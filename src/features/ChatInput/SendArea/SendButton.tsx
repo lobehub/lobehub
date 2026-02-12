@@ -15,11 +15,11 @@ const SendButton = memo(() => {
       disabled={disabled}
       generating={generating}
       menu={sendMenu as any}
-      onClick={() => send()}
-      onStop={() => handleStop()}
       placement={'topRight'}
       shape={shape}
       trigger={['hover']}
+      onClick={() => send()}
+      onStop={() => handleStop()}
     />
   );
 });

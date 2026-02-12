@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { ChatMessage } from './types';
+import { type ChatMessage } from './types';
 
 interface ChatListProps {
   messages: ChatMessage[];

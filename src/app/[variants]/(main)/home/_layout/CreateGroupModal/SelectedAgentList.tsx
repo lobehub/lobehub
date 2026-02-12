@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 
-import AgentItem, { type AgentItemData } from './AgentItem';
+import { type AgentItemData } from './AgentItem';
+import AgentItem from './AgentItem';
 import { useAgentSelectionStore } from './store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -50,9 +51,9 @@ const SelectedAgentList = memo<SelectedAgentListProps>(
           <div className={styles.title}>{t('sessionGroup.groupName')}</div>
           <Input
             autoFocus
-            onChange={(e) => onGroupNameChange(e.target.value)}
             placeholder={t('sessionGroup.inputPlaceholder')}
             value={groupName}
+            onChange={(e) => onGroupNameChange(e.target.value)}
           />
         </Flexbox>
 
@@ -65,7 +66,7 @@ const SelectedAgentList = memo<SelectedAgentListProps>(
           ) : (
             <Flexbox>
               {selectedAgents.map((agent) => (
-                <AgentItem agent={agent} defaultTitle={defaultTitle} key={agent.id} showRemove />
+                <AgentItem showRemove agent={agent} defaultTitle={defaultTitle} key={agent.id} />
               ))}
             </Flexbox>
           )}

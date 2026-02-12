@@ -1,8 +1,9 @@
 'use client';
 
+import 'dayjs/locale/zh.js';
+
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import 'dayjs/locale/zh.js';
 import { type CSSProperties, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 

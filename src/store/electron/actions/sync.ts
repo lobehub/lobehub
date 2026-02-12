@@ -1,43 +1,44 @@
 import { type DataSyncConfig } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
-import useSWR, { type SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { mutate } from '@/libs/swr';
 import { remoteServerService } from '@/services/electron/remoteServer';
+import { type StoreSetter } from '@/store/types';
 
 import { initialState } from '../initialState';
-import type { ElectronStore } from '../store';
+import { type ElectronStore } from '../store';
 
 /**
  * Remote server actions
  */
-export interface ElectronRemoteServerAction {
-  clearRemoteServerSyncError: () => void;
-  connectRemoteServer: (params: DataSyncConfig) => Promise<void>;
-  disconnectRemoteServer: () => Promise<void>;
-  refreshServerConfig: () => Promise<void>;
-  refreshUserData: () => Promise<void>;
-  useDataSyncConfig: () => SWRResponse;
-}
 
 const REMOTE_SERVER_CONFIG_KEY = 'electron:getRemoteServerConfig';
 
-export const remoteSyncSlice: StateCreator<
-  ElectronStore,
-  [['zustand/devtools', never]],
-  [],
-  ElectronRemoteServerAction
-> = (set, get) => ({
-  clearRemoteServerSyncError: () => {
-    set({ remoteServerSyncError: undefined }, false, 'clearRemoteServerSyncError');
-  },
+type Setter = StoreSetter<ElectronStore>;
+export const remoteSyncSlice = (set: Setter, get: () => ElectronStore, _api?: unknown) =>
+  new ElectronRemoteServerActionImpl(set, get, _api);
 
-  connectRemoteServer: async (values) => {
+export class ElectronRemoteServerActionImpl {
+  readonly #get: () => ElectronStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ElectronStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  clearRemoteServerSyncError = (): void => {
+    this.#set({ remoteServerSyncError: undefined }, false, 'clearRemoteServerSyncError');
+  };
+
+  connectRemoteServer = async (values: DataSyncConfig): Promise<void> => {
     if (values.storageMode === 'selfHost' && !values.remoteServerUrl) return;
 
-    set({ isConnectingServer: true });
-    get().clearRemoteServerSyncError();
+    this.#set({ isConnectingServer: true });
+    this.#get().clearRemoteServerSyncError();
     try {
       // Get current configuration
       const config = await remoteServerService.getRemoteServerConfig();
@@ -53,46 +54,46 @@ export const remoteSyncSlice: StateCreator<
       if (!result.success) {
         console.error('Authorization request failed:', result.error);
 
-        set({
+        this.#set({
           remoteServerSyncError: { message: result.error, type: 'AUTH_ERROR' },
         });
       }
       // Refresh state
-      await get().refreshServerConfig();
+      await this.#get().refreshServerConfig();
     } catch (error) {
       console.error('Remote server configuration error:', error);
-      set({
+      this.#set({
         remoteServerSyncError: { message: (error as Error).message, type: 'CONFIG_ERROR' },
       });
     } finally {
-      set({ isConnectingServer: false });
+      this.#set({ isConnectingServer: false });
     }
-  },
+  };
 
-  disconnectRemoteServer: async () => {
-    set({ isConnectingServer: false });
-    get().clearRemoteServerSyncError();
+  disconnectRemoteServer = async (): Promise<void> => {
+    this.#set({ isConnectingServer: false });
+    this.#get().clearRemoteServerSyncError();
     try {
       await remoteServerService.setRemoteServerConfig({ active: false, storageMode: 'cloud' });
       // Update form URL to empty
-      set({ dataSyncConfig: initialState.dataSyncConfig });
+      this.#set({ dataSyncConfig: initialState.dataSyncConfig });
       // Refresh state
-      await get().refreshServerConfig();
+      await this.#get().refreshServerConfig();
     } catch (error) {
       console.error('Disconnect failed:', error);
-      set({
+      this.#set({
         remoteServerSyncError: { message: (error as Error).message, type: 'DISCONNECT_ERROR' },
       });
     } finally {
-      set({ isConnectingServer: false });
+      this.#set({ isConnectingServer: false });
     }
-  },
+  };
 
-  refreshServerConfig: async () => {
+  refreshServerConfig = async (): Promise<void> => {
     await mutate(REMOTE_SERVER_CONFIG_KEY);
-  },
+  };
 
-  refreshUserData: async () => {
+  refreshUserData = async (): Promise<void> => {
     const { getSessionStoreState } = await import('@/store/session');
     const { getChatStoreState } = await import('@/store/chat');
     const { getUserStoreState } = await import('@/store/user');
@@ -101,10 +102,10 @@ export const remoteSyncSlice: StateCreator<
     await getChatStoreState().refreshMessages();
     await getChatStoreState().refreshTopic();
     await getUserStoreState().refreshUserState();
-  },
+  };
 
-  useDataSyncConfig: () =>
-    useSWR<DataSyncConfig>(
+  useDataSyncConfig = (): SWRResponse => {
+    return useSWR<DataSyncConfig>(
       REMOTE_SERVER_CONFIG_KEY,
       async () => {
         try {
@@ -116,13 +117,19 @@ export const remoteSyncSlice: StateCreator<
       },
       {
         onSuccess: (data) => {
-          if (!isEqual(data, get().dataSyncConfig)) {
-            get().refreshUserData();
+          if (!isEqual(data, this.#get().dataSyncConfig)) {
+            this.#get().refreshUserData();
           }
 
-          set({ dataSyncConfig: data, isInitRemoteServerConfig: true });
+          this.#set({ dataSyncConfig: data, isInitRemoteServerConfig: true });
         },
         suspense: false,
       },
-    ),
-});
+    );
+  };
+}
+
+export type ElectronRemoteServerAction = Pick<
+  ElectronRemoteServerActionImpl,
+  keyof ElectronRemoteServerActionImpl
+>;

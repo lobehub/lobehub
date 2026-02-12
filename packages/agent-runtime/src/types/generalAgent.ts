@@ -1,4 +1,9 @@
-import { ChatToolPayload, MessageToolCall } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type DynamicInterventionResolver,
+  type GlobalInterventionAuditConfig,
+  type MessageToolCall,
+} from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
   /** Force create a new assistant message (e.g., after compression) */
@@ -77,6 +82,17 @@ export interface GeneralAgentConfig {
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
   };
+  /**
+   * Dynamic intervention audits registry (per-tool)
+   * Used to evaluate runtime intervention policies for tools with dynamic config
+   */
+  dynamicInterventionAudits?: Record<string, DynamicInterventionResolver>;
+  /**
+   * Global intervention resolvers that run for EVERY tool call
+   * Evaluated in array order, before per-tool dynamic resolvers.
+   * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
+   */
+  globalInterventionAudits?: GlobalInterventionAuditConfig[];
   modelRuntimeConfig?: {
     /**
      * Compression model configuration

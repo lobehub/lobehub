@@ -18,8 +18,8 @@ const Header = memo(() => {
       right={
         <ActionIcon
           icon={isDark ? Moon : Sun}
-          onClick={() => setTheme(isDark ? 'light' : 'dark')}
           size={MOBILE_HEADER_ICON_SIZE}
+          onClick={() => setTheme(isDark ? 'light' : 'dark')}
         />
       }
     />

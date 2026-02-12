@@ -1,6 +1,6 @@
-import { ModelPerformance, ModelTokensUsage, ModelUsage } from '@lobechat/types';
+import type { ModelPerformance, ModelTokensUsage, ModelUsage } from '@lobechat/types';
 
-import { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
+import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
 
@@ -124,8 +124,8 @@ export interface ChatStreamPayload {
     summary?: string;
   };
   reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high';
-  responseMode?: 'stream' | 'json';
   response_format?: ChatResponseFormat;
+  responseMode?: 'stream' | 'json';
   /**
    * @title Whether to enable streaming requests
    * @default true

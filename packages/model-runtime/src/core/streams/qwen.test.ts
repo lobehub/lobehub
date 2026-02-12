@@ -1,7 +1,7 @@
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { StreamContext } from './protocol';
+import type { StreamContext } from './protocol';
 import { QwenAIStream, transformQwenStream } from './qwen';
 
 describe('QwenAIStream', () => {
@@ -621,7 +621,7 @@ describe('QwenAIStream', () => {
   });
 });
 
-// Test case for parallel tool calls bug (LOBE-3903)
+// Test case for parallel tool calls bug
 // This test reproduces the issue where Qwen model returns 3 parallel tool calls
 // for querying time in Beijing, Shanghai, and Nanjing simultaneously.
 // The bug causes arguments from different tool calls to be incorrectly merged.

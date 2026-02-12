@@ -3,18 +3,18 @@
  *
  * Handles all agent builder tool calls for configuring and customizing agents.
  */
-import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 import { AgentBuilderExecutionRuntime } from './ExecutionRuntime';
-import {
-  AgentBuilderApiName,
-  AgentBuilderIdentifier,
-  type GetAvailableModelsParams,
-  type InstallPluginParams,
-  type SearchMarketToolsParams,
-  type UpdateAgentConfigParams,
-  type UpdatePromptParams,
+import type {
+  GetAvailableModelsParams,
+  InstallPluginParams,
+  SearchMarketToolsParams,
+  UpdateAgentConfigParams,
+  UpdatePromptParams,
 } from './types';
+import { AgentBuilderApiName, AgentBuilderIdentifier } from './types';
 
 const runtime = new AgentBuilderExecutionRuntime();
 

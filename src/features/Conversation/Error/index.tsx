@@ -1,9 +1,11 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { ChatErrorType, type ChatMessageError, type ErrorType } from '@lobechat/types';
+import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { type ChatMessageError, type ErrorType } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 import { type IPluginErrorType } from '@lobehub/chat-plugin-sdk';
-import { type AlertProps, Block, Highlighter, Skeleton } from '@lobehub/ui';
-import dynamic from '@/libs/next/dynamic';
+import { type AlertProps } from '@lobehub/ui';
+import { Block, Highlighter, Skeleton } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +14,7 @@ import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorCon
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import { useProviderName } from '@/hooks/useProviderName';
+import dynamic from '@/libs/next/dynamic';
 
 import ChatInvalidAPIKey from './ChatInvalidApiKey';
 
@@ -24,12 +27,12 @@ const loading = () => (
   <Block
     align={'center'}
     padding={16}
+    variant={'outlined'}
     style={{
       overflow: 'hidden',
       position: 'relative',
       width: '100%',
     }}
-    variant={'outlined'}
   >
     <Skeleton.Button active block />
   </Block>
@@ -148,6 +151,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
 
   return (
     <ErrorContent
+      id={data.id}
       error={{
         ...alertError,
         extra: data.error?.body ? (
@@ -161,7 +165,6 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
           </Highlighter>
         ) : undefined,
       }}
-      id={data.id}
     />
   );
 });

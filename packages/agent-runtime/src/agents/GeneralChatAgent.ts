@@ -1,22 +1,28 @@
-import type { ChatToolPayload, HumanInterventionConfig } from '@lobechat/types';
-
-import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '../core';
 import {
-  Agent,
-  AgentInstruction,
-  AgentInstructionCompressContext,
-  AgentRuntimeContext,
-  AgentState,
-  GeneralAgentCallLLMInstructionPayload,
-  GeneralAgentCallLLMResultPayload,
-  GeneralAgentCallToolResultPayload,
-  GeneralAgentCallToolsBatchInstructionPayload,
-  GeneralAgentCallingToolInstructionPayload,
-  GeneralAgentCompressionResultPayload,
-  GeneralAgentConfig,
-  HumanAbortPayload,
-  TaskResultPayload,
-  TasksBatchResultPayload,
+  type ChatToolPayload,
+  type ExtendedHumanInterventionConfig,
+  type HumanInterventionConfig,
+  type HumanInterventionPolicy,
+} from '@lobechat/types';
+
+import { createDefaultGlobalAudits, DEFAULT_SECURITY_BLACKLIST } from '../audit';
+import { InterventionChecker } from '../core';
+import {
+  type Agent,
+  type AgentInstruction,
+  type AgentInstructionCompressContext,
+  type AgentRuntimeContext,
+  type AgentState,
+  type GeneralAgentCallingToolInstructionPayload,
+  type GeneralAgentCallLLMInstructionPayload,
+  type GeneralAgentCallLLMResultPayload,
+  type GeneralAgentCallToolResultPayload,
+  type GeneralAgentCallToolsBatchInstructionPayload,
+  type GeneralAgentCompressionResultPayload,
+  type GeneralAgentConfig,
+  type HumanAbortPayload,
+  type TaskResultPayload,
+  type TasksBatchResultPayload,
 } from '../types';
 import { shouldCompress } from '../utils/tokenCounter';
 
@@ -46,7 +52,7 @@ export class GeneralChatAgent implements Agent {
   private getToolInterventionConfig(
     toolCalling: ChatToolPayload,
     state: AgentState,
-  ): HumanInterventionConfig | undefined {
+  ): ExtendedHumanInterventionConfig | undefined {
     const { identifier, apiName } = toolCalling;
     const manifest = state.toolManifestMap[identifier];
 
@@ -57,6 +63,57 @@ export class GeneralChatAgent implements Agent {
 
     // API-level config takes precedence over tool-level config
     return api?.humanIntervention ?? manifest.humanIntervention;
+  }
+
+  private isDynamicInterventionConfig(
+    config: ExtendedHumanInterventionConfig | undefined,
+  ): config is {
+    dynamic: { default?: HumanInterventionPolicy; policy?: HumanInterventionPolicy; type: string };
+  } {
+    return !!config && typeof config === 'object' && !Array.isArray(config) && 'dynamic' in config;
+  }
+
+  private matchesAlwaysPolicy(
+    config: HumanInterventionConfig | undefined,
+    toolArgs: Record<string, any>,
+  ): boolean {
+    if (!config) return false;
+    if (config === 'always') return true;
+    if (!Array.isArray(config)) return false;
+
+    return config.some((rule) => {
+      if (rule.policy !== 'always') return false;
+      if (!rule.match) return true;
+
+      return Object.entries(rule.match).every(([paramName, matcher]) => {
+        const paramValue = toolArgs[paramName];
+        if (paramValue === undefined) return false;
+
+        if (typeof matcher === 'string') {
+          return String(paramValue).includes(matcher) || matcher.includes('*');
+        }
+
+        return true;
+      });
+    });
+  }
+
+  private resolveDynamicPolicy(
+    config: ExtendedHumanInterventionConfig | undefined,
+    toolArgs: Record<string, any>,
+    metadata?: Record<string, any>,
+  ): HumanInterventionPolicy | undefined {
+    if (!this.isDynamicInterventionConfig(config)) {
+      return undefined;
+    }
+
+    const { dynamic } = config;
+    const resolver = this.config.dynamicInterventionAudits?.[dynamic.type];
+
+    if (!resolver) return dynamic.default ?? 'never';
+
+    const shouldIntervene = resolver(toolArgs, metadata);
+    return shouldIntervene ? (dynamic.policy ?? 'always') : (dynamic.default ?? 'never');
   }
 
   /**
@@ -71,12 +128,18 @@ export class GeneralChatAgent implements Agent {
     const toolsNeedingIntervention: ChatToolPayload[] = [];
     const toolsToExecute: ChatToolPayload[] = [];
 
-    // Get security blacklist (use default if not provided)
+    // Get security blacklist for resolver metadata
     const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
+
+    // Build resolver metadata: merge state.metadata with security blacklist
+    const resolverMetadata = { ...state.metadata, securityBlacklist };
 
     // Get user config (default to 'manual' mode)
     const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
+
+    // Global audits: default to security blacklist audit if not provided
+    const globalResolvers = this.config.globalInterventionAudits ?? createDefaultGlobalAudits();
 
     for (const toolCalling of toolsCalling) {
       const { identifier, apiName } = toolCalling;
@@ -90,64 +153,71 @@ export class GeneralChatAgent implements Agent {
         // Invalid JSON, treat as empty args
       }
 
-      // Priority 0: CRITICAL - Check security blacklist FIRST
-      const securityCheck = InterventionChecker.checkSecurityBlacklist(securityBlacklist, toolArgs);
+      // Phase 1: Run global resolvers (e.g., security blacklist)
+      let globalBlocked = false;
+      let globalPolicy: HumanInterventionPolicy = 'always';
 
-      // Priority 0.5: Headless mode - fully automated for async tasks
-      // In headless mode: blacklisted tools are skipped, all other tools execute directly
+      for (const globalResolver of globalResolvers) {
+        if (globalResolver.resolver(toolArgs, resolverMetadata)) {
+          globalBlocked = true;
+          globalPolicy = globalResolver.policy ?? 'always';
+          break;
+        }
+      }
+
+      // Phase 2: Headless mode - fully automated for async tasks
       if (approvalMode === 'headless') {
-        if (securityCheck.blocked) {
-          // Skip blacklisted tools entirely (don't execute, don't wait for approval)
+        if (globalBlocked && globalPolicy === 'always') {
+          // Skip 'always' blocked tools entirely (don't execute, don't wait for approval)
           continue;
         }
-        // All other tools execute directly
+        // All other tools execute directly (including overridable global blocks)
         toolsToExecute.push(toolCalling);
         continue;
       }
 
-      // For non-headless modes: security blacklist requires intervention
-      if (securityCheck.blocked) {
+      // For non-headless modes: 'always' global block requires intervention unconditionally
+      if (globalBlocked && globalPolicy === 'always') {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
-      // Priority 1: Check 'always' policy - overrides auto-run mode
-      // Some sensitive operations (e.g., installPlugin) must always require user confirmation
+      // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
-      const hasAlwaysPolicy =
-        config === 'always' ||
-        (Array.isArray(config) &&
-          config.some((rule) => {
-            // Check if the 'always' rule matches current tool args
-            if (rule.policy !== 'always') return false;
-            // If rule has match criteria, check if it matches
-            if (rule.match) {
-              return Object.entries(rule.match).every(([paramName, matcher]) => {
-                const paramValue = toolArgs[paramName];
-                if (paramValue === undefined) return false;
-                // Simple string comparison for basic matching
-                if (typeof matcher === 'string') {
-                  return String(paramValue).includes(matcher) || matcher.includes('*');
-                }
-                return true;
-              });
-            }
-            // No match criteria means it's a default 'always' rule
-            return true;
-          }));
+      const isDynamicConfig = this.isDynamicInterventionConfig(config);
+      const dynamicPolicy = this.resolveDynamicPolicy(config, toolArgs, state.metadata);
+      const staticConfig = isDynamicConfig
+        ? undefined
+        : (config as HumanInterventionConfig | undefined);
 
-      if (hasAlwaysPolicy) {
+      if (dynamicPolicy !== undefined) {
+        if (dynamicPolicy === 'never') {
+          toolsToExecute.push(toolCalling);
+        } else {
+          toolsNeedingIntervention.push(toolCalling);
+        }
+        continue;
+      }
+
+      // Phase 3.5: Handle overridable global block (policy !== 'always')
+      if (globalBlocked && globalPolicy !== 'always') {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
-      // Priority 2: User config is 'auto-run', all tools execute directly
+      // Phase 4: Check 'always' policy - overrides auto-run mode
+      if (this.matchesAlwaysPolicy(staticConfig, toolArgs)) {
+        toolsNeedingIntervention.push(toolCalling);
+        continue;
+      }
+
+      // Phase 5: User config is 'auto-run', all tools execute directly
       if (approvalMode === 'auto-run') {
         toolsToExecute.push(toolCalling);
         continue;
       }
 
-      // Priority 3: User config is 'allow-list', check if tool is in whitelist
+      // Phase 6: User config is 'allow-list', check if tool is in whitelist
       if (approvalMode === 'allow-list') {
         if (allowList.includes(toolKey)) {
           toolsToExecute.push(toolCalling);
@@ -157,10 +227,9 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Priority 4: User config is 'manual' (default), use tool's own config
-      // Note: config is already retrieved above for 'always' policy check
+      // Phase 7: User config is 'manual' (default), use tool's own config
       const policy = InterventionChecker.shouldIntervene({
-        config,
+        config: staticConfig,
         securityBlacklist,
         toolArgs,
       });
@@ -168,7 +237,6 @@ export class GeneralChatAgent implements Agent {
       if (policy === 'never') {
         toolsToExecute.push(toolCalling);
       } else {
-        // 'required' or undefined requires intervention
         toolsNeedingIntervention.push(toolCalling);
       }
     }

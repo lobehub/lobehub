@@ -83,11 +83,11 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
     return (
       <Flexbox gap={2}>
         <Flexbox
+          horizontal
           align={'center'}
           className={cx(styles.folderHeader, isActive && styles.folderHeaderActive)}
-          horizontal
-          onClick={handleClick}
           style={{ paddingInlineStart: level * 16 + 8 }}
+          onClick={handleClick}
         >
           <motion.div
             animate={{ rotate: isExpanded ? 0 : -90 }}
@@ -95,18 +95,18 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
           >
             <ActionIcon
               icon={CaretDownFilled as any}
+              size={'small'}
               onClick={(e) => {
                 e.stopPropagation();
                 handleToggle();
               }}
-              size={'small'}
             />
           </motion.div>
           <Flexbox
+            horizontal
             align={'center'}
             flex={1}
             gap={8}
-            horizontal
             style={{ minHeight: 28, minWidth: 0 }}
           >
             <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={16} />
@@ -140,10 +140,10 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
                   key={child.id}
                   level={level + 1}
                   loadedFolders={loadedFolders}
+                  selectedKey={selectedKey}
                   onFolderClick={onFolderClick}
                   onLoadFolder={onLoadFolder}
                   onToggleFolder={onToggleFolder}
-                  selectedKey={selectedKey}
                 />
               ))}
             </Flexbox>
@@ -184,10 +184,10 @@ const FolderTree = memo<FolderTreeProps>(
             item={item}
             key={item.id}
             loadedFolders={loadedFolders}
+            selectedKey={selectedKey}
             onFolderClick={onFolderClick}
             onLoadFolder={onLoadFolder}
             onToggleFolder={onToggleFolder}
-            selectedKey={selectedKey}
           />
         ))}
       </Flexbox>

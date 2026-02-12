@@ -1,5 +1,6 @@
 import { Input } from '@lobehub/ui';
-import { Checkbox, Form, type FormInstance, Select } from 'antd';
+import { type FormInstance } from 'antd';
+import { Checkbox, Form, Select } from 'antd';
 import { type AiModelType } from 'model-bank';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

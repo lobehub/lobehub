@@ -3,7 +3,8 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import { type FC, Suspense, lazy } from 'react';
+import { type FC } from 'react';
+import { lazy, Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router-dom';
 
@@ -11,6 +12,7 @@ import { DndContextWrapper } from '@/app/[variants]/(main)/resource/features/Dnd
 import Loading from '@/components/Loading/BrandTextLoading';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
+import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
@@ -38,20 +40,28 @@ const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
-  const { isOpen: isFeedbackModalOpen, close: closeFeedbackModal } = useFeedbackModal();
+  const {
+    initialValues: feedbackInitialValues,
+    isOpen: isFeedbackModalOpen,
+    close: closeFeedbackModal,
+  } = useFeedbackModal();
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
       <Suspense fallback={null}>
-        {isDesktop && <TitleBar />}
         {isDesktop && <DesktopAutoOidcOnFirstOpen />}
         {isDesktop && <DesktopNavigationBridge />}
+        {isDesktop && <DesktopFileMenuBridge />}
         {isDesktop && <AuthRequiredModal />}
         {showCloudPromotion && <CloudBanner />}
       </Suspense>
+
+      <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
       <DndContextWrapper>
         <Flexbox
+          horizontal
           className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
+          width={'100%'}
           height={
             isDesktop
               ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
@@ -59,8 +69,6 @@ const Layout: FC = () => {
                 ? `calc(100% - ${BANNER_HEIGHT}px)`
                 : '100%'
           }
-          horizontal
-          width={'100%'}
         >
           <NavPanel />
           <DesktopLayoutContainer>
@@ -81,7 +89,11 @@ const Layout: FC = () => {
         <CmdkLazy />
         {isFeedbackModalOpen && (
           <Suspense fallback={null}>
-            <FeedbackModal onClose={closeFeedbackModal} open={isFeedbackModalOpen} />
+            <FeedbackModal
+              initialValues={feedbackInitialValues}
+              open={isFeedbackModalOpen}
+              onClose={closeFeedbackModal}
+            />
           </Suspense>
         )}
       </Suspense>

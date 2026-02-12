@@ -1,5 +1,5 @@
 import debug from 'debug';
-import type { Plugin } from 'unified';
+import { type Plugin } from 'unified';
 import { SKIP, visit } from 'unist-util-visit';
 
 // 创建 debugger 实例

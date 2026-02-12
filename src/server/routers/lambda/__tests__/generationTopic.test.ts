@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { GenerationTopicModel } from '@/database/models/generationTopic';
-import { GenerationTopicItem } from '@/database/schemas/generation';
+import { type GenerationTopicItem } from '@/database/schemas/generation';
 import { FileService } from '@/server/services/file';
 import { GenerationService } from '@/server/services/generation';
 

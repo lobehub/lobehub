@@ -1,6 +1,6 @@
 import { authEnv } from '@/envs/auth';
 
-import type { GenericProviderDefinition } from '../types';
+import { type GenericProviderDefinition } from '../types';
 
 const FEISHU_AUTHORIZATION_URL = 'https://accounts.feishu.cn/open-apis/authen/v1/authorize';
 const FEISHU_TOKEN_URL = 'https://open.feishu.cn/open-apis/authen/v2/oauth/token';

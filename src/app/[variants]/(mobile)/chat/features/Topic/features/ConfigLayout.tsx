@@ -3,7 +3,8 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import { type CSSProperties, type ReactNode, memo } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
+import { memo } from 'react';
 
 import SidebarHeader from '@/components/SidebarHeader';
 import { useGlobalStore } from '@/store/global';
@@ -70,16 +71,16 @@ const ConfigLayout = memo<ConfigLayoutProps>(
         };
 
     const combinedActions = (
-      <Flexbox align="center" gap={2} horizontal>
+      <Flexbox horizontal align="center" gap={2}>
         {actions}
         <ActionIcon
           className={cx(styles.chevron, expanded && styles.chevronExpanded)}
           icon={ChevronRight}
-          onClick={handleHeaderClick}
           size="small"
           style={{
             pointerEvents: 'none',
           }}
+          onClick={handleHeaderClick}
         />
       </Flexbox>
     );
@@ -88,12 +89,12 @@ const ConfigLayout = memo<ConfigLayoutProps>(
       <Flexbox className={className} height={'fit-content'}>
         <SidebarHeader
           actions={combinedActions}
-          onClick={handleHeaderClick}
+          title={title}
           style={{
             cursor: 'pointer',
             ...headerStyle,
           }}
-          title={title}
+          onClick={handleHeaderClick}
         />
         <Flexbox
           className={styles.container}

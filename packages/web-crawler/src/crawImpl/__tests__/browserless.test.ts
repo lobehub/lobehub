@@ -91,7 +91,7 @@ describe('browserless', () => {
   it('should allow requests to permitted file types', async () => {
     const allowedExtensions = ['html', 'css', 'js', 'json', 'xml', 'webmanifest', 'txt', 'md'];
     const pattern = new RegExp(
-      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[\\?#].*)?$',
+      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[?#].*)?$',
     );
 
     allowedExtensions.forEach((ext) => {
@@ -104,7 +104,7 @@ describe('browserless', () => {
   it('should reject requests to non-permitted file types', async () => {
     const rejectedExtensions = ['jpg', 'png', 'gif', 'pdf', 'doc', 'mp4', 'wav'];
     const pattern = new RegExp(
-      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[\\?#].*)?$',
+      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[?#].*)?$',
     );
 
     rejectedExtensions.forEach((ext) => {

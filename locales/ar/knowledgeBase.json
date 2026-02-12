@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "تمت إضافة الملف بنجاح",
+  "addToKnowledgeBase.alreadyExists": "هذا الملف موجود بالفعل في المكتبة",
   "addToKnowledgeBase.confirm": "إضافة",
   "addToKnowledgeBase.error": "فشل في إضافة الملف إلى المكتبة",
   "addToKnowledgeBase.id.placeholder": "يرجى اختيار مكتبة للإضافة إليها",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "اسم المكتبة",
   "createNew.name.required": "يرجى إدخال اسم المكتبة",
   "createNew.title": "إنشاء مكتبة جديدة",
+  "moveToKnowledgeBase.error": "فشل في نقل الملف إلى المكتبة",
+  "moveToKnowledgeBase.success": "تم نقل الملف بنجاح",
   "tab.evals": "التقييمات",
   "tab.files": "الملفات",
   "tab.settings": "الإعدادات",

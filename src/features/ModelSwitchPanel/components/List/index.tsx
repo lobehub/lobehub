@@ -1,5 +1,5 @@
 import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import type { FC } from 'react';
+import { type FC } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
@@ -11,7 +11,7 @@ import { useBuildListItems } from '../../hooks/useBuildListItems';
 import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
-import type { GroupMode } from '../../types';
+import { type GroupMode } from '../../types';
 import { menuKey } from '../../utils';
 import { ListItemRenderer } from './ListItemRenderer';
 
@@ -83,7 +83,6 @@ export const List: FC<ListProps> = ({
       flex={1}
       style={{
         height: listHeight,
-        paddingBlock: groupMode === 'byModel' ? 8 : 0,
       }}
     >
       <TooltipGroup>

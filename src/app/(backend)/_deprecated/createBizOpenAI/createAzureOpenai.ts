@@ -1,5 +1,6 @@
 import { ChatErrorType } from '@lobechat/types';
-import OpenAI, { type ClientOptions } from 'openai';
+import { type ClientOptions } from 'openai';
+import OpenAI from 'openai';
 import urlJoin from 'url-join';
 
 import { getLLMConfig } from '@/envs/llm';

@@ -1,9 +1,9 @@
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { z } from 'zod';
 
-import type { RuntimeStepContext } from '../stepContext';
+import { type RuntimeStepContext } from '../stepContext';
+import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
-import type { HumanInterventionConfig, HumanInterventionPolicy } from './intervention';
 
 interface Meta {
   /**
@@ -21,6 +21,11 @@ interface Meta {
    */
   description?: string;
   /**
+   * readme
+   * @desc Long-form readme content for the plugin
+   */
+  readme?: string;
+  /**
    * tags
    * @desc Tags of the plugin
    * @nameEN Tags
@@ -33,6 +38,7 @@ interface Meta {
 const MetaSchema = z.object({
   avatar: z.string().optional(),
   description: z.string().optional(),
+  readme: z.string().optional(),
   tags: z.array(z.string()).optional(),
   title: z.string(),
 });
@@ -47,6 +53,86 @@ export type RenderDisplayControl = 'alwaysExpand' | 'collapsed' | 'expand';
 
 export const RenderDisplayControlSchema = z.enum(['collapsed', 'expand', 'alwaysExpand']);
 
+/**
+ * Dynamic intervention resolver function type
+ * Receives tool args and state metadata to determine if condition is met
+ * @returns true if intervention is required, false otherwise
+ */
+export type DynamicInterventionResolver = (
+  toolArgs: Record<string, any>,
+  metadata?: Record<string, any>,
+) => boolean;
+
+/**
+ * Global intervention audit configuration
+ * Global audits run for EVERY tool call, not just tools with dynamic config.
+ * They are evaluated before per-tool dynamic audits in the intervention chain.
+ */
+export interface GlobalInterventionAuditConfig {
+  /**
+   * Policy to apply when audit condition is met (returns true)
+   * - 'always': cannot be bypassed by auto-run; in headless mode the tool is skipped entirely
+   * - 'required': requires intervention but can be bypassed by auto-run
+   * @default 'always'
+   */
+  policy?: HumanInterventionPolicy;
+
+  /**
+   * The audit function, reuses DynamicInterventionResolver signature
+   */
+  resolver: DynamicInterventionResolver;
+
+  /**
+   * Unique type identifier for this global audit
+   */
+  type: string;
+}
+
+/**
+ * Dynamic intervention configuration
+ * Used to dynamically determine intervention policy based on runtime context
+ *
+ * The resolver is referenced by type identifier and looked up from
+ * the dynamicInterventionAudits registry at runtime.
+ */
+export interface DynamicInterventionConfig {
+  /**
+   * Default policy when resolver returns false or no resolver is available
+   * @default 'never'
+   */
+  default?: HumanInterventionPolicy;
+
+  /**
+   * Policy to apply when resolver condition is met
+   * @default 'always'
+   */
+  policy?: HumanInterventionPolicy;
+
+  /**
+   * Resolver type identifier for external resolver lookup
+   * The resolver function is registered in dynamicInterventionAudits
+   */
+  type: string;
+}
+
+export const DynamicInterventionConfigSchema = z.object({
+  default: HumanInterventionPolicySchema.optional(),
+  policy: HumanInterventionPolicySchema.optional(),
+  type: z.string(),
+});
+
+/**
+ * Extended human intervention config that supports dynamic evaluation
+ */
+export type ExtendedHumanInterventionConfig =
+  | HumanInterventionConfig
+  | { dynamic: DynamicInterventionConfig };
+
+export const ExtendedHumanInterventionConfigSchema = z.union([
+  HumanInterventionConfigSchema,
+  z.object({ dynamic: DynamicInterventionConfigSchema }),
+]);
+
 export interface LobeChatPluginApi {
   description: string;
   /**
@@ -54,14 +140,17 @@ export interface LobeChatPluginApi {
    * Controls when and how the tool requires human approval/selection
    *
    * Can be either:
-   * - Simple: A policy string ('never', 'always', 'first')
+   * - Simple: A policy string ('never', 'always', 'required')
    * - Complex: Array of rules for parameter-level control
+   * - Dynamic: { dynamic: DynamicInterventionConfig } for runtime evaluation
    *
    * Examples:
    * - 'always' - always require intervention
    * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
+   * - { dynamic: { default: 'never', policy: 'required', type: 'exampleResolver' } } - exampleResolver should register in `GeneralChatAgent.dynamicInterventionAudits`
+   *
    */
-  humanIntervention?: HumanInterventionConfig;
+  humanIntervention?: ExtendedHumanInterventionConfig;
   name: string;
   parameters: Record<string, any>;
   /**
@@ -78,7 +167,7 @@ export interface LobeChatPluginApi {
 
 export const LobeChatPluginApiSchema = z.object({
   description: z.string(),
-  humanIntervention: HumanInterventionConfigSchema.optional(),
+  humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   name: z.string(),
   parameters: z.record(z.string(), z.any()),
   renderDisplayControl: RenderDisplayControlSchema.optional(),
@@ -115,7 +204,7 @@ export interface BuiltinToolManifest {
 
 export const BuiltinToolManifestSchema = z.object({
   api: z.array(LobeChatPluginApiSchema),
-  humanIntervention: HumanInterventionPolicySchema.optional(),
+  humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   identifier: z.string(),
   meta: MetaSchema,
   systemRole: z.string(),
@@ -351,6 +440,12 @@ export interface BuiltinToolContext {
    * Used by tools that need to create messages or operations within a topic
    */
   topicId?: string | null;
+
+  /**
+   * The working directory configured for file operations
+   * When set, file operations should be restricted to this directory
+   */
+  workingDirectory?: string;
 }
 
 /**
@@ -547,7 +642,7 @@ export interface IBuiltinToolExecutor {
    *
    * @returns Array of supported API names
    */
-  getApiNames(): string[];
+  getApiNames: () => string[];
 
   /**
    * Check if this executor supports the given API
@@ -555,7 +650,7 @@ export interface IBuiltinToolExecutor {
    * @param apiName - The API name to check
    * @returns Whether the API is supported
    */
-  hasApi(apiName: string): boolean;
+  hasApi: (apiName: string) => boolean;
 
   /**
    * The tool identifier (e.g., 'lobe-group-management')
@@ -570,7 +665,7 @@ export interface IBuiltinToolExecutor {
    * @param ctx - Execution context
    * @returns The execution result
    */
-  invoke(apiName: string, params: any, ctx: BuiltinToolContext): Promise<BuiltinToolResult>;
+  invoke: (apiName: string, params: any, ctx: BuiltinToolContext) => Promise<BuiltinToolResult>;
 }
 
 /**

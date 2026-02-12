@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sleep } from '@/utils/sleep';
 
-import { aiProviders, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
-import { AiProviderModel } from '../aiProvider';
 import { getTestDB } from '../../core/getTestDB';
+import { aiProviders, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { AiProviderModel } from '../aiProvider';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -204,7 +204,7 @@ describe('AiProviderModel', () => {
   });
 
   describe('updateConfig', () => {
-    it('should update provider config with encryption', async () => {
+    it('should update provider config with encryption and merge keyVaults', async () => {
       const providerId = 'aihubmix';
       await serverDB.insert(aiProviders).values({
         id: providerId,
@@ -228,7 +228,10 @@ describe('AiProviderModel', () => {
         where: eq(aiProviders.id, providerId),
       });
 
-      expect(mockEncryptor).toHaveBeenCalledWith(JSON.stringify({ newKey: 'newValue' }));
+      // Should merge existing keyVaults with new values
+      expect(mockEncryptor).toHaveBeenCalledWith(
+        JSON.stringify({ key: 'value', newKey: 'newValue' }),
+      );
       expect(updated?.keyVaults).toBe('encrypted-data');
       expect(updated?.fetchOnClient).toBeTruthy();
     });
@@ -251,7 +254,168 @@ describe('AiProviderModel', () => {
         where: eq(aiProviders.id, providerId),
       });
 
+      expect(updated?.keyVaults).toBe(JSON.stringify({ key: 'value', newKey: 'newValue' }));
+    });
+
+    it('should merge keyVaults with existing values when decryptor is provided', async () => {
+      const providerId = 'aihubmix';
+      const existingKeyVaults = {
+        apiKey: 'existing-api-key',
+        oauthAccessToken: 'existing-oauth-token',
+        bearerToken: 'existing-bearer-token',
+      };
+
+      await serverDB.insert(aiProviders).values({
+        id: providerId,
+        keyVaults: JSON.stringify(existingKeyVaults),
+        name: 'AiHubMix',
+        source: 'custom',
+        userId,
+      });
+
+      const mockEncryptor = vi.fn().mockImplementation((s: string) => Promise.resolve(s));
+      const mockDecryptor = vi
+        .fn()
+        .mockImplementation((s: string) => Promise.resolve(JSON.parse(s)));
+
+      // Update only apiKey, should preserve oauthAccessToken and bearerToken
+      await aiProviderModel.updateConfig(
+        providerId,
+        {
+          keyVaults: { apiKey: 'new-api-key' },
+        },
+        mockEncryptor,
+        mockDecryptor,
+      );
+
+      const updated = await serverDB.query.aiProviders.findFirst({
+        where: eq(aiProviders.id, providerId),
+      });
+
+      const updatedKeyVaults = JSON.parse(updated?.keyVaults || '{}');
+      expect(updatedKeyVaults).toEqual({
+        apiKey: 'new-api-key',
+        bearerToken: 'existing-bearer-token',
+        oauthAccessToken: 'existing-oauth-token',
+      });
+    });
+
+    it('should preserve OAuth tokens when updating non-OAuth fields', async () => {
+      const providerId = 'aihubmix';
+      const existingKeyVaults = {
+        bearerToken: 'copilot-bearer-token',
+        bearerTokenExpiresAt: '1700000000000',
+        oauthAccessToken: 'ghu_oauth_token',
+      };
+
+      await serverDB.insert(aiProviders).values({
+        id: providerId,
+        keyVaults: JSON.stringify(existingKeyVaults),
+        name: 'AiHubMix',
+        source: 'custom',
+        userId,
+      });
+
+      const mockEncryptor = vi.fn().mockImplementation((s: string) => Promise.resolve(s));
+      const mockDecryptor = vi
+        .fn()
+        .mockImplementation((s: string) => Promise.resolve(JSON.parse(s)));
+
+      // Update with empty keyVaults (simulating form submit without OAuth fields)
+      await aiProviderModel.updateConfig(
+        providerId,
+        {
+          keyVaults: {},
+          fetchOnClient: true,
+        },
+        mockEncryptor,
+        mockDecryptor,
+      );
+
+      const updated = await serverDB.query.aiProviders.findFirst({
+        where: eq(aiProviders.id, providerId),
+      });
+
+      const updatedKeyVaults = JSON.parse(updated?.keyVaults || '{}');
+      expect(updatedKeyVaults).toEqual(existingKeyVaults);
+      expect(updated?.fetchOnClient).toBe(true);
+    });
+
+    it('should handle decryption errors gracefully and use new values only', async () => {
+      const providerId = 'aihubmix';
+
+      await serverDB.insert(aiProviders).values({
+        id: providerId,
+        keyVaults: 'invalid-encrypted-data',
+        name: 'AiHubMix',
+        source: 'custom',
+        userId,
+      });
+
+      const mockEncryptor = vi.fn().mockImplementation((s: string) => Promise.resolve(s));
+      const mockDecryptor = vi.fn().mockImplementation(() => {
+        throw new Error('Decryption failed');
+      });
+
+      await aiProviderModel.updateConfig(
+        providerId,
+        {
+          keyVaults: { newKey: 'newValue' },
+        },
+        mockEncryptor,
+        mockDecryptor,
+      );
+
+      const updated = await serverDB.query.aiProviders.findFirst({
+        where: eq(aiProviders.id, providerId),
+      });
+
       expect(updated?.keyVaults).toBe(JSON.stringify({ newKey: 'newValue' }));
+    });
+
+    it('should allow clearing OAuth tokens explicitly', async () => {
+      const providerId = 'aihubmix';
+      const existingKeyVaults = {
+        apiKey: 'api-key',
+        bearerToken: 'bearer-token',
+        oauthAccessToken: 'oauth-token',
+      };
+
+      await serverDB.insert(aiProviders).values({
+        id: providerId,
+        keyVaults: JSON.stringify(existingKeyVaults),
+        name: 'AiHubMix',
+        source: 'custom',
+        userId,
+      });
+
+      const mockEncryptor = vi.fn().mockImplementation((s: string) => Promise.resolve(s));
+      const mockDecryptor = vi
+        .fn()
+        .mockImplementation((s: string) => Promise.resolve(JSON.parse(s)));
+
+      // Explicitly set OAuth tokens to undefined to clear them
+      await aiProviderModel.updateConfig(
+        providerId,
+        {
+          keyVaults: {
+            apiKey: 'api-key',
+            bearerToken: undefined,
+            oauthAccessToken: undefined,
+          },
+        },
+        mockEncryptor,
+        mockDecryptor,
+      );
+
+      const updated = await serverDB.query.aiProviders.findFirst({
+        where: eq(aiProviders.id, providerId),
+      });
+
+      const updatedKeyVaults = JSON.parse(updated?.keyVaults || '{}');
+      expect(updatedKeyVaults.apiKey).toBe('api-key');
+      expect(updatedKeyVaults.bearerToken).toBeUndefined();
+      expect(updatedKeyVaults.oauthAccessToken).toBeUndefined();
     });
   });
 

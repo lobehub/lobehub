@@ -31,7 +31,7 @@ const List = memo((props: ListProps) => {
   if (!initAiProviderList)
     return (
       <Flexbox gap={24} paddingBlock={'0 16px'}>
-        <Flexbox align={'center'} gap={4} horizontal>
+        <Flexbox horizontal align={'center'} gap={4}>
           <Text strong style={{ fontSize: 16 }}>
             {t('list.title.enabled')}
           </Text>
@@ -39,12 +39,12 @@ const List = memo((props: ListProps) => {
         <Grid gap={16} rows={3}>
           {loadingArr.map((item) => (
             <Card
+              loading
               enabled={false}
               id={item}
               key={item}
-              loading
-              onProviderSelect={onProviderSelect}
               source={'builtin'}
+              onProviderSelect={onProviderSelect}
             />
           ))}
         </Grid>
@@ -54,7 +54,7 @@ const List = memo((props: ListProps) => {
   return (
     <>
       <Flexbox gap={24}>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Text strong style={{ fontSize: 18 }}>
             {t('list.title.enabled')}
           </Text>
@@ -68,7 +68,7 @@ const List = memo((props: ListProps) => {
       </Flexbox>
       {disabledCustomList.length > 0 && (
         <Flexbox gap={24}>
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             <Text strong style={{ fontSize: 18 }}>
               {t('list.title.custom')}
             </Text>
@@ -82,7 +82,7 @@ const List = memo((props: ListProps) => {
         </Flexbox>
       )}
       <Flexbox gap={24}>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Text strong style={{ fontSize: 18 }}>
             {t('list.title.disabled')}
           </Text>

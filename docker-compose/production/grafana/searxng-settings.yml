@@ -2,7 +2,7 @@ general:
   # Debug mode, only for development. Is overwritten by ${SEARXNG_DEBUG}
   debug: false
   # displayed name
-  instance_name: "searxng"
+  instance_name: 'searxng'
   # For example: https://example.com/privacy
   privacypolicy_url: false
   # use true to use your own donation page written in searx/info/en/donate.md
@@ -36,15 +36,15 @@ search:
   # Existing autocomplete backends: "baidu", "brave", "dbpedia", "duckduckgo", "google", "yandex",
   # "mwmbl", "seznam", "stract", "swisscows", "qwant", "wikipedia" -
   # leave blank to turn it off by default.
-  autocomplete: ""
+  autocomplete: ''
   # minimun characters to type before autocompleter starts
   autocomplete_min: 4
   # backend for the favicon near URL in search results.
   # Available resolvers: "allesedv", "duckduckgo", "google", "yandex" - leave blank to turn it off by default.
-  favicon_resolver: ""
+  favicon_resolver: ''
   # Default search language - leave blank to detect from browser information or
   # use codes from 'languages.py'
-  default_lang: "auto"
+  default_lang: 'auto'
   # max_page: 0  # if engine supports paging, 0 means unlimited numbers of pages
   # Available languages
   # languages:
@@ -81,10 +81,10 @@ search:
 server:
   # Is overwritten by ${SEARXNG_PORT} and ${SEARXNG_BIND_ADDRESS}
   port: 8888
-  bind_address: "127.0.0.1"
+  bind_address: '127.0.0.1'
   # public URL of the instance, to ensure correct inbound links. Is overwritten
   # by ${SEARXNG_URL}.
-  base_url: /  # "http://example.com/location"
+  base_url: / # "http://example.com/location"
   # rate limit the number of request on the instance, block some bots.
   # Is overwritten by ${SEARXNG_LIMITER}
   limiter: false
@@ -95,14 +95,14 @@ server:
   # If your instance owns a /etc/searxng/settings.yml file, then set the following
   # values there.
 
-  secret_key: "779c5b69fe650f147be9012abca6b44a8697acdb2817b46353f4779bb07d81d1"  # Is overwritten by ${SEARXNG_SECRET}
+  secret_key: '779c5b69fe650f147be9012abca6b44a8697acdb2817b46353f4779bb07d81d1' # Is overwritten by ${SEARXNG_SECRET}
   # Proxy image results through SearXNG. Is overwritten by ${SEARXNG_IMAGE_PROXY}
   image_proxy: false
   # 1.0 and 1.1 are supported
-  http_protocol_version: "1.0"
+  http_protocol_version: '1.0'
   # POST queries are more secure as they don't show up in history but may cause
   # problems when using Firefox containers
-  method: "POST"
+  method: 'POST'
   default_http_headers:
     X-Content-Type-Options: nosniff
     X-Download-Options: noopen
@@ -116,11 +116,11 @@ redis:
 
 ui:
   # Custom static path - leave it blank if you didn't change
-  static_path: ""
+  static_path: ''
   # Is overwritten by ${SEARXNG_STATIC_USE_HASH}.
   static_use_hash: false
   # Custom templates path - leave it blank if you didn't change
-  templates_path: ""
+  templates_path: ''
   # query_in_title: When true, the result page's titles contains the query
   # it decreases the privacy, since the browser can records the page titles.
   query_in_title: false
@@ -134,7 +134,7 @@ ui:
   # cache_url: "https://webcache.googleusercontent.com/search?q=cache:"
   # Default interface locale - leave blank to detect from browser information or
   # use codes from the 'locales' config section
-  default_locale: ""
+  default_locale: ''
   # Open result links in a new tab by default
   # results_on_new_tab: false
   theme_args:
@@ -189,7 +189,7 @@ outgoing:
   # max_request_timeout: 10.0
   # suffix of searx_useragent, could contain information like an email address
   # to the administrator
-  useragent_suffix: ""
+  useragent_suffix: ''
   # The maximum number of concurrent connections that may be established.
   pool_connections: 100
   # Allow the connection pool to maintain keep-alive connections below this
@@ -320,7 +320,7 @@ checker:
     infobox: &tests_infobox
       infobox:
         matrix:
-          query: ["linux", "new york", "bbc"]
+          query: ['linux', 'new york', 'bbc']
         result_container:
           - has_infobox
 
@@ -345,10 +345,10 @@ engines:
   - name: adobe stock
     engine: adobe_stock
     shortcut: asi
-    categories: ["images"]
+    categories: ['images']
     # https://docs.searxng.org/dev/engines/online/adobe_stock.html
     adobe_order: relevance
-    adobe_content_types: ["photo", "illustration", "zip_vector", "template", "3d", "image"]
+    adobe_content_types: ['photo', 'illustration', 'zip_vector', 'template', '3d', 'image']
     timeout: 6
     disabled: true
 
@@ -356,9 +356,9 @@ engines:
     engine: adobe_stock
     shortcut: asv
     network: adobe stock
-    categories: ["videos"]
+    categories: ['videos']
     adobe_order: relevance
-    adobe_content_types: ["video"]
+    adobe_content_types: ['video']
     timeout: 6
     disabled: true
 
@@ -366,9 +366,9 @@ engines:
     engine: adobe_stock
     shortcut: asa
     network: adobe stock
-    categories: ["music"]
+    categories: ['music']
     adobe_order: relevance
-    adobe_content_types: ["audio"]
+    adobe_content_types: ['audio']
     timeout: 6
     disabled: true
 
@@ -490,7 +490,7 @@ engines:
     engine: wikipedia
     shortcut: wp
     # add "list" to the array to get results in the results list
-    display_type: ["infobox"]
+    display_type: ['infobox']
     categories: [general]
 
   - name: bilibili
@@ -754,7 +754,7 @@ engines:
     timeout: 3.0
     weight: 2
     # add "list" to the array to get results in the results list
-    display_type: ["infobox"]
+    display_type: ['infobox']
     tests: *tests_infobox
     categories: [general]
 
@@ -900,9 +900,9 @@ engines:
   - name: gentoo
     engine: mediawiki
     shortcut: ge
-    categories: ["it", "software wikis"]
-    base_url: "https://wiki.gentoo.org/"
-    api_path: "api.php"
+    categories: ['it', 'software wikis']
+    base_url: 'https://wiki.gentoo.org/'
+    api_path: 'api.php'
     search_type: text
     timeout: 10
 
@@ -1030,7 +1030,7 @@ engines:
     shortcut: hex
     disabled: true
     # Valid values: name inserted_at updated_at total_downloads recent_downloads
-    sort_criteria: "recent_downloads"
+    sort_criteria: 'recent_downloads'
     page_size: 10
 
   - name: crates.io
@@ -1330,7 +1330,7 @@ engines:
     title_query: metadata/oaf:entity/oaf:result/title/$
     content_query: metadata/oaf:entity/oaf:result/description/$
     content_html_to_text: true
-    categories: "science"
+    categories: 'science'
     shortcut: oad
     timeout: 5.0
     about:
@@ -1859,8 +1859,7 @@ engines:
   - name: torch
     engine: xpath
     paging: true
-    search_url:
-      http://xmh57jrknzkhv6y3ls3ubitzfqnkrwxhopf5aygthi7d6rplyvk3noyd.onion/cgi-bin/omega/omega?P={query}&DEFAULTOP=and
+    search_url: http://xmh57jrknzkhv6y3ls3ubitzfqnkrwxhopf5aygthi7d6rplyvk3noyd.onion/cgi-bin/omega/omega?P={query}&DEFAULTOP=and
     results_xpath: //table//tr
     url_xpath: ./td[2]/a
     title_xpath: ./td[2]/b
@@ -1969,7 +1968,7 @@ engines:
     weight: 0.5
     shortcut: wb
     categories: [general, wikimedia]
-    base_url: "https://{language}.wikibooks.org/"
+    base_url: 'https://{language}.wikibooks.org/'
     search_type: text
     disabled: true
     about:
@@ -1980,7 +1979,7 @@ engines:
     engine: mediawiki
     shortcut: wn
     categories: [news, wikimedia]
-    base_url: "https://{language}.wikinews.org/"
+    base_url: 'https://{language}.wikinews.org/'
     search_type: text
     srsort: create_timestamp_desc
     about:
@@ -1992,7 +1991,7 @@ engines:
     weight: 0.5
     shortcut: wq
     categories: [general, wikimedia]
-    base_url: "https://{language}.wikiquote.org/"
+    base_url: 'https://{language}.wikiquote.org/'
     search_type: text
     disabled: true
     additional_tests:
@@ -2006,7 +2005,7 @@ engines:
     weight: 0.5
     shortcut: ws
     categories: [general, wikimedia]
-    base_url: "https://{language}.wikisource.org/"
+    base_url: 'https://{language}.wikisource.org/'
     search_type: text
     disabled: true
     about:
@@ -2017,7 +2016,7 @@ engines:
     engine: mediawiki
     shortcut: wsp
     categories: [general, science, wikimedia]
-    base_url: "https://species.wikimedia.org/"
+    base_url: 'https://species.wikimedia.org/'
     search_type: text
     disabled: true
     about:
@@ -2026,7 +2025,7 @@ engines:
     tests:
       wikispecies:
         matrix:
-          query: "Campbell, L.I. et al. 2011: MicroRNAs"
+          query: 'Campbell, L.I. et al. 2011: MicroRNAs'
           lang: en
         result_container:
           - not_empty
@@ -2038,7 +2037,7 @@ engines:
     engine: mediawiki
     shortcut: wt
     categories: [dictionaries, wikimedia]
-    base_url: "https://{language}.wiktionary.org/"
+    base_url: 'https://{language}.wiktionary.org/'
     search_type: text
     about:
       website: https://www.wiktionary.org/
@@ -2049,7 +2048,7 @@ engines:
     weight: 0.5
     shortcut: wv
     categories: [general, wikimedia]
-    base_url: "https://{language}.wikiversity.org/"
+    base_url: 'https://{language}.wikiversity.org/'
     search_type: text
     disabled: true
     about:
@@ -2061,7 +2060,7 @@ engines:
     weight: 0.5
     shortcut: wy
     categories: [general, wikimedia]
-    base_url: "https://{language}.wikivoyage.org/"
+    base_url: 'https://{language}.wikivoyage.org/'
     search_type: text
     disabled: true
     about:
@@ -2315,7 +2314,7 @@ engines:
     no_result_for_http_status: [404]
     about:
       website: https://www.woxikon.de/
-      wikidata_id:  # No Wikidata ID
+      wikidata_id: # No Wikidata ID
       use_official_api: false
       require_api_key: false
       results: HTML

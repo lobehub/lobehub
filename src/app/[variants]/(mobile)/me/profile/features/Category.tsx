@@ -5,7 +5,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import Cell, { type CellProps } from '@/components/Cell';
+import { type CellProps } from '@/components/Cell';
+import Cell from '@/components/Cell';
 import { ProfileTabs } from '@/store/global/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';

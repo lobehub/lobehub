@@ -87,11 +87,11 @@ export const ReferenceImages = memo<ReferenceImagesProps>(({ imageUrl, imageUrls
         <div className={styles.imageSingleInner}>
           <ImageItem
             alt="Reference image"
+            style={{ height: '100%', width: '100%' }}
+            url={allImages[0]}
             preview={{
               src: allImages[0],
             }}
-            style={{ height: '100%', width: '100%' }}
-            url={allImages[0]}
           />
         </div>
       </div>
@@ -100,16 +100,16 @@ export const ReferenceImages = memo<ReferenceImagesProps>(({ imageUrl, imageUrls
 
   // Multiple images layout
   return (
-    <Flexbox className={styles.container} horizontal wrap="wrap">
+    <Flexbox horizontal className={styles.container} wrap="wrap">
       {allImages.map((url, index) => (
         <div className={styles.image} key={`${url}-${index}`}>
           <ImageItem
             alt={`Reference image ${index + 1}`}
+            style={{ height: '100%', width: '100%' }}
+            url={url}
             preview={{
               src: url,
             }}
-            style={{ height: '100%', width: '100%' }}
-            url={url}
           />
         </div>
       ))}

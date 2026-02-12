@@ -4,7 +4,7 @@ import {
   type PluginManifest,
 } from '@lobehub/market-sdk';
 import {
-  AgentEventRequest,
+  type AgentEventRequest,
   type CallReportRequest,
   type InstallReportRequest,
   type PluginEventRequest,
@@ -86,6 +86,21 @@ class DiscoverService {
       },
       { context: { showNotification: false } },
     );
+  };
+
+  getAgentsByPlugin = async (params: {
+    locale?: string;
+    page?: number;
+    pageSize?: number;
+    pluginId: string;
+  }): Promise<AssistantListResponse> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return lambdaClient.market.getAgentsByPlugin.query({
+      ...params,
+      locale,
+      page: params.page ? Number(params.page) : 1,
+      pageSize: params.pageSize ? Number(params.pageSize) : 20,
+    });
   };
 
   // ============================== MCP Market ==============================
@@ -483,7 +498,7 @@ class DiscoverService {
 
   getGroupAgentList = async (params: GroupAgentQueryParams = {}): Promise<any> => {
     const locale = globalHelpers.getCurrentLanguage();
-    return lambdaClient.market.getGroupAgentList.query(
+    return lambdaClient.market.agentGroup.getAgentGroupList.query(
       {
         ...params,
         locale,

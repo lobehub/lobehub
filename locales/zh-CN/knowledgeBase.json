@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "文件添加成功",
+  "addToKnowledgeBase.alreadyExists": "该文件已在此资源库中",
   "addToKnowledgeBase.confirm": "添加",
   "addToKnowledgeBase.error": "添加文件到资源库失败",
   "addToKnowledgeBase.id.placeholder": "请选择要添加的资源库",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "资源库名称",
   "createNew.name.required": "请填写资源库名称",
   "createNew.title": "新建资源库",
+  "moveToKnowledgeBase.error": "移动文件到资源库失败",
+  "moveToKnowledgeBase.success": "文件移动成功",
   "tab.evals": "评估",
   "tab.files": "文件",
   "tab.settings": "设置",

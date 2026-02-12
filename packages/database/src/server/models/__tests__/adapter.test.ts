@@ -14,7 +14,7 @@ import {
   oidcSessions,
 } from '../../../schemas/oidc';
 
-let serverDB = await getTestDB();
+const serverDB = await getTestDB();
 
 // Test data
 const testModelName = 'Session';

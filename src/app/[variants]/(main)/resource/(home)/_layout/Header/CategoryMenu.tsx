@@ -57,12 +57,12 @@ const CategoryMenu = memo(() => {
       {items.map((item) => (
         <Link
           key={item.key}
+          to={item.url}
           onClick={(e) => {
             e.preventDefault();
             setMode('explorer');
             navigate(item.url, { replace: true });
           }}
-          to={item.url}
         >
           <NavItem active={activeKey === item.key} icon={item.icon} title={item.title} />
         </Link>

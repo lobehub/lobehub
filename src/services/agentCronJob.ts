@@ -1,6 +1,6 @@
-import type {
-  CreateAgentCronJobData,
-  UpdateAgentCronJobData,
+import {
+  type CreateAgentCronJobData,
+  type UpdateAgentCronJobData,
 } from '@/database/schemas/agentCronJob';
 import { lambdaClient } from '@/libs/trpc/client/lambda';
 

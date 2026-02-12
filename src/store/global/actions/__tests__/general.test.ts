@@ -1,12 +1,12 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { CURRENT_VERSION } from '@/const/version';
 import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global';
 import { initialState } from '@/store/global/initialState';
 import { switchLang } from '@/utils/client/switchLang';
+import { withSWR } from '~test-utils';
 
 vi.mock('@/utils/client/switchLang', () => ({
   switchLang: vi.fn(),

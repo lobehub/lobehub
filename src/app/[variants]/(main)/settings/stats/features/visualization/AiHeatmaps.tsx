@@ -1,4 +1,5 @@
-import { Heatmaps, type HeatmapsProps } from '@lobehub/charts';
+import { type HeatmapsProps } from '@lobehub/charts';
+import { Heatmaps } from '@lobehub/charts';
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { FlameIcon } from 'lucide-react';
@@ -27,6 +28,8 @@ const AiHeatmaps = memo<
       blockRadius={mobile ? 2 : undefined}
       blockSize={mobile ? 6 : 14}
       data={data || []}
+      loading={isLoading || !data}
+      maxLevel={4}
       labels={{
         legend: {
           less: t('heatmaps.legend.less'),
@@ -49,8 +52,6 @@ const AiHeatmaps = memo<
         tooltip: t('heatmaps.tooltip'),
         totalCount: t('heatmaps.totalCount'),
       }}
-      loading={isLoading || !data}
-      maxLevel={4}
       style={{
         alignSelf: 'center',
       }}
@@ -59,7 +60,7 @@ const AiHeatmaps = memo<
   );
 
   const tags = (
-    <Flexbox gap={8} horizontal>
+    <Flexbox horizontal gap={8}>
       <Tag variant={'filled'}>{[days, t('stats.days')].join(' ')}</Tag>
       <Tag color={'success'} icon={<Icon icon={FlameIcon} />} variant={'filled'}>
         {[hotDays, t('stats.days')].join(' ')}
@@ -70,7 +71,7 @@ const AiHeatmaps = memo<
   if (inShare) {
     return (
       <Flexbox gap={4}>
-        <Flexbox align={'baseline'} gap={4} horizontal justify={'space-between'}>
+        <Flexbox horizontal align={'baseline'} gap={4} justify={'space-between'}>
           <div
             style={{
               color: cssVar.colorTextDescription,

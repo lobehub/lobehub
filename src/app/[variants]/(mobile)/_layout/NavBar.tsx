@@ -1,7 +1,8 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { TabBar, type TabBarProps } from '@lobehub/ui/mobile';
+import { type TabBarProps } from '@lobehub/ui/mobile';
+import { TabBar } from '@lobehub/ui/mobile';
 import { createStaticStyles } from 'antd-style';
 import { Compass, MessageSquare, User } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -23,7 +24,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: fixed;
     z-index: 100;
     inset-block-end: 0;
-    inset-inline: 0 0;
+    inset-inline: 0;
   `,
 }));
 

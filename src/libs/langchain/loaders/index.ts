@@ -1,7 +1,5 @@
-import {
-  type SupportedTextSplitterLanguage,
-  SupportedTextSplitterLanguages,
-} from 'langchain/text_splitter';
+import { type SupportedTextSplitterLanguage } from 'langchain/text_splitter';
+import { SupportedTextSplitterLanguages } from 'langchain/text_splitter';
 
 import { LANGCHAIN_SUPPORT_TEXT_LIST } from '@/libs/langchain/file';
 import { type LangChainLoaderType } from '@/libs/langchain/types';

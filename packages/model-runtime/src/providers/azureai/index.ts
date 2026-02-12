@@ -1,14 +1,16 @@
-import createClient, { ModelClient } from '@azure-rest/ai-inference';
-import { AzureKeyCredential } from '@azure/core-auth';
-import { ModelProvider } from 'model-bank';
 import type { Readable as NodeReadable } from 'node:stream';
-import OpenAI from 'openai';
+
+import { AzureKeyCredential } from '@azure/core-auth';
+import type { ModelClient } from '@azure-rest/ai-inference';
+import createClient from '@azure-rest/ai-inference';
+import { ModelProvider } from 'model-bank';
+import type OpenAI from 'openai';
 
 import { systemToUserModels } from '../../const/models';
-import { LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { transformResponseToStream } from '../../core/openaiCompatibleFactory';
-import { OpenAIStream, createSSEDataExtractor } from '../../core/streams';
-import { ChatMethodOptions, ChatStreamPayload } from '../../types';
+import { createSSEDataExtractor, OpenAIStream } from '../../core/streams';
+import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
@@ -37,7 +39,7 @@ export class LobeAzureAI implements LobeRuntimeAI {
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
     // Remove internal apiMode parameter to prevent sending to Azure AI API
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { messages, model, temperature, top_p, apiMode: _, ...params } = payload;
     // o1 series models on Azure OpenAI does not support streaming currently
     const enableStreaming = model.includes('o1') ? false : (params.stream ?? true);

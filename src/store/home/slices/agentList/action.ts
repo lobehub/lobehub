@@ -1,11 +1,11 @@
 import isEqual from 'fast-deep-equal';
-import type { SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
 
-import type { SidebarAgentItem, SidebarAgentListResponse } from '@/database/repositories/home';
+import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { homeService } from '@/services/home';
-import type { HomeStore } from '@/store/home/store';
+import { type HomeStore } from '@/store/home/store';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { mapResponseToState } from './initialState';
@@ -15,54 +15,39 @@ const n = setNamespace('agentList');
 const FETCH_AGENT_LIST_KEY = 'fetchAgentList';
 const SEARCH_AGENTS_KEY = 'searchAgents';
 
-export interface AgentListAction {
-  /**
-   * Close all agents drawer
-   */
-  closeAllAgentsDrawer: () => void;
-  /**
-   * Open all agents drawer
-   */
-  openAllAgentsDrawer: () => void;
-  /**
-   * Refresh the agent list (mutate SWR cache)
-   */
-  refreshAgentList: () => Promise<void>;
-  /**
-   * SWR hook to fetch sidebar agent list
-   */
-  useFetchAgentList: (isLogin: boolean | undefined) => SWRResponse<SidebarAgentListResponse>;
-  /**
-   * SWR hook to search agents by keyword
-   */
-  useSearchAgents: (keyword?: string) => SWRResponse<SidebarAgentItem[]>;
-}
+type Setter = StoreSetter<HomeStore>;
+export const createAgentListSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
+  new AgentListActionImpl(set, get, _api);
 
-export const createAgentListSlice: StateCreator<
-  HomeStore,
-  [['zustand/devtools', never]],
-  [],
-  AgentListAction
-> = (set, get) => ({
-  closeAllAgentsDrawer: () => {
-    set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
-  },
+export class AgentListActionImpl {
+  readonly #get: () => HomeStore;
+  readonly #set: Setter;
 
-  openAllAgentsDrawer: () => {
-    set({ allAgentsDrawerOpen: true }, false, n('openAllAgentsDrawer'));
-  },
+  constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-  refreshAgentList: async () => {
+  closeAllAgentsDrawer = (): void => {
+    this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
+  };
+
+  openAllAgentsDrawer = (): void => {
+    this.#set({ allAgentsDrawerOpen: true }, false, n('openAllAgentsDrawer'));
+  };
+
+  refreshAgentList = async (): Promise<void> => {
     await mutate([FETCH_AGENT_LIST_KEY, true]);
-  },
+  };
 
-  useFetchAgentList: (isLogin) =>
-    useClientDataSWRWithSync<SidebarAgentListResponse>(
+  useFetchAgentList = (isLogin: boolean | undefined): SWRResponse<SidebarAgentListResponse> => {
+    return useClientDataSWRWithSync<SidebarAgentListResponse>(
       isLogin === true ? [FETCH_AGENT_LIST_KEY, isLogin] : null,
       () => homeService.getSidebarAgentList(),
       {
         onData: (data) => {
-          const state = get();
+          const state = this.#get();
           const newState = mapResponseToState(data);
 
           // Skip update if data is the same
@@ -75,7 +60,7 @@ export const createAgentListSlice: StateCreator<
             return;
           }
 
-          set(
+          this.#set(
             {
               ...newState,
               isAgentListInit: true,
@@ -85,12 +70,16 @@ export const createAgentListSlice: StateCreator<
           );
         },
       },
-    ),
+    );
+  };
 
-  useSearchAgents: (keyword) =>
-    useClientDataSWR<SidebarAgentItem[]>([SEARCH_AGENTS_KEY, keyword], async () => {
+  useSearchAgents = (keyword?: string): SWRResponse<SidebarAgentItem[]> => {
+    return useClientDataSWR<SidebarAgentItem[]>([SEARCH_AGENTS_KEY, keyword], async () => {
       if (!keyword) return [];
 
       return homeService.searchAgents(keyword);
-    }),
-});
+    });
+  };
+}
+
+export type AgentListAction = Pick<AgentListActionImpl, keyof AgentListActionImpl>;

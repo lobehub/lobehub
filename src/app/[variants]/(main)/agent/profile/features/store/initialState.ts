@@ -1,7 +1,6 @@
 import { type IEditor } from '@lobehub/editor';
 import { type EditorState } from '@lobehub/editor/react';
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface PublicState {}
 
 export interface State extends PublicState {

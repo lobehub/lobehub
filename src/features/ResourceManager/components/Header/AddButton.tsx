@@ -2,10 +2,12 @@
 
 import { FILE_URL } from '@lobechat/business-const';
 import { Notion } from '@lobehub/icons';
-import { Button, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
-import { type ChangeEvent, useCallback, useMemo, useState } from 'react';
+import { type ChangeEvent } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
@@ -87,7 +89,16 @@ const AddButton = () => {
     // Switch to page view mode with real ID
     setCurrentViewItemId(realId);
     setMode('page');
-  }, [category, createResourceAndSync, currentFolderId, libraryId, setCategory, setCurrentViewItemId, setMode, t]);
+  }, [
+    category,
+    createResourceAndSync,
+    currentFolderId,
+    libraryId,
+    setCategory,
+    setCurrentViewItemId,
+    setMode,
+    t,
+  ]);
 
   const handleCreateFolder = useCallback(async () => {
     // Navigate to "All" category first if not already there
@@ -135,7 +146,15 @@ const AddButton = () => {
       message.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
-  }, [category, createResourceAndSync, currentFolderId, libraryId, setCategory, setPendingRenameItemId, t]);
+  }, [
+    category,
+    createResourceAndSync,
+    currentFolderId,
+    libraryId,
+    setCategory,
+    setPendingRenameItemId,
+    t,
+  ]);
 
   const {
     handleCloseNotionGuide,
@@ -197,14 +216,14 @@ const AddButton = () => {
         label: (
           <Upload
             accept={getAcceptedFileTypes(category)}
+            multiple={true}
+            showUploadList={false}
             beforeUpload={async (file) => {
               setMenuOpen(false);
               await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
 
               return false;
             }}
-            multiple={true}
-            showUploadList={false}
           >
             <div>{t('header.actions.uploadFile')}</div>
           </Upload>
@@ -249,10 +268,10 @@ const AddButton = () => {
     <>
       <DropdownMenu
         items={items}
-        onOpenChange={setMenuOpen}
         open={menuOpen}
         placement="bottomRight"
         trigger="both"
+        onOpenChange={setMenuOpen}
       >
         <Button data-no-highlight icon={Plus} type="primary">
           {t('addLibrary')}
@@ -263,26 +282,26 @@ const AddButton = () => {
         cover={<GuideVideo height={269} src={FILE_URL.importFromNotionGuide} width={358} />}
         desc={t('header.actions.notionGuide.desc')}
         okText={t('header.actions.notionGuide.ok')}
-        onCancel={handleCloseNotionGuide}
-        onOk={handleStartNotionImport}
         open={notionGuideOpen}
         title={t('header.actions.notionGuide.title')}
+        onCancel={handleCloseNotionGuide}
+        onOk={handleStartNotionImport}
       />
       <input
-        id="folder-upload-input"
         multiple
-        onChange={handleFolderUploadWithClose}
+        id="folder-upload-input"
         style={{ display: 'none' }}
+        onChange={handleFolderUploadWithClose}
         type="file"
         // @ts-expect-error - webkitdirectory is not in the React types
         webkitdirectory=""
       />
       <input
         accept=".zip"
-        onChange={handleNotionImport}
         ref={notionInputRef}
         style={{ display: 'none' }}
         type="file"
+        onChange={handleNotionImport}
       />
     </>
   );

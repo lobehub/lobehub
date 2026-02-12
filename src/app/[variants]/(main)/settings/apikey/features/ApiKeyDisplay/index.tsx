@@ -1,7 +1,8 @@
 import { CopyOutlined, EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons';
 import { Button } from '@lobehub/ui';
 import { App, Flex } from 'antd';
-import { type FC, useState } from 'react';
+import { type FC } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface ApiKeyDisplayProps {
@@ -40,17 +41,17 @@ const ApiKeyDisplay: FC<ApiKeyDisplayProps> = ({ apiKey }) => {
       <Flex>
         <Button
           icon={isVisible ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-          onClick={toggleVisibility}
           size="small"
           title={isVisible ? t('apikey.display.hide') : t('apikey.display.show')}
           type="text"
+          onClick={toggleVisibility}
         />
         <Button
           icon={<CopyOutlined />}
-          onClick={handleCopy}
           size="small"
           title={t('apikey.display.copy')}
           type="text"
+          onClick={handleCopy}
         />
       </Flex>
     </Flex>

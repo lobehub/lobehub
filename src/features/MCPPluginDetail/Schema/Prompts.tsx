@@ -41,6 +41,7 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
       activeKey={activeKey}
       expandIconPlacement={'end'}
       gap={8}
+      variant={'outlined'}
       items={prompts.map((item) => {
         return {
           children: (
@@ -55,6 +56,9 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                   children:
                     mode === ModeType.Docs ? (
                       <InlineTable
+                        dataSource={item.arguments}
+                        pagination={false}
+                        rowKey={'name'}
                         columns={[
                           {
                             dataIndex: 'name',
@@ -74,12 +78,12 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             dataIndex: 'required',
                             render: (_, record) => (
                               <Icon
+                                icon={record.required ? CheckIcon : MinusIcon}
                                 color={
                                   record.required
                                     ? cssVar.colorSuccess
                                     : cssVar.colorTextDescription
                                 }
-                                icon={record.required ? CheckIcon : MinusIcon}
                               />
                             ),
                             title: t('mcp.details.schema.prompts.table.required'),
@@ -89,9 +93,6 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             title: t('mcp.details.schema.prompts.table.description'),
                           },
                         ]}
-                        dataSource={item.arguments}
-                        pagination={false}
-                        rowKey={'name'}
                       />
                     ) : (
                       <Highlighter
@@ -122,7 +123,6 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
         };
       })}
       onChange={setActiveKey}
-      variant={'outlined'}
     />
   );
 });

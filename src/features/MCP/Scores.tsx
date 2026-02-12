@@ -1,14 +1,14 @@
 'use client';
 
-import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tooltip, stopPropagation } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleDashedIcon, HammerIcon, LayersIcon, MessageSquareQuoteIcon } from 'lucide-react';
-import { Link } from '@/libs/router';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { Link } from '@/libs/router';
 import { McpNavKey } from '@/types/discover';
 
 import {
@@ -149,10 +149,10 @@ const Scores = memo<ScoresProps>(
     const scoreTag = (
       <Tooltip title={`${t(`mcp.details.scoreLevel.${grade}.desc`)} (${Math.round(percentage)}%)`}>
         <Flexbox
+          horizontal
           align={'center'}
           className={cx(styles.tag, getGradeStyleClass(grade, styles))}
           gap={8}
-          horizontal
           style={{
             paddingLeft: 4,
           }}
@@ -182,10 +182,10 @@ const Scores = memo<ScoresProps>(
     const unvalidatedTag = (
       <Tooltip title={t('mcp.unvalidated.desc')}>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.tag}
           gap={8}
-          horizontal
           style={{
             color: cssVar.colorTextDescription,
             paddingLeft: 4,
@@ -198,13 +198,7 @@ const Scores = memo<ScoresProps>(
     );
 
     return (
-      <Flexbox
-        align={'center'}
-        flex={'none'}
-        gap={8}
-        horizontal
-        onClick={(e) => e.stopPropagation()}
-      >
+      <Flexbox horizontal align={'center'} flex={'none'} gap={8} onClick={stopPropagation}>
         {identifier && (
           <Link
             href={qs.stringifyUrl({
@@ -226,7 +220,7 @@ const Scores = memo<ScoresProps>(
               url: urlJoin('/community/mcp', identifier),
             })}
           >
-            <Flexbox align={'center'} className={styles.extraTag} gap={16} horizontal>
+            <Flexbox horizontal align={'center'} className={styles.extraTag} gap={16}>
               {showToolts && (
                 <Tooltip
                   title={[
@@ -234,7 +228,7 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.tools.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox align={'center'} className={styles.extraTagActive} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
                     <Icon icon={HammerIcon} size={14} />
                     {toolsCount}
                   </Flexbox>
@@ -247,7 +241,7 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.prompts.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox align={'center'} className={styles.extraTagActive} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
                     <Icon icon={MessageSquareQuoteIcon} size={14} />
                     {promptsCount}
                   </Flexbox>
@@ -260,7 +254,7 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.resources.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox align={'center'} className={styles.extraTagActive} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
                     <Icon icon={LayersIcon} size={14} />
                     {resourcesCount}
                   </Flexbox>

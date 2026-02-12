@@ -1,6 +1,7 @@
 import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler, memo, useCallback, useMemo } from 'react';
+import { type MouseEventHandler } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -17,8 +18,8 @@ import {
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import Actions from './Actions';
-import { UserMessageExtra } from './Extra';
 import UserMessageContent from './components/MessageContent';
+import { UserMessageExtra } from './Extra';
 
 interface UserMessageProps {
   disableEditing?: boolean;
@@ -78,6 +79,16 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
 
   return (
     <ChatItem
+      avatar={{ avatar, title }}
+      editing={editing}
+      id={id}
+      message={content}
+      messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
+      placement={'right'}
+      showAvatar={false}
+      showTitle={false}
+      time={createdAt}
+      titleAddon={dmIndicator}
       actions={
         <Actions
           actionsConfig={actionsConfig}
@@ -87,18 +98,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           index={index}
         />
       }
-      avatar={{ avatar, title }}
-      editing={editing}
-      id={id}
-      message={content}
-      messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
-      placement={'right'}
-      showAvatar={false}
-      showTitle={false}
-      time={createdAt}
-      titleAddon={dmIndicator}
     >
       <UserMessageContent {...item} />
     </ChatItem>

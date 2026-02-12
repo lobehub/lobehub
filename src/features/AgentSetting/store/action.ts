@@ -5,9 +5,10 @@ import {
   chainSummaryDescription,
   chainSummaryTags,
 } from '@lobechat/prompts';
-import { TraceNameMap, type TracePayload, TraceTopicType } from '@lobechat/types';
+import { type TracePayload } from '@lobechat/types';
+import { TraceNameMap, TraceTopicType } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
-import type { PartialDeep } from 'type-fest';
+import { type PartialDeep } from 'type-fest';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { chatService } from '@/services/chat';
@@ -20,17 +21,14 @@ import { type SystemAgentItem } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type LoadingState, type SaveStatus } from '../store/initialState';
-import { type State, initialState } from './initialState';
-import { type ConfigDispatch, configReducer } from './reducers/config';
-import { type MetaDataDispatch, metaDataReducer } from './reducers/meta';
+import { type LoadingState, type SaveStatus, type State } from '../store/initialState';
+import { initialState } from './initialState';
+import { type ConfigDispatch } from './reducers/config';
+import { configReducer } from './reducers/config';
+import { type MetaDataDispatch } from './reducers/meta';
+import { metaDataReducer } from './reducers/meta';
 
 export interface PublicAction {
-  /**
-   * 自动选择表情
-   * @param id - 表情的 ID
-   */
-  autoPickEmoji: () => Promise<void>;
   /**
    * 自动完成代理描述
    * @param id - 代理的 ID
@@ -49,6 +47,11 @@ export interface PublicAction {
    */
   autocompleteAllMeta: (replace?: boolean) => void;
   autocompleteMeta: (key: keyof MetaData) => void;
+  /**
+   * 自动选择表情
+   * @param id - 表情的 ID
+   */
+  autoPickEmoji: () => Promise<void>;
 }
 
 export interface Action extends PublicAction {

@@ -1,5 +1,5 @@
-import { ModelParamsSchema } from '../standard-parameters';
-import { AIChatModelCard, AIImageModelCard } from '../types';
+import type { ModelParamsSchema } from '../standard-parameters';
+import type { AIChatModelCard, AIImageModelCard } from '../types';
 
 /**
  * gemini implicit caching not extra cost

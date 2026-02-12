@@ -10,12 +10,8 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
-import {
-  type LobeAgentSession,
-  LobeSessionType,
-  type LobeSessions,
-  SessionDefaultGroup,
-} from '@/types/session';
+import { type LobeAgentSession, type LobeSessions } from '@/types/session';
+import { LobeSessionType, SessionDefaultGroup } from '@/types/session';
 
 import CollapseGroup from './CollapseGroup';
 import Actions from './CollapseGroup/Actions';
@@ -80,13 +76,13 @@ const DefaultMode = memo(() => {
           children: <SessionList dataSource={children} groupId={id} />,
           extra: (
             <Actions
-              id={id}
               isCustomGroup
+              id={id}
+              openConfigModal={() => setConfigGroupModalOpen(true)}
+              openRenameModal={() => setRenameGroupModalOpen(true)}
               onOpenChange={(isOpen) => {
                 if (isOpen) setActiveGroupId(id);
               }}
-              openConfigModal={() => setConfigGroupModalOpen(true)}
-              openRenameModal={() => setRenameGroupModalOpen(true)}
             />
           ),
           key: id,
@@ -116,13 +112,13 @@ const DefaultMode = memo(() => {
       {activeGroupId && (
         <RenameGroupModal
           id={activeGroupId}
-          onCancel={() => setRenameGroupModalOpen(false)}
           open={renameGroupModalOpen}
+          onCancel={() => setRenameGroupModalOpen(false)}
         />
       )}
       <ConfigGroupModal
-        onCancel={() => setConfigGroupModalOpen(false)}
         open={configGroupModalOpen}
+        onCancel={() => setConfigGroupModalOpen(false)}
       />
     </>
   );

@@ -10,7 +10,7 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useServerConfigStore } from '@/store/serverConfig';
 
-import type { MarketPublishAction } from './types';
+import { type MarketPublishAction } from './types';
 import { useMarketPublish } from './useMarketPublish';
 
 interface MarketPublishButtonProps {
@@ -131,9 +131,9 @@ const PublishButton = memo<MarketPublishButtonProps>(
       <ActionIcon
         icon={ShapesUploadIcon}
         loading={loading}
-        onClick={handleButtonClick}
         size={HEADER_ICON_SIZE(mobile)}
         title={buttonTitle}
+        onClick={handleButtonClick}
       />
     );
   },

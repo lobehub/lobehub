@@ -1,10 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { AiProviderModelListItem } from 'model-bank';
+import { type AiProviderModelListItem } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { mutate } from '@/libs/swr';
 import { aiModelService } from '@/services/aiModel';
+import { withSWR } from '~test-utils';
 
 import { useAiInfraStore as useStore } from '../../store';
 

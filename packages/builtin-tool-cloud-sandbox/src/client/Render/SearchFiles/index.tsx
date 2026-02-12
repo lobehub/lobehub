@@ -1,12 +1,12 @@
 'use client';
 
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { File, Folder } from 'lucide-react';
 import { memo } from 'react';
 
-import { type SearchLocalFilesState } from '../../../types';
+import type { SearchLocalFilesState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -51,12 +51,12 @@ const SearchFiles = memo<BuiltinRenderProps<SearchLocalFilesParams, SearchLocalF
     return (
       <Flexbox className={styles.container} gap={8}>
         {/* Header */}
-        <Flexbox align={'center'} horizontal justify={'space-between'}>
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Text className={styles.header}>
             🔍 Search in {args.directory}
             {args.keyword && ` for "${args.keyword}"`}
           </Text>
-          <Text as={'span'} code fontSize={11} type={'secondary'}>
+          <Text code as={'span'} fontSize={11} type={'secondary'}>
             {pluginState.totalCount} results
           </Text>
         </Flexbox>
@@ -67,23 +67,23 @@ const SearchFiles = memo<BuiltinRenderProps<SearchLocalFilesParams, SearchLocalF
             <Flexbox gap={2}>
               {pluginState.results.map((file, index) => (
                 <Flexbox
+                  horizontal
                   align={'center'}
                   className={styles.fileItem}
-                  horizontal
                   justify={'space-between'}
                   key={index}
                 >
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     {file.isDirectory ? (
                       <Folder className={styles.folderIcon} size={14} />
                     ) : (
                       <File className={styles.fileIcon} size={14} />
                     )}
                     <Flexbox gap={2}>
-                      <Text as={'span'} code fontSize={12}>
+                      <Text code as={'span'} fontSize={12}>
                         {file.name}
                       </Text>
-                      <Text as={'span'} code fontSize={11} type={'secondary'}>
+                      <Text code as={'span'} fontSize={11} type={'secondary'}>
                         {file.path}
                       </Text>
                     </Flexbox>

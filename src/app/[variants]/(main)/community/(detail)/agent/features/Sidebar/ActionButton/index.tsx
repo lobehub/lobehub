@@ -13,7 +13,7 @@ import ForkAndChat from './ForkAndChat';
 const ActionButton = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { avatar, description, tags, title, identifier } = useDetailContext();
   return (
-    <Flexbox align={'center'} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} gap={8}>
       <ForkAndChat mobile={mobile} />
       <ShareButton
         meta={{

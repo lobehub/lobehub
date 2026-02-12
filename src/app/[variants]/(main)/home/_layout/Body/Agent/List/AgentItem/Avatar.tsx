@@ -10,9 +10,9 @@ interface AgentAvatarProps {
 const AgentAvatar = memo<AgentAvatarProps>(({ avatar, avatarBackground }) => {
   return (
     <Avatar
+      emojiScaleWithBackground
       avatar={avatar || DEFAULT_AVATAR}
       background={avatarBackground}
-      emojiScaleWithBackground
       shape={'square'}
       size={22}
     />

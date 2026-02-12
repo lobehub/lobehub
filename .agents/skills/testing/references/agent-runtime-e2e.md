@@ -6,13 +6,14 @@
 
 Only mock **three external dependencies**:
 
-| Dependency | Mock | Description |
-|------------|------|-------------|
-| Database | PGLite | In-memory database from `@lobechat/database/test-utils` |
-| Redis | InMemoryAgentStateManager | Memory implementation |
-| Redis | InMemoryStreamEventManager | Memory implementation |
+| Dependency | Mock                       | Description                                             |
+| ---------- | -------------------------- | ------------------------------------------------------- |
+| Database   | PGLite                     | In-memory database from `@lobechat/database/test-utils` |
+| Redis      | InMemoryAgentStateManager  | Memory implementation                                   |
+| Redis      | InMemoryStreamEventManager | Memory implementation                                   |
 
 **NOT mocked:**
+
 - `model-bank` - Uses real model config
 - `Mecha` (AgentToolsEngine, ContextEngineering)
 - `AgentRuntimeService`
@@ -21,6 +22,7 @@ Only mock **three external dependencies**:
 ### Use vi.spyOn, not vi.mock
 
 Different tests need different LLM responses. `vi.spyOn` provides:
+
 - Flexible return values per test
 - Easy testing of different scenarios
 - Better test isolation
@@ -76,7 +78,7 @@ export const createOpenAIStreamResponse = (options: {
         controller.close();
       },
     }),
-    { headers: { 'content-type': 'text/event-stream' } }
+    { headers: { 'content-type': 'text/event-stream' } },
   );
 };
 ```
@@ -84,7 +86,10 @@ export const createOpenAIStreamResponse = (options: {
 ### State Management
 
 ```typescript
-import { InMemoryAgentStateManager, InMemoryStreamEventManager } from '@/server/modules/AgentRuntime';
+import {
+  InMemoryAgentStateManager,
+  InMemoryStreamEventManager,
+} from '@/server/modules/AgentRuntime';
 
 const stateManager = new InMemoryAgentStateManager();
 const streamEventManager = new InMemoryStreamEventManager();
@@ -107,14 +112,18 @@ it('should handle text response', async () => {
 });
 
 it('should handle tool calls', async () => {
-  fetchSpy.mockResolvedValueOnce(createOpenAIStreamResponse({
-    toolCalls: [{
-      id: 'call_123',
-      name: 'lobe-web-browsing____search____builtin',
-      arguments: JSON.stringify({ query: 'weather' }),
-    }],
-    finishReason: 'tool_calls',
-  }));
+  fetchSpy.mockResolvedValueOnce(
+    createOpenAIStreamResponse({
+      toolCalls: [
+        {
+          id: 'call_123',
+          name: 'lobe-web-browsing____search____builtin',
+          arguments: JSON.stringify({ query: 'weather' }),
+        },
+      ],
+      finishReason: 'tool_calls',
+    }),
+  );
   // ... execute test
 });
 ```

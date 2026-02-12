@@ -1,6 +1,7 @@
 import { uniq } from 'es-toolkit/compat';
 import { type DependencyList } from 'react';
-import { type HotkeyCallback, type Options, useHotkeys } from 'react-hotkeys-hook';
+import { type HotkeyCallback, type Options } from 'react-hotkeys-hook';
+import { useHotkeys } from 'react-hotkeys-hook';
 
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { useServerConfigStore } from '@/store/serverConfig';

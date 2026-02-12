@@ -58,13 +58,13 @@ const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize })
       className={styles.page}
       current={page ? Number(page) : currentPage}
       data-testid="pagination"
-      onChange={handlePageChange}
       pageSize={pageSize}
       showSizeChanger={false}
+      total={total}
       style={{
         alignSelf: 'flex-end',
       }}
-      total={total}
+      onChange={handlePageChange}
     />
   );
 });

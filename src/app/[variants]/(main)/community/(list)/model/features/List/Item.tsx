@@ -60,31 +60,31 @@ const ModelItem = memo<DiscoverModelItem>(
         clickable
         data-testid="model-item"
         height={'100%'}
-        onClick={() => {
-          navigate(link);
-        }}
+        variant={'outlined'}
+        width={'100%'}
         style={{
           overflow: 'hidden',
           position: 'relative',
         }}
-        variant={'outlined'}
-        width={'100%'}
+        onClick={() => {
+          navigate(link);
+        }}
       >
         <Flexbox
+          horizontal
           align={'flex-start'}
           gap={16}
-          horizontal
           justify={'space-between'}
           padding={16}
           width={'100%'}
         >
           <Flexbox
-            gap={12}
             horizontal
+            gap={12}
+            title={identifier}
             style={{
               overflow: 'hidden',
             }}
-            title={identifier}
           >
             <ModelIcon model={identifier} size={40} style={{ flex: 'none' }} type={'avatar'} />
             <Flexbox
@@ -95,16 +95,16 @@ const ModelItem = memo<DiscoverModelItem>(
               }}
             >
               <Flexbox
+                horizontal
                 align={'center'}
                 flex={1}
                 gap={8}
-                horizontal
                 style={{
                   overflow: 'hidden',
                 }}
               >
                 <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
-                  <Text as={'h2'} className={styles.title} ellipsis>
+                  <Text ellipsis as={'h2'} className={styles.title}>
                     {displayName}
                   </Text>
                 </Link>
@@ -112,14 +112,14 @@ const ModelItem = memo<DiscoverModelItem>(
               <div className={styles.author}>{identifier}</div>
             </Flexbox>
           </Flexbox>
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             <ModelTypeIcon type={type} />
           </Flexbox>
         </Flexbox>
         <Flexbox flex={1} gap={12} paddingInline={16}>
           <ModelInfoTags
-            contextWindowTokens={contextWindowTokens}
             directionReverse
+            contextWindowTokens={contextWindowTokens}
             {...abilities}
           />
           <Text
@@ -133,19 +133,19 @@ const ModelItem = memo<DiscoverModelItem>(
           </Text>
         </Flexbox>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.footer}
-          horizontal
           justify={'space-between'}
           padding={16}
         >
           <Flexbox
+            horizontal
             align={'center'}
             className={styles.secondaryDesc}
-            horizontal
             justify={'space-between'}
           >
-            <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
                 className={styles.secondaryDesc}
@@ -156,12 +156,12 @@ const ModelItem = memo<DiscoverModelItem>(
             <Popover
               content={
                 <Flexbox
-                  gap={6}
                   horizontal
+                  gap={6}
+                  wrap={'wrap'}
                   style={{
                     maxWidth: 175,
                   }}
-                  wrap={'wrap'}
                 >
                   {providers.map((item) => (
                     <ProviderIcon key={item} provider={item} size={24} />
@@ -169,7 +169,7 @@ const ModelItem = memo<DiscoverModelItem>(
                 </Flexbox>
               }
             >
-              <Flexbox align={'center'} gap={6} horizontal>
+              <Flexbox horizontal align={'center'} gap={6}>
                 {providers.slice(0, 6).map((item) => (
                   <ProviderIcon key={item} provider={item} size={14} type={'mono'} />
                 ))}

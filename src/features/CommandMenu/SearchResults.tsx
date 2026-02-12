@@ -16,12 +16,12 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import type { SearchResult } from '@/database/repositories/search';
+import { type SearchResult } from '@/database/repositories/search';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CommandItem } from './components';
 import { styles } from './styles';
-import type { ValidSearchType } from './utils/queryParser';
+import { type ValidSearchType } from './utils/queryParser';
 
 interface SearchResultsProps {
   isLoading: boolean;
@@ -100,7 +100,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'plugin': {
-          navigate(`/community/plugins/${result.identifier}`);
+          navigate(`/community/mcp/${result.identifier}`);
           break;
         }
         case 'communityAgent': {
@@ -108,7 +108,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'memory': {
-          navigate(`/memory`);
+          navigate(`/memory/preferences?preferenceId=${result.id}`);
           break;
         }
       }
@@ -185,7 +185,6 @@ const SearchResults = memo<SearchResultsProps>(
       }
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const getItemValue = (result: SearchResult) => {
       const meta = [result.title, result.description].filter(Boolean).join(' ');
       // Prefix with "search-result" to ensure these items rank after built-in commands
@@ -193,7 +192,6 @@ const SearchResults = memo<SearchResultsProps>(
       return `search-result ${result.type} ${result.id} ${meta}`.trim();
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const getDescription = (result: SearchResult) => {
       if (!result.description) return null;
       // Sanitize markdown content for message search results
@@ -203,7 +201,6 @@ const SearchResults = memo<SearchResultsProps>(
       return result.description;
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const getSubtitle = (result: SearchResult) => {
       const description = getDescription(result);
 
@@ -274,10 +271,10 @@ const SearchResults = memo<SearchResultsProps>(
           description={subtitle}
           icon={getIcon(result.type)}
           key={result.id}
-          onSelect={() => handleNavigate(result)}
           title={titleWithPrefix}
           value={getItemValue(result)}
           variant="detailed"
+          onSelect={() => handleNavigate(result)}
         />
       );
     };
@@ -298,8 +295,8 @@ const SearchResults = memo<SearchResultsProps>(
           forceMount
           key={`search-more-${type}`}
           keywords={[`zzz-action-${type}`]}
-          onSelect={() => handleSearchMore(type)}
           value={`zzz-action-${type}-search-more`}
+          onSelect={() => handleSearchMore(type)}
         >
           <div className={styles.itemContent}>
             <div className={styles.itemIcon}>{getIcon(type)}</div>

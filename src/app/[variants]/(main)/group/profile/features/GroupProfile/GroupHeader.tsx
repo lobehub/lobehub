@@ -6,7 +6,7 @@ import { useDebounceFn } from 'ahooks';
 import { message } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
-import { Suspense, memo, useCallback, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GroupAvatar from '@/app/[variants]/(main)/group/features/GroupAvatar';
@@ -89,19 +89,24 @@ const GroupHeader = memo(() => {
   return (
     <Flexbox
       gap={16}
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      }}
       paddingBlock={16}
       style={{
         cursor: 'default',
       }}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }}
     >
       {/* Avatar Section */}
       <EmojiPicker
-        allowDelete={!!groupMeta.avatar}
         allowUpload
+        allowDelete={!!groupMeta.avatar}
+        loading={uploading}
+        locale={locale}
+        shape={'square'}
+        size={72}
+        value={groupMeta.avatar}
         background={
           groupMeta.backgroundColor && groupMeta.backgroundColor !== 'rgba(0,0,0,0)'
             ? groupMeta.backgroundColor
@@ -137,10 +142,10 @@ const GroupHeader = memo(() => {
                 >
                   <BackgroundSwatches
                     gap={8}
-                    onChange={handleBackgroundColorChange}
                     shape={'square'}
                     size={38}
                     value={groupMeta.backgroundColor}
+                    onChange={handleBackgroundColorChange}
                   />
                 </Suspense>
               </Flexbox>
@@ -148,34 +153,29 @@ const GroupHeader = memo(() => {
             value: 'background',
           },
         ]}
-        loading={uploading}
-        locale={locale}
-        onChange={handleAvatarChange}
-        onDelete={handleAvatarDelete}
-        onUpload={handleAvatarUpload}
         popupProps={{
           placement: 'bottomLeft',
         }}
-        shape={'square'}
-        size={72}
-        value={groupMeta.avatar}
+        onChange={handleAvatarChange}
+        onDelete={handleAvatarDelete}
+        onUpload={handleAvatarUpload}
       />
       {/* Title Section */}
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Input
-          onChange={(e) => {
-            setLocalTitle(e.target.value);
-            debouncedSaveTitle(e.target.value);
-          }}
           placeholder={t('name.placeholder')}
+          value={localTitle}
+          variant={'borderless'}
           style={{
             fontSize: 36,
             fontWeight: 600,
             padding: 0,
             width: '100%',
           }}
-          value={localTitle}
-          variant={'borderless'}
+          onChange={(e) => {
+            setLocalTitle(e.target.value);
+            debouncedSaveTitle(e.target.value);
+          }}
         />
       </Flexbox>
     </Flexbox>

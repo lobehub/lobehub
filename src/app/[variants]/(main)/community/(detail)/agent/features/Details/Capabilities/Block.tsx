@@ -1,5 +1,6 @@
 import { Flexbox, Tag } from '@lobehub/ui';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import Title from '../../../../../features/Title';
 

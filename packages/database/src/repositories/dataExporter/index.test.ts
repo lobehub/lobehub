@@ -14,10 +14,10 @@ import {
   sessionGroups,
   sessions,
   topics,
-  userSettings,
   users,
+  userSettings,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { DATA_EXPORT_CONFIG, DataExporterRepos } from './index';
 
 let db: LobeChatDatabase;

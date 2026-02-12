@@ -19,6 +19,9 @@ const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
   return (
     <GridCard
       actions={<ContextDropdown id={context.id} />}
+      capturedAt={context.capturedAt || context.updatedAt || context.createdAt}
+      cate={context.type}
+      title={context.title}
       badges={
         <>
           <ProgressIcon
@@ -34,10 +37,7 @@ const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
           />
         </>
       }
-      capturedAt={context.capturedAt || context.updatedAt || context.createdAt}
-      cate={context.type}
       onClick={onClick}
-      title={context.title}
     >
       {context.description}
     </GridCard>

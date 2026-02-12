@@ -1,6 +1,16 @@
 'use client';
 
-import { Avatar, Block, Flexbox, Grid, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import {
+  Avatar,
+  Block,
+  Flexbox,
+  Grid,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+  stopPropagation,
+} from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { ClockIcon, Heart } from 'lucide-react';
@@ -12,7 +22,8 @@ import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { type FavoritePluginItem, socialService } from '@/services/social';
+import { type FavoritePluginItem } from '@/services/social';
+import { socialService } from '@/services/social';
 import { useDiscoverStore } from '@/store/discover';
 
 import { useUserDetailContext } from './DetailProvider';
@@ -91,17 +102,17 @@ const FavoritePluginCard = memo<FavoritePluginCardProps>(
 
     return (
       <Block
-        className={styles.wrapper}
         clickable
+        className={styles.wrapper}
         height={'100%'}
-        onClick={() => navigate(link)}
+        variant={'outlined'}
+        width={'100%'}
         style={{
           cursor: 'pointer',
           overflow: 'hidden',
           position: 'relative',
         }}
-        variant={'outlined'}
-        width={'100%'}
+        onClick={() => navigate(link)}
       >
         {showUnfavorite && (
           <Tooltip title={t('user.unfavorite')}>
@@ -117,16 +128,16 @@ const FavoritePluginCard = memo<FavoritePluginCardProps>(
           </Tooltip>
         )}
         <Flexbox
+          horizontal
           align={'flex-start'}
           gap={16}
-          horizontal
           justify={'space-between'}
           padding={16}
           width={'100%'}
         >
           <Flexbox
-            gap={12}
             horizontal
+            gap={12}
             style={{
               overflow: 'hidden',
             }}
@@ -139,13 +150,13 @@ const FavoritePluginCard = memo<FavoritePluginCardProps>(
                 overflow: 'hidden',
               }}
             >
-              <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} gap={8}>
                 <Link
-                  onClick={(e) => e.stopPropagation()}
                   style={{ color: 'inherit', flex: 1, overflow: 'hidden' }}
                   to={link}
+                  onClick={stopPropagation}
                 >
-                  <Text as={'h3'} className={styles.title} ellipsis style={{ flex: 1 }}>
+                  <Text ellipsis as={'h3'} className={styles.title} style={{ flex: 1 }}>
                     {name}
                   </Text>
                 </Link>
@@ -165,19 +176,19 @@ const FavoritePluginCard = memo<FavoritePluginCardProps>(
           </Text>
         </Flexbox>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.footer}
-          horizontal
           justify={'space-between'}
           padding={16}
         >
           <Flexbox
+            horizontal
             align={'center'}
             className={styles.secondaryDesc}
-            horizontal
             justify={'space-between'}
           >
-            <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
                 className={styles.secondaryDesc}
@@ -252,7 +263,7 @@ const UserFavoritePlugins = memo<UserFavoritePluginsProps>(({ rows = 4 }) => {
 
   return (
     <Flexbox gap={16}>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Text fontSize={16} weight={500}>
           {t('user.favoritePlugins')}
         </Text>
@@ -263,8 +274,8 @@ const UserFavoritePlugins = memo<UserFavoritePluginsProps>(({ rows = 4 }) => {
           <FavoritePluginCard
             key={item.identifier}
             {...item}
-            onUnfavorite={handleUnfavorite}
             showUnfavorite={isOwner}
+            onUnfavorite={handleUnfavorite}
           />
         ))}
       </Grid>

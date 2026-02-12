@@ -4,7 +4,7 @@ import { MCP } from '@lobehub/icons';
 import { ActionIcon, DropdownMenu, Grid } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MoreHorizontal } from 'lucide-react';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,6 +19,8 @@ const FeaturedPlugins = memo(() => {
 
   return (
     <GroupBlock
+      icon={<MCP color={cssVar.colorTextDescription} size={18} />}
+      title={t('home.featuredPlugins')}
       action={
         <DropdownMenu
           items={[
@@ -34,8 +36,6 @@ const FeaturedPlugins = memo(() => {
           <ActionIcon icon={MoreHorizontal} size="small" />
         </DropdownMenu>
       }
-      icon={<MCP color={cssVar.colorTextDescription} size={18} />}
-      title={t('home.featuredPlugins')}
     >
       <Grid gap={12} maxItemWidth={320} rows={4} width={'100%'}>
         <Suspense

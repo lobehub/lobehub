@@ -3,12 +3,13 @@
 import { Checkbox, Flexbox, FormGroup, LobeSelect as Select, Text } from '@lobehub/ui';
 import { Divider, InputNumber, TimePicker } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
-import type { Dayjs } from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SCHEDULE_TYPE_OPTIONS, type ScheduleType, TIMEZONE_OPTIONS } from '../CronConfig';
+import { type ScheduleType } from '../CronConfig';
+import { SCHEDULE_TYPE_OPTIONS, TIMEZONE_OPTIONS } from '../CronConfig';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   label: css`
@@ -109,22 +110,22 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
     return (
       <FormGroup title={t('agentCronJobs.schedule')} variant="filled">
         {/* Frequency Row */}
-        <Flexbox align="center" className={styles.row} gap={24} horizontal>
+        <Flexbox horizontal align="center" className={styles.row} gap={24}>
           <Text className={styles.label}>{t('agentCronJobs.form.frequency')}</Text>
           <Select
+            style={{ width: 140 }}
+            value={scheduleType}
+            variant="outlined"
+            options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
+              label: t(opt.label as any),
+              value: opt.value,
+            }))}
             onChange={(value: ScheduleType) =>
               onScheduleChange({
                 scheduleType: value,
                 weekdays: value === 'weekly' ? [1, 2, 3, 4, 5] : [],
               })
             }
-            options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
-              label: t(opt.label as any),
-              value: opt.value,
-            }))}
-            style={{ width: 140 }}
-            value={scheduleType}
-            variant="outlined"
           />
         </Flexbox>
 
@@ -133,16 +134,16 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
         {/* Time Row (for daily/weekly) */}
         {scheduleType !== 'hourly' && (
           <>
-            <Flexbox align="center" className={styles.row} gap={24} horizontal>
+            <Flexbox horizontal align="center" className={styles.row} gap={24}>
               <Text className={styles.label}>{t('agentCronJobs.form.time')}</Text>
               <TimePicker
                 format="HH:mm"
                 minuteStep={15}
+                style={{ width: 120 }}
+                value={triggerTime ?? dayjs().hour(9).minute(0)}
                 onChange={(value) => {
                   if (value) onScheduleChange({ triggerTime: value });
                 }}
-                style={{ width: 120 }}
-                value={triggerTime ?? dayjs().hour(9).minute(0)}
               />
             </Flexbox>
             <Divider style={{ margin: 0 }} />
@@ -152,31 +153,31 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
         {/* Hourly Interval Row */}
         {scheduleType === 'hourly' && (
           <>
-            <Flexbox align="center" className={styles.row} gap={24} horizontal>
+            <Flexbox horizontal align="center" className={styles.row} gap={24}>
               <Text className={styles.label}>{t('agentCronJobs.form.every')}</Text>
-              <Flexbox align="center" gap={8} horizontal>
+              <Flexbox horizontal align="center" gap={8}>
                 <InputNumber
                   max={24}
                   min={1}
-                  onChange={(value) => onScheduleChange({ hourlyInterval: value ?? 1 })}
                   style={{ width: 70 }}
                   value={hourlyInterval ?? 1}
+                  onChange={(value) => onScheduleChange({ hourlyInterval: value ?? 1 })}
                 />
                 <Text type="secondary">{t('agentCronJobs.form.hours')}</Text>
                 <Text type="secondary">{t('agentCronJobs.form.at')}</Text>
                 <Select
-                  onChange={(value: number) =>
-                    onScheduleChange({ triggerTime: dayjs().hour(0).minute(value) })
-                  }
+                  style={{ width: '80px' }}
+                  value={triggerTime?.minute() ?? 0}
+                  variant="outlined"
                   options={[
                     { label: ':00', value: 0 },
                     { label: ':15', value: 15 },
                     { label: ':30', value: 30 },
                     { label: ':45', value: 45 },
                   ]}
-                  style={{ width: '80px' }}
-                  value={triggerTime?.minute() ?? 0}
-                  variant="outlined"
+                  onChange={(value: number) =>
+                    onScheduleChange({ triggerTime: dayjs().hour(0).minute(value) })
+                  }
                 />
               </Flexbox>
             </Flexbox>
@@ -187,16 +188,16 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
         {/* Weekday Selector (only for weekly) */}
         {scheduleType === 'weekly' && (
           <>
-            <Flexbox align="center" className={styles.row} gap={24} horizontal>
+            <Flexbox horizontal align="center" className={styles.row} gap={24}>
               <Text className={styles.label}>{t('agentCronJobs.weekdays')}</Text>
-              <Flexbox gap={6} horizontal>
+              <Flexbox horizontal gap={6}>
                 {WEEKDAYS.map(({ key, label }) => (
                   <div
+                    key={key}
                     className={cx(
                       styles.weekdayButton,
                       weekdays.includes(key) && styles.weekdayButtonActive,
                     )}
-                    key={key}
                     onClick={() => toggleWeekday(key)}
                   >
                     {t(label as any)}
@@ -209,32 +210,32 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
         )}
 
         {/* Timezone Row */}
-        <Flexbox align="center" className={styles.row} gap={24} horizontal>
+        <Flexbox horizontal align="center" className={styles.row} gap={24}>
           <Text className={styles.label}>{t('agentCronJobs.form.timezone')}</Text>
           <Select
-            onChange={(value: string) => onScheduleChange({ timezone: value })}
+            showSearch
             options={TIMEZONE_OPTIONS}
             popupMatchSelectWidth={false}
-            showSearch
             style={{ minWidth: '200px', width: 'fit-content' }}
             value={timezone}
             variant="outlined"
+            onChange={(value: string) => onScheduleChange({ timezone: value })}
           />
         </Flexbox>
 
         <Divider style={{ margin: 0 }} />
 
         {/* Execution Limit Row */}
-        <Flexbox align="center" className={styles.row} gap={24} horizontal>
+        <Flexbox horizontal align="center" className={styles.row} gap={24}>
           <Text className={styles.label}>{t('agentCronJobs.maxExecutions')}</Text>
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             <InputNumber
               disabled={isUnlimited}
               min={1}
-              onChange={(value) => onScheduleChange({ maxExecutions: value })}
               placeholder="100"
               style={{ width: 100 }}
               value={maxExecutions ?? undefined}
+              onChange={(value) => onScheduleChange({ maxExecutions: value })}
             />
             <Text type="secondary">{t('agentCronJobs.form.times')}</Text>
             <Checkbox

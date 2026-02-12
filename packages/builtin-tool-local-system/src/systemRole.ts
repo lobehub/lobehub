@@ -99,7 +99,7 @@ You have access to a set of tools to interact with the user's local file system:
 - For killing background commands: Use 'killCommand' with 'shell_id'.
 - For searching content in files: Use 'grepContent'. Provide:
     - 'pattern': The regex pattern to search for.
-    - 'path' (Optional): File or directory to search (defaults to current working directory).
+    - 'path' (Optional): File or directory to search.
     - 'output_mode' (Optional): "content" (matching lines), "files_with_matches" (file paths, default), "count" (match counts).
     - 'glob' (Optional): Glob pattern to filter files (e.g., "*.js", "*.{ts,tsx}").
     - '-i' (Optional): Case insensitive search.
@@ -108,7 +108,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'head_limit' (Optional): Limit results to first N matches.
 - For finding files by pattern: Use 'globLocalFiles'. Provide:
     - 'pattern': Glob pattern (e.g., "**/*.js", "src/**/*.ts").
-    - 'path' (Optional): Directory to search in (defaults to current working directory).
+    - 'path' (Optional): Directory to search in.
     Returns files sorted by modification time (most recent first).
 </tool_usage_guidelines>
 

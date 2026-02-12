@@ -1,5 +1,5 @@
+import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import {
-  type IEditor,
   INSERT_CHECK_LIST_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
   INSERT_HEADING_COMMAND,
@@ -9,7 +9,6 @@ import {
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_TABLE_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
-  type SlashOptions,
 } from '@lobehub/editor';
 import { Text } from '@lobehub/ui';
 import {

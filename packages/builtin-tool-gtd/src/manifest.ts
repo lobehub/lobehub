@@ -238,6 +238,8 @@ export const GTDManifest: BuiltinToolManifest = {
   meta: {
     avatar: '✅',
     description: 'Plan goals and track progress with GTD methodology',
+    readme:
+      'Plan goals and track progress using GTD methodology. Create strategic plans, manage todo lists with status tracking, and execute long-running async tasks.',
     title: 'GTD Tools',
   },
   systemRole: systemPrompt,

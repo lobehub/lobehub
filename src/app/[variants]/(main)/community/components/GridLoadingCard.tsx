@@ -16,8 +16,8 @@ const Card = memo<{ banner?: boolean }>(({ banner }) => {
     <Block height={'100%'} style={{ overflow: 'hidden' }} variant={'outlined'} width={'100%'}>
       {banner && <Skeleton.Block active height={64} width={'100%'} />}
       {/* Header with avatar and title */}
-      <Flexbox gap={16} horizontal padding={16}>
-        <Flexbox gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+      <Flexbox horizontal gap={16} padding={16}>
+        <Flexbox horizontal gap={12} style={{ flex: 1, overflow: 'hidden' }}>
           <Skeleton.Avatar active shape="square" size={40} style={{ flex: 'none' }} />
           <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
             <Skeleton.Button
@@ -51,7 +51,7 @@ const Card = memo<{ banner?: boolean }>(({ banner }) => {
       {/* Description */}
       <Flexbox gap={12} paddingInline={16}>
         <Skeleton.Paragraph active fontSize={14} rows={3} style={{ marginBottom: 0 }} />
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           <Skeleton.Button
             active
             size={'small'}
@@ -72,7 +72,7 @@ const Card = memo<{ banner?: boolean }>(({ banner }) => {
       </Flexbox>
 
       {/* Footer */}
-      <Flexbox className={styles.footer} gap={4} horizontal padding={16} style={{ marginTop: 12 }}>
+      <Flexbox horizontal className={styles.footer} gap={4} padding={16} style={{ marginTop: 12 }}>
         <Skeleton.Button
           active
           size={'small'}

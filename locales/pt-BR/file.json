@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "Processando",
   "detail.data.embedding.success": "Concluído",
   "detail.data.embeddingStatus": "vetorização",
+  "detail.data.noChunk": "Nenhum fragmento",
   "empty": "Nenhum arquivo ou pasta foi enviado ainda.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} arquivos filtrados (de {{total}} no total)",
   "header.actions.connect": "Conectar...",

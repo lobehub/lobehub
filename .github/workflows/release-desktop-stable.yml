@@ -145,7 +145,7 @@ jobs:
           fi
 
           # macOS (ARM64)
-          # 使用 GitHub Hosted Runner
+          # 使用 GitHub Hosted Runner (macos-15 修复 hdiutil 问题)
           if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_mac }}" == "true" ]]; then
             echo "Using GitHub-Hosted Runner for macOS ARM64"
             arm_entry='{"os": "macos-15", "name": "macos-arm64"}'
@@ -185,10 +185,18 @@ jobs:
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.check-stable.outputs.version }} stable
 
+      # macOS 构建前清理 (修复 hdiutil 问题 https://github.com/electron-userland/electron-builder/issues/8415)
+      - name: Clean previous build artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sudo rm -rf apps/desktop/release || true
+          sudo rm -rf apps/desktop/dist || true
+          sudo rm -rf /tmp/electron-builder* || true
+
       # macOS 构建
       - name: Build artifact on macOS
         if: runner.os == 'macOS'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
@@ -204,11 +212,13 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID }}
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
+          # Debug hdiutil issues (https://github.com/electron-userland/electron-builder/issues/8415)
+          DEBUG_DMG: true
 
       # Windows 构建
       - name: Build artifact on Windows
         if: runner.os == 'Windows'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
@@ -225,7 +235,7 @@ jobs:
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
         run: |
-          npm run desktop:build
+          npm run desktop:package:app
           tar -czf apps/desktop/release/lobehub-renderer.tar.gz -C out .
         env:
           UPDATE_CHANNEL: stable

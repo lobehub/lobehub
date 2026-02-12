@@ -29,11 +29,35 @@ Prioritize modules with business logic:
 
 ## Workflow
 
+### 0. Pre-check: Scan Existing Test PRs
+
+Before selecting a module, **MUST** scan existing PRs to avoid duplicate work:
+
+1. **List in-flight PRs**:
+
+   ```bash
+   gh pr list --search "automatic/add-tests-" --state open --json number,title,headRefName,mergeable
+   ```
+
+2. **Close conflicting PRs**: For any PR where `mergeable` is `"CONFLICTING"`, close it with a comment:
+
+   ```bash
+   gh pr close <number> --comment "Closing: this PR has merge conflicts with main and is outdated. A new test PR may be created for this module."
+   ```
+
+3. **Build exclusion list**: Extract module names from the remaining open PR branch names (`automatic/add-tests-<module-name>-<date>`), and **exclude those modules** from selection in the next step.
+
+4. **Output summary** (for logging):
+   - Total open test PRs found
+   - PRs closed due to conflicts
+   - Modules currently in-flight (excluded from selection)
+
 ### 1. Select a Module to Process
 
 **Selection Strategy**:
 
 - Randomly pick ONE module from the target directories
+- **MUST skip modules that already have an open PR** (from step 0's exclusion list)
 - Prioritize modules that:
   - Have significant business logic
   - Have no or minimal test coverage

@@ -2,7 +2,8 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_SETTINGS } from '@lobechat/config';
-import { Button, Form, type FormGroupItemType, Icon } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Button, Form, Icon } from '@lobehub/ui';
 import { App, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
@@ -122,7 +123,7 @@ const AdvancedActions = () => {
       ...(enableBusinessFeatures ? [renderExportButtonFormItem()] : []),
       {
         children: (
-          <Button danger onClick={handleClear} type={'primary'}>
+          <Button danger type={'primary'} onClick={handleClear}>
             {t('danger.clear.action')}
           </Button>
         ),
@@ -133,7 +134,7 @@ const AdvancedActions = () => {
       },
       {
         children: (
-          <Button danger onClick={handleReset} type={'primary'}>
+          <Button danger type={'primary'} onClick={handleReset}>
             {t('danger.reset.action')}
           </Button>
         ),
@@ -153,8 +154,8 @@ const AdvancedActions = () => {
         initialValues={settings}
         items={[analytics, system]}
         itemsType={'group'}
-        onValuesChange={setSettings}
         variant={'filled'}
+        onValuesChange={setSettings}
         {...FORM_STYLE}
       />
       {enableBusinessFeatures && <AccountDeletion />}

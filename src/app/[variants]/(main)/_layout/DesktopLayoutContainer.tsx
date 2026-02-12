@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { type FC, type PropsWithChildren, useMemo } from 'react';
+import { type FC, type PropsWithChildren } from 'react';
+import { useMemo } from 'react';
 
 import { isDesktop } from '@/const/version';
 import { useIsDark } from '@/hooks/useIsDark';

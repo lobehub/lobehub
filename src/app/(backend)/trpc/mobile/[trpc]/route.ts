@@ -1,5 +1,5 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import type { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 
 import { createLambdaContext } from '@/libs/trpc/lambda/context';
 import { prepareRequestForTRPC } from '@/libs/trpc/utils/request-adapter';

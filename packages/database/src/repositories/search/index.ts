@@ -9,7 +9,7 @@ import {
   topics,
   userMemories,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 
 export type SearchResultType =
   | 'page'

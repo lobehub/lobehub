@@ -22,8 +22,8 @@ const ContextsGridView = memo<GridViewProps>(({ contexts, isLoading, onClick }) 
       hasMore={contextsHasMore}
       isLoading={isLoading}
       items={contexts}
-      onLoadMore={loadMoreContexts}
       renderItem={(context) => <ContextCard context={context} onClick={() => onClick(context)} />}
+      onLoadMore={loadMoreContexts}
     />
   );
 });

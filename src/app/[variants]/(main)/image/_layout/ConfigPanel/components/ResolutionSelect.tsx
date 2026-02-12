@@ -30,11 +30,11 @@ const ResolutionSelect = memo(() => {
   return (
     <Segmented
       block
-      onChange={handleChange}
       options={options}
       style={{ width: '100%' }}
       value={value}
       variant="filled"
+      onChange={handleChange}
     />
   );
 });

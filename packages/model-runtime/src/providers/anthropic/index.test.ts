@@ -1,9 +1,10 @@
 // @vitest-environment node
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import * as anthropicHelpers from '../../core/contextBuilders/anthropic';
-import { ChatCompletionTool, ChatStreamPayload } from '../../types/chat';
+import type { ChatCompletionTool, ChatStreamPayload } from '../../types/chat';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeAnthropicAI } from './index';
 
@@ -844,7 +845,7 @@ describe('LobeAnthropicAI', () => {
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'claude-3-haiku-20240307',
-          temperature: 1.0,
+          temperature: 1,
         };
 
         const result = await buildDefaultAnthropicPayload(payload);

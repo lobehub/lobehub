@@ -1,5 +1,5 @@
 import { defaultCache } from '@serwist/next/worker';
-import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
+import { type PrecacheEntry, type SerwistGlobalConfig } from 'serwist';
 import { Serwist } from 'serwist';
 
 // This declares the value of `injectionPoint` to TypeScript.
@@ -12,7 +12,6 @@ declare global {
   }
 }
 
-// eslint-disable-next-line no-undef
 declare const self: ServiceWorkerGlobalScope;
 
 const serwist = new Serwist({

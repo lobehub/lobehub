@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "Bezig",
   "detail.data.embedding.success": "Voltooid",
   "detail.data.embeddingStatus": "embedding",
+  "detail.data.noChunk": "Geen onderdeel",
   "empty": "Er zijn nog geen bestanden of mappen geüpload.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} bestanden gefilterd (van {{total}} totaal)",
   "header.actions.connect": "Verbinden...",

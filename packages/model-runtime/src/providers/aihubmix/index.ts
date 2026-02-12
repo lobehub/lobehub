@@ -3,7 +3,7 @@ import urlJoin from 'url-join';
 
 import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
+import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface AiHubMixModelCard {

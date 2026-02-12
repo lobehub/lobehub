@@ -10,7 +10,7 @@
  * - import dynamic from '@/libs/next/dynamic';
  * - import Image from '@/libs/next/Image';
  *
- * @see RFC 147: LOBE-2850 - Phase 3
+ * @see RFC 147
  */
 
 // Navigation exports

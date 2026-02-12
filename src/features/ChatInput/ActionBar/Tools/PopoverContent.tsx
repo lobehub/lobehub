@@ -1,4 +1,5 @@
-import { Flexbox, Icon, type ItemType, usePopoverContext } from '@lobehub/ui';
+import { type ItemType } from '@lobehub/ui';
+import { Flexbox, Icon, usePopoverContext } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
 import { memo } from 'react';
@@ -41,12 +42,12 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore }) => {
       <div className={styles.footer}>
         <div
           className={toolsListStyles.item}
+          role="button"
+          tabIndex={0}
           onClick={() => {
             closePopover();
             onOpenStore();
           }}
-          role="button"
-          tabIndex={0}
         >
           <div className={toolsListStyles.itemIcon}>
             <Icon icon={Store} size={20} />
@@ -56,12 +57,12 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore }) => {
         </div>
         <div
           className={toolsListStyles.item}
+          role="button"
+          tabIndex={0}
           onClick={() => {
             closePopover();
             navigate('/settings/skill');
           }}
-          role="button"
-          tabIndex={0}
         >
           <div className={toolsListStyles.itemIcon}>
             <Icon icon={Settings} size={20} />

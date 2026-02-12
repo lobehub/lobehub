@@ -4,7 +4,7 @@ import {
   TEST_COMPONENTS,
   TEST_FLUX_MODELS,
 } from '@/server/services/comfyui/__tests__/fixtures/testModels';
-import type { WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
+import { type WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
 
 /**
  * Create a mock WorkflowContext for testing

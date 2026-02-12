@@ -1,11 +1,8 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
-import { DEFAULT_PREFERENCE } from '@/const/user';
-import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
-import { UserGuide, UserPreference } from '@/types/user';
+import { type UserGuide } from '@/types/user';
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "Bestand succesvol toegevoegd",
+  "addToKnowledgeBase.alreadyExists": "Dit bestand bevindt zich al in de bibliotheek",
   "addToKnowledgeBase.confirm": "Toevoegen",
   "addToKnowledgeBase.error": "Toevoegen van bestand aan bibliotheek mislukt",
   "addToKnowledgeBase.id.placeholder": "Selecteer een bibliotheek om toe te voegen",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "Naam van de bibliotheek",
   "createNew.name.required": "Voer een naam voor de bibliotheek in",
   "createNew.title": "Nieuwe bibliotheek aanmaken",
+  "moveToKnowledgeBase.error": "Het is niet gelukt om het bestand naar de bibliotheek te verplaatsen",
+  "moveToKnowledgeBase.success": "Bestand succesvol verplaatst",
   "tab.evals": "Evaluaties",
   "tab.files": "Bestanden",
   "tab.settings": "Instellingen",

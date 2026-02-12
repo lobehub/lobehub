@@ -2,7 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { PageSelection } from '@/types/index';
+import { type PageSelection } from '@/types/index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -48,8 +48,8 @@ const PageSelections = memo<PageSelectionsProps>(({ selections }) => {
     <Flexbox gap={8}>
       {selections.map((selection) => (
         <Flexbox className={styles.container} key={selection.id}>
-          <Flexbox className={styles.wrapper} gap={4} horizontal padding={4}>
-            {/* eslint-disable-next-line react/no-unescaped-entities */}
+          <Flexbox horizontal className={styles.wrapper} gap={4} padding={4}>
+            {}
             <span className={styles.quote}>"</span>
             <div className={styles.content}>{selection.content}</div>
           </Flexbox>

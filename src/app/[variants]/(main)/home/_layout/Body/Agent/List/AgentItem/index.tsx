@@ -1,9 +1,10 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
-import type { SidebarAgentItem } from '@lobechat/types';
+import { type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
-import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
+import { type CSSProperties, type DragEvent } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -90,7 +91,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   // Memoize avatar icon (show loader when updating)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon color={cssVar.colorTextDescription} icon={Loader2} size={18} spin />;
+      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
     }
 
     return <Avatar avatar={typeof avatar === 'string' ? avatar : undefined} />;
@@ -117,11 +118,11 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
           icon={avatarIcon}
           key={id}
           loading={isLoading}
+          style={style}
+          title={displayTitle}
           onDoubleClick={handleDoubleClick}
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
-          style={style}
-          title={displayTitle}
         />
       </Link>
 

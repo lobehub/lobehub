@@ -1,10 +1,10 @@
 'use client';
 
 import { StyleProvider } from 'antd-style';
-import { useServerInsertedHTML } from '@/libs/next/navigation';
 import { type PropsWithChildren } from 'react';
 
 import { isDesktop } from '@/const/version';
+import { useServerInsertedHTML } from '@/libs/next/navigation';
 
 const StyleRegistry = ({ children }: PropsWithChildren) => {
   useServerInsertedHTML(() => {

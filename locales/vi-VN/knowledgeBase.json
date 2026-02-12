@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "Tệp đã được thêm thành công",
+  "addToKnowledgeBase.alreadyExists": "Tệp này đã có trong thư viện",
   "addToKnowledgeBase.confirm": "Thêm",
   "addToKnowledgeBase.error": "Không thể thêm tệp vào Thư viện",
   "addToKnowledgeBase.id.placeholder": "Vui lòng chọn thư viện để thêm vào",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "Tên thư viện",
   "createNew.name.required": "Vui lòng nhập tên thư viện",
   "createNew.title": "Tạo Thư viện Mới",
+  "moveToKnowledgeBase.error": "Không thể di chuyển tệp vào Thư viện",
+  "moveToKnowledgeBase.success": "Đã di chuyển tệp thành công",
   "tab.evals": "Đánh giá",
   "tab.files": "Tệp",
   "tab.settings": "Cài đặt",

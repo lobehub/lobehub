@@ -1,11 +1,14 @@
 import { z } from 'zod';
 
-import { UIChatMessage } from './message';
-import { PageSelection, PageSelectionSchema } from './message/ui/params';
-import { OpenAIChatMessage } from './openai/chat';
-import { LobeUniformTool, LobeUniformToolSchema } from './tool';
-import { ChatTopic } from './topic';
-import { IThreadType, ThreadType } from './topic/thread';
+import type { UIChatMessage } from './message';
+import type { PageSelection } from './message/ui/params';
+import { PageSelectionSchema } from './message/ui/params';
+import type { OpenAIChatMessage } from './openai/chat';
+import type { LobeUniformTool } from './tool';
+import { LobeUniformToolSchema } from './tool';
+import type { ChatTopic } from './topic';
+import type { IThreadType } from './topic/thread';
+import { ThreadType } from './topic/thread';
 
 export interface SendNewMessage {
   content: string;

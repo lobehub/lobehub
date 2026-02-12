@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { MetaData } from '@/types/meta';
+import { type MetaData } from '@/types/meta';
 
 import { sessionMetaSelectors } from './meta';
 

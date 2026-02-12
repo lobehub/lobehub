@@ -33,36 +33,36 @@ const AgentCouncilMessage = memo<AgentCouncilMessageProps>(({ id }) => {
     <>
       <WideScreenContainer>
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
           height={48}
-          horizontal
           justify={'space-between'}
           paddingBlock={8}
         >
           {displayMode === 'tab' ? (
             <Segmented
-              onChange={(value) => setActiveTab(Number(value))}
+              size={'small'}
+              value={activeTab}
               options={members.map((_, idx) => {
                 return {
                   icon: <Icon icon={BotIcon} size={14} />,
                   value: idx,
                 };
               })}
-              size={'small'}
-              value={activeTab}
+              onChange={(value) => setActiveTab(Number(value))}
             />
           ) : (
             <div />
           )}
           <Segmented
-            onChange={(value) => setDisplayMode(value as DisplayMode)}
+            size="small"
+            value={displayMode}
             options={[
               { icon: <Icon icon={Columns2} />, value: 'horizontal' },
               { icon: <Icon icon={Layers} />, value: 'tab' },
             ]}
-            size="small"
-            value={displayMode}
+            onChange={(value) => setDisplayMode(value as DisplayMode)}
           />
         </Flexbox>
       </WideScreenContainer>

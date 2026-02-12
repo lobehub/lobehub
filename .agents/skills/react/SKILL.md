@@ -17,6 +17,7 @@ If unsure about component usage, search existing code in this project. Most comp
 Reference: `node_modules/@lobehub/ui/es/index.mjs` for all available components.
 
 **Common Components:**
+
 - General: ActionIcon, ActionIconGroup, Block, Button, Icon
 - Data Display: Avatar, Collapse, Empty, Highlighter, Markdown, Tag, Tooltip
 - Data Entry: CodeEditor, CopyButton, EditableText, Form, FormModal, Input, SearchBar, Select
@@ -28,12 +29,13 @@ Reference: `node_modules/@lobehub/ui/es/index.mjs` for all available components.
 
 Hybrid routing: Next.js App Router (static pages) + React Router DOM (main SPA).
 
-| Route Type | Use Case | Implementation |
-|------------|----------|----------------|
+| Route Type         | Use Case                          | Implementation               |
+| ------------------ | --------------------------------- | ---------------------------- |
 | Next.js App Router | Auth pages (login, signup, oauth) | `src/app/[variants]/(auth)/` |
-| React Router DOM | Main SPA (chat, settings) | `desktopRouter.config.tsx` |
+| React Router DOM   | Main SPA (chat, settings)         | `desktopRouter.config.tsx`   |
 
 ### Key Files
+
 - Entry: `src/app/[variants]/page.tsx`
 - Desktop router: `src/app/[variants]/router/desktopRouter.config.tsx`
 - Mobile router: `src/app/[variants]/(mobile)/router/mobileRouter.config.tsx`
@@ -56,11 +58,11 @@ errorElement: <ErrorBoundary resetPath="/chat" />;
 ```tsx
 // ❌ Wrong
 import Link from 'next/link';
-<Link href="/">Home</Link>
+<Link href="/">Home</Link>;
 
 // ✅ Correct
 import { Link } from 'react-router-dom';
-<Link to="/">Home</Link>
+<Link to="/">Home</Link>;
 
 // In components
 import { useNavigate } from 'react-router-dom';

@@ -1,4 +1,4 @@
-import type { State } from '../../initialState';
+import { type State } from '../../initialState';
 
 const editor = (s: State) => s.editor;
 const inputMessage = (s: State) => s.inputMessage;

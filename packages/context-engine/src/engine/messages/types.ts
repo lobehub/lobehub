@@ -218,6 +218,10 @@ export interface MessagesEngineParams {
   groupAgentBuilderContext?: GroupAgentBuilderContext;
   /** GTD (Getting Things Done) configuration */
   gtd?: GTDConfig;
+  /** Reaction feedback configuration */
+  reactionFeedback?: {
+    enabled?: boolean;
+  };
   /** User memory configuration */
   userMemory?: UserMemoryConfig;
 

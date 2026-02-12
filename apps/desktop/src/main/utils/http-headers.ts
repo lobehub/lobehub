@@ -4,8 +4,33 @@
  * Electron's webRequest responseHeaders is a plain JS object where keys are case-sensitive,
  * but HTTP headers are case-insensitive per spec. These utilities handle this mismatch.
  */
+import { getDesktopEnv } from '@/env';
 
 type ElectronResponseHeaders = Record<string, string[]>;
+
+/**
+ * Append Vercel JWT cookie to headers if VERCEL_JWT env is set.
+ * Works with Headers object, plain object, or OutgoingHttpHeaders.
+ */
+export function appendVercelCookie(
+  headers: Headers | Record<string, string | number | string[] | undefined>,
+): void {
+  const vercelJwt = getDesktopEnv().VERCEL_JWT;
+  if (!vercelJwt) return;
+
+  if (headers instanceof Headers) {
+    const existing = headers.get('Cookie') || '';
+    headers.set(
+      'Cookie',
+      existing ? `${existing}; _vercel_jwt=${vercelJwt}` : `_vercel_jwt=${vercelJwt}`,
+    );
+  } else {
+    const existing = (headers['Cookie'] as string) || '';
+    headers['Cookie'] = existing
+      ? `${existing}; _vercel_jwt=${vercelJwt}`
+      : `_vercel_jwt=${vercelJwt}`;
+  }
+}
 
 /**
  * Set a header value, replacing any existing header with the same name (case-insensitive)

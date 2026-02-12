@@ -45,7 +45,7 @@ describe('TextLoader', () => {
   });
 
   it('split long', async () => {
-    const content = fs.readFileSync(join(__dirname, `./pg24022.txt`), 'utf-8');
+    const content = fs.readFileSync(join(__dirname, `./pg24022.txt`), 'utf8');
 
     const result = await TextLoader(content);
 

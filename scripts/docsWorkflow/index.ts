@@ -1,9 +1,10 @@
-import { consola } from 'consola';
 import { relative, resolve } from 'node:path';
+
+import { consola } from 'consola';
 import pMap from 'p-map';
 import urlJoin from 'url-join';
 
-import { DOCS_DIR, HOME_PATH, SIDEBAR_PATH, WIKI_URL, docsFiles } from './const';
+import { DOCS_DIR, docsFiles, HOME_PATH, SIDEBAR_PATH, WIKI_URL } from './const';
 import toc from './toc';
 import { genMdLink, getTitle, updateDocs } from './utils';
 

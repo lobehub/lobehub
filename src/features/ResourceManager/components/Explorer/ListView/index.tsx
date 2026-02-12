@@ -3,9 +3,11 @@
 import { Center, Checkbox, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import debug from 'debug';
-import { type DragEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type DragEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { type VirtuosoHandle } from 'react-virtuoso';
+import { Virtuoso } from 'react-virtuoso';
 
 import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
@@ -330,8 +332,7 @@ const ListView = memo(function ListView() {
 
     // Leave some padding at the end when there are no more pages,
     // so users can clearly feel they've reached the end of the list.
-    if (hasMore === false && dataLength > 0)
-      return <div aria-hidden style={{ height: 96 }} />;
+    if (hasMore === false && dataLength > 0) return <div aria-hidden style={{ height: 96 }} />;
 
     return null;
   }, [columnWidths, dataLength, hasMore, isLoadingMore]);
@@ -342,9 +343,9 @@ const ListView = memo(function ListView() {
     <Flexbox height={'100%'}>
       <div className={styles.scrollContainer}>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.header}
-          horizontal
           paddingInline={8}
           style={{
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
@@ -417,21 +418,21 @@ const ListView = memo(function ListView() {
           </Flexbox>
         </Flexbox>
         <div
+          data-drop-target-id={currentFolderId || undefined}
+          data-is-folder="true"
+          ref={containerRef}
+          style={{ overflow: 'hidden', position: 'relative' }}
           className={cx(
             styles.dropZone,
             isDropZoneActive && styles.dropZoneActive,
             isAnyRowHovered && 'any-row-hovered',
           )}
-          data-drop-target-id={currentFolderId || undefined}
-          data-is-folder="true"
           onDragLeave={handleDropZoneDragLeave}
+          onDrop={handleDropZoneDrop}
           onDragOver={(e) => {
             handleDropZoneDragOver(e);
             handleDragMove(e);
           }}
-          onDrop={handleDropZoneDrop}
-          ref={containerRef}
-          style={{ overflow: 'hidden', position: 'relative' }}
         >
           <Virtuoso
             components={{ Footer }}
@@ -440,6 +441,9 @@ const ListView = memo(function ListView() {
             endReached={handleEndReached}
             increaseViewportBy={{ bottom: 800, top: 1200 }}
             initialItemCount={30}
+            overscan={48 * 5}
+            ref={virtuosoRef}
+            style={{ height: 'calc(100vh - 100px)' }}
             itemContent={(index, item) => {
               if (!item) return null;
               return (
@@ -448,17 +452,14 @@ const ListView = memo(function ListView() {
                   index={index}
                   isAnyRowHovered={isAnyRowHovered}
                   key={item.id}
-                  onHoverChange={setIsAnyRowHovered}
-                  onSelectedChange={handleSelectionChange}
                   pendingRenameItemId={pendingRenameItemId}
                   selected={selectFileIds.includes(item.id)}
+                  onHoverChange={setIsAnyRowHovered}
+                  onSelectedChange={handleSelectionChange}
                   {...item}
                 />
               );
             }}
-            overscan={48 * 5}
-            ref={virtuosoRef}
-            style={{ height: 'calc(100vh - 100px)' }}
           />
         </div>
       </div>

@@ -161,10 +161,7 @@ export const agentGroupRouter = router({
       // 2. Create group with supervisor and member agents
       // Filter out null/undefined values from supervisorConfig
       const supervisorConfig = input.supervisorConfig
-        ? Object.fromEntries(
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars, eqeqeq
-            Object.entries(input.supervisorConfig).filter(([_, v]) => v != null),
-          )
+        ? Object.fromEntries(Object.entries(input.supervisorConfig).filter(([_, v]) => v != null))
         : undefined;
 
       const normalizedConfig = ctx.agentGroupService.normalizeGroupConfig(

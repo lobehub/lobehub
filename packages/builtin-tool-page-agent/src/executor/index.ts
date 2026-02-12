@@ -1,12 +1,13 @@
 import type {
-  EditTitleArgs,
   EditorRuntime,
+  EditTitleArgs,
   GetPageContentArgs,
   InitDocumentArgs,
   ModifyNodesArgs,
   ReplaceTextArgs,
 } from '@lobechat/editor-runtime';
-import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 import type {
   EditTitleState,

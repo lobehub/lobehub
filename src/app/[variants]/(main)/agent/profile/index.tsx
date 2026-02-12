@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { type FC, Suspense, memo } from 'react';
+import { type FC } from 'react';
+import { memo, Suspense } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBuilder from '@/features/AgentBuilder';
@@ -41,13 +42,13 @@ const ProfileArea = memo(() => {
           <>
             <Header />
             <Flexbox
-              height={'100%'}
               horizontal
+              height={'100%'}
+              style={styles.contentWrapper}
+              width={'100%'}
               onClick={() => {
                 editor?.focus();
               }}
-              style={styles.contentWrapper}
-              width={'100%'}
             >
               <WideScreenContainer>
                 <ProfileEditor />
@@ -66,7 +67,7 @@ const AgentProfile: FC = () => {
   return (
     <Suspense fallback={<Loading debugId="AgentProfile" />}>
       <ProfileProvider>
-        <Flexbox height={'100%'} horizontal width={'100%'}>
+        <Flexbox horizontal height={'100%'} width={'100%'}>
           <ProfileArea />
           <AgentBuilder />
         </Flexbox>

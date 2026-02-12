@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Generation, GenerationBatch } from '@/types/generation';
+import { type Generation, type GenerationBatch } from '@/types/generation';
 
 // Import functions for testing
 import {

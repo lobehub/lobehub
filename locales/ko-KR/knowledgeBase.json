@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "파일이 성공적으로 추가되었습니다",
+  "addToKnowledgeBase.alreadyExists": "이 파일은 이미 라이브러리에 있습니다",
   "addToKnowledgeBase.confirm": "추가",
   "addToKnowledgeBase.error": "파일을 지식 베이스에 추가하지 못했습니다",
   "addToKnowledgeBase.id.placeholder": "추가할 지식 베이스를 선택하세요",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "지식 베이스 이름",
   "createNew.name.required": "지식 베이스 이름을 입력하세요",
   "createNew.title": "새 지식 베이스 만들기",
+  "moveToKnowledgeBase.error": "파일을 라이브러리로 이동하는 데 실패했습니다",
+  "moveToKnowledgeBase.success": "파일이 성공적으로 이동되었습니다",
   "tab.evals": "평가",
   "tab.files": "문서",
   "tab.settings": "설정",

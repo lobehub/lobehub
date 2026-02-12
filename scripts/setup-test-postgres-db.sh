@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 停止并删除已存在的容器
-docker stop postgres-paradedb 2>/dev/null && docker rm postgres-paradedb 2>/dev/null
+docker stop postgres-paradedb 2> /dev/null && docker rm postgres-paradedb 2> /dev/null
 
 # 启动pgvector容器
 docker run --name postgres-paradedb \

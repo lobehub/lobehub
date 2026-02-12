@@ -2,7 +2,8 @@
 
 import { Markdown, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type RefObject, memo, useEffect } from 'react';
+import { type RefObject } from 'react';
+import { memo, useEffect } from 'react';
 
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 
@@ -38,10 +39,10 @@ const StreamingMarkdown = memo<StreamingMarkdownProps>(({ children, maxHeight = 
     <ScrollShadow
       className={styles.container}
       offset={12}
-      onScroll={handleScroll}
       ref={ref as RefObject<HTMLDivElement>}
       size={12}
       style={{ maxHeight }}
+      onScroll={handleScroll}
     >
       <Markdown animated style={{ overflow: 'unset' }} variant={'chat'}>
         {children}

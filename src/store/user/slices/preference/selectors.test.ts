@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UserStore } from '@/store/user';
+import { type UserStore } from '@/store/user';
 
 import { initialPreferenceState } from './initialState';
 import { preferenceSelectors } from './selectors';

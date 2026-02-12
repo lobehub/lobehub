@@ -35,6 +35,7 @@ const Body = memo(() => {
   return (
     <Flexbox paddingInline={4}>
       <Accordion
+        gap={8}
         defaultExpandedKeys={[
           SettingsGroupKey.Profile,
           SettingsGroupKey.Subscription,
@@ -42,7 +43,6 @@ const Body = memo(() => {
           SettingsGroupKey.AIConfig,
           SettingsGroupKey.System,
         ]}
-        gap={8}
       >
         {categoryGroups.map((group) => (
           <AccordionItem
@@ -62,8 +62,8 @@ const Body = memo(() => {
                   active={activeTab === item.key}
                   icon={item.icon}
                   key={item.key}
-                  onClick={() => handleTabClick(item.key)}
                   title={item.label}
+                  onClick={() => handleTabClick(item.key)}
                 />
               ))}
             </Flexbox>

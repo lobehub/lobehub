@@ -1,9 +1,10 @@
+import { isDesktop } from '@lobechat/const';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { uniq } from 'es-toolkit/compat';
 
 import { type InstallPluginMeta, type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
-import type { ToolStoreState } from '../../initialState';
+import { type ToolStoreState } from '../../initialState';
 
 const installedPlugins = (s: ToolStoreState) => s.installedPlugins;
 
@@ -56,6 +57,8 @@ const installedPluginMetaList = (s: ToolStoreState) =>
   installedPlugins(s)
     // Filter out Klavis plugins (they have their own display location)
     .filter((p) => !p.customParams?.klavis)
+    // Filter out stdio MCP plugins on non-desktop (stdio requires Electron IPC)
+    .filter((p) => isDesktop || p.customParams?.mcp?.type !== 'stdio')
     .map<InstallPluginMeta>((p) => ({
       author: p.manifest?.author,
       createdAt: p.manifest?.createdAt || (p.manifest as any)?.createAt,

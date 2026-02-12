@@ -1,4 +1,4 @@
-import { AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

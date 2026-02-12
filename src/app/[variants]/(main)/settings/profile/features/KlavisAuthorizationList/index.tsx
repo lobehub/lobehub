@@ -53,7 +53,7 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
 
   return (
     <Tag closable onClose={handleRevoke}>
-      <Flexbox align="center" gap={4} horizontal style={{ opacity: isRevoking ? 0.5 : 1 }}>
+      <Flexbox horizontal align="center" gap={4} style={{ opacity: isRevoking ? 0.5 : 1 }}>
         {renderIcon()}
         {serverType?.label || server.serverName}
       </Flexbox>
@@ -67,7 +67,7 @@ interface KlavisAuthorizationListProps {
 
 export const KlavisAuthorizationList = memo<KlavisAuthorizationListProps>(({ servers }) => {
   return (
-    <Flexbox gap={8} horizontal wrap="wrap">
+    <Flexbox horizontal gap={8} wrap="wrap">
       {servers.map((server) => (
         <KlavisAuthItem key={server.identifier} server={server} />
       ))}

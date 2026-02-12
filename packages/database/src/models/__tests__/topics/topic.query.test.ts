@@ -10,7 +10,7 @@ import {
   topics,
   users,
 } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
 
 const userId = 'topic-query-user';

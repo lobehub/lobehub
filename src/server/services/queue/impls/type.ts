@@ -7,25 +7,25 @@ export interface QueueServiceImpl {
   /**
    * Cancel scheduled task
    */
-  cancelScheduledTask(taskId: string): Promise<void>;
+  cancelScheduledTask: (taskId: string) => Promise<void>;
 
   /**
    * Get queue statistics
    */
-  getQueueStats(): Promise<QueueStats>;
+  getQueueStats: () => Promise<QueueStats>;
 
   /**
    * Health check
    */
-  healthCheck(): Promise<HealthCheckResult>;
+  healthCheck: () => Promise<HealthCheckResult>;
 
   /**
    * Schedule multiple messages to the queue
    */
-  scheduleBatchMessages(messages: QueueMessage[]): Promise<string[]>;
+  scheduleBatchMessages: (messages: QueueMessage[]) => Promise<string[]>;
 
   /**
    * Schedule a message to the queue
    */
-  scheduleMessage(message: QueueMessage): Promise<string>;
+  scheduleMessage: (message: QueueMessage) => Promise<string>;
 }

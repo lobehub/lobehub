@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentGroupDetail, AgentGroupMember } from '@lobechat/types';
+import { type AgentGroupDetail, type AgentGroupMember } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
@@ -84,7 +84,7 @@ const Title = memo(() => {
     data?.title && (
       <>
         <PageTitle title={data.title} />
-        <Text align={'center'} ellipsis fontSize={16} strong style={{ textAlign: 'center' }}>
+        <Text ellipsis strong align={'center'} fontSize={16} style={{ textAlign: 'center' }}>
           {data.title}
         </Text>
       </>

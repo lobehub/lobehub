@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 // https://platform.moonshot.cn/docs/pricing/chat
 const moonshotChatModels: AIChatModelCard[] = [

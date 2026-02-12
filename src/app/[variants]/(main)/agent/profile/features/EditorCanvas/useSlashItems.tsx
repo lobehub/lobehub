@@ -1,3 +1,4 @@
+import { type SlashOptions } from '@lobehub/editor';
 import {
   INSERT_CHECK_LIST_COMMAND,
   INSERT_HEADING_COMMAND,
@@ -6,7 +7,6 @@ import {
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_TABLE_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
-  type SlashOptions,
 } from '@lobehub/editor';
 import { Text } from '@lobehub/ui';
 import {

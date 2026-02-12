@@ -4,6 +4,7 @@ import { Boxes } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Agents from '@/features/MCPPluginDetail/Agents';
 import Deployment from '@/features/MCPPluginDetail/Deployment';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
 import Header from '@/features/MCPPluginDetail/Header';
@@ -46,10 +47,10 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
     return (
       <Center
         height={'100%'}
+        width={'100%'}
         style={{
           background: theme.colorBgContainerSecondary,
         }}
-        width={'100%'}
       >
         <Empty
           description={t('store.emptySelectHint')}
@@ -65,8 +66,8 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
       <Flexbox gap={16}>
         <Header inModal />
         <Nav
-          activeTab={activeTab as McpNavKey}
           inModal
+          activeTab={activeTab as McpNavKey}
           noSettings={noSettings}
           setActiveTab={setActiveTab}
         />
@@ -76,6 +77,7 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
           {activeTab === McpNavKey.Deployment && <Deployment />}
           {activeTab === McpNavKey.Schema && <Schema />}
           {activeTab === McpNavKey.Score && <Score />}
+          {activeTab === McpNavKey.Agents && <Agents inModal />}
         </Flexbox>
       </Flexbox>
     </DetailProvider>

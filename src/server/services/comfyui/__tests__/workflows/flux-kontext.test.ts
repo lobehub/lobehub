@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { PromptBuilder } from '@saintno/comfyui-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TEST_FLUX_MODELS } from '@/server/services/comfyui/__tests__/fixtures/testModels';
@@ -109,7 +108,7 @@ describe('buildFluxKontextWorkflow - Complex Dual-Mode Architecture', () => {
     it('should create workflow with all required nodes for t2i mode', async () => {
       const modelName = TEST_FLUX_MODELS.KONTEXT;
       const params = {
-        cfg: 4.0,
+        cfg: 4,
         height: 768,
         prompt: 'Dynamic node test',
         steps: 28,
@@ -131,9 +130,9 @@ describe('buildFluxKontextWorkflow - Complex Dual-Mode Architecture', () => {
 
     it('should handle different CFG values for guidance', async () => {
       const testCases = [
-        { cfg: 1.0, expected: 'minimal guidance' },
+        { cfg: 1, expected: 'minimal guidance' },
         { cfg: 3.5, expected: 'default guidance' },
-        { cfg: 7.0, expected: 'high guidance' },
+        { cfg: 7, expected: 'high guidance' },
       ];
 
       for (const testCase of testCases) {

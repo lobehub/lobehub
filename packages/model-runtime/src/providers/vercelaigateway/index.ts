@@ -1,9 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
-import {
-  type OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface VercelAIGatewayModelCard {
@@ -40,7 +38,6 @@ export const params = {
   baseURL: 'https://ai-gateway.vercel.sh/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { reasoning_effort, thinking, reasoning: _reasoning, verbosity, ...rest } = payload;
 
       let reasoning: VercelAIGatewayReasoning | undefined;
@@ -125,7 +122,12 @@ export const params = {
         // Merge all applicable extendParams for settings
         ...(() => {
           const extendParams: string[] = [];
-          if (tags.includes('reasoning') && m.id.includes('gpt-5') && !m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {
+          if (
+            tags.includes('reasoning') &&
+            m.id.includes('gpt-5') &&
+            !m.id.includes('gpt-5.1') &&
+            !m.id.includes('gpt-5.2')
+          ) {
             extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {

@@ -3,8 +3,6 @@ import { BRANDING_LOGO_URL } from '@lobechat/business-const';
 import qs from 'query-string';
 import { describe, expect, it, vi } from 'vitest';
 
-import { getCanonicalUrl } from '@/server/utils/url';
-
 import { Manifest, manifestModule } from './manifest';
 
 // Mock external dependencies

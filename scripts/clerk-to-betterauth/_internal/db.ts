@@ -1,4 +1,4 @@
-import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
+import { neonConfig, Pool as NeonPool } from '@neondatabase/serverless';
 import { drizzle as neonDrizzle } from 'drizzle-orm/neon-serverless';
 import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { Pool as NodePool } from 'pg';

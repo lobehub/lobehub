@@ -1,7 +1,7 @@
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import { type ItemType } from 'antd/es/menu/interface';
+import { createStaticStyles } from 'antd-style';
 import { FolderCogIcon, FolderPenIcon, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -106,7 +106,6 @@ export const useSessionGroupMenuItems = () => {
    * Create agent in group menu item
    */
   const createAgentInGroupMenuItem = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     (groupId: string, _isPinned?: boolean): ItemType => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {

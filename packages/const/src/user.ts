@@ -1,4 +1,5 @@
-import { TopicDisplayMode, UserPreference } from '@lobechat/types';
+import type { UserPreference } from '@lobechat/types';
+import { TopicDisplayMode } from '@lobechat/types';
 
 /**
  * Current onboarding flow version.

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ChatSemanticSearchChunk } from './chunk';
+import type { ChatSemanticSearchChunk } from './chunk';
 
 export const SemanticSearchSchema = z.object({
   fileIds: z.array(z.string()).optional(),

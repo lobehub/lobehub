@@ -1,4 +1,3 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
 import {
@@ -13,14 +12,15 @@ import {
   Gift,
   Image as ImageIcon,
   Info,
-  KeyIcon,
   KeyboardIcon,
+  KeyIcon,
   Map,
   MessageSquareTextIcon,
   Mic2,
   PaletteIcon,
   PieChart,
   Sparkles,
+  TerminalSquare,
   UserCircle,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -29,13 +29,17 @@ import { useTranslation } from 'react-i18next';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { SettingsTabs } from '@/store/global/initialState';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 export enum SettingsGroupKey {
-  AIConfig = 'ai-config',
   Account = 'account',
+  AIConfig = 'ai-config',
   Profile = 'profile',
   Subscription = 'subscription',
   System = 'system',
@@ -74,7 +78,7 @@ export const useCategory = () => {
     }
     return avatar;
   }, [avatar, remoteServerUrl]);
-
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
@@ -103,35 +107,35 @@ export const useCategory = () => {
       title: t('group.profile'),
     });
 
-    const subscriptionItems: CategoryItem[] = [
-      {
-        icon: Map,
-        key: SettingsTabs.Plans,
-        label: tSubscription('tab.plans'),
-      },
-      {
-        icon: Coins,
-        key: SettingsTabs.Funds,
-        label: tSubscription('tab.funds'),
-      },
-      {
-        icon: PieChart,
-        key: SettingsTabs.Usage,
-        label: tSubscription('tab.usage'),
-      },
-      {
-        icon: CreditCard,
-        key: SettingsTabs.Billing,
-        label: tSubscription('tab.billing'),
-      },
-      {
-        icon: Gift,
-        key: SettingsTabs.Referral,
-        label: tSubscription('tab.referral'),
-      },
-    ];
+    if (enableBusinessFeatures) {
+      const subscriptionItems: CategoryItem[] = [
+        {
+          icon: Map,
+          key: SettingsTabs.Plans,
+          label: tSubscription('tab.plans'),
+        },
+        {
+          icon: Coins,
+          key: SettingsTabs.Funds,
+          label: tSubscription('tab.funds'),
+        },
+        {
+          icon: PieChart,
+          key: SettingsTabs.Usage,
+          label: tSubscription('tab.usage'),
+        },
+        {
+          icon: CreditCard,
+          key: SettingsTabs.Billing,
+          label: tSubscription('tab.billing'),
+        },
+        {
+          icon: Gift,
+          key: SettingsTabs.Referral,
+          label: tSubscription('tab.referral'),
+        },
+      ];
 
-    if (ENABLE_BUSINESS_FEATURES) {
       groups.push({
         items: subscriptionItems,
         key: SettingsGroupKey.Subscription,
@@ -211,6 +215,11 @@ export const useCategory = () => {
         key: SettingsTabs.Proxy,
         label: t('tab.proxy'),
       },
+      isDesktop && {
+        icon: TerminalSquare,
+        key: SettingsTabs.SystemTools,
+        label: t('tab.systemTools'),
+      },
       {
         icon: Database,
         key: SettingsTabs.Storage,
@@ -230,7 +239,18 @@ export const useCategory = () => {
     });
 
     return groups;
-  }, [t, tAuth, enableSTT, hideDocs, mobile, showAiImage, showApiKeyManage, avatarUrl, username]);
+  }, [
+    t,
+    tAuth,
+    enableSTT,
+    enableBusinessFeatures,
+    hideDocs,
+    mobile,
+    showAiImage,
+    showApiKeyManage,
+    avatarUrl,
+    username,
+  ]);
 
   return categoryGroups;
 };

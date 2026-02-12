@@ -1,10 +1,12 @@
 import { type ChatModelCard } from '@lobechat/types';
-import { type IconAvatarProps, LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { Avatar, Flexbox, FlexboxProps, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { type IconAvatarProps } from '@lobehub/icons';
+import { LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import {
-  Infinity,
   AtomIcon,
+  Infinity,
   LucideEye,
   LucideGlobe,
   LucideImage,
@@ -14,7 +16,8 @@ import {
 } from 'lucide-react';
 import { type ModelAbilities } from 'model-bank';
 import numeral from 'numeral';
-import { CSSProperties, type FC, memo } from 'react';
+import { type CSSProperties, type FC } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type AiProviderSourceType } from '@/types/aiProvider';
@@ -266,9 +269,9 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={32}
-        horizontal
         justify={'space-between'}
         {...rest}
         style={{
@@ -279,18 +282,18 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
         }}
       >
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           style={{ flexShrink: 1, minWidth: 0, overflow: 'hidden' }}
         >
           <ModelIcon model={id} size={20} />
           <Text
+            style={mobile ? { maxWidth: '60vw' } : { minWidth: 0, overflow: 'hidden' }}
             ellipsis={{
               tooltip: displayNameOrId,
               tooltipWhenOverflow: true,
             }}
-            style={mobile ? { maxWidth: '60vw' } : { minWidth: 0, overflow: 'hidden' }}
           >
             {displayNameOrId}
           </Text>
@@ -332,13 +335,13 @@ export const ProviderItemRender = memo<ProviderItemRenderProps>(
     const isMono = type === 'mono';
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={6}
-        horizontal
+        width={'100%'}
         style={{
           overflow: 'hidden',
         }}
-        width={'100%'}
       >
         {source === 'custom' && !!logo ? (
           <Avatar
@@ -353,7 +356,7 @@ export const ProviderItemRender = memo<ProviderItemRenderProps>(
         ) : (
           <ProviderIcon provider={provider} size={size} type={type} />
         )}
-        <Text color={'inherit'} ellipsis>
+        <Text ellipsis color={'inherit'}>
           {name}
         </Text>
       </Flexbox>
@@ -367,7 +370,7 @@ interface LabelRendererProps {
 }
 
 export const LabelRenderer = memo<LabelRendererProps>(({ Icon, label }) => (
-  <Flexbox align={'center'} gap={8} horizontal>
+  <Flexbox horizontal align={'center'} gap={8}>
     <Icon size={20} />
     <span>{label}</span>
   </Flexbox>

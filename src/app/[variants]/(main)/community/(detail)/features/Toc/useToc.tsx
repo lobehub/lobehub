@@ -2,7 +2,8 @@
 
 import { type AnchorProps } from 'antd';
 import { unionBy } from 'es-toolkit/compat';
-import { type FC, type PropsWithChildren, createContext, useContext, useState } from 'react';
+import { type FC, type PropsWithChildren } from 'react';
+import { createContext, use, useState } from 'react';
 
 interface TocState {
   isLoading: boolean;
@@ -28,7 +29,7 @@ export const TocProvider: FC<PropsWithChildren> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [toc, setToc] = useState<AnchorProps['items']>([]);
   return (
-    <TocContext.Provider
+    <TocContext
       value={{
         isLoading: loading,
         setFinished: () => setLoading(false),
@@ -39,12 +40,12 @@ export const TocProvider: FC<PropsWithChildren> = ({ children }) => {
       }}
     >
       {children}
-    </TocContext.Provider>
+    </TocContext>
   );
 };
 
 export const useToc = () => {
-  return useContext(TocContext);
+  return use(TocContext);
 };
 
 export function createTOCTree(items: TOCItem[]): AnchorProps['items'] {

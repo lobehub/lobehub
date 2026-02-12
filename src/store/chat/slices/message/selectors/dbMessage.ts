@@ -1,7 +1,7 @@
 import { type StepContextTodos, type UIChatMessage } from '@lobechat/types';
 
 import { chatHelpers } from '../../../helpers';
-import type { ChatStoreState } from '../../../initialState';
+import { type ChatStoreState } from '../../../initialState';
 import { messageMapKey } from '../../../utils/messageMapKey';
 
 /**

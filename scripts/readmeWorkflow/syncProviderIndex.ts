@@ -1,6 +1,7 @@
+import { resolve } from 'node:path';
+
 import { consola } from 'consola';
 import { readJSONSync } from 'fs-extra';
-import { resolve } from 'node:path';
 import urlJoin from 'url-join';
 
 import { PROVIDER_LIST, PROVIDER_SPLIT, root } from './const';
@@ -28,7 +29,7 @@ const runProviderTable = async (lang?: string) => {
         )
         .join('\n'),
       `<details><summary><kbd>See more providers (+${PROVIDER_LIST.length - 10})</kbd></summary>`,
-      PROVIDER_LIST.slice(10, PROVIDER_LIST.length)
+      PROVIDER_LIST.slice(10)
         .map((item) =>
           genProviderTable({
             ...item,

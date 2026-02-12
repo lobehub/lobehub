@@ -3,7 +3,8 @@
 import { Modal } from '@lobehub/ui';
 import { ConfigProvider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
-import { type ReactNode, useCallback, useState } from 'react';
+import { type ReactNode } from 'react';
+import { useCallback, useState } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -18,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   extra: css`
     position: fixed;
     z-index: ${cssVar.zIndexPopupBase + 10};
-    inset-block: 0 0;
+    inset-block: 0;
     inset-inline-end: 0;
 
     width: 0;
@@ -70,9 +71,9 @@ const FullscreenModal = ({ children, detail, onClose }: FullscreenModalProps) =>
           className={cx(styles.modal, showDetail && styles.modal_withDetail)}
           classNames={{ body: styles.body, header: styles.header, wrapper: styles.content }}
           footer={false}
-          onCancel={handleCancel}
           open={open}
           width={'auto'}
+          onCancel={handleCancel}
         >
           {children}
         </Modal>

@@ -31,10 +31,10 @@ const FileItem = memo<ChatFileItem>(({ name, fileType, size, id }) => {
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={styles.container}
       gap={8}
-      horizontal
       onClick={() => {
         openFilePreview({ fileId: id });
       }}

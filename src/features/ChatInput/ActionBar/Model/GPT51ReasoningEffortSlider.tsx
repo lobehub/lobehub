@@ -1,4 +1,5 @@
-import { type CreatedLevelSliderProps, createLevelSliderComponent } from './createLevelSlider';
+import { type CreatedLevelSliderProps } from './createLevelSlider';
+import { createLevelSliderComponent } from './createLevelSlider';
 
 const GPT51_REASONING_EFFORT_LEVELS = ['none', 'low', 'medium', 'high'] as const;
 type GPT51ReasoningEffort = (typeof GPT51_REASONING_EFFORT_LEVELS)[number];

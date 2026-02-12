@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "در حال انجام",
   "detail.data.embedding.success": "تکمیل شد",
   "detail.data.embeddingStatus": "تعبیه",
+  "detail.data.noChunk": "هیچ بخشی وجود ندارد",
   "empty": "هنوز هیچ فایل یا پوشه‌ای بارگذاری نشده است.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} فایل فیلتر شد (از مجموع {{total}})",
   "header.actions.connect": "اتصال...",

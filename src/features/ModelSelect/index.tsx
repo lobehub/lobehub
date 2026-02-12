@@ -1,6 +1,8 @@
-import { LobeSelect, type LobeSelectProps, TooltipGroup } from '@lobehub/ui';
+import { type LobeSelectProps } from '@lobehub/ui';
+import { LobeSelect, TooltipGroup } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { type ReactNode, memo, useMemo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -100,13 +102,16 @@ const ModelSelect = memo<ModelSelectProps>(
     return (
       <TooltipGroup>
         <LobeSelect
+          virtual
           defaultValue={`${value?.provider}/${value?.model}`}
           loading={loading}
-          onChange={(value, option) => {
-            if (!value) return;
-            const model = (value as string).split('/').slice(1).join('/');
-            onChange?.({ model, provider: (option as unknown as ModelOption).provider });
-          }}
+          options={options}
+          popupClassName={styles.popup}
+          popupMatchSelectWidth={false}
+          selectedIndicatorVariant="bold"
+          size={size}
+          value={`${value?.provider}/${value?.model}`}
+          variant={variant}
           optionRender={(option) => {
             const data = option as unknown as ModelOption;
             return (
@@ -118,19 +123,16 @@ const ModelSelect = memo<ModelSelectProps>(
               />
             );
           }}
-          options={options}
-          popupClassName={styles.popup}
-          popupMatchSelectWidth={false}
-          selectedIndicatorVariant="bold"
-          size={size}
           style={{
             minWidth: 200,
             width: initialWidth ? 'initial' : undefined,
             ...style,
           }}
-          value={`${value?.provider}/${value?.model}`}
-          variant={variant}
-          virtual
+          onChange={(value, option) => {
+            if (!value) return;
+            const model = (value as string).split('/').slice(1).join('/');
+            onChange?.({ model, provider: (option as unknown as ModelOption).provider });
+          }}
         />
       </TooltipGroup>
     );

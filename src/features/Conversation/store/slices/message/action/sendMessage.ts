@@ -1,8 +1,8 @@
-import type { SendMessageParams } from '@lobechat/types';
+import { type SendMessageParams } from '@lobechat/types';
 
 import { useChatStore } from '@/store/chat';
 
-import type { Store as ConversationStore } from '../../../action';
+import { type Store as ConversationStore } from '../../../action';
 
 /**
  * Send a message in this conversation

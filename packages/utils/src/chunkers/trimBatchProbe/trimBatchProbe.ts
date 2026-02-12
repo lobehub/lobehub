@@ -1,13 +1,13 @@
 import { encodeAsync } from '../../tokenizer';
 
 export interface Buildable {
-  build(tryCompactIfPossible?: boolean): string | Promise<string>;
+  build: (tryCompactIfPossible?: boolean) => string | Promise<string>;
 }
 
 export type Joiner<T = string> =
   | string
   | ((batch: T[]) => string | Promise<string>)
-  | { join(batch: T[]): string | Promise<string> };
+  | { join: (batch: T[]) => string | Promise<string> };
 
 export interface TrimBatchProbeOptions<T = string | Buildable> {
   builder?: (item: T, tryCompact?: boolean) => string | Promise<string>;
@@ -19,7 +19,7 @@ export interface TrimBatchProbeOptions<T = string | Buildable> {
 
 export type Input<T = string | Buildable> = T | T[] | undefined | null;
 
-const PUNCTUATION_SPLIT_REGEXP = /(?<=[\p{Punctuation}])\s*/u;
+const PUNCTUATION_SPLIT_REGEXP = /(?<=\p{Punctuation})\s*/u;
 
 export const isBuildable = (value: unknown): value is Buildable =>
   Boolean(value) && typeof (value as Buildable).build === 'function';
@@ -108,7 +108,10 @@ export const hardTruncateFromTail = async (text: string, tokenLimit: number) => 
 /**
  * Joins built segments using the provided joiner or string separator.
  */
-export const joinSegments = async (segments: string[], joiner: ReturnType<typeof resolveJoiner>) => {
+export const joinSegments = async (
+  segments: string[],
+  joiner: ReturnType<typeof resolveJoiner>,
+) => {
   if (typeof joiner === 'string') return segments.join(joiner);
 
   return joiner(segments);
@@ -218,8 +221,11 @@ export const trimBasedOnBatchProbe = async <T = string | Buildable>(
 ): Promise<string> => {
   const options: TrimBatchProbeOptions<T> =
     typeof tokenLimitOrOptions === 'number'
-      ? { ...(typeof maybeOptions === 'object' ? maybeOptions : {}), tokenLimit: tokenLimitOrOptions }
-      : tokenLimitOrOptions ?? {};
+      ? {
+          ...(typeof maybeOptions === 'object' ? maybeOptions : {}),
+          tokenLimit: tokenLimitOrOptions,
+        }
+      : (tokenLimitOrOptions ?? {});
 
   if (typeof maybeOptions === 'string') {
     options.joiner = maybeOptions;
@@ -272,7 +278,9 @@ export const trimBasedOnBatchProbe = async <T = string | Buildable>(
 
       if (
         bestCompact &&
-        (!bestNormal || bestCompact.count > bestNormal.count || bestCompact.text.length > bestNormal.text.length)
+        (!bestNormal ||
+          bestCompact.count > bestNormal.count ||
+          bestCompact.text.length > bestNormal.text.length)
       ) {
         return bestCompact.text;
       }

@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -86,14 +87,14 @@ const Notification = memo<NotificationProps>(
             <ActionIcon className={styles.cancelIcon} icon={XIcon} onClick={() => onCancel?.()} />
           )}
           <Flexbox
+            horizontal
+            gap={16}
+            padding={'20px 20px 16px'}
             className={cx(
               styles.wrapper,
               isDarkMode ? styles.wrapperDark : styles.wrapperLight,
               wrapperClassName,
             )}
-            gap={16}
-            horizontal
-            padding={'20px 20px 16px'}
             {...restWrapper}
           >
             {children}

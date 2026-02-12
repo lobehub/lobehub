@@ -1,8 +1,9 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 
 import { preferencePrompt } from '../prompts';
-import { PreferenceMemory, PreferenceMemorySchema } from '../schemas';
-import { ExtractorTemplateProps } from '../types';
+import type { PreferenceMemory } from '../schemas';
+import { PreferenceMemorySchema } from '../schemas';
+import type { ExtractorTemplateProps } from '../types';
 import { buildGenerateObjectSchema } from '../utils/zod';
 import { BaseMemoryExtractor } from './base';
 

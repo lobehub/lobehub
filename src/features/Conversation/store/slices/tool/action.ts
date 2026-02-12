@@ -1,8 +1,8 @@
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
 import { useChatStore } from '@/store/chat';
 
-import type { Store as ConversationStore } from '../../action';
+import { type Store as ConversationStore } from '../../action';
 import { dataSelectors } from '../data/selectors';
 
 /**

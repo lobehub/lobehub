@@ -114,19 +114,19 @@
 
           // 调用主进程的重试逻辑
           if (window.electron && window.electron.ipcRenderer) {
-            window.electron.ipcRenderer.invoke('retry-connection')
-              .then((result) => {
-                if (result && result.success) {
-                  // 连接成功，无需额外操作，页面会自动导航
-                } else {
-                  // 连接失败，重置按钮状态
-                  setTimeout(() => {
-                    retryButton.disabled = false;
-                    retryButton.textContent = 'Retry';
-                    errorMessage.textContent = 'Unable to connect to the application, please check your network connection or confirm if the development server is running.';
-                  }, 1000);
-                }
-              });
+            window.electron.ipcRenderer.invoke('retry-connection').then((result) => {
+              if (result && result.success) {
+                // 连接成功，无需额外操作，页面会自动导航
+              } else {
+                // 连接失败，重置按钮状态
+                setTimeout(() => {
+                  retryButton.disabled = false;
+                  retryButton.textContent = 'Retry';
+                  errorMessage.textContent =
+                    'Unable to connect to the application, please check your network connection or confirm if the development server is running.';
+                }, 1000);
+              }
+            });
           }
         });
       }

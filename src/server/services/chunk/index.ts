@@ -2,7 +2,8 @@ import { type LobeChatDatabase } from '@lobechat/database';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
-import { type ChunkContentParams, ContentChunk } from '@/server/modules/ContentChunk';
+import { type ChunkContentParams } from '@/server/modules/ContentChunk';
+import { ContentChunk } from '@/server/modules/ContentChunk';
 import { createAsyncCaller } from '@/server/routers/async';
 import {
   AsyncTaskError,

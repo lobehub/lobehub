@@ -1,4 +1,4 @@
-import type { ListItem } from './types';
+import { type ListItem } from './types';
 
 export const menuKey = (provider: string, model: string) => `${provider}-${model}`;
 

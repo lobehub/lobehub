@@ -3,7 +3,8 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import { type GroupBy } from './index';
 
@@ -32,7 +33,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 50%;
 
     background: ${cssVar.colorBgElevated};
-    box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 40%);
+    box-shadow: 0 2px 4px -2px rgb(0 0 0 / 40%);
   `,
 }));
 
@@ -49,7 +50,7 @@ export const PeriodHeader = memo<PeriodHeaderProps>(({ periodKey, groupBy = 'day
       : dayjs(periodKey).format('MMMM D, YYYY');
 
   return (
-    <Flexbox align={'center'} className={styles.periodHeader} gap={12} horizontal paddingBlock={8}>
+    <Flexbox horizontal align={'center'} className={styles.periodHeader} gap={12} paddingBlock={8}>
       <Text weight={500}>{periodName}</Text>
     </Flexbox>
   );

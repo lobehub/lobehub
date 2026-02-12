@@ -6,8 +6,6 @@ import { z } from 'zod';
  * Used for Ask AI functionality to persist selection context with user messages.
  */
 export interface PageSelection {
-  /** Selection unique identifier */
-  id: string;
   anchor?: {
     startNodeId: string;
     endNodeId: string;
@@ -16,14 +14,16 @@ export interface PageSelection {
   };
   /** Selected content (plain text or markdown) */
   content: string;
-  /** XML structure of the selected content (for positioning edits) */
-  xml?: string;
+  /** End line number */
+  endLine?: number;
+  /** Selection unique identifier */
+  id: string;
   /** Page ID the selection belongs to */
   pageId: string;
   /** Start line number */
   startLine?: number;
-  /** End line number */
-  endLine?: number;
+  /** XML structure of the selected content (for positioning edits) */
+  xml?: string;
 }
 
 export const PageSelectionSchema = z.object({

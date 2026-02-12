@@ -3,31 +3,33 @@ import { LOADING_FLAT } from '@lobechat/const';
 import { type SendGroupMessageParams } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { type StreamEvent, agentRuntimeClient } from '@/services/agentRuntime';
+import { type StreamEvent } from '@/services/agentRuntime';
+import { agentRuntimeClient } from '@/services/agentRuntime';
 import { type ChatStore } from '@/store/chat/store';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 const log = debug('store:chat:ai-agent:agentGroup');
 
 const n = setNamespace('aiAgentGroup');
 
-export interface ChatGroupChatAction {
-  /**
-   * Sends a new message to a group chat and triggers agent responses
-   */
-  sendGroupMessage: (params: SendGroupMessageParams) => Promise<void>;
-}
+type Setter = StoreSetter<ChatStore>;
+export const agentGroupSlice = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new ChatGroupChatActionImpl(set, get, _api);
 
-export const agentGroupSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  ChatGroupChatAction
-> = (set, get) => ({
-  sendGroupMessage: async ({ context, message, files }) => {
+export class ChatGroupChatActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  sendGroupMessage = async ({ context, message, files }: SendGroupMessageParams): Promise<void> => {
     if (!message.trim() && (!files || files.length === 0)) return;
 
     const { agentId, groupId, topicId } = context;
@@ -37,7 +39,8 @@ export const agentGroupSlice: StateCreator<
       return;
     }
 
-    const { internal_handleAgentStreamEvent, optimisticCreateTmpMessage, startOperation } = get();
+    const { internal_handleAgentStreamEvent, optimisticCreateTmpMessage, startOperation } =
+      this.#get();
 
     log(
       'sendGroupMessage: agentId=%s, groupId=%s, message=%s',
@@ -46,7 +49,7 @@ export const agentGroupSlice: StateCreator<
       message.slice(0, 50),
     );
 
-    set({ isCreatingMessage: true }, false, n('sendGroupMessage/start'));
+    this.#set({ isCreatingMessage: true }, false, n('sendGroupMessage/start'));
 
     // 0. Create execServerAgentRuntime operation FIRST for correct loading state
     // This ensures isAgentRuntimeRunningByContext returns true during mutate call
@@ -87,8 +90,8 @@ export const agentGroupSlice: StateCreator<
     );
 
     // Start loading state for temp messages
-    get().internal_toggleMessageLoading(true, tempUserId);
-    get().internal_toggleMessageLoading(true, tempAssistantId);
+    this.#get().internal_toggleMessageLoading(true, tempUserId);
+    this.#get().internal_toggleMessageLoading(true, tempAssistantId);
 
     try {
       // 2. Call backend execGroupAgent - creates messages and triggers Agent
@@ -108,7 +111,7 @@ export const agentGroupSlice: StateCreator<
       // 3. Update topics if new topic was created
       if (result.topics) {
         const pageSize = 20; // Default page size for topics
-        get().internal_updateTopics(agentId, {
+        this.#get().internal_updateTopics(agentId, {
           groupId,
           items: result.topics.items as any, // Type from DB may have null vs undefined differences
           pageSize,
@@ -118,7 +121,10 @@ export const agentGroupSlice: StateCreator<
 
       // 4. Switch to new topic if created
       if (result.isCreateNewTopic && result.topicId) {
-        await get().switchTopic(result.topicId, { clearNewKey: true, skipRefreshMessage: true });
+        await this.#get().switchTopic(result.topicId, {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
       }
 
       // 5. Create execContext with updated topicId from server response
@@ -127,12 +133,12 @@ export const agentGroupSlice: StateCreator<
       // 6. Replace temp messages with server messages
       // Messages include assistant message with error if operation failed to start
       if (result.messages) {
-        get().replaceMessages(result.messages, {
+        this.#get().replaceMessages(result.messages, {
           action: n('sendGroupMessage/syncMessages'),
           context: execContext,
         });
         // Delete temp messages - use execOperationId for correct context
-        get().internal_dispatchMessage(
+        this.#get().internal_dispatchMessage(
           { ids: [tempUserId, tempAssistantId], type: 'deleteMessages' },
           { operationId: execOperationId },
         );
@@ -143,12 +149,12 @@ export const agentGroupSlice: StateCreator<
       if (result.success === false) {
         log('Agent operation failed to start: %s', result.error);
         // Complete the operation with error status
-        get().failOperation(execOperationId, {
+        this.#get().failOperation(execOperationId, {
           message: result.error || 'Agent operation failed to start',
           type: 'AgentStartupError',
         });
         // Stop loading state for assistant message
-        get().internal_toggleMessageLoading(false, result.assistantMessageId);
+        this.#get().internal_toggleMessageLoading(false, result.assistantMessageId);
         return;
       }
 
@@ -161,7 +167,7 @@ export const agentGroupSlice: StateCreator<
       };
 
       // 9. Start child operation for SSE stream using backend operationId
-      get().startOperation({
+      this.#get().startOperation({
         context: { ...execContext, messageId: result.assistantMessageId },
         label: 'Group Agent Stream',
         operationId: result.operationId,
@@ -172,8 +178,8 @@ export const agentGroupSlice: StateCreator<
       // Associate assistant message with both operations:
       // - execServerAgentRuntime (parent) - for isGenerating detection
       // - groupAgentStream (child) - for stream cancel handling
-      get().associateMessageWithOperation(result.assistantMessageId, execOperationId);
-      get().associateMessageWithOperation(result.assistantMessageId, result.operationId);
+      this.#get().associateMessageWithOperation(result.assistantMessageId, execOperationId);
+      this.#get().associateMessageWithOperation(result.assistantMessageId, result.operationId);
 
       // 10. Connect to SSE stream
       // Server will automatically close the connection after sending agent_runtime_end event
@@ -185,18 +191,18 @@ export const agentGroupSlice: StateCreator<
         onDisconnect: () => {
           log('Stream disconnected from %s', result.operationId);
           // Complete both operations when stream disconnects (either by server close or client abort)
-          get().completeOperation(result.operationId);
-          get().completeOperation(execOperationId);
+          this.#get().completeOperation(result.operationId);
+          this.#get().completeOperation(execOperationId);
         },
         onError: (error: Error) => {
           log('Stream error for %s: %O', result.operationId, error);
           // Fail the stream operation on error
-          get().failOperation(result.operationId, {
+          this.#get().failOperation(result.operationId, {
             message: error.message,
             type: 'AgentStreamError',
           });
           if (streamContext.assistantId) {
-            get().internal_handleAgentError(streamContext.assistantId, error.message);
+            this.#get().internal_handleAgentError(streamContext.assistantId, error.message);
           }
         },
         onEvent: async (event: StreamEvent) => {
@@ -205,7 +211,7 @@ export const agentGroupSlice: StateCreator<
       });
 
       // 11. Register cancel handler for aborting SSE stream
-      get().onOperationCancel(result.operationId, () => {
+      this.#get().onOperationCancel(result.operationId, () => {
         log('Cancelling SSE stream for operation %s', result.operationId);
         eventSource.abort();
       });
@@ -221,7 +227,7 @@ export const agentGroupSlice: StateCreator<
         log('sendGroupMessage aborted by user');
         // Operation was cancelled by user, status already updated by cancelOperation
         // Just clean up temp messages
-        get().internal_dispatchMessage(
+        this.#get().internal_dispatchMessage(
           {
             ids: [tempUserId, tempAssistantId],
             type: 'deleteMessages',
@@ -233,7 +239,7 @@ export const agentGroupSlice: StateCreator<
         console.error('Failed to send group message:', error);
 
         // Remove temp messages on error - use execOperationId for correct context
-        get().internal_dispatchMessage(
+        this.#get().internal_dispatchMessage(
           {
             ids: [tempUserId, tempAssistantId],
             type: 'deleteMessages',
@@ -242,15 +248,17 @@ export const agentGroupSlice: StateCreator<
         );
 
         // Fail the execServerAgentRuntime operation
-        get().failOperation(execOperationId, {
+        this.#get().failOperation(execOperationId, {
           message: error instanceof Error ? error.message : 'Unknown error',
           type: 'SendGroupMessageError',
         });
       }
     } finally {
-      get().internal_toggleMessageLoading(false, tempUserId);
-      get().internal_toggleMessageLoading(false, tempAssistantId);
-      set({ isCreatingMessage: false }, false, n('sendGroupMessage/end'));
+      this.#get().internal_toggleMessageLoading(false, tempUserId);
+      this.#get().internal_toggleMessageLoading(false, tempAssistantId);
+      this.#set({ isCreatingMessage: false }, false, n('sendGroupMessage/end'));
     }
-  },
-});
+  };
+}
+
+export type ChatGroupChatAction = Pick<ChatGroupChatActionImpl, keyof ChatGroupChatActionImpl>;

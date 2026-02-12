@@ -123,7 +123,7 @@ jobs:
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
 
       - name: Build artifact on macOS
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: ${{ inputs.channel }}
           APP_URL: http://localhost:3015
@@ -193,7 +193,7 @@ jobs:
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
 
       - name: Build artifact on Windows
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: ${{ inputs.channel }}
           APP_URL: http://localhost:3015
@@ -246,7 +246,7 @@ jobs:
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
 
       - name: Build artifact on Linux
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: ${{ inputs.channel }}
           APP_URL: http://localhost:3015

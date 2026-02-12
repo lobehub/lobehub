@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { RedisConfig } from './types';
+import { type RedisConfig } from './types';
 
 const buildRedisConfig = (): RedisConfig | null => {
   const url = process.env.REDIS_URL;

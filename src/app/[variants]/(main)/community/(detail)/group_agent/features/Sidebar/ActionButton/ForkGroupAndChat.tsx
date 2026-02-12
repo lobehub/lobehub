@@ -120,7 +120,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         };
         // Filter out null/undefined values
         supervisorConfig = Object.fromEntries(
-          // eslint-disable-next-line eqeqeq, @typescript-eslint/no-unused-vars
+           
           Object.entries(rawConfig).filter(([_, v]) => v != null),
         );
       }
@@ -201,9 +201,9 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
       block
       className={styles.buttonGroup}
       loading={isLoading}
-      onClick={handleForkAndChat}
       size={'large'}
       type={'primary'}
+      onClick={handleForkAndChat}
     >
       {t('fork.forkAndChat')}
     </Button>

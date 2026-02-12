@@ -1,13 +1,22 @@
 'use client';
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { BuiltinInterventionProps } from '@lobechat/types';
-import { Accordion, AccordionItem, Avatar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import type { BuiltinInterventionProps } from '@lobechat/types';
+import {
+  Accordion,
+  AccordionItem,
+  Avatar,
+  Flexbox,
+  Icon,
+  Tooltip,
+  stopPropagation,
+} from '@lobehub/ui';
 import { Input, InputNumber } from 'antd';
 import { createStaticStyles, useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Clock, Trash2 } from 'lucide-react';
-import { ChangeEvent, memo, useCallback, useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -111,7 +120,7 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
       paddingBlock={4}
       paddingInline={2}
       title={
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <div className={styles.assignee}>
             <Avatar
               avatar={agent?.avatar || DEFAULT_AVATAR}
@@ -125,15 +134,15 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
       }
     >
       <Flexbox gap={12} style={{ marginTop: 8 }}>
-        <Flexbox gap={12} horizontal>
+        <Flexbox horizontal gap={12}>
           <Input
-            onChange={handleTitleChange}
             placeholder={t('agentGroupManagement.executeTasks.intervention.titlePlaceholder')}
             size={'small'}
             value={task.title}
             variant={'filled'}
+            onChange={handleTitleChange}
           />
-          <Flexbox align={'center'} gap={8} horizontal onClick={(e) => e.stopPropagation()}>
+          <Flexbox horizontal align={'center'} gap={8} onClick={stopPropagation}>
             <Tooltip title={t('agentGroupManagement.executeTask.intervention.timeout')}>
               <Clock size={14} />
             </Tooltip>
@@ -141,26 +150,26 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
               className={styles.timeoutInput}
               max={120}
               min={1}
-              onChange={handleTimeoutChange}
               size={'small'}
               suffix={t('agentGroupManagement.executeTask.intervention.timeoutUnit')}
               value={Math.round((task.timeout || DEFAULT_TIMEOUT) / 60_000)}
               variant={'filled'}
+              onChange={handleTimeoutChange}
             />
             <Icon
               className={styles.deleteButton}
               icon={Trash2}
-              onClick={handleDelete}
               size={{ size: 16 }}
+              onClick={handleDelete}
             />
           </Flexbox>
         </Flexbox>
         <Input.TextArea
           autoSize={{ maxRows: 20, minRows: 8 }}
-          onChange={handleInstructionChange}
           placeholder={t('agentGroupManagement.executeTasks.intervention.instructionPlaceholder')}
           value={task.instruction}
           variant={'filled'}
+          onChange={handleInstructionChange}
         />
       </Flexbox>
     </AccordionItem>
@@ -220,9 +229,9 @@ const ExecuteTasksIntervention = memo<BuiltinInterventionProps<ExecuteTasksParam
           <TaskEditor
             index={index}
             key={task.agentId || index}
+            task={task}
             onChange={handleTaskChange}
             onDelete={handleTaskDelete}
-            task={task}
           />
         ))}
       </Accordion>

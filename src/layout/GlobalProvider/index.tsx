@@ -1,7 +1,8 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { ContextMenuHost, ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui';
-import { LazyMotion, domMax } from 'motion/react';
-import { type ReactNode, Suspense } from 'react';
+import { domMax, LazyMotion } from 'motion/react';
+import { type ReactNode } from 'react';
+import { Suspense } from 'react';
 
 import { ReferralProvider } from '@/business/client/ReferralProvider';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';

@@ -1,9 +1,10 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Fragment, memo, useCallback, useState } from 'react';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+
+import { Flexbox } from '@lobehub/ui';
+import { Fragment, memo, useCallback, useState } from 'react';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
@@ -31,7 +32,7 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
   const [containerWidth, setContainerWidth] = useState<number>();
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // eslint-disable-next-line no-undef
+   
   const onResize = useCallback<ResizeObserverCallback>((entries) => {
     const [entry] = entries;
 
@@ -67,8 +68,8 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
           className={styles.document}
           file={url}
           loading={<NeuralNetworkLoading size={36} />}
-          onLoadSuccess={onDocumentLoadSuccess}
           options={options}
+          onLoadSuccess={onDocumentLoadSuccess}
         >
           {Array.from({ length: numPages }, (_, index) => {
             const width = containerWidth ? Math.min(containerWidth, maxWidth) : maxWidth;

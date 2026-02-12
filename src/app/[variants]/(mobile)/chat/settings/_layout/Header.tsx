@@ -13,10 +13,10 @@ const Header = memo(() => {
 
   return (
     <ChatHeader
-      center={<ChatHeader.Title title={t('header.session')} />}
-      onBackClick={() => navigate(-1)}
       showBackButton
+      center={<ChatHeader.Title title={t('header.session')} />}
       style={mobileHeaderSticky}
+      onBackClick={() => navigate(-1)}
     />
   );
 });

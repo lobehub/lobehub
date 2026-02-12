@@ -1,0 +1,229 @@
+name: Auto Tag Release
+
+permissions:
+  contents: write
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  auto-tag:
+    name: Auto Tag Release
+    runs-on: ubuntu-latest
+    # Only trigger when PR is merged
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          # Fetch full history for proper tagging
+          fetch-depth: 0
+
+      - name: Detect release PR (version from title)
+        id: release
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $PR_TITLE"
+
+          # Match "🚀 release: v{x.x.x}" format (strict semver: x.y.z with optional -prerelease or +build)
+          if [[ "$PR_TITLE" =~ ^🚀[[:space:]]+release:[[:space:]]*v([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "✅ Detected release PR, version: v$VERSION"
+          else
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Not a release PR"
+          fi
+
+      - name: Detect hotfix PR (branch prefix)
+        id: hotfix
+        if: steps.release.outputs.should_tag != 'true'
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          echo "Head ref: $HEAD_REF"
+
+          if [[ "$HEAD_REF" == hotfix/* ]]; then
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "✅ Detected hotfix PR"
+          else
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Not a hotfix PR"
+          fi
+
+      - name: Prepare main branch
+        if: steps.release.outputs.should_tag == 'true' || steps.hotfix.outputs.should_tag == 'true'
+        run: |
+          git checkout main
+          git pull --rebase origin main
+
+      - name: Resolve hotfix version (patch bump)
+        id: hotfix-version
+        if: steps.hotfix.outputs.should_tag == 'true'
+        run: |
+          CURRENT_VERSION="$(node -p "require('./package.json').version")"
+          echo "Current version: ${CURRENT_VERSION}"
+
+          # Coerce to stable base (e.g. 2.0.0-beta.1 -> 2.0.0), then bump patch (-> 2.0.1)
+          BASE_VERSION="$(npx -y semver@7 "${CURRENT_VERSION}" -c)"
+          if [ -z "${BASE_VERSION}" ]; then
+            echo "❌ Invalid version in package.json: ${CURRENT_VERSION}"
+            exit 1
+          fi
+
+          NEXT_VERSION="$(npx -y semver@7 -i patch "${BASE_VERSION}")"
+          echo "📦 Hotfix version: ${NEXT_VERSION}"
+          echo "version=${NEXT_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Set context (release)
+        if: steps.release.outputs.should_tag == 'true'
+        run: |
+          echo "SHOULD_TAG=true" >> $GITHUB_ENV
+          echo "KIND=release" >> $GITHUB_ENV
+          echo "VERSION=${{ steps.release.outputs.version }}" >> $GITHUB_ENV
+
+      - name: Set context (hotfix)
+        if: steps.hotfix.outputs.should_tag == 'true'
+        run: |
+          echo "SHOULD_TAG=true" >> $GITHUB_ENV
+          echo "KIND=hotfix" >> $GITHUB_ENV
+          echo "VERSION=${{ steps.hotfix-version.outputs.version }}" >> $GITHUB_ENV
+
+      - name: Check if tag already exists
+        if: env.SHOULD_TAG == 'true'
+        id: check-tag
+        run: |
+          VERSION="${{ env.VERSION }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Tag v$VERSION already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Tag v$VERSION does not exist, can create"
+          fi
+
+      - name: Bump package.json version (before tagging)
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
+        id: bump-version
+        run: |
+          VERSION="${{ env.VERSION }}"
+          KIND="${{ env.KIND }}"
+          echo "📝 Bumping package.json version to: $VERSION"
+
+          # Validate VERSION is strict semver before writing
+          if ! npx -y semver@7 "$VERSION" >/dev/null 2>&1; then
+            echo "❌ Invalid semver version: $VERSION"
+            exit 1
+          fi
+
+          # Configure git
+          git config --global user.name "lobehubbot"
+          git config --global user.email "i@lobehub.com"
+
+          # Update package.json using Node.js
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+            const target = '$VERSION';
+            if (pkg.version === target) {
+              console.log('✅ package.json already at version', target);
+              process.exit(0);
+            }
+            pkg.version = target;
+            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+            console.log('✅ package.json updated to', target);
+          "
+
+          # Commit changes (if any) and push
+          git add package.json
+          if [ "$KIND" == "hotfix" ]; then
+            COMMIT_MSG="🐛 chore(hotfix): bump version to v$VERSION [skip ci]"
+          else
+            COMMIT_MSG="🔧 chore(release): bump version to v$VERSION [skip ci]"
+          fi
+          git commit -m "$COMMIT_MSG" || echo "Nothing to commit"
+          git push origin HEAD:main
+
+          # Output the SHA we will tag
+          echo "tag_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Create Tag
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
+        run: |
+          VERSION="${{ env.VERSION }}"
+          KIND="${{ env.KIND }}"
+          echo "🏷️ Creating tag: v$VERSION"
+
+          # Tag the bumped version commit SHA (not the PR merge commit SHA)
+          TAG_SHA="${{ steps.bump-version.outputs.tag_sha }}"
+
+          if [ "$KIND" == "hotfix" ]; then
+            PREFIX="🐛 hotfix"
+          else
+            PREFIX="🚀 release"
+          fi
+
+          # Create annotated tag with single line message
+          git tag -a "v$VERSION" "$TAG_SHA" -m "$PREFIX: v$VERSION | PR #${{ github.event.pull_request.number }} | Author: ${{ github.event.pull_request.user.login }}"
+
+          # Push tag
+          git push origin "v$VERSION"
+
+          echo "✅ Tag v$VERSION created successfully!"
+
+      - name: Create GitHub Release (release)
+        if: env.SHOULD_TAG == 'true' && env.KIND == 'release' && steps.check-tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: 🚀 Release v${{ env.VERSION }}
+          body: |
+            ## 📦 Release v${{ env.VERSION }}
+
+            This release was automatically published from PR #${{ github.event.pull_request.number }}.
+
+            ### Changes
+            See PR description: ${{ github.event.pull_request.html_url }}
+
+            ### Commit Message
+            ${{ github.event.pull_request.body }}
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Create GitHub Release (hotfix)
+        if: env.SHOULD_TAG == 'true' && env.KIND == 'hotfix' && steps.check-tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: 🩹 Hotfix v${{ env.VERSION }}
+          body: |
+            ## 📦 Hotfix v${{ env.VERSION }}
+
+            This hotfix was automatically published from PR #${{ github.event.pull_request.number }}.
+
+            ### Changes
+            See PR description: ${{ github.event.pull_request.html_url }}
+
+            ### Commit Message
+            ${{ github.event.pull_request.body }}
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Output result
+        run: |
+          if [ "${{ env.SHOULD_TAG }}" == "true" ]; then
+            if [ "${{ steps.check-tag.outputs.exists }}" == "true" ]; then
+              echo "⚠️ Result: Tag v${{ env.VERSION }} already exists, skipping creation"
+            else
+              echo "✅ Result: Tag v${{ env.VERSION }} created successfully!"
+            fi
+          else
+            echo "ℹ️ Result: Not a release/hotfix PR, no tag created"
+          fi

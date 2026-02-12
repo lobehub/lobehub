@@ -113,12 +113,12 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
       <Flexbox gap={16} paddingBlock={24}>
         {/* Lite Mode Option */}
         <Block
-          className={cx(styles.base, styles.lite)}
           clickable
-          onClick={handleSelectLite}
+          className={cx(styles.base, styles.lite)}
           padding={16}
           style={imageStyles}
           variant={'outlined'}
+          onClick={handleSelectLite}
         >
           <Flexbox
             gap={8}
@@ -126,7 +126,7 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
               zIndex: 10,
             }}
           >
-            <Text as={'h2'} fontSize={18} strong>
+            <Text strong as={'h2'} fontSize={18}>
               {t('modeSelection.lite.title')}
             </Text>
             <Text as={'p'}>{t('modeSelection.lite.subtitle')}</Text>
@@ -138,12 +138,12 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
 
         {/* Pro Mode Option */}
         <Block
-          className={cx(styles.base, styles.pro)}
           clickable
-          onClick={handleSelectPro}
+          className={cx(styles.base, styles.pro)}
           padding={16}
           style={imageStyles}
           variant={'outlined'}
+          onClick={handleSelectPro}
         >
           <Flexbox
             gap={8}
@@ -151,7 +151,7 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
               zIndex: 10,
             }}
           >
-            <Text as={'h2'} fontSize={18} strong>
+            <Text strong as={'h2'} fontSize={18}>
               {t('modeSelection.pro.title')}
             </Text>
             <Text as={'p'}>{t('modeSelection.pro.subtitle')}</Text>
@@ -161,14 +161,14 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
           </Flexbox>
         </Block>
       </Flexbox>
-      <Flexbox align={'center'} horizontal justify={'space-between'}>
+      <Flexbox horizontal align={'center'} justify={'space-between'}>
         <Button
           icon={Undo2Icon}
-          onClick={onBack}
+          type={'text'}
           style={{
             color: cssVar.colorTextDescription,
           }}
-          type={'text'}
+          onClick={onBack}
         >
           {t('back')}
         </Button>

@@ -1,8 +1,9 @@
-import { LobeTool } from '@lobechat/types';
+import type { LobeTool } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
-import { InstalledPluginItem, NewInstalledPlugin, userInstalledPlugins } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { InstalledPluginItem, NewInstalledPlugin } from '../schemas';
+import { userInstalledPlugins } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class PluginModel {
   private userId: string;

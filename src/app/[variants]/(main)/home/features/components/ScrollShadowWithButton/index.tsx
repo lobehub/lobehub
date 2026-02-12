@@ -1,4 +1,5 @@
-import { Button, Flexbox, type FlexboxProps, ScrollShadow } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Button, Flexbox, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -76,26 +77,26 @@ const ScrollShadowWithButton = memo<FlexboxProps>(({ children, ...rest }) => {
   }, []);
 
   return (
-    <Flexbox className={styles.container} horizontal width={'100%'} {...rest}>
+    <Flexbox horizontal className={styles.container} width={'100%'} {...rest}>
       {canScrollLeft && (
         <Button
           className={cx(styles.button, styles.leftButton, 'scroll-button')}
           icon={ChevronLeft}
-          onClick={() => handleScroll('left')}
           shape={'circle'}
           type={'default'}
+          onClick={() => handleScroll('left')}
         />
       )}
       <ScrollShadow
         hideScrollBar
         offset={16}
-        onScroll={checkScrollability}
-        onScrollCapture={checkScrollability}
         orientation={'horizontal'}
         ref={scrollRef}
         size={16}
+        onScroll={checkScrollability}
+        onScrollCapture={checkScrollability}
       >
-        <Flexbox gap={12} horizontal>
+        <Flexbox horizontal gap={12}>
           {children}
         </Flexbox>
       </ScrollShadow>
@@ -103,9 +104,9 @@ const ScrollShadowWithButton = memo<FlexboxProps>(({ children, ...rest }) => {
         <Button
           className={cx(styles.button, styles.rightButton, 'scroll-button')}
           icon={ChevronRight}
-          onClick={() => handleScroll('right')}
           shape={'circle'}
           type={'default'}
+          onClick={() => handleScroll('right')}
         />
       )}
     </Flexbox>

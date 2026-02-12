@@ -8,12 +8,12 @@ import {
   type ModelParamsSchema,
   type Pricing,
 } from 'model-bank';
-import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiProviderService } from '@/services/aiProvider';
 import { type AiInfraStore } from '@/store/aiInfra/store';
+import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import {
@@ -21,13 +21,13 @@ import {
   type AiProviderListItem,
   type AiProviderRuntimeState,
   type AiProviderSortMap,
-  AiProviderSourceEnum,
   type CreateAiProviderParams,
   type EnabledProvider,
   type EnabledProviderWithModels,
   type UpdateAiProviderConfigParams,
   type UpdateAiProviderParams,
 } from '@/types/aiProvider';
+import { AiProviderSourceEnum } from '@/types/aiProvider';
 
 export type ProviderModelListItem = {
   abilities: ModelAbilities;
@@ -168,52 +168,33 @@ type AiProviderRuntimeStateWithBuiltinModels = AiProviderRuntimeState & {
   enabledImageModelList?: EnabledProviderWithModels[];
 };
 
-export interface AiProviderAction {
-  createNewAiProvider: (params: CreateAiProviderParams) => Promise<void>;
-  deleteAiProvider: (id: string) => Promise<void>;
-  internal_toggleAiProviderConfigUpdating: (id: string, loading: boolean) => void;
-  internal_toggleAiProviderLoading: (id: string, loading: boolean) => void;
-  refreshAiProviderDetail: () => Promise<void>;
-  refreshAiProviderList: () => Promise<void>;
-  refreshAiProviderRuntimeState: () => Promise<void>;
-  removeAiProvider: (id: string) => Promise<void>;
-  toggleProviderEnabled: (id: string, enabled: boolean) => Promise<void>;
-  updateAiProvider: (id: string, value: UpdateAiProviderParams) => Promise<void>;
-  updateAiProviderConfig: (id: string, value: UpdateAiProviderConfigParams) => Promise<void>;
-  updateAiProviderSort: (items: AiProviderSortMap[]) => Promise<void>;
+type Setter = StoreSetter<AiInfraStore>;
+export const createAiProviderSlice = (set: Setter, get: () => AiInfraStore, _api?: unknown) =>
+  new AiProviderActionImpl(set, get, _api);
 
-  useFetchAiProviderItem: (id: string) => SWRResponse<AiProviderDetailItem | undefined>;
-  useFetchAiProviderList: (params?: {
-    enabled?: boolean;
-    suspense?: boolean;
-  }) => SWRResponse<AiProviderListItem[]>;
-  /**
-   * fetch provider keyVaults and user enabled model list
-   * @param isLoginOnInit
-   */
-  useFetchAiProviderRuntimeState: (
-    isLoginOnInit: boolean | undefined,
-    isSyncActive?: boolean,
-  ) => SWRResponse<AiProviderRuntimeStateWithBuiltinModels | undefined>;
-}
+export class AiProviderActionImpl {
+  readonly #get: () => AiInfraStore;
+  readonly #set: Setter;
 
-export const createAiProviderSlice: StateCreator<
-  AiInfraStore,
-  [['zustand/devtools', never]],
-  [],
-  AiProviderAction
-> = (set, get) => ({
-  createNewAiProvider: async (params) => {
+  constructor(set: Setter, get: () => AiInfraStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createNewAiProvider = async (params: CreateAiProviderParams): Promise<void> => {
     await aiProviderService.createAiProvider({ ...params, source: AiProviderSourceEnum.Custom });
-    await get().refreshAiProviderList();
-  },
-  deleteAiProvider: async (id: string) => {
+    await this.#get().refreshAiProviderList();
+  };
+
+  deleteAiProvider = async (id: string): Promise<void> => {
     await aiProviderService.deleteAiProvider(id);
 
-    await get().refreshAiProviderList();
-  },
-  internal_toggleAiProviderConfigUpdating: (id, loading) => {
-    set(
+    await this.#get().refreshAiProviderList();
+  };
+
+  internal_toggleAiProviderConfigUpdating = (id: string, loading: boolean): void => {
+    this.#set(
       (state) => {
         if (loading)
           return { aiProviderConfigUpdatingIds: [...state.aiProviderConfigUpdatingIds, id] };
@@ -225,9 +206,10 @@ export const createAiProviderSlice: StateCreator<
       false,
       'toggleAiProviderLoading',
     );
-  },
-  internal_toggleAiProviderLoading: (id, loading) => {
-    set(
+  };
+
+  internal_toggleAiProviderLoading = (id: string, loading: boolean): void => {
+    this.#set(
       (state) => {
         if (loading) return { aiProviderLoadingIds: [...state.aiProviderLoadingIds, id] };
 
@@ -236,33 +218,37 @@ export const createAiProviderSlice: StateCreator<
       false,
       'toggleAiProviderLoading',
     );
-  },
-  refreshAiProviderDetail: async () => {
-    await mutate([AiProviderSwrKey.fetchAiProviderItem, get().activeAiProvider]);
-    await get().refreshAiProviderRuntimeState();
-  },
-  refreshAiProviderList: async () => {
+  };
+
+  refreshAiProviderDetail = async (): Promise<void> => {
+    await mutate([AiProviderSwrKey.fetchAiProviderItem, this.#get().activeAiProvider]);
+    await this.#get().refreshAiProviderRuntimeState();
+  };
+
+  refreshAiProviderList = async (): Promise<void> => {
     await mutate(AiProviderSwrKey.fetchAiProviderList);
-    await get().refreshAiProviderRuntimeState();
-  },
-  refreshAiProviderRuntimeState: async () => {
+    await this.#get().refreshAiProviderRuntimeState();
+  };
+
+  refreshAiProviderRuntimeState = async (): Promise<void> => {
     await Promise.all([
       mutate([AiProviderSwrKey.fetchAiProviderRuntimeState, true]),
       mutate([AiProviderSwrKey.fetchAiProviderRuntimeState, false]),
     ]);
-  },
-  removeAiProvider: async (id) => {
-    await aiProviderService.deleteAiProvider(id);
-    await get().refreshAiProviderList();
-  },
+  };
 
-  toggleProviderEnabled: async (id: string, enabled: boolean) => {
-    get().internal_toggleAiProviderLoading(id, true);
+  removeAiProvider = async (id: string): Promise<void> => {
+    await aiProviderService.deleteAiProvider(id);
+    await this.#get().refreshAiProviderList();
+  };
+
+  toggleProviderEnabled = async (id: string, enabled: boolean): Promise<void> => {
+    this.#get().internal_toggleAiProviderLoading(id, true);
     await aiProviderService.toggleProviderEnabled(id, enabled);
 
     // Immediately update local aiProviderList to reflect the change
     // This ensures the switch displays correctly without waiting for SWR refresh
-    set(
+    this.#set(
       (state) => ({
         aiProviderList: state.aiProviderList.map((item) =>
           item.id === id ? { ...item, enabled } : item,
@@ -272,26 +258,29 @@ export const createAiProviderSlice: StateCreator<
       'toggleProviderEnabled/syncEnabled',
     );
 
-    await get().refreshAiProviderList();
+    await this.#get().refreshAiProviderList();
 
-    get().internal_toggleAiProviderLoading(id, false);
-  },
+    this.#get().internal_toggleAiProviderLoading(id, false);
+  };
 
-  updateAiProvider: async (id, value) => {
-    get().internal_toggleAiProviderLoading(id, true);
+  updateAiProvider = async (id: string, value: UpdateAiProviderParams): Promise<void> => {
+    this.#get().internal_toggleAiProviderLoading(id, true);
     await aiProviderService.updateAiProvider(id, value);
-    await get().refreshAiProviderList();
-    await get().refreshAiProviderDetail();
+    await this.#get().refreshAiProviderList();
+    await this.#get().refreshAiProviderDetail();
 
-    get().internal_toggleAiProviderLoading(id, false);
-  },
+    this.#get().internal_toggleAiProviderLoading(id, false);
+  };
 
-  updateAiProviderConfig: async (id, value) => {
-    get().internal_toggleAiProviderConfigUpdating(id, true);
+  updateAiProviderConfig = async (
+    id: string,
+    value: UpdateAiProviderConfigParams,
+  ): Promise<void> => {
+    this.#get().internal_toggleAiProviderConfigUpdating(id, true);
     await aiProviderService.updateAiProviderConfig(id, value);
 
     // Immediately update local state for instant UI feedback
-    set(
+    this.#set(
       (state) => {
         const currentRuntimeConfig = state.aiProviderRuntimeConfig[id];
         const currentDetailConfig = state.aiProviderDetailMap[id];
@@ -344,24 +333,25 @@ export const createAiProviderSlice: StateCreator<
       'updateAiProviderConfig/syncChanges',
     );
 
-    await get().refreshAiProviderDetail();
+    await this.#get().refreshAiProviderDetail();
 
-    get().internal_toggleAiProviderConfigUpdating(id, false);
-  },
+    this.#get().internal_toggleAiProviderConfigUpdating(id, false);
+  };
 
-  updateAiProviderSort: async (items) => {
+  updateAiProviderSort = async (items: AiProviderSortMap[]): Promise<void> => {
     await aiProviderService.updateAiProviderOrder(items);
-    await get().refreshAiProviderList();
-  },
-  useFetchAiProviderItem: (id) =>
-    useClientDataSWR<AiProviderDetailItem | undefined>(
+    await this.#get().refreshAiProviderList();
+  };
+
+  useFetchAiProviderItem = (id: string): SWRResponse<AiProviderDetailItem | undefined> => {
+    return useClientDataSWR<AiProviderDetailItem | undefined>(
       [AiProviderSwrKey.fetchAiProviderItem, id],
       () => aiProviderService.getAiProviderById(id),
       {
         onSuccess: (data) => {
           if (!data) return;
 
-          set(
+          this.#set(
             (state) => ({
               activeAiProvider: id,
               aiProviderDetailMap: { ...state.aiProviderDetailMap, [id]: data },
@@ -371,16 +361,21 @@ export const createAiProviderSlice: StateCreator<
           );
         },
       },
-    ),
-  useFetchAiProviderList: (opts) =>
-    useClientDataSWR<AiProviderListItem[]>(
+    );
+  };
+
+  useFetchAiProviderList = (opts?: {
+    enabled?: boolean;
+    suspense?: boolean;
+  }): SWRResponse<AiProviderListItem[]> => {
+    return useClientDataSWR<AiProviderListItem[]>(
       opts?.enabled === false ? null : AiProviderSwrKey.fetchAiProviderList,
       () => aiProviderService.getAiProviderList(),
       {
         fallbackData: [],
         onSuccess: (data) => {
-          if (!get().initAiProviderList) {
-            set(
+          if (!this.#get().initAiProviderList) {
+            this.#set(
               { aiProviderList: data, initAiProviderList: true },
               false,
               'useFetchAiProviderList/init',
@@ -388,12 +383,18 @@ export const createAiProviderSlice: StateCreator<
             return;
           }
 
-          set({ aiProviderList: data }, false, 'useFetchAiProviderList/refresh');
+          this.#set({ aiProviderList: data }, false, 'useFetchAiProviderList/refresh');
         },
       },
-    ),
+    );
+  };
 
-  useFetchAiProviderRuntimeState: (isLogin) => {
+  useFetchAiProviderRuntimeState = (
+    isLoginOnInit: boolean | undefined,
+    isSyncActive?: boolean,
+  ): SWRResponse<AiProviderRuntimeStateWithBuiltinModels | undefined> => {
+    void isSyncActive;
+    const isLogin = isLoginOnInit;
     const isAuthLoaded = useUserStore(authSelectors.isLoaded);
     // Only fetch when auth is loaded and login status is explicitly defined (true or false)
     // Prevents unnecessary requests when login state is null/undefined
@@ -461,7 +462,7 @@ export const createAiProviderSlice: StateCreator<
         onSuccess: (data) => {
           if (!data) return;
 
-          set(
+          this.#set(
             {
               aiProviderRuntimeConfig: data.runtimeConfig,
               builtinAiModelList: data.builtinAiModelList,
@@ -477,5 +478,7 @@ export const createAiProviderSlice: StateCreator<
         },
       },
     );
-  },
-});
+  };
+}
+
+export type AiProviderAction = Pick<AiProviderActionImpl, keyof AiProviderActionImpl>;

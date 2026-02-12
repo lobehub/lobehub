@@ -1,4 +1,4 @@
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { memo } from 'react';
@@ -21,7 +21,7 @@ const UpdateConfig = memo<BuiltinRenderProps<UpdateAgentConfigParams, UpdateConf
     return (
       <Flexbox gap={8}>
         {hasTogglePlugin && (
-          <Flexbox align={'center'} gap={8} horizontal style={{ fontSize: 13 }}>
+          <Flexbox horizontal align={'center'} gap={8} style={{ fontSize: 13 }}>
             {togglePlugin.enabled ? (
               <CheckCircle size={14} style={{ color: 'var(--lobe-success-6)' }} />
             ) : (

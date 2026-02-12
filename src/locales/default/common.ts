@@ -253,6 +253,7 @@ export default {
   'cmdk.submitIssue': 'Submit Issue',
   'cmdk.theme': 'Theme',
   'cmdk.themeAuto': 'Auto',
+  'cmdk.themeCurrent': 'Current',
   'cmdk.themeDark': 'Dark',
   'cmdk.themeLight': 'Light',
   'cmdk.toOpen': 'Open',
@@ -327,6 +328,7 @@ export default {
   'geminiImageChineseWarning.doNotShowAgain': 'Do Not Show Again',
   'geminiImageChineseWarning.title': 'Chinese Input Notice',
   'historyRange': 'History Range',
+  'home.suggestQuestions': 'Try these examples',
   'import': 'Import',
   'importData': 'Import Data',
   'importModal.error.desc':
@@ -442,6 +444,7 @@ export default {
   'setting': 'Settings',
   'share': 'Share',
   'stop': 'Stop',
+  'switch': 'Switch',
   'sync.actions.settings': 'Sync Settings',
   'sync.actions.sync': 'Sync Now',
   'sync.awareness.current': 'Current Device',

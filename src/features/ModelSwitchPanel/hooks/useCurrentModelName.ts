@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 export const useCurrentModelName = (
   enabledList: EnabledProviderWithModels[],

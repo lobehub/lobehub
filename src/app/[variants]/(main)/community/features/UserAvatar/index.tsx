@@ -84,11 +84,11 @@ const UserAvatar = memo(() => {
       <Button
         icon={UserCircleIcon}
         loading={loading}
-        onClick={handleSignIn}
+        type="text"
         style={{
           height: 30,
         }}
-        type="text"
+        onClick={handleSignIn}
       >
         {t('user.login')}
       </Button>
@@ -101,9 +101,9 @@ const UserAvatar = memo(() => {
   return (
     <Avatar
       avatar={avatarUrl || userProfile?.userName || username}
-      onClick={handleAvatarClick}
       shape={'square'}
       size={28}
+      onClick={handleAvatarClick}
     />
   );
 });

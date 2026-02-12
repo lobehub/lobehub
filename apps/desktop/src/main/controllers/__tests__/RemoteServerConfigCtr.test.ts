@@ -335,10 +335,10 @@ describe('RemoteServerConfigCtr', () => {
       const { safeStorage } = await import('electron');
       vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(true);
 
-      // Token expires in 1 hour
-      await controller.saveTokens('access', 'refresh', 3600);
+      // Token expires in 2 days (well beyond the 24-hour default buffer)
+      await controller.saveTokens('access', 'refresh', 2 * 24 * 3600);
 
-      // Default buffer is 5 minutes
+      // Default buffer is 24 hours
       const result = controller.isTokenExpiringSoon();
 
       expect(result).toBe(false);
@@ -657,6 +657,56 @@ describe('RemoteServerConfigCtr', () => {
       // Verify tokens were loaded by checking getTokenExpiresAt
       expect(newController.getTokenExpiresAt()).toBeDefined();
     });
+
+    it('should load lastRefreshAt from store', () => {
+      const lastRefreshTime = Date.now() - 3600000; // 1 hour ago
+      mockStoreManager.get.mockImplementation((key) => {
+        if (key === 'encryptedTokens') {
+          return {
+            accessToken: 'stored-access',
+            expiresAt: Date.now() + 3600000,
+            lastRefreshAt: lastRefreshTime,
+            refreshToken: 'stored-refresh',
+          };
+        }
+        return { active: false, storageMode: 'cloud' };
+      });
+
+      const newController = new RemoteServerConfigCtr(mockApp);
+      newController.afterAppReady();
+
+      // Verify lastRefreshAt was loaded
+      expect(newController.getLastTokenRefreshAt()).toBe(lastRefreshTime);
+    });
+  });
+
+  describe('getLastTokenRefreshAt', () => {
+    it('should return undefined when no tokens have been saved', () => {
+      expect(controller.getLastTokenRefreshAt()).toBeUndefined();
+    });
+
+    it('should return the last refresh time after saving tokens', async () => {
+      const beforeSave = Date.now();
+      await controller.saveTokens('access', 'refresh', 3600);
+      const afterSave = Date.now();
+
+      const lastRefreshAt = controller.getLastTokenRefreshAt();
+
+      expect(lastRefreshAt).toBeDefined();
+      expect(lastRefreshAt).toBeGreaterThanOrEqual(beforeSave);
+      expect(lastRefreshAt).toBeLessThanOrEqual(afterSave);
+    });
+
+    it('should persist lastRefreshAt to store when saving tokens', async () => {
+      await controller.saveTokens('access', 'refresh', 3600);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith(
+        'encryptedTokens',
+        expect.objectContaining({
+          lastRefreshAt: expect.any(Number),
+        }),
+      );
+    });
   });
 
   describe('getRemoteServerUrl', () => {
@@ -693,6 +743,71 @@ describe('RemoteServerConfigCtr', () => {
       const result = await controller.getRemoteServerUrl(customConfig);
 
       expect(result).toBe('https://custom-server.com');
+    });
+  });
+
+  describe('isRemoteServerConfigured', () => {
+    it('should return true for active cloud mode (no remoteServerUrl needed)', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        storageMode: 'cloud',
+        // remoteServerUrl is undefined for cloud mode
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true for active selfHost mode with remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: 'https://my-server.com',
+        storageMode: 'selfHost',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false for inactive config', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: false,
+        storageMode: 'cloud',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for selfHost mode without remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        storageMode: 'selfHost',
+        // remoteServerUrl is undefined
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should use provided config instead of fetching', async () => {
+      // Store has inactive config
+      mockStoreManager.get.mockReturnValue({
+        active: false,
+        storageMode: 'cloud',
+      });
+
+      // But we provide an active config
+      const result = await controller.isRemoteServerConfigured({
+        active: true,
+        storageMode: 'cloud',
+      });
+
+      expect(result).toBe(true);
     });
   });
 });

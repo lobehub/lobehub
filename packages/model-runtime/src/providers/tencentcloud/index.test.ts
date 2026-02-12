@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeTencentCloudAI, TencentCloudModelCard, params } from './index';
+import type { TencentCloudModelCard } from './index';
+import { LobeTencentCloudAI, params } from './index';
 
 const provider = ModelProvider.TencentCloud;
 const defaultBaseURL = 'https://api.lkeap.cloud.tencent.com/v1';

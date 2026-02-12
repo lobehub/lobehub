@@ -2,7 +2,8 @@
 
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
-import { HIDE_TOOLBAR_COMMAND, type IEditor } from '@lobehub/editor';
+import { type IEditor } from '@lobehub/editor';
+import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Avatar, Block } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -39,11 +40,14 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
       {
         children: (
           <Block
+            clickable
+            horizontal
             align="center"
             className={styles.askCopilot}
-            clickable
             gap={8}
-            horizontal
+            paddingBlock={6}
+            paddingInline={12}
+            variant="borderless"
             onClick={() => {
               const xml = (editor.getSelectionDocument?.('litexml') as string) || '';
               const plainText = (editor.getSelectionDocument?.('text') as string) || '';
@@ -86,9 +90,6 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
               editor.dispatchCommand(HIDE_TOOLBAR_COMMAND, undefined);
               editor.blur();
             }}
-            paddingBlock={6}
-            paddingInline={12}
-            variant="borderless"
           >
             <Avatar avatar={DEFAULT_INBOX_AVATAR} shape="square" size={16} />
             <span>{label}</span>

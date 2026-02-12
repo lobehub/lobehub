@@ -1,4 +1,5 @@
-import { type CreatedLevelSliderProps, createLevelSliderComponent } from './createLevelSlider';
+import { type CreatedLevelSliderProps } from './createLevelSlider';
+import { createLevelSliderComponent } from './createLevelSlider';
 
 const TEXT_VERBOSITY_LEVELS = ['low', 'medium', 'high'] as const;
 type TextVerbosity = (typeof TEXT_VERBOSITY_LEVELS)[number];

@@ -21,8 +21,8 @@ jobs:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5
         with:
-          concurrent_skipping: "same_content_newer"
-          skip_after_successful_duplicate: "true"
+          concurrent_skipping: 'same_content_newer'
+          skip_after_successful_duplicate: 'true'
           do_not_skip: '["workflow_dispatch", "schedule"]'
 
   # Package tests - all packages in single job to save runner resources
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: "@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/python-interpreter @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory model-bank"
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/python-interpreter @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory model-bank'
 
     steps:
       - uses: actions/checkout@v6
@@ -227,6 +227,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+
 
         ports:
           - 5432:5432

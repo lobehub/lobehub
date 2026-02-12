@@ -1,5 +1,5 @@
 import type { Pricing } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { describe, expect, it } from 'vitest';
 
 import { convertOpenAIImageUsage, convertOpenAIResponseUsage, convertOpenAIUsage } from './openai';

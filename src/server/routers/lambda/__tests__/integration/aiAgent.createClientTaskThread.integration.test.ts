@@ -1,6 +1,13 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
-import { agents, chatGroups, messages, sessions, threads, topics } from '@lobechat/database/schemas';
+import { type LobeChatDatabase } from '@lobechat/database';
+import {
+  agents,
+  chatGroups,
+  messages,
+  sessions,
+  threads,
+  topics,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
@@ -374,8 +381,14 @@ describe('createClientTaskThread Integration', () => {
       expect(result2.success).toBe(true);
 
       // Verify threads have different agentIds
-      const [thread1] = await serverDB.select().from(threads).where(eq(threads.id, result1.threadId));
-      const [thread2] = await serverDB.select().from(threads).where(eq(threads.id, result2.threadId));
+      const [thread1] = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.id, result1.threadId));
+      const [thread2] = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.id, result2.threadId));
 
       expect(thread1.agentId).toBe(testAgentId);
       expect(thread2.agentId).toBe(agent2.id);

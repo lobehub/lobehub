@@ -1,7 +1,8 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler, memo, useCallback } from 'react';
+import { type MouseEventHandler } from 'react';
+import { memo, useCallback } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -9,7 +10,7 @@ import { ChatItem } from '@/features/Conversation/ChatItem';
 import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
 import { AssistantMessageExtra } from '@/features/Conversation/Messages/Assistant/Extra';
 import { normalizeThinkTags, processWithArtifact } from '@/features/Conversation/utils/markdown';
-import type { UIChatMessage } from '@/types/index';
+import { type UIChatMessage } from '@/types/index';
 
 import { useAgentMeta } from '../../../hooks';
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -64,17 +65,20 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
 
   return (
     <ChatItem
+      showTitle
       aboveMessage={null}
       actions={actionBarHolder}
       avatar={avatar}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
       editing={editing}
-      error={
-        errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
-      }
       id={id}
       loading={generating}
       message={message}
+      placement={'left'}
+      time={createdAt}
+      error={
+        errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
+      }
       messageExtra={
         <AssistantMessageExtra
           content={content}
@@ -88,9 +92,6 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
         />
       }
       onMouseEnter={onMouseEnter}
-      placement={'left'}
-      showTitle
-      time={createdAt}
     >
       <AutoScrollShadow content={content} streaming={generating}>
         <MessageContent {...item} />

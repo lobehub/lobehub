@@ -22,6 +22,10 @@ const AgentIdSync = () => {
     if (prevAgentId !== undefined && prevAgentId !== params.aid) {
       useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
     }
+    // Clear unread completion indicator for the agent being viewed
+    if (params.aid) {
+      useChatStore.getState().clearUnreadCompletedAgent(params.aid);
+    }
   }, [params.aid, prevAgentId]);
 
   useMount(() => {

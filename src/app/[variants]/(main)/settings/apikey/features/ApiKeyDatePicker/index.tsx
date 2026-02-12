@@ -1,6 +1,8 @@
 import { DatePicker } from '@lobehub/ui';
-import { type DatePickerProps, Flex } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
+import { type DatePickerProps } from 'antd';
+import { Flex } from 'antd';
+import { type Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,14 +30,14 @@ const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({ value, onChange, ...props
       value={value as any}
       {...props}
       minDate={dayjs()}
-      onChange={handleOnChange}
       placeholder={t('apikey.form.fields.expiresAt.placeholder')}
+      showNow={false}
       renderExtraFooter={() => (
         <Flex justify="center">
           <a onClick={() => handleOnChange(null)}>{t('apikey.display.neverExpires')}</a>
         </Flex>
       )}
-      showNow={false}
+      onChange={handleOnChange}
     />
   );
 };

@@ -47,19 +47,25 @@ const Nav = memo(() => {
 
   return (
     <>
-      <Flexbox align={'center'} className={styles.title} gap={4} horizontal>
+      <Flexbox horizontal align={'center'} className={styles.title} gap={4}>
         <ActionIcon
           color={cssVar.colorText}
           icon={MenuIcon}
+          size={{ blockSize: 32, size: 18 }}
           onClick={() => {
             setOpen(true);
           }}
-          size={{ blockSize: 32, size: 18 }}
         />
         {activeItem?.label}
       </Flexbox>
 
       <Drawer
+        headerStyle={{ display: 'none' }}
+        open={open}
+        placement={'left'}
+        rootStyle={{ position: 'absolute' }}
+        width={260}
+        zIndex={10}
         bodyStyle={{
           display: 'flex',
           flexDirection: 'column',
@@ -67,23 +73,19 @@ const Nav = memo(() => {
           justifyContent: 'space-between',
           padding: 16,
         }}
-        headerStyle={{ display: 'none' }}
-        onClick={() => setOpen(false)}
-        onClose={() => setOpen(false)}
-        open={open}
-        placement={'left'}
-        rootStyle={{ position: 'absolute' }}
         style={{
           background: cssVar.colorBgLayout,
           borderRight: `1px solid ${cssVar.colorSplit}`,
           paddingTop: 44,
         }}
-        width={260}
-        zIndex={10}
+        onClick={() => setOpen(false)}
+        onClose={() => setOpen(false)}
       >
         <Menu
           compact
+          selectable
           items={items}
+          selectedKeys={[activeKey]}
           onClick={({ key }) => {
             scrollToTop();
             if (key === DiscoverTab.Home) {
@@ -92,8 +94,6 @@ const Nav = memo(() => {
               navigate(`/community/${key}`);
             }
           }}
-          selectable
-          selectedKeys={[activeKey]}
         />
       </Drawer>
     </>

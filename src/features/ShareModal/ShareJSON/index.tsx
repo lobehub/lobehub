@@ -1,8 +1,8 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { type TopicExportMode } from '@lobechat/types';
 import { exportFile } from '@lobechat/utils/client';
-import { Button, Form, type FormItemProps, copyToClipboard } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
 import { App, Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
@@ -16,9 +16,9 @@ import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 
 import { styles } from '../style';
-import Preview from './Preview';
 import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
+import Preview from './Preview';
 import { type FieldType } from './type';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
@@ -45,9 +45,9 @@ const ShareJSON = memo(() => {
       children: (
         <Segmented
           block
-          onChange={(value) => setFieldValue((prev) => ({ ...prev, exportMode: value }))}
           options={exportModeOptions}
           value={fieldValue.exportMode}
+          onChange={(value) => setFieldValue((prev) => ({ ...prev, exportMode: value }))}
         />
       ),
       label: t('shareModal.exportMode.label'),
@@ -92,21 +92,21 @@ const ShareJSON = memo(() => {
       <Button
         block
         icon={CopyIcon}
+        size={isMobile ? undefined : 'large'}
+        type={'primary'}
         onClick={async () => {
           await copyToClipboard(content);
           message.success(t('copySuccess', { ns: 'common' }));
         }}
-        size={isMobile ? undefined : 'large'}
-        type={'primary'}
       >
         {t('copy', { ns: 'common' })}
       </Button>
       <Button
         block
+        size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.json`);
         }}
-        size={isMobile ? undefined : 'large'}
       >
         {t('shareModal.downloadFile')}
       </Button>
@@ -129,7 +129,7 @@ const ShareJSON = memo(() => {
         </Flexbox>
       </Flexbox>
       {isMobile && (
-        <Flexbox className={styles.footer} gap={8} horizontal>
+        <Flexbox horizontal className={styles.footer} gap={8}>
           {button}
         </Flexbox>
       )}

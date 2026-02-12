@@ -1,6 +1,7 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { omit } from 'es-toolkit/compat';
-import { AiModelType, CHAT_MODEL_IMAGE_GENERATION_PARAMS } from 'model-bank';
+import type { AiModelType } from 'model-bank';
+import { CHAT_MODEL_IMAGE_GENERATION_PARAMS } from 'model-bank';
 
 // Whitelist for automatic image model generation
 export const IMAGE_GENERATION_MODEL_WHITELIST = [

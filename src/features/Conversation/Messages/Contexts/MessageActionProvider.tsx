@@ -1,5 +1,6 @@
 import { isEqual } from 'es-toolkit/compat';
-import { type FC, type PropsWithChildren, memo, useEffect, useRef, useState } from 'react';
+import { type FC, type PropsWithChildren } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { MESSAGE_ACTION_BAR_PORTAL_SELECTORS } from '@/const/messageActionPortal';
@@ -8,8 +9,8 @@ import { dataSelectors, useConversationStore } from '../../store';
 import { AssistantActionsBar } from '../Assistant/Actions';
 import { GroupActionsBar } from '../AssistantGroup/Actions';
 import { UserActionsBar } from '../User/Actions';
+import { type MessageActionType } from './message-action-context';
 import {
-  type MessageActionType,
   MessageItemActionElementPortialContext,
   MessageItemActionTypeContext,
   SetMessageItemActionElementPortialContext,

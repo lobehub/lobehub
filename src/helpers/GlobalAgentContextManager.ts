@@ -74,7 +74,7 @@ class GlobalAgentContextManager {
     if (!template) return '';
 
     // Updated to use replaceAll for potentially multiple occurrences
-    return template.replaceAll(/{{([^}]+)}}/g, (match, key) => {
+    return template.replaceAll(/\{\{([^}]+)\}\}/g, (match, key) => {
       const trimmedKey = key.trim() as keyof LobeGlobalAgentContext;
       return ctx[trimmedKey] !== undefined ? String(ctx[trimmedKey]) : '[N/A]';
     });

@@ -12,9 +12,8 @@ import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import NavItem, {
-  type NavItemProps,
-} from '../../../../../../../features/NavPanel/components/NavItem';
+import { type NavItemProps } from '../../../../../../../features/NavPanel/components/NavItem';
+import NavItem from '../../../../../../../features/NavPanel/components/NavItem';
 
 interface Item {
   hidden?: boolean | undefined;
@@ -81,8 +80,8 @@ const Nav = memo(() => {
             hidden={item.hidden}
             icon={item.icon}
             key={item.key}
-            onClick={item.onClick}
             title={item.title}
+            onClick={item.onClick}
           />
         );
         if (!item.url) return content;
@@ -90,6 +89,7 @@ const Nav = memo(() => {
         return (
           <Link
             key={item.key}
+            to={item.url}
             onClick={(e) => {
               e.preventDefault();
               item?.onClick?.();
@@ -97,7 +97,6 @@ const Nav = memo(() => {
                 navigate(item.url);
               }
             }}
-            to={item.url}
           >
             <NavItem
               active={tab === item.key}

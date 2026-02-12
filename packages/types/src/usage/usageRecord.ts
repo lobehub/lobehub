@@ -1,4 +1,4 @@
-import { MessageMetadata } from '../message';
+import type { MessageMetadata } from '../message';
 
 export interface UsageRecordItem {
   createdAt: Date;

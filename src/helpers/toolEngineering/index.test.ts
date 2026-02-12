@@ -1,5 +1,5 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './index';
 
@@ -63,9 +63,13 @@ vi.mock('@/store/tool', () => ({
   }),
 }));
 
+let mockGetInstalledPluginById: (id: string) => () => any = () => () => undefined;
+let mockInstalledPluginManifestList: () => LobeChatPluginManifest[] = () => [];
+
 vi.mock('@/store/tool/selectors', () => ({
   pluginSelectors: {
-    installedPluginManifestList: () => [],
+    getInstalledPluginById: (id: string) => mockGetInstalledPluginById(id),
+    installedPluginManifestList: () => mockInstalledPluginManifestList(),
   },
   klavisStoreSelectors: {
     klavisAsLobeTools: () => [],
@@ -86,6 +90,11 @@ vi.mock('@/helpers/getSearchConfig', () => ({
 }));
 
 describe('toolEngineering', () => {
+  afterEach(() => {
+    mockGetInstalledPluginById = () => () => undefined;
+    mockInstalledPluginManifestList = () => [];
+  });
+
   describe('createToolsEngine', () => {
     it('should generate tools array for enabled plugins', () => {
       const toolsEngine = createToolsEngine();
@@ -171,6 +180,68 @@ describe('toolEngineering', () => {
 
       expect(result.enabledToolIds).toEqual(['search', 'lobe-web-browsing']);
       expect(result.enabledToolIds).toHaveLength(2);
+    });
+  });
+
+  describe('stdio MCP filtering on web', () => {
+    const stdioMcpManifest = {
+      api: [
+        {
+          description: 'Run stdio tool',
+          name: 'run',
+          parameters: { properties: {}, required: [], type: 'object' },
+        },
+      ],
+      identifier: 'stdio-mcp-plugin',
+      meta: { title: 'Stdio MCP', avatar: '🔧' },
+      type: 'default',
+    } as unknown as LobeChatPluginManifest;
+
+    const httpMcpManifest = {
+      api: [
+        {
+          description: 'Run http tool',
+          name: 'run',
+          parameters: { properties: {}, required: [], type: 'object' },
+        },
+      ],
+      identifier: 'http-mcp-plugin',
+      meta: { title: 'HTTP MCP', avatar: '🌐' },
+      type: 'default',
+    } as unknown as LobeChatPluginManifest;
+
+    it('should filter stdio MCP tools in non-desktop environment', () => {
+      mockInstalledPluginManifestList = () => [stdioMcpManifest];
+      mockGetInstalledPluginById = (id: string) => () =>
+        id === 'stdio-mcp-plugin'
+          ? { customParams: { mcp: { type: 'stdio' } }, identifier: id }
+          : undefined;
+
+      const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['stdio-mcp-plugin'],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain('stdio-mcp-plugin');
+    });
+
+    it('should NOT filter http MCP tools in non-desktop environment', () => {
+      mockInstalledPluginManifestList = () => [httpMcpManifest];
+      mockGetInstalledPluginById = (id: string) => () =>
+        id === 'http-mcp-plugin'
+          ? { customParams: { mcp: { type: 'http' } }, identifier: id }
+          : undefined;
+
+      const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['http-mcp-plugin'],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain('http-mcp-plugin');
     });
   });
 

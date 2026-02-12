@@ -99,6 +99,12 @@ export interface LobeAgentChatConfig {
    * @default 6000
    */
   toolResultMaxLength?: number;
+
+  /**
+   * Whether to auto-scroll during AI streaming output
+   * undefined = use global setting
+   */
+  enableAutoScrollOnStreaming?: boolean;
 }
 /* eslint-enable */
 
@@ -116,6 +122,7 @@ export const AgentChatConfigSchema = z.object({
   effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
   enableAdaptiveThinking: z.boolean().optional(),
   enableAutoCreateTopic: z.boolean().optional(),
+  enableAutoScrollOnStreaming: z.boolean().optional(),
   enableCompressHistory: z.boolean().optional(),
   enableContextCompression: z.boolean().optional(),
   enableHistoryCount: z.boolean().optional(),

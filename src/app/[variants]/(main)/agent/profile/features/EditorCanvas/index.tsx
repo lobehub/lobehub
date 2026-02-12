@@ -1,8 +1,8 @@
 'use client';
 
 import {
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactLinkHighlightPlugin,
   ReactListPlugin,
@@ -19,8 +19,8 @@ import { useTranslation } from 'react-i18next';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import { useMentionOptions } from '../ProfileEditor/MentionList';
 import { EMPTY_EDITOR_STATE } from '../constants';
+import { useMentionOptions } from '../ProfileEditor/MentionList';
 import { useProfileStore } from '../store';
 import TypoBar from './TypoBar';
 import { useSlashItems } from './useSlashItems';
@@ -114,8 +114,6 @@ const EditorCanvas = memo(() => {
         editor={editor!}
         lineEmptyPlaceholder={t('settingAgent.prompt.placeholder')}
         mentionOption={mentionOptions}
-        onInit={() => setEditorInit(true)}
-        onTextChange={handleChange}
         placeholder={t('settingAgent.prompt.templatePlaceholder')}
         plugins={[
           ReactListPlugin,
@@ -136,6 +134,8 @@ const EditorCanvas = memo(() => {
         style={{
           paddingBottom: 64,
         }}
+        onInit={() => setEditorInit(true)}
+        onTextChange={handleChange}
       />
     </div>
   );

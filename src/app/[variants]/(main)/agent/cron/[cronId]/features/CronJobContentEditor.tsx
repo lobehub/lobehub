@@ -1,8 +1,8 @@
 'use client';
 
 import {
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactLinkPlugin,
   ReactListPlugin,
@@ -78,8 +78,10 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
             content={''}
             editor={editor}
             lineEmptyPlaceholder={t('agentCronJobs.form.content.placeholder')}
-            onTextChange={handleContentChange}
             placeholder={t('agentCronJobs.form.content.placeholder')}
+            style={{ paddingBottom: 48 }}
+            type={'text'}
+            variant={'chat'}
             plugins={
               enableRichRender
                 ? [
@@ -93,9 +95,7 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
                   ]
                 : undefined
             }
-            style={{ paddingBottom: 48 }}
-            type={'text'}
-            variant={'chat'}
+            onTextChange={handleContentChange}
           />
         </div>
       </FormGroup>

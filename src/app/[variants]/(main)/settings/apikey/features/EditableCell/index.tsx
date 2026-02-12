@@ -1,9 +1,11 @@
 'use client';
 
 import { ActionIcon, Input } from '@lobehub/ui';
-import { App, type InputRef } from 'antd';
+import { type InputRef } from 'antd';
+import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
-import dayjs, { type Dayjs } from 'dayjs';
+import { type Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { Check, Edit, X } from 'lucide-react';
 import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -153,9 +155,9 @@ const EditableCell = memo<EditableCellProps>(
               <Input
                 autoFocus
                 defaultValue={value as string}
-                onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 ref={inputRef}
+                onKeyDown={handleKeyDown}
               />
             </div>
           );
@@ -167,13 +169,13 @@ const EditableCell = memo<EditableCellProps>(
           return (
             <ApiKeyDatePicker
               defaultValue={dateValue}
+              open={true}
               onChange={handleDatePickerSubmit}
               onOpenChange={() => {
                 if (isEditing) {
                   setIsEditing(false);
                 }
               }}
-              open={true}
             />
           );
         }
@@ -190,8 +192,8 @@ const EditableCell = memo<EditableCellProps>(
         <div className={styles.editingContainer}>
           {renderEditMode()}
           <div className={styles.actionButtons}>
-            <ActionIcon icon={Check} onClick={handleSubmit} size="small" />
-            <ActionIcon icon={X} onClick={handleCancel} size="small" />
+            <ActionIcon icon={Check} size="small" onClick={handleSubmit} />
+            <ActionIcon icon={X} size="small" onClick={handleCancel} />
           </div>
         </div>
       );
@@ -209,8 +211,8 @@ const EditableCell = memo<EditableCellProps>(
         <ActionIcon
           className={cx(styles.editButton, 'edit-button')}
           icon={Edit}
-          onClick={handleEdit}
           size="small"
+          onClick={handleEdit}
         />
       </div>
     );

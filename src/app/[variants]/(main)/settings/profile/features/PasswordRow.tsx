@@ -45,20 +45,20 @@ const PasswordRow = ({ mobile }: PasswordRowProps) => {
 
   return (
     <ProfileRow
+      label={t('profile.password')}
+      mobile={mobile}
       action={
         <Text
-          onClick={sending ? undefined : handleChangePassword}
           style={{
             cursor: sending ? 'default' : 'pointer',
             fontSize: 13,
             opacity: sending ? 0.5 : 1,
           }}
+          onClick={sending ? undefined : handleChangePassword}
         >
           {hasPasswordAccount ? t('profile.changePassword') : t('profile.setPassword')}
         </Text>
       }
-      label={t('profile.password')}
-      mobile={mobile}
     >
       <Text>{hasPasswordAccount ? '••••••' : '--'}</Text>
     </ProfileRow>

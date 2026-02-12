@@ -1,8 +1,8 @@
-import type { DropdownMenuPlacement } from '@lobehub/ui';
-import type { AiModelForSelect } from 'model-bank';
-import type { ReactNode } from 'react';
+import { type DropdownMenuPlacement } from '@lobehub/ui';
+import { type AiModelForSelect } from 'model-bank';
+import { type ReactNode } from 'react';
 
-import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 export type GroupMode = 'byModel' | 'byProvider';
 

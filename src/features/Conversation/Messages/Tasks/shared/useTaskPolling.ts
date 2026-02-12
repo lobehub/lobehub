@@ -1,6 +1,6 @@
 'use client';
 
-import { ThreadStatus } from '@lobechat/types';
+import { type ThreadStatus } from '@lobechat/types';
 import { useEffect, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';

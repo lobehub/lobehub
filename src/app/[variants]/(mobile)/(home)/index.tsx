@@ -1,4 +1,4 @@
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 
 import SessionListContent from './features/SessionListContent';
 import SkeletonList from './features/SkeletonList';

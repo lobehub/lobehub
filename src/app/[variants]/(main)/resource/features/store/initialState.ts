@@ -53,13 +53,13 @@ export interface State {
    */
   selectedFileIds: string[];
   /**
-   * Sort direction (ascending or descending)
-   */
-  sortType: SortType;
-  /**
    * Field to sort files by
    */
   sorter: 'name' | 'createdAt' | 'size';
+  /**
+   * Sort direction (ascending or descending)
+   */
+  sortType: SortType;
   /**
    * File explorer view mode (list or masonry)
    */

@@ -17,7 +17,7 @@ const QualitySelect = memo(() => {
       value: quality,
     })) ?? [];
 
-  return <Select onChange={setValue} options={options} style={{ width: '100%' }} value={value} />;
+  return <Select options={options} style={{ width: '100%' }} value={value} onChange={setValue} />;
 });
 
 export default QualitySelect;

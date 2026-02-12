@@ -1,13 +1,14 @@
 import { GROUP_CHAT_URL } from '@lobechat/const';
-import type { SidebarAgentItem } from '@lobechat/types';
+import { type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
-import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
+import { type CSSProperties, type DragEvent } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import GroupAvatar from '@/features/GroupAvatar';
+import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
@@ -23,7 +24,7 @@ interface GroupItemProps {
 }
 
 const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
-  const { id, avatar, title, pinned } = item;
+  const { id, avatar, backgroundColor, title, pinned } = item;
   const { t } = useTranslation('chat');
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
@@ -80,10 +81,23 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
   // Memoize avatar icon (show loader when updating)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon color={cssVar.colorTextDescription} icon={Loader2} size={18} spin />;
+      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
     }
-    return <GroupAvatar avatars={(avatar as any) || []} size={22} />;
-  }, [isUpdating, avatar]);
+
+    // If avatar is a string, it's a custom group avatar
+    const customAvatar = typeof avatar === 'string' ? avatar : undefined;
+    // If avatar is an array, it's member avatars for composition
+    const memberAvatars = Array.isArray(avatar) ? avatar : [];
+
+    return (
+      <AgentGroupAvatar
+        avatar={customAvatar}
+        backgroundColor={backgroundColor || undefined}
+        memberAvatars={memberAvatars}
+        size={22}
+      />
+    );
+  }, [isUpdating, avatar, backgroundColor]);
 
   const dropdownMenu = useGroupDropdownMenu({
     id,
@@ -103,11 +117,11 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
           extra={pinIcon}
           icon={avatarIcon}
           key={id}
+          style={style}
+          title={displayTitle}
           onDoubleClick={handleDoubleClick}
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
-          style={style}
-          title={displayTitle}
         />
       </Link>
       <Editing id={id} title={displayTitle} toggleEditing={toggleEditing} />

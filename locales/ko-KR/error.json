@@ -150,6 +150,7 @@
   "upload.desc": "상세 정보: {{detail}}",
   "upload.fileOnlySupportInServerMode": "현재 배포 모드에서는 이미지가 아닌 파일 업로드는 지원되지 않습니다. {{ext}}을(를) 업로드하려면 서버 데이터베이스 배포로 전환하거나 {{cloud}} 서비스를 사용하세요",
   "upload.networkError": "네트워크 이상 또는 CORS 설정이 올바르지 않습니다. 파일 스토리지 서비스의 CORS 설정을 확인한 후 다시 시도하세요",
+  "upload.storageLimitExceeded": "파일 저장 용량이 현재 요금제의 한도에 도달했습니다. 요금제를 업그레이드하거나 사용하지 않는 파일을 삭제하여 공간을 확보해 주세요.",
   "upload.title": "업로드를 완료할 수 없습니다",
   "upload.unknownError": "원인: {{reason}}",
   "upload.uploadFailed": "업로드를 완료할 수 없습니다"

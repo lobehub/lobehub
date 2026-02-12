@@ -1,6 +1,7 @@
 import { Icon } from '@lobehub/ui';
-import { Collapse, type CollapseProps } from 'antd';
-import { createStaticStyles , responsive } from 'antd-style';
+import { type CollapseProps } from 'antd';
+import { Collapse } from 'antd';
+import { createStaticStyles, responsive } from 'antd-style';
 import { ChevronDown } from 'lucide-react';
 import { memo } from 'react';
 
@@ -43,8 +44,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const CollapseGroup = memo<CollapseProps>((props) => {
   return (
     <Collapse
+      ghost
       bordered={false}
       className={styles.container}
+      expandIconPlacement={'end'}
+      size={'small'}
       expandIcon={({ isActive }) => (
         <Icon
           className={styles.icon}
@@ -53,9 +57,6 @@ const CollapseGroup = memo<CollapseProps>((props) => {
           style={isActive ? {} : { rotate: '-90deg' }}
         />
       )}
-      expandIconPlacement={'end'}
-      ghost
-      size={'small'}
       {...props}
     />
   );

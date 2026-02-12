@@ -1,69 +1,62 @@
 ---
-title: LobeHub API 前后端交互逻辑
-description: 深入了解 LobeHub API 的前后端交互实现逻辑和核心组件。
+title: Chat API 前后端交互逻辑
+description: 深入了解 LobeChat Chat API 的前后端交互实现逻辑和核心组件。
 tags:
-  - LobeHub API
+  - Chat API
   - 前后端交互
-  - 事件序列
-  - 核心组件
+  - Model Runtime
+  - Agent Runtime
+  - MCP
 ---
 
-# LobeHub API 前后端交互逻辑
+# Chat API 前后端交互逻辑
 
-本文档说明了 LobeHub API 在前后端交互中的实现逻辑，包括事件序列和涉及的核心组件。
+本文档说明了 LobeChat Chat API 在前后端交互中的实现逻辑，
+包括事件序列和涉及的核心组件。
 
 ## 交互时序图
 
 ```mermaid
 sequenceDiagram
     participant Client as 前端客户端
-    participant ChatService as 前端 ChatService
+    participant AgentLoop as Agent Runtime 循环
+    participant ChatService as ChatService
     participant ChatAPI as 后端 Chat API
-    participant AgentRuntime as AgentRuntime
+    participant ModelRuntime as Model Runtime
     participant ModelProvider as 模型提供商 API
-    participant PluginGateway as 插件网关
+    participant ToolExecution as 工具执行层
 
-    Client->>ChatService: 调用 createAssistantMessage
-    Note over ChatService: 处理消息、工具和参数
+    Client->>AgentLoop: sendMessage()
+    Note over AgentLoop: 创建 GeneralChatAgent + AgentRuntime
 
-    ChatService->>ChatService: 调用 getChatCompletion
-    Note over ChatService: 准备请求参数
+    loop Agent Plan-Execute 循环
+        AgentLoop->>AgentLoop: Agent 决定下一步指令
 
-    ChatService->>ChatAPI: 发送 POST 请求到 /webapi/chat/[provider]
+        alt call_llm 指令
+            AgentLoop->>ChatService: getChatCompletion
+            Note over ChatService: 上下文工程 (context engineering)
+            ChatService->>ChatAPI: POST /webapi/chat/[provider]
+            ChatAPI->>ModelRuntime: 初始化 ModelRuntime
+            ModelRuntime->>ModelProvider: chat completion 请求
+            ModelProvider-->>ChatService: 流式返回 SSE 响应
+            ChatService-->>Client: onMessageHandle 回调
 
-    ChatAPI->>AgentRuntime: 初始化 AgentRuntime
-    Note over AgentRuntime: 通过 provider 和 用户配置创建运行时
+        else call_tool 指令
+            AgentLoop->>ToolExecution: 执行工具
+            Note over ToolExecution: Builtin / MCP / Plugin
+            ToolExecution-->>AgentLoop: 返回工具结果
 
-    ChatAPI->>AgentRuntime: 调用 chat 方法
-    AgentRuntime->>ModelProvider: 发送 chat completion 请求
+        else request_human_* 指令
+            AgentLoop-->>Client: 请求用户介入
+            Client->>AgentLoop: 用户反馈
 
-    ModelProvider-->>AgentRuntime: 返回流式响应
-    AgentRuntime-->>ChatAPI: 处理响应并返回 stream
-
-    ChatAPI-->>ChatService: 流式返回 SSE 响应
-
-    ChatService->>ChatService: 使用 fetchSSE 处理流式响应
-    Note over ChatService: 通过 fetchEventSource 处理事件流
-
-    loop 对于每个数据块
-        ChatService->>ChatService: 处理不同类型的事件 (text, tool_calls, reasoning 等)
-        ChatService-->>Client: 通过 onMessageHandle 回调返回当前块
+        else finish 指令
+            AgentLoop-->>Client: onFinish 回调
+        end
     end
 
-    ChatService-->>Client: 通过 onFinish 回调返回完整结果
-
-    Note over ChatService,ModelProvider: 插件调用场景
-    ModelProvider-->>ChatService: 返回包含 tool_calls 的响应
-    ChatService->>ChatService: 解析工具调用
-    ChatService->>ChatService: 调用 runPluginApi
-    ChatService->>PluginGateway: 发送插件请求到网关
-    PluginGateway-->>ChatService: 返回插件执行结果
-    ChatService->>ModelProvider: 将插件结果返回给模型
-    ModelProvider-->>ChatService: 基于插件结果生成最终响应
-
-    Note over ChatService,ModelProvider: 预设任务场景
-    Client->>ChatService: 触发预设任务(如自动翻译、搜索等)
-    ChatService->>ChatService: 调用 fetchPresetTaskResult
+    Note over Client,ModelProvider: 预设任务场景 (不经过 Agent 循环)
+    Client->>ChatService: fetchPresetTaskResult
     ChatService->>ChatAPI: 发送预设任务请求
     ChatAPI-->>ChatService: 返回任务结果
     ChatService-->>Client: 通过回调函数返回结果
@@ -71,285 +64,319 @@ sequenceDiagram
 
 ## 主要步骤说明
 
-1. **客户端发起请求**：客户端调用前端 ChatService 的 createAssistantMessage 方法。
+### 1. 客户端发起请求
 
-2. **前端处理请求**：
+用户发送消息后，`sendMessage()`
+（`src/store/chat/slices/aiChat/actions/conversationLifecycle.ts`）
+创建用户消息和助手消息占位，然后调用 `internal_execAgentRuntime()`。
 
-   - `src/services/chat.ts` 对消息、工具和参数进行预处理
-   - 调用 getChatCompletion 准备请求参数
-   - 使用 `src/utils/fetch/fetchSSE.ts` 发送请求到后端 API
+### 2. Agent Runtime 驱动循环
 
-3. **后端处理请求**：
+Agent Runtime 是整个 chat 流程的**核心执行引擎**。
+每次聊天交互（从简单问答到复杂多步工具调用）都通过
+`AgentRuntime.step()` 循环驱动。
 
-   - `src/app/(backend)/webapi/chat/[provider]/route.ts` 接收请求
-   - 初始化 AgentRuntime
-   - 根据用户配置和提供商创建相应的模型实例
+**初始化**
+（`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`）：
 
-4. **模型调用**：
+1. 解析 agent 配置（模型、provider、插件列表等）
+2. 通过 `createAgentToolsEngine()` 创建工具注册表
+3. 创建 `GeneralChatAgent`（"大脑"，决定下一步做什么）
+   和 `AgentRuntime`（"引擎"，执行指令）
+4. 通过 `createAgentExecutors()` 注入自定义执行器
 
-   - `src/libs/agent-runtime/AgentRuntime.ts` 调用相应模型提供商的 API
-   - 返回流式响应
+**执行循环**：
 
-5. **处理响应**：
+```ts
+while (state.status !== 'done' && state.status !== 'error') {
+  result = await runtime.step(state, nextContext);
+  // GeneralChatAgent 决定: call_llm → call_tool → call_llm → finish
+}
+```
 
-   - 后端将模型响应转换为 Stream 返回
-   - 前端通过 fetchSSE 和 [fetchEventSource](https://github.com/Azure/fetch-event-source) 处理流式响应
-   - 对不同类型的事件（文本、工具调用、推理等）进行处理
-   - 通过回调函数将结果传递回客户端
+每一步中，`GeneralChatAgent` 根据当前状态返回一条
+`AgentInstruction`，`AgentRuntime` 通过对应的 executor 执行：
 
-6. **插件调用场景**：
+- `call_llm`：调用 LLM（见下方步骤 3-5）
+- `call_tool`：执行工具调用（见下方步骤 6）
+- `finish`：结束循环
+- `compress_context`：上下文压缩
+- `request_human_approve` / `request_human_prompt` /
+  `request_human_select`：请求用户介入
 
-   当 AI 模型在响应中返回 `tool_calls` 字段时，会触发插件调用流程：
+### 3. 前端处理 LLM 请求
 
-   - AI 模型返回包含 `tool_calls` 的响应，表明需要调用工具
-   - 前端通过 `internal_callPluginApi` 方法处理工具调用
-   - 调用 `runPluginApi` 方法执行插件功能，包括获取插件设置和清单、创建认证请求头、发送请求到插件网关
-   - 插件执行完成后，结果返回给 AI 模型，模型基于结果生成最终响应
+当 Agent 发出 `call_llm` 指令时，executor 调用 ChatService：
 
-   **实际应用示例**：
+- `src/services/chat/index.ts` 对消息、工具和参数进行预处理
+- `src/services/chat/mecha/` 下的模块完成上下文工程
+  （context engineering），包括 agent 配置解析、
+  模型参数解析、MCP 上下文注入等
+- 调用 `getChatCompletion` 准备请求参数
+- 使用 `@lobechat/fetch-sse` 包中的 `fetchSSE`
+  发送请求到后端 API
 
-   - **搜索插件**：当用户需要获取实时信息时，AI 会调用网页搜索插件来获取最新数据
-   - **DALL-E 插件**：用户要求生成图片时，AI 调用 DALL-E 插件创建图像
-   - **Midjourney 插件**：提供更高质量的图像生成能力，通过 API 调用 Midjourney 服务
+### 4. 后端处理请求
 
-7. **预设任务处理**：
+- `src/app/(backend)/webapi/chat/[provider]/route.ts` 接收请求
+- 调用 `initModelRuntimeFromDB` 从数据库读取用户的
+  provider 配置，初始化 ModelRuntime
+- 同时存在 tRPC 路由
+  `src/server/routers/lambda/aiChat.ts`，
+  用于服务端消息发送和结构化输出等场景
 
-   预设任务是指系统预定义的特定功能任务，通常在用户执行特定操作时触发（而非常规聊天流程的一部分）。这些任务使用 `fetchPresetTaskResult` 方法执行，该方法与正常聊天流程类似，但会使用专门设计的提示词（prompt chain）。
+### 5. 模型调用与响应处理
 
-   **执行时机**：预设任务主要在以下场景被触发：
+- `ModelRuntime`
+  （`packages/model-runtime/src/core/ModelRuntime.ts`）
+  调用相应模型提供商的 API，返回流式响应
+- 前端通过 `fetchSSE` 和
+  [fetchEventSource](https://github.com/Azure/fetch-event-source)
+  处理流式响应
+- 对不同类型的事件（文本、工具调用、推理等）进行处理
+- 通过回调函数将结果传递回客户端
 
-   1. **角色信息自动生成**：当用户创建或编辑角色时触发
+### 6. 工具调用场景
 
-      - 角色头像生成（通过 `autoPickEmoji` 方法）
-      - 角色描述生成（通过 `autocompleteAgentDescription` 方法）
-      - 角色标签生成（通过 `autocompleteAgentTags` 方法）
-      - 角色标题生成（通过 `autocompleteAgentTitle` 方法）
+当 AI 模型在响应中返回 `tool_calls` 字段时，Agent 会发出
+`call_tool` 指令。LobeChat 支持三种工具类型：
 
-   2. **消息翻译**：用户手动点击翻译按钮时触发（通过 `translateMessage` 方法）
+**Builtin 工具**：内置在应用中的工具，通过本地执行器直接运行。
 
-   3. **网页搜索**：当启用搜索但模型不支持工具调用时，通过 `fetchPresetTaskResult` 实现搜索功能
+- 前端通过 `invokeBuiltinTool` 方法在客户端直接执行
+- 包括搜索、DALL-E 图像生成等内置功能
 
-   **实际代码示例**：
+**MCP 工具**：通过
+[Model Context Protocol](https://modelcontextprotocol.io/)
+连接的外部工具。
 
-   角色头像自动生成实现：
+- 前端通过 `invokeMCPTypePlugin` 方法调用
+  `MCPService`（`src/services/mcp.ts`）
+- 支持 stdio、HTTP（streamable-http/SSE）
+  和云端（Klavis）三种连接方式
+- MCP 工具的注册和发现通过 MCP 服务器配置管理
 
-   ```ts
-   // src/features/AgentSetting/store/action.ts
-   autoPickEmoji: async () => {
-     const { config, meta, dispatchMeta } = get();
-     const systemRole = config.systemRole;
+**Plugin 工具**：传统插件体系，通过 API 网关调用。
+该体系预期将逐步废弃，由 MCP 工具体系替代。
 
-     chatService.fetchPresetTaskResult({
-       onFinish: async (emoji) => {
-         dispatchMeta({ type: 'update', value: { avatar: emoji } });
-       },
-       onLoadingChange: (loading) => {
-         get().updateLoadingState('avatar', loading);
-       },
-       params: merge(
-         get().internal_getSystemAgentForMeta(),
-         chainPickEmoji([meta.title, meta.description, systemRole].filter(Boolean).join(',')),
-       ),
-       trace: get().getCurrentTracePayload({ traceName: TraceNameMap.EmojiPicker }),
-     });
-   };
-   ```
+- 前端通过 `invokeDefaultTypePlugin` 方法调用
+- 获取插件设置和清单、创建认证请求头、
+  发送请求到插件网关
 
-   翻译功能实现：
+工具执行完成后，结果写入消息并返回给 Agent 循环，
+Agent 会再次调用 LLM 基于工具结果生成最终响应。
+工具分发逻辑位于
+`src/store/chat/slices/plugin/actions/pluginTypes.ts`。
 
-   ```ts
-   // src/store/chat/slices/translate/action.ts
-   translateMessage: async (id, targetLang) => {
-     // ...省略部分代码...
+### 7. 预设任务处理
 
-     // 检测语言
-     chatService.fetchPresetTaskResult({
-       onFinish: async (data) => {
-         if (data && supportLocales.includes(data)) from = data;
-         await updateMessageTranslate(id, { content, from, to: targetLang });
-       },
-       params: merge(translationSetting, chainLangDetect(message.content)),
-       trace: get().getCurrentTracePayload({ traceName: TraceNameMap.LanguageDetect }),
-     });
+预设任务是系统预定义的特定功能任务，
+通常在用户执行特定操作时触发
+（不经过 Agent Runtime 循环，直接调用 LLM）。
+这些任务使用 `fetchPresetTaskResult` 方法执行，
+该方法与正常聊天流程类似，
+但会使用专门设计的提示词（prompt chain）。
 
-     // 执行翻译
-     chatService.fetchPresetTaskResult({
-       onMessageHandle: (chunk) => {
-         if (chunk.type === 'text') {
-           content = chunk.text;
-           internal_dispatchMessage({
-             id,
-             type: 'updateMessageTranslate',
-             value: { content, from, to: targetLang },
-           });
-         }
-       },
-       onFinish: async () => {
-         await updateMessageTranslate(id, { content, from, to: targetLang });
-         internal_toggleChatLoading(false, id, n('translateMessage(end)', { id }) as string);
-       },
-       params: merge(translationSetting, chainTranslate(message.content, targetLang)),
-       trace: get().getCurrentTracePayload({ traceName: TraceNameMap.Translation }),
-     });
-   };
-   ```
+**执行时机**：
 
-8. **完成**：
-   - 当流结束时，调用 onFinish 回调，提供完整的响应结果
+1. **角色信息自动生成**：当用户创建或编辑角色时触发
+   - 角色头像生成（通过 `autoPickEmoji` 方法）
+   - 角色描述生成（通过 `autocompleteAgentDescription` 方法）
+   - 角色标签生成（通过 `autocompleteAgentTags` 方法）
+   - 角色标题生成（通过 `autocompleteAgentTitle` 方法）
+2. **消息翻译**：用户手动点击翻译按钮时触发
+   （通过 `translateMessage` 方法）
+3. **网页搜索**：当启用搜索但模型不支持工具调用时，
+   通过 `fetchPresetTaskResult` 实现搜索功能
 
-## AgentRuntime 说明
+**实际代码示例**：
 
-AgentRuntime 是 LobeHub 中的一个核心抽象层，它封装了与不同 AI 模型提供商交互的统一接口。其主要职责和特点包括：
+角色头像自动生成实现：
 
-1. **统一抽象层**：AgentRuntime 提供了一个统一的接口，隐藏了不同 AI 提供商 API 的实现细节差异（如 OpenAI、Anthropic、Bedrock 等）。
+```ts
+// src/features/AgentSetting/store/action.ts
+autoPickEmoji: async () => {
+  const { config, meta, dispatchMeta } = get();
+  const systemRole = config.systemRole;
 
-2. **模型初始化**：通过 `initializeWithProvider` 静态方法，根据指定的提供商和配置参数初始化对应的运行时实例。
+  chatService.fetchPresetTaskResult({
+    onFinish: async (emoji) => {
+      dispatchMeta({ type: 'update', value: { avatar: emoji } });
+    },
+    onLoadingChange: (loading) => {
+      get().updateLoadingState('avatar', loading);
+    },
+    params: merge(
+      get().internal_getSystemAgentForMeta(),
+      chainPickEmoji(
+        [meta.title, meta.description, systemRole]
+          .filter(Boolean)
+          .join(','),
+      ),
+    ),
+    trace: get().getCurrentTracePayload({
+      traceName: TraceNameMap.EmojiPicker,
+    }),
+  });
+};
+```
 
-3. **能力封装**：
+翻译功能实现：
 
-   - `chat` 方法：处理聊天流式请求
-   - `models` 方法：获取模型列表
-   - 支持文本嵌入、文本到图像、文本到语音等功能（如果模型提供商支持）
+```ts
+// src/store/chat/slices/translate/action.ts
+translateMessage: async (id, targetLang) => {
+  // ...省略部分代码...
 
-4. **插件化架构**：通过 `src/libs/agent-runtime/runtimeMap.ts` 映射表，实现了可扩展的插件化架构，方便添加新的模型提供商。目前支持超过 40 个不同的模型提供商：
+  // 检测语言
+  chatService.fetchPresetTaskResult({
+    onFinish: async (data) => {
+      if (data && supportLocales.includes(data)) from = data;
+      await updateMessageTranslate(id, {
+        content,
+        from,
+        to: targetLang,
+      });
+    },
+    params: merge(
+      translationSetting,
+      chainLangDetect(message.content),
+    ),
+    trace: get().getCurrentTracePayload({
+      traceName: TraceNameMap.LanguageDetect,
+    }),
+  });
 
-   ```ts
-   export const providerRuntimeMap = {
-     openai: LobeOpenAI,
-     anthropic: LobeAnthropicAI,
-     google: LobeGoogleAI,
-     azure: LobeAzureOpenAI,
-     bedrock: LobeBedrockAI,
-     ollama: LobeOllamaAI,
-     // ...其他40多个模型提供商
-   };
-   ```
-
-5. **适配器模式**：在内部使用适配器模式，将不同提供商的 API 适配到统一的 `src/libs/agent-runtime/BaseAI.ts` 接口：
-
-   ```ts
-   export interface LobeRuntimeAI {
-     baseURL?: string;
-     chat(payload: ChatStreamPayload, options?: ChatCompetitionOptions): Promise<Response>;
-     embeddings?(payload: EmbeddingsPayload, options?: EmbeddingsOptions): Promise<Embeddings[]>;
-     models?(): Promise<any>;
-     textToSpeech?: (
-       payload: TextToSpeechPayload,
-       options?: TextToSpeechOptions,
-     ) => Promise<ArrayBuffer>;
-   }
-   ```
-
-   **适配器实现示例**：
-
-   1. **OpenRouter 适配器**：OpenRouter 是一个统一 API，可以通过它访问多个模型提供商的 AI 模型。LobeHub 通过适配器实现对 OpenRouter 的支持：
-
-      ```ts
-      // OpenRouter 适配器实现
-      class LobeOpenRouterAI implements LobeRuntimeAI {
-        client: OpenAI;
-        baseURL: string;
-
-        constructor(options: OpenAICompatibleOptions) {
-          // 初始化 OpenRouter 客户端，使用 OpenAI 兼容的 API
-          this.client = new OpenAI({
-            apiKey: options.apiKey,
-            baseURL: OPENROUTER_BASE_URL,
-            defaultHeaders: {
-              'HTTP-Referer': 'https://github.com/lobehub/lobehub',
-              'X-Title': 'LobeHub',
-            },
-          });
-          this.baseURL = OPENROUTER_BASE_URL;
-        }
-
-        // 实现聊天功能
-        async chat(payload: ChatCompletionCreateParamsBase, options?: RequestOptions) {
-          // 将 LobeHub 的请求格式转换为 OpenRouter 格式
-          // 处理模型映射、消息格式等
-          return this.client.chat.completions.create(
-            {
-              ...payload,
-              model: payload.model || 'openai/gpt-4-turbo', // 默认模型
-            },
-            options,
-          );
-        }
-
-        // 实现其他 LobeRuntimeAI 接口方法
+  // 执行翻译
+  chatService.fetchPresetTaskResult({
+    onMessageHandle: (chunk) => {
+      if (chunk.type === 'text') {
+        content = chunk.text;
+        internal_dispatchMessage({
+          id,
+          type: 'updateMessageTranslate',
+          value: { content, from, to: targetLang },
+        });
       }
-      ```
+    },
+    onFinish: async () => {
+      await updateMessageTranslate(id, {
+        content,
+        from,
+        to: targetLang,
+      });
+      internal_toggleChatLoading(
+        false,
+        id,
+        n('translateMessage(end)', { id }) as string,
+      );
+    },
+    params: merge(
+      translationSetting,
+      chainTranslate(message.content, targetLang),
+    ),
+    trace: get().getCurrentTracePayload({
+      traceName: TraceNameMap.Translation,
+    }),
+  });
+};
+```
 
-   2. **Google Gemini 适配器**：Gemini 是 Google 的大语言模型，LobeHub 通过专门的适配器支持 Gemini 系列模型：
+### 8. 完成
 
-      ```ts
-      import { GoogleGenerativeAI } from '@google/generative-ai';
+当 Agent 发出 `finish` 指令时，循环结束，
+调用 `onFinish` 回调，提供完整的响应结果。
 
-      // Gemini 适配器实现
-      class LobeGoogleAI implements LobeRuntimeAI {
-        client: GoogleGenerativeAI;
-        baseURL: string;
-        apiKey: string;
+## 客户端 vs 服务端执行
 
-        constructor(options: GoogleAIOptions) {
-          // 初始化 Google Generative AI 客户端
-          this.client = new GoogleGenerativeAI(options.apiKey);
-          this.apiKey = options.apiKey;
-          this.baseURL = options.baseURL || GOOGLE_AI_BASE_URL;
-        }
+Agent Runtime 循环的执行位置取决于场景：
 
-        // 实现聊天功能
-        async chat(payload: ChatCompletionCreateParamsBase, options?: RequestOptions) {
-          // 选择合适的模型（支持 Gemini Pro、Gemini Flash 等）
-          const modelName = payload.model || 'gemini-pro';
-          const model = this.client.getGenerativeModel({ model: modelName });
+- **客户端循环**（浏览器）：常规 1:1 对话、继续生成、
+  群组编排决策。循环在浏览器中运行，
+  入口为 `internal_execAgentRuntime()`
+  （`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`）
+- **服务端循环**（队列 / 本地）：群聊 supervisor agent、
+  子 agent 任务、API/Cron 触发。循环在服务端运行，
+  通过 SSE 流式推送事件到客户端，
+  入口为 `AgentRuntimeService.executeStep()`
+  （`src/server/services/agentRuntime/AgentRuntimeService.ts`），
+  tRPC 路由为 `src/server/routers/lambda/aiAgent.ts`
 
-          // 处理多模态输入（如图像）
-          const contents = this.processMessages(payload.messages);
+## Model Runtime
 
-          // 设置生成参数
-          const generationConfig = {
-            temperature: payload.temperature,
-            topK: payload.top_k,
-            topP: payload.top_p,
-            maxOutputTokens: payload.max_tokens,
-          };
+Model Runtime（`packages/model-runtime/`）是 LobeChat 中
+与 LLM 模型提供商交互的核心抽象层，
+负责将不同提供商的 API 适配为统一接口。
 
-          // 创建聊天会话并获取响应
-          const chat = model.startChat({
-            generationConfig,
-            history: contents.slice(0, -1),
-            safetySettings: this.getSafetySettings(payload),
-          });
+**核心职责**：
 
-          // 处理流式响应
-          return this.handleStreamResponse(chat, contents, options?.signal);
-        }
+- **统一抽象层**：通过 `LobeRuntimeAI` 接口
+  （`packages/model-runtime/src/core/BaseAI.ts`）
+  隐藏不同 AI 提供商 API 的差异
+- **模型初始化**：通过 provider 映射表
+  （`packages/model-runtime/src/runtimeMap.ts`）
+  初始化对应的运行时实例
+- **能力封装**：`chat`（聊天流式请求）、
+  `models`（模型列表）、`embeddings`（文本嵌入）、
+  `createImage`（图像生成）、`textToSpeech`（语音合成）、
+  `generateObject`（结构化输出）
 
-        // 实现其他处理方法
-        private processMessages(messages) {
-          /* ... */
-        }
-        private getSafetySettings(payload) {
-          /* ... */
-        }
-        private handleStreamResponse(chat, contents, signal) {
-          /* ... */
-        }
-      }
-      ```
+**核心接口**：
 
-   **不同模型的适配实现**：
+```ts
+// packages/model-runtime/src/core/BaseAI.ts
+export interface LobeRuntimeAI {
+  baseURL?: string;
+  chat?(
+    payload: ChatStreamPayload,
+    options?: ChatMethodOptions,
+  ): Promise<Response>;
+  generateObject?(
+    payload: GenerateObjectPayload,
+    options?: GenerateObjectOptions,
+  ): Promise<any>;
+  embeddings?(
+    payload: EmbeddingsPayload,
+    options?: EmbeddingsOptions,
+  ): Promise<Embeddings[]>;
+  models?(): Promise<any>;
+  createImage?: (
+    payload: CreateImagePayload,
+  ) => Promise<CreateImageResponse>;
+  textToSpeech?: (
+    payload: TextToSpeechPayload,
+    options?: TextToSpeechOptions,
+  ) => Promise<ArrayBuffer>;
+}
+```
 
-- `src/libs/agent-runtime/openai/index.ts` - OpenAI 实现
-- `src/libs/agent-runtime/anthropic/index.ts` - Anthropic 实现
-- `src/libs/agent-runtime/google/index.ts` - Google 实现
-- `src/libs/agent-runtime/openrouter/index.ts` - OpenRouter 实现
+**适配器架构**：通过 `openaiCompatibleFactory` 和
+`anthropicCompatibleFactory` 两种工厂函数，
+大多数提供商只需少量配置即可接入。
+目前支持超过 40 个模型提供商
+（OpenAI、Anthropic、Google、Azure、Bedrock、Ollama 等），
+各实现位于 `packages/model-runtime/src/providers/`。
 
-详细实现可以查看：
+## Agent Runtime
 
-- `src/libs/agent-runtime/AgentRuntime.ts` - 核心运行时类
-- `src/libs/agent-runtime/BaseAI.ts` - 定义基础接口
-- `src/libs/agent-runtime/runtimeMap.ts` - 提供商映射表
-- `src/libs/agent-runtime/UniformRuntime/index.ts` - 处理多模型统一运行时
-- `src/libs/agent-runtime/utils/openaiCompatibleFactory/index.ts` - OpenAI 兼容适配器工厂
+Agent Runtime（`packages/agent-runtime/`）是
+LobeChat 的 Agent 编排引擎。
+如上文所述，它是驱动整个 chat 流程的核心执行引擎。
+
+**核心组件**：
+
+- **`AgentRuntime`**
+  （`packages/agent-runtime/src/core/runtime.ts`）：
+  "引擎"，执行 Agent 指令循环，
+  支持 `call_llm`、`call_tool`、`finish`、
+  `compress_context`、`request_human_*` 等指令类型
+- **`GeneralChatAgent`**
+  （`packages/agent-runtime/src/agents/GeneralChatAgent.ts`）：
+  "大脑"，根据当前状态决定下一步执行什么指令
+- **`GroupOrchestrationRuntime`**
+  （`packages/agent-runtime/src/groupOrchestration/`）：
+  多 Agent 编排，支持 speak /broadcast/
+  delegate /executeTask 等协作模式
+- **`UsageCounter`**：token 使用和费用追踪
+- **`InterventionChecker`**：
+  安全黑名单管理 Agent 行为边界

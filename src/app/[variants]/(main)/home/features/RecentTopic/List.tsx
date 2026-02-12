@@ -32,11 +32,11 @@ const RecentTopicList = memo(() => {
     return (
       <Link
         key={topic.id}
+        to={topicUrl}
         style={{
           color: 'inherit',
           textDecoration: 'none',
         }}
-        to={topicUrl}
       >
         <ReactTopicItem {...topic} />
       </Link>

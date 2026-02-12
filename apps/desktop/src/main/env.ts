@@ -90,6 +90,9 @@ export const getDesktopEnv = memoize(() =>
       // Custom update server URL (for stable channel)
       // e.g., https://releases.lobehub.com/stable or https://your-bucket.s3.amazonaws.com/releases
       UPDATE_SERVER_URL: z.string().optional().default(process.env.UPDATE_SERVER_URL),
+
+      // Vercel JWT for bypassing deployment protection (dev only)
+      VERCEL_JWT: z.string().optional(),
     },
   }),
 );

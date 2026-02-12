@@ -64,10 +64,10 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
 
   const tooltipContent = (
     <Flexbox
+      horizontal
       align={'center'}
       flex={1}
       gap={16}
-      horizontal
       justify={'space-between'}
       style={{
         overflow: 'hidden',
@@ -86,7 +86,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
           {formatTime(topic.updatedAt, locale)}
         </Text>
       </Flexbox>
-      <ActionIcon danger icon={Trash} onClick={handleDelete} size="small" />
+      <ActionIcon danger icon={Trash} size="small" onClick={handleDelete} />
     </Flexbox>
   );
 
@@ -94,24 +94,24 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
     <Popover
       content={tooltipContent}
       placement={'left'}
+      trigger={showMoreInfo ? [] : ['hover']}
       styles={{
         content: {
           width: 200,
         },
       }}
-      trigger={showMoreInfo ? [] : ['hover']}
     >
       <Flexbox
+        horizontal
         align={'center'}
         gap={12}
-        horizontal
         justify={'center'}
-        onClick={handleClick}
+        width={'100%'}
         style={{
           cursor: 'pointer',
           ...style,
         }}
-        width={'100%'}
+        onClick={handleClick}
       >
         <Avatar
           avatar={topic.coverUrl ?? ''}

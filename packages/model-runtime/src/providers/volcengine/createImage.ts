@@ -1,9 +1,9 @@
 import createDebug from 'debug';
-import { RuntimeImageGenParamsValue } from 'model-bank';
+import type { RuntimeImageGenParamsValue } from 'model-bank';
 import OpenAI from 'openai';
 
-import { CreateImageOptions } from '../../core/openaiCompatibleFactory';
-import { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 
 const log = createDebug('lobe-image:volcengine');
 

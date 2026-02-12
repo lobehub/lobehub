@@ -3,7 +3,8 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
-import { type CSSProperties, type ReactNode, memo } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDragUploadContext } from './DragUploadProvider';
@@ -128,37 +129,37 @@ const DragUploadZone = memo<DragUploadZoneProps>(
           <div className={styles.overlay}>
             <div className={styles.overlayContent} style={{ minHeight: overlayMinHeight }}>
               <Center className={styles.content} gap={8}>
-                <Flexbox className={styles.iconGroup} horizontal>
+                <Flexbox horizontal className={styles.iconGroup}>
                   <Center
                     className={styles.icon}
                     height={BLOCK_SIZE * 1.2}
+                    width={BLOCK_SIZE}
                     style={{
                       background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
                       transform: 'rotateZ(-20deg) translateX(8px)',
                     }}
-                    width={BLOCK_SIZE}
                   >
                     <Icon icon={FileImage} size={ICON_SIZE} />
                   </Center>
                   <Center
                     className={styles.icon}
                     height={BLOCK_SIZE * 1.2}
+                    width={BLOCK_SIZE}
                     style={{
                       transform: 'translateY(-10px)',
                       zIndex: 1,
                     }}
-                    width={BLOCK_SIZE}
                   >
                     <Icon icon={FileUpIcon} size={ICON_SIZE} />
                   </Center>
                   <Center
                     className={styles.icon}
                     height={BLOCK_SIZE * 1.2}
+                    width={BLOCK_SIZE}
                     style={{
                       background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
                       transform: 'rotateZ(20deg) translateX(-8px)',
                     }}
-                    width={BLOCK_SIZE}
                   >
                     <Icon icon={FileText} size={ICON_SIZE} />
                   </Center>

@@ -1,11 +1,11 @@
 import { ActionIcon, Button, Modal , Skeleton } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
 import { Brush } from 'lucide-react';
-import dynamic from '@/libs/next/dynamic';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import dynamic from '@/libs/next/dynamic';
 
 const Inner = dynamic(() => import('./Inner'), {
   loading: () => <Skeleton paragraph={{ rows: 8 }} title={false} />,
@@ -20,9 +20,9 @@ const CreateButton = memo<{ mobile?: boolean }>(({ mobile }) => {
     mobile || resMobile ? (
       <ActionIcon
         icon={Brush}
-        onClick={() => setIsModalOpen(true)}
         size={MOBILE_HEADER_ICON_SIZE}
         title={t('create')}
+        onClick={() => setIsModalOpen(true)}
       />
     ) : (
       <Button icon={Brush} onClick={() => setIsModalOpen(true)}>
@@ -36,9 +36,9 @@ const CreateButton = memo<{ mobile?: boolean }>(({ mobile }) => {
       <Modal
         allowFullscreen
         footer={null}
-        onCancel={() => setIsModalOpen(false)}
         open={isModalOpen}
         title={t('create')}
+        onCancel={() => setIsModalOpen(false)}
       >
         <Inner />
       </Modal>

@@ -15,7 +15,7 @@ const Header = memo(() => {
   return (
     <NavHeader
       left={
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           <AutoSaveHint />
           <AgentStatusTag />
           <AgentVersionReviewTag />

@@ -29,7 +29,7 @@ LobeHub Desktop 是 [LobeChat](https://github.com/lobehub/lobe-chat) 的跨平�
 pnpm install-isolated
 
 # 启动开发服务器
-pnpm electron:dev
+pnpm dev
 
 # 类型检查
 pnpm type-check
@@ -51,19 +51,20 @@ cp .env.desktop .env
 
 ### 构建命令
 
-| 命令               | 描述                               |
-| ------------------ | ---------------------------------- |
-| `pnpm build`       | 构建所有平台                       |
-| `pnpm build:mac`   | 构建 macOS (Intel + Apple Silicon) |
-| `pnpm build:win`   | 构建 Windows                       |
-| `pnpm build:linux` | 构建 Linux                         |
-| `pnpm build-local` | 本地开发构建                       |
+| 命令                       | 描述                               |
+| -------------------------- | ---------------------------------- |
+| `pnpm build:main`          | 构建 main/preload（仅产出 dist）   |
+| `pnpm package:mac`         | 打包 macOS (Intel + Apple Silicon) |
+| `pnpm package:win`         | 打包 Windows                       |
+| `pnpm package:linux`       | 打包 Linux                         |
+| `pnpm package:local`       | 本地打包（不打 ASAR）              |
+| `pnpm package:local:reuse` | 本地打包复用已有 dist              |
 
 ### 开发工作流
 
 ```bash
 # 1. 开发
-pnpm electron:dev # 启动热重载开发服务器
+pnpm dev # 启动热重载开发服务器
 
 # 2. 代码质量
 pnpm lint       # ESLint 检查
@@ -74,8 +75,8 @@ pnpm type-check # TypeScript 验证
 pnpm test # 运行 Vitest 测试
 
 # 4. 构建和打包
-pnpm build       # 生产构建
-pnpm build-local # 本地测试构建
+pnpm build:main    # 生产构建（仅 dist）
+pnpm package:local # 本地测试打包
 ```
 
 ## 🎯 发布渠道

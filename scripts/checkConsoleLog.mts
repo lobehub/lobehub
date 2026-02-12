@@ -77,7 +77,7 @@ const checkConsoleLogs = () => {
     }
 
     const lines = output.trim().split('\n');
-    const violations: Array<{ content: string, file: string; line: string; }> = [];
+    const violations: Array<{ content: string; file: string; line: string }> = [];
 
     for (const line of lines) {
       // Parse git grep output: filename:lineNumber:content
@@ -105,7 +105,9 @@ const checkConsoleLogs = () => {
     }
 
     if (violations.length === 0) {
-      console.log('✅ No console.log violations found (all matches are whitelisted or in comments)!');
+      console.log(
+        '✅ No console.log violations found (all matches are whitelisted or in comments)!',
+      );
       return;
     }
 
@@ -118,7 +120,9 @@ const checkConsoleLogs = () => {
     for (const violation of violations) {
       if (isCI) {
         // GitHub Actions warning annotation format
-        console.log(`::warning file=${violation.file},line=${violation.line}::console.log found: ${violation.content}`);
+        console.log(
+          `::warning file=${violation.file},line=${violation.line}::console.log found: ${violation.content}`,
+        );
       } else {
         console.log(`  ${violation.file}:${violation.line}`);
         console.log(`    ${violation.content}\n`);
@@ -126,9 +130,7 @@ const checkConsoleLogs = () => {
     }
 
     console.log(`\n💡 Total violations: ${violations.length}`);
-    console.log(
-      `\n📝 To whitelist files, add them to ${WHITELIST_PATH} in the following format:`,
-    );
+    console.log(`\n📝 To whitelist files, add them to ${WHITELIST_PATH} in the following format:`);
     console.log(`{
   "files": ["path/to/file.ts"],
   "patterns": ["scripts/**/*.mts", "**/*.test.ts"]

@@ -1,4 +1,4 @@
-import type { Mock } from 'vitest';
+import { type Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // eslint-disable-next-line import/first

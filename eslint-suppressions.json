@@ -1,0 +1,782 @@
+{
+  "src/app/[variants]/(desktop)/desktop-onboarding/features/WelcomeStep.tsx": {
+    "@eslint-react/no-nested-component-definitions": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/agent/profile/features/Header/AgentPublishButton/PublishButton.tsx": {
+    "import-x/consistent-type-specifier-style": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/community/(detail)/agent/features/Details/Capabilities/PluginItem.tsx": {
+    "simple-import-sort/imports": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/community/(detail)/agent/features/Header.tsx": {
+    "simple-import-sort/imports": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/community/components/VirtuosoGridList/index.tsx": {
+    "@eslint-react/no-nested-component-definitions": {
+      "count": 2
+    }
+  },
+  "src/app/[variants]/(main)/home/_layout/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx": {
+    "import-x/consistent-type-specifier-style": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/home/_layout/Body/Agent/Modals/ConfigGroupModal/index.tsx": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 1
+    },
+    "simple-import-sort/imports": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/home/features/RecentPage/Item.tsx": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/home/features/index.tsx": {
+    "@eslint-react/no-nested-component-definitions": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/memory/features/GridView/index.tsx": {
+    "@eslint-react/no-nested-component-definitions": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/resource/features/hooks/useResourceManagerUrlSync.ts": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/settings/provider/detail/ollama/CheckError.tsx": {
+    "regexp/no-dupe-characters-character-class": {
+      "count": 1
+    },
+    "regexp/no-obscure-range": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/onboarding/features/ResponseLanguageStep.tsx": {
+    "@eslint-react/no-nested-component-definitions": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/onboarding/features/TelemetryStep.tsx": {
+    "@eslint-react/no-nested-component-definitions": {
+      "count": 1
+    }
+  },
+  "src/components/AntdStaticMethods/index.tsx": {
+    "import-x/no-mutable-exports": {
+      "count": 3
+    }
+  },
+  "src/components/ChatGroupWizard/index.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/components/Loading/CircleLoading/index.tsx": {
+    "unicorn/no-anonymous-default-export": {
+      "count": 1
+    }
+  },
+  "src/components/ModelSelect/index.tsx": {
+    "no-shadow-restricted-names": {
+      "count": 1
+    }
+  },
+  "src/config/featureFlags/schema.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/envs/analytics.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/envs/app.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/envs/auth.ts": {
+    "perfectionist/sort-interfaces": {
+      "count": 19
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/envs/email.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/envs/langfuse.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/envs/llm.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/envs/redis.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Error/OllamaBizError/index.tsx": {
+    "regexp/no-dupe-characters-character-class": {
+      "count": 1
+    },
+    "regexp/no-obscure-range": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/CompressedGroup/index.tsx": {
+    "import-x/consistent-type-specifier-style": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/Messages/Supervisor/components/ContentBlock.tsx": {
+    "simple-import-sort/imports": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/types/hooks.ts": {
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/features/Conversation/utils/markdown.ts": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 3
+    }
+  },
+  "src/features/DevPanel/CacheViewer/index.tsx": {
+    "react-hooks/rules-of-hooks": {
+      "count": 1
+    }
+  },
+  "src/features/NavPanel/SideBarHeaderLayout.tsx": {
+    "@eslint-react/dom/no-flush-sync": {
+      "count": 1
+    }
+  },
+  "src/features/PluginsUI/Render/utils/iframeOnReady.test.ts": {
+    "unicorn/no-invalid-remove-event-listener": {
+      "count": 1
+    }
+  },
+  "src/features/PluginsUI/Render/utils/pluginSettings.test.ts": {
+    "unicorn/no-invalid-remove-event-listener": {
+      "count": 1
+    }
+  },
+  "src/features/PluginsUI/Render/utils/pluginState.test.ts": {
+    "unicorn/no-invalid-remove-event-listener": {
+      "count": 1
+    }
+  },
+  "src/features/ProtocolUrlHandler/InstallPlugin/CustomPluginInstallModal.tsx": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/ListView/index.tsx": {
+    "@eslint-react/no-nested-component-definitions": {
+      "count": 1
+    }
+  },
+  "src/features/ResourceManager/components/Explorer/MasonryView/MasonryItem/NoteFileItem.tsx": {
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "src/features/ShareModal/ShareJSON/generateFullExport.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/helpers/parserPlaceholder/index.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/layout/AuthProvider/MarketAuth/oidc.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "src/libs/better-auth/define-config.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/libs/observability/traceparent.test.ts": {
+    "import/first": {
+      "count": 1
+    }
+  },
+  "src/libs/oidc-provider/http-adapter.ts": {
+    "@typescript-eslint/ban-types": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-function-type": {
+      "count": 1
+    }
+  },
+  "src/libs/trpc/middleware/openTelemetry.test.ts": {
+    "import/first": {
+      "count": 1
+    }
+  },
+  "src/locales/default/welcome.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/server/modules/Mecha/ContextEngineering/index.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/server/modules/ModelRuntime/apiKeyManager.test.ts": {
+    "unicorn/no-new-array": {
+      "count": 1
+    }
+  },
+  "src/server/routers/lambda/__tests__/integration/aiAgent.createClientGroupAgentTaskThread.integration.test.ts": {
+    "@typescript-eslint/no-non-null-asserted-optional-chain": {
+      "count": 2
+    }
+  },
+  "src/server/routers/lambda/__tests__/integration/aiAgent.createClientTaskThread.integration.test.ts": {
+    "@typescript-eslint/no-non-null-asserted-optional-chain": {
+      "count": 2
+    }
+  },
+  "src/server/routers/lambda/aiChat.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "src/server/routers/lambda/chunk.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "src/server/routers/lambda/index.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/routers/lambda/ragEval.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/server/routers/lambda/user.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/routers/lambda/userMemory.ts": {
+    "@typescript-eslint/consistent-type-imports": {
+      "count": 1
+    },
+    "import-x/no-duplicates": {
+      "count": 2
+    },
+    "simple-import-sort/imports": {
+      "count": 1
+    }
+  },
+  "src/server/routers/tools/_helpers/scheduleToolCallReport.test.ts": {
+    "simple-import-sort/imports": {
+      "count": 1
+    }
+  },
+  "src/server/routers/tools/mcp.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/server/services/comfyui/config/fluxModelRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/modelRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/promptToolConst.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/sdModelRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/systemComponents.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/workflowRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/core/errorHandlerService.ts": {
+    "regexp/no-dupe-disjunctions": {
+      "count": 1
+    },
+    "regexp/no-super-linear-backtracking": {
+      "count": 1
+    }
+  },
+  "src/server/services/comfyui/errors/configError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/errors/modelResolverError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/errors/servicesError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/errors/utilsError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/errors/workflowError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/utils/workflowUtils.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/flux-dev.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/flux-kontext.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/flux-schnell.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/sd35.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/simple-sd.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/webhookUser/index.test.ts": {
+    "unicorn/no-thenable": {
+      "count": 7
+    }
+  },
+  "src/services/_url.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/services/chat/mecha/contextEngineering.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/store/agent/slices/cron/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/agent/slices/knowledge/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/agent/slices/plugin/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/chat/agents/GroupOrchestration/createGroupOrchestrationExecutors.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/store/chat/agents/createAgentExecutors.ts": {
+    "prefer-const": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/aiAgent/actions/groupOrchestration.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/aiAgent/actions/runAgent.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/aiChat/actions/__tests__/StreamingHandler.test.ts": {
+    "import-x/consistent-type-specifier-style": {
+      "count": 1
+    },
+    "unused-imports/no-unused-imports": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/aiChat/actions/conversationControl.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/aiChat/actions/conversationLifecycle.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/aiChat/actions/memory.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/aiChat/actions/streamingExecutor.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/message/actions/optimisticUpdate.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/message/actions/publicApi.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/operation/types.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/plugin/actions/internals.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/plugin/actions/optimisticUpdate.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/plugin/actions/pluginTypes.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/plugin/actions/publicApi.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/plugin/actions/workflow.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/portal/selectors.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/thread/action.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/topic/action.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/translate/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/chat/slices/tts/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/discover/slices/assistant/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/discover/slices/groupAgent/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/discover/slices/mcp/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/discover/slices/model/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/discover/slices/plugin/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/discover/slices/provider/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/discover/slices/social/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/discover/slices/user/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/document/slices/editor/selectors.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/store/file/slices/chunk/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/file/slices/tts/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/file/slices/upload/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/global/actions/workspacePane.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/global/initialState.ts": {
+    "typescript-sort-keys/string-enum": {
+      "count": 2
+    }
+  },
+  "src/store/home/slices/group/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/image/slices/generationConfig/initialState.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/library/slices/content/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 2
+    }
+  },
+  "src/store/mention/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/serverConfig/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/store/session/slices/session/action.ts": {
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/session/slices/sessionGroup/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    },
+    "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/store/tool/slices/builtin/executors/index.ts": {
+    "import-x/consistent-type-specifier-style": {
+      "count": 1
+    }
+  },
+  "src/store/tool/slices/oldStore/initialState.ts": {
+    "typescript-sort-keys/string-enum": {
+      "count": 1
+    }
+  },
+  "src/store/userMemory/slices/home/action.ts": {
+    "no-unused-private-class-members": {
+      "count": 1
+    }
+  },
+  "src/styles/antdOverride.ts": {
+    "unicorn/no-anonymous-default-export": {
+      "count": 1
+    }
+  },
+  "src/utils/server/parseModels.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "tests/setup.ts": {
+    "import/first": {
+      "count": 1
+    },
+    "import/newline-after-import": {
+      "count": 1
+    }
+  }
+}

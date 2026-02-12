@@ -1,7 +1,7 @@
-import { HotkeyId } from '@/types/hotkey';
-import { GlobalLLMProviderKey } from '@/types/user/settings';
+import { type HotkeyId } from '@/types/hotkey';
+import { type GlobalLLMProviderKey } from '@/types/user/settings';
 
-import { UserStore } from '../../../store';
+import { type UserStore } from '../../../store';
 import { settingsSelectors } from './settings';
 
 describe('settingsSelectors', () => {

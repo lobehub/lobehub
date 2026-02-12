@@ -1,5 +1,6 @@
 import { Accordion, AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
-import { type CSSProperties, memo, useState } from 'react';
+import { type CSSProperties } from 'react';
+import { memo, useState } from 'react';
 
 import Actions from '@/features/Conversation/Messages/AssistantGroup/Tool/Actions';
 import dynamic from '@/libs/next/dynamic';
@@ -78,6 +79,10 @@ const Tool = memo<InspectorProps>(
         onExpandedChange={(keys) => setExpand(keys.length > 0)}
       >
         <AccordionItem
+          itemKey={'tool'}
+          paddingBlock={4}
+          paddingInline={4}
+          title={<Inspectors apiName={apiName} identifier={identifier} result={result} />}
           action={
             !disableEditing && (
               <Actions
@@ -91,10 +96,6 @@ const Tool = memo<InspectorProps>(
               />
             )
           }
-          itemKey={'tool'}
-          paddingBlock={4}
-          paddingInline={4}
-          title={<Inspectors apiName={apiName} identifier={identifier} result={result} />}
         >
           <Flexbox gap={8} paddingBlock={8}>
             {showDebug && !disableEditing && (

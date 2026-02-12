@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-array-push-push */
 import {
   EditLocalFileParams,
   EditLocalFileResult,
@@ -22,13 +23,13 @@ import {
 import { SYSTEM_FILES_TO_IGNORE, loadFile } from '@lobechat/file-loaders';
 import { createPatch } from 'diff';
 import { dialog, shell } from 'electron';
-import fg from 'fast-glob';
-import { Stats, constants } from 'node:fs';
+import { constants } from 'node:fs';
 import { access, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { FileResult, SearchOptions } from '@/modules/fileSearch';
+import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
-import { FileResult, SearchOptions } from '@/types/fileSearch';
 import { makeSureDirExist } from '@/utils/file-system';
 import { createLogger } from '@/utils/logger';
 
@@ -41,6 +42,10 @@ export default class LocalFileCtr extends ControllerModule {
   static override readonly groupName = 'localSystem';
   private get searchService() {
     return this.app.getService(FileSearchService);
+  }
+
+  private get contentSearchService() {
+    return this.app.getService(ContentSearchService);
   }
 
   // ==================== File Operation ====================
@@ -584,163 +589,12 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async handleGrepContent(params: GrepContentParams): Promise<GrepContentResult> {
-    const {
-      pattern,
-      path: searchPath = process.cwd(),
-      output_mode = 'files_with_matches',
-    } = params;
-    const logPrefix = `[grepContent: ${pattern}]`;
-    logger.debug(`${logPrefix} Starting content search`, { output_mode, searchPath });
-
-    try {
-      const regex = new RegExp(
-        pattern,
-        `g${params['-i'] ? 'i' : ''}${params.multiline ? 's' : ''}`,
-      );
-
-      // Determine files to search
-      let filesToSearch: string[] = [];
-      const stats = await stat(searchPath);
-
-      if (stats.isFile()) {
-        filesToSearch = [searchPath];
-      } else {
-        // Use glob pattern if provided, otherwise search all files
-        // If glob doesn't contain directory separator and doesn't start with **,
-        // auto-prefix with **/ to make it recursive
-        let globPattern = params.glob || '**/*';
-        if (params.glob && !params.glob.includes('/') && !params.glob.startsWith('**')) {
-          globPattern = `**/${params.glob}`;
-        }
-
-        filesToSearch = await fg(globPattern, {
-          absolute: true,
-          cwd: searchPath,
-          dot: true,
-          ignore: ['**/node_modules/**', '**/.git/**'],
-        });
-
-        // Filter by type if provided
-        if (params.type) {
-          const ext = `.${params.type}`;
-          filesToSearch = filesToSearch.filter((file) => file.endsWith(ext));
-        }
-      }
-
-      logger.debug(`${logPrefix} Found ${filesToSearch.length} files to search`);
-
-      const matches: string[] = [];
-      let totalMatches = 0;
-
-      for (const filePath of filesToSearch) {
-        try {
-          const fileStats = await stat(filePath);
-          if (!fileStats.isFile()) continue;
-
-          const content = await readFile(filePath, 'utf8');
-          const lines = content.split('\n');
-
-          switch (output_mode) {
-            case 'files_with_matches': {
-              if (regex.test(content)) {
-                matches.push(filePath);
-                totalMatches++;
-                if (params.head_limit && matches.length >= params.head_limit) break;
-              }
-              break;
-            }
-            case 'content': {
-              const matchedLines: string[] = [];
-              for (let i = 0; i < lines.length; i++) {
-                if (regex.test(lines[i])) {
-                  const contextBefore = params['-B'] || params['-C'] || 0;
-                  const contextAfter = params['-A'] || params['-C'] || 0;
-
-                  const startLine = Math.max(0, i - contextBefore);
-                  const endLine = Math.min(lines.length - 1, i + contextAfter);
-
-                  for (let j = startLine; j <= endLine; j++) {
-                    const lineNum = params['-n'] ? `${j + 1}:` : '';
-                    matchedLines.push(`${filePath}:${lineNum}${lines[j]}`);
-                  }
-                  totalMatches++;
-                }
-              }
-              matches.push(...matchedLines);
-              if (params.head_limit && matches.length >= params.head_limit) break;
-              break;
-            }
-            case 'count': {
-              const fileMatches = (content.match(regex) || []).length;
-              if (fileMatches > 0) {
-                matches.push(`${filePath}:${fileMatches}`);
-                totalMatches += fileMatches;
-              }
-              break;
-            }
-          }
-        } catch (error) {
-          logger.debug(`${logPrefix} Skipping file ${filePath}:`, error);
-        }
-      }
-
-      logger.info(`${logPrefix} Search completed`, {
-        matchCount: matches.length,
-        totalMatches,
-      });
-
-      return {
-        matches: params.head_limit ? matches.slice(0, params.head_limit) : matches,
-        success: true,
-        total_matches: totalMatches,
-      };
-    } catch (error) {
-      logger.error(`${logPrefix} Grep failed:`, error);
-      return {
-        matches: [],
-        success: false,
-        total_matches: 0,
-      };
-    }
+    return this.contentSearchService.grep(params);
   }
 
   @IpcMethod()
-  async handleGlobFiles({
-    path: searchPath = process.cwd(),
-    pattern,
-  }: GlobFilesParams): Promise<GlobFilesResult> {
-    const logPrefix = `[globFiles: ${pattern}]`;
-    logger.debug(`${logPrefix} Starting glob search`, { searchPath });
-
-    try {
-      const files = await fg(pattern, {
-        absolute: true,
-        cwd: searchPath,
-        dot: true,
-        onlyFiles: false,
-        stats: true,
-      });
-
-      // Sort by modification time (most recent first)
-      const sortedFiles = (files as unknown as Array<{ path: string; stats: Stats }>)
-        .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime())
-        .map((f) => f.path);
-
-      logger.info(`${logPrefix} Glob completed`, { fileCount: sortedFiles.length });
-
-      return {
-        files: sortedFiles,
-        success: true,
-        total_files: sortedFiles.length,
-      };
-    } catch (error) {
-      logger.error(`${logPrefix} Glob failed:`, error);
-      return {
-        files: [],
-        success: false,
-        total_files: 0,
-      };
-    }
+  async handleGlobFiles(params: GlobFilesParams): Promise<GlobFilesResult> {
+    return this.searchService.glob(params);
   }
 
   // ==================== File Editing ====================

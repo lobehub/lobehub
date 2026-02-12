@@ -15,7 +15,7 @@ import {
   type UserSettings,
 } from '@lobechat/types';
 
-import type { UserStore } from '@/store/user';
+import { type UserStore } from '@/store/user';
 import { merge } from '@/utils/merge';
 
 export const currentSettings = (s: UserStore): UserSettings => merge(s.defaultSettings, s.settings);

@@ -1,7 +1,8 @@
 'use client';
 
 import { VoiceList } from '@lobehub/tts';
-import { Form, type FormGroupItemType, Select } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Form, Select } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Mic } from 'lucide-react';
@@ -13,8 +14,8 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
 import { selectors, useStore } from '../store';
-import SelectWithTTSPreview from './SelectWithTTSPreview';
 import { ttsOptions } from './options';
+import SelectWithTTSPreview from './SelectWithTTSPreview';
 
 const TTS_SETTING_KEY = 'tts';
 const { openaiVoiceOptions, localeOptions } = VoiceList;
@@ -97,13 +98,13 @@ const AgentTTS = memo(() => {
     <Form
       footer={<Form.SubmitFooter />}
       form={form}
+      items={[tts]}
+      itemsType={'group'}
+      variant={'borderless'}
       initialValues={{
         [TTS_SETTING_KEY]: config,
       }}
-      items={[tts]}
-      itemsType={'group'}
       onFinish={updateConfig}
-      variant={'borderless'}
       {...FORM_STYLE}
     />
   );

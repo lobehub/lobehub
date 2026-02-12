@@ -1,5 +1,5 @@
 import { Blocks } from 'lucide-react';
-import { Suspense, memo, useCallback, useState } from 'react';
+import { memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createSkillStoreModal } from '@/features/SkillStore';
@@ -37,6 +37,8 @@ const Tools = memo(() => {
       <Action
         icon={Blocks}
         loading={updating}
+        showTooltip={false}
+        title={t('tools.title')}
         popover={{
           content: <PopoverContent items={marketItems} onOpenStore={handleOpenStore} />,
           maxWidth: 320,
@@ -47,8 +49,6 @@ const Tools = memo(() => {
             },
           },
         }}
-        showTooltip={false}
-        title={t('tools.title')}
       />
     </Suspense>
   );

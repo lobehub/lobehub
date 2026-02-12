@@ -1,4 +1,4 @@
-import { ChatSemanticSearchChunk, FileSearchResult } from '@lobechat/types';
+import type { ChatSemanticSearchChunk, FileSearchResult } from '@lobechat/types';
 
 export const KnowledgeBaseIdentifier = 'lobe-knowledge-base';
 

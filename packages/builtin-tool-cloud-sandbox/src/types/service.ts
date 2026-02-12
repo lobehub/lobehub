@@ -37,12 +37,12 @@ export interface ISandboxService {
    * @param toolName - The name of the tool to call (e.g., 'runCommand', 'writeLocalFile')
    * @param params - The parameters for the tool
    */
-  callTool(toolName: string, params: Record<string, any>): Promise<SandboxCallToolResult>;
+  callTool: (toolName: string, params: Record<string, any>) => Promise<SandboxCallToolResult>;
 
   /**
    * Export a file from sandbox and upload to cloud storage
    * @param path - The file path in the sandbox
    * @param filename - The name of the file to export
    */
-  exportAndUploadFile(path: string, filename: string): Promise<SandboxExportFileResult>;
+  exportAndUploadFile: (path: string, filename: string) => Promise<SandboxExportFileResult>;
 }

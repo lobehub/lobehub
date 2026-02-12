@@ -33,12 +33,12 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
         }}
       >
         <Result
+          icon={<FluentEmoji emoji={'⌛'} size={96} type={'anim'} />}
           extra={
-            <Button onClick={handleBackToMarket} size={'large'} type="primary">
+            <Button size={'large'} type="primary" onClick={handleBackToMarket}>
               {t('groupAgents.status.backToMarket', { defaultValue: 'Back to Market' })}
             </Button>
           }
-          icon={<FluentEmoji emoji={'⌛'} size={96} type={'anim'} />}
           subTitle={
             <Text fontSize={16} type={'secondary'}>
               {t('groupAgents.status.unpublished.subtitle', {
@@ -78,12 +78,12 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
       }}
     >
       <Result
+        icon={statusIcon}
         extra={
-          <Button onClick={handleBackToMarket} type="primary">
+          <Button type="primary" onClick={handleBackToMarket}>
             {t('groupAgents.status.backToMarket', { defaultValue: 'Back to Market' })}
           </Button>
         }
-        icon={statusIcon}
         subTitle={
           <div style={{ color: '#666', lineHeight: 1.6 }}>
             <p>

@@ -23,6 +23,7 @@ const Header = memo(() => {
     <NavHeader
       className={styles.headerContainer}
       left={<StoreSearchBar />}
+      style={cssVariables}
       right={
         !isHome && (
           <>
@@ -31,7 +32,6 @@ const Header = memo(() => {
           </>
         )
       }
-      style={cssVariables}
       styles={{
         left: { flex: 1 },
       }}

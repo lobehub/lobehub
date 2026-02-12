@@ -3,14 +3,19 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { type ElectronAppAction, createElectronAppSlice } from './actions/app';
-import {
-  type NavigationHistoryAction,
-  createNavigationHistorySlice,
-} from './actions/navigationHistory';
-import { type ElectronSettingsAction, settingsSlice } from './actions/settings';
-import { type ElectronRemoteServerAction, remoteSyncSlice } from './actions/sync';
-import { type ElectronState, initialState } from './initialState';
+import { flattenActions } from '../utils/flattenActions';
+import { type ElectronAppAction } from './actions/app';
+import { createElectronAppSlice } from './actions/app';
+import { type NavigationHistoryAction } from './actions/navigationHistory';
+import { createNavigationHistorySlice } from './actions/navigationHistory';
+import { type RecentPagesAction } from './actions/recentPages';
+import { createRecentPagesSlice } from './actions/recentPages';
+import { type ElectronSettingsAction } from './actions/settings';
+import { settingsSlice } from './actions/settings';
+import { type ElectronRemoteServerAction } from './actions/sync';
+import { remoteSyncSlice } from './actions/sync';
+import { type ElectronState } from './initialState';
+import { initialState } from './initialState';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -20,18 +25,28 @@ export interface ElectronStore
     ElectronRemoteServerAction,
     ElectronAppAction,
     ElectronSettingsAction,
-    NavigationHistoryAction {
+    NavigationHistoryAction,
+    RecentPagesAction {
   /* empty */
 }
 
+type ElectronStoreAction = ElectronRemoteServerAction &
+  ElectronAppAction &
+  ElectronSettingsAction &
+  NavigationHistoryAction &
+  RecentPagesAction;
+
 const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = (
-  ...parameters
+  ...parameters: Parameters<StateCreator<ElectronStore, [['zustand/devtools', never]]>>
 ) => ({
   ...initialState,
-  ...remoteSyncSlice(...parameters),
-  ...createElectronAppSlice(...parameters),
-  ...settingsSlice(...parameters),
-  ...createNavigationHistorySlice(...parameters),
+  ...flattenActions<ElectronStoreAction>([
+    remoteSyncSlice(...parameters),
+    createElectronAppSlice(...parameters),
+    settingsSlice(...parameters),
+    createNavigationHistorySlice(...parameters),
+    createRecentPagesSlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

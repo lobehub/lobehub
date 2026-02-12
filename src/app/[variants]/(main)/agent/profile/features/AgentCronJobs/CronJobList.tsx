@@ -7,7 +7,7 @@ import { Calendar, Clock, Edit, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AgentCronJob } from '@/database/schemas/agentCronJob';
+import { type AgentCronJob } from '@/database/schemas/agentCronJob';
 
 import { useAgentCronJobs } from './hooks/useAgentCronJobs';
 
@@ -68,14 +68,14 @@ const CronJobList = memo<CronJobListProps>(({ cronJobs, loading, onEdit, onDelet
               <ActionIcon
                 icon={Edit}
                 key="edit"
-                onClick={() => onEdit(job.id)}
                 size="small"
                 title={t('agentCronJobs.editJob')}
+                onClick={() => onEdit(job.id)}
               />,
               <Popconfirm
                 key="delete"
-                onConfirm={() => onDelete(job.id)}
                 title={t('agentCronJobs.confirmDelete')}
+                onConfirm={() => onDelete(job.id)}
               >
                 <ActionIcon icon={Trash2} size="small" title={t('agentCronJobs.deleteJob')} />
               </Popconfirm>,
@@ -85,8 +85,8 @@ const CronJobList = memo<CronJobListProps>(({ cronJobs, loading, onEdit, onDelet
               avatar={
                 <Switch
                   checked={job.enabled || false}
-                  onChange={() => handleToggleEnabled(job)}
                   size="small"
+                  onChange={() => handleToggleEnabled(job)}
                 />
               }
               description={
@@ -98,8 +98,8 @@ const CronJobList = memo<CronJobListProps>(({ cronJobs, loading, onEdit, onDelet
                     {job.content}
                   </Paragraph>
 
-                  <Flexbox gap={8} horizontal style={{ marginTop: 4 }}>
-                    <Flexbox align="center" gap={4} horizontal>
+                  <Flexbox horizontal gap={8} style={{ marginTop: 4 }}>
+                    <Flexbox horizontal align="center" gap={4}>
                       <Icon icon={Clock} size={12} />
                       <Text style={{ fontSize: '11px' }}>{t(intervalText as any)}</Text>
                     </Flexbox>
@@ -111,7 +111,7 @@ const CronJobList = memo<CronJobListProps>(({ cronJobs, loading, onEdit, onDelet
                     )}
 
                     {job.lastExecutedAt && (
-                      <Flexbox align="center" gap={4} horizontal>
+                      <Flexbox horizontal align="center" gap={4}>
                         <Icon icon={Calendar} size={12} />
                         <Text style={{ fontSize: '11px' }}>
                           {dayjs(job.lastExecutedAt).format('MM/DD HH:mm')}
@@ -122,7 +122,7 @@ const CronJobList = memo<CronJobListProps>(({ cronJobs, loading, onEdit, onDelet
                 </Flexbox>
               }
               title={
-                <Flexbox align="center" gap={8} horizontal>
+                <Flexbox horizontal align="center" gap={8}>
                   <span>{job.name}</span>
                   <Badge status={statusInfo.status} text={t(statusInfo.text as any)} />
                 </Flexbox>

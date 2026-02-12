@@ -23,7 +23,7 @@ import urlJoin from 'url-join';
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 
 import { styles } from '../../styles';
-import type { ModelWithProviders } from '../../types';
+import { type ModelWithProviders } from '../../types';
 import { menuKey } from '../../utils';
 
 interface MultipleProvidersModelItemProps {
@@ -50,7 +50,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     const isActive = data.providers.some((p) => menuKey(p.id, data.model.id) === activeKey);
 
     return (
-      <DropdownMenuSubmenuRoot onOpenChange={setSubmenuOpen} open={submenuOpen}>
+      <DropdownMenuSubmenuRoot open={submenuOpen} onOpenChange={setSubmenuOpen}>
         <DropdownMenuSubmenuTrigger
           className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
           style={{ paddingBlock: 8, paddingInline: 8 }}
@@ -98,6 +98,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                         <ActionIcon
                           className={'settings-icon'}
                           icon={LucideBolt}
+                          size={'small'}
+                          title={t('ModelSwitchPanel.goToSettings')}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -108,8 +110,6 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                               navigate(url);
                             }
                           }}
-                          size={'small'}
-                          title={t('ModelSwitchPanel.goToSettings')}
                         />
                       </DropdownMenuItemExtra>
                     </DropdownMenuItem>

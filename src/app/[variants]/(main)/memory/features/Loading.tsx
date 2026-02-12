@@ -38,7 +38,7 @@ const Loading = memo<{ rows?: number; viewMode?: ViewMode }>(({ viewMode, rows =
         <Flexbox className={styles.card} key={i}>
           <Skeleton.Title active fontSize={16} lineHeight={1.4} width={'80%'} />
           <Skeleton.Paragraph active rows={5} style={{ marginBottom: 0 }} />
-          <Flexbox gap={8} horizontal>
+          <Flexbox horizontal gap={8}>
             <Skeleton.Button active size={'small'} style={{ height: 20, width: 60 }} />
             <Skeleton.Button active size={'small'} style={{ height: 20, width: 50 }} />
           </Flexbox>

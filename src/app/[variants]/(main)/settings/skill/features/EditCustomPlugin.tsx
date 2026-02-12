@@ -1,5 +1,6 @@
 import isEqual from 'fast-deep-equal';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
@@ -30,18 +31,18 @@ const EditCustomPlugin = memo<EditCustomPluginProps>(
       >
         <DevModal
           mode={'edit'}
+          open={open}
+          value={customPlugin}
+          onOpenChange={onOpenChange}
+          onValueChange={updateNewDevPlugin}
           onDelete={() => {
             uninstallCustomPlugin(identifier);
             onOpenChange(false);
           }}
-          onOpenChange={onOpenChange}
           onSave={async (devPlugin) => {
             await installCustomPlugin(devPlugin);
             onOpenChange(false);
           }}
-          onValueChange={updateNewDevPlugin}
-          open={open}
-          value={customPlugin}
         />
         {children}
       </div>

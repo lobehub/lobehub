@@ -1,4 +1,4 @@
-import { BuiltinToolManifest } from '@lobechat/types';
+import { type BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
 import { LocalSystemApiName, LocalSystemIdentifier } from './types';
@@ -7,7 +7,14 @@ export const LocalSystemManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'List files and folders in a specified directory. Returns file/folder names with metadata (size, modified time). Results are sorted by modified time (newest first) by default and limited to 100 items.',
+        'List files and folders in a specified directory. Input should be a path. Output is a JSON array of file/folder names.',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.listLocalFiles,
       parameters: {
         properties: {
@@ -40,6 +47,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Read the content of a specific file. Input should be the file path. Output is the file content as a string.',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.readLocalFile,
       parameters: {
         properties: {
@@ -63,6 +77,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Search for files within the workspace based on a query string and optional filter options. Input should include the search query and any filter options. Output is a JSON array of matching file paths.',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.searchLocalFiles,
       parameters: {
         properties: {
@@ -81,10 +102,6 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             format: 'date-time',
             type: 'string',
           },
-          directory: {
-            description: 'Limit the search to this specific directory path',
-            type: 'string',
-          },
           exclude: {
             description: 'Array of file or directory paths to exclude',
             items: {
@@ -101,6 +118,11 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           keywords: {
             description: 'The search keywords string (can include partial names or keywords)',
+            type: 'string',
+          },
+          scope: {
+            description:
+              'Working directory scope. Limits the search to this directory. Defaults to the current working directory.',
             type: 'string',
           },
           limit: {
@@ -139,7 +161,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Moves or renames multiple files/directories. Input is an array of objects, each containing an oldPath and a newPath.',
-      humanIntervention: 'required',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.moveLocalFiles,
       parameters: {
         properties: {
@@ -170,6 +198,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Rename a file or folder in its current location. Input should be the current full path and the new name.',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.renameLocalFile,
       parameters: {
         properties: {
@@ -189,7 +224,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Write content to a specific file. Input should be the file path and content. Overwrites existing file or creates a new one.',
-      humanIntervention: 'required',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.writeLocalFile,
       parameters: {
         properties: {
@@ -209,7 +250,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Perform exact string replacements in files. Must read the file first before editing.',
-      humanIntervention: 'required',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.editLocalFile,
       parameters: {
         properties: {
@@ -300,6 +347,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Search for content within files using regex patterns. Supports various output modes and filtering options.',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.grepContent,
       parameters: {
         properties: {
@@ -344,12 +398,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             enum: ['content', 'files_with_matches', 'count'],
             type: 'string',
           },
-          'path': {
-            description: 'File or directory to search in (defaults to current working directory)',
-            type: 'string',
-          },
           'pattern': {
             description: 'The regular expression pattern to search for',
+            type: 'string',
+          },
+          'scope': {
+            description:
+              'Working directory scope. Limits the search to this directory. Defaults to the current working directory.',
             type: 'string',
           },
           'type': {
@@ -364,15 +419,24 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       description:
         'Find files matching glob patterns. Supports standard glob syntax like "**/*.js" or "src/**/*.ts".',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'required',
+          type: 'pathScopeAudit',
+        },
+      },
       name: LocalSystemApiName.globLocalFiles,
       parameters: {
         properties: {
-          path: {
-            description: 'The directory to search in (defaults to current working directory)',
+          pattern: {
+            description:
+              'The glob pattern to match files against (e.g. "**/*.js", "src/**/*.ts"). Relative patterns are resolved against the scope.',
             type: 'string',
           },
-          pattern: {
-            description: 'The glob pattern to match files against (e.g. "**/*.js", "*.{ts,tsx}")',
+          scope: {
+            description:
+              'Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory.',
             type: 'string',
           },
         },
@@ -384,6 +448,9 @@ export const LocalSystemManifest: BuiltinToolManifest = {
   identifier: LocalSystemIdentifier,
   meta: {
     avatar: '📁',
+    description: 'Access and manage local files, run shell commands on your desktop',
+    readme:
+      'Access your local filesystem on desktop. Read, write, search, and organize files. Execute shell commands with background task support and grep content with regex patterns.',
     title: 'Local System',
   },
   systemRole: systemPrompt,

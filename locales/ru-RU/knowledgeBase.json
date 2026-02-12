@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "Файл успешно добавлен",
+  "addToKnowledgeBase.alreadyExists": "Этот файл уже находится в библиотеке",
   "addToKnowledgeBase.confirm": "Добавить",
   "addToKnowledgeBase.error": "Не удалось добавить файл в библиотеку",
   "addToKnowledgeBase.id.placeholder": "Пожалуйста, выберите библиотеку для добавления",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "Название библиотеки",
   "createNew.name.required": "Пожалуйста, введите название библиотеки",
   "createNew.title": "Создать новую библиотеку",
+  "moveToKnowledgeBase.error": "Не удалось переместить файл в библиотеку",
+  "moveToKnowledgeBase.success": "Файл успешно перемещён",
   "tab.evals": "Оценки",
   "tab.files": "Файлы",
   "tab.settings": "Настройки",

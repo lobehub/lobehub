@@ -69,7 +69,7 @@ const MemoryItem = memo<MemoryItemProps>(({ title, content, subContent, tags }) 
         </Text>
       )}
       {tags && tags.length > 0 && (
-        <Flexbox className={styles.tags} gap={4} horizontal wrap={'wrap'}>
+        <Flexbox horizontal className={styles.tags} gap={4} wrap={'wrap'}>
           {tags.map((tag, index) => (
             <Tag key={index} size={'small'}>
               {tag}

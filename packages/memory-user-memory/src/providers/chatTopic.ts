@@ -1,6 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { topics } from '@lobechat/database/schemas';
-import { OpenAIChatMessage } from '@lobechat/model-runtime';
+import type { OpenAIChatMessage } from '@lobechat/model-runtime';
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { u } from 'unist-builder';
@@ -8,7 +8,7 @@ import { toXml } from 'xast-util-to-xml';
 import type { Child } from 'xastscript';
 import { x } from 'xastscript';
 
-import {
+import type {
   BuiltContext,
   MemoryContextProvider,
   MemoryExtractionJob,

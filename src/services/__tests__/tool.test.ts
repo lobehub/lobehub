@@ -1,4 +1,4 @@
-import { Mock, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolService } from '../tool';
 import openAPIV3 from './openai/OpenAPI_V3.json';

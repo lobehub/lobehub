@@ -1,6 +1,7 @@
 // @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { loadFile } from '../src';
@@ -14,7 +15,7 @@ describe('loadFile Integration Tests', () => {
     const testPureTextFile = (fileName: string) => {
       it(`should load content from a ${fileName} file using filePath`, async () => {
         const filePath = getFixturePath(fileName);
-        const expectedContent = fs.readFileSync(filePath, 'utf-8');
+        const expectedContent = fs.readFileSync(filePath, 'utf8');
 
         // Pass filePath directly to loadFile
         const docs = await loadFile(filePath);

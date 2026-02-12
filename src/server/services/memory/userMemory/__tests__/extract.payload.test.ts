@@ -5,9 +5,8 @@ import { LayersEnum, MemorySourceType } from '@/types/userMemory';
 import {
   type MemoryExtractionNormalizedPayload,
   type MemoryExtractionPayloadInput,
-  buildWorkflowPayloadInput,
-  normalizeMemoryExtractionPayload,
 } from '../extract';
+import { buildWorkflowPayloadInput, normalizeMemoryExtractionPayload } from '../extract';
 
 describe('normalizeMemoryExtractionPayload', () => {
   it('normalizes sources, layers, ids, and dates with fallback baseUrl', () => {

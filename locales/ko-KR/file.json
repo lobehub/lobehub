@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "처리 중",
   "detail.data.embedding.success": "완료됨",
   "detail.data.embeddingStatus": "벡터화 상태",
+  "detail.data.noChunk": "청크 없음",
   "empty": "업로드된 파일/폴더가 없습니다",
   "header.actions.builtInBlockList.filtered": "{{total}}개 파일 중 {{ignored}}개 파일이 필터링되었습니다",
   "header.actions.connect": "연결 중...",

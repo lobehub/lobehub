@@ -22,8 +22,8 @@ export interface SupervisorTodoItem {
 
 export interface SupervisorDecisionResult {
   decisions: SupervisorDecisionList;
-  todoUpdated: boolean;
   todos: SupervisorTodoItem[];
+  todoUpdated: boolean;
 }
 
 export type SupervisorToolName =
@@ -250,14 +250,14 @@ export class GroupChatSupervisor {
         case 'create_todo': {
           if (context.scene === 'productive') {
             const changed = this.applyCreateTodo(todos, call.parameter);
-            todoUpdated = todoUpdated || changed;
+            if (changed) todoUpdated = true;
           }
           break;
         }
         case 'finish_todo': {
           if (context.scene === 'productive') {
             const changed = this.applyFinishTodo(todos, call.parameter);
-            todoUpdated = todoUpdated || changed;
+            if (changed) todoUpdated = true;
           }
           break;
         }
@@ -449,7 +449,7 @@ export class GroupChatSupervisor {
       if (!targetExists) target = undefined;
     }
 
-    if (context.allowDM === false) {
+    if (context.allowDM === false && target === 'user') {
       target = undefined;
     }
 
@@ -534,7 +534,7 @@ export class GroupChatSupervisor {
             typeof (item as any).content === 'string' &&
             typeof (item as any).finished === 'boolean',
         )
-        .map((item) => ({
+        .map((item: any) => ({
           assignee:
             typeof (item as any).assignee === 'string' && (item as any).assignee.trim()
               ? ((item as any).assignee as string).trim()

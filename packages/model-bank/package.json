@@ -27,6 +27,7 @@
     "./fireworksai": "./src/aiModels/fireworksai.ts",
     "./giteeai": "./src/aiModels/giteeai.ts",
     "./github": "./src/aiModels/github.ts",
+    "./githubCopilot": "./src/aiModels/githubCopilot.ts",
     "./google": "./src/aiModels/google.ts",
     "./groq": "./src/aiModels/groq.ts",
     "./lobehub": "./src/aiModels/lobehub/index.ts",

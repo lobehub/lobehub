@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "In progress",
   "detail.data.embedding.success": "Completed",
   "detail.data.embeddingStatus": "embedding",
+  "detail.data.noChunk": "No chunk",
   "empty": "No files or folders have been uploaded yet.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} files filtered (out of {{total}} total)",
   "header.actions.connect": "Connect...",

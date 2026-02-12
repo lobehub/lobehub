@@ -11,12 +11,12 @@ const Preview = memo<{ content: string }>(({ content }) => {
       style={{ padding: 16 }}
     >
       <Highlighter
+        wrap
         language={'json'}
+        variant={'borderless'}
         style={{
           fontSize: 12,
         }}
-        variant={'borderless'}
-        wrap
       >
         {content}
       </Highlighter>

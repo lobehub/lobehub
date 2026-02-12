@@ -1,9 +1,11 @@
 'use client';
 
-import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
+import { type DraggablePanelProps } from '@lobehub/ui';
+import { DraggablePanel, DraggablePanelContainer } from '@lobehub/ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { type PropsWithChildren, memo, useEffect, useState } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -52,19 +54,19 @@ const ImageTopicPanel = memo<PropsWithChildren>(({ children }) => {
 
   return (
     <DraggablePanel
-      classNames={{
-        content: styles.content,
-        handle: styles.handle,
-      }}
       defaultSize={{ width: tmpWidth }}
       expand={showImageTopicPanel}
       maxWidth={320}
       minWidth={80}
       mode={md ? 'fixed' : 'float'}
-      onExpandChange={handleExpand}
-      onSizeChange={handleSizeChange}
       placement="right"
       size={{ height: '100%', width: imageTopicPanelWidth }}
+      classNames={{
+        content: styles.content,
+        handle: styles.handle,
+      }}
+      onExpandChange={handleExpand}
+      onSizeChange={handleSizeChange}
     >
       <DraggablePanelContainer
         style={{

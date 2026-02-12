@@ -65,9 +65,9 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = GroupAgentNavKey
   return mobile ? (
     nav
   ) : (
-    <Flexbox align={'center'} className={styles.nav} horizontal justify={'space-between'}>
+    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
       {nav}
-      <Flexbox gap={12} horizontal>
+      <Flexbox horizontal gap={12}>
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('groupAgents.details.nav.needHelp', { defaultValue: 'Need help?' })}
         </a>

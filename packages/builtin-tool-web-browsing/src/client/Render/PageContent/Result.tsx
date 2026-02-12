@@ -1,7 +1,7 @@
 'use client';
 
-import { type CrawlErrorResult, type CrawlSuccessResult } from '@lobechat/web-crawler';
-import { ActionIcon, Alert, Block, Flexbox, Text } from '@lobehub/ui';
+import type { CrawlErrorResult, CrawlSuccessResult } from '@lobechat/web-crawler';
+import { ActionIcon, Alert, Block, Flexbox, Text, stopPropagation } from '@lobehub/ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
@@ -80,18 +80,18 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
         />
         <div>
           <Descriptions
+            column={1}
+            size="small"
             classNames={{
               content: styles.footerText,
               label: styles.footerText,
             }}
-            column={1}
             items={[
               {
                 children: crawler,
                 label: t('search.crawPages.meta.crawler'),
               },
             ]}
-            size="small"
           />
         </div>
       </Flexbox>
@@ -102,19 +102,19 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
 
   return (
     <Block
-      className={styles.container}
       clickable
+      className={styles.container}
       justify={'space-between'}
+      variant={'outlined'}
       onClick={() => {
         openToolUI(messageId, WebBrowsingManifest.identifier);
         togglePageContent(originalUrl);
       }}
-      variant={'outlined'}
     >
       <Flexbox gap={8} paddingBlock={8} paddingInline={12}>
-        <Flexbox align={'center'} className={styles.titleRow} horizontal justify={'space-between'}>
+        <Flexbox horizontal align={'center'} className={styles.titleRow} justify={'space-between'}>
           <Text ellipsis>{title || originalUrl}</Text>
-          <Link href={url} onClick={(e) => e.stopPropagation()} target={'_blank'}>
+          <Link href={url} target={'_blank'} onClick={stopPropagation}>
             <ActionIcon icon={ExternalLink} size={'small'} />
           </Link>
         </Flexbox>
@@ -124,11 +124,12 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
       </Flexbox>
       <Flexbox className={styles.footer}>
         <Descriptions
+          column={2}
+          size="small"
           classNames={{
             content: styles.footerText,
             label: styles.footerText,
           }}
-          column={2}
           items={[
             {
               children: result.content?.length,
@@ -139,7 +140,6 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
               label: t('search.crawPages.meta.crawler'),
             },
           ]}
-          size="small"
         />
       </Flexbox>
     </Block>

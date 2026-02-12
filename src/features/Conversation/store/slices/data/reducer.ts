@@ -1,9 +1,9 @@
-import type {
-  ChatMessageExtra,
-  ChatToolPayload,
-  CreateMessageParams,
-  MessagePluginItem,
-  UIChatMessage,
+import {
+  type ChatMessageExtra,
+  type ChatToolPayload,
+  type CreateMessageParams,
+  type MessagePluginItem,
+  type UIChatMessage,
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';

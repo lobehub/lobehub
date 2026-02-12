@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ElectronState, defaultProxySettings, initialState } from '@/store/electron/initialState';
+import { type ElectronState } from '@/store/electron/initialState';
+import { initialState } from '@/store/electron/initialState';
 import { merge } from '@/utils/merge';
 
 import { desktopStateSelectors } from '../desktopState';

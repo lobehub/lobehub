@@ -90,7 +90,7 @@ const SessionItem = memo<SessionItemProps>(({ id }) => {
   const addon = useMemo(
     () =>
       !showModel ? undefined : (
-        <Flexbox gap={4} horizontal style={{ flexWrap: 'wrap' }}>
+        <Flexbox horizontal gap={4} style={{ flexWrap: 'wrap' }}>
           <ModelTag model={model} />
         </Flexbox>
       ),
@@ -128,11 +128,10 @@ const SessionItem = memo<SessionItemProps>(({ id }) => {
         draggable={isDesktop}
         key={id}
         loading={loading}
-        onDoubleClick={handleDoubleClick}
-        onDragEnd={handleDragEnd}
-        onDragStart={handleDragStart}
         pin={pin}
         showAction={open}
+        title={title}
+        type={sessionType}
         styles={{
           container: {
             gap: 12,
@@ -142,13 +141,14 @@ const SessionItem = memo<SessionItemProps>(({ id }) => {
             maskImage: `linear-gradient(90deg, #000 90%, transparent)`,
           },
         }}
-        title={title}
-        type={sessionType}
+        onDoubleClick={handleDoubleClick}
+        onDragEnd={handleDragEnd}
+        onDragStart={handleDragStart}
       />
       <CreateGroupModal
         id={id}
-        onCancel={() => setCreateGroupModalOpen(false)}
         open={createGroupModalOpen}
+        onCancel={() => setCreateGroupModalOpen(false)}
       />
     </>
   );

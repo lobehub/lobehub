@@ -7,7 +7,8 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
-import NavItem, { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePathname } from '@/libs/router/navigation';
 import { DiscoverTab } from '@/types/discover';
 
@@ -74,8 +75,8 @@ const Nav = memo(() => {
             active={tab.startsWith(item.key)}
             icon={item.icon}
             key={item.key}
-            onClick={item.onClick}
             title={item.title}
+            onClick={item.onClick}
           />
         );
         if (!item.url) return content;
@@ -83,6 +84,7 @@ const Nav = memo(() => {
         return (
           <Link
             key={item.key}
+            to={item.url}
             onClick={(e) => {
               e.preventDefault();
               item?.onClick?.();
@@ -90,7 +92,6 @@ const Nav = memo(() => {
                 navigate(item.url);
               }
             }}
-            to={item.url}
           >
             <NavItem active={tab.startsWith(item.key)} icon={item.icon} title={item.title} />
           </Link>

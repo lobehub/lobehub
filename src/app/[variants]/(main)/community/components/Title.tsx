@@ -1,9 +1,11 @@
 'use client';
 
-import { Button, Flexbox, type FlexboxProps, Icon, Tag } from '@lobehub/ui';
-import { createStaticStyles, useResponsive , responsive } from 'antd-style';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { createStaticStyles, responsive, useResponsive } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { SCROLL_PARENT_ID } from '../features/const';
@@ -63,9 +65,9 @@ const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
   };
 
   return (
-    <Flexbox align={'center'} gap={16} horizontal justify={'space-between'} width={'100%'}>
+    <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} width={'100%'}>
       {tag ? (
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {title}
           <Tag className={styles.tag}>{tag}</Tag>
         </Flexbox>
@@ -74,9 +76,9 @@ const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
       )}
       {moreLink && (
         <Link
-          onClick={handleMoreClick}
           target={moreLink.startsWith('http') ? '_blank' : undefined}
           to={moreLink}
+          onClick={handleMoreClick}
         >
           <Button className={styles.more} style={{ paddingInline: 6 }} type={'text'}>
             <span>{more}</span>

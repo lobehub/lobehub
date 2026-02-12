@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeModelScopeAI, ModelScopeModelCard, params } from './index';
+import type { ModelScopeModelCard } from './index';
+import { LobeModelScopeAI, params } from './index';
 
 const provider = ModelProvider.ModelScope;
 const defaultBaseURL = 'https://api-inference.modelscope.cn/v1';

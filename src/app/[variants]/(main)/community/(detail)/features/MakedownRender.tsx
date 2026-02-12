@@ -2,7 +2,8 @@
 
 import { Center, Empty, Markdown } from '@lobehub/ui';
 import { FileText } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { H1, H2, H3, H4, H5 } from './Toc/Heading';
@@ -24,6 +25,8 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
   return (
     <Markdown
       allowHtml
+      enableImageGallery={false}
+      enableLatex={false}
       components={{
         a: ({ href, ...rest }: { children?: ReactNode; href?: string }) => {
           if (href && href.startsWith('http'))
@@ -40,13 +43,10 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
           if (typeof src !== 'string') return null;
           if (src.includes('glama.ai')) return null;
 
-          // eslint-disable-next-line @next/next/no-img-element
           if (src.startsWith('http')) return <img src={src} {...rest} />;
           return null;
         },
       }}
-      enableImageGallery={false}
-      enableLatex={false}
     >
       {children}
     </Markdown>

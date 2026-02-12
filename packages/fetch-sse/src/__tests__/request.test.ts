@@ -498,9 +498,9 @@ describe('getRequestBody', () => {
       const buffer = new ArrayBuffer(8);
       const view = new Uint8Array(buffer);
       // Set specific binary pattern
-      view[0] = 0xff;
+      view[0] = 0xFF;
       view[1] = 0x00;
-      view[2] = 0xaa;
+      view[2] = 0xAA;
       view[3] = 0x55;
       view[4] = 0x12;
       view[5] = 0x34;
@@ -512,9 +512,9 @@ describe('getRequestBody', () => {
 
       // Assert
       const resultView = new Uint8Array(result as ArrayBuffer);
-      expect(resultView[0]).toBe(0xff);
+      expect(resultView[0]).toBe(0xFF);
       expect(resultView[1]).toBe(0x00);
-      expect(resultView[2]).toBe(0xaa);
+      expect(resultView[2]).toBe(0xAA);
       expect(resultView[3]).toBe(0x55);
       expect(resultView[4]).toBe(0x12);
       expect(resultView[5]).toBe(0x34);
@@ -561,12 +561,12 @@ describe('getRequestBody', () => {
       const imageData = new Uint8Array([
         0x89,
         0x50,
-        0x4e,
+        0x4E,
         0x47,
-        0x0d,
-        0x0a,
-        0x1a,
-        0x0a, // PNG header
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A, // PNG header
       ]);
       const imageBlob = new Blob([imageData], { type: 'image/png' });
 
@@ -578,14 +578,14 @@ describe('getRequestBody', () => {
       const resultView = new Uint8Array(result as ArrayBuffer);
       expect(resultView[0]).toBe(0x89);
       expect(resultView[1]).toBe(0x50);
-      expect(resultView[2]).toBe(0x4e);
+      expect(resultView[2]).toBe(0x4E);
       expect(resultView[3]).toBe(0x47);
     });
 
     it('should handle binary protocol buffer data', async () => {
       // Arrange
       const protobufData = new Uint8Array([
-        0x08, 0x96, 0x01, 0x12, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f,
+        0x08, 0x96, 0x01, 0x12, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F,
       ]);
       const buffer = protobufData.buffer;
 

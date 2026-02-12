@@ -1,5 +1,5 @@
 import { BotMessageSquareIcon } from 'lucide-react';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { EdgeConfig } from '@lobechat/edge-config';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AssistantStore } from './index';
 
@@ -188,7 +188,7 @@ describe('AssistantStore', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('something else'));
     const store = new AssistantStore();
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
+     
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(store.getAgentIndex()).rejects.toThrow('something else');

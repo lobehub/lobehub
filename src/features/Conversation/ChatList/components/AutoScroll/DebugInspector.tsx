@@ -4,12 +4,7 @@ import { memo } from 'react';
 import { createPortal } from 'react-dom';
 
 import { messageStateSelectors, useConversationStore, virtuaListSelectors } from '../../../store';
-
-/**
- * 判断是否在底部的阈值（单位：px）
- * 当距离底部小于等于此值时，认为在底部
- */
-export const AT_BOTTOM_THRESHOLD = 300;
+import { AT_BOTTOM_THRESHOLD } from './const';
 
 /**
  * 是否开启调试面板

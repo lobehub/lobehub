@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "En proceso",
   "detail.data.embedding.success": "Completado",
   "detail.data.embeddingStatus": "incrustación",
+  "detail.data.noChunk": "Sin fragmento",
   "empty": "Aún no se han subido archivos ni carpetas.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} archivos filtrados (de un total de {{total}})",
   "header.actions.connect": "Conectar...",

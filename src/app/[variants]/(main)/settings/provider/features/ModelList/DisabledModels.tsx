@@ -1,8 +1,8 @@
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Text, TooltipGroup } from '@lobehub/ui';
-import type { ItemType } from 'antd/es/menu/interface';
+import { type ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon, LucideCheck } from 'lucide-react';
-import type { AiProviderModelListItem } from 'model-bank';
+import { type AiProviderModelListItem } from 'model-bank';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWRInfinite from 'swr/infinite';
@@ -235,7 +235,7 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
   return (
     shouldRenderSection && (
       <Flexbox>
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Text style={{ fontSize: 12, marginTop: 8 }} type={'secondary'}>
             {t('providerModels.list.disabled')}
           </Text>
@@ -303,7 +303,7 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
           ))}
         </TooltipGroup>
 
-        <Flexbox align="center" horizontal justify="center" paddingBlock={8}>
+        <Flexbox horizontal align="center" justify="center" paddingBlock={8}>
           <div ref={loadMoreRef} style={{ height: 1, width: '0' }} />
           {(isInitialLoading || isLoadingMore) && (
             <Text style={{ fontSize: 12, marginTop: 4 }} type={'secondary'}>

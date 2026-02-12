@@ -1,4 +1,5 @@
-import { Center, Empty, type EmptyProps } from '@lobehub/ui';
+import { type EmptyProps } from '@lobehub/ui';
+import { Center, Empty } from '@lobehub/ui';
 import { MessageSquareText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,10 +15,10 @@ const TopicEmpty = memo<TopicEmptyProps>(({ search, ...rest }) => {
     <Center height="100%" style={{ minHeight: '50vh' }} width="100%">
       <Empty
         description={search ? t('searchResultEmpty') : t('guide.desc')}
+        icon={MessageSquareText}
         descriptionProps={{
           fontSize: 14,
         }}
-        icon={MessageSquareText}
         style={{
           maxWidth: 400,
         }}

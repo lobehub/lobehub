@@ -8,7 +8,7 @@ import {
   useResourceManagerFetchKnowledgeItems,
   useResourceManagerStore,
 } from '@/app/[variants]/(main)/resource/features/store';
-import type { MultiSelectActionType } from '@/app/[variants]/(main)/resource/features/store/action';
+import { type MultiSelectActionType } from '@/app/[variants]/(main)/resource/features/store/action';
 import { selectors, sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 import { useAddFilesToKnowledgeBaseModal } from '@/features/LibraryModal';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
@@ -108,7 +108,7 @@ export const useResourceExplorer = ({
         return;
       }
 
-      if (type === 'addToOtherKnowledgeBase') {
+      if (type === 'moveToOtherKnowledgeBase') {
         openAddModal({
           fileIds: selectFileIds,
           knowledgeBaseId: libraryId,

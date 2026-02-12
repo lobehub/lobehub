@@ -1,21 +1,17 @@
-import { APP_WINDOW_MIN_SIZE, TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
-import {
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-  session as electronSession,
-  ipcMain,
-  screen,
-} from 'electron';
 import console from 'node:console';
 import { join } from 'node:path';
+
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
+import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type { BrowserWindowConstructorOptions } from 'electron';
+import { BrowserWindow, ipcMain, screen, session as electronSession, shell } from 'electron';
 
 import { preloadDir, resourcesDir } from '@/const/dir';
 import { isMac } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
-import { setResponseHeader } from '@/utils/http-headers';
+import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
@@ -120,8 +116,6 @@ export default class Browser {
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
 
-
-
     return new BrowserWindow({
       ...rest,
       autoHideMenuBar: true,
@@ -139,6 +133,7 @@ export default class Browser {
         contextIsolation: true,
         preload: join(preloadDir, 'index.js'),
         sandbox: false,
+        webviewTag: true,
       },
       width: resolvedState.width,
       x: resolvedState.x,
@@ -168,6 +163,9 @@ export default class Browser {
 
     // Setup event listeners
     this.setupEventListeners(browserWindow);
+
+    // Setup external link handler (prevents opening new windows in renderer)
+    this.setupWindowOpenHandler(browserWindow);
   }
 
   private initiateContentLoading(): void {
@@ -190,6 +188,26 @@ export default class Browser {
     this.setupFocusListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
     this.setupContextMenu(browserWindow);
+  }
+
+  /**
+   * Setup window open handler to intercept external links
+   * Prevents opening new windows in renderer and uses system browser instead
+   */
+  private setupWindowOpenHandler(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up window open handler for external links`);
+
+    browserWindow.webContents.setWindowOpenHandler(({ url }) => {
+      logger.info(`[${this.identifier}] Intercepted window open for URL: ${url}`);
+
+      // Open external URL in system browser
+      shell.openExternal(url).catch((error) => {
+        logger.error(`[${this.identifier}] Failed to open external URL: ${url}`, error);
+      });
+
+      // Deny creating new window in renderer
+      return { action: 'deny' };
+    });
   }
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
@@ -480,6 +498,8 @@ export default class Browser {
         delete requestHeaders['Origin'];
         logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
+
+      appendVercelCookie(requestHeaders);
 
       callback({ requestHeaders });
     });

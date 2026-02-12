@@ -1,6 +1,7 @@
 import { NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { fetch, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 
+import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
 import { ProxyDispatcherManager } from './dispatcher';
@@ -41,12 +42,9 @@ export class ProxyConnectionTester {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'LobeChat-Desktop/1.0.0',
-        },
-        signal: controller.signal,
-      });
+      const headers: Record<string, string> = { 'User-Agent': 'LobeChat-Desktop/1.0.0' };
+      appendVercelCookie(headers);
+      const response = await fetch(url, { headers, signal: controller.signal });
 
       clearTimeout(timeoutId);
 
@@ -113,11 +111,11 @@ export class ProxyConnectionTester {
       setGlobalDispatcher(agent);
 
       try {
+        const testHeaders: Record<string, string> = { 'User-Agent': 'LobeChat-Desktop/1.0.0' };
+        appendVercelCookie(testHeaders);
         const response = await fetch(testUrl, {
           dispatcher: agent,
-          headers: {
-            'User-Agent': 'LobeChat-Desktop/1.0.0',
-          },
+          headers: testHeaders,
           signal: controller.signal,
         });
 

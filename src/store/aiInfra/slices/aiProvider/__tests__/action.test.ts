@@ -1,5 +1,5 @@
 import * as runtimeModule from '@lobechat/model-runtime';
-import type { AIImageModelCard, EnabledAiModel, ModelParamsSchema } from 'model-bank';
+import { type AIImageModelCard, type EnabledAiModel, type ModelParamsSchema } from 'model-bank';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {

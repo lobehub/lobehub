@@ -1,5 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import type { SegmentedProps } from '@lobehub/ui';
+import { type SegmentedProps } from '@lobehub/ui';
 import { snapdom } from '@zumer/snapdom';
 import dayjs from 'dayjs';
 import { useCallback, useState } from 'react';

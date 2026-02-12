@@ -29,19 +29,19 @@ describe('BuiltinType', () => {
   });
 
   it('should not render anything if identifier is unknown', () => {
-    const { container } = render(<BuiltinType content="{}" messageId="123" identifier="unknown" />);
+    const { container } = render(<BuiltinType content="{}" identifier="unknown" messageId="123" />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('should render the correct renderer for web browsing', () => {
     const content = '{"query":"test"}';
-    render(<BuiltinType content={content} messageId="123" identifier="lobe-web-browsing" />);
+    render(<BuiltinType content={content} identifier="lobe-web-browsing" messageId="123" />);
     expect(screen.getByText(`WebBrowsingRender: ${content}`)).toBeInTheDocument();
   });
 
   it('should render the correct renderer for code interpreter', () => {
     const content = '{"code":"print(1)"}';
-    render(<BuiltinType content={content} messageId="123" identifier="lobe-code-interpreter" />);
+    render(<BuiltinType content={content} identifier="lobe-code-interpreter" messageId="123" />);
     expect(screen.getByText(`CodeInterpreterRender: ${content}`)).toBeInTheDocument();
   });
 
@@ -53,14 +53,14 @@ describe('BuiltinType', () => {
 
     render(
       <BuiltinType
-        content={content}
-        messageId="msg-123"
-        toolCallId="tool-call-123"
-        identifier="lobe-web-browsing"
-        arguments={args}
-        pluginState={pluginState}
-        pluginError={pluginError}
         apiName="testApi"
+        arguments={args}
+        content={content}
+        identifier="lobe-web-browsing"
+        messageId="msg-123"
+        pluginError={pluginError}
+        pluginState={pluginState}
+        toolCallId="tool-call-123"
       />,
     );
 

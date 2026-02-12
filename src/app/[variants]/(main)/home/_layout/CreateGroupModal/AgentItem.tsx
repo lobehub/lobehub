@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Flexbox, Text , Checkbox } from '@lobehub/ui';
+import { Avatar, Checkbox, Flexbox, stopPropagation, Text } from '@lobehub/ui';
 import { useHover } from 'ahooks';
 import { createStaticStyles } from 'antd-style';
 import { X } from 'lucide-react';
@@ -92,26 +92,22 @@ const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, sho
   return (
     <div
       className={styles.item}
-      onClick={showCheckbox ? handleClick : undefined}
       ref={ref}
       style={{ cursor: showCheckbox ? 'pointer' : 'default' }}
+      onClick={showCheckbox ? handleClick : undefined}
     >
-      <Flexbox align="center" gap={8} horizontal width="100%">
+      <Flexbox horizontal align="center" gap={8} width="100%">
         {showCheckbox && (
-          <Checkbox
-            checked={isSelected}
-            onChange={handleClick}
-            onClick={(e) => e.stopPropagation()}
-          />
+          <Checkbox checked={isSelected} onChange={handleClick} onClick={stopPropagation} />
         )}
         <Avatar
+          emojiScaleWithBackground
           animation={isHovering}
           avatar={avatar}
           background={avatarBackground}
-          emojiScaleWithBackground
           size={28}
         />
-        <Text className={styles.title} ellipsis>
+        <Text ellipsis className={styles.title}>
           {title}
         </Text>
         {showRemove && (

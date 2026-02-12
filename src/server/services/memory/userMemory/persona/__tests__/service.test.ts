@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,28 +8,20 @@ import { UserPersonaModel } from '@/database/models/userMemory/persona';
 
 import { UserPersonaService } from '../service';
 
-// Use var to avoid TDZ with vi.mock hoisting
-var aiInfraMocks:
-  | undefined
-  | {
-      getAiProviderRuntimeState: ReturnType<typeof vi.fn>;
-      tryMatchingModelFrom: ReturnType<typeof vi.fn>;
-      tryMatchingProviderFrom: ReturnType<typeof vi.fn>;
-    };
+// Use vi.hoisted to ensure mocks are available when vi.mock factory runs
+const aiInfraMocks = vi.hoisted(() => ({
+  getAiProviderRuntimeState: vi.fn(),
+  tryMatchingModelFrom: vi.fn(),
+  tryMatchingProviderFrom: vi.fn(),
+}));
 
 vi.mock('@/database/repositories/aiInfra', () => {
-  aiInfraMocks = {
-    getAiProviderRuntimeState: vi.fn(),
-    tryMatchingModelFrom: vi.fn(),
-    tryMatchingProviderFrom: vi.fn(),
-  };
-
   const AiInfraRepos = vi.fn().mockImplementation(() => ({
-    getAiProviderRuntimeState: aiInfraMocks!.getAiProviderRuntimeState,
+    getAiProviderRuntimeState: aiInfraMocks.getAiProviderRuntimeState,
   })) as unknown as typeof import('@/database/repositories/aiInfra').AiInfraRepos;
 
-  (AiInfraRepos as any).tryMatchingModelFrom = aiInfraMocks!.tryMatchingModelFrom;
-  (AiInfraRepos as any).tryMatchingProviderFrom = aiInfraMocks!.tryMatchingProviderFrom;
+  (AiInfraRepos as any).tryMatchingModelFrom = aiInfraMocks.tryMatchingModelFrom;
+  (AiInfraRepos as any).tryMatchingProviderFrom = aiInfraMocks.tryMatchingProviderFrom;
 
   return { AiInfraRepos };
 });
@@ -84,12 +76,12 @@ const userId = 'user-persona-service';
 
 beforeEach(async () => {
   toolCall.mockClear();
-  aiInfraMocks!.getAiProviderRuntimeState.mockReset();
-  aiInfraMocks!.tryMatchingModelFrom.mockReset();
-  aiInfraMocks!.tryMatchingProviderFrom.mockReset();
-  aiInfraMocks!.tryMatchingModelFrom.mockResolvedValue('openai');
-  aiInfraMocks!.tryMatchingProviderFrom.mockResolvedValue('openai');
-  aiInfraMocks!.getAiProviderRuntimeState.mockResolvedValue({
+  aiInfraMocks.getAiProviderRuntimeState.mockReset();
+  aiInfraMocks.tryMatchingModelFrom.mockReset();
+  aiInfraMocks.tryMatchingProviderFrom.mockReset();
+  aiInfraMocks.tryMatchingModelFrom.mockResolvedValue('openai');
+  aiInfraMocks.tryMatchingProviderFrom.mockResolvedValue('openai');
+  aiInfraMocks.getAiProviderRuntimeState.mockResolvedValue({
     enabledAiModels: [
       { abilities: {}, enabled: true, id: 'gpt-mock', providerId: 'openai', type: 'chat' },
     ],

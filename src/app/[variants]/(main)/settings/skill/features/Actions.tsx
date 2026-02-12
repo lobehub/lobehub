@@ -1,4 +1,4 @@
-import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { App, Space } from 'antd';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -68,18 +68,19 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   return (
     <>
-      <Flexbox align={'center'} gap={8} horizontal onClick={(e) => e.stopPropagation()}>
+      <Flexbox horizontal align={'center'} gap={8} onClick={stopPropagation}>
         {installed ? (
           <Space.Compact>
             {showConfigureButton &&
               (isCustomPlugin ? (
-                <EditCustomPlugin identifier={identifier} onOpenChange={setModal} open={showModal}>
+                <EditCustomPlugin identifier={identifier} open={showModal} onOpenChange={setModal}>
                   {configureButton}
                 </EditCustomPlugin>
               ) : (
                 configureButton
               ))}
             <DropdownMenu
+              placement="bottomRight"
               items={[
                 {
                   danger: true,
@@ -103,7 +104,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                   },
                 },
               ]}
-              placement="bottomRight"
             >
               <Button icon={MoreHorizontalIcon} loading={installing} />
             </DropdownMenu>
@@ -111,6 +111,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         ) : (
           <Button
             loading={installing}
+            size={mobile ? 'small' : undefined}
             onClick={async () => {
               if (isMCP) {
                 await installMCPPlugin(identifier);
@@ -120,7 +121,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                 await togglePlugin(identifier);
               }
             }}
-            size={mobile ? 'small' : undefined}
           >
             {t('store.actions.install')}
           </Button>
@@ -128,17 +128,17 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
       </Flexbox>
       <PluginDetailModal
         id={identifier}
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
         open={settingsOpen}
         schema={plugin?.settings}
         tab="settings"
+        onClose={() => {
+          setSettingsOpen(false);
+        }}
       />
       <McpSettingsModal
         identifier={identifier}
-        onClose={() => setMcpSettingsOpen(false)}
         open={mcpSettingsOpen}
+        onClose={() => setMcpSettingsOpen(false)}
       />
     </>
   );

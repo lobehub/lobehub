@@ -1,5 +1,6 @@
 export default {
   'addToKnowledgeBase.addSuccess': 'File added successfully',
+  'addToKnowledgeBase.alreadyExists': 'This file is already in the library',
   'addToKnowledgeBase.confirm': 'Add',
   'addToKnowledgeBase.error': 'Failed to add file to Library',
   'addToKnowledgeBase.id.placeholder': 'Please select a library to add to',
@@ -7,6 +8,8 @@ export default {
   'addToKnowledgeBase.id.title': 'Target Library',
   'addToKnowledgeBase.title': 'Add to Library',
   'addToKnowledgeBase.totalFiles': '{{count}} files selected',
+  'moveToKnowledgeBase.error': 'Failed to move file to Library',
+  'moveToKnowledgeBase.success': 'File moved successfully',
   'createNew.confirm': 'Create New',
   'createNew.description.placeholder': 'Library description (optional)',
   'createNew.formTitle': 'Basic Information',

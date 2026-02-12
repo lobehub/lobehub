@@ -1,4 +1,4 @@
-import type { ComfyUIKeyVault } from '@lobechat/types';
+import { type ComfyUIKeyVault } from '@lobechat/types';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -7,7 +7,7 @@ import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClie
 import { ImageService } from '@/server/services/comfyui/core/imageService';
 import { ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
 import { WorkflowBuilderService } from '@/server/services/comfyui/core/workflowBuilderService';
-import type { WorkflowContext } from '@/server/services/comfyui/types';
+import { type WorkflowContext } from '@/server/services/comfyui/types';
 
 // ComfyUI params validation - only validate required fields
 // Other RuntimeImageGenParams fields are passed through automatically

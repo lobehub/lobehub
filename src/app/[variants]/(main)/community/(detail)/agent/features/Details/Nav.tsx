@@ -68,9 +68,9 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
           label:
             capabilitiesCount > 1 ? (
               <Flexbox
+                horizontal
                 align={'center'}
                 gap={6}
-                horizontal
                 style={{
                   display: 'inline-flex',
                 }}
@@ -100,9 +100,9 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
   return mobile ? (
     nav
   ) : (
-    <Flexbox align={'center'} className={styles.nav} horizontal justify={'space-between'}>
+    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
       <div className={styles.tabsWrapper}>{nav}</div>
-      <Flexbox flex="none" gap={12} horizontal style={{ marginInlineStart: 12 }}>
+      <Flexbox horizontal flex="none" gap={12} style={{ marginInlineStart: 12 }}>
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.needHelp')}
         </a>

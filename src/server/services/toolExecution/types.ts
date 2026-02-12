@@ -28,5 +28,8 @@ export interface ToolExecutionResultResponse extends ToolExecutionResult {
 }
 
 export interface IToolExecutor {
-  execute(payload: ChatToolPayload, context: ToolExecutionContext): Promise<ToolExecutionResult>;
+  execute: (
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+  ) => Promise<ToolExecutionResult>;
 }

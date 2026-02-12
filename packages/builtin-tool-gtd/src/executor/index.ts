@@ -1,23 +1,24 @@
 import { formatTodoStateSummary } from '@lobechat/prompts';
-import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 import { notebookService } from '@/services/notebook';
 import { useNotebookStore } from '@/store/notebook';
 
 import { GTDIdentifier } from '../manifest';
-import {
-  type ClearTodosParams,
-  type CreatePlanParams,
-  type CreateTodosParams,
-  type ExecTaskParams,
-  type ExecTasksParams,
-  GTDApiName,
-  type Plan,
-  type TodoItem,
-  type TodoState,
-  type UpdatePlanParams,
-  type UpdateTodosParams,
+import type {
+  ClearTodosParams,
+  CreatePlanParams,
+  CreateTodosParams,
+  ExecTaskParams,
+  ExecTasksParams,
+  Plan,
+  TodoItem,
+  TodoState,
+  UpdatePlanParams,
+  UpdateTodosParams,
 } from '../types';
+import { GTDApiName } from '../types';
 import { getTodosFromContext } from './helper';
 
 /**
@@ -133,7 +134,7 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
     }
 
     const existingTodos = getTodosFromContext(ctx);
-    let updatedTodos = [...existingTodos];
+    const updatedTodos = [...existingTodos];
     const results: string[] = [];
 
     for (const op of operations) {

@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "W trakcie",
   "detail.data.embedding.success": "Zakończono",
   "detail.data.embeddingStatus": "osadzanie",
+  "detail.data.noChunk": "Brak fragmentu",
   "empty": "Nie przesłano jeszcze żadnych plików ani folderów.",
   "header.actions.builtInBlockList.filtered": "Przefiltrowano {{ignored}} plików (z {{total}} ogółem)",
   "header.actions.connect": "Połącz...",

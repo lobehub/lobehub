@@ -3,11 +3,12 @@
 import { Button, Modal } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Upload, X } from 'lucide-react';
-import Image from '@/libs/next/Image';
-import React, { type FC, memo, useEffect, useRef, useState } from 'react';
+import { type FC } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUploadFilesValidation } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useUploadFilesValidation';
+import Image from '@/libs/next/Image';
 
 // ======== Types ======== //
 
@@ -327,11 +328,11 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
           onClick={() => setSelectedIndex(index)}
         >
           <Image
-            alt={`Image ${index + 1}`}
             fill
+            unoptimized
+            alt={`Image ${index + 1}`}
             src={displayUrl}
             style={{ objectFit: 'cover' }}
-            unoptimized
           />
 
           {/* 新文件标识 */}
@@ -357,22 +358,22 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
         centered
         className={styles.modal}
         footer={null}
-        onCancel={onClose}
         open={open}
         title={t('MultiImagesUpload.modal.title', { count: imageItems.length })}
         width={720}
+        onCancel={onClose}
       >
         {/* Hidden file input */}
         <input
-          accept="image/*"
           multiple
+          accept="image/*"
+          ref={inputRef}
+          style={{ display: 'none' }}
+          type="file"
           onChange={handleFilesChange}
           onClick={(e) => {
             e.currentTarget.value = '';
           }}
-          ref={inputRef}
-          style={{ display: 'none' }}
-          type="file"
         />
 
         {/* Content */}
@@ -387,12 +388,12 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
             {selectedItem ? (
               <>
                 <Image
+                  unoptimized
                   alt="Preview"
                   className={styles.previewImage}
                   height={320}
                   src={getDisplayUrl(selectedItem)}
                   style={{ objectFit: 'contain' }}
-                  unoptimized
                   width={400}
                 />
                 <div className={styles.fileName}>{getDisplayFileName(selectedItem)}</div>
@@ -410,13 +411,13 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
           <Button
             disabled={maxCount ? imageItems.length >= maxCount : false}
             icon={<Upload size={16} />}
-            onClick={handleUpload}
             type="default"
+            onClick={handleUpload}
           >
             {t('MultiImagesUpload.modal.upload')}
           </Button>
 
-          <Button onClick={handleComplete} type="primary">
+          <Button type="primary" onClick={handleComplete}>
             {t('MultiImagesUpload.modal.complete')}
           </Button>
         </div>

@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "قيد المعالجة",
   "detail.data.embedding.success": "اكتمل",
   "detail.data.embeddingStatus": "التضمين",
+  "detail.data.noChunk": "لا توجد وحدة",
   "empty": "لم يتم تحميل أي ملفات أو مجلدات بعد.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} ملف تم تصفيته (من أصل {{total}})",
   "header.actions.connect": "اتصال...",

@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "進行中",
   "detail.data.embedding.success": "已完成",
   "detail.data.embeddingStatus": "向量化",
+  "detail.data.noChunk": "無可用區塊",
   "empty": "暫無已上傳文件/文件夾",
   "header.actions.builtInBlockList.filtered": "已過濾 {{ignored}} 個檔案（共 {{total}} 個檔案）",
   "header.actions.connect": "連接...",

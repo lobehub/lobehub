@@ -31,6 +31,7 @@ const ContextList = memo(() => {
   const showSelectionList = useFileStore(fileChatSelectors.chatContextSelectionHasItem);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
 
+
   // Clear selections only when agentId changes (not on initial mount)
   useEffect(() => {
     if (prevAgentIdRef.current !== undefined && prevAgentIdRef.current !== agentId) {
@@ -67,13 +68,13 @@ const ContextList = memo(() => {
       {/* Uploading/Error files - show with detailed FileItem */}
       {hasUploadingFiles && (
         <ScrollShadow
-          className={styles.uploadingContainer}
           hideScrollBar
           horizontal
+          className={styles.uploadingContainer}
           orientation={'horizontal'}
           size={8}
         >
-          <Flexbox gap={8} horizontal>
+          <Flexbox horizontal gap={8}>
             {uploadingFiles.map((item) => (
               <FileItem key={item.id} {...item} />
             ))}
@@ -84,15 +85,15 @@ const ContextList = memo(() => {
       {/* Completed files and selections - show with compact Tag */}
       {(hasCompletedFiles || hasSelections) && (
         <ScrollShadow
-          className={styles.container}
           hideScrollBar
           horizontal
+          className={styles.container}
           orientation={'horizontal'}
           size={8}
         >
           <Flexbox
-            gap={4}
             horizontal
+            gap={4}
             paddingInline={0}
             style={{ paddingBlockStart: 8 }}
             wrap={'wrap'}

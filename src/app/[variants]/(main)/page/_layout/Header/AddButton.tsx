@@ -20,12 +20,12 @@ const AddButton = memo(() => {
   return (
     <ActionIcon
       icon={SquarePenIcon}
-      onClick={handleNewDocument}
+      title={t('header.newPageButton')}
       size={{
         blockSize: 32,
         size: 18,
       }}
-      title={t('header.newPageButton')}
+      onClick={handleNewDocument}
     />
   );
 });

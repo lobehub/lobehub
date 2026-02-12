@@ -3,7 +3,7 @@ import urlJoin from 'url-join';
 
 import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
+import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface NewAPIModelCard {
@@ -97,7 +97,7 @@ export const params = {
     const modelList: NewAPIModelCard[] = modelsPage.data || [];
 
     // Try to get pricing information to enrich model details
-    let pricingMap: Map<string, NewAPIPricing> = new Map();
+    const pricingMap: Map<string, NewAPIPricing> = new Map();
 
     const pricingList = await fetchPricing(`${baseURL}/api/pricing`, openAIClient.apiKey || '');
     if (pricingList) {
@@ -108,7 +108,7 @@ export const params = {
 
     // Process the model list: determine the provider for each model based on priority rules
     const enrichedModelList = modelList.map((model) => {
-      let enhancedModel: any = { ...model };
+      const enhancedModel: any = { ...model };
 
       // add pricing info
       const pricing = pricingMap.get(model.id);

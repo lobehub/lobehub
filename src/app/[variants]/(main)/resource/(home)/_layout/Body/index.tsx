@@ -24,17 +24,17 @@ const SidebarBody = memo<{ itemKey: string }>(({ itemKey }) => {
 
   return (
     <AccordionItem
-      action={
-        <ActionIcon
-          icon={PlusIcon}
-          onClick={handleCreate}
-          size={'small'}
-          title={t('library.new')}
-        />
-      }
       itemKey={itemKey}
       paddingBlock={4}
       paddingInline={'8px 4px'}
+      action={
+        <ActionIcon
+          icon={PlusIcon}
+          size={'small'}
+          title={t('library.new')}
+          onClick={handleCreate}
+        />
+      }
       title={
         <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
           {t('library.title')}

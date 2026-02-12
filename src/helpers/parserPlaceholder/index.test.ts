@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  VARIABLE_GENERATORS,
   parsePlaceholderVariables,
   parsePlaceholderVariablesMessages,
+  VARIABLE_GENERATORS,
 } from './index';
 
 // Mock dependencies
@@ -458,7 +458,10 @@ describe('VARIABLE_GENERATORS', () => {
     });
 
     it('should generate hour with padding', () => {
+      // getHours() returns local time, so we need to mock it directly
+      const spy = vi.spyOn(Date.prototype, 'getHours').mockReturnValue(6);
       expect(VARIABLE_GENERATORS.hour()).toBe('06');
+      spy.mockRestore();
     });
 
     it('should generate minute with padding', () => {

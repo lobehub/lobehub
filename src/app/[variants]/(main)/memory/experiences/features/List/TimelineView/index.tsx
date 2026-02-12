@@ -1,6 +1,6 @@
 'use client';
 
-import type { ExperienceListItem } from '@lobechat/types';
+import { type ExperienceListItem } from '@lobechat/types';
 import { memo } from 'react';
 
 import { useUserMemoryStore } from '@/store/userMemory';
@@ -26,13 +26,13 @@ const ExperienceTimelineView = memo<ExperienceTimelineViewProps>(
         groupBy="day"
         hasMore={experiencesHasMore}
         isLoading={isLoading}
-        onLoadMore={loadMoreExperiences}
         renderHeader={(periodKey) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
         renderItem={(experience) => (
           <TimelineItemWrapper>
             <ExperienceCard experience={experience} onClick={onCardClick} />
           </TimelineItemWrapper>
         )}
+        onLoadMore={loadMoreExperiences}
       />
     );
   },

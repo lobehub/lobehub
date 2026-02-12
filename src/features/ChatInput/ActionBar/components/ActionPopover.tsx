@@ -1,8 +1,10 @@
 'use client';
 
-import { Flexbox, Popover, type PopoverProps } from '@lobehub/ui';
+import { type PopoverProps } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode, Suspense, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, Suspense } from 'react';
 
 import DebugNode from '@/components/DebugNode';
 import UpdateLoading from '@/components/Loading/UpdateLoading';
@@ -69,7 +71,7 @@ const ActionPopover = memo<ActionPopoverProps>(
       <Suspense fallback={<DebugNode trace="ActionPopover > content" />}>
         <>
           {title && (
-            <Flexbox gap={8} horizontal justify={'space-between'} style={{ marginBottom: 16 }}>
+            <Flexbox horizontal gap={8} justify={'space-between'} style={{ marginBottom: 16 }}>
               {title}
               {extra}
               {loading && <UpdateLoading style={{ color: cssVar.colorTextSecondary }} />}
@@ -82,13 +84,13 @@ const ActionPopover = memo<ActionPopoverProps>(
 
     return (
       <Popover
+        content={popoverContent}
+        nativeButton={false}
+        placement={isMobile ? 'top' : placement}
         classNames={{
           ...(typeof resolvedClassNames === 'object' ? resolvedClassNames : {}),
           content: contentClassName,
         }}
-        content={popoverContent}
-        nativeButton={false}
-        placement={isMobile ? 'top' : placement}
         styles={{
           ...(typeof resolvedStyles === 'object' ? resolvedStyles : {}),
           content: {

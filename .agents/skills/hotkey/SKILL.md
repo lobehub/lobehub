@@ -71,7 +71,7 @@ const clearChatHotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.
 
 <Tooltip hotkey={clearChatHotkey} title={t('clearChat.title', { ns: 'hotkey' })}>
   <Button icon={<DeleteOutlined />} onClick={clearMessages} />
-</Tooltip>
+</Tooltip>;
 ```
 
 ## Best Practices

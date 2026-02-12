@@ -65,7 +65,10 @@ In this example, the 📝 emoji represents a documentation update. The commit me
 
 ### Semantic Release
 
-We use semantic release to automate version control and release processes. Ensure that your commit messages adhere to the semantic release specifications so that when the code is merged into the main branch, the system can automatically create a new version and release it.
+We use semantic release to automate version control and release processes. When a PR is merged into the main branch, the system automatically determines whether to publish a new version based on the gitmoji prefix in commit messages:
+
+- Commits with `✨ feat` or `🐛 fix` prefixes will **trigger a new release**
+- For minor changes that don't need a release, use prefixes like `💄 style` or `🔨 chore`
 
 ### Commitlint
 
@@ -73,13 +76,27 @@ To ensure consistency in commit messages, we use `commitlint` to check the forma
 
 Before committing your code, ensure that your commit messages adhere to our standards.
 
+### Testing
+
+LobeHub has comprehensive unit tests (Vitest) and E2E tests (Cucumber + Playwright), which run automatically via GitHub Actions CI on every PR. Before submitting a PR or requesting a merge, make sure all tests pass.
+
+You can run specific test files locally to verify:
+
+```bash
+# Run specific test (never run bun run test — full suite is very slow)
+bunx vitest run --silent='passed-only' '[file-path]'
+```
+
+For more testing details, see the [Testing Guide](/docs/development/basic/test).
+
 ### How to Contribute
 
 1. Fork the project to your account.
 2. Create a new branch for development.
-3. After completing the development, ensure that your code passes the aforementioned code style checks.
+3. After completing development, ensure your code passes code style checks and tests.
 4. Commit your changes and use appropriate gitmoji to label your commit message.
 5. Create a Pull Request to the main branch of the original project.
-6. Await code review and make necessary modifications based on feedback.
+6. Ensure all GitHub Actions CI checks pass.
+7. Await code review and make necessary modifications based on feedback.
 
 Thank you for following these guidelines, as they help us maintain the quality and consistency of the project. We look forward to your contributions!

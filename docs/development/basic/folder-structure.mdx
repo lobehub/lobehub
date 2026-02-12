@@ -13,103 +13,212 @@ tags:
 
 # Directory Structure
 
-The directory structure of LobeHub is as follows:
+LobeHub uses a Monorepo architecture (`@lobechat/` namespace).
+The top-level directory structure is as follows:
 
 ```bash
-src
-├── app            # Next.js App Router implementation with route groups and API routes
-├── business       # Business logic modules (client and server)
-├── components     # Reusable UI components
-├── config         # Application configuration files, including client-side and server-side environment variables
-├── const          # Application constants and enums
-├── envs           # Environment variable definitions and validation (analytics, auth, llm, etc.)
-├── features       # Function modules related to business functions, such as agent settings, plugin development pop-ups, etc.
-├── helpers        # Utility helpers for tool engineering, placeholder parsing, etc.
-├── hooks          # Custom utility hooks reused throughout the application
-├── layout         # Application layout components, such as navigation bars, sidebars, etc.
-├── libs           # Third-party integrations (analytics, OIDC, etc.)
-├── locales        # Internationalization language files
-├── server         # Server-side modules and services
-├── services       # Encapsulated backend service interfaces, such as HTTP requests
-├── store          # Zustand store for state management
-├── styles         # Global styles and CSS-in-JS configurations
-├── tools          # Built-in tools (artifacts, inspectors, interventions, etc.)
-├── types          # TypeScript type definition files
-├── utils          # Common utility functions
-├── auth.ts        # Authentication configuration (Better Auth)
-├── instrumentation.ts      # Application monitoring and telemetry setup
-├── instrumentation.node.ts # Node.js-specific instrumentation
-└── proxy.ts       # Next.js middleware proxy configuration
+lobe-chat/
+├── apps/
+│   └── desktop/               # Electron desktop app
+├── packages/                  # Shared packages (@lobechat/*)
+│   ├── agent-runtime/         # Agent runtime
+│   ├── database/              # Database schemas, models, repositories
+│   ├── model-runtime/         # Model runtime (AI provider adapters)
+│   ├── builtin-tool-*/        # Built-in tool packages
+│   ├── business/              # Cloud business slot packages
+│   ├── context-engine/        # Context engine
+│   ├── conversation-flow/     # Conversation flow
+│   ├── editor-runtime/        # Editor runtime
+│   ├── file-loaders/          # File loaders
+│   ├── prompts/               # Prompt templates
+│   └── ...                    # More shared packages
+├── src/                       # Main app source code (see below)
+├── locales/                   # i18n translation files (zh-CN, en-US, etc.)
+├── e2e/                       # E2E tests (Cucumber + Playwright)
+└── docs/                      # Documentation
 ```
 
-## app
-
-The `app` directory follows Next.js 13+ App Router conventions with a sophisticated architecture using [Route Groups](https://nextjs.org/docs/app/building-your-application/routing/route-groups) to organize backend services, platform variants, and application routes:
+## src Directory
 
 ```bash
-app
-├── (backend)/                    # Backend API routes and services
-│   ├── api/                      # REST API endpoints
-│   │   ├── auth/                 # Authentication routes
-│   │   └── webhooks/             # Webhook handlers
-│   ├── middleware/               # Request middleware
-│   ├── oidc/                     # OpenID Connect routes
-│   ├── trpc/                     # tRPC API endpoints
-│   │   ├── async/                # Async tRPC routes
-│   │   ├── desktop/              # Desktop-specific tRPC routes
-│   │   ├── edge/                 # Edge runtime tRPC routes
-│   │   ├── lambda/               # Lambda tRPC routes
-│   │   └── tools/                # Tools tRPC routes
-│   └── webapi/                   # Web API endpoints
-│       ├── chat/                 # Chat-related APIs
-│       ├── models/               # Model management APIs
-│       ├── tts/                  # Text-to-speech APIs
-│       └── ...
-├── [variants]/                   # Platform and device variants
-│   ├── (auth)/                   # Authentication pages
-│   │   ├── login/
-│   │   └── signup/
-│   ├── (main)/                   # Main application routes
-│   │   ├── (mobile)/             # Mobile-specific routes
-│   │   │   └── me/               # Mobile profile pages
-│   │   ├── _layout/              # Layout components
-│   │   ├── chat/                 # Chat interface
-│   │   ├── discover/             # Discovery pages
-│   │   ├── files/                # File management
-│   │   ├── image/                # Image generation
-│   │   ├── profile/              # User profile
-│   │   ├── repos/                # Repository management
-│   │   └── settings/             # Application settings
-│   └── @modal/                   # Parallel modal routes
-│       ├── (.)changelog/
-│       └── _layout/
-├── desktop/                      # Desktop-specific routes
-│   └── devtools/
-├── manifest.ts                   # PWA manifest
-├── robots.tsx                    # Robots.txt generation
-├── sitemap.tsx                   # Sitemap generation
-└── sw.ts                         # Service worker
+src/
+├── app/               # Next.js App Router (route groups and API routes)
+├── business/          # Cloud-only business logic (client/server)
+├── components/        # Reusable UI components
+├── config/            # App configuration (client and server env vars)
+├── const/             # Application constants and enums
+├── envs/              # Environment variable definitions and validation
+├── features/          # Business feature modules (Agent settings, plugin dev, etc.)
+├── helpers/           # Utility helper functions
+├── hooks/             # Reusable custom Hooks
+├── layout/            # Global layout components (AuthProvider, GlobalProvider)
+├── libs/              # Third-party integrations (better-auth, OIDC, tRPC, MCP, etc.)
+├── locales/           # i18n default language files (English)
+├── server/            # Server-side modules
+│   ├── featureFlags/  # Feature flags
+│   ├── globalConfig/  # Global configuration
+│   ├── modules/       # Server modules (no DB access)
+│   ├── routers/       # tRPC routers (async, lambda, mobile, tools)
+│   └── services/      # Server services (with DB access)
+├── services/          # Client-side service interfaces
+├── store/             # Zustand state management
+├── styles/            # Global styles and CSS-in-JS configurations
+├── tools/             # Built-in tools (artifacts, inspectors, etc.)
+├── types/             # TypeScript type definitions
+├── utils/             # General utility functions
+├── auth.ts            # Authentication configuration (Better Auth)
+├── instrumentation.ts # App monitoring and telemetry setup
+└── proxy.ts           # Next.js middleware proxy configuration
+```
+
+## app Directory
+
+The `app` directory follows Next.js App Router conventions,
+using [Route Groups](https://nextjs.org/docs/app/building-your-application/routing/route-groups)
+to organize backend services, platform variants,
+and application routes:
+
+```bash
+app/
+├── (backend)/                 # Backend API routes and services
+│   ├── api/                   # REST API endpoints (auth, webhooks)
+│   ├── f/                     # File service
+│   ├── market/                # Market service
+│   ├── middleware/            # Request middleware
+│   ├── oidc/                  # OpenID Connect routes
+│   ├── trpc/                  # tRPC API endpoints
+│   │   ├── async/             # Async tRPC routes
+│   │   ├── desktop/           # Desktop tRPC routes
+│   │   ├── lambda/            # Lambda tRPC routes
+│   │   └── tools/             # Tools tRPC routes
+│   └── webapi/                # Web API endpoints (chat, models, tts, etc.)
+├── [variants]/                # Platform and device variants
+│   ├── (auth)/                # Auth pages (login, signup)
+│   ├── (desktop)/             # Desktop-specific routes
+│   ├── (main)/                # Main application routes (SPA)
+│   │   ├── _layout/           # Layout components
+│   │   ├── agent/             # Agent pages
+│   │   ├── home/              # Home page
+│   │   ├── image/             # Image generation
+│   │   ├── memory/            # Memory management
+│   │   ├── resource/          # Resource management
+│   │   └── settings/          # Application settings
+│   ├── (mobile)/              # Mobile-specific routes
+│   ├── onboarding/            # Onboarding flow
+│   ├── router/                # SPA router configuration
+│   └── share/                 # Share pages
+├── manifest.ts                # PWA manifest
+├── robots.tsx                 # Robots.txt generation
+├── sitemap.tsx                # Sitemap generation
+└── sw.ts                      # Service Worker
 ```
 
 ### Architecture Explanation
 
 **Route Groups:**
 
-- `(backend)` - Contains all server-side API routes, middleware, and backend services
-- `[variants]` - Dynamic route group handling different platform variants and main application pages
-- `@modal` - Parallel routes for modal dialogs using Next.js parallel routing
+- `(backend)` — All server-side API routes, middleware, and backend services
+- `[variants]` — Dynamic route group for platform variants
+- `(main)` — Main SPA using React Router DOM
 
 **Platform Organization:**
 
-- The architecture supports multiple platforms (web, desktop, mobile) through route organization
-- Desktop-specific routes are in the `desktop/` directory
-- Mobile-specific routes are organized under `(main)/(mobile)/`
-- Shared layouts and components are in `_layout/` directories
+- Supports multiple platforms (web, desktop, mobile) through route organization
+- Desktop-specific routes under `(desktop)/`
+- Mobile-specific routes under `(mobile)/`
+- Shared layout components in `_layout/` directories
 
 **API Architecture:**
 
-- REST APIs in `(backend)/api/` and `(backend)/webapi/`
-- tRPC endpoints organized by runtime environment (edge, lambda, async, desktop)
-- Authentication and OIDC handling in dedicated route groups
+- REST APIs: `(backend)/api/` and `(backend)/webapi/`
+- tRPC endpoints (`src/server/routers/`): grouped by runtime
+  - `lambda/` — Main business routers (agent, session, message,
+    topic, file, knowledge, settings, etc.)
+  - `async/` — Long-running async operations
+    (file processing, image generation, RAG evaluation)
+  - `tools/` — Tool invocations (search, MCP, market, klavis)
+  - `mobile/` — Mobile-specific routers
 
-This architecture provides clear separation of concerns while maintaining flexibility for different deployment targets and runtime environments.
+**Data Flow:**
+
+Using a typical user action (e.g., updating Agent config) as an example, here's how data flows through each layer:
+
+```plaintext
+React UI (src/features/, src/app/)
+  │  User interaction triggers event
+  ▼
+Store Actions (src/store/)
+  │  Zustand action updates local state, calls service
+  ▼
+Client Service (src/services/)
+  │  Wraps tRPC client call, prepares request params
+  ▼
+tRPC Router (src/server/routers/lambda/)
+  │  Validates input (zod), routes to service
+  ▼
+Server Service (src/server/services/)
+  │  Executes business logic, calls DB model
+  ▼
+DB Model (packages/database/src/models/)
+  │  Wraps Drizzle ORM queries
+  ▼
+PostgreSQL
+```
+
+For data reads, the flow is reversed: UI consumes data via store selectors, and stores fetch from the backend via SWR + tRPC queries.
+
+### Routing Architecture
+
+The project uses hybrid routing:
+Next.js App Router handles static pages (e.g., auth pages),
+while React Router DOM powers the main SPA.
+
+**Entry**: `src/app/[variants]/page.tsx`
+dispatches to desktop or mobile router based on device type.
+
+**Key configuration files:**
+
+- Desktop router: `src/app/[variants]/router/desktopRouter.config.tsx`
+- Mobile router: `src/app/[variants]/(mobile)/router/mobileRouter.config.tsx`
+- Router utilities: `src/utils/router.tsx`
+
+**Desktop SPA Routes (React Router DOM):**
+
+```bash
+/                          # Home
+/agent/:aid                # Agent conversation
+/agent/:aid/profile        # Agent profile
+/agent/:aid/cron/:cronId   # Cron task detail
+/group/:gid                # Group conversation
+/group/:gid/profile        # Group profile
+/community                 # Community discovery (agent, model, provider, mcp)
+/community/agent/:slug     # Agent detail page
+/community/model/:slug     # Model detail page
+/community/provider/:slug  # Provider detail page
+/community/mcp/:slug       # MCP detail page
+/resource                  # Resource management
+/resource/library/:id      # Knowledge base detail
+/settings/:tab             # Settings (profile, provider, etc.)
+/settings/provider/:id     # Model provider configuration
+/memory                    # Memory management
+/image                     # Image generation
+/page/:id                  # Page detail
+/share/t/:id               # Share topic
+/onboarding                # Onboarding flow
+```
+
+**Mobile SPA Routes (React Router DOM):**
+
+```bash
+/                          # Home
+/agent/:aid                # Agent conversation
+/community                 # Community discovery
+/settings                  # Settings home
+/settings/:tab             # Settings detail
+/settings/provider/:id     # Model provider configuration
+/me                        # Personal center
+/me/profile                # Profile
+/me/settings               # Personal settings
+/share/t/:id               # Share topic
+/onboarding                # Onboarding flow
+```

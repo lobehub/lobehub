@@ -1,8 +1,9 @@
 import { enableMapSet, produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -12,9 +13,9 @@ import {
   type CallKlavisToolResult,
   type CreateKlavisServerParams,
   type KlavisServer,
-  KlavisServerStatus,
   type KlavisTool,
 } from './types';
+import { KlavisServerStatus } from './types';
 
 enableMapSet();
 
@@ -23,55 +24,27 @@ const n = setNamespace('klavisStore');
 /**
  * Klavis Store Actions
  */
-export interface KlavisStoreAction {
-  /**
-   * Call Klavis tool
-   */
-  callKlavisTool: (params: CallKlavisToolParams) => Promise<CallKlavisToolResult>;
 
-  /**
-   * Complete OAuth authentication and update server status
-   * @param identifier - Server identifier (e.g., 'google-calendar')
-   */
-  completeKlavisServerAuth: (identifier: string) => Promise<void>;
+type Setter = StoreSetter<ToolStore>;
+export const createKlavisStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
+  new KlavisStoreActionImpl(set, get, _api);
 
-  /**
-   * Create a single Klavis MCP Server instance
-   * @returns Created server instance, or object with oauthUrl if OAuth is required
-   */
-  createKlavisServer: (params: CreateKlavisServerParams) => Promise<KlavisServer | undefined>;
+export class KlavisStoreActionImpl {
+  readonly #get: () => ToolStore;
+  readonly #set: Setter;
 
-  /**
-   * Refresh Klavis Server tool list
-   * @param identifier - Server identifier (e.g., 'google-calendar')
-   */
-  refreshKlavisServerTools: (identifier: string) => Promise<void>;
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-  /**
-   * Remove Klavis Server
-   * @param identifier - Server identifier (e.g., 'google-calendar')
-   */
-  removeKlavisServer: (identifier: string) => Promise<void>;
-
-  /**
-   * Use SWR to fetch user's Klavis server list
-   * @param enabled - Whether to enable fetching
-   */
-  useFetchUserKlavisServers: (enabled: boolean) => SWRResponse<KlavisServer[]>;
-}
-
-export const createKlavisStoreSlice: StateCreator<
-  ToolStore,
-  [['zustand/devtools', never]],
-  [],
-  KlavisStoreAction
-> = (set, get) => ({
-  callKlavisTool: async (params) => {
+  callKlavisTool = async (params: CallKlavisToolParams): Promise<CallKlavisToolResult> => {
     const { serverUrl, toolName, toolArgs } = params;
 
     const toolId = `${serverUrl}:${toolName}`;
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
         draft.executingToolIds.add(toolId);
       }),
@@ -89,7 +62,7 @@ export const createKlavisStoreSlice: StateCreator<
 
       console.log('toolsClient.klavis.callTool-response', response);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           draft.executingToolIds.delete(toolId);
         }),
@@ -101,7 +74,7 @@ export const createKlavisStoreSlice: StateCreator<
     } catch (error) {
       console.error('[Klavis] Failed to call tool:', error);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           draft.executingToolIds.delete(toolId);
         }),
@@ -114,17 +87,19 @@ export const createKlavisStoreSlice: StateCreator<
         success: false,
       };
     }
-  },
+  };
 
-  completeKlavisServerAuth: async (identifier) => {
+  completeKlavisServerAuth = async (identifier: string): Promise<void> => {
     // After OAuth completes, refresh tool list
-    await get().refreshKlavisServerTools(identifier);
-  },
+    await this.#get().refreshKlavisServerTools(identifier);
+  };
 
-  createKlavisServer: async (params) => {
+  createKlavisServer = async (
+    params: CreateKlavisServerParams,
+  ): Promise<KlavisServer | undefined> => {
     const { userId, serverName, identifier } = params;
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
         draft.loadingServerIds.add(identifier);
       }),
@@ -155,7 +130,7 @@ export const createKlavisStoreSlice: StateCreator<
       };
 
       // Add to servers list
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           // Check if already exists (using identifier), update if exists
           const existingIndex = draft.servers.findIndex((s) => s.identifier === identifier);
@@ -174,7 +149,7 @@ export const createKlavisStoreSlice: StateCreator<
     } catch (error) {
       console.error('[Klavis] Failed to create server:', error);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           draft.loadingServerIds.delete(identifier);
         }),
@@ -184,10 +159,10 @@ export const createKlavisStoreSlice: StateCreator<
 
       return undefined;
     }
-  },
+  };
 
-  refreshKlavisServerTools: async (identifier) => {
-    const { servers } = get();
+  refreshKlavisServerTools = async (identifier: string): Promise<void> => {
+    const { servers } = this.#get();
 
     // Find server using identifier
     const server = servers.find((s) => s.identifier === identifier);
@@ -196,7 +171,7 @@ export const createKlavisStoreSlice: StateCreator<
       return;
     }
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
         draft.loadingServerIds.add(identifier);
       }),
@@ -213,7 +188,7 @@ export const createKlavisStoreSlice: StateCreator<
       // If server returned an auth error (during polling), silently return
       // This happens when user is still in the process of authorizing
       if (instanceStatus.error === 'AUTH_ERROR') {
-        set(
+        this.#set(
           produce((draft: KlavisStoreState) => {
             draft.loadingServerIds.delete(identifier);
           }),
@@ -227,7 +202,7 @@ export const createKlavisStoreSlice: StateCreator<
       if (!instanceStatus.isAuthenticated) {
         if (!instanceStatus.authNeeded) {
           // If no authentication needed, all is well
-          set(
+          this.#set(
             produce((draft: KlavisStoreState) => {
               draft.loadingServerIds.delete(identifier);
             }),
@@ -238,7 +213,7 @@ export const createKlavisStoreSlice: StateCreator<
         }
 
         // Remove from local state (using identifier)
-        set(
+        this.#set(
           produce((draft: KlavisStoreState) => {
             draft.servers = draft.servers.filter((s) => s.identifier !== identifier);
             draft.loadingServerIds.delete(identifier);
@@ -263,7 +238,7 @@ export const createKlavisStoreSlice: StateCreator<
 
       const tools = response.tools as KlavisTool[];
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           // Find server using identifier
           const serverIndex = draft.servers.findIndex((s) => s.identifier === identifier);
@@ -295,7 +270,7 @@ export const createKlavisStoreSlice: StateCreator<
     } catch (error) {
       console.error('[Klavis] Failed to refresh tools:', error);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           // Find server using identifier
           const serverIndex = draft.servers.findIndex((s) => s.identifier === identifier);
@@ -310,14 +285,14 @@ export const createKlavisStoreSlice: StateCreator<
         n('refreshKlavisServerTools/error'),
       );
     }
-  },
+  };
 
-  removeKlavisServer: async (identifier) => {
-    const { servers } = get();
+  removeKlavisServer = async (identifier: string): Promise<void> => {
+    const { servers } = this.#get();
     // Find server using identifier
     const server = servers.find((s) => s.identifier === identifier);
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
         // Filter using identifier
         draft.servers = draft.servers.filter((s) => s.identifier !== identifier);
@@ -337,10 +312,28 @@ export const createKlavisStoreSlice: StateCreator<
         console.error('[Klavis] Failed to delete server instance:', error);
       }
     }
-  },
+  };
 
-  useFetchUserKlavisServers: (enabled) =>
-    useSWR<KlavisServer[]>(
+  useFetchServerTools = (serverName: string | undefined): SWRResponse<KlavisTool[]> => {
+    return useSWR<KlavisTool[]>(
+      serverName ? `klavis-server-tools-${serverName}` : null,
+      async () => {
+        const response = await toolsClient.klavis.getTools.query({ serverName: serverName! });
+        return (response.tools || []).map((tool: any) => ({
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          name: tool.name,
+        }));
+      },
+      {
+        fallbackData: [],
+        revalidateOnFocus: false,
+      },
+    );
+  };
+
+  useFetchUserKlavisServers = (enabled: boolean): SWRResponse<KlavisServer[]> => {
+    return useSWR<KlavisServer[]>(
       enabled ? 'fetchUserKlavisServers' : null,
       async () => {
         const klavisPlugins = await lambdaClient.klavis.getKlavisPlugins.query();
@@ -376,7 +369,7 @@ export const createKlavisStoreSlice: StateCreator<
       {
         fallbackData: [],
         onSuccess: (data) => {
-          set(
+          this.#set(
             produce((draft: KlavisStoreState) => {
               if (data.length > 0) {
                 // Check if already exists using identifier
@@ -392,5 +385,8 @@ export const createKlavisStoreSlice: StateCreator<
         },
         revalidateOnFocus: false,
       },
-    ),
-});
+    );
+  };
+}
+
+export type KlavisStoreAction = Pick<KlavisStoreActionImpl, keyof KlavisStoreActionImpl>;

@@ -97,7 +97,7 @@ const Table = ({ columns, dataSource, loading }: TableProps) => {
   if (loading)
     return (
       <Center height={'100%'}>
-        <Icon icon={Loader2Icon} spin />
+        <Icon spin icon={Loader2Icon} />
       </Center>
     );
 

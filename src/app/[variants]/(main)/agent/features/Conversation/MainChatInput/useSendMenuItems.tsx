@@ -1,7 +1,7 @@
 'use client';
 
-import { Hotkey, Icon, type MenuProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { Flexbox, Hotkey, Icon } from '@lobehub/ui';
 import { BotMessageSquare, LucideCheck, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -61,13 +61,13 @@ export const useSendMenuItems = (): MenuProps['items'] => {
         icon: !useCmdEnterToSend ? <Icon icon={LucideCheck} /> : <div />,
         key: 'sendWithEnter',
         label: (
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             <Trans
+              i18nKey={'input.sendWithEnter'}
+              ns={'chat'}
               components={{
                 key: <Hotkey keys={KeyEnum.Enter} variant={'borderless'} />,
               }}
-              i18nKey={'input.sendWithEnter'}
-              ns={'chat'}
             />
           </Flexbox>
         ),
@@ -79,15 +79,15 @@ export const useSendMenuItems = (): MenuProps['items'] => {
         icon: useCmdEnterToSend ? <Icon icon={LucideCheck} /> : <div />,
         key: 'sendWithCmdEnter',
         label: (
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             <Trans
+              i18nKey={'input.sendWithCmdEnter'}
+              ns={'chat'}
               components={{
                 key: (
                   <Hotkey keys={[KeyEnum.Mod, KeyEnum.Enter].join('+')} variant={'borderless'} />
                 ),
               }}
-              i18nKey={'input.sendWithCmdEnter'}
-              ns={'chat'}
             />
           </Flexbox>
         ),
@@ -106,7 +106,7 @@ export const useSendMenuItems = (): MenuProps['items'] => {
         icon: <Icon icon={MessageSquarePlus} />,
         key: 'addUser',
         label: (
-          <Flexbox align={'center'} gap={24} horizontal>
+          <Flexbox horizontal align={'center'} gap={24}>
             {t('input.addUser')}
             <Hotkey keys={hotkey} />
           </Flexbox>

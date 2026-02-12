@@ -76,6 +76,7 @@ vi.mock('node:crypto', () => ({
 const mockRemoteServerConfigCtr = {
   clearTokens: vi.fn().mockResolvedValue(undefined),
   getAccessToken: vi.fn().mockResolvedValue('mock-access-token'),
+  getLastTokenRefreshAt: vi.fn().mockReturnValue(Date.now()),
   getRemoteServerConfig: vi.fn().mockResolvedValue({ active: true, storageMode: 'cloud' }),
   getRemoteServerUrl: vi.fn().mockImplementation(async (config?: DataSyncConfig) => {
     if (config?.storageMode === 'selfHost') {
@@ -84,6 +85,8 @@ const mockRemoteServerConfigCtr = {
     return 'https://lobehub-cloud.com'; // OFFICIAL_CLOUD_SERVER
   }),
   getTokenExpiresAt: vi.fn().mockReturnValue(Date.now() + 3600000),
+  isNonRetryableError: vi.fn().mockReturnValue(false),
+  isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
   isTokenExpiringSoon: vi.fn().mockReturnValue(false),
   refreshAccessToken: vi.fn().mockResolvedValue({ success: true }),
   saveTokens: vi.fn().mockResolvedValue(undefined),
@@ -710,5 +713,203 @@ describe('AuthCtr', () => {
       // Allow some tolerance for timing
       expect(handoffCalls.length).toBeLessThanOrEqual(5);
     }, 10000);
+  });
+
+  describe('Proactive Token Refresh', () => {
+    const FIVE_MINUTES = 5 * 60 * 1000; // Debounce interval
+
+    beforeEach(() => {
+      // Reset mocks for proactive refresh tests
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerConfig).mockResolvedValue({
+        active: true,
+        remoteServerUrl: 'https://lobehub-cloud.com',
+        storageMode: 'cloud',
+      });
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValue(true);
+      vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue('mock-access-token');
+      vi.mocked(mockRemoteServerConfigCtr.getTokenExpiresAt).mockReturnValue(
+        Date.now() + 3600000, // Token valid for 1 hour
+      );
+      // Reset getLastTokenRefreshAt to a recent value by default
+      // Individual tests will override this as needed
+      vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(Date.now());
+    });
+
+    describe('onAppActivate', () => {
+      it('should refresh token when last refresh was more than 5 minutes ago', async () => {
+        // Last refresh was 10 minutes ago (exceeds 5-minute debounce)
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 10 * 60 * 1000,
+        );
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({
+          success: true,
+        });
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalled();
+        expect(mockWindow.webContents.send).toHaveBeenCalledWith('tokenRefreshed');
+      });
+
+      it('should NOT refresh token when last refresh was within 5 minutes', async () => {
+        // Last refresh was 2 minutes ago (within 5-minute debounce)
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 2 * 60 * 1000,
+        );
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
+      });
+
+      it('should refresh token when lastRefreshAt is undefined (never refreshed)', async () => {
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(undefined);
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({
+          success: true,
+        });
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalled();
+      });
+
+      it('should skip refresh when remote server is not active', async () => {
+        vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValue(false);
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 10 * 60 * 1000,
+        );
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
+      });
+
+      it('should skip refresh when no access token exists', async () => {
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(null);
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 10 * 60 * 1000,
+        );
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
+      });
+
+      it('should handle refresh failure with non-retryable error', async () => {
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 10 * 60 * 1000,
+        );
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({
+          error: 'invalid_grant',
+          success: false,
+        });
+        vi.mocked(mockRemoteServerConfigCtr.isNonRetryableError).mockReturnValue(true);
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.clearTokens).toHaveBeenCalled();
+        expect(mockRemoteServerConfigCtr.setRemoteServerConfig).toHaveBeenCalledWith({
+          active: false,
+        });
+        expect(mockWindow.webContents.send).toHaveBeenCalledWith('authorizationRequired');
+      });
+
+      it('should handle refresh failure with transient error (start auto-refresh)', async () => {
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 10 * 60 * 1000,
+        );
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({
+          error: 'network_error',
+          success: false,
+        });
+        vi.mocked(mockRemoteServerConfigCtr.isNonRetryableError).mockReturnValue(false);
+
+        await authCtr.onAppActivate();
+
+        // Should not clear tokens for transient errors
+        expect(mockRemoteServerConfigCtr.clearTokens).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('afterAppReady (initializeAutoRefresh)', () => {
+      it('should proactively refresh token on startup when debounce interval exceeded', async () => {
+        // Last refresh was 10 minutes ago (exceeds 5-minute debounce)
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 10 * 60 * 1000,
+        );
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({
+          success: true,
+        });
+
+        authCtr.afterAppReady();
+
+        // Wait for async initialization
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalled();
+      });
+
+      it('should NOT refresh on startup when token was recently refreshed (within debounce)', async () => {
+        // Last refresh was 2 minutes ago (within 5-minute debounce)
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 2 * 60 * 1000,
+        );
+
+        authCtr.afterAppReady();
+
+        // Wait for async initialization
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
+      });
+
+      it('should refresh on startup when token is expired regardless of last refresh time', async () => {
+        // Token expired 1 hour ago
+        vi.mocked(mockRemoteServerConfigCtr.getTokenExpiresAt).mockReturnValue(
+          Date.now() - 60 * 60 * 1000,
+        );
+        // Last refresh was 2 minutes ago (within debounce, but token is expired)
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - 2 * 60 * 1000,
+        );
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({
+          success: true,
+        });
+
+        authCtr.afterAppReady();
+
+        // Wait for async initialization
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalled();
+      });
+    });
+
+    describe('refresh debounce boundary tests', () => {
+      it('should NOT refresh at exactly 5 minutes minus 1 second', async () => {
+        // Last refresh was 4 minutes 59 seconds ago
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - (FIVE_MINUTES - 1000),
+        );
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
+      });
+
+      it('should refresh at exactly 5 minutes', async () => {
+        // Last refresh was exactly 5 minutes ago
+        vi.mocked(mockRemoteServerConfigCtr.getLastTokenRefreshAt).mockReturnValue(
+          Date.now() - FIVE_MINUTES,
+        );
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({
+          success: true,
+        });
+
+        await authCtr.onAppActivate();
+
+        expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalled();
+      });
+    });
   });
 });

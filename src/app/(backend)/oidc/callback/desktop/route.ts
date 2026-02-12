@@ -1,5 +1,6 @@
 import debug from 'debug';
-import { type NextRequest, NextResponse, after } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
 import { serverDB } from '@/database/server';

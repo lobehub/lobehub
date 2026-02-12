@@ -5,7 +5,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { messages } from '../../../schemas/message';
 import { topics } from '../../../schemas/topic';
 import { users } from '../../../schemas/user';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryTopicRepository } from '../UserMemoryTopicRepository';
 
 const userId = 'user-memory-topic-test-user';

@@ -1,4 +1,4 @@
-import { NavigateFunction } from 'react-router-dom';
+import { type NavigateFunction } from 'react-router-dom';
 
 import { type LobeDocument } from '@/types/document';
 

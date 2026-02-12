@@ -1,6 +1,7 @@
 'use client';
 
-import { Form, type FormGroupItemType, Icon, Skeleton } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Form, Icon, Skeleton } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -32,7 +33,7 @@ const MemorySetting = memo(() => {
         valuePropName: 'checked',
       },
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('memory.title'),
   };
 
@@ -43,12 +44,12 @@ const MemorySetting = memo(() => {
       initialValues={memory}
       items={[memorySettings]}
       itemsType={'group'}
+      variant={'filled'}
       onValuesChange={async (values) => {
         setLoading(true);
         await setSettings({ memory: values });
         setLoading(false);
       }}
-      variant={'filled'}
       {...FORM_STYLE}
     />
   );

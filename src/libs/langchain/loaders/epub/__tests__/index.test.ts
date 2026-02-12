@@ -1,6 +1,7 @@
 // @vitest-environment node
 import * as fs from 'node:fs';
 import { join } from 'node:path';
+
 import { expect } from 'vitest';
 
 import { EPubLoader } from '../index';

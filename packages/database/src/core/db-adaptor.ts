@@ -1,4 +1,4 @@
-import { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase } from '../type';
 import { getDBInstance } from './web-server';
 
 /**

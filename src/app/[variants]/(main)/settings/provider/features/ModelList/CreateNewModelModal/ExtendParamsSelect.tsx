@@ -1,8 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
-import { Popover, Select, Space, Switch, Tag, Typography, theme } from 'antd';
-import type { ExtendParamsType } from 'model-bank';
+import { Popover, Select, Space, Switch, Tag, theme, Typography } from 'antd';
+import { type ExtendParamsType } from 'model-bank';
+import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
-import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import EffortSlider from '@/features/ChatInput/ActionBar/Model/EffortSlider';
@@ -199,7 +199,7 @@ const PreviewContent = ({
             width: previewWidth,
           }}
         >
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             <Typography.Text strong>{label}</Typography.Text>
             {parameterTag ? <Tag color={'cyan'}>{parameterTag}</Tag> : null}
           </Flexbox>
@@ -344,13 +344,18 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       <Select
         allowClear
         mode={'multiple'}
-        onChange={(val) => handleChange(val as ExtendParamsType[])}
+        options={options}
+        placeholder={placeholder}
+        popupMatchSelectWidth={false}
+        style={{ width: '100%' }}
+        value={value}
         optionRender={(option) => {
           const def = definitionMap.get(option.value as ExtendParamsType);
           if (!def) return option.label;
 
           return (
             <Popover
+              placement={'right'}
               content={
                 <PreviewContent
                   desc={def.desc}
@@ -362,7 +367,6 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
                   previewWidth={def.previewWidth}
                 />
               }
-              placement={'right'}
             >
               <Flexbox gap={4}>
                 <Typography.Text>{def.label}</Typography.Text>
@@ -373,19 +377,17 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
             </Popover>
           );
         }}
-        options={options}
-        placeholder={placeholder}
-        popupMatchSelectWidth={false}
-        style={{ width: '100%' }}
-        value={value}
+        onChange={(val) => handleChange(val as ExtendParamsType[])}
       />
       {value && value.length > 0 && (
-        <Space size={[8, 8]} wrap>
+        <Space wrap size={[8, 8]}>
           {value.map((key) => {
             const def = definitionMap.get(key);
             if (!def) return null;
             return (
               <Popover
+                key={key}
+                placement={'top'}
                 content={
                   <PreviewContent
                     desc={def.desc}
@@ -397,8 +399,6 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
                     previewWidth={def.previewWidth}
                   />
                 }
-                key={key}
-                placement={'top'}
               >
                 <Tag bordered={false} color={'processing'}>
                   {def.label}

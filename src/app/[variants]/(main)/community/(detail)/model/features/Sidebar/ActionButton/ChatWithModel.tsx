@@ -46,14 +46,14 @@ const ChatWithModel = memo(() => {
       <Dropdown.Button
         className={styles.button}
         icon={<Icon icon={ChevronDownIcon} />}
-        menu={{
-          items,
-        }}
-        onClick={handleLobeHubChat}
         overlayStyle={{ minWidth: 267 }}
         size={'large'}
         style={{ flex: 1, width: 'unset' }}
         type={'primary'}
+        menu={{
+          items,
+        }}
+        onClick={handleLobeHubChat}
       >
         {t('models.chat')}
       </Dropdown.Button>

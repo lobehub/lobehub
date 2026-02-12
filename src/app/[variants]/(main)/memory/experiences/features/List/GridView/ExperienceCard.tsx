@@ -1,4 +1,4 @@
-import type { ExperienceListItem } from '@lobechat/types';
+import { type ExperienceListItem } from '@lobechat/types';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
@@ -22,16 +22,16 @@ const ExperienceCard = memo<ExperienceCardProps>(({ experience, onClick }) => {
   return (
     <GridCard
       actions={<ExperienceDropdown id={experience.id} />}
+      capturedAt={experience.capturedAt || experience.updatedAt || experience.createdAt}
+      cate={experience.type}
+      title={experience.title}
       badges={
         <ProgressIcon
           format={(percent) => `${t('filter.sort.scoreConfidence')}: ${percent}%`}
           percent={(experience.scoreConfidence ?? 0) * 100}
         />
       }
-      capturedAt={experience.capturedAt || experience.updatedAt || experience.createdAt}
-      cate={experience.type}
       onClick={() => onClick(experience)}
-      title={experience.title}
     >
       {experience.keyLearning || experience.situation}
     </GridCard>

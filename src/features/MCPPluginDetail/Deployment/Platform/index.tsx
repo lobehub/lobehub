@@ -28,14 +28,14 @@ const Platform = memo<PlatformProps>(({ lite, identifier, connection }) => {
   return (
     <Block gap={lite ? 0 : 16} padding={4} variant={lite ? 'outlined' : 'borderless'}>
       <Highlighter
+        fullFeatured
         className={cx(lite && styles.lite)}
         fileName={'MCP server config'}
-        fullFeatured
         language={'json'}
+        variant={'filled'}
         style={{
           fontSize: 12,
         }}
-        variant={'filled'}
       >
         {serverConfig}
       </Highlighter>

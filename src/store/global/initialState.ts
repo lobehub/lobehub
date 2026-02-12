@@ -1,6 +1,7 @@
-import type { NavigateFunction } from 'react-router-dom';
+import { type NavigateFunction } from 'react-router-dom';
 
-import { DatabaseLoadingState, type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
+import { type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
+import { DatabaseLoadingState } from '@/types/clientDB';
 import { type LocaleMode } from '@/types/locale';
 import { SessionDefaultGroup } from '@/types/session';
 import { AsyncLocalStorage } from '@/utils/localStorage';
@@ -35,31 +36,32 @@ export enum GroupSettingsTabs {
 }
 
 export enum SettingsTabs {
-  APIKey = 'apikey',
   About = 'about',
   Agent = 'agent',
+  APIKey = 'apikey',
+  Billing = 'billing',
   ChatAppearance = 'chat-appearance',
   Common = 'common',
+  Funds = 'funds',
   Hotkey = 'hotkey',
   Image = 'image',
   LLM = 'llm',
   Memory = 'memory',
+  // business
+  Plans = 'plans',
   Profile = 'profile',
   Provider = 'provider',
   Proxy = 'proxy',
+  Referral = 'referral',
   Security = 'security',
   Skill = 'skill',
-  Stats = 'stats',
-  Storage = 'storage',
-  TTS = 'tts',
 
   /* eslint-disable typescript-sort-keys/string-enum */
-  // business
-  Plans = 'plans',
-  Funds = 'funds',
+  Stats = 'stats',
+  Storage = 'storage',
+  SystemTools = 'system-tools',
+  TTS = 'tts',
   Usage = 'usage',
-  Billing = 'billing',
-  Referral = 'referral',
   /* eslint-enable typescript-sort-keys/string-enum */
 }
 

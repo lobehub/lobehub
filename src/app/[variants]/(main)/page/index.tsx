@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import PageExplorerPlaceholder from '@/features/PageExplorer/PageExplorerPlaceholder';

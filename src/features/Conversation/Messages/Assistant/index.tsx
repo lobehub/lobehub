@@ -2,7 +2,8 @@
 
 import { LOADING_FLAT } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler, memo, useCallback } from 'react';
+import { type MouseEventHandler } from 'react';
+import { memo, useCallback } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -12,13 +13,13 @@ import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
+import MessageBranch from '../components/MessageBranch';
 import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
-import MessageBranch from '../components/MessageBranch';
-import { AssistantMessageExtra } from './Extra';
 import MessageContent from './components/MessageContent';
+import { AssistantMessageExtra } from './Extra';
 
 const actionBarHolder = (
   <div {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }} style={{ height: '28px' }} />
@@ -84,7 +85,17 @@ const AssistantMessage = memo<AssistantMessageProps>(
 
     return (
       <ChatItem
+        showTitle
         aboveMessage={null}
+        avatar={avatar}
+        customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
+        editing={editing}
+        id={id}
+        loading={generating}
+        message={message}
+        newScreenMinHeight={minHeight}
+        placement={'left'}
+        time={createdAt}
         actions={
           <>
             {branch && (
@@ -97,15 +108,9 @@ const AssistantMessage = memo<AssistantMessageProps>(
             {actionBarHolder}
           </>
         }
-        avatar={avatar}
-        customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
-        editing={editing}
         error={
           errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
         }
-        id={id}
-        loading={generating}
-        message={message}
         messageExtra={
           <AssistantMessageExtra
             content={content}
@@ -118,12 +123,8 @@ const AssistantMessage = memo<AssistantMessageProps>(
             usage={usage! || metadata}
           />
         }
-        newScreenMinHeight={minHeight}
         onDoubleClick={onDoubleClick}
         onMouseEnter={onMouseEnter}
-        placement={'left'}
-        showTitle
-        time={createdAt}
       >
         <MessageContent {...item} />
       </ChatItem>

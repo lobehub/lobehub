@@ -12,7 +12,7 @@ const container = css`
 
 const content = css`
   position: absolute;
-  inset-block: -1px -1px;
+  inset-block: -1px;
   inset-inline-start: -1px;
 
   width: calc(100% + 2px);

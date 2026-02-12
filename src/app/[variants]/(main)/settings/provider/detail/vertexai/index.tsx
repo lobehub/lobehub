@@ -101,11 +101,11 @@ const useProviderCard = (): ProviderItem => {
         ) : (
           <Select
             allowClear
+            placeholder={t('vertexai.region.placeholder')}
             options={VERTEX_AI_REGIONS.map((region) => ({
               label: region,
               value: region,
             }))}
-            placeholder={t('vertexai.region.placeholder')}
           />
         ),
         desc: (

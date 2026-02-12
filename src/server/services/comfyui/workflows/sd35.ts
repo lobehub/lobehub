@@ -13,7 +13,7 @@ import {
   DEFAULT_NEGATIVE_PROMPT,
   WORKFLOW_DEFAULTS,
 } from '@/server/services/comfyui/config/constants';
-import type { WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
+import { type WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
 import { WorkflowError } from '@/server/services/comfyui/errors';
 import { getWorkflowFilenamePrefix } from '@/server/services/comfyui/utils/workflowUtils';
 

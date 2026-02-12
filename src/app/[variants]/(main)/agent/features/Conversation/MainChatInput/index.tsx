@@ -40,6 +40,7 @@ const MainChatInput = memo(() => {
       }}
       rightActions={rightActions}
       sendMenu={{ items: sendMenuItems }}
+      skipScrollMarginWithList
     />
   );
 });

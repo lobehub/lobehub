@@ -1,4 +1,4 @@
-import type { DependencyList } from 'react';
+import { type DependencyList } from 'react';
 import { useCallback } from 'react';
 
 export const useTypeScriptHappyCallback: <Args extends unknown[], R>(

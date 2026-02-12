@@ -5,7 +5,8 @@ import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import { type KlavisServerType } from '@/const/index';
-import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type KlavisServer } from '@/store/tool/slices/klavisStore';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 import { useKlavisOAuth } from '../hooks/useKlavisOAuth';
 import { useKlavisServerActions } from '../hooks/useKlavisServerActions';
@@ -49,13 +50,13 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
     return (
       <Block
+        horizontal
         align="center"
         clickable={isClickable}
         gap={8}
-        horizontal
         justify="space-between"
-        onClick={handleItemClick}
         padding={12}
+        variant={'outlined'}
         style={
           isConnected
             ? {
@@ -64,13 +65,13 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
               }
             : {}
         }
-        variant={'outlined'}
+        onClick={handleItemClick}
       >
         <Flexbox
+          horizontal
           align="center"
           flex={1}
           gap={12}
-          horizontal
           style={{
             overflow: 'hidden',
           }}

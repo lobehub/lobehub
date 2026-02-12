@@ -1,4 +1,4 @@
-import type { ActivityListItem } from '@lobechat/types';
+import { type ActivityListItem } from '@lobechat/types';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,9 +22,9 @@ const ActivityCard = memo<ActivityCardProps>(({ activity, onClick }) => {
       capturedAt={capturedAt}
       cate={activity.type}
       hashTags={activity.tags}
-      onClick={() => onClick(activity)}
       title={activity.title || t('activity.defaultType')}
       titleAddon={activity.status}
+      onClick={() => onClick(activity)}
     >
       {activity.narrative || activity.notes || activity.status || t('activity.defaultType')}
     </TimeLineCard>

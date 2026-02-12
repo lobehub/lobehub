@@ -47,22 +47,22 @@ const PreferenceRightPanel = memo(() => {
         <Text
           as={'h1'}
           fontSize={20}
+          weight={'bold'}
           style={{
             lineHeight: 1.4,
             marginBottom: 0,
           }}
-          weight={'bold'}
         >
           {preference.title || preference.type || t('preference.defaultType')}
         </Text>
-        <Flexbox align="center" gap={16} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
           <ProgressIcon
+            showInfo
             format={(percent) => `${t('filter.sort.scorePriority')}: ${percent}%`}
             percent={(preference.scorePriority ?? 0) * 100}
-            showInfo
           />
         </Flexbox>
-        <Flexbox align="center" gap={16} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
           <SourceLink source={preference.source} />
           <Time capturedAt={preference.capturedAt || preference.updatedAt || preference.createdAt} />
         </Flexbox>
@@ -73,7 +73,7 @@ const PreferenceRightPanel = memo(() => {
 
         {preference.suggestions && (
           <Block gap={8} padding={16} variant={'filled'}>
-            <Flexbox align={'center'} className={styles.suggestionsTitle} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} className={styles.suggestionsTitle} gap={6}>
               <Icon icon={BotIcon} size={16} />
               <span>{t('preference.suggestions')}</span>
             </Flexbox>

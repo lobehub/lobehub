@@ -4,50 +4,19 @@ import {
   type RuntimeImageGenParams,
   type RuntimeImageGenParamsKeys,
   type RuntimeImageGenParamsValue,
-  extractDefaultValues,
 } from 'model-bank';
-import { type StateCreator } from 'zustand/vanilla';
+import { extractDefaultValues } from 'model-bank';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
+import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 
-import type { ImageStore } from '../../store';
+import { type ImageStore } from '../../store';
 import { calculateInitialAspectRatio } from '../../utils/aspectRatio';
 import { adaptSizeToRatio, parseRatio } from '../../utils/size';
-
-export interface GenerationConfigAction {
-  setParamOnInput<K extends RuntimeImageGenParamsKeys>(
-    paramName: K,
-    value: RuntimeImageGenParamsValue,
-  ): void;
-
-  setModelAndProviderOnSelect(model: string, provider: string): void;
-
-  setImageNum: (imageNum: number) => void;
-
-  reuseSettings: (
-    model: string,
-    provider: string,
-    settings: Partial<RuntimeImageGenParams>,
-  ) => void;
-  reuseSeed: (seed: number) => void;
-
-  setWidth(width: number): void;
-  setHeight(height: number): void;
-  toggleAspectRatioLock(): void;
-  setAspectRatio(aspectRatio: string): void;
-
-  // Initialization related methods
-  _initializeDefaultImageConfig(): void;
-  initializeImageConfig(
-    isLogin?: boolean,
-    lastSelectedImageModel?: string,
-    lastSelectedImageProvider?: string,
-  ): void;
-}
 
 /**
  * @internal
@@ -95,14 +64,25 @@ function prepareModelConfigState(model: string, provider: string) {
   };
 }
 
-export const createGenerationConfigSlice: StateCreator<
-  ImageStore,
-  [['zustand/devtools', never]],
-  [],
-  GenerationConfigAction
-> = (set, get) => ({
-  setParamOnInput: (paramName, value) => {
-    set(
+type Setter = StoreSetter<ImageStore>;
+export const createGenerationConfigSlice = (set: Setter, get: () => ImageStore, _api?: unknown) =>
+  new GenerationConfigActionImpl(set, get, _api);
+
+export class GenerationConfigActionImpl {
+  readonly #get: () => ImageStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ImageStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  setParamOnInput = <T extends RuntimeImageGenParamsKeys>(
+    paramName: T,
+    value: RuntimeImageGenParamsValue,
+  ): void => {
+    this.#set(
       (state) => {
         const { parameters } = state;
         return { parameters: { ...parameters, [paramName]: value } };
@@ -110,10 +90,10 @@ export const createGenerationConfigSlice: StateCreator<
       false,
       `setParamOnInput/${paramName}`,
     );
-  },
+  };
 
-  setWidth: (width) => {
-    set(
+  setWidth = (width: number): void => {
+    this.#set(
       (state) => {
         const {
           parameters,
@@ -141,10 +121,10 @@ export const createGenerationConfigSlice: StateCreator<
       false,
       `setWidth`,
     );
-  },
+  };
 
-  setHeight: (height) => {
-    set(
+  setHeight = (height: number): void => {
+    this.#set(
       (state) => {
         const {
           parameters,
@@ -172,10 +152,10 @@ export const createGenerationConfigSlice: StateCreator<
       false,
       `setHeight`,
     );
-  },
+  };
 
-  toggleAspectRatioLock: () => {
-    set(
+  toggleAspectRatioLock = (): void => {
+    this.#set(
       (state) => {
         const {
           isAspectRatioLocked,
@@ -244,10 +224,10 @@ export const createGenerationConfigSlice: StateCreator<
       false,
       'toggleAspectRatioLock',
     );
-  },
+  };
 
-  setAspectRatio: (aspectRatio) => {
-    const { parameters, parametersSchema: parametersSchema } = get();
+  setAspectRatio = (aspectRatio: string): void => {
+    const { parameters, parametersSchema: parametersSchema } = this.#get();
     if (!parameters || !parametersSchema) return;
 
     const defaultValues = extractDefaultValues(parametersSchema);
@@ -271,20 +251,20 @@ export const createGenerationConfigSlice: StateCreator<
       newParams.aspectRatio = aspectRatio;
     }
 
-    set(
+    this.#set(
       { activeAspectRatio: aspectRatio, parameters: newParams },
       false,
       `setAspectRatio/${aspectRatio}`,
     );
-  },
+  };
 
-  setModelAndProviderOnSelect: (model, provider) => {
+  setModelAndProviderOnSelect = (model: string, provider: string): void => {
     const { defaultValues, parametersSchema, initialActiveRatio } = prepareModelConfigState(
       model,
       provider,
     );
 
-    set(
+    this.#set(
       {
         model,
         provider,
@@ -305,15 +285,19 @@ export const createGenerationConfigSlice: StateCreator<
         lastSelectedImageProvider: provider,
       });
     }
-  },
+  };
 
-  setImageNum: (imageNum) => {
-    set(() => ({ imageNum }), false, `setImageNum/${imageNum}`);
-  },
+  setImageNum = (imageNum: number): void => {
+    this.#set(() => ({ imageNum }), false, `setImageNum/${imageNum}`);
+  };
 
-  reuseSettings: (model: string, provider: string, settings: Partial<RuntimeImageGenParams>) => {
+  reuseSettings = (
+    model: string,
+    provider: string,
+    settings: Partial<RuntimeImageGenParams>,
+  ): void => {
     const { defaultValues, parametersSchema } = getModelAndDefaults(model, provider);
-    set(
+    this.#set(
       () => ({
         model,
         provider,
@@ -323,19 +307,27 @@ export const createGenerationConfigSlice: StateCreator<
       false,
       `reuseSettings/${model}/${provider}`,
     );
-  },
+  };
 
-  reuseSeed: (seed: number) => {
-    set((state) => ({ parameters: { ...state.parameters, seed } }), false, `reuseSeed/${seed}`);
-  },
+  reuseSeed = (seed: number): void => {
+    this.#set(
+      (state) => ({ parameters: { ...state.parameters, seed } }),
+      false,
+      `reuseSeed/${seed}`,
+    );
+  };
 
-  _initializeDefaultImageConfig: () => {
+  _initializeDefaultImageConfig = (): void => {
     const { defaultImageNum } = settingsSelectors.currentImageSettings(useUserStore.getState());
-    set({ imageNum: defaultImageNum, isInit: true }, false, 'initializeImageConfig/default');
-  },
+    this.#set({ imageNum: defaultImageNum, isInit: true }, false, 'initializeImageConfig/default');
+  };
 
-  initializeImageConfig: (isLogin, lastSelectedImageModel, lastSelectedImageProvider) => {
-    const { _initializeDefaultImageConfig } = get();
+  initializeImageConfig = (
+    isLogin?: boolean,
+    lastSelectedImageModel?: string,
+    lastSelectedImageProvider?: string,
+  ): void => {
+    const { _initializeDefaultImageConfig } = this.#get();
     const { defaultImageNum } = settingsSelectors.currentImageSettings(useUserStore.getState());
 
     if (isLogin && lastSelectedImageModel && lastSelectedImageProvider) {
@@ -345,7 +337,7 @@ export const createGenerationConfigSlice: StateCreator<
           lastSelectedImageProvider,
         );
 
-        set(
+        this.#set(
           {
             model: lastSelectedImageModel,
             provider: lastSelectedImageProvider,
@@ -365,5 +357,10 @@ export const createGenerationConfigSlice: StateCreator<
     } else {
       _initializeDefaultImageConfig();
     }
-  },
-});
+  };
+}
+
+export type GenerationConfigAction = Pick<
+  GenerationConfigActionImpl,
+  keyof GenerationConfigActionImpl
+>;

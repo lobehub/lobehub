@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { type EditorContentState } from './initialState';
-import { type DocumentDispatch, documentReducer } from './reducer';
+import { type DocumentDispatch } from './reducer';
+import { documentReducer } from './reducer';
 
 describe('documentReducer', () => {
   let state: Record<string, EditorContentState>;

@@ -1,11 +1,12 @@
-import { UserPreference } from '@lobechat/types';
+import type { UserPreference } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { nextauthAccounts, userSettings, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
-import { ListUsersForMemoryExtractorCursor, UserModel, UserNotFoundError } from '../user';
 import { getTestDB } from '../../core/getTestDB';
+import { nextauthAccounts, users, userSettings } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import type { ListUsersForMemoryExtractorCursor } from '../user';
+import { UserModel, UserNotFoundError } from '../user';
 
 const userId = 'user-model-test';
 const otherUserId = 'other-user-test';

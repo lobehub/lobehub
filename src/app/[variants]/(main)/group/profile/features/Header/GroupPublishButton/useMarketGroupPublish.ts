@@ -10,7 +10,7 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
-import type { MarketPublishAction, OriginalGroupInfo } from './types';
+import { type MarketPublishAction, type OriginalGroupInfo } from './types';
 import { generateDefaultChangelog } from './utils';
 
 interface UseMarketGroupPublishOptions {

@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 // CometAPI model list based on src/config/modelProviders/cometapi.ts
 const cometapiChatModels: AIChatModelCard[] = [
@@ -218,7 +218,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 1_114_112,
     description:
-      "Gemini 2.5 Pro is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.",
+      'Gemini 2.5 Pro is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro',
     enabled: true,
     id: 'gemini-2.5-pro',
@@ -230,7 +230,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 65_536,
     description:
-      "Gemini 2.5 Flash is Google’s fast-response reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.",
+      'Gemini 2.5 Flash is Google’s fast-response reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 flash',
     enabled: true,
     id: 'gemini-2.5-flash',
@@ -264,7 +264,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 131_072,
-    description: "xAI’s Grok 4 with strong reasoning capability.",
+    description: 'xAI’s Grok 4 with strong reasoning capability.',
     displayName: 'Grok 4',
     enabled: true,
     id: 'grok-4-0709',
@@ -274,7 +274,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 131_072,
-    description: "xAI’s Grok 3 with strong reasoning capability.",
+    description: 'xAI’s Grok 3 with strong reasoning capability.',
     displayName: 'Grok 3',
     enabled: true,
     id: 'grok-3',
@@ -284,7 +284,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 100_000,
-    description: "xAI’s Grok 3 Mini with strong reasoning and fast responses.",
+    description: 'xAI’s Grok 3 Mini with strong reasoning and fast responses.',
     displayName: 'Grok 3 Mini',
     enabled: true,
     id: 'grok-3-mini',

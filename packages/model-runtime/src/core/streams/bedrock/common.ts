@@ -1,4 +1,4 @@
-import {
+import type {
   InvokeModelWithResponseStreamResponse,
   ResponseStream,
 } from '@aws-sdk/client-bedrock-runtime';

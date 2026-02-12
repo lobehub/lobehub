@@ -40,7 +40,6 @@ export default defineConfig({
   ],
   test: {
     alias: {
-      /* eslint-disable sort-keys-fix/sort-keys-fix */
       '@/database/_deprecated': resolve(__dirname, './src/database/_deprecated'),
       '@/database': resolve(__dirname, './packages/database/src'),
       '@/utils/client/switchLang': resolve(__dirname, './src/utils/client/switchLang'),
@@ -51,6 +50,7 @@ export default defineConfig({
       '@/utils/server': resolve(__dirname, './src/utils/server'),
       '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
       '@/utils/electron': resolve(__dirname, './src/utils/electron'),
+      '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),
       '@/utils': resolve(__dirname, './packages/utils/src'),
       '@/types': resolve(__dirname, './packages/types/src'),
       '@/const': resolve(__dirname, './packages/const/src'),

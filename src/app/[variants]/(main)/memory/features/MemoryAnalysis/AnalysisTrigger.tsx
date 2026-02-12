@@ -58,10 +58,10 @@ const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange, iconOnl
         <Button
           icon={<Icon icon={CalendarClockIcon} />}
           loading={loading}
-          onClick={() => setOpen(true)}
           size={'large'}
           style={{ maxWidth: 300 }}
           type={'primary'}
+          onClick={() => setOpen(true)}
         >
           {t('analysis.action.button')}
         </Button>
@@ -69,12 +69,12 @@ const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange, iconOnl
 
       <DateRangeModal
         footerNote={footerNote}
-        onCancel={() => setOpen(false)}
-        onChange={onRangeChange}
-        onSubmit={handleSubmit}
         open={open}
         range={range}
         submitting={submitting}
+        onCancel={() => setOpen(false)}
+        onChange={onRangeChange}
+        onSubmit={handleSubmit}
       />
     </>
   );

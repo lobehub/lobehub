@@ -6,7 +6,7 @@
  * Note: AgentStateManager and StreamEventManager will automatically use
  * InMemory implementations when Redis is not available (test environment).
  */
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, messages } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
@@ -37,7 +37,6 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockResponsesCreate: any;
 
 let serverDB: LobeChatDatabase;

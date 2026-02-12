@@ -1,4 +1,4 @@
-import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
+import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -221,8 +221,8 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   const renderRightControl = () => {
     if (isConnecting) {
       return (
-        <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-          <Icon icon={Loader2} spin />
+        <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+          <Icon spin icon={Loader2} />
         </Flexbox>
       );
     }
@@ -230,14 +230,14 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     if (!server) {
       return (
         <Flexbox
+          horizontal
           align="center"
           gap={4}
-          horizontal
+          style={{ cursor: 'pointer', opacity: 0.65 }}
           onClick={(e) => {
             e.stopPropagation();
             handleConnect();
           }}
-          style={{ cursor: 'pointer', opacity: 0.65 }}
         >
           {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
           <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -248,7 +248,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     switch (server.status) {
       case LobehubSkillStatus.CONNECTED: {
         if (isToggling) {
-          return <Icon icon={Loader2} spin />;
+          return <Icon spin icon={Loader2} />;
         }
         return (
           <Checkbox
@@ -263,16 +263,17 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
       case LobehubSkillStatus.CONNECTING: {
         if (isWaitingAuth) {
           return (
-            <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-              <Icon icon={Loader2} spin />
+            <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+              <Icon spin icon={Loader2} />
             </Flexbox>
           );
         }
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={async (e) => {
               e.stopPropagation();
               try {
@@ -283,7 +284,6 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
                 console.error('[LobehubSkill] Failed to get authorize URL:', error);
               }
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.lobehubSkill.authorize', { defaultValue: 'Authorize' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -293,14 +293,14 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
       case LobehubSkillStatus.NOT_CONNECTED: {
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={(e) => {
               e.stopPropagation();
               handleConnect();
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -322,9 +322,9 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       gap={24}
-      horizontal
       justify={'space-between'}
       onClick={(e) => {
         e.stopPropagation();
@@ -333,7 +333,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
         }
       }}
     >
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         {label}
       </Flexbox>
       {renderRightControl()}

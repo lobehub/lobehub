@@ -1,40 +1,38 @@
-import type { StateCreator } from 'zustand/vanilla';
-
 import { documentService } from '@/services/document';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
-import type { SessionStore } from '@/store/session/store';
+import { type SessionStore } from '@/store/session/store';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { StarterMode } from './initialState';
+import { type StarterMode } from './initialState';
 
 const n = setNamespace('homeInput');
 
-export interface HomeInputAction {
-  clearInputMode: () => void;
-  sendAsAgent: (message: string) => Promise<string>;
-  sendAsImage: () => void;
-  sendAsResearch: (message: string) => Promise<void>;
-  sendAsWrite: (message: string) => Promise<string>;
-  setInputActiveMode: (mode: StarterMode) => void;
-}
+type Setter = StoreSetter<SessionStore>;
+export const createHomeInputSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
+  new HomeInputActionImpl(set, get, _api);
 
-export const createHomeInputSlice: StateCreator<
-  SessionStore,
-  [['zustand/devtools', never]],
-  [],
-  HomeInputAction
-> = (set, get) => ({
-  clearInputMode: () => {
-    set({ inputActiveMode: null }, false, n('clearInputMode'));
-  },
+export class HomeInputActionImpl {
+  readonly #get: () => SessionStore;
+  readonly #set: Setter;
 
-  sendAsAgent: async (message) => {
-    set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
+  constructor(set: Setter, get: () => SessionStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  clearInputMode = (): void => {
+    this.#set({ inputActiveMode: null }, false, n('clearInputMode'));
+  };
+
+  sendAsAgent = async (message: string): Promise<string> => {
+    this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
       // 1. Create new Agent using existing createSession action
-      const newAgentId = await get().createSession(
+      const newAgentId = await this.#get().createSession(
         {
           config: { systemRole: message },
           meta: { title: message?.slice(0, 50) || 'New Agent' },
@@ -56,15 +54,15 @@ export const createHomeInputSlice: StateCreator<
       });
 
       // 4. Clear mode
-      set({ inputActiveMode: null }, false, n('sendAsAgent/clearMode'));
+      this.#set({ inputActiveMode: null }, false, n('sendAsAgent/clearMode'));
 
       return newAgentId;
     } finally {
-      set({ homeInputLoading: false }, false, n('sendAsAgent/end'));
+      this.#set({ homeInputLoading: false }, false, n('sendAsAgent/end'));
     }
-  },
+  };
 
-  sendAsImage: () => {
+  sendAsImage = (): void => {
     // Navigate to /image page
     const navigate = useGlobalStore.getState().navigate;
     if (navigate) {
@@ -72,19 +70,19 @@ export const createHomeInputSlice: StateCreator<
     }
 
     // Clear mode
-    set({ inputActiveMode: null }, false, n('sendAsImage'));
-  },
+    this.#set({ inputActiveMode: null }, false, n('sendAsImage'));
+  };
 
-  sendAsResearch: async (message) => {
+  sendAsResearch = async (message: string): Promise<void> => {
     // TODO: Implement DeepResearch mode
     console.log('sendAsResearch:', message);
 
     // Clear mode
-    set({ inputActiveMode: null }, false, n('sendAsResearch'));
-  },
+    this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));
+  };
 
-  sendAsWrite: async (message) => {
-    set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
+  sendAsWrite = async (message: string): Promise<string> => {
+    this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
       // 1. Create new Document
@@ -110,15 +108,17 @@ export const createHomeInputSlice: StateCreator<
       });
 
       // 4. Clear mode
-      set({ inputActiveMode: null }, false, n('sendAsWrite/clearMode'));
+      this.#set({ inputActiveMode: null }, false, n('sendAsWrite/clearMode'));
 
       return newDoc.id;
     } finally {
-      set({ homeInputLoading: false }, false, n('sendAsWrite/end'));
+      this.#set({ homeInputLoading: false }, false, n('sendAsWrite/end'));
     }
-  },
+  };
 
-  setInputActiveMode: (mode) => {
-    set({ inputActiveMode: mode }, false, n('setInputActiveMode', mode));
-  },
-});
+  setInputActiveMode = (mode: StarterMode): void => {
+    this.#set({ inputActiveMode: mode }, false, n('setInputActiveMode', mode));
+  };
+}
+
+export type HomeInputAction = Pick<HomeInputActionImpl, keyof HomeInputActionImpl>;

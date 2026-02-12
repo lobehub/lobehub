@@ -9,7 +9,7 @@ import MemberCountTag from './MemberCountTag';
  */
 const TitleTags = memo(() => {
   return (
-    <Flexbox align={'center'} gap={12} horizontal>
+    <Flexbox horizontal align={'center'} gap={12}>
       <MemberCountTag />
     </Flexbox>
   );

@@ -1,4 +1,5 @@
-import { SEARCH_SEARXNG_NOT_CONFIG, type UniformSearchResponse } from '@lobechat/types';
+import { type UniformSearchResponse } from '@lobechat/types';
+import { SEARCH_SEARXNG_NOT_CONFIG } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import { toolsEnv } from '@/envs/tools';

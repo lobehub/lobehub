@@ -77,12 +77,27 @@ export const ModelPerformanceSchema = z.object({
   latency: z.number().optional(),
 });
 
+// ============ Emoji Reaction ============ //
+
+export interface EmojiReaction {
+  emoji: string;
+  count: number;
+  users: string[];
+}
+
+export const EmojiReactionSchema = z.object({
+  emoji: z.string(),
+  count: z.number(),
+  users: z.array(z.string()),
+});
+
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
+  reactions: z.array(EmojiReactionSchema).optional(),
 });
 
 export interface ModelUsage extends ModelTokensUsage {
@@ -155,4 +170,8 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
    * Used for Ask AI functionality to persist selection context
    */
   pageSelections?: PageSelection[];
+  /**
+   * Emoji reactions on this message
+   */
+  reactions?: EmojiReaction[];
 }

@@ -6,11 +6,12 @@ import { memo, useMemo, useState } from 'react';
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { type UIChatMessage } from '@/types/index';
 import { ThreadStatus } from '@/types/index';
-import type { UIChatMessage } from '@/types/index';
 
-import { ErrorState, InitializingState, TaskMessages, isProcessingStatus } from '../shared';
-import TaskTitle, { type TaskMetrics } from './TaskTitle';
+import { ErrorState, InitializingState, isProcessingStatus, TaskMessages } from '../shared';
+import { type TaskMetrics } from './TaskTitle';
+import TaskTitle from './TaskTitle';
 
 interface ClientTaskItemProps {
   item: UIChatMessage;
@@ -115,10 +116,10 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
     <AccordionItem
       expand={expanded}
       itemKey={id}
-      onExpandChange={setExpanded}
       paddingBlock={4}
       paddingInline={4}
       title={<TaskTitle metrics={metrics} status={status} title={title} />}
+      onExpandChange={setExpanded}
     >
       <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
         {instruction && (

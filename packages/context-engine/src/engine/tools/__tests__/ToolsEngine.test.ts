@@ -710,7 +710,7 @@ describe('ToolsEngine', () => {
           type: 'function',
           function: {
             // The long action name should be hashed
-            name: expect.stringMatching(/^long-long-plugin-with-id____MD5HASH_[a-f0-9]+$/),
+            name: expect.stringMatching(/^long-long-plugin-with-id____MD5HASH_[\da-f]+$/),
             description: 'Long API',
             parameters: {},
           },

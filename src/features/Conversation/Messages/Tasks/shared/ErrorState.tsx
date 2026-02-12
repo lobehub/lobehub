@@ -6,7 +6,8 @@ import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type TaskDetail, ThreadStatus } from '@/types/index';
+import { type TaskDetail } from '@/types/index';
+import { ThreadStatus } from '@/types/index';
 
 import { MetricItem } from './CompletedState';
 import { formatCost, formatDuration } from './utils';
@@ -98,6 +99,8 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
     <Flexbox gap={12}>
       {/* Error Content */}
       <Alert
+        title={isCancelled ? t('task.status.cancelled') : t('task.status.failed')}
+        type={'secondary'}
         extra={
           errorContent && (
             <Highlighter
@@ -110,11 +113,9 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
             </Highlighter>
           )
         }
-        title={isCancelled ? t('task.status.cancelled') : t('task.status.failed')}
-        type={'secondary'}
       />
       {hasMetrics ? (
-        <Flexbox align="center" gap={12} horizontal wrap="wrap">
+        <Flexbox horizontal align="center" gap={12} wrap="wrap">
           {/* Duration */}
           {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
 

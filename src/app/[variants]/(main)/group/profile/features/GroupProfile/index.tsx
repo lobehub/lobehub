@@ -76,13 +76,13 @@ const GroupProfile = memo(() => {
   return (
     <>
       <Flexbox
+        style={{ cursor: 'default', marginBottom: 12 }}
         onClick={(e) => {
           e.stopPropagation();
         }}
-        style={{ cursor: 'default', marginBottom: 12 }}
       >
         <Flexbox height={66} width={'100%'}>
-          <Flexbox gap={8} horizontal paddingBlock={12}>
+          <Flexbox horizontal gap={8} paddingBlock={12}>
             <AutoSaveHint />
             <GroupStatusTag />
             <GroupVersionReviewTag />
@@ -93,29 +93,29 @@ const GroupProfile = memo(() => {
         <GroupHeader />
         {/* Start Conversation Button */}
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'flex-start'}
           style={{ marginTop: 16 }}
         >
           <Button
             icon={PlayIcon}
+            type={'primary'}
             onClick={() => {
               if (!groupId) return;
               router.push(urlJoin('/group', groupId));
             }}
-            type={'primary'}
           >
             {t('startConversation')}
           </Button>
           <GroupPublishButton />
           <Button
             icon={Settings2Icon}
-            onClick={() => setShowAgentSetting(true)}
             size={'small'}
             style={{ color: theme.colorTextSecondary }}
             type={'text'}
+            onClick={() => setShowAgentSetting(true)}
           >
             {t('advancedSettings')}
           </Button>
@@ -127,11 +127,11 @@ const GroupProfile = memo(() => {
         editor={editor}
         editorData={editorData}
         entityId={groupId}
-        onContentChange={onContentChange}
         placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
+        onContentChange={onContentChange}
       />
       {/* Advanced Settings Modal */}
-      <AgentSettings onCancel={() => setShowAgentSetting(false)} open={showAgentSetting} />
+      <AgentSettings open={showAgentSetting} onCancel={() => setShowAgentSetting(false)} />
     </>
   );
 });

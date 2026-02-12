@@ -41,8 +41,8 @@ chmod +x *.sh
 cd ../..
 
 # 构建未签名的本地测试包
-bun run build
-bun run build-local
+bun run build:main
+bun run package:local
 ```
 
 如果需要模拟 CI 的渠道构建（Nightly / Beta / Stable），可以使用根目录脚本：

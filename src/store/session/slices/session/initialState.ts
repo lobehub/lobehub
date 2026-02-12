@@ -26,16 +26,16 @@ export interface SessionState {
    * @description Used to control the display state of the session rename modal
    */
   sessionRenamingId: string | null;
+  /**
+   * it means defaultSessions
+   */
+  sessions: LobeSessions;
   sessionSearchKeywords?: string;
   /**
    * @title Session ID being updated
    * @description Used to display loading state when session is being updated
    */
   sessionUpdatingId: string | null;
-  /**
-   * it means defaultSessions
-   */
-  sessions: LobeSessions;
 }
 
 export const initialSessionState: SessionState = {

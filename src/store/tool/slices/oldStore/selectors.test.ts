@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ToolStoreState, initialState } from '../../initialState';
+import { type ToolStoreState } from '../../initialState';
+import { initialState } from '../../initialState';
 import { pluginStoreSelectors } from './selectors';
 
 const mockState = {

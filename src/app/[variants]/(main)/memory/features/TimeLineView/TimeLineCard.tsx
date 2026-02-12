@@ -1,6 +1,7 @@
 import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import CateTag from '../CateTag';
 import HashTags from '../HashTags';
@@ -41,23 +42,23 @@ const TimeLineCard = memo<TimeLineCardProps>(
   ({ title, titleAddon, cate, children, actions, onClick, capturedAt, hashTags }) => {
     return (
       <Block
-        className={styles.timelineCard}
         clickable
+        className={styles.timelineCard}
         gap={12}
-        onClick={onClick}
         padding={16}
         variant={'borderless'}
+        onClick={onClick}
       >
         {(title || titleAddon) && (
           <Flexbox
+            horizontal
             align={'center'}
             gap={4}
-            horizontal
+            width={'100%'}
+            wrap={'wrap'}
             style={{
               overflow: 'hidden',
             }}
-            width={'100%'}
-            wrap={'wrap'}
           >
             {title && typeof title === 'string' ? (
               <Text as={'h2'} fontSize={16} style={{ lineHeight: 1.5, margin: 0 }} weight={500}>
@@ -77,16 +78,16 @@ const TimeLineCard = memo<TimeLineCardProps>(
           children
         )}
         <HashTags hashTags={hashTags} />
-        <Flexbox align={'center'} gap={8} horizontal justify={'space-between'}>
-          <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} gap={8}>
             <CateTag cate={cate} />
             <Time capturedAt={capturedAt} />
           </Flexbox>
           <Flexbox
+            horizontal
             align={'center'}
             className={cx(ACTION_CLASSNAME, styles.actions)}
             gap={4}
-            horizontal
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();

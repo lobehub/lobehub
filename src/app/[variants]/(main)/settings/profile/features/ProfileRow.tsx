@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import type { CSSProperties, ReactNode } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 
 interface ProfileRowProps {
   action?: ReactNode;
@@ -24,7 +24,7 @@ const ProfileRow = ({ label, children, action, mobile }: ProfileRowProps) => {
   if (mobile) {
     return (
       <Flexbox gap={12} style={rowStyle}>
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Text strong>{label}</Text>
           {action}
         </Flexbox>
@@ -34,8 +34,8 @@ const ProfileRow = ({ label, children, action, mobile }: ProfileRowProps) => {
   }
 
   return (
-    <Flexbox align="center" gap={24} horizontal justify="space-between" style={rowStyle}>
-      <Flexbox align="center" gap={24} horizontal style={{ flex: 1 }}>
+    <Flexbox horizontal align="center" gap={24} justify="space-between" style={rowStyle}>
+      <Flexbox horizontal align="center" gap={24} style={{ flex: 1 }}>
         <Text style={labelStyle}>{label}</Text>
         <Flexbox style={{ flex: 1 }}>{children}</Flexbox>
       </Flexbox>

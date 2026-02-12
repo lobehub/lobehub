@@ -41,19 +41,19 @@ const OpeningQuestions = memo<OpeningQuestionsProps>(({ mobile, questions }) => 
   return (
     <div className={styles.container}>
       <p className={styles.title}>{t('guide.questions.title')}</p>
-      <Flexbox gap={8} horizontal wrap={'wrap'}>
+      <Flexbox horizontal gap={8} wrap={'wrap'}>
         {questions.slice(0, mobile ? 2 : 5).map((question) => {
           return (
             <Block
-              className={styles.card}
               clickable
+              className={styles.card}
               key={question}
-              onClick={() => {
-                sendMessage({ message: question });
-              }}
               paddingBlock={8}
               paddingInline={12}
               variant={'filled'}
+              onClick={() => {
+                sendMessage({ message: question });
+              }}
             >
               {question}
             </Block>

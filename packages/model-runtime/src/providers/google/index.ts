@@ -1,17 +1,17 @@
-import {
+import type {
   GenerateContentConfig,
-  Tool as GoogleFunctionCallTool,
-  GoogleGenAI,
   HttpOptions,
   ThinkingConfig,
+  Tool as GoogleFunctionCallTool,
 } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import debug from 'debug';
 
-import { LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildGoogleMessages, buildGoogleTools } from '../../core/contextBuilders/google';
 import { GoogleGenerativeAIStream, VertexAIStream } from '../../core/streams';
 import { LOBE_ERROR_KEY } from '../../core/streams/google';
-import {
+import type {
   ChatCompletionTool,
   ChatMethodOptions,
   ChatStreamPayload,
@@ -19,7 +19,7 @@ import {
   GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';

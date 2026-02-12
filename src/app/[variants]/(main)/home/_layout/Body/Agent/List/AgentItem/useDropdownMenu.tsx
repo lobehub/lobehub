@@ -1,5 +1,6 @@
 import { SessionDefaultGroup } from '@lobechat/types';
-import { Icon, type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import {

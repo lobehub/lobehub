@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 
-import type { ActionsBarConfig } from '@/features/Conversation';
+import { type ActionsBarConfig } from '@/features/Conversation';
 
 /**
  * Hook to create thread-specific actionsBar configuration

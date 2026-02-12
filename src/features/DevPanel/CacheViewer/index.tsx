@@ -2,8 +2,8 @@ import { Center, Empty } from '@lobehub/ui';
 import { Database } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import DataTable from './DataTable';
 import { CachePanelContextProvider } from './cacheProvider';
+import DataTable from './DataTable';
 import { getCacheFiles } from './getCacheEntries';
 
 const CacheViewer = async () => {

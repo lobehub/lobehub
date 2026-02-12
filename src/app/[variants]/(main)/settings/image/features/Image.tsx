@@ -1,7 +1,8 @@
 'use client';
 
 import { type UserImageConfig } from '@lobechat/types';
-import { Form, type FormGroupItemType, Icon, Skeleton } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Form, Icon, Skeleton } from '@lobehub/ui';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,7 +43,7 @@ const ImageSettings = memo(() => {
         },
       ],
       extra: isUpdating ? (
-        <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.6 }} />
+        <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.6 }} />
       ) : undefined,
       title: t('settingImage.defaultCount.title'),
     },
@@ -55,6 +56,7 @@ const ImageSettings = memo(() => {
       initialValues={imageSettings}
       items={items}
       itemsType={'group'}
+      variant={'filled'}
       onValuesChange={async (values) => {
         setIsUpdating(true);
         try {
@@ -63,7 +65,6 @@ const ImageSettings = memo(() => {
           setIsUpdating(false);
         }
       }}
-      variant={'filled'}
       {...FORM_STYLE}
     />
   );

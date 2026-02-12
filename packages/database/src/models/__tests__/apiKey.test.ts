@@ -2,10 +2,10 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getTestDB } from '../../core/getTestDB';
 import { apiKeys, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { ApiKeyModel } from '../apiKey';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -95,7 +95,10 @@ describe('ApiKeyModel', () => {
       const { id: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
 
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id: key2 } = await anotherApiKeyModel.create({ name: 'User 2 Key', enabled: true });
+      const { id: key2 } = await anotherApiKeyModel.create({
+        name: 'User 2 Key',
+        enabled: true,
+      });
 
       await apiKeyModel.delete(key2);
 
@@ -346,7 +349,10 @@ describe('ApiKeyModel', () => {
       const { id: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
 
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id: key2 } = await anotherApiKeyModel.create({ name: 'User 2 Key', enabled: true });
+      const { id: key2 } = await anotherApiKeyModel.create({
+        name: 'User 2 Key',
+        enabled: true,
+      });
 
       await apiKeyModel.update(key2, { name: 'Attempted Update' });
 
@@ -372,14 +378,17 @@ describe('ApiKeyModel', () => {
     });
 
     it('should return undefined for non-existent id', async () => {
-      const found = await apiKeyModel.findById(999_999);
+      const found = await apiKeyModel.findById('999_999');
 
       expect(found).toBeUndefined();
     });
 
     it('should only find API keys for the current user', async () => {
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id: key2 } = await anotherApiKeyModel.create({ name: 'User 2 Key', enabled: true });
+      const { id: key2 } = await anotherApiKeyModel.create({
+        name: 'User 2 Key',
+        enabled: true,
+      });
 
       const found = await apiKeyModel.findById(key2);
 
@@ -406,7 +415,10 @@ describe('ApiKeyModel', () => {
 
     it('should only update API keys for the current user', async () => {
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id: key2 } = await anotherApiKeyModel.create({ name: 'User 2 Key', enabled: true });
+      const { id: key2 } = await anotherApiKeyModel.create({
+        name: 'User 2 Key',
+        enabled: true,
+      });
 
       await apiKeyModel.updateLastUsed(key2);
 

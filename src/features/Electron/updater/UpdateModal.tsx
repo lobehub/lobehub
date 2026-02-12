@@ -1,9 +1,7 @@
-import {
-  type ProgressInfo,
-  type UpdateInfo,
-  useWatchBroadcast,
-} from '@lobechat/electron-client-ipc';
-import { Button, Flexbox, type ModalInstance, createModal } from '@lobehub/ui';
+import { type ProgressInfo, type UpdateInfo } from '@lobechat/electron-client-ipc';
+import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import { type ModalInstance } from '@lobehub/ui';
+import { Button, createModal, Flexbox } from '@lobehub/ui';
 import { App, Progress, Spin } from 'antd';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -225,7 +223,7 @@ const UpdateModalContent = memo<UpdateModalContentProps>(({ onClose, setModalPro
         <Button key="cancel" onClick={closeModal}>
           {t('cancel', { ns: 'common' })}
         </Button>,
-        <Button key="download" onClick={handleDownload} type="primary">
+        <Button key="download" type="primary" onClick={handleDownload}>
           {t('updater.downloadNewVersion')}
         </Button>,
       ];
@@ -236,7 +234,7 @@ const UpdateModalContent = memo<UpdateModalContentProps>(({ onClose, setModalPro
         <Button key="later" onClick={handleInstallLater}>
           {t('updater.installLater')}
         </Button>,
-        <Button key="now" onClick={handleInstallNow} type="primary">
+        <Button key="now" type="primary" onClick={handleInstallNow}>
           {t('updater.restartAndInstall')}
         </Button>,
       ];
@@ -244,7 +242,7 @@ const UpdateModalContent = memo<UpdateModalContentProps>(({ onClose, setModalPro
 
     if (stage === 'latest') {
       actions = [
-        <Button key="ok" onClick={closeModal} type="primary">
+        <Button key="ok" type="primary" onClick={closeModal}>
           {t('ok', { ns: 'common' })}
         </Button>,
       ];
@@ -253,7 +251,7 @@ const UpdateModalContent = memo<UpdateModalContentProps>(({ onClose, setModalPro
     if (actions.length === 0) return null;
 
     return (
-      <Flexbox gap={8} horizontal justify="end">
+      <Flexbox horizontal gap={8} justify="end">
         {actions}
       </Flexbox>
     );
@@ -287,7 +285,7 @@ export const useUpdateModal = () => {
 
     instanceRef.current = createModal({
       afterClose: props?.onAfterClose,
-      children: <UpdateModalContent onClose={handleClose} setModalProps={setModalProps} />,
+      children: <UpdateModalContent setModalProps={setModalProps} onClose={handleClose} />,
       footer: null,
       keyboard: true,
       maskClosable: true,

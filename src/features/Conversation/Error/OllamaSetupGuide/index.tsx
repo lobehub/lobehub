@@ -12,12 +12,12 @@ const SetupGuide = memo<{ id?: string }>(({ id }) => {
       align={'center'}
       gap={8}
       padding={16}
+      variant={'outlined'}
       style={{
         overflow: 'hidden',
         position: 'relative',
         width: '100%',
       }}
-      variant={'outlined'}
     >
       {isDesktop ? <OllamaDesktopSetupGuide id={id} /> : <OllamaSetupGuide />}
     </Block>

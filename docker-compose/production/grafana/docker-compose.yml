@@ -61,6 +61,7 @@ services:
         wait \$MINIO_PID
       "
 
+
   # version lock ref: https://github.com/lobehub/lobe-chat/pull/7331
   casdoor:
     image: casbin/casdoor:v2.13.0
@@ -231,6 +232,7 @@ services:
         wait \$LOBE_PID
       "
 
+
 volumes:
   data:
     driver: local
@@ -242,7 +244,6 @@ volumes:
     driver: local
   prometheus_data:
     driver: local
-
 
 networks:
   lobe-network:

@@ -19,7 +19,7 @@ const ChatConversation = memo(() => {
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   return (
-    <DragUploadZone onUploadFiles={handleUploadFiles} style={{ height: '100%', width: '100%' }}>
+    <DragUploadZone style={{ height: '100%', width: '100%' }} onUploadFiles={handleUploadFiles}>
       <Flexbox height={'100%'} style={{ overflow: 'hidden', position: 'relative' }} width={'100%'}>
         {showHeader && <ChatHeader />}
         <ConversationArea />

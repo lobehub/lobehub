@@ -5,12 +5,12 @@ import type {
   AiProviderRuntimeState,
   EnabledProvider,
 } from '@lobechat/types';
-import { AiProviderModelListItem, EnabledAiModel, ExtendParamsType } from 'model-bank';
+import type { AiProviderModelListItem, EnabledAiModel, ExtendParamsType } from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { AiInfraRepos } from './index';
 
 const userId = 'test-user-id';

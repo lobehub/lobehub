@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref https://cloud.tencent.com/document/product/1729/104753
 const Hunyuan: ModelProviderCard = {

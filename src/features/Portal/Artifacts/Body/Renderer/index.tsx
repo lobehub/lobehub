@@ -1,6 +1,7 @@
 import { Markdown, Mermaid } from '@lobehub/ui';
-import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
+
+import dynamic from '@/libs/next/dynamic';
 
 import HTMLRenderer from './HTML';
 import SVGRender from './SVG';

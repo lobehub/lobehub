@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * Lobe Group Management Executor
  *
@@ -6,20 +5,23 @@
  * Note: Member management (searchAgent, inviteAgent, createAgent, removeAgent)
  * is handled by group-agent-builder. This executor focuses on orchestration.
  */
-import {
+import type {
   BroadcastParams,
   CreateWorkflowParams,
   DelegateParams,
   ExecuteTaskParams,
   ExecuteTasksParams,
-  GroupManagementApiName,
-  GroupManagementIdentifier,
   InterruptParams,
   SpeakParams,
   SummarizeParams,
   VoteParams,
 } from '@lobechat/builtin-tool-group-management';
-import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
+import {
+  GroupManagementApiName,
+  GroupManagementIdentifier,
+} from '@lobechat/builtin-tool-group-management';
+import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName> {
   readonly identifier = GroupManagementIdentifier;

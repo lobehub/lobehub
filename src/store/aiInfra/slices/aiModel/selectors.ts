@@ -111,11 +111,13 @@ const isModelHasBuiltinSearch = (id: string, provider: string) => (s: AIProvider
   return !!searchImpl;
 };
 
-const isModelBuiltinSearchInternal = (id: string, provider: string) => (s: AIProviderStoreState): boolean => {
-  const searchImpl = modelBuiltinSearchImpl(id, provider)(s);
+const isModelBuiltinSearchInternal =
+  (id: string, provider: string) =>
+  (s: AIProviderStoreState): boolean => {
+    const searchImpl = modelBuiltinSearchImpl(id, provider)(s);
 
-  return searchImpl === ModelSearchImplement.Internal;
-};
+    return searchImpl === ModelSearchImplement.Internal;
+  };
 
 const isModelHasBuiltinSearchConfig =
   (id: string, provider: string) => (s: AIProviderStoreState) => {

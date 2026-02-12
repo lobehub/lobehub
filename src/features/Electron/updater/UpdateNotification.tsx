@@ -1,4 +1,5 @@
-import { type UpdateInfo, useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import { type UpdateInfo } from '@lobechat/electron-client-ipc';
+import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { Modal } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -93,29 +94,29 @@ export const UpdateNotification: React.FC = () => {
             }}
           >
             <Icon icon={CircleFadingArrowUp} style={{ fontSize: 16 }} />
-            <div onClick={() => setDetailVisible(true)} style={{ cursor: 'pointer', fontSize: 12 }}>
+            <div style={{ cursor: 'pointer', fontSize: 12 }} onClick={() => setDetailVisible(true)}>
               {t('updater.updateReady')}
               {updateInfo?.version ? ` · ${updateInfo.version}` : ''}
             </div>
             <div style={{ flex: 1 }} />
             <Button
+              size="small"
+              type="text"
               onClick={() => {
                 autoUpdateService.installLater();
               }}
-              size="small"
-              type="text"
             >
               {t('updater.later')}
             </Button>
 
             <Button
               loading={isInstalling}
+              size="small"
+              type="primary"
               onClick={() => {
                 setIsInstalling(true);
                 autoUpdateService.installNow();
               }}
-              size="small"
-              type="primary"
             >
               {t('updater.upgradeNow')}
             </Button>
@@ -124,10 +125,10 @@ export const UpdateNotification: React.FC = () => {
 
         <Modal
           footer={null}
-          onCancel={() => setDetailVisible(false)}
           open={detailVisible}
           title={t('updater.updateReady')}
           width={520}
+          onCancel={() => setDetailVisible(false)}
         >
           <Flexbox gap={12} style={{ maxWidth: 480 }}>
             <div style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
@@ -140,17 +141,17 @@ export const UpdateNotification: React.FC = () => {
               />
             )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <Button onClick={() => autoUpdateService.installLater()} size="small">
+              <Button size="small" onClick={() => autoUpdateService.installLater()}>
                 {t('updater.installLater')}
               </Button>
               <Button
                 loading={isInstalling}
+                size="small"
+                type="primary"
                 onClick={() => {
                   setIsInstalling(true);
                   autoUpdateService.installNow();
                 }}
-                size="small"
-                type="primary"
               >
                 {t('updater.restartAndInstall')}
               </Button>

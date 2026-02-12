@@ -1,12 +1,18 @@
 'use client';
 
-import type { SlashOptions } from '@lobehub/editor';
-import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
-import { type ReactNode, memo, useCallback } from 'react';
+import { type SlashOptions } from '@lobehub/editor';
+import { type MenuProps } from '@lobehub/ui';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { type ReactNode } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ActionKeys, ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
-import type { SendButtonHandler, SendButtonProps } from '@/features/ChatInput/store/initialState';
+import { type ActionKeys } from '@/features/ChatInput';
+import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import {
+  type SendButtonHandler,
+  type SendButtonProps,
+} from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
@@ -43,6 +49,10 @@ export interface ChatInputProps {
    * Send menu configuration (for send options like Enter/Cmd+Enter, Add AI/User message)
    */
   sendMenu?: MenuProps;
+  /**
+   * 与 ChatList 共同挨在一起的时候，将一点间距去掉
+   */
+  skipScrollMarginWithList?: boolean;
 }
 
 /**
@@ -60,6 +70,7 @@ const ChatInput = memo<ChatInputProps>(
     sendMenu,
     sendButtonProps: customSendButtonProps,
     onEditorReady,
+    skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
 
@@ -132,14 +143,14 @@ const ChatInput = memo<ChatInputProps>(
     };
 
     const defaultContent = (
-      <WideScreenContainer>
+      <WideScreenContainer style={skipScrollMarginWithList ? { marginTop: -12 } : undefined}>
         {sendMessageErrorMsg && (
           <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
             <Alert
               closable
-              onClose={clearSendMessageError}
               title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
               type={'secondary'}
+              onClose={clearSendMessageError}
             />
           </Flexbox>
         )}
@@ -150,19 +161,19 @@ const ChatInput = memo<ChatInputProps>(
     return (
       <ChatInputProvider
         agentId={agentId}
+        leftActions={leftActions}
+        mentionItems={mentionItems}
+        rightActions={rightActions}
+        sendButtonProps={sendButtonProps}
+        sendMenu={sendMenu}
         chatInputEditorRef={(instance) => {
           if (instance) {
             setEditor(instance);
             onEditorReady?.(instance);
           }
         }}
-        leftActions={leftActions}
-        mentionItems={mentionItems}
         onMarkdownContentChange={updateInputMessage}
         onSend={handleSend}
-        rightActions={rightActions}
-        sendButtonProps={sendButtonProps}
-        sendMenu={sendMenu}
       >
         {children ?? defaultContent}
       </ChatInputProvider>

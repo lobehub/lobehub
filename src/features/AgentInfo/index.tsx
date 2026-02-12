@@ -2,7 +2,8 @@ import { Avatar, Center, Markdown, Tag } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import { type MetaData } from '@/types/meta';
 
@@ -39,14 +40,14 @@ const AgentInfo = memo<AgentInfoProps>(({ systemRole, style, meta, onAvatarClick
           avatar={meta.avatar}
           background={meta.backgroundColor || cssVar.colorFillTertiary}
           className={styles.avatar}
-          onClick={onAvatarClick}
           shape={'square'}
           size={100}
+          onClick={onAvatarClick}
         />
       )}
       {meta.title && <div className={styles.title}>{meta.title}</div>}
       {(meta?.tags as string[])?.length > 0 && (
-        <Center gap={6} horizontal style={{ flexWrap: 'wrap' }}>
+        <Center horizontal gap={6} style={{ flexWrap: 'wrap' }}>
           {(meta.tags as string[]).map((tag: string, index) => (
             <Tag key={index} style={{ margin: 0 }}>
               {startCase(tag).trim()}

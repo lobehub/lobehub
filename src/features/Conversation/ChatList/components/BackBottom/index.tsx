@@ -4,7 +4,8 @@ import { ArrowDownIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AT_BOTTOM_THRESHOLD, OPEN_DEV_INSPECTOR } from '../AutoScroll/DebugInspector';
+import { AT_BOTTOM_THRESHOLD } from '../AutoScroll/const';
+import { OPEN_DEV_INSPECTOR } from '../AutoScroll/DebugInspector';
 import { styles } from './style';
 
 export interface BackBottomProps {
@@ -68,17 +69,17 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
       )}
 
       <ActionIcon
-        className={cx(styles.container, visible && styles.visible)}
         glass
+        className={cx(styles.container, visible && styles.visible)}
         icon={ArrowDownIcon}
-        onClick={onScrollToBottom}
+        title={t('backToBottom')}
+        variant={'outlined'}
         size={{
           blockSize: 36,
           borderRadius: 36,
           size: 18,
         }}
-        title={t('backToBottom')}
-        variant={'outlined'}
+        onClick={onScrollToBottom}
       />
     </>
   );

@@ -17,6 +17,8 @@ const EditState = memo<EditStateProps>(({ id, content }) => {
 
   return (
     <EditorModal
+      open={!!id}
+      value={content ? String(content) : ''}
       onCancel={() => {
         toggleMessageEditing(id, false);
       }}
@@ -25,8 +27,6 @@ const EditState = memo<EditStateProps>(({ id, content }) => {
         await updateMessageContent(id, value);
         toggleMessageEditing(id, false);
       }}
-      open={!!id}
-      value={content ? String(content) : ''}
     />
   );
 });

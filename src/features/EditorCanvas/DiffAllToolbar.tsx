@@ -1,6 +1,7 @@
 'use client';
 
-import { DiffAction, IEditor, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
+import { type IEditor } from '@lobehub/editor';
+import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
 import { Block, Icon } from '@lobehub/ui';
 import { Button, Space } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -120,37 +121,37 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
   return (
     <div className={styles.container}>
       <Block
+        horizontal
+        shadow
         className={cx(styles.toolbar, isDarkMode ? styles.toolbarDark : styles.toolbarLight)}
         gap={8}
-        horizontal
         padding={4}
-        shadow
         variant="outlined"
       >
         <Space>
           <Button
+            size={'small'}
+            type="text"
             onClick={async () => {
               storeEditor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Reject,
               });
               await handleSave();
             }}
-            size={'small'}
-            type="text"
           >
             <Icon icon={X} size={16} />
             {t('modifier.rejectAll')}
           </Button>
           <Button
             color={'default'}
+            size={'small'}
+            variant="filled"
             onClick={async () => {
               storeEditor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Accept,
               });
               await handleSave();
             }}
-            size={'small'}
-            variant="filled"
           >
             <Icon color={'green'} icon={Check} size={16} />
             {t('modifier.acceptAll')}

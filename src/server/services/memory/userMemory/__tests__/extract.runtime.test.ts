@@ -1,8 +1,8 @@
-import type { AiProviderRuntimeState } from '@lobechat/types';
-import type { EnabledAiModel } from 'model-bank';
+import { type AiProviderRuntimeState } from '@lobechat/types';
+import { type EnabledAiModel } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { MemoryExtractionPrivateConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { type MemoryExtractionPrivateConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
 import { MemoryExtractionExecutor } from '../extract';
 
@@ -48,7 +48,6 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     memory: {},
   };
 
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore accessing private constructor for testing
   return new MemoryExtractionExecutor(serverConfig as any, {
     ...basePrivateConfig,

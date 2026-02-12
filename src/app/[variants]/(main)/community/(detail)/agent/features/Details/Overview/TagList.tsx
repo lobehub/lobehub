@@ -28,7 +28,7 @@ const TagList = memo<{ tags: string[] }>(({ tags }) => {
   const showTags = Boolean(tags?.length && tags?.length > 0);
   return (
     showTags && (
-      <Flexbox gap={8} horizontal wrap={'wrap'}>
+      <Flexbox horizontal gap={8} wrap={'wrap'}>
         {tags.map((tag) => (
           <Link
             key={tag}

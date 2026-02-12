@@ -1,6 +1,7 @@
 'use client';
 
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';

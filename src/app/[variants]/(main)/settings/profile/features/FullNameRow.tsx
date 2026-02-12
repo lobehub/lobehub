@@ -63,16 +63,16 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
         {!mobile && <Text strong>{t('profile.fullNameInputHint')}</Text>}
         <Input
           autoFocus
-          onChange={(e) => setEditValue(e.target.value)}
-          onPressEnter={handleSave}
           placeholder={t('profile.fullName')}
           value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onPressEnter={handleSave}
         />
-        <Flexbox gap={8} horizontal justify="flex-end">
-          <Button disabled={saving} onClick={handleCancel} size="small">
+        <Flexbox horizontal gap={8} justify="flex-end">
+          <Button disabled={saving} size="small" onClick={handleCancel}>
             {t('profile.cancel')}
           </Button>
-          <Button loading={saving} onClick={handleSave} size="small" type="primary">
+          <Button loading={saving} size="small" type="primary" onClick={handleSave}>
             {t('profile.save')}
           </Button>
         </Flexbox>
@@ -91,9 +91,9 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
       {mobile ? (
         <Text>{fullName || '--'}</Text>
       ) : (
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Text>{fullName || '--'}</Text>
-          <Text onClick={handleStartEdit} style={{ cursor: 'pointer', fontSize: 13 }}>
+          <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
             {t('profile.updateFullName')}
           </Text>
         </Flexbox>
@@ -104,10 +104,10 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
   if (mobile) {
     return (
       <Flexbox gap={12} style={rowStyle}>
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Text strong>{t('profile.fullName')}</Text>
           {!isEditing && (
-            <Text onClick={handleStartEdit} style={{ cursor: 'pointer', fontSize: 13 }}>
+            <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
               {t('profile.updateFullName')}
             </Text>
           )}
@@ -118,7 +118,7 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
   }
 
   return (
-    <Flexbox gap={24} horizontal style={rowStyle}>
+    <Flexbox horizontal gap={24} style={rowStyle}>
       <Text style={labelStyle}>{t('profile.fullName')}</Text>
       <Flexbox style={{ flex: 1 }}>
         <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>

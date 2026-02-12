@@ -1,7 +1,8 @@
 'use client';
 
 import { Alert } from '@lobehub/ui';
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { type ErrorInfo, type ReactNode } from 'react';
+import { Component } from 'react';
 
 interface EditorErrorBoundaryState {
   error: Error | null;
@@ -47,16 +48,16 @@ export class EditorErrorBoundary extends Component<
 
       return (
         <Alert
-          message={this.state.error?.message || 'An unknown error occurred in the editor'}
           showIcon
+          message={this.state.error?.message || 'An unknown error occurred in the editor'}
+          title="Editor Error"
+          type="error"
           style={{
             margin: 16,
             overflow: 'hidden',
             position: 'relative',
             width: '100%',
           }}
-          title="Editor Error"
-          type="error"
         />
       );
     }

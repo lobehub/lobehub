@@ -1,4 +1,4 @@
-import type { UserStore } from '@/store/user';
+import { type UserStore } from '@/store/user';
 
 import { currentSettings } from './settings';
 

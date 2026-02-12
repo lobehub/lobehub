@@ -2,7 +2,8 @@
 
 import { ActionIcon, Block, Text } from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import React, { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SupervisorAvatar from '@/app/[variants]/(main)/group/features/GroupAvatar';
@@ -27,16 +28,16 @@ const Agent = memo<PropsWithChildren>(() => {
   return (
     <SwitchPanel>
       <Block
-        align={'center'}
         clickable
-        gap={8}
         horizontal
+        align={'center'}
+        gap={8}
         padding={2}
+        variant={'borderless'}
         style={{
           minWidth: 32,
           overflow: 'hidden',
         }}
-        variant={'borderless'}
       >
         <SupervisorAvatar size={28} />
         <Text ellipsis weight={500}>

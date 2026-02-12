@@ -1,5 +1,6 @@
 import debug from 'debug';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { UAParser } from 'ua-parser-js';
 import urlJoin from 'url-join';
 
@@ -165,6 +166,9 @@ export function defineConfig() {
     '/api/dev(.*)',
     '/webapi(.*)',
     '/trpc(.*)',
+    // version
+    '/api/version',
+    '/api/desktop/(.*)',
     // better auth
     '/signin',
     '/signup',
@@ -180,6 +184,7 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
+ 
   ]);
 
   const betterAuthMiddleware = async (req: NextRequest) => {

@@ -2,9 +2,10 @@
 
 import { Button } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+
 import Link from '@/libs/next/Link';
 import { useSearchParams } from '@/libs/next/navigation';
-import { useTranslation } from 'react-i18next';
 
 import AuthCard from '../../../../features/AuthCard';
 import { VerifyEmailContent } from './VerifyEmailContent';
@@ -17,6 +18,8 @@ const VerifyEmailPage = () => {
 
   return (
     <AuthCard
+      subtitle={t('betterAuth.verifyEmail.description', { email: email || '@' })}
+      title={t('betterAuth.verifyEmail.title')}
       footer={
         <Link href={'/signin'}>
           <Button block icon={ChevronLeftIcon} size={'large'}>
@@ -24,8 +27,6 @@ const VerifyEmailPage = () => {
           </Button>
         </Link>
       }
-      subtitle={t('betterAuth.verifyEmail.description', { email: email || '@' })}
-      title={t('betterAuth.verifyEmail.title')}
     >
       <VerifyEmailContent callbackUrl={callbackUrl} email={email} />
     </AuthCard>

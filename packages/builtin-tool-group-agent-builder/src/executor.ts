@@ -10,23 +10,23 @@ import type {
   SearchMarketToolsParams,
 } from '@lobechat/builtin-tool-agent-builder';
 import { AgentBuilderExecutionRuntime } from '@lobechat/builtin-tool-agent-builder/executionRuntime';
-import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 import { GroupAgentBuilderExecutionRuntime } from './ExecutionRuntime';
-import {
-  type BatchCreateAgentsParams,
-  type CreateAgentParams,
-  type GetAgentInfoParams,
-  GroupAgentBuilderApiName,
-  GroupAgentBuilderIdentifier,
-  type InviteAgentParams,
-  type RemoveAgentParams,
-  type SearchAgentParams,
-  type UpdateAgentConfigWithIdParams,
-  type UpdateAgentPromptParams,
-  type UpdateGroupParams,
-  type UpdateGroupPromptParams,
+import type {
+  BatchCreateAgentsParams,
+  CreateAgentParams,
+  GetAgentInfoParams,
+  InviteAgentParams,
+  RemoveAgentParams,
+  SearchAgentParams,
+  UpdateAgentConfigWithIdParams,
+  UpdateAgentPromptParams,
+  UpdateGroupParams,
+  UpdateGroupPromptParams,
 } from './types';
+import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
 const agentBuilderRuntime = new AgentBuilderExecutionRuntime();
 const groupAgentBuilderRuntime = new GroupAgentBuilderExecutionRuntime();

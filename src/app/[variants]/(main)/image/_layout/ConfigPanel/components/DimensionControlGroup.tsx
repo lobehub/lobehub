@@ -52,21 +52,21 @@ const DimensionControlGroup = memo(() => {
     <Flexbox gap={16}>
       {/* 宽高比选择器 */}
       <Flexbox gap={8}>
-        <Flexbox align="center" distribution="space-between" horizontal>
+        <Flexbox horizontal align="center" distribution="space-between">
           <span style={styles.label}>{t('config.aspectRatio.label')}</span>
           <ActionIcon
             aria-label={lockButtonTitle}
             icon={lockIcon}
-            onClick={toggleLock}
             size="small"
             title={lockButtonTitle}
+            onClick={toggleLock}
           />
         </Flexbox>
         <AspectRatioSelect
-          onChange={setAspectRatio}
           options={aspectRatioOptions}
           style={styles.aspectRatioSelect}
           value={aspectRatio}
+          onChange={setAspectRatio}
         />
       </Flexbox>
 
@@ -77,8 +77,8 @@ const DimensionControlGroup = memo(() => {
           <SliderWithInput
             max={widthSchema.max}
             min={widthSchema.min}
-            onChange={setWidth}
             value={width ?? widthSchema.min}
+            onChange={setWidth}
           />
         </Flexbox>
       )}
@@ -90,8 +90,8 @@ const DimensionControlGroup = memo(() => {
           <SliderWithInput
             max={heightSchema.max}
             min={heightSchema.min}
-            onChange={setHeight}
             value={height ?? heightSchema.min}
+            onChange={setHeight}
           />
         </Flexbox>
       )}

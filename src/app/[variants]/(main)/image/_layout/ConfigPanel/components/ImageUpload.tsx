@@ -4,13 +4,14 @@ import { Center } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
-import Image from '@/libs/next/Image';
-import React, { type FC, memo, useEffect, useRef, useState } from 'react';
+import { type FC } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDragAndDrop } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useDragAndDrop';
 import { useUploadFilesValidation } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useUploadFilesValidation';
 import { configPanelStyles } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/style';
+import Image from '@/libs/next/Image';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
 
@@ -310,13 +311,13 @@ const Placeholder: FC<PlaceholderProps> = memo(({ isDragOver, onClick }) => {
 
   return (
     <Center
+      gap={16}
+      horizontal={false}
       className={cx(
         styles.placeholder,
         configStyles.dragTransition,
         isDragOver && configStyles.dragOver,
       )}
-      gap={16}
-      horizontal={false}
       onClick={onClick}
     >
       <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
@@ -343,11 +344,11 @@ const UploadingDisplay: FC<UploadingDisplayProps> = memo(({ previewUrl, progress
   return (
     <div className={styles.uploadingDisplay}>
       <Image
-        alt="Uploading preview"
         fill
+        unoptimized
+        alt="Uploading preview"
         src={previewUrl}
         style={{ objectFit: 'cover' }}
-        unoptimized
       />
       <div className={styles.uploadingOverlay}>
         <CircularProgress value={progress} />
@@ -393,11 +394,11 @@ const SuccessDisplay: FC<SuccessDisplayProps> = memo(
         onClick={onChangeImage}
       >
         <Image
-          alt="Uploaded image"
           fill
+          unoptimized
+          alt="Uploaded image"
           src={imageUrl}
           style={{ objectFit: 'cover' }}
-          unoptimized
         />
 
         {/* Delete button */}
@@ -614,14 +615,14 @@ const ImageUpload: FC<ImageUploadProps> = memo(
         {/* Hidden file input */}
         <input
           accept="image/*"
+          ref={inputRef}
+          style={{ display: 'none' }}
+          type="file"
           onChange={handleFileChange}
           onClick={(e) => {
             // Reset value to allow re-selecting the same file
             e.currentTarget.value = '';
           }}
-          ref={inputRef}
-          style={{ display: 'none' }}
-          type="file"
         />
 
         {/* Conditional rendering based on state */}

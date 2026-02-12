@@ -15,7 +15,7 @@ env:
   DATABASE_DRIVER: node
   KEY_VAULTS_SECRET: LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=
   AUTH_SECRET: e2e-test-secret-key-for-better-auth-32chars!
-  AUTH_EMAIL_VERIFICATION: "0"
+  AUTH_EMAIL_VERIFICATION: '0'
   # Mock S3 env vars to prevent initialization errors
   S3_ACCESS_KEY_ID: e2e-mock-access-key
   S3_SECRET_ACCESS_KEY: e2e-mock-secret-key
@@ -33,8 +33,8 @@ jobs:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5
         with:
-          concurrent_skipping: "same_content_newer"
-          skip_after_successful_duplicate: "true"
+          concurrent_skipping: 'same_content_newer'
+          skip_after_successful_duplicate: 'true'
           do_not_skip: '["workflow_dispatch", "schedule"]'
 
   e2e:
@@ -49,6 +49,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+
         ports:
           - 5432:5432
 
@@ -74,7 +75,7 @@ jobs:
       - name: Build application
         run: bun run build
         env:
-          SKIP_LINT: "1"
+          SKIP_LINT: '1'
 
       - name: Run E2E tests
         run: bun run e2e

@@ -10,7 +10,8 @@ import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage'
 import { type UsageLog } from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 
-import { GroupBy, type UsageChartProps } from '../../../../types';
+import { type UsageChartProps } from '../../../../types';
+import { GroupBy } from '../../../../types';
 import ModelTable from './ModelTable';
 
 const computeList = (data: UsageLog[], groupBy: GroupBy): string[] => {
@@ -46,20 +47,20 @@ const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
   return (
     <>
       <StatisticCard
+        key={groupBy}
+        loading={isLoading}
         extra={
           <ActionIcon
             icon={MaximizeIcon}
-            onClick={() => setOpen(true)}
             size={'small'}
             title={
               groupBy === GroupBy.Model
                 ? t('usage.activeModels.modelTable')
                 : t('usage.activeModels.providerTable')
             }
+            onClick={() => setOpen(true)}
           />
         }
-        key={groupBy}
-        loading={isLoading}
         statistic={{
           description: (
             <Flexbox horizontal wrap={'wrap'}>
@@ -108,13 +109,13 @@ const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
       />
       <Modal
         footer={null}
-        onCancel={() => setOpen(false)}
         open={open}
         title={
           groupBy === GroupBy.Model
             ? t('usage.activeModels.modelTable')
             : t('usage.activeModels.providerTable')
         }
+        onCancel={() => setOpen(false)}
       >
         <ModelTable data={data} groupBy={groupBy} isLoading={isLoading} />
       </Modal>

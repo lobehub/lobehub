@@ -24,10 +24,10 @@ const AutoGenerateAvatar = memo<AutoGenerateAvatarProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         flex={'none'}
         gap={2}
-        horizontal
         padding={2}
         style={{
           background: cssVar.colorBgContainer,
@@ -41,20 +41,20 @@ const AutoGenerateAvatar = memo<AutoGenerateAvatarProps>(
           background={background || cssVar.colorFillTertiary}
           loading={loading}
           locale={locale}
-          onChange={onChange}
           size={48}
+          value={value}
           style={{
             background: cssVar.colorFillTertiary,
           }}
-          value={value}
+          onChange={onChange}
         />
         <ActionIcon
           disabled={!canAutoGenerate}
           icon={Wand2}
           loading={loading}
-          onClick={onGenerate}
           size="small"
           title={!canAutoGenerate ? t('autoGenerateTooltipDisabled') : t('autoGenerate')}
+          onClick={onGenerate}
         />
       </Flexbox>
     );

@@ -1,15 +1,7 @@
 'use client';
 
-import {
-  type ComponentType,
-  type ReactElement,
-  Suspense,
-  createElement,
-  lazy,
-  memo,
-  useCallback,
-  useEffect,
-} from 'react';
+import { type ComponentType, type ReactElement } from 'react';
+import { createElement, lazy, memo, Suspense, useCallback, useEffect } from 'react';
 import { Navigate, Route, useNavigate, useRouteError } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -114,11 +106,11 @@ export const NavigatorRegistrar = memo(() => {
  * Route configuration object type (compatible with createBrowserRouter format)
  */
 export interface RouteConfig {
-  // HydrateFallback is ignored in declarative mode
-  HydrateFallback?: ComponentType;
   children?: RouteConfig[];
   element?: ReactElement;
   errorElement?: ReactElement;
+  // HydrateFallback is ignored in declarative mode
+  HydrateFallback?: ComponentType;
   index?: boolean;
   loader?: (args: { params: Record<string, string | undefined> }) => unknown;
   path?: string;
@@ -150,7 +142,7 @@ export function renderRoutes(routes: RouteConfig[]): ReactElement[] {
     const childRoutes = children ? renderRoutes(children) : undefined;
 
     if (isIndex) {
-      return <Route element={element} index key={`index-${index}`} />;
+      return <Route index element={element} key={`index-${index}`} />;
     }
 
     return (

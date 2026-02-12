@@ -23,10 +23,10 @@ const MemberCard = memo(
       <Card hoverable>
         <Flexbox gap={12}>
           {/* Avatar and Basic Info */}
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             <Avatar avatar={currentVersion.avatar || agent.name[0]} size={48} />
             <Flexbox flex={1} gap={4}>
-              <Flexbox align="center" gap={8} horizontal>
+              <Flexbox horizontal align="center" gap={8}>
                 <Title level={5} style={{ margin: 0 }}>
                   {currentVersion.name || agent.name}
                 </Title>
@@ -62,7 +62,7 @@ const MemberCard = memo(
           )}
 
           {/* Metadata */}
-          <Flexbox gap={8} horizontal wrap="wrap">
+          <Flexbox horizontal gap={8} wrap="wrap">
             {currentVersion.version && (
               <Text type="secondary">
                 {t('members.version', { defaultValue: 'Version' })}: {currentVersion.version}
@@ -79,8 +79,8 @@ const MemberCard = memo(
           {/* URL */}
           {currentVersion.url && (
             <Text
-              copyable={{ text: currentVersion.url }}
               ellipsis
+              copyable={{ text: currentVersion.url }}
               style={{ fontSize: 12 }}
               type="secondary"
             >

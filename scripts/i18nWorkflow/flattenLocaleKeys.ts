@@ -1,10 +1,10 @@
-/* eslint-disable unicorn/prefer-top-level-await */
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import prettier from '@prettier/sync';
 import { consola } from 'consola';
 import { colors } from 'consola/utils';
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { toLodashPath } from '../../src/locales/utils';
 import { localeDir, localeDirJsonList, localesDir, srcDefaultLocales } from './const';
@@ -134,6 +134,6 @@ const run = async () => {
 
 run().catch((error) => {
   consola.error(error);
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(1);
 });

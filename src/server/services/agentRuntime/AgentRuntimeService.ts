@@ -1,44 +1,37 @@
-import {
-  AgentRuntime,
-  type AgentRuntimeContext,
-  type AgentState,
-  GeneralChatAgent,
-} from '@lobechat/agent-runtime';
-import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
+import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import { AgentRuntime, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { type ChatMessageError } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
-import {
-  AgentRuntimeCoordinator,
-  type AgentRuntimeCoordinatorOptions,
-  createStreamEventManager,
-} from '@/server/modules/AgentRuntime';
-import {
-  type RuntimeExecutorContext,
-  createRuntimeExecutors,
-} from '@/server/modules/AgentRuntime/RuntimeExecutors';
-import type { IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
+import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
+import { type RuntimeExecutorContext } from '@/server/modules/AgentRuntime/RuntimeExecutors';
+import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
+import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
 import { PluginGatewayService } from '@/server/services/pluginGateway';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
+import { dynamicInterventionAudits } from '@/tools/dynamicInterventionAudits';
 
-import type {
-  AgentExecutionParams,
-  AgentExecutionResult,
-  OperationCreationParams,
-  OperationCreationResult,
-  OperationStatusResult,
-  PendingInterventionsResult,
-  StartExecutionParams,
-  StartExecutionResult,
-  StepCompletionReason,
-  StepLifecycleCallbacks,
+import {
+  type AgentExecutionParams,
+  type AgentExecutionResult,
+  type OperationCreationParams,
+  type OperationCreationResult,
+  type OperationStatusResult,
+  type PendingInterventionsResult,
+  type StartExecutionParams,
+  type StartExecutionResult,
+  type StepCompletionReason,
+  type StepLifecycleCallbacks,
 } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -252,6 +245,7 @@ export class AgentRuntimeService {
           // need be removed
           modelRuntimeConfig,
           userId,
+          workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
         },
         // modelRuntimeConfig at state level for executor fallback
@@ -842,6 +836,7 @@ export class AgentRuntimeService {
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
       },
+      dynamicInterventionAudits,
       modelRuntimeConfig: metadata?.modelRuntimeConfig,
       operationId,
       userId: metadata?.userId,

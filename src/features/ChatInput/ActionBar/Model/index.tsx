@@ -77,12 +77,12 @@ const ModelSwitch = memo(() => {
   );
 
   return (
-    <Flexbox align={'center'} className={isModelHasExtendParams ? styles.container : ''} horizontal>
+    <Flexbox horizontal align={'center'} className={isModelHasExtendParams ? styles.container : ''}>
       <ModelSwitchPanel
         model={model}
-        onModelChange={handleModelChange}
         placement={dropdownPlacement}
         provider={provider}
+        onModelChange={handleModelChange}
       >
         <Center
           className={cx(styles.model, isModelHasExtendParams && styles.modelWithControl)}
@@ -98,14 +98,14 @@ const ModelSwitch = memo(() => {
       {isModelHasExtendParams && (
         <Action
           icon={Settings2Icon}
+          showTooltip={false}
+          style={{ borderRadius: 24, marginInlineStart: -4 }}
+          title={t('extendParams.title')}
           popover={{
             content: <ControlsForm />,
             minWidth: 350,
             placement: 'topLeft',
           }}
-          showTooltip={false}
-          style={{ borderRadius: 24, marginInlineStart: -4 }}
-          title={t('extendParams.title')}
         />
       )}
     </Flexbox>

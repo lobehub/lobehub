@@ -1,5 +1,6 @@
 import { useEditor } from '@lobehub/editor/react';
-import { Modal, ModalProps, createRawModal } from '@lobehub/ui';
+import { type ModalProps } from '@lobehub/ui';
+import { createRawModal, Modal } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,11 +24,19 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
 
   return (
     <Modal
+      destroyOnHidden
       cancelText={t('cancel')}
       closable={false}
       confirmLoading={confirmLoading}
-      destroyOnHidden
       okText={t('ok')}
+      title={null}
+      width={'min(90vw, 920px)'}
+      styles={{
+        body: {
+          overflow: 'hidden',
+          padding: 0,
+        },
+      }}
       onOk={async () => {
         setConfirmLoading(true);
         let finalValue;
@@ -39,20 +48,12 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
         await onConfirm?.(finalValue || '');
         setConfirmLoading(false);
       }}
-      styles={{
-        body: {
-          overflow: 'hidden',
-          padding: 0,
-        },
-      }}
-      title={null}
-      width={'min(90vw, 920px)'}
       {...rest}
     >
       {enableRichRender ? (
         <EditorCanvas defaultValue={value} editor={editor} />
       ) : (
-        <TextareCanvas defaultValue={value} onChange={(v) => setV(v)} value={v} />
+        <TextareCanvas defaultValue={value} value={v} onChange={(v) => setV(v)} />
       )}
     </Modal>
   );

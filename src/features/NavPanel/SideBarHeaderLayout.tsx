@@ -1,17 +1,19 @@
 'use client';
 
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Breadcrumb, type BreadcrumbProps } from 'antd';
+import { type BreadcrumbProps } from 'antd';
+import { Breadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
 
-import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 import BackButton from './components/BackButton';
+import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
 const prefixCls = 'ant';
 
@@ -62,21 +64,21 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     const navigate = useNavigate();
     const leftContent = left ? (
       <Flexbox
+        horizontal
         align={'center'}
         flex={1}
         gap={2}
-        horizontal
         style={{
           overflow: 'hidden',
         }}
       >
         {showBack && (
           <BackButton
+            to={backTo}
             size={{
               blockSize: 32,
               size: 16,
             }}
-            to={backTo}
           />
         )}
         {left && typeof left === 'string' ? (
@@ -91,6 +93,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
       <Flexbox flex={1} paddingInline={6}>
         <Breadcrumb
           className={styles.breadcrumb}
+          separator={<Icon icon={ChevronRightIcon} />}
           items={[
             {
               href: '/',
@@ -108,25 +111,24 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
               }
             },
           }))}
-          separator={<Icon icon={ChevronRightIcon} />}
         />
       </Flexbox>
     );
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         className={styles.container}
         flex={'none'}
-        horizontal
         justify={'space-between'}
         padding={6}
       >
         {leftContent}
         <Flexbox
+          horizontal
           align={'center'}
           gap={2}
-          horizontal
           justify={'flex-end'}
           style={{
             overflow: 'hidden',

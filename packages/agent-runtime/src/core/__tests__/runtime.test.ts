@@ -1,7 +1,7 @@
-import { ChatToolPayload } from '@lobechat/types';
+import type { ChatToolPayload } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
+import type {
   Agent,
   AgentEventError,
   AgentRuntimeContext,
@@ -10,7 +10,6 @@ import {
   CostCalculationContext,
   CostLimit,
   RuntimeConfig,
-  ToolsCalling,
   Usage,
 } from '../../types';
 import { AgentRuntime } from '../runtime';
@@ -23,9 +22,10 @@ class MockAgent implements Agent {
 
   async runner(context: AgentRuntimeContext, state: AgentState) {
     switch (context.phase) {
-      case 'user_input':
+      case 'user_input': {
         return { type: 'call_llm' as const, payload: { messages: state.messages } };
-      case 'llm_result':
+      }
+      case 'llm_result': {
         const llmPayload = context.payload as { result: any; hasToolCalls: boolean };
         if (llmPayload.hasToolCalls) {
           return {
@@ -34,10 +34,13 @@ class MockAgent implements Agent {
           };
         }
         return { type: 'finish' as const, reason: 'completed' as const, reasonDetail: 'Done' };
-      case 'tool_result':
+      }
+      case 'tool_result': {
         return { type: 'call_llm' as const, payload: { messages: state.messages } };
-      default:
+      }
+      default: {
         return { type: 'finish' as const, reason: 'completed' as const, reasonDetail: 'Done' };
+      }
     }
   }
 }
@@ -520,7 +523,7 @@ describe('AgentRuntime', () => {
       const agent = new MockAgent();
       const runtime = new AgentRuntime(agent);
 
-      let state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+      const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
       expect(state.stepCount).toBe(0);
 
       // First step
@@ -639,7 +642,7 @@ describe('AgentRuntime', () => {
       const runtime = new AgentRuntime(agent);
 
       // Create interrupted state
-      let state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+      const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
       const interruptResult = runtime.interrupt(state, 'Test interruption');
 
       // Resume execution
@@ -660,7 +663,7 @@ describe('AgentRuntime', () => {
       const agent = new MockAgent();
       const runtime = new AgentRuntime(agent);
 
-      let state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+      const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
       const interruptResult = runtime.interrupt(state, 'Fatal error', false);
 
       await expect(runtime.resume(interruptResult.newState)).rejects.toThrow(
@@ -686,7 +689,7 @@ describe('AgentRuntime', () => {
       };
       const runtime = new AgentRuntime(agent);
 
-      let state = AgentRuntime.createInitialState({
+      const state = AgentRuntime.createInitialState({
         operationId: 'test-session',
         messages: [{ role: 'user', content: 'Hello' }],
       });
@@ -769,14 +772,16 @@ describe('AgentRuntime', () => {
 
         async runner(context: AgentRuntimeContext, state: AgentState) {
           switch (context.phase) {
-            case 'user_input':
+            case 'user_input': {
               return { type: 'call_llm' as const, payload: { messages: state.messages } };
-            default:
+            }
+            default: {
               return {
                 type: 'finish' as const,
                 reason: 'completed' as const,
                 reasonDetail: 'Done',
               };
+            }
           }
         }
 
@@ -846,7 +851,7 @@ describe('AgentRuntime', () => {
 
         calculateCost(context: CostCalculationContext): Cost {
           const newCost = structuredClone(context.previousCost || ({} as Cost));
-          newCost.total = 10.0; // High cost that exceeds limit
+          newCost.total = 10; // High cost that exceeds limit
           newCost.currency = 'USD';
           newCost.calculatedAt = new Date().toISOString();
           return newCost;
@@ -860,7 +865,7 @@ describe('AgentRuntime', () => {
       const runtime = new AgentRuntime(agent);
 
       const costLimit: CostLimit = {
-        maxTotalCost: 5.0,
+        maxTotalCost: 5,
         currency: 'USD',
         onExceeded: 'stop',
       };
@@ -889,9 +894,9 @@ describe('AgentRuntime', () => {
 
         calculateCost(context: CostCalculationContext): Cost {
           return {
-            llm: { byModel: [], total: 15.0, currency: 'USD' },
+            llm: { byModel: [], total: 15, currency: 'USD' },
             tools: { byTool: [], total: 0, currency: 'USD' },
-            total: 15.0,
+            total: 15,
             currency: 'USD',
             calculatedAt: new Date().toISOString(),
           };
@@ -905,7 +910,7 @@ describe('AgentRuntime', () => {
       const runtime = new AgentRuntime(agent);
 
       const costLimit: CostLimit = {
-        maxTotalCost: 10.0,
+        maxTotalCost: 10,
         currency: 'USD',
         onExceeded: 'interrupt',
       };
@@ -944,9 +949,10 @@ describe('AgentRuntime', () => {
         .fn()
         .mockImplementation((context: AgentRuntimeContext, state: AgentState) => {
           switch (context.phase) {
-            case 'user_input':
+            case 'user_input': {
               return Promise.resolve({ type: 'call_llm', payload: { messages: state.messages } });
-            case 'llm_result':
+            }
+            case 'llm_result': {
               const llmPayload = context.payload as { result: any; hasToolCalls: boolean };
               if (llmPayload.hasToolCalls) {
                 // Convert OpenAI format tool_calls to ChatToolPayload format
@@ -963,7 +969,8 @@ describe('AgentRuntime', () => {
                 });
               }
               return Promise.resolve({ type: 'finish', reason: 'completed', reasonDetail: 'Done' });
-            case 'human_approved_tool':
+            }
+            case 'human_approved_tool': {
               const approvedPayload = context.payload as { approvedToolCall: ChatToolPayload };
               return Promise.resolve({
                 payload: {
@@ -972,16 +979,19 @@ describe('AgentRuntime', () => {
                 },
                 type: 'call_tool',
               });
-            case 'tool_result':
+            }
+            case 'tool_result': {
               return Promise.resolve({ type: 'call_llm', payload: { messages: state.messages } });
-            default:
+            }
+            default: {
               return Promise.resolve({ type: 'finish', reason: 'completed', reasonDetail: 'Done' });
+            }
           }
         });
 
       async function* mockModelRuntime(payload: unknown) {
         const messages = (payload as any).messages;
-        const lastMessage = messages[messages.length - 1];
+        const lastMessage = messages.at(-1);
         if (lastMessage.role === 'user') {
           yield { content: "I'll check the weather for you." };
           yield {
@@ -1005,7 +1015,7 @@ describe('AgentRuntime', () => {
       const runtime = new AgentRuntime(agent);
 
       // Step 1: User asks question
-      let state = AgentRuntime.createInitialState({
+      const state = AgentRuntime.createInitialState({
         operationId: 'test-session',
         messages: [{ role: 'user', content: "What's the weather in Beijing?" }],
       });
@@ -1375,8 +1385,9 @@ describe('AgentRuntime', () => {
           executionLog.push(`runner(${context.phase})`);
 
           switch (context.phase) {
-            case 'user_input':
+            case 'user_input': {
               return { type: 'call_llm' as const, payload: { messages: state.messages } };
+            }
 
             case 'llm_result': {
               const llmPayload = context.payload as { result: any; hasToolCalls: boolean };
@@ -1402,12 +1413,14 @@ describe('AgentRuntime', () => {
               return { type: 'finish' as const, reason: 'completed' as const };
             }
 
-            case 'tools_batch_result':
+            case 'tools_batch_result': {
               // After tools complete, call LLM again
               return { type: 'call_llm' as const, payload: { messages: state.messages } };
+            }
 
-            default:
+            default: {
               return { type: 'finish' as const, reason: 'completed' as const };
+            }
           }
         }
 
@@ -1450,7 +1463,7 @@ describe('AgentRuntime', () => {
       const runtime = new AgentRuntime(agent);
 
       // Start with user message
-      let state = AgentRuntime.createInitialState({
+      const state = AgentRuntime.createInitialState({
         operationId: 'multi-round-test',
         messages: [{ role: 'user', content: 'Please search and crawl some pages' }],
       });
@@ -1847,9 +1860,9 @@ describe('AgentRuntime', () => {
           return {
             calculatedAt: new Date().toISOString(),
             currency: 'USD',
-            llm: { byModel: [], currency: 'USD', total: 15.0 },
+            llm: { byModel: [], currency: 'USD', total: 15 },
             tools: { byTool: [], currency: 'USD', total: 0 },
-            total: 15.0,
+            total: 15,
           };
         }
 
@@ -1863,7 +1876,7 @@ describe('AgentRuntime', () => {
 
       const costLimit: CostLimit = {
         currency: 'USD',
-        maxTotalCost: 10.0,
+        maxTotalCost: 10,
         onExceeded: 'warn',
       };
 
@@ -1914,8 +1927,8 @@ describe('AgentRuntime', () => {
             calculatedAt: new Date().toISOString(),
             currency: 'USD',
             llm: { byModel: [], currency: 'USD', total: 0 },
-            tools: { byTool: [], currency: 'USD', total: 20.0 },
-            total: 20.0,
+            tools: { byTool: [], currency: 'USD', total: 20 },
+            total: 20,
           };
         }
       }
@@ -1925,7 +1938,7 @@ describe('AgentRuntime', () => {
 
       const costLimit: CostLimit = {
         currency: 'USD',
-        maxTotalCost: 10.0,
+        maxTotalCost: 10,
         onExceeded: 'stop',
       };
 
@@ -1966,9 +1979,9 @@ describe('AgentRuntime', () => {
             tools: {
               byTool: [],
               currency: 'USD',
-              total: baseCost.tools.total + 5.0,
+              total: baseCost.tools.total + 5,
             },
-            total: baseCost.total + 5.0,
+            total: baseCost.total + 5,
           };
         }
 

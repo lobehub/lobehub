@@ -1,6 +1,8 @@
-import { Icon, type IconSize } from '@lobehub/ui';
+import { type IconSize } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { Loader2 } from 'lucide-react';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 interface UpdateLoadingProps {
   size?: IconSize;
@@ -10,7 +12,7 @@ interface UpdateLoadingProps {
 const UpdateLoading = memo<UpdateLoadingProps>(({ size, style }) => {
   return (
     <div style={style}>
-      <Icon icon={Loader2} size={size} spin />
+      <Icon spin icon={Loader2} size={size} />
     </div>
   );
 });

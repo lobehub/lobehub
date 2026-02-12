@@ -1,7 +1,7 @@
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
-import type { State } from '../../initialState';
-import type { VirtuaScrollMethods, VisibleItemMetrics } from './initialState';
+import { type State } from '../../initialState';
+import { type VirtuaScrollMethods, type VisibleItemMetrics } from './initialState';
 
 export interface VirtuaListAction {
   /**

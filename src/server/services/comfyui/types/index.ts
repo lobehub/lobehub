@@ -1,4 +1,4 @@
-import type { ComfyUIKeyVault } from '@lobechat/types';
+import { type ComfyUIKeyVault } from '@lobechat/types';
 
 export interface ComfyUIServiceConfig {
   baseURL: string;

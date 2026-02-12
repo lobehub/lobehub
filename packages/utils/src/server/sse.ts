@@ -137,7 +137,7 @@ export type AgentStreamEventType =
 /**
  * Creates SSE headers for agent streaming
  */
-// eslint-disable-next-line no-undef
+
 export function createSSEHeaders(): HeadersInit {
   return {
     'Access-Control-Allow-Headers': 'Cache-Control, Last-Event-ID',

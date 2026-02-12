@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "Dosya başarıyla eklendi",
+  "addToKnowledgeBase.alreadyExists": "Bu dosya zaten kütüphanede mevcut",
   "addToKnowledgeBase.confirm": "Ekle",
   "addToKnowledgeBase.error": "Dosya Kütüphane'ye eklenemedi",
   "addToKnowledgeBase.id.placeholder": "Eklenecek bir kütüphane seçin",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "Kütüphane adı",
   "createNew.name.required": "Lütfen bir kütüphane adı girin",
   "createNew.title": "Yeni Kütüphane Oluştur",
+  "moveToKnowledgeBase.error": "Dosya kütüphaneye taşınamadı",
+  "moveToKnowledgeBase.success": "Dosya başarıyla taşındı",
   "tab.evals": "Değerlendirmeler",
   "tab.files": "Dosyalar",
   "tab.settings": "Ayarlar",

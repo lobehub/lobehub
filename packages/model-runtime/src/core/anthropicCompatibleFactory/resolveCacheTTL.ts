@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 
-import { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload } from '../../types';
 
 type CacheTTL = Anthropic.Messages.CacheControlEphemeral['ttl'];
 

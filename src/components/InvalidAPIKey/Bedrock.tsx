@@ -26,65 +26,65 @@ const BedrockForm = memo<{ description: string }>(({ description }) => {
     >
       <InputPassword
         autoComplete={'new-password'}
-        onChange={(e) => {
-          setConfig(ModelProvider.Bedrock, { keyVaults: { accessKeyId: e.target.value } });
-        }}
         placeholder={'Aws Access Key Id'}
         value={accessKeyId}
         variant={'filled'}
+        onChange={(e) => {
+          setConfig(ModelProvider.Bedrock, { keyVaults: { accessKeyId: e.target.value } });
+        }}
       />
       <InputPassword
         autoComplete={'new-password'}
-        onChange={(e) => {
-          setConfig(ModelProvider.Bedrock, { keyVaults: { secretAccessKey: e.target.value } });
-        }}
         placeholder={'Aws Secret Access Key'}
         value={secretAccessKey}
         variant={'filled'}
+        onChange={(e) => {
+          setConfig(ModelProvider.Bedrock, { keyVaults: { secretAccessKey: e.target.value } });
+        }}
       />
       {showSessionToken ? (
         <InputPassword
           autoComplete={'new-password'}
-          onChange={(e) => {
-            setConfig(ModelProvider.Bedrock, { keyVaults: { sessionToken: e.target.value } });
-          }}
           placeholder={'Aws Session Token'}
           value={sessionToken}
           variant={'filled'}
+          onChange={(e) => {
+            setConfig(ModelProvider.Bedrock, { keyVaults: { sessionToken: e.target.value } });
+          }}
         />
       ) : (
         <Button
           block
           icon={ShieldPlus}
+          type={'text'}
           onClick={() => {
             setShowSessionToken(true);
           }}
-          type={'text'}
         >
           {t('bedrock.unlock.customSessionToken')}
         </Button>
       )}
       {showRegion ? (
         <Select
-          onChange={(region) => {
-            setConfig('bedrock', { keyVaults: { region } });
-          }}
+          placeholder={'https://api.openai.com/v1'}
+          style={{ width: '100%' }}
+          value={region}
           options={['us-east-1', 'us-west-2', 'ap-southeast-1', 'eu-central-1'].map((i) => ({
             label: i,
             value: i,
           }))}
-          placeholder={'https://api.openai.com/v1'}
-          style={{ width: '100%' }}
-          value={region}
+          onChange={(region) => {
+            setConfig('bedrock', { keyVaults: { region } });
+          }}
         />
       ) : (
         <Button
           block
           icon={<Icon icon={Network} />}
+          type={'text'}
           onClick={() => {
             setShow(true);
           }}
-          type={'text'}
         >
           {t('bedrock.unlock.customRegion')}
         </Button>

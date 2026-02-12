@@ -1,4 +1,4 @@
-import { type BuiltinInspector } from '@lobechat/types';
+import type { BuiltinInspector } from '@lobechat/types';
 
 import { NotebookApiName } from '../../types';
 import { CreateDocumentInspector } from './CreateDocument';

@@ -2,7 +2,8 @@
 
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { type ReactNode, memo, useMemo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
 
 import Loading from '@/app/[variants]/(main)/memory/features/Loading';
@@ -141,24 +142,24 @@ function TimelineViewInner<
     <div className={styles.timelineContainer}>
       <div className={cx(styles.timelineLine, isDarkMode && styles.timelineLine_dark)} />
       <GroupedVirtuoso
+        customScrollParent={scrollParent}
+        endReached={hasMore && onLoadMore ? onLoadMore : undefined}
+        groupCounts={groupCounts}
+        increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
+        overscan={24}
+        style={{ minHeight: '100%' }}
         components={{
           Footer: isLoading ? () => <Loading viewMode={'timeline'} /> : undefined,
         }}
-        customScrollParent={scrollParent}
-        endReached={hasMore && onLoadMore ? onLoadMore : undefined}
         groupContent={(index) => {
           const periodKey = sortedPeriods[index];
           const itemCount = groupCounts[index];
           return renderHeader(periodKey, itemCount);
         }}
-        groupCounts={groupCounts}
-        increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
         itemContent={(index) => {
           const item = groupedItems[index];
           return renderItem(item);
         }}
-        overscan={24}
-        style={{ minHeight: '100%' }}
       />
     </div>
   );

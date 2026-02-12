@@ -9,7 +9,7 @@ import urlJoin from 'url-join';
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 
 import { styles } from '../../styles';
-import type { ListItem } from '../../types';
+import { type ListItem } from '../../types';
 import { menuKey } from '../../utils';
 import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
 import { SingleProviderModelItem } from './SingleProviderModelItem';
@@ -32,14 +32,14 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'no-provider': {
         return (
           <Block
-            className={styles.menuItem}
             clickable
-            gap={8}
             horizontal
+            className={styles.menuItem}
+            gap={8}
             key="no-provider"
-            onClick={() => navigate('/settings/provider/all')}
             style={{ color: cssVar.colorTextTertiary }}
             variant={'borderless'}
+            onClick={() => navigate('/settings/provider/all')}
           >
             {t('ModelSwitchPanel.emptyProvider')}
             <Icon icon={LucideArrowRight} />
@@ -50,8 +50,8 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'group-header': {
         return (
           <Flexbox
-            className={styles.groupHeader}
             horizontal
+            className={styles.groupHeader}
             justify="space-between"
             key={`header-${item.provider.id}`}
             paddingBlock={'12px 4px'}
@@ -66,6 +66,8 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             <ActionIcon
               className="settings-icon"
               icon={LucideBolt}
+              size={'small'}
+              title={t('ModelSwitchPanel.goToSettings')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -76,8 +78,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   navigate(url);
                 }
               }}
-              size={'small'}
-              title={t('ModelSwitchPanel.goToSettings')}
             />
           </Flexbox>
         );
@@ -86,12 +86,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'empty-model': {
         return (
           <Flexbox
+            horizontal
             className={styles.menuItem}
             gap={8}
-            horizontal
             key={`empty-${item.provider.id}`}
-            onClick={() => navigate(`/settings/provider/${item.provider.id}`)}
             style={{ color: cssVar.colorTextTertiary }}
+            onClick={() => navigate(`/settings/provider/${item.provider.id}`)}
           >
             {t('ModelSwitchPanel.emptyModel')}
             <Icon icon={LucideArrowRight} />
@@ -105,20 +105,20 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
 
         return (
           <Block
-            className={styles.menuItem}
             clickable
+            className={styles.menuItem}
             key={key}
+            variant={isActive ? 'filled' : 'borderless'}
             onClick={async () => {
               onModelChange(item.model.id, item.provider.id);
               onClose();
             }}
-            variant={isActive ? 'filled' : 'borderless'}
           >
             <ModelItemRender
               {...item.model}
               {...item.model.abilities}
-              newBadgeLabel={newLabel}
               showInfoTag
+              newBadgeLabel={newLabel}
             />
           </Block>
         );
@@ -131,14 +131,14 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
 
         return (
           <Block
-            className={styles.menuItem}
             clickable
+            className={styles.menuItem}
             key={key}
+            variant={isActive ? 'filled' : 'borderless'}
             onClick={async () => {
               onModelChange(item.data.model.id, singleProvider.id);
               onClose();
             }}
-            variant={isActive ? 'filled' : 'borderless'}
           >
             <SingleProviderModelItem data={item.data} newLabel={newLabel} />
           </Block>

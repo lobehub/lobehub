@@ -1,7 +1,7 @@
 import qs from 'query-string';
 import urlJoin from 'url-join';
 
-import { CrawlImpl, CrawlSuccessResult } from '../type';
+import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
 
 const BASE_URL = process.env.BROWSERLESS_URL ?? 'https://chrome.browserless.io';

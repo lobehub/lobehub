@@ -1,9 +1,9 @@
+import { type LucideIcon } from 'lucide-react';
 import {
   BrainCircuit,
   FilePenIcon,
   Image,
   LibraryBigIcon,
-  type LucideIcon,
   Settings,
   ShapesIcon,
 } from 'lucide-react';

@@ -2,6 +2,389 @@
 
 # Changelog
 
+### [Version 2.1.26](https://github.com/lobehub/lobe-chat/compare/v2.1.25...v2.1.26)
+
+<sup>Released on **2026-02-10**</sup>
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Update i18n, closes [#12227](https://github.com/lobehub/lobe-chat/issues/12227) ([37b06c4](https://github.com/lobehub/lobe-chat/commit/37b06c4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.25](https://github.com/lobehub/lobe-chat/compare/v2.1.24...v2.1.25)
+
+<sup>Released on **2026-02-09**</sup>
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.24](https://github.com/lobehub/lobe-chat/compare/v2.1.23...v2.1.24)
+
+<sup>Released on **2026-02-09**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix multimodal content_part images rendered as base64 text.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix multimodal content_part images rendered as base64 text, closes [#12210](https://github.com/lobehub/lobe-chat/issues/12210) ([00ff5b9](https://github.com/lobehub/lobe-chat/commit/00ff5b9))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.23](https://github.com/lobehub/lobe-chat/compare/v2.1.22...v2.1.23)
+
+<sup>Released on **2026-02-09**</sup>
+
+#### 🐛 Bug Fixes
+
+- **swr**: Prevent useActionSWR isValidating from getting stuck.
+- **misc**: Fix editor content missing when send error, use custom avatar for group chat in sidebar.
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **swr**: Prevent useActionSWR isValidating from getting stuck, closes [#12059](https://github.com/lobehub/lobe-chat/issues/12059) ([8877bc1](https://github.com/lobehub/lobe-chat/commit/8877bc1))
+- **misc**: Fix editor content missing when send error, closes [#12205](https://github.com/lobehub/lobe-chat/issues/12205) ([ee7ae5b](https://github.com/lobehub/lobe-chat/commit/ee7ae5b))
+- **misc**: Use custom avatar for group chat in sidebar, closes [#12208](https://github.com/lobehub/lobe-chat/issues/12208) ([31145c9](https://github.com/lobehub/lobe-chat/commit/31145c9))
+
+#### Styles
+
+- **misc**: Update i18n, closes [#12025](https://github.com/lobehub/lobe-chat/issues/12025) ([c12d022](https://github.com/lobehub/lobe-chat/commit/c12d022))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.23](https://github.com/lobehub/lobe-chat/compare/v2.1.22...v2.1.23)
+
+<sup>Released on **2026-02-08**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix editor content missing when send error.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix editor content missing when send error, closes [#12205](https://github.com/lobehub/lobe-chat/issues/12205) ([ee7ae5b](https://github.com/lobehub/lobe-chat/commit/ee7ae5b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.23](https://github.com/lobehub/lobe-chat/compare/v2.1.22...v2.1.23)
+
+<sup>Released on **2026-02-08**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix editor content missing when send error.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix editor content missing when send error, closes [#12205](https://github.com/lobehub/lobe-chat/issues/12205) ([ee7ae5b](https://github.com/lobehub/lobe-chat/commit/ee7ae5b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.22](https://github.com/lobehub/lobe-chat/compare/v2.1.21...v2.1.22)
+
+<sup>Released on **2026-02-08**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Register Notebook tool in server runtime.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Register Notebook tool in server runtime, closes [#12203](https://github.com/lobehub/lobe-chat/issues/12203) ([be6da39](https://github.com/lobehub/lobe-chat/commit/be6da39))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.21](https://github.com/lobehub/lobe-chat/compare/v2.1.20...v2.1.21)
+
+<sup>Released on **2026-02-08**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Add end-user info on OpenAI Responses API call, enable vertical scrolling for topic list on mobile.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Add end-user info on OpenAI Responses API call, closes [#12134](https://github.com/lobehub/lobe-chat/issues/12134) ([72a85ac](https://github.com/lobehub/lobe-chat/commit/72a85ac))
+- **misc**: Enable vertical scrolling for topic list on mobile, closes [#12157](https://github.com/lobehub/lobe-chat/issues/12157) [lobehub/lobe-chat#12029](https://github.com/lobehub/lobe-chat/issues/12029) ([bd4e253](https://github.com/lobehub/lobe-chat/commit/bd4e253))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.21](https://github.com/lobehub/lobe-chat/compare/v2.1.20...v2.1.21)
+
+<sup>Released on **2026-02-08**</sup>
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.21](https://github.com/lobehub/lobe-chat/compare/v2.1.20...v2.1.21)
+
+<sup>Released on **2026-02-08**</sup>
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.20](https://github.com/lobehub/lobe-chat/compare/v2.1.19...v2.1.20)
+
+<sup>Released on **2026-02-08**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Add api/version and api/desktop to public routes, show notification when file upload fails due to storage plan limit.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Add api/version and api/desktop to public routes, closes [#12194](https://github.com/lobehub/lobe-chat/issues/12194) ([ea81cd4](https://github.com/lobehub/lobe-chat/commit/ea81cd4))
+- **misc**: Show notification when file upload fails due to storage plan limit, closes [#12176](https://github.com/lobehub/lobe-chat/issues/12176) ([f26d0df](https://github.com/lobehub/lobe-chat/commit/f26d0df))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.20](https://github.com/lobehub/lobe-chat/compare/v2.1.19...v2.1.20)
+
+<sup>Released on **2026-02-08**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Add api/version and api/desktop to public routes, show notification when file upload fails due to storage plan limit.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Add api/version and api/desktop to public routes, closes [#12194](https://github.com/lobehub/lobe-chat/issues/12194) ([ea81cd4](https://github.com/lobehub/lobe-chat/commit/ea81cd4))
+- **misc**: Show notification when file upload fails due to storage plan limit, closes [#12176](https://github.com/lobehub/lobe-chat/issues/12176) ([f26d0df](https://github.com/lobehub/lobe-chat/commit/f26d0df))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.20](https://github.com/lobehub/lobe-chat/compare/v2.1.19...v2.1.20)
+
+<sup>Released on **2026-02-07**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Show notification when file upload fails due to storage plan limit.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Show notification when file upload fails due to storage plan limit, closes [#12176](https://github.com/lobehub/lobe-chat/issues/12176) ([f26d0df](https://github.com/lobehub/lobe-chat/commit/f26d0df))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.20](https://github.com/lobehub/lobe-chat/compare/v2.1.19...v2.1.20)
+
+<sup>Released on **2026-02-07**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Show notification when file upload fails due to storage plan limit.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Show notification when file upload fails due to storage plan limit, closes [#12176](https://github.com/lobehub/lobe-chat/issues/12176) ([f26d0df](https://github.com/lobehub/lobe-chat/commit/f26d0df))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.19](https://github.com/lobehub/lobe-chat/compare/v2.1.18...v2.1.19)
+
+<sup>Released on **2026-02-06**</sup>
+
+#### ♻ Code Refactoring
+
+- **docker-compose**: Restructure dev environment.
+- **misc**: Upgrade agents/group detail pages tabs、hidden like button.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fixed in community pluings tab the lobehub skills not display.
+
+#### 💄 Styles
+
+- **model-runtime**: Add Claude Opus 4.6 support for Bedrock runtime.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **docker-compose**: Restructure dev environment, closes [#12132](https://github.com/lobehub/lobe-chat/issues/12132) ([7ba15cc](https://github.com/lobehub/lobe-chat/commit/7ba15cc))
+- **misc**: Upgrade agents/group detail pages tabs、hidden like button, closes [#12127](https://github.com/lobehub/lobe-chat/issues/12127) ([e402c51](https://github.com/lobehub/lobe-chat/commit/e402c51))
+
+#### What's fixed
+
+- **misc**: Fixed in community pluings tab the lobehub skills not display, closes [#12141](https://github.com/lobehub/lobe-chat/issues/12141) ([193c96f](https://github.com/lobehub/lobe-chat/commit/193c96f))
+
+#### Styles
+
+- **model-runtime**: Add Claude Opus 4.6 support for Bedrock runtime, closes [#12155](https://github.com/lobehub/lobe-chat/issues/12155) ([90a75af](https://github.com/lobehub/lobe-chat/commit/90a75af))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.19](https://github.com/lobehub/lobe-chat/compare/v2.1.18...v2.1.19)
 
 <sup>Released on **2026-02-06**</sup>

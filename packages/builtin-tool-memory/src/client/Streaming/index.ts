@@ -1,4 +1,4 @@
-import { type BuiltinStreaming } from '@lobechat/types';
+import type { BuiltinStreaming } from '@lobechat/types';
 
 import { MemoryApiName } from '../../types';
 import { AddExperienceMemoryStreaming } from './AddExperienceMemory';

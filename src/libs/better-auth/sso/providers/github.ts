@@ -1,6 +1,6 @@
 import { authEnv } from '@/envs/auth';
 
-import type { BuiltinProviderDefinition } from '../types';
+import { type BuiltinProviderDefinition } from '../types';
 
 const provider: BuiltinProviderDefinition<
   {

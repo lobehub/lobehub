@@ -1,8 +1,8 @@
 import { Md5 } from 'ts-md5';
 
-import { ChatToolPayload, MessageToolCall } from '@/types/index';
+import type { ChatToolPayload, MessageToolCall } from '@/types/index';
 
-import { LobeChatPluginApi, LobeToolManifest } from './types';
+import type { LobeChatPluginApi, LobeToolManifest } from './types';
 
 // Tool naming constants
 const PLUGIN_SCHEMA_SEPARATOR = '____';
@@ -78,7 +78,7 @@ export class ToolNameResolver {
           }
         }
 
-        let payload: ChatToolPayload = {
+        const payload: ChatToolPayload = {
           apiName,
           arguments: toolCall.function.arguments,
           id: toolCall.id,

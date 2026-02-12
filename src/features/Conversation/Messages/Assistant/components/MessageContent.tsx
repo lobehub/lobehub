@@ -1,8 +1,12 @@
 import { LOADING_FLAT } from '@lobechat/const';
 import { type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
+import { ReactionDisplay } from '../../../components/Reaction';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { CollapsedMessage } from '../../AssistantGroup/components/CollapsedMessage';
 import DisplayContent from '../../components/DisplayContent';
@@ -19,6 +23,9 @@ const MessageContent = memo<UIChatMessage>(
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
     const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
+    const addReaction = useConversationStore((s) => s.addReaction);
+    const removeReaction = useConversationStore((s) => s.removeReaction);
+    const userId = useUserStore(userProfileSelectors.userId)!;
 
     const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && !!tools;
 
@@ -32,6 +39,28 @@ const MessageContent = memo<UIChatMessage>(
       (!props.reasoning && isReasoning);
 
     const showFileChunks = !!chunksList && chunksList.length > 0;
+
+    const reactions = metadata?.reactions || [];
+
+    const handleReactionClick = useCallback(
+      (emoji: string) => {
+        const existing = reactions.find((r) => r.emoji === emoji);
+        if (existing && existing.users.includes(userId)) {
+          removeReaction(id, emoji);
+        } else {
+          addReaction(id, emoji);
+        }
+      },
+      [id, reactions, addReaction, removeReaction],
+    );
+
+    const isActive = useCallback(
+      (emoji: string) => {
+        const reaction = reactions.find((r) => r.emoji === emoji);
+        return !!reaction && reaction.users.includes(userId);
+      },
+      [reactions],
+    );
 
     if (isCollapsed) return <CollapsedMessage content={content} id={id} />;
 
@@ -52,6 +81,14 @@ const MessageContent = memo<UIChatMessage>(
           tempDisplayContent={metadata?.tempDisplayContent}
         />
         {showImageItems && <ImageFileListViewer items={imageList} />}
+        {reactions.length > 0 && (
+          <ReactionDisplay
+            isActive={isActive}
+            messageId={id}
+            onReactionClick={handleReactionClick}
+            reactions={reactions}
+          />
+        )}
       </Flexbox>
     );
   },

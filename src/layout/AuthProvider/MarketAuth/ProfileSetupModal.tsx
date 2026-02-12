@@ -2,7 +2,8 @@
 
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
 import { Center, Flexbox, Icon, Input, Modal, Text, TextArea, Tooltip } from '@lobehub/ui';
-import { App, Form, Upload, type UploadProps } from 'antd';
+import { type UploadProps } from 'antd';
+import { App, Form, Upload } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -271,21 +272,21 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
 
     return (
       <Modal
+        centered
         cancelButtonProps={isFirstTimeSetup ? { style: { display: 'none' } } : undefined}
         cancelText={t('profileSetup.cancel')}
-        centered
         closable={!isFirstTimeSetup}
         confirmLoading={loading}
         keyboard={!isFirstTimeSetup}
         maskClosable={!isFirstTimeSetup}
         okText={isFirstTimeSetup ? t('profileSetup.getStarted') : t('profileSetup.save')}
-        onCancel={handleCancel}
-        onOk={handleSubmit}
         open={open}
         title={false}
         width={640}
+        onCancel={handleCancel}
+        onOk={handleSubmit}
       >
-        <Text fontSize={20} strong style={{ marginTop: 16 }}>
+        <Text strong fontSize={20} style={{ marginTop: 16 }}>
           {isFirstTimeSetup ? t('profileSetup.titleFirstTime') : t('profileSetup.titleEdit')}
         </Text>
         <Text style={{ display: 'block', marginBottom: 24 }} type="secondary">
@@ -295,7 +296,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         </Text>
 
         <Form form={form} layout="vertical">
-          <Flexbox gap={24} horizontal>
+          <Flexbox horizontal gap={24}>
             <Flexbox flex={1}>
               <Form.Item
                 label={t('profileSetup.fields.displayName.label')}
@@ -309,21 +310,21 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                 ]}
               >
                 <Input
+                  showCount
                   maxLength={50}
                   placeholder={t('profileSetup.fields.displayName.placeholder')}
-                  showCount
                 />
               </Form.Item>
               <Form.Item
+                name="userName"
                 label={
-                  <Flexbox align="center" gap={4} horizontal>
+                  <Flexbox horizontal align="center" gap={4}>
                     {t('profileSetup.fields.userName.label')}
                     <Tooltip title={t('profileSetup.fields.userName.tooltip')}>
                       <CircleHelp size={14} style={{ cursor: 'help', opacity: 0.5 }} />
                     </Tooltip>
                   </Flexbox>
                 }
-                name="userName"
                 rules={[
                   { message: t('profileSetup.fields.userName.required'), required: true },
                   {
@@ -341,10 +342,10 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                 ]}
               >
                 <Input
+                  showCount
                   maxLength={32}
                   placeholder={t('profileSetup.fields.userName.placeholder')}
                   prefix="@"
-                  showCount
                 />
               </Form.Item>
             </Flexbox>
@@ -352,17 +353,17 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
             <Form.Item>
               <EmojiPicker
                 allowDelete={!!avatarUrl}
-                allowUpload={{
-                  enableEmoji: false,
-                }}
                 loading={avatarUploading}
                 locale={locale}
-                onChange={handleAvatarChange}
-                onDelete={handleAvatarDelete}
-                onUpload={handleAvatarUpload}
                 shape="square"
                 size={80}
                 value={avatarUrl || undefined}
+                allowUpload={{
+                  enableEmoji: false,
+                }}
+                onChange={handleAvatarChange}
+                onDelete={handleAvatarDelete}
+                onUpload={handleAvatarUpload}
               />
             </Form.Item>
           </Flexbox>
@@ -377,10 +378,10 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
             ]}
           >
             <TextArea
+              showCount
               maxLength={200}
               placeholder={t('profileSetup.fields.description.placeholder')}
               rows={3}
-              showCount
             />
           </Form.Item>
 
@@ -390,7 +391,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
               {/* Banner Upload Section */}
               <Form.Item
                 label={
-                  <Flexbox align="center" gap={4} horizontal>
+                  <Flexbox horizontal align="center" gap={4}>
                     {t('profileSetup.fields.bannerUrl.label')}
                     <Tooltip title={t('profileSetup.fields.bannerUrl.tooltip')}>
                       <CircleHelp size={14} style={{ cursor: 'help', opacity: 0.5 }} />
@@ -421,18 +422,18 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                       }}
                     >
                       <Center
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.opacity = '1';
-                        }}
-                        onMouseLeave={(e) => {
-                          if (bannerUrl) e.currentTarget.style.opacity = '0';
-                        }}
                         style={{
                           background: bannerUrl ? 'rgba(0,0,0,0.4)' : 'transparent',
                           height: '100%',
                           opacity: bannerUrl ? 0 : 1,
                           transition: 'opacity 0.2s',
                           width: '100%',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.opacity = '1';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (bannerUrl) e.currentTarget.style.opacity = '0';
                         }}
                       >
                         <Flexbox align="center" gap={8}>
@@ -455,19 +456,19 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                     </div>
                   </Upload>
                   {bannerUrl && (
-                    <Flexbox align="center" gap={8} horizontal justify="flex-end">
+                    <Flexbox horizontal align="center" gap={8} justify="flex-end">
                       <Text
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleBannerDelete();
-                        }}
                         style={{
                           color: cssVar.colorError,
                           cursor: 'pointer',
                           fontSize: 12,
                         }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBannerDelete();
+                        }}
                       >
-                        <Flexbox align="center" gap={4} horizontal>
+                        <Flexbox horizontal align="center" gap={4}>
                           <Trash2 size={12} />
                           {t('profileSetup.fields.bannerUrl.remove')}
                         </Flexbox>

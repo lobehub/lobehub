@@ -1,10 +1,11 @@
 'use client';
 
-import type { AgentItem } from '@lobechat/types';
+import { type AgentItem } from '@lobechat/types';
 import { ActionIcon, Avatar, Center, Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Settings } from 'lucide-react';
-import { type PropsWithChildren, memo, useState } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -115,10 +116,10 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
         }}
       >
         <Avatar
+          emojiScaleWithBackground
           avatar={agent.avatar || DEFAULT_AVATAR}
           background={agent.backgroundColor ?? undefined}
           className={styles.bannerInner}
-          emojiScaleWithBackground
           shape={'square'}
           size={400}
         />
@@ -127,9 +128,9 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
       {/* Header with Avatar */}
       <Flexbox className={styles.header} gap={8}>
         <Avatar
+          emojiScaleWithBackground
           avatar={agent.avatar || DEFAULT_AVATAR}
           background={agent.backgroundColor ?? undefined}
-          emojiScaleWithBackground
           shape={'square'}
           size={48}
           style={{
@@ -137,18 +138,18 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
           }}
         />
         <Flexbox gap={2}>
-          <Flexbox align={'center'} horizontal justify={'space-between'}>
-            <Text className={styles.name} ellipsis>
+          <Flexbox horizontal align={'center'} justify={'space-between'}>
+            <Text ellipsis className={styles.name}>
               {agent.title || t('defaultSession', { ns: 'common' })}
             </Text>
 
             {/* Settings Button */}
-            <Flexbox align="center" horizontal justify="flex-end" style={{ paddingBlockStart: 0 }}>
+            <Flexbox horizontal align="center" justify="flex-end" style={{ paddingBlockStart: 0 }}>
               <ActionIcon
                 icon={Settings}
-                onClick={handleSettings}
                 size="small"
                 title={t('groupSidebar.agentProfile.settings')}
+                onClick={handleSettings}
               />
             </Flexbox>
           </Flexbox>
@@ -167,8 +168,8 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
         <div className={styles.sectionTitle}>{t('groupSidebar.agentProfile.model')}</div>
         <ModelSelect
           loading={loading}
-          onChange={handleModelChange}
           value={{ model: agent.model!, provider: agent.provider! }}
+          onChange={handleModelChange}
         />
       </Flexbox>
     </Flexbox>
@@ -179,13 +180,13 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
       classNames={{ trigger: styles.trigger }}
       content={content}
       nativeButton={false}
-      onOpenChange={setOpen}
       open={open}
       placement="right"
+      trigger="click"
       styles={{
         content: { borderRadius: 12, overflow: 'hidden', padding: 0 },
       }}
-      trigger="click"
+      onOpenChange={setOpen}
     >
       {children}
     </Popover>

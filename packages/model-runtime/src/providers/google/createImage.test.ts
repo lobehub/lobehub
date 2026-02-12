@@ -1,9 +1,9 @@
 // @vitest-environment node
-import { GoogleGenAI } from '@google/genai';
+import type { GoogleGenAI } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImagePayload } from '../../types/image';
 import { createGoogleImage } from './createImage';
 
 const provider = 'google';
@@ -12,7 +12,7 @@ const noImageErrorType = 'ProviderNoImageGenerated';
 const invalidErrorType = 'InvalidProviderAPIKey';
 
 // Mock the console.error to avoid polluting test output
-vi.spyOn(console, 'error').mockImplementation(() => { });
+vi.spyOn(console, 'error').mockImplementation(() => {});
 
 let mockClient: GoogleGenAI;
 

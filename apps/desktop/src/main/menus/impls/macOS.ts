@@ -101,47 +101,66 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             submenu: [],
           },
           { type: 'separator' },
-          {
-            accelerator: 'Command+H',
-            label: t('macOS.hide', { appName }),
-            role: 'hide',
-          },
-          {
-            accelerator: 'Command+Alt+H',
-            label: t('macOS.hideOthers'),
-            role: 'hideOthers',
-          },
-          {
-            label: t('macOS.unhide'),
-            role: 'unhide',
-          },
+          { label: t('macOS.hide', { appName }), role: 'hide' },
+          { label: t('macOS.hideOthers'), role: 'hideOthers' },
+          { label: t('macOS.unhide'), role: 'unhide' },
           { type: 'separator' },
-          {
-            accelerator: 'Command+Q',
-            label: t('file.quit'),
-            role: 'quit',
-          },
+          { label: t('file.quit'), role: 'quit' },
         ],
       },
       {
         label: t('file.title'),
         submenu: [
           {
-            accelerator: 'Command+W',
-            label: t('window.close'),
-            role: 'close',
+            accelerator: 'Command+N',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewTopic');
+            },
+            label: t('file.newTopic'),
           },
+          { type: 'separator' },
+          {
+            accelerator: 'Alt+Command+A',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewAgent');
+            },
+            label: t('file.newAgent'),
+          },
+          {
+            accelerator: 'Alt+Command+G',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewAgentGroup');
+            },
+            label: t('file.newAgentGroup'),
+          },
+          {
+            accelerator: 'Alt+Command+P',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewPage');
+            },
+            label: t('file.newPage'),
+          },
+          { type: 'separator' },
+          { label: t('window.close'), role: 'close' },
         ],
       },
       {
         label: t('edit.title'),
         submenu: [
-          { accelerator: 'Command+Z', label: t('edit.undo'), role: 'undo' },
-          { accelerator: 'Shift+Command+Z', label: t('edit.redo'), role: 'redo' },
+          { label: t('edit.undo'), role: 'undo' },
+          { label: t('edit.redo'), role: 'redo' },
           { type: 'separator' },
-          { accelerator: 'Command+X', label: t('edit.cut'), role: 'cut' },
-          { accelerator: 'Command+C', label: t('edit.copy'), role: 'copy' },
-          { accelerator: 'Command+V', label: t('edit.paste'), role: 'paste' },
+          { label: t('edit.cut'), role: 'cut' },
+          { label: t('edit.copy'), role: 'copy' },
+          { label: t('edit.paste'), role: 'paste' },
           { type: 'separator' },
           {
             label: t('edit.speech'),
@@ -151,7 +170,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             ],
           },
           { type: 'separator' },
-          { accelerator: 'Command+A', label: t('edit.selectAll'), role: 'selectAll' },
+          { label: t('edit.selectAll'), role: 'selectAll' },
         ],
       },
       {
@@ -161,9 +180,9 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           { label: t('view.forceReload'), role: 'forceReload' },
           { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
           { type: 'separator' },
-          { accelerator: 'Command+0', label: t('view.resetZoom'), role: 'resetZoom' },
-          { accelerator: 'Command+Plus', label: t('view.zoomIn'), role: 'zoomIn' },
-          { accelerator: 'Command+-', label: t('view.zoomOut'), role: 'zoomOut' },
+          { label: t('view.resetZoom'), role: 'resetZoom' },
+          { label: t('view.zoomIn'), role: 'zoomIn' },
+          { label: t('view.zoomOut'), role: 'zoomOut' },
           { type: 'separator' },
           { accelerator: 'F11', label: t('view.toggleFullscreen'), role: 'togglefullscreen' },
         ],
@@ -522,8 +541,8 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
 
     // Standard edit actions for chat (copy/paste focused)
     template.push(
-      { accelerator: 'Command+C', label: t('edit.copy'), role: 'copy' },
-      { accelerator: 'Command+V', label: t('edit.paste'), role: 'paste' },
+      { label: t('edit.copy'), role: 'copy' },
+      { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
       { label: t('edit.selectAll'), role: 'selectAll' },
     );
@@ -575,11 +594,11 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
 
     // Standard edit actions for editor (full edit capabilities)
     template.push(
-      { accelerator: 'Command+X', label: t('edit.cut'), role: 'cut' },
-      { accelerator: 'Command+C', label: t('edit.copy'), role: 'copy' },
-      { accelerator: 'Command+V', label: t('edit.paste'), role: 'paste' },
+      { label: t('edit.cut'), role: 'cut' },
+      { label: t('edit.copy'), role: 'copy' },
+      { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
-      { accelerator: 'Command+A', label: t('edit.selectAll'), role: 'selectAll' },
+      { label: t('edit.selectAll'), role: 'selectAll' },
       { type: 'separator' },
       { label: t('edit.delete'), role: 'delete' },
     );

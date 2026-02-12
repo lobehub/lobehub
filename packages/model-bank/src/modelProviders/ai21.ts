@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref https://docs.ai21.com/reference/jamba-15-api-ref
 const Ai21: ModelProviderCard = {

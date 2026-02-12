@@ -39,7 +39,7 @@ export const ragEvalRouter = router({
   runRecordEvaluation: ragEvalProcedure
     .input(
       z.object({
-        evalRecordId: z.number(),
+        evalRecordId: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

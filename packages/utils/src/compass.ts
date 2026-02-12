@@ -8,8 +8,8 @@ export class StrCompressor {
    * @ignore
    */
   private instance!: {
-    compress(buf: Uint8Array, options?: any): Uint8Array;
-    decompress(buf: Uint8Array): Uint8Array;
+    compress: (buf: Uint8Array, options?: any) => Uint8Array;
+    decompress: (buf: Uint8Array) => Uint8Array;
   };
 
   async init(): Promise<void> {

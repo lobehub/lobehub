@@ -1,7 +1,7 @@
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
-import { Suspense, memo } from 'react';
+import { memo, Suspense } from 'react';
 
 import { getBuiltinStreaming } from '@/tools/streamings';
 
@@ -119,9 +119,9 @@ const Render = memo<RenderProps>(
 
     const placeholder = (
       <LoadingPlaceholder
+        loading
         apiName={apiName}
         identifier={identifier}
-        loading
         messageId={messageId}
         requestArgs={requestArgs}
         toolCallId={toolCallId}
@@ -136,15 +136,15 @@ const Render = memo<RenderProps>(
           <ToolRender
             content={result.content || ''}
             messageId={toolMessageId}
+            pluginState={result.state}
+            showCustomToolRender={showCustomToolRender}
+            toolCallId={toolCallId}
             plugin={{
               apiName,
               arguments: requestArgs || '',
               identifier,
               type: type as any,
             }}
-            pluginState={result.state}
-            showCustomToolRender={showCustomToolRender}
-            toolCallId={toolCallId}
           />
           {!disableEditing && (
             <div>

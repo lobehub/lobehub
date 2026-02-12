@@ -1,8 +1,11 @@
+import './initialize';
+
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { type ResolvingViewport } from 'next';
 import Script from 'next/script';
-import { type ReactNode, Suspense } from 'react';
+import { type ReactNode } from 'react';
+import { Suspense } from 'react';
 import { isRtlLang } from 'rtl-detect';
 
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
@@ -44,9 +47,8 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
   };
 
   return (
-    <html dir={direction} lang={locale} suppressHydrationWarning>
+    <html suppressHydrationWarning dir={direction} lang={locale}>
       <head>
-        {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
         <script dangerouslySetInnerHTML={{ __html: `(${outdateBrowserScript.toString()})();` }} />
         {process.env.DEBUG_REACT_SCAN === '1' && (
           <Script
@@ -72,7 +74,6 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
 };
 
 function outdateBrowserScript() {
-  // eslint-disable-next-line unicorn/consistent-function-scoping
   function supportsImportMaps(): boolean {
     return (
       typeof HTMLScriptElement !== 'undefined' &&
@@ -81,7 +82,6 @@ function outdateBrowserScript() {
     );
   }
 
-  // eslint-disable-next-line unicorn/consistent-function-scoping
   function supportsCascadeLayers(): boolean {
     if (typeof document === 'undefined') return false;
 

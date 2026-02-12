@@ -1,4 +1,4 @@
-import { type UniformSearchResult } from '@lobechat/types';
+import type { UniformSearchResult } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
@@ -64,8 +64,8 @@ const SearchItem = memo<SearchResultProps>((props) => {
     <a className={styles.container} href={url!} rel="noreferrer" target={'_blank'}>
       <Flexbox distribution={'space-between'} flex={1} gap={8} padding={12}>
         <Flexbox gap={8}>
-          <Flexbox align={'center'} distribution={'space-between'} horizontal>
-            <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} distribution={'space-between'}>
+            <Flexbox horizontal align={'center'} gap={8}>
               <WebFavicon title={title} url={url} />
               <Flexbox className={styles.title}>{title}</Flexbox>
             </Flexbox>

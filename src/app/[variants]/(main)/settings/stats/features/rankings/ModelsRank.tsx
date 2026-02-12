@@ -33,33 +33,33 @@ export const TopicsRank = memo(() => {
   return (
     <>
       <StatsFormGroup
-        extra={
-          showExtra ? (
-            <ActionIcon icon={MaximizeIcon} onClick={() => setOpen(true)} size={'small'} />
-          ) : undefined
-        }
         fontSize={16}
         title={t('stats.modelsRank.title')}
+        extra={
+          showExtra ? (
+            <ActionIcon icon={MaximizeIcon} size={'small'} onClick={() => setOpen(true)} />
+          ) : undefined
+        }
       >
         <BarList
           data={data?.slice(0, 5).map((item) => mapData(item)) || []}
           height={220}
           leftLabel={t('stats.modelsRank.left')}
           loading={isLoading || !data}
+          rightLabel={t('stats.modelsRank.right')}
           noDataText={{
             desc: t('stats.empty.desc'),
             title: t('stats.empty.title'),
           }}
-          rightLabel={t('stats.modelsRank.right')}
         />
       </StatsFormGroup>
       {showExtra && (
         <Modal
           footer={null}
           loading={isLoading || !data}
-          onCancel={() => setOpen(false)}
           open={open}
           title={t('stats.modelsRank.title')}
+          onCancel={() => setOpen(false)}
         >
           <BarList
             data={data?.map((item) => mapData(item)) || []}

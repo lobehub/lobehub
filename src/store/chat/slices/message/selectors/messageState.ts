@@ -1,4 +1,4 @@
-import type { ChatStoreState } from '../../../initialState';
+import { type ChatStoreState } from '../../../initialState';
 import { operationSelectors } from '../../operation/selectors';
 import { mainDisplayChatIDs } from './chat';
 import { getDbMessageByToolCallId } from './dbMessage';

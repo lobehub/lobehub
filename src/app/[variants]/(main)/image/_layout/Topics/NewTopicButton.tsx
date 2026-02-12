@@ -17,26 +17,26 @@ const NewTopicButton = memo<NewTopicButtonProps>(({ count, onClick, showMoreInfo
   if (showMoreInfo)
     return (
       <Flexbox
+        horizontal
         align="center"
         gap={8}
-        horizontal
         justify="space-between"
+        width={'100%'}
         style={{
           marginBottom: 12,
         }}
-        width={'100%'}
       >
         <div>
           {t('topic.title')} {count ? count : ''}
         </div>
         <ActionIcon
           icon={Plus}
-          onClick={onClick}
           size={'small'}
           title={t('topic.createNew')}
           tooltipProps={{
             placement: 'left',
           }}
+          onClick={onClick}
         />
       </Flexbox>
     );
@@ -44,16 +44,16 @@ const NewTopicButton = memo<NewTopicButtonProps>(({ count, onClick, showMoreInfo
   return (
     <ActionIcon
       icon={Plus}
-      onClick={onClick}
+      title={t('topic.createNew')}
+      variant={'filled'}
       size={{
         blockSize: 48,
         size: 20,
       }}
-      title={t('topic.createNew')}
       tooltipProps={{
         placement: 'left',
       }}
-      variant={'filled'}
+      onClick={onClick}
     />
   );
 });

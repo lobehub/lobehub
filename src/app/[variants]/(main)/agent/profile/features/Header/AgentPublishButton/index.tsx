@@ -35,8 +35,8 @@ const AgentPublishButton = memo(() => {
       <PublishButton action={action} onPublishSuccess={handlePublishSuccess} />
       <PublishResultModal
         identifier={publishedIdentifier}
-        onCancel={() => setShowResultModal(false)}
         open={showResultModal}
+        onCancel={() => setShowResultModal(false)}
       />
     </>
   );

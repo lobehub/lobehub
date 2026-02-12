@@ -16,44 +16,44 @@ export type IMessageGroupType = (typeof MessageGroupType)[keyof typeof MessageGr
  * Metadata for compression type message groups
  */
 export interface CompressionGroupMetadata {
-  // Compression range
-  startMessageId?: string;
+  compressedAt?: string;
+  compressedTokenCount?: number;
+  // Compression info
+  compressionStrategy?: 'summarize';
+
   endMessageId?: string;
-  pinnedMessageIds?: string[];
+  // UI state
+  expanded?: boolean;
+  originalMessageCount?: number;
 
   // Statistics
   originalTokenCount?: number;
-  compressedTokenCount?: number;
-  originalMessageCount?: number;
+  pinnedMessageIds?: string[];
 
-  // Compression info
-  compressionStrategy?: 'summarize';
-  compressedAt?: string;
-
-  // UI state
-  expanded?: boolean;
+  // Compression range
+  startMessageId?: string;
 }
 
 /**
  * Message group item
  */
 export interface MessageGroupItem {
-  id: string;
-  userId: string;
-  topicId?: string | null;
-  parentGroupId?: string | null;
-  parentMessageId?: string | null;
+  clientId?: string | null;
+  content?: string | null;
+  createdAt: Date;
+  description?: string | null;
+  editorData?: any | null;
 
+  id: string;
+  parentGroupId?: string | null;
+
+  parentMessageId?: string | null;
   // Metadata
   title?: string | null;
-  description?: string | null;
+  topicId?: string | null;
 
   // Compression fields
   type?: IMessageGroupType | null;
-  content?: string | null;
-  editorData?: any | null;
-
-  clientId?: string | null;
-  createdAt: Date;
   updatedAt: Date;
+  userId: string;
 }

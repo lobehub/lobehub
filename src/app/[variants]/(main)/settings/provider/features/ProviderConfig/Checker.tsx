@@ -1,18 +1,25 @@
 'use client';
 
 import { CheckCircleFilled } from '@ant-design/icons';
-import { type ChatMessageError, TraceNameMap } from '@lobechat/types';
+import { type ChatMessageError } from '@lobechat/types';
+import { TraceNameMap } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Alert, Button, Flexbox, Highlighter, Icon, LobeSelect as Select } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
-import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+const styles = createStaticStyles(({ css }) => ({
+  popup: css`
+    width: 380px;
+  `,
+}));
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation('error');
   const providerName = useProviderName(error.body?.provider);
@@ -20,6 +27,9 @@ const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   return (
     <Flexbox gap={8} style={{ maxWidth: 600, width: '100%' }}>
       <Alert
+        showIcon
+        title={t(`response.${error.type}` as any, { provider: providerName })}
+        type={'error'}
         extra={
           <Flexbox paddingBlock={8} paddingInline={16}>
             <Highlighter
@@ -32,9 +42,6 @@ const Error = memo<{ error: ChatMessageError }>(({ error }) => {
             </Highlighter>
           </Flexbox>
         }
-        showIcon
-        title={t(`response.${error.type}` as any, { provider: providerName })}
-        type={'error'}
       />
     </Flexbox>
   );
@@ -162,9 +169,26 @@ const Checker = memo<ConnectionCheckerProps>(
 
     return (
       <Flexbox gap={8}>
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           <Select
+            virtual
             listItemHeight={36}
+            options={sortedModels.map((id) => ({ label: id, value: id }))}
+            popupClassName={cx(styles.popup)}
+            suffixIcon={isProviderConfigUpdating && <Icon spin icon={Loader2Icon} />}
+            value={checkModel}
+            optionRender={({ value }) => {
+              return (
+                <Flexbox horizontal align={'center'} gap={6}>
+                  <ModelIcon model={value as string} size={20} />
+                  {value}
+                </Flexbox>
+              );
+            }}
+            style={{
+              flex: 1,
+              overflow: 'hidden',
+            }}
             onSelect={async (value) => {
               // Update local state
               setCheckModel(value);
@@ -175,25 +199,10 @@ const Checker = memo<ConnectionCheckerProps>(
               // This allows the model to be retained after page refresh
               await updateAiProviderConfig(provider, { checkModel: value });
             }}
-            optionRender={({ value }) => {
-              return (
-                <Flexbox align={'center'} gap={6} horizontal>
-                  <ModelIcon model={value as string} size={20} />
-                  {value}
-                </Flexbox>
-              );
-            }}
-            options={sortedModels.map((id) => ({ label: id, value: id }))}
-            style={{
-              flex: 1,
-              overflow: 'hidden',
-            }}
-            suffixIcon={isProviderConfigUpdating && <Icon icon={Loader2Icon} spin />}
-            value={checkModel}
-            virtual
           />
           <Button
             disabled={isProviderConfigUpdating}
+            loading={loading}
             icon={
               pass ? (
                 <CheckCircleFilled
@@ -203,15 +212,6 @@ const Checker = memo<ConnectionCheckerProps>(
                 />
               ) : undefined
             }
-            loading={loading}
-            onClick={async () => {
-              await onBeforeCheck();
-              try {
-                await checkConnection();
-              } finally {
-                await onAfterCheck();
-              }
-            }}
             style={
               pass
                 ? {
@@ -220,6 +220,14 @@ const Checker = memo<ConnectionCheckerProps>(
                   }
                 : undefined
             }
+            onClick={async () => {
+              await onBeforeCheck();
+              try {
+                await checkConnection();
+              } finally {
+                await onAfterCheck();
+              }
+            }}
           >
             {pass ? t('llm.checker.pass') : t('llm.checker.button')}
           </Button>

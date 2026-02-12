@@ -292,7 +292,7 @@ export interface IGroupOrchestrationSupervisor {
    * @param state - Current agent state
    * @returns The next instruction to execute
    */
-  decide(result: ExecutorResult, state: AgentState): Promise<SupervisorInstruction>;
+  decide: (result: ExecutorResult, state: AgentState) => Promise<SupervisorInstruction>;
 }
 
 /**

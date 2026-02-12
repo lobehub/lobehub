@@ -1,4 +1,5 @@
-import { Form, type FormItemProps, Input, TextArea } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Form, Input, TextArea } from '@lobehub/ui';
 import { type FormInstance } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -102,6 +103,7 @@ const LocalForm = memo<{ form: FormInstance; mode?: 'edit' | 'create' }>(({ form
   return (
     <Form
       form={form}
+      layout={'vertical'}
       items={[
         {
           children: metaItem,
@@ -112,7 +114,6 @@ const LocalForm = memo<{ form: FormInstance; mode?: 'edit' | 'create' }>(({ form
           title: t('dev.metaConfig'),
         },
       ]}
-      layout={'vertical'}
       validateMessages={{
         required: () => t('dev.meta.formFieldRequired'),
       }}

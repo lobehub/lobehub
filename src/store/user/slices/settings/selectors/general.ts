@@ -18,11 +18,14 @@ const contextMenuMode = (s: UserStore) => {
   return isDesktop ? 'default' : 'disabled';
 };
 const telemetry = (s: UserStore) => generalConfig(s).telemetry;
+const enableAutoScrollOnStreaming = (s: UserStore) =>
+  generalConfig(s).enableAutoScrollOnStreaming ?? true;
 
 export const userGeneralSettingsSelectors = {
   animationMode,
   config: generalConfig,
   contextMenuMode,
+  enableAutoScrollOnStreaming,
   fontSize,
   highlighterTheme,
   mermaidTheme,

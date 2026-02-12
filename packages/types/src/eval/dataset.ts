@@ -7,7 +7,7 @@ export interface EvalDatasetRecordRefFile {
 }
 export interface EvalDatasetRecord {
   createdAt: Date;
-  id: number;
+  id: string;
   ideal?: string | null;
 
   metadata: any;
@@ -33,7 +33,7 @@ export type InsertEvalDatasetRecord = z.infer<typeof insertEvalDatasetRecordSche
 export interface RAGEvalDataSetItem {
   createdAt: Date;
   description?: string | null;
-  id: number;
+  id: string;
   name: string;
   updatedAt: Date;
 }

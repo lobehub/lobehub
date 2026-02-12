@@ -9,7 +9,7 @@ import { sha256 } from 'js-sha256';
 
 import { FileS3 } from '@/server/modules/S3';
 import { type FileService } from '@/server/services/file';
-import { MarketService } from '@/server/services/market';
+import { type MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:sandbox-service');
 

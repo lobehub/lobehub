@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Modal, Block } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { Suspense, memo, useState } from 'react';
+import { Flexbox, Modal } from '@lobehub/ui';
+import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -15,35 +14,7 @@ import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Actions';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 12px;
-    padding-inline: 0;
-  `,
-  icon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  title: css`
-    cursor: pointer;
-    font-size: 15px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-}));
+import { styles } from './style';
 
 interface McpSkillItemProps {
   author?: string;
@@ -67,22 +38,26 @@ const McpSkillItem = memo<McpSkillItemProps>(
     return (
       <>
         <Flexbox
+          horizontal
           align="center"
           className={styles.container}
           gap={16}
-          horizontal
           justify="space-between"
         >
-          <Flexbox align="center" gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-            <Block className={styles.icon} variant={'outlined'}>
-              <PluginAvatar avatar={avatar} size={32} />
-            </Block>
-            <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
-              <span className={styles.title} onClick={() => setDetailOpen(true)}>
-                {title}
-              </span>
-              <PluginTag author={author} isMCP={isMCP} type={type} />
+          <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
+            <Flexbox
+              horizontal
+              align="center"
+              gap={16}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setDetailOpen(true)}
+            >
+              <div className={styles.icon}>
+                <PluginAvatar avatar={avatar} size={32} />
+              </div>
+              <span className={styles.title}>{title}</span>
             </Flexbox>
+            <PluginTag author={author} isMCP={isMCP} type={type} />
           </Flexbox>
           <Actions identifier={identifier} isMCP={isMCP} type={type} />
         </Flexbox>
@@ -90,23 +65,23 @@ const McpSkillItem = memo<McpSkillItemProps>(
           <Modal
             destroyOnHidden
             footer={null}
-            onCancel={() => setDetailOpen(false)}
             open={detailOpen}
             title={t('dev.title.skillDetails')}
             width={800}
+            onCancel={() => setDetailOpen(false)}
           >
             <Suspense fallback={<McpDetailLoading />}>
-              <McpDetail identifier={identifier} noSettings />
+              <McpDetail noSettings identifier={identifier} />
             </Suspense>
           </Modal>
         )}
         {isCustomPlugin && (
           <PluginDetailModal
             id={identifier}
-            onClose={() => setDetailOpen(false)}
             open={detailOpen}
             schema={plugin?.settings}
             tab="info"
+            onClose={() => setDetailOpen(false)}
           />
         )}
       </>

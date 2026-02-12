@@ -10,7 +10,8 @@ import useSWRMutation from 'swr/mutation';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
-import { type GroupMemberConfig, chatGroupService } from '@/services/chatGroup';
+import { type GroupMemberConfig } from '@/services/chatGroup';
+import { chatGroupService } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
@@ -285,6 +286,7 @@ export const useCreateMenuItems = () => {
     configMenuItem,
     createAgent,
     createAgentMenuItem,
+    createEmptyGroup,
     createGroupChatMenuItem,
     createGroupFromTemplate,
     createGroupWithMembers,

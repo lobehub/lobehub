@@ -1,5 +1,5 @@
-import { DiscoverAssistantItem } from './assistants';
-import { DiscoverGroupAgentItem } from './groupAgents';
+import type { DiscoverAssistantItem } from './assistants';
+import type { DiscoverGroupAgentItem } from './groupAgents';
 
 export * from './assistants';
 export * from './fork';

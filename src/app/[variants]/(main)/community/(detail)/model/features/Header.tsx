@@ -37,7 +37,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
   return (
     <Flexbox gap={12}>
-      <Flexbox align={'flex-start'} gap={16} horizontal width={'100%'}>
+      <Flexbox horizontal align={'flex-start'} gap={16} width={'100%'}>
         <ModelIcon model={identifier} size={mobile ? 48 : 64} />
         <Flexbox
           flex={1}
@@ -47,9 +47,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           }}
         >
           <Flexbox
+            horizontal
             align={'center'}
             gap={8}
-            horizontal
             justify={'space-between'}
             style={{
               overflow: 'hidden',
@@ -57,10 +57,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             }}
           >
             <Flexbox
+              horizontal
               align={'center'}
               flex={1}
               gap={12}
-              horizontal
               style={{
                 overflow: 'hidden',
                 position: 'relative',
@@ -75,16 +75,16 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
                 {displayName || identifier}
               </Text>
             </Flexbox>
-            <Flexbox align={'center'} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} gap={6}>
               {type && <ModelTypeIcon type={type} />}
             </Flexbox>
           </Flexbox>
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             <span>{identifier}</span>
             <Icon icon={DotIcon} />
             <ModelInfoTags
-              contextWindowTokens={contextWindowTokens}
               directionReverse
+              contextWindowTokens={contextWindowTokens}
               {...abilities}
             />
             <Icon icon={DotIcon} />

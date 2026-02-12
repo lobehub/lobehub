@@ -1,6 +1,6 @@
-import type { NavigateFunction } from 'react-router-dom';
+import { type NavigateFunction } from 'react-router-dom';
 
-export type StarterMode = 'agent' | 'group' | 'write' | 'image' | 'research' | null;
+export type StarterMode = 'agent' | 'group' | 'write' | 'research' | null;
 
 export interface HomeInputState {
   homeInputLoading: boolean;

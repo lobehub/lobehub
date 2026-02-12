@@ -3,7 +3,8 @@ import urlJoin from 'url-join';
 
 import { DEFAULT_LANG, isLocaleNotSupport } from '@/const/locale';
 import { appEnv } from '@/envs/app';
-import { type Locales, normalizeLocale } from '@/locales/resources';
+import { type Locales } from '@/locales/resources';
+import { normalizeLocale } from '@/locales/resources';
 import { CacheRevalidate, CacheTag } from '@/types/discover';
 
 export class AssistantStore {
@@ -102,7 +103,7 @@ export class AssistantStore {
       });
     }
     if (!res.ok) return;
-    let data = await res.json();
+    const data = await res.json();
     return data;
   };
 }

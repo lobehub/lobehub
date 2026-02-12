@@ -1,6 +1,6 @@
 import { Button, Icon, InputPassword, Text } from '@lobehub/ui';
+import { type FormInstance, type InputRef } from 'antd';
 import { Form } from 'antd';
-import type { FormInstance, InputRef } from 'antd';
 import { cssVar } from 'antd-style';
 import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -34,35 +34,35 @@ export const SignInPasswordStep = ({
 
   return (
     <AuthCard
+      subtitle={t('betterAuth.signin.passwordStep.subtitle')}
+      title={'Agent teammates that grow with you'}
       footer={
         <>
           <Text fontSize={13} type={'secondary'}>
             <a
-              onClick={onForgotPassword}
               style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+              onClick={onForgotPassword}
             >
               {t('betterAuth.signin.forgotPassword')}
             </a>
           </Text>
           <Button
             icon={ChevronLeft}
-            onClick={onBackToEmail}
             size={'large'}
             style={{ marginTop: 16 }}
+            onClick={onBackToEmail}
           >
             {t('betterAuth.signin.backToEmail')}
           </Button>
         </>
       }
-      subtitle={t('betterAuth.signin.passwordStep.subtitle')}
-      title={'Agent teammates that grow with you'}
     >
       <Text fontSize={20}>{email}</Text>
       <Form
         form={form}
         layout="vertical"
-        onFinish={(values) => onSubmit(values as { password: string })}
         style={{ marginTop: 12 }}
+        onFinish={(values) => onSubmit(values as { password: string })}
       >
         <Form.Item
           name="password"
@@ -71,6 +71,8 @@ export const SignInPasswordStep = ({
         >
           <InputPassword
             placeholder={t('betterAuth.signin.passwordPlaceholder')}
+            ref={passwordInputRef}
+            size="large"
             prefix={
               <Icon
                 icon={Lock}
@@ -79,8 +81,6 @@ export const SignInPasswordStep = ({
                 }}
               />
             }
-            ref={passwordInputRef}
-            size="large"
             style={{
               padding: 6,
             }}
@@ -88,10 +88,10 @@ export const SignInPasswordStep = ({
               <Button
                 icon={ChevronRight}
                 loading={loading}
-                onClick={() => form.submit()}
                 style={{ color: cssVar.colorPrimary }}
                 title={t('betterAuth.signin.submit')}
                 variant={'filled'}
+                onClick={() => form.submit()}
               />
             }
           />

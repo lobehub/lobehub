@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -18,11 +18,11 @@ const WriteFile = memo<BuiltinInterventionProps<WriteLocalFileParams>>(({ args }
     <Flexbox gap={8}>
       <Text>Write to file: {path}</Text>
       <Highlighter
+        wrap
         language={'text'}
         showLanguage={false}
         style={{ maxHeight: 200, overflow: 'auto', padding: '4px 8px' }}
         variant={'outlined'}
-        wrap
       >
         {preview}
       </Highlighter>

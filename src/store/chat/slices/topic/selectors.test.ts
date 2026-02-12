@@ -1,7 +1,6 @@
-import { t } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
-import { ChatStore } from '@/store/chat';
+import { type ChatStore } from '@/store/chat';
 import { initialState } from '@/store/chat/initialState';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { merge } from '@/utils/merge';

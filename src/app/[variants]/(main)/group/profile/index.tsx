@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { type FC, Suspense, memo } from 'react';
+import { type FC } from 'react';
+import { memo, Suspense } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -9,11 +10,11 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
-import StoreSync from './StoreSync';
 import AgentBuilder from './features/AgentBuilder';
 import GroupProfileSettings from './features/GroupProfile';
 import Header from './features/Header';
 import MemberProfile from './features/MemberProfile';
+import StoreSync from './StoreSync';
 
 const ProfileArea = memo(() => {
   const editor = useGroupProfileStore((s) => s.editor);
@@ -30,13 +31,13 @@ const ProfileArea = memo(() => {
         <>
           <Header />
           <Flexbox
-            height={'100%'}
             horizontal
+            height={'100%'}
+            style={{ cursor: 'text', display: 'flex', overflowY: 'auto', position: 'relative' }}
+            width={'100%'}
             onClick={() => {
               editor?.focus();
             }}
-            style={{ cursor: 'text', display: 'flex', overflowY: 'auto', position: 'relative' }}
-            width={'100%'}
           >
             <WideScreenContainer>
               {isGroupTab ? <GroupProfileSettings /> : <MemberProfile />}
@@ -52,7 +53,7 @@ const GroupProfile: FC = () => {
   return (
     <Suspense fallback={<Loading debugId="GroupProfile" />}>
       <StoreSync />
-      <Flexbox height={'100%'} horizontal width={'100%'}>
+      <Flexbox horizontal height={'100%'} width={'100%'}>
         <ProfileArea />
         <AgentBuilder />
       </Flexbox>

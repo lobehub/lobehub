@@ -13,7 +13,7 @@ export const parseFilesConfig = (envString: string = ''): SystemEmbeddingConfig 
   const config: FilesConfig = {} as any;
 
   // Handle full-width commas and extra spaces
-  let envValue = envString.replaceAll('，', ',').trim();
+  const envValue = envString.replaceAll('，', ',').trim();
 
   const pairs = envValue.split(',');
 

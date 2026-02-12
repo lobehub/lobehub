@@ -48,7 +48,7 @@ export const CreatePlanStreaming = memo<BuiltinStreamingProps<CreatePlanParams>>
       {/* Header */}
       <div className={styles.header}>
         <Icon icon={ListChecksIcon} size={18} />
-        <Text className={styles.title} ellipsis>
+        <Text ellipsis className={styles.title}>
           {goal}
         </Text>
       </div>

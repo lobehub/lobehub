@@ -1,0 +1,397 @@
+name: Release Desktop Nightly
+
+# ============================================
+# Nightly 自动发版工作流
+# ============================================
+# 触发条件:
+#   1. 定时: 每天 UTC+8 14:00 (UTC 06:00)
+#   2. 手动触发 (workflow_dispatch)
+#
+# 版本策略:
+#   基于最新 tag 的 minor+1, 格式: X.(Y+1).0-nightly.YYYYMMDDHHMM
+#   例: 当前 tag v2.0.12 → v2.1.0-nightly.202502091400
+#   使用精确到分钟的时间戳避免同一天多次触发时 tag 冲突
+# ============================================
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force build (skip diff check)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  # ============================================
+  # 计算 Nightly 版本号
+  # ============================================
+  calculate-version:
+    name: Calculate Nightly Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      has_changes: ${{ steps.changes.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check for code changes since last nightly
+        id: changes
+        run: |
+          # 手动触发 + force 时跳过 diff 检查
+          if [ "${{ inputs.force }}" == "true" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "🔧 Force build requested, skipping diff check"
+            exit 0
+          fi
+
+          # 查找上一个 nightly tag
+          last_nightly=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.' | head -n 1)
+
+          if [ -z "$last_nightly" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "📦 No previous nightly tag found, proceeding with first nightly build"
+            exit 0
+          fi
+
+          echo "📌 Last nightly tag: $last_nightly"
+
+          # 对比指定目录是否有变更
+          changes=$(git diff --name-only "$last_nightly"..HEAD -- package.json src/ packages/ apps/desktop/)
+
+          if [ -z "$changes" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "⏭️ No code changes since $last_nightly, skipping nightly build"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            change_count=$(echo "$changes" | wc -l | tr -d ' ')
+            echo "✅ ${change_count} file(s) changed since $last_nightly:"
+            echo "$changes" | head -20
+            [ "$change_count" -gt 20 ] && echo "  ... and $((change_count - 20)) more"
+          fi
+
+      - name: Calculate nightly version
+        if: steps.changes.outputs.has_changes == 'true'
+        id: version
+        run: |
+          # 获取最新的 tag (排除 nightly tag)
+          latest_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+
+          if [ -z "$latest_tag" ]; then
+            echo "❌ No stable tag found"
+            exit 1
+          fi
+
+          echo "📌 Latest stable tag: $latest_tag"
+
+          # 去掉 v 前缀
+          base_version="${latest_tag#v}"
+
+          # 解析 major.minor.patch
+          IFS='.' read -r major minor patch <<< "$base_version"
+
+          # minor + 1, patch 归零
+          new_minor=$((minor + 1))
+          timestamp=$(date -u +"%Y%m%d%H%M")
+
+          version="${major}.${new_minor}.0-nightly.${timestamp}"
+          tag="v${version}"
+
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          echo "✅ Nightly version: ${version}"
+          echo "🏷️ Tag: ${tag}"
+
+  # ============================================
+  # 代码质量检查
+  # ============================================
+  test:
+    name: Code quality check
+    needs: [calculate-version]
+    if: needs.calculate-version.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun i
+
+      - name: Lint
+        run: bun run lint
+
+  # ============================================
+  # 多平台构建
+  # ============================================
+  build:
+    needs: [calculate-version, test]
+    if: needs.calculate-version.outputs.has_changes == 'true'
+    name: Build Desktop App
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel, windows-2025, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} nightly
+
+      # macOS 构建前清理 (修复 hdiutil 问题 https://github.com/electron-userland/electron-builder/issues/8415)
+      - name: Clean previous build artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sudo rm -rf apps/desktop/release || true
+          sudo rm -rf apps/desktop/dist || true
+          sudo rm -rf /tmp/electron-builder* || true
+
+      # macOS 构建
+      - name: Build artifact on macOS
+        if: runner.os == 'macOS'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: nightly
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_FOR_PULL_REQUEST: true
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+
+      # Windows 构建
+      - name: Build artifact on Windows
+        if: runner.os == 'Windows'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: nightly
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+          TEMP: C:\temp
+          TMP: C:\temp
+
+      # Linux 构建
+      - name: Build artifact on Linux
+        if: runner.os == 'Linux'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: nightly
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+
+      - name: Upload artifacts
+        uses: ./.github/actions/desktop-upload-artifacts
+        with:
+          artifact-name: release-${{ matrix.os }}
+          retention-days: 3
+
+  # ============================================
+  # 合并 macOS 多架构 latest-mac.yml 文件
+  # ============================================
+  merge-mac-files:
+    needs: [build]
+    name: Merge macOS Release Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release
+          pattern: release-*
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -R release
+
+      - name: Install yaml only for merge step
+        run: |
+          cd scripts/electronWorkflow
+          if [ ! -f package.json ]; then
+            echo '{"name":"merge-mac-release","private":true}' > package.json
+          fi
+          bun add --no-save yaml@2.8.1
+
+      - name: Merge latest-mac.yml files
+        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+
+      - name: Upload artifacts with merged macOS files
+        uses: actions/upload-artifact@v6
+        with:
+          name: merged-release
+          path: release/
+          retention-days: 1
+
+  # ============================================
+  # 创建 Nightly Release
+  # ============================================
+  publish-release:
+    needs: [merge-mac-files, calculate-version]
+    name: Publish Nightly Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download merged artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: merged-release
+          path: release
+
+      - name: List final artifacts
+        run: ls -R release
+
+      - name: Create Nightly Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.calculate-version.outputs.tag }}
+          name: 'Desktop Nightly ${{ needs.calculate-version.outputs.tag }}'
+          prerelease: true
+          body: |
+            ## 🌙 Nightly Build — ${{ needs.calculate-version.outputs.tag }}
+
+            > Automated nightly build from `main` branch.
+
+            ### ⚠️ Important Notes
+
+            - **This is an automated nightly build and is NOT intended for production use.**
+            - Nightly builds are generated from the latest `main` branch and may contain **unstable, untested, or incomplete features**.
+            - **No guarantees** are made regarding stability, data integrity, or backward compatibility.
+            - Bugs, crashes, and breaking changes are expected. **Use at your own risk.**
+            - **Do NOT report bugs** from nightly builds unless you can reproduce them on the latest beta or stable release.
+            - Nightly builds may have **different update channels** — they will not auto-update to/from stable or beta versions.
+            - It is strongly recommended to **back up your data** before using a nightly build.
+
+            ### 📦 Installation
+
+            Download the appropriate installer for your platform from the assets below.
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon) | `.dmg` (arm64) |
+            | macOS (Intel) | `.dmg` (x64) |
+            | Windows | `.exe` |
+            | Linux | `.AppImage` / `.deb` |
+          files: |
+            release/latest*
+            release/*.dmg*
+            release/*.zip*
+            release/*.exe*
+            release/*.AppImage
+            release/*.deb*
+            release/*.snap*
+            release/*.rpm*
+            release/*.tar.gz*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # 清理旧的 Nightly Releases (保留最近 7 个)
+  # ============================================
+  cleanup-old-nightlies:
+    needs: [publish-release]
+    name: Cleanup Old Nightly Releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete old nightly releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            const nightlyReleases = releases
+              .filter(r => r.tag_name.includes('-nightly.'))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            const toDelete = nightlyReleases.slice(7);
+
+            for (const release of toDelete) {
+              console.log(`🗑️ Deleting old nightly release: ${release.tag_name}`);
+
+              // Delete the release
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+              });
+
+              // Delete the tag
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `tags/${release.tag_name}`,
+                });
+              } catch (e) {
+                console.log(`⚠️ Could not delete tag ${release.tag_name}: ${e.message}`);
+              }
+            }
+
+            console.log(`✅ Cleanup complete. Kept ${Math.min(nightlyReleases.length, 7)} nightly releases, deleted ${toDelete.length}.`);

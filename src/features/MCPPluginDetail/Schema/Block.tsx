@@ -1,5 +1,6 @@
 import { Flexbox, Segmented, Tag } from '@lobehub/ui';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Title from '../../../app/[variants]/(main)/community/features/Title';
@@ -19,12 +20,14 @@ const Block = memo<BlockProps>(({ title, count, desc, children, mode, setMode, i
   const { t } = useTranslation('discover');
   return (
     <Flexbox gap={8}>
-      <Flexbox align={'center'} gap={12} horizontal justify={'space-between'}>
+      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
         <Title id={id} tag={<Tag>{count}</Tag>}>
           {title}
         </Title>
         <Segmented
-          onChange={(v) => setMode?.(v as ModeType)}
+          shape={'round'}
+          value={mode}
+          variant={'outlined'}
           options={[
             {
               label: t('mcp.details.schema.mode.docs'),
@@ -35,9 +38,7 @@ const Block = memo<BlockProps>(({ title, count, desc, children, mode, setMode, i
               value: ModeType.JSON,
             },
           ]}
-          shape={'round'}
-          value={mode}
-          variant={'outlined'}
+          onChange={(v) => setMode?.(v as ModeType)}
         />
       </Flexbox>
       <p style={{ marginBottom: 24 }}>{desc}</p>

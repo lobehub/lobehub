@@ -1,7 +1,7 @@
 'use client';
 
-import { Form, type FormGroupItemType, HotkeyInput, Icon } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,7 +12,8 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { HotkeyGroupEnum, type HotkeyItem } from '@/types/hotkey';
+import { type HotkeyItem } from '@/types/hotkey';
+import { HotkeyGroupEnum } from '@/types/hotkey';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
@@ -51,7 +52,7 @@ const HotkeySetting = memo(() => {
     children: HOTKEYS_REGISTRATION.filter(
       (item) => item.group === HotkeyGroupEnum.Conversation,
     ).map((item) => mapHotkeyItem(item)),
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('hotkey.group.conversation'),
   };
 
@@ -62,12 +63,12 @@ const HotkeySetting = memo(() => {
       initialValues={hotkey}
       items={[conversation]}
       itemsType={'group'}
+      variant={'filled'}
       onValuesChange={async (values) => {
         setLoading(true);
         await setSettings({ hotkey: values });
         setLoading(false);
       }}
-      variant={'filled'}
       {...FORM_STYLE}
     />
   );

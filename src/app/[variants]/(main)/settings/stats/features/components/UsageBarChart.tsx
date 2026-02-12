@@ -1,4 +1,5 @@
-import { BarChart, type BarChartProps, ChartTooltipFrame, ChartTooltipRow } from '@lobehub/charts';
+import { type BarChartProps } from '@lobehub/charts';
+import { BarChart, ChartTooltipFrame, ChartTooltipRow } from '@lobehub/charts';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 
@@ -20,7 +21,7 @@ export const UsageBarChart = ({ ...props }: UsageBarChartProps) => (
         return (
           <ChartTooltipFrame>
             <Flexbox horizontal justify={'space-between'} paddingBlock={8} paddingInline={16}>
-              <Text as={'p'} ellipsis style={{ margin: 0 }}>
+              <Text ellipsis as={'p'} style={{ margin: 0 }}>
                 {label}
               </Text>
               {sum !== 0 && (

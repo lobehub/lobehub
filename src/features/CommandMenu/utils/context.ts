@@ -1,4 +1,4 @@
-import type { Context, MenuContext } from '../types';
+import { type Context, type MenuContext } from '../types';
 
 /**
  * Configuration for context detection

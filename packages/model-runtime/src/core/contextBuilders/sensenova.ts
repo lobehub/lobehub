@@ -1,31 +1,31 @@
 export const convertSenseNovaMessage = (content: any) => {
-  // 如果为单条 string 类 content，则格式转换为 text 类
+  // If it's a single string content, convert format to text type
   if (typeof content === 'string') {
     return [{ text: content, type: 'text' }];
   }
 
-  // 如果内容为空或不是数组，返回空数组避免后续错误
+  // If content is empty or not an array, return empty array to avoid subsequent errors
   if (!Array.isArray(content)) {
     return [];
   }
 
-  // 如果内容包含图片内容，则需要对 array 类 content，进行格式转换
+  // If content contains images, need to convert array content format
   return content
     .map((item: any) => {
-      // 如果项为空，跳过处理
+      // If item is empty, skip processing
       if (!item) return null;
 
-      // 如果为 content，则格式转换为 text 类
+      // If it's content, convert format to text type
       if (item.type === 'text') return item;
 
-      // 如果为 image_url，则格式转换为 image_url 类
+      // If it's image_url, convert format to image_url type
       if (item.type === 'image_url' && item.image_url) {
         const url = item.image_url.url;
 
-        // 确保 URL 存在且为字符串
+        // Ensure URL exists and is a string
         if (!url || typeof url !== 'string') return null;
 
-        // 如果 image_url 为 base64 格式，则返回 image_base64 类，否则返回 image_url 类
+        // If image_url is in base64 format, return image_base64 type, otherwise return image_url type
         return url.startsWith('data:image/jpeg;base64') || url.startsWith('data:image/png;base64')
           ? {
               image_base64: url.split(',')[1],

@@ -1,14 +1,14 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { PluginItem } from '@lobehub/market-sdk';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type PluginItem } from '@lobehub/market-sdk';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
-import { CheckMcpInstallResult, MCPInstallStep } from '@/types/plugins';
+import { type CheckMcpInstallResult } from '@/types/plugins';
+import { MCPInstallStep } from '@/types/plugins';
 
 import { useToolStore } from '../../store';
 

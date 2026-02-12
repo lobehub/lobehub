@@ -1,5 +1,5 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
-import type { UserStore } from '@/store/user';
+import { type UserStore } from '@/store/user';
 import { merge } from '@/utils/merge';
 
 import { currentSettings } from './settings';

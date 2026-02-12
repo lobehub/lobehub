@@ -1,7 +1,7 @@
 'use client';
 
-import { Form, type FormGroupItemType, Icon } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Form, Icon, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -44,7 +44,7 @@ const Appearance = memo(() => {
         name: 'neutralColor',
       },
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('settingAppearance.title'),
   };
 
@@ -54,12 +54,12 @@ const Appearance = memo(() => {
       initialValues={general}
       items={[theme]}
       itemsType={'group'}
+      variant={'filled'}
       onValuesChange={async (value) => {
         setLoading(true);
         await setSettings({ general: value });
         setLoading(false);
       }}
-      variant={'filled'}
       {...FORM_STYLE}
     />
   );

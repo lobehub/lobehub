@@ -12,7 +12,8 @@ import Item from './Item';
 import MasonryItemWrapper from './Item/MasonryItemWrapper';
 import Loading from './Loading';
 import MasonrySkeleton from './MasonrySkeleton';
-import ViewSwitcher, { type ViewMode } from './ViewSwitcher';
+import { type ViewMode } from './ViewSwitcher';
+import ViewSwitcher from './ViewSwitcher';
 
 export const List = memo(() => {
   const { t } = useTranslation('file');
@@ -76,8 +77,8 @@ export const List = memo(() => {
   return (
     <Flexbox height={500}>
       <Flexbox paddingInline={16} style={{ paddingBlockEnd: 12 }}>
-        <Flexbox align={'center'} horizontal justify={'flex-end'}>
-          <ViewSwitcher onViewChange={setViewMode} view={viewMode} />
+        <Flexbox horizontal align={'center'} justify={'flex-end'}>
+          <ViewSwitcher view={viewMode} onViewChange={setViewMode} />
         </Flexbox>
       </Flexbox>
       {isLoading || isTransitioning ? (
@@ -105,13 +106,13 @@ export const List = memo(() => {
       ) : viewMode === 'list' ? (
         <Virtuoso
           increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
+          overscan={24}
+          style={{ flex: 1, marginInline: -16 }}
+          totalCount={data!.length}
           itemContent={(index) => {
             const item = data![index];
             return <Item key={item.id} {...item} />;
           }}
-          overscan={24}
-          style={{ flex: 1, marginInline: -16 }}
-          totalCount={data!.length}
         />
       ) : (
         <div style={{ height: '100%', position: 'relative' }}>

@@ -61,16 +61,16 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
   }, [token]);
 
   return (
-    <Flexbox align={'center'} gap={12} horizontal paddingInline={'4px 0'}>
+    <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
       <Flexbox flex={1}>
         <Slider
           marks={marks}
           max={exponent(64)}
           min={exponent(1)}
-          onChange={updateWithPowValue}
           step={null}
           tooltip={{ open: false }}
           value={powValue}
+          onChange={updateWithPowValue}
         />
       </Flexbox>
       <div>
@@ -78,13 +78,13 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
           changeOnWheel
           max={64_000}
           min={0}
+          step={step}
+          style={{ width: 80 }}
+          value={token}
           onChange={(e) => {
             if (!e && e !== 0) return;
             updateWithRealValue(e as number);
           }}
-          step={step}
-          style={{ width: 80 }}
-          value={token}
         />
       </div>
     </Flexbox>

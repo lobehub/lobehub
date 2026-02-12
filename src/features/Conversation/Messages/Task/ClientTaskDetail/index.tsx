@@ -1,6 +1,7 @@
 'use client';
 
-import { type TaskDetail, ThreadStatus } from '@lobechat/types';
+import { type TaskDetail } from '@lobechat/types';
+import { ThreadStatus } from '@lobechat/types';
 import { memo, useMemo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';

@@ -40,10 +40,10 @@ const ChangelogModal = memo<ChangelogModalProps>(({ open, onClose, shouldLoad })
 
   return open ? (
     <Modal
-      footer={null}
       maskClosable
-      onCancel={onClose}
+      footer={null}
       open={true}
+      width={800}
       styles={{
         body: {
           maxHeight: '70vh',
@@ -55,14 +55,14 @@ const ChangelogModal = memo<ChangelogModalProps>(({ open, onClose, shouldLoad })
           <Button
             icon={<ArrowUpRightIcon size={16} />}
             iconPlacement="end"
-            onClick={onClose}
             type="text"
+            onClick={onClose}
           >
             {t('changelog')}
           </Button>
         </Flexbox>
       }
-      width={800}
+      onCancel={onClose}
     >
       <Flexbox gap={16} padding={16} style={{ width: '100%' }}>
         {isLoading || data.length === 0 ? (

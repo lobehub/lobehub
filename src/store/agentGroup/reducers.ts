@@ -1,4 +1,4 @@
-import type { AgentGroupDetail } from '@lobechat/types';
+import { type AgentGroupDetail } from '@lobechat/types';
 import { produce } from 'immer';
 
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';

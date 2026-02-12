@@ -1,13 +1,13 @@
 'use client';
 
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
 import { memo } from 'react';
 
-import { type MoveLocalFilesState } from '../../../types';
+import type { MoveLocalFilesState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   arrow: css`
@@ -48,7 +48,7 @@ const MoveLocalFiles = memo<BuiltinRenderProps<MoveLocalFilesParams, MoveLocalFi
     return (
       <Flexbox className={styles.container} gap={8}>
         {/* Header */}
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {allSuccess ? (
             <CheckCircleFilled
               className={styles.statusIcon}
@@ -67,10 +67,10 @@ const MoveLocalFiles = memo<BuiltinRenderProps<MoveLocalFilesParams, MoveLocalFi
           <Flexbox gap={4}>
             {pluginState.results.map((result, index) => (
               <Flexbox
+                horizontal
                 align={'center'}
                 className={styles.moveItem}
                 gap={8}
-                horizontal
                 key={index}
                 style={{
                   background: result.success ? cssVar.colorSuccessBg : cssVar.colorErrorBg,
@@ -81,15 +81,15 @@ const MoveLocalFiles = memo<BuiltinRenderProps<MoveLocalFilesParams, MoveLocalFi
                 ) : (
                   <CloseCircleFilled style={{ color: cssVar.colorError, fontSize: 12 }} />
                 )}
-                <Text as={'span'} code ellipsis fontSize={11} style={{ maxWidth: 200 }}>
+                <Text code ellipsis as={'span'} fontSize={11} style={{ maxWidth: 200 }}>
                   {result.source}
                 </Text>
                 <ArrowRight className={styles.arrow} size={12} />
-                <Text as={'span'} code ellipsis fontSize={11} style={{ maxWidth: 200 }}>
+                <Text code ellipsis as={'span'} fontSize={11} style={{ maxWidth: 200 }}>
                   {result.destination}
                 </Text>
                 {result.error && (
-                  <Text as={'span'} code fontSize={11} type={'danger'}>
+                  <Text code as={'span'} fontSize={11} type={'danger'}>
                     ({result.error})
                   </Text>
                 )}

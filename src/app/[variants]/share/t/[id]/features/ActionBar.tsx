@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
-import { SharedTopicData } from '@/types/topic';
+import { type SharedTopicData } from '@/types/topic';
 
 interface ActionBarProps {
   data: SharedTopicData;
@@ -69,25 +69,25 @@ const ActionBar = memo<ActionBarProps>(({ data }) => {
   return (
     <Center>
       <Block
+        horizontal
+        shadow
         align="center"
         gap={16}
-        horizontal
         justify={'space-between'}
         paddingBlock={8}
         paddingInline={'12px 8px'}
-        shadow
+        variant={'outlined'}
         style={{
           borderRadius: 48,
           boxShadow: '0 2px 12px -4px rgba(0, 0, 0, 0.1)',
           maxWidth: 960,
         }}
-        variant={'outlined'}
       >
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           {renderAgentOrGroupAvatar()}
           {renderAgentOrGroupTitle()}
         </Flexbox>
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Link to={`/community/agent`}>
             <Button shape={'round'} variant={'filled'}>
               {t('sharePage.actions.findMord')}

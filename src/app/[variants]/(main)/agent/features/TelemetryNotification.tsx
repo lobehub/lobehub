@@ -62,20 +62,20 @@ const TelemetryNotification = memo<{ mobile?: boolean }>(({ mobile }) => {
             </span>
           </div>
         </Flexbox>
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           <Button
+            type={'primary'}
             onClick={() => {
               updateTelemetry(true);
             }}
-            type={'primary'}
           >
             {t('telemetry.allow')}
           </Button>
           <Button
+            type={'text'}
             onClick={() => {
               updateTelemetry(false);
             }}
-            type={'text'}
           >
             {t('telemetry.deny')}
           </Button>

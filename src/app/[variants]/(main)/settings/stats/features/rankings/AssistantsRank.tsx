@@ -1,7 +1,6 @@
 import { BarList } from '@lobehub/charts';
 import { ActionIcon, Avatar, Modal } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
-import Link from '@/libs/router/Link';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { INBOX_SESSION_ID } from '@/const/session';
+import Link from '@/libs/router/Link';
 import { useClientDataSWR } from '@/libs/swr';
 import { sessionService } from '@/services/session';
 import { type SessionRankItem } from '@/types/session';
@@ -60,42 +60,42 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   return (
     <>
       <StatsFormGroup
-        extra={
-          showExtra && (
-            <ActionIcon icon={MaximizeIcon} onClick={() => setOpen(true)} size={'small'} />
-          )
-        }
         fontSize={16}
         title={t('stats.assistantsRank.title')}
+        extra={
+          showExtra && (
+            <ActionIcon icon={MaximizeIcon} size={'small'} onClick={() => setOpen(true)} />
+          )
+        }
       >
         <BarList
           data={data?.slice(0, 5).map((item) => mapData(item)) || []}
           height={220}
           leftLabel={t('stats.assistantsRank.left')}
           loading={isLoading || !data}
+          rightLabel={t('stats.assistantsRank.right')}
           noDataText={{
             desc: t('stats.empty.desc'),
             title: t('stats.empty.title'),
           }}
           onValueChange={(item) => navigate(item.link)}
-          rightLabel={t('stats.assistantsRank.right')}
         />
       </StatsFormGroup>
       {showExtra && (
         <Modal
           footer={null}
           loading={isLoading || !data}
-          onCancel={() => setOpen(false)}
           open={open}
           title={t('stats.assistantsRank.title')}
+          onCancel={() => setOpen(false)}
         >
           <BarList
             data={data?.map((item) => mapData(item)) || []}
             height={340}
             leftLabel={t('stats.assistantsRank.left')}
             loading={isLoading || !data}
-            onValueChange={(item) => navigate(item.link)}
             rightLabel={t('stats.assistantsRank.right')}
+            onValueChange={(item) => navigate(item.link)}
           />
         </Modal>
       )}

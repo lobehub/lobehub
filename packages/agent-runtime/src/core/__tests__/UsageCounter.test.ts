@@ -1,8 +1,8 @@
-import { ModelUsage } from '@lobechat/types';
+import type { ModelUsage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { UsageCounter } from '../UsageCounter';
 import { AgentRuntime } from '../runtime';
+import { UsageCounter } from '../UsageCounter';
 
 describe('UsageCounter', () => {
   describe('UsageCounter.accumulateLLM', () => {

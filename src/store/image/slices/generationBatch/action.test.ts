@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate } from '@/libs/swr';
 import { generationService } from '@/services/generation';
@@ -8,7 +8,7 @@ import { generationBatchService } from '@/services/generationBatch';
 import { useImageStore } from '@/store/image';
 import { generationBatchSelectors } from '@/store/image/slices/generationBatch/selectors';
 import { AsyncTaskStatus } from '@/types/asyncTask';
-import { GenerationBatch } from '@/types/generation';
+import { type GenerationBatch } from '@/types/generation';
 
 // Mock services and dependencies
 vi.mock('@/services/generation', () => ({

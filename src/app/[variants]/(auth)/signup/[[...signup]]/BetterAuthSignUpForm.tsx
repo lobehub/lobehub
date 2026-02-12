@@ -3,13 +3,15 @@
 import { Button, Icon, Text } from '@lobehub/ui';
 import { Form, Input } from 'antd';
 import { Lock, Mail } from 'lucide-react';
-import Link from '@/libs/next/Link';
-import { useSearchParams } from '@/libs/next/navigation';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Link from '@/libs/next/Link';
+import { useSearchParams } from '@/libs/next/navigation';
+
 import { AuthCard } from '../../../../../features/AuthCard';
-import { type SignUpFormValues, useSignUp } from './useSignUp';
+import { type SignUpFormValues } from './useSignUp';
+import { useSignUp } from './useSignUp';
 
 const BetterAuthSignUpForm = () => {
   const [form] = Form.useForm<SignUpFormValues>();
@@ -46,6 +48,7 @@ const BetterAuthSignUpForm = () => {
         >
           <Input
             placeholder={t('betterAuth.signup.emailPlaceholder')}
+            size="large"
             prefix={
               <Icon
                 icon={Mail}
@@ -54,7 +57,6 @@ const BetterAuthSignUpForm = () => {
                 }}
               />
             }
-            size="large"
           />
         </Form.Item>
         <Form.Item
@@ -67,7 +69,7 @@ const BetterAuthSignUpForm = () => {
               message: t('betterAuth.errors.passwordFormat'),
               validator: (_, value) => {
                 if (!value) return Promise.resolve();
-                const hasLetter = /[A-Za-z]/.test(value);
+                const hasLetter = /[a-z]/i.test(value);
                 const hasNumber = /\d/.test(value);
                 return hasLetter && hasNumber ? Promise.resolve() : Promise.reject();
               },
@@ -76,6 +78,7 @@ const BetterAuthSignUpForm = () => {
         >
           <Input.Password
             placeholder={t('betterAuth.signup.passwordPlaceholder')}
+            size="large"
             prefix={
               <Icon
                 icon={Lock}
@@ -84,7 +87,6 @@ const BetterAuthSignUpForm = () => {
                 }}
               />
             }
-            size="large"
           />
         </Form.Item>
         <Form.Item
@@ -104,6 +106,7 @@ const BetterAuthSignUpForm = () => {
         >
           <Input.Password
             placeholder={t('betterAuth.signup.confirmPasswordPlaceholder')}
+            size="large"
             prefix={
               <Icon
                 icon={Lock}
@@ -112,7 +115,6 @@ const BetterAuthSignUpForm = () => {
                 }}
               />
             }
-            size="large"
           />
         </Form.Item>
 

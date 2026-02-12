@@ -7,7 +7,7 @@ import { styles } from './style';
 
 const Layout = () => {
   return (
-    <Flexbox className={styles.mainContainer} gap={24} horizontal width={'100%'}>
+    <Flexbox horizontal className={styles.mainContainer} gap={24} width={'100%'}>
       <CategoryContainer>
         <Category />
       </CategoryContainer>

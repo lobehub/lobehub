@@ -1,15 +1,16 @@
 import { parse } from '@lobechat/conversation-flow';
-import type { ConversationContext, UIChatMessage } from '@lobechat/types';
+import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
-import type { SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import type { Store as ConversationStore } from '../../action';
-import { type MessageDispatch, messagesReducer } from './reducer';
+import { type Store as ConversationStore } from '../../action';
+import { type MessageDispatch } from './reducer';
+import { messagesReducer } from './reducer';
 import { dataSelectors } from './selectors';
 
 const log = debug('lobe-render:features:Conversation');

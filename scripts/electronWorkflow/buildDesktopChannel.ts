@@ -1,7 +1,7 @@
-/* eslint-disable unicorn/no-process-exit */
-import fs from 'fs-extra';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
+
+import fs from 'fs-extra';
 
 type ReleaseChannel = 'stable' | 'beta' | 'nightly';
 
@@ -115,7 +115,7 @@ const main = async () => {
 
   try {
     runCommand(`npm run workflow:set-desktop-version ${version} ${channel}`);
-    runCommand('npm run desktop:build', { UPDATE_CHANNEL: channel });
+    runCommand('npm run desktop:package:app', { UPDATE_CHANNEL: channel });
   } catch (error) {
     console.error('❌ Build failed:', error);
     process.exit(1);

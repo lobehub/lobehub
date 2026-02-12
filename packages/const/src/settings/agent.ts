@@ -1,5 +1,5 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import {
+import type {
   LobeAgentChatConfig,
   LobeAgentConfig,
   LobeAgentTTSConfig,

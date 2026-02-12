@@ -1,6 +1,7 @@
 'use client';
 
-import { SearchBar, type SearchBarProps } from '@lobehub/ui';
+import { type SearchBarProps } from '@lobehub/ui';
+import { SearchBar } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,17 +46,17 @@ const Search = memo<StoreSearchBarProps>(() => {
     <SearchBar
       data-testid="search-bar"
       defaultValue={q}
+      placeholder={t('search.placeholder')}
+      value={word}
+      variant={'borderless'}
+      style={{
+        width: '100%',
+      }}
+      onSearch={handleSearch}
       onInputChange={(v) => {
         setWord(v);
         if (!v) handleSearch('');
       }}
-      onSearch={handleSearch}
-      placeholder={t('search.placeholder')}
-      style={{
-        width: '100%',
-      }}
-      value={word}
-      variant={'borderless'}
     />
   );
 });

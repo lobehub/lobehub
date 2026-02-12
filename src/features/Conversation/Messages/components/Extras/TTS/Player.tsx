@@ -1,5 +1,6 @@
 import { type ChatMessageError } from '@lobechat/types';
-import { AudioPlayer, type AudioPlayerProps } from '@lobehub/tts/react';
+import { type AudioPlayerProps } from '@lobehub/tts/react';
+import { AudioPlayer } from '@lobehub/tts/react';
 import { ActionIcon, Alert, Button, Flexbox, Highlighter } from '@lobehub/ui';
 import { TrashIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -15,15 +16,18 @@ const Player = memo<PlayerProps>(({ onRetry, error, onDelete, audio, isLoading, 
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox align={'center'} horizontal style={{ minWidth: 200, width: '100%' }}>
+    <Flexbox horizontal align={'center'} style={{ minWidth: 200, width: '100%' }}>
       {error ? (
         <Alert
+          closable
+          style={{ alignItems: 'center', width: '100%' }}
+          title={error.message}
+          type="error"
           action={
-            <Button onClick={onRetry} size={'small'} type={'primary'}>
+            <Button size={'small'} type={'primary'} onClick={onRetry}>
               {t('retry', { ns: 'common' })}
             </Button>
           }
-          closable
           extra={
             error.body && (
               <Highlighter actionIconSize={'small'} language={'json'} variant={'borderless'}>
@@ -32,9 +36,6 @@ const Player = memo<PlayerProps>(({ onRetry, error, onDelete, audio, isLoading, 
             )
           }
           onClose={onDelete}
-          style={{ alignItems: 'center', width: '100%' }}
-          title={error.message}
-          type="error"
         />
       ) : (
         <>
@@ -43,12 +44,12 @@ const Player = memo<PlayerProps>(({ onRetry, error, onDelete, audio, isLoading, 
             audio={audio}
             buttonSize={'small'}
             isLoading={isLoading}
-            onInitPlay={onInitPlay}
-            onLoadingStop={stop}
             timeRender={'tag'}
             timeStyle={{ margin: 0 }}
+            onInitPlay={onInitPlay}
+            onLoadingStop={stop}
           />
-          <ActionIcon icon={TrashIcon} onClick={onDelete} size={'small'} title={t('tts.clear')} />
+          <ActionIcon icon={TrashIcon} size={'small'} title={t('tts.clear')} onClick={onDelete} />
         </>
       )}
     </Flexbox>

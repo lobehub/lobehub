@@ -3,11 +3,12 @@
 import { type SlashOptions } from '@lobehub/editor';
 import { Alert, Avatar, Flexbox } from '@lobehub/ui';
 import { isEqual } from 'es-toolkit/compat';
-import { Suspense, memo, useMemo } from 'react';
+import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { type ActionKeys, ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { type ActionKeys } from '@/features/ChatInput';
+import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import GroupAvatar from '@/features/GroupAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -50,13 +51,13 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
       {
         icon: (
           <GroupAvatar
+            size={24}
             avatars={
               currentGroupMembers?.map((member) => ({
                 avatar: member.avatar || DEFAULT_AVATAR,
                 background: member.backgroundColor || undefined,
               })) || []
             }
-            size={24}
           />
         ),
         key: 'ALL_MEMBERS',
@@ -82,18 +83,18 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
 
   return (
     <ChatInputProvider
+      leftActions={isDMPortal ? dmLeftActions : leftActions}
+      mentionItems={mentionItems}
+      rightActions={isDMPortal ? [] : rightActions}
       chatInputEditorRef={(instance) => {
         if (!instance) return;
         useChatStore.setState({ mainInputEditor: instance });
       }}
-      leftActions={isDMPortal ? dmLeftActions : leftActions}
-      mentionItems={mentionItems}
-      onMarkdownContentChange={(content) => {
-        useChatStore.setState({ inputMessage: content });
-      }}
-      rightActions={isDMPortal ? [] : rightActions}
       sendMenu={{
         items: sendMenuItems,
+      }}
+      onMarkdownContentChange={(content) => {
+        useChatStore.setState({ inputMessage: content });
       }}
     >
       <WideScreenContainer>
@@ -101,9 +102,9 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
           <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
             <Alert
               closable
-              onClose={clearSendMessageError}
               title={t('input.errorMsg', { errorMsg: mainInputSendErrorMsg })}
               type={'warning'}
+              onClose={clearSendMessageError}
             />
           </Flexbox>
         )}

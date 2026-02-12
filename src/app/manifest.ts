@@ -1,4 +1,4 @@
-import type { MetadataRoute } from 'next';
+import { type MetadataRoute } from 'next';
 
 const manifest = async (): Promise<MetadataRoute.Manifest> => {
   // Skip heavy module compilation in development

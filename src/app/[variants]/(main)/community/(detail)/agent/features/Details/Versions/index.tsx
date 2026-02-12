@@ -9,7 +9,8 @@ import InlineTable from '@/components/InlineTable';
 import PublishedTime from '@/components/PublishedTime';
 import Link from '@/libs/router/Link';
 import { usePathname, useQuery } from '@/libs/router/navigation';
-import { type AssistantMarketSource, AssistantNavKey } from '@/types/discover';
+import { type AssistantMarketSource } from '@/types/discover';
+import { AssistantNavKey } from '@/types/discover';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';
@@ -56,6 +57,9 @@ const Versions = memo(() => {
       <Title>{t('assistants.details.version.title')}</Title>
       <Block variant={'outlined'}>
         <InlineTable
+          dataSource={versions}
+          rowKey={'version'}
+          size={'middle'}
           columns={[
             {
               dataIndex: 'version',
@@ -68,7 +72,7 @@ const Versions = memo(() => {
                       : undefined;
                   const statusMeta = statusKey ? statusTagMap[statusKey] : undefined;
                   const content = (
-                    <Flexbox align={'center'} gap={8} horizontal>
+                    <Flexbox horizontal align={'center'} gap={8}>
                       <code style={{ fontSize: 14 }}>{record.version}</code>
                       {(record.isLatest || record.version === currentVersion) && (
                         <Tag color={'info'}>{t('assistants.details.version.table.isLatest')}</Tag>
@@ -81,6 +85,7 @@ const Versions = memo(() => {
 
                   return (
                     <Link
+                      style={{ color: 'inherit' }}
                       href={qs.stringifyUrl(
                         {
                           query: {
@@ -92,7 +97,6 @@ const Versions = memo(() => {
                         },
                         { skipNull: true },
                       )}
-                      style={{ color: 'inherit' }}
                     >
                       {content}
                     </Link>
@@ -120,9 +124,6 @@ const Versions = memo(() => {
               title: t('assistants.details.version.table.publishAt'),
             },
           ]}
-          dataSource={versions}
-          rowKey={'version'}
-          size={'middle'}
         />
       </Block>
     </Flexbox>

@@ -115,11 +115,11 @@ export const GenerationItem = memo<GenerationItemProps>(
           aspectRatio={aspectRatio}
           generation={generation}
           generationBatch={generationBatch}
+          prompt={prompt}
+          seedTooltip={seedTooltip}
           onCopySeed={handleCopySeed}
           onDelete={handleDeleteGeneration}
           onDownload={handleDownloadImage}
-          prompt={prompt}
-          seedTooltip={seedTooltip}
         />
       );
     }

@@ -1,7 +1,8 @@
 import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronLeftIcon } from 'lucide-react';
-import { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -31,26 +32,26 @@ const BackNav = memo<PropsWithChildren>(({ children }) => {
       <Button
         className={styles.button}
         icon={ChevronLeftIcon}
-        onClick={() => navigate('/')}
         type={'text'}
+        onClick={() => navigate('/')}
       >
         {t('back')}
       </Button>
     );
   } else {
     leftContent = (
-      <Flexbox align={'center'} gap={4} horizontal>
+      <Flexbox horizontal align={'center'} gap={4}>
         <ActionIcon
           icon={ChevronLeftIcon}
-          onClick={() => navigate('/')}
           size={DESKTOP_HEADER_ICON_SIZE}
+          onClick={() => navigate('/')}
         />
         {children}
       </Flexbox>
     );
   }
   return (
-    <Flexbox align={'center'} gap={4} horizontal justify={'space-between'} padding={8}>
+    <Flexbox horizontal align={'center'} gap={4} justify={'space-between'} padding={8}>
       {leftContent}
       <ToggleLeftPanelButton />
     </Flexbox>

@@ -1,10 +1,9 @@
-import { ChatResponse } from 'ollama/browser';
+import type { ChatResponse } from 'ollama/browser';
 
-import { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks } from '../../types';
 import { nanoid } from '../../utils/uuid';
+import type { StreamContext, StreamProtocolChunk } from './protocol';
 import {
-  StreamContext,
-  StreamProtocolChunk,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   generateToolCallId,
@@ -54,7 +53,7 @@ const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): Strea
 export const OllamaStream = (
   res: ReadableStream<ChatResponse>,
   cb?: ChatStreamCallbacks,
-): ReadableStream<string> => {
+): ReadableStream<Uint8Array> => {
   const streamStack: StreamContext = { id: 'chat_' + nanoid() };
 
   return res

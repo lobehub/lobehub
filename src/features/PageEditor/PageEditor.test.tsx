@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useEffect } from 'react';
 import { renderHook } from '@testing-library/react';
+import { useEffect } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('PageEditor beforeunload handler', () => {
   let addEventListenerSpy: ReturnType<typeof vi.spyOn>;

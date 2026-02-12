@@ -101,38 +101,35 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
         7: '8K',
         8: '16K',
         9: '24K',
-        // eslint-disable-next-line sort-keys-fix/sort-keys-fix
         10: '32K',
       };
     }, []);
 
     return (
-      <Flexbox align={'center'} gap={12} horizontal paddingInline={'4px 0'}>
+      <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
         <Flexbox flex={1}>
           <Slider
             marks={marks}
             max={10}
             min={0}
-            onChange={updateWithSliderPosition}
             step={null}
             tooltip={{ open: false }}
             value={sliderPosition}
+            onChange={updateWithSliderPosition}
           />
         </Flexbox>
         <div>
           <InputNumber
             changeOnWheel
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            max={32_768}
+            min={-1}
+            step={inputStep}
+            style={{ width: 80 }}
+            value={budget}
             formatter={(value, _info) => {
               if (value === SPECIAL_VALUES.AUTO) return 'Auto';
               if (value === SPECIAL_VALUES.OFF) return 'OFF';
               return `${value}`;
-            }}
-            max={32_768}
-            min={-1}
-            onChange={(e) => {
-              if (e === null || e === undefined) return;
-              updateWithRealValue(e as number);
             }}
             parser={(value) => {
               if (typeof value === 'string') {
@@ -145,9 +142,10 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
               }
               return SPECIAL_VALUES.AUTO;
             }}
-            step={inputStep}
-            style={{ width: 80 }}
-            value={budget}
+            onChange={(e) => {
+              if (e === null || e === undefined) return;
+              updateWithRealValue(e as number);
+            }}
           />
         </div>
       </Flexbox>

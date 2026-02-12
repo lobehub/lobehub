@@ -6,24 +6,26 @@ import debug from 'debug';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
-import { type MCPErrorData, parseStdioErrorMessage } from '@/libs/mcp/types';
+import { type MCPErrorData } from '@/libs/mcp/types';
+import { parseStdioErrorMessage } from '@/libs/mcp/types';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
+import { type StoreSetter } from '@/store/types';
 import { McpConnectionType } from '@/types/discover';
 import {
   type CheckMcpInstallResult,
+  type McpConnectionParams,
   type MCPErrorInfo,
   type MCPInstallProgress,
-  MCPInstallStep,
   type MCPPluginListParams,
-  type McpConnectionParams,
 } from '@/types/plugins';
+import { MCPInstallStep } from '@/types/plugins';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -138,36 +140,28 @@ export interface TestMcpConnectionResult {
   success: boolean;
 }
 
-export interface PluginMCPStoreAction {
-  cancelInstallMCPPlugin: (identifier: string) => Promise<void>;
-  cancelMcpConnectionTest: (identifier: string) => void;
-  installMCPPlugin: (
-    identifier: string,
-    options?: { config?: Record<string, any>; resume?: boolean; skipDepsCheck?: boolean },
-  ) => Promise<boolean | undefined>;
-  loadMoreMCPPlugins: () => void;
-  resetMCPPluginList: (keywords?: string) => void;
-  // Test connection related methods
-  testMcpConnection: (params: McpConnectionParams) => Promise<TestMcpConnectionResult>;
-  uninstallMCPPlugin: (identifier: string) => Promise<void>;
-  updateMCPInstallProgress: (identifier: string, progress: MCPInstallProgress | undefined) => void;
-  useFetchMCPPluginList: (params: MCPPluginListParams) => SWRResponse<PluginListResponse>;
-}
+type Setter = StoreSetter<ToolStore>;
+export const createMCPPluginStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
+  new PluginMCPStoreActionImpl(set, get, _api);
 
-export const createMCPPluginStoreSlice: StateCreator<
-  ToolStore,
-  [['zustand/devtools', never]],
-  [],
-  PluginMCPStoreAction
-> = (set, get) => ({
-  cancelInstallMCPPlugin: async (identifier) => {
+export class PluginMCPStoreActionImpl {
+  readonly #get: () => ToolStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  cancelInstallMCPPlugin = async (identifier: string): Promise<void> => {
     // Get and cancel AbortController
-    const abortController = get().mcpInstallAbortControllers[identifier];
+    const abortController = this.#get().mcpInstallAbortControllers[identifier];
     if (abortController) {
       abortController.abort();
 
       // Clean up AbortController storage
-      set(
+      this.#set(
         produce((draft: MCPStoreState) => {
           delete draft.mcpInstallAbortControllers[identifier];
         }),
@@ -177,18 +171,17 @@ export const createMCPPluginStoreSlice: StateCreator<
     }
 
     // Clean up installation progress and loading state
-    get().updateMCPInstallProgress(identifier, undefined);
-    get().updateInstallLoadingState(identifier, undefined);
-  },
+    this.#get().updateMCPInstallProgress(identifier, undefined);
+    this.#get().updateInstallLoadingState(identifier, undefined);
+  };
 
-  // Cancel MCP connection test
-  cancelMcpConnectionTest: (identifier) => {
-    const abortController = get().mcpTestAbortControllers[identifier];
+  cancelMcpConnectionTest = (identifier: string): void => {
+    const abortController = this.#get().mcpTestAbortControllers[identifier];
     if (abortController) {
       abortController.abort();
 
       // Clean up state
-      set(
+      this.#set(
         produce((draft: MCPStoreState) => {
           draft.mcpTestLoading[identifier] = false;
           delete draft.mcpTestAbortControllers[identifier];
@@ -198,12 +191,15 @@ export const createMCPPluginStoreSlice: StateCreator<
         n('cancelMcpConnectionTest'),
       );
     }
-  },
+  };
 
-  installMCPPlugin: async (identifier, options = {}) => {
+  installMCPPlugin = async (
+    identifier: string,
+    options: { config?: Record<string, any>; resume?: boolean; skipDepsCheck?: boolean } = {},
+  ): Promise<boolean | undefined> => {
     const { resume = false, config, skipDepsCheck } = options;
     const normalizedConfig = toNonEmptyStringRecord(config);
-    let plugin = mcpStoreSelectors.getPluginById(identifier)(get());
+    let plugin = mcpStoreSelectors.getPluginById(identifier)(this.#get());
 
     if (!plugin || !plugin.manifestUrl) {
       const data = await discoverService.getMcpDetail({ identifier });
@@ -218,13 +214,13 @@ export const createMCPPluginStoreSlice: StateCreator<
     // @ts-expect-error
     const { haveCloudEndpoint } = plugin || {};
 
-    const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = get();
+    const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();
 
     // Create AbortController for canceling installation
     const abortController = new AbortController();
 
     // Store AbortController
-    set(
+    this.#set(
       produce((draft: MCPStoreState) => {
         draft.mcpInstallAbortControllers[identifier] = abortController;
       }),
@@ -248,7 +244,7 @@ export const createMCPPluginStoreSlice: StateCreator<
 
       if (resume) {
         // Resume mode: get previous info from storage
-        const configInfo = get().mcpInstallProgress[identifier];
+        const configInfo = this.#get().mcpInstallProgress[identifier];
         if (!configInfo) {
           console.error('No config info found for resume');
           return;
@@ -301,7 +297,7 @@ export const createMCPPluginStoreSlice: StateCreator<
         // Prioritize endpoint (http/cloud) over stdio in all environments
         // Desktop: endpoint > stdio
         // Web: endpoint only (stdio not supported)
-        let shouldUseHttpDeployment = !!httpOption;
+        const shouldUseHttpDeployment = !!httpOption;
 
         if (hasCloudEndpoint) {
           // Use cloudEndPoint, create cloud type connection
@@ -614,7 +610,7 @@ export const createMCPPluginStoreSlice: StateCreator<
       updateInstallLoadingState(identifier, undefined);
 
       // Clean up AbortController
-      set(
+      this.#set(
         produce((draft: MCPStoreState) => {
           delete draft.mcpInstallAbortControllers[identifier];
         }),
@@ -698,7 +694,7 @@ export const createMCPPluginStoreSlice: StateCreator<
       updateInstallLoadingState(identifier, undefined);
 
       // Clean up AbortController
-      set(
+      this.#set(
         produce((draft: MCPStoreState) => {
           delete draft.mcpInstallAbortControllers[identifier];
         }),
@@ -706,14 +702,14 @@ export const createMCPPluginStoreSlice: StateCreator<
         n('installMCPPlugin/clearController'),
       );
     }
-  },
+  };
 
-  loadMoreMCPPlugins: () => {
-    const { mcpPluginItems, totalCount, currentPage } = get();
+  loadMoreMCPPlugins = (): void => {
+    const { mcpPluginItems, totalCount, currentPage } = this.#get();
 
     // Check if there's more data to load
     if (mcpPluginItems.length < (totalCount || 0)) {
-      set(
+      this.#set(
         produce((draft: MCPStoreState) => {
           draft.currentPage = currentPage + 1;
         }),
@@ -721,10 +717,10 @@ export const createMCPPluginStoreSlice: StateCreator<
         n('loadMoreMCPPlugins'),
       );
     }
-  },
+  };
 
-  resetMCPPluginList: (keywords) => {
-    set(
+  resetMCPPluginList = (keywords?: string): void => {
+    this.#set(
       produce((draft: MCPStoreState) => {
         draft.mcpPluginItems = [];
         draft.currentPage = 1;
@@ -734,17 +730,16 @@ export const createMCPPluginStoreSlice: StateCreator<
       false,
       n('resetMCPPluginList'),
     );
-  },
+  };
 
-  // Test MCP connection
-  testMcpConnection: async (params) => {
+  testMcpConnection = async (params: McpConnectionParams): Promise<TestMcpConnectionResult> => {
     const { identifier, connection, metadata } = params;
 
     // Create AbortController for canceling test
     const abortController = new AbortController();
 
     // Store AbortController and set loading state
-    set(
+    this.#set(
       produce((draft: MCPStoreState) => {
         draft.mcpTestAbortControllers[identifier] = abortController;
         draft.mcpTestLoading[identifier] = true;
@@ -797,7 +792,7 @@ export const createMCPPluginStoreSlice: StateCreator<
       }
 
       // Clean up state
-      set(
+      this.#set(
         produce((draft: MCPStoreState) => {
           draft.mcpTestLoading[identifier] = false;
           delete draft.mcpTestAbortControllers[identifier];
@@ -826,7 +821,7 @@ export const createMCPPluginStoreSlice: StateCreator<
       const { originalMessage, errorLog } = parseStdioErrorMessage(rawErrorMessage);
 
       // Set error state
-      set(
+      this.#set(
         produce((draft: MCPStoreState) => {
           draft.mcpTestLoading[identifier] = false;
           draft.mcpTestErrors[identifier] = originalMessage;
@@ -838,30 +833,33 @@ export const createMCPPluginStoreSlice: StateCreator<
 
       return { error: originalMessage, errorLog, success: false };
     }
-  },
+  };
 
-  uninstallMCPPlugin: async (identifier) => {
+  uninstallMCPPlugin = async (identifier: string): Promise<void> => {
     await pluginService.uninstallPlugin(identifier);
-    await get().refreshPlugins();
+    await this.#get().refreshPlugins();
 
     discoverService.reportMcpEvent({
       event: 'uninstall',
       identifier: identifier,
       source: 'self',
     });
-  },
+  };
 
-  updateMCPInstallProgress: (identifier, progress) => {
-    set(
+  updateMCPInstallProgress = (
+    identifier: string,
+    progress: MCPInstallProgress | undefined,
+  ): void => {
+    this.#set(
       produce((draft: MCPStoreState) => {
         draft.mcpInstallProgress[identifier] = progress;
       }),
       false,
       n(`updateMCPInstallProgress/${progress?.step || 'clear'}`),
     );
-  },
+  };
 
-  useFetchMCPPluginList: (params) => {
+  useFetchMCPPluginList = (params: MCPPluginListParams): SWRResponse<PluginListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     const requestParams = isDesktop
       ? params
@@ -883,8 +881,8 @@ export const createMCPPluginStoreSlice: StateCreator<
       swrKey,
       () => discoverService.getMCPPluginList(requestParams),
       {
-        onSuccess(data) {
-          set(
+        onSuccess: (data) => {
+          this.#set(
             produce((draft: MCPStoreState) => {
               draft.searchLoading = false;
 
@@ -917,5 +915,7 @@ export const createMCPPluginStoreSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type PluginMCPStoreAction = Pick<PluginMCPStoreActionImpl, keyof PluginMCPStoreActionImpl>;

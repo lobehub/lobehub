@@ -3,8 +3,8 @@ import { Form } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
-import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
+import { type CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
+import { type ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';

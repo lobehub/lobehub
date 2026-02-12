@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 
 /**
  * make the OpenAI response data as a stream
@@ -8,7 +8,7 @@ export const transformResponseToStream = (data: OpenAI.ChatCompletion) =>
     start(controller) {
       const choices = data.choices || [];
       const first = choices[0];
-      // 兼容：非流式里 DeepSeek 等会把“深度思考”放在 message.reasoning_content
+      // Compatibility: Non-streaming responses from DeepSeek etc. put "deep thinking" in message.reasoning_content
       const message: any = first?.message ?? {};
       const reasoningText =
         typeof message.reasoning_content === 'string' && message.reasoning_content.length > 0

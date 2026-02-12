@@ -1,10 +1,10 @@
 'use client';
 
-import dynamic from '@/libs/next/dynamic';
 import { pwaInstallHandler } from 'pwa-install-handler';
 import { memo, useEffect, useState } from 'react';
 
 import { usePlatform } from '@/hooks/usePlatform';
+import dynamic from '@/libs/next/dynamic';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';

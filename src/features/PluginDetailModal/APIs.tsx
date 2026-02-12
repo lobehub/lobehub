@@ -28,6 +28,11 @@ const APIs = memo<{
     <Flexbox paddingBlock={16} width={'100%'}>
       <Table
         bordered
+        dataSource={pluginManifest.api}
+        pagination={false}
+        rowKey={'name'}
+        size={'small'}
+        tableLayout="fixed"
         columns={[
           {
             dataIndex: 'name',
@@ -39,11 +44,6 @@ const APIs = memo<{
             title: t('detailModal.info.description'),
           },
         ]}
-        dataSource={pluginManifest.api}
-        pagination={false}
-        rowKey={'name'}
-        size={'small'}
-        tableLayout="fixed"
       />
     </Flexbox>
   );

@@ -32,10 +32,12 @@ const Header = memo(() => {
 
   return (
     <ChatHeader
+      showBackButton
+      style={mobileHeaderSticky}
       center={
         <ChatHeader.Title
           title={
-            <Flexbox align={'center'} gap={8} horizontal>
+            <Flexbox horizontal align={'center'} gap={8}>
               <span style={{ lineHeight: 1.2 }}>
                 {isProvider
                   ? params.providerId
@@ -46,8 +48,6 @@ const Header = memo(() => {
         />
       }
       onBackClick={handleBackClick}
-      showBackButton
-      style={mobileHeaderSticky}
     />
   );
 });

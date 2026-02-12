@@ -8,7 +8,7 @@ import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
-import type { UserInitializationState } from '@/types/user';
+import { type UserInitializationState } from '@/types/user';
 
 const redirectIfNotOn = (currentPath: string, path: string) => {
   if (!currentPath.startsWith(path)) {

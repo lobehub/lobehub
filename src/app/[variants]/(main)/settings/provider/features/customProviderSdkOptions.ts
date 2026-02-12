@@ -1,4 +1,4 @@
-import type { AiProviderSDKType } from '@/types/aiProvider';
+import { type AiProviderSDKType } from '@/types/aiProvider';
 
 export const CUSTOM_PROVIDER_SDK_OPTIONS = [
   { label: 'OpenAI', value: 'openai' },

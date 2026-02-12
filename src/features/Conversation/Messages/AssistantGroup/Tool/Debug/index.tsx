@@ -1,5 +1,6 @@
 import { type ToolIntervention } from '@lobechat/types';
-import { Block, Highlighter, Icon, Tabs, type TabsProps } from '@lobehub/ui';
+import { type TabsProps } from '@lobehub/ui';
+import { Block, Highlighter, Icon, Tabs } from '@lobehub/ui';
 import {
   BracesIcon,
   FunctionSquareIcon,
@@ -126,13 +127,13 @@ const Debug = memo<DebugProps>(
         <Tabs
           compact
           items={items}
+          tabPlacement={'start'}
           styles={{
             content: {
               height: 300,
               padding: 0,
             },
           }}
-          tabPlacement={'start'}
         />
       </Block>
     );

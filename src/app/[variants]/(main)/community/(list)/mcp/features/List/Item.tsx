@@ -1,7 +1,17 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Block, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Block,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+  stopPropagation,
+} from '@lobehub/ui';
 import { Spotlight } from '@lobehub/ui/awesome';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
@@ -80,11 +90,13 @@ const McpItem = memo<DiscoverMcpItem>(
     const link = urlJoin('/community/mcp', identifier);
 
     const handleClick = useCallback(() => {
-      discoverService.reportMcpEvent({
-        event: 'click',
-        identifier,
-        source: location.pathname,
-      }).catch(() => {});
+      discoverService
+        .reportMcpEvent({
+          event: 'click',
+          identifier,
+          source: location.pathname,
+        })
+        .catch(() => {});
 
       navigate(link);
     }, [identifier, link, navigate]);
@@ -94,30 +106,30 @@ const McpItem = memo<DiscoverMcpItem>(
         clickable
         data-testid="mcp-item"
         height={'100%'}
-        onClick={handleClick}
+        variant={'outlined'}
+        width={'100%'}
         style={{
           overflow: 'hidden',
           position: 'relative',
         }}
-        variant={'outlined'}
-        width={'100%'}
+        onClick={handleClick}
       >
         {isFeatured && <Spotlight size={400} />}
         <Flexbox
+          horizontal
           align={'flex-start'}
           gap={16}
-          horizontal
           justify={'space-between'}
           padding={16}
           width={'100%'}
         >
           <Flexbox
-            gap={12}
             horizontal
+            gap={12}
+            title={identifier}
             style={{
               overflow: 'hidden',
             }}
-            title={identifier}
           >
             <Avatar avatar={icon} shape={'square'} size={40} style={{ flex: 'none' }} />
             <Flexbox
@@ -128,16 +140,16 @@ const McpItem = memo<DiscoverMcpItem>(
               }}
             >
               <Flexbox
+                horizontal
                 align={'center'}
                 flex={1}
                 gap={8}
-                horizontal
                 style={{
                   overflow: 'hidden',
                 }}
               >
                 <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
-                  <Text as={'h2'} className={styles.title} ellipsis>
+                  <Text ellipsis as={'h2'} className={styles.title}>
                     {name}
                   </Text>
                 </Link>
@@ -150,14 +162,14 @@ const McpItem = memo<DiscoverMcpItem>(
               {author && <div className={styles.author}>{author}</div>}
             </Flexbox>
           </Flexbox>
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             {installationMethods && <InstallationIcon type={installationMethods} />}
             {github && (
               <a
                 href={github.url}
-                onClick={(e) => e.stopPropagation()}
                 rel="noopener noreferrer"
                 target={'_blank'}
+                onClick={stopPropagation}
               >
                 <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
               </a>
@@ -186,12 +198,12 @@ const McpItem = memo<DiscoverMcpItem>(
             {description}
           </Text>
           <Flexbox
+            horizontal
             align={'center'}
             className={styles.secondaryDesc}
-            horizontal
             justify={'space-between'}
           >
-            <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
                 className={styles.secondaryDesc}
@@ -199,16 +211,16 @@ const McpItem = memo<DiscoverMcpItem>(
                 template={'MMM DD, YYYY'}
               />
             </Flexbox>
-            <Flexbox align={'center'} gap={8} horizontal>
+            <Flexbox horizontal align={'center'} gap={8}>
               {t(`mcp.categories.${category}.name` as any)}
               {isFeatured && (
                 <Tag
                   size={'small'}
+                  variant={'outlined'}
                   style={{
                     color: 'inherit',
                     fontSize: 'inherit',
                   }}
-                  variant={'outlined'}
                 >
                   {t('isFeatured')}
                 </Tag>
@@ -217,9 +229,9 @@ const McpItem = memo<DiscoverMcpItem>(
           </Flexbox>
         </Flexbox>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.footer}
-          horizontal
           justify={'space-between'}
           padding={16}
         >

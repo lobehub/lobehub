@@ -1,11 +1,10 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
-import * as debugStreamModule from '../../utils/debugStream';
 import { LobeTaichuAI } from './index';
 
 const provider = ModelProvider.Taichu;
@@ -58,12 +57,12 @@ describe('LobeTaichuAI', () => {
       // Test cases for temperature and top_p
       const testCases = [
         { temperature: 0.5, top_p: 0.5, expectedTemperature: 0.25, expectedTopP: 0.25 },
-        { temperature: 1.0, top_p: 1.0, expectedTemperature: 0.5, expectedTopP: 0.5 },
-        { temperature: 2.0, top_p: 2.0, expectedTemperature: 1.0, expectedTopP: 1.0 },
-        { temperature: 1.0, top_p: undefined, expectedTemperature: 0.5, expectedTopP: undefined },
+        { temperature: 1, top_p: 1, expectedTemperature: 0.5, expectedTopP: 0.5 },
+        { temperature: 2, top_p: 2, expectedTemperature: 1, expectedTopP: 1 },
+        { temperature: 1, top_p: undefined, expectedTemperature: 0.5, expectedTopP: undefined },
         { temperature: 0, top_p: 0.1, expectedTemperature: 0.01, expectedTopP: 0.1 },
-        { temperature: 0.01, top_p: 0.0, expectedTemperature: 0.01, expectedTopP: 0.1 },
-        { temperature: 0.02, top_p: 20.0, expectedTemperature: 0.01, expectedTopP: 9.9 },
+        { temperature: 0.01, top_p: 0, expectedTemperature: 0.01, expectedTopP: 0.1 },
+        { temperature: 0.02, top_p: 20, expectedTemperature: 0.01, expectedTopP: 9.9 },
       ];
 
       for (const { temperature, top_p, expectedTemperature, expectedTopP } of testCases) {

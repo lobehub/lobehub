@@ -1,12 +1,12 @@
-import type {
-  ArgumentMatcher,
-  HumanInterventionPolicy,
-  HumanInterventionRule,
-  SecurityBlacklistRule,
-  ShouldInterveneParams,
+import  {
+  type ArgumentMatcher,
+  type HumanInterventionPolicy,
+  type HumanInterventionRule,
+  type SecurityBlacklistRule,
+  type ShouldInterveneParams,
 } from '@lobechat/types';
 
-import { DEFAULT_SECURITY_BLACKLIST } from './defaultSecurityBlacklist';
+import { DEFAULT_SECURITY_BLACKLIST } from '../audit/defaultSecurityBlacklist';
 
 /**
  * Result of security blacklist check

@@ -20,9 +20,9 @@ const CronJobSaveButton = memo<CronJobSaveButtonProps>(({ disabled, loading, onS
         disabled={disabled}
         icon={Save}
         loading={loading}
-        onClick={onSave}
         style={{ maxWidth: 200, width: '100%' }}
         type="primary"
+        onClick={onSave}
       >
         {t('agentCronJobs.saveAsNew')}
       </Button>

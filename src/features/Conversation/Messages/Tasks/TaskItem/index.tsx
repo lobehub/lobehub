@@ -3,7 +3,7 @@
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
-import type { UIChatMessage } from '@/types/index';
+import { type UIChatMessage } from '@/types/index';
 
 import ClientTaskItem from './ClientTaskItem';
 import ServerTaskItem from './ServerTaskItem';

@@ -1,12 +1,12 @@
-import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
 
-import type { AgentCronJob } from '@/database/schemas/agentCronJob';
+import { type AgentCronJob } from '@/database/schemas/agentCronJob';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client/lambda';
 import { agentCronJobService } from '@/services/agentCronJob';
+import { type StoreSetter } from '@/store/types';
 
-import type { AgentStore } from '../../store';
+import { type AgentStore } from '../../store';
 
 const FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY = 'cronTopicsWithJobInfo';
 
@@ -29,23 +29,23 @@ export interface CronTopicGroupWithJobInfo {
  * Cron Slice Actions
  * Handles agent cron job operations
  */
-export interface CronSliceAction {
-  createAgentCronJob: () => Promise<string | null>;
-  internal_refreshCronTopics: () => Promise<void>;
-  useFetchCronTopicsWithJobInfo: (
-    agentId?: string,
-    enabled?: boolean,
-  ) => SWRResponse<CronTopicGroupWithJobInfo[]>;
-}
 
-export const createCronSlice: StateCreator<
-  AgentStore,
-  [['zustand/devtools', never]],
-  [],
-  CronSliceAction
-> = (set, get) => ({
-  createAgentCronJob: async () => {
-    const { activeAgentId, internal_refreshCronTopics } = get();
+type Setter = StoreSetter<AgentStore>;
+export const createCronSlice = (set: Setter, get: () => AgentStore, _api?: unknown) =>
+  new CronSliceActionImpl(set, get, _api);
+
+export class CronSliceActionImpl {
+  readonly #get: () => AgentStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createAgentCronJob = async (): Promise<string | null> => {
+    const { activeAgentId, internal_refreshCronTopics } = this.#get();
     if (!activeAgentId) return null;
 
     try {
@@ -65,14 +65,17 @@ export const createCronSlice: StateCreator<
       console.error('Failed to create cron job:', error);
       return null;
     }
-  },
+  };
 
-  internal_refreshCronTopics: async () => {
-    await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, get().activeAgentId]);
-  },
+  internal_refreshCronTopics = async (): Promise<void> => {
+    await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, this.#get().activeAgentId]);
+  };
 
-  useFetchCronTopicsWithJobInfo: (agentId, enabled = true) =>
-    useClientDataSWR<CronTopicGroupWithJobInfo[]>(
+  useFetchCronTopicsWithJobInfo = (
+    agentId?: string,
+    enabled: boolean = true,
+  ): SWRResponse<CronTopicGroupWithJobInfo[]> => {
+    return useClientDataSWR<CronTopicGroupWithJobInfo[]>(
       enabled && agentId ? [FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, agentId] : null,
       async ([, id]: [string, string]) => {
         const [cronJobsResult, cronTopicsGroups] = await Promise.all([
@@ -106,5 +109,8 @@ export const createCronSlice: StateCreator<
         fallbackData: [],
         revalidateOnFocus: false,
       },
-    ),
-});
+    );
+  };
+}
+
+export type CronSliceAction = Pick<CronSliceActionImpl, keyof CronSliceActionImpl>;

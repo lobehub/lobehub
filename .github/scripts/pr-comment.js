@@ -2,8 +2,7 @@
  * Generate PR comment with download links for desktop builds
  * and handle comment creation/update logic
  */
-module.exports = async ({ github, context, releaseUrl, version, tag }) => {
-  // 用于识别构建评论的标识符
+const prComment = async ({ github, context, releaseUrl, artifactsUrl, version, tag }) => {
   const COMMENT_IDENTIFIER = '<!-- DESKTOP-BUILD-COMMENT -->';
 
   /**
@@ -69,7 +68,7 @@ module.exports = async ({ github, context, releaseUrl, version, tag }) => {
 **Version**: \`${version}\`
 **Build Time**: \`${new Date().toISOString()}\`
 
-📦 [View All Build Artifacts](${releaseUrl})
+📦 [Release Download](${releaseUrl}) · 📥 [Actions Artifacts](${artifactsUrl || `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`})
 
 
 ## Build Artifacts
@@ -88,7 +87,7 @@ ${assetTable}
 **Version**: \`${version}\`
 **Build Time**: \`${new Date().toISOString()}\`
 
-## 📦 [View All Build Artifacts](${releaseUrl})
+📦 [Release Download](${releaseUrl}) · 📥 [Actions Artifacts](${artifactsUrl || `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`})
 
 > Note: This is a temporary build for testing purposes only.
       `;
@@ -96,45 +95,41 @@ ${assetTable}
   };
 
   /**
-   * 查找并更新或创建PR评论
+   * Find and update or create the PR comment
    */
   const updateOrCreateComment = async () => {
-    // 生成评论内容
     const body = await generateCommentBody();
 
-    // 查找我们之前可能创建的评论
     const { data: comments } = await github.rest.issues.listComments({
       issue_number: context.issue.number,
       owner: context.repo.owner,
       repo: context.repo.repo,
     });
 
-    // 查找包含我们标识符的评论
     const buildComment = comments.find((comment) => comment.body.includes(COMMENT_IDENTIFIER));
 
     if (buildComment) {
-      // 如果找到现有评论，则更新它
       await github.rest.issues.updateComment({
         comment_id: buildComment.id,
         owner: context.repo.owner,
         repo: context.repo.repo,
         body: body,
       });
-      console.log(`已更新现有评论 ID: ${buildComment.id}`);
+      console.log(`Updated existing comment ID: ${buildComment.id}`);
       return { updated: true, id: buildComment.id };
     } else {
-      // 如果没有找到现有评论，则创建新评论
       const result = await github.rest.issues.createComment({
         issue_number: context.issue.number,
         owner: context.repo.owner,
         repo: context.repo.repo,
         body: body,
       });
-      console.log(`已创建新评论 ID: ${result.data.id}`);
+      console.log(`Created new comment ID: ${result.data.id}`);
       return { updated: false, id: result.data.id };
     }
   };
 
-  // 执行评论更新或创建
   return await updateOrCreateComment();
 };
+
+module.exports = prComment;

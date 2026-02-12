@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
-import { LobeChatDatabase } from '../../../type';
 import { NewEvaluationRecordsItem, evaluationRecords } from '../../../schemas';
+import { LobeChatDatabase } from '../../../type';
 
 export class EvaluationRecordModel {
   private userId: string;
@@ -27,13 +27,13 @@ export class EvaluationRecordModel {
       .returning();
   };
 
-  delete = async (id: number) => {
+  delete = async (id: string) => {
     return this.db
       .delete(evaluationRecords)
       .where(and(eq(evaluationRecords.id, id), eq(evaluationRecords.userId, this.userId)));
   };
 
-  query = async (reportId: number) => {
+  query = async (reportId: string) => {
     return this.db.query.evaluationRecords.findMany({
       where: and(
         eq(evaluationRecords.evaluationId, reportId),
@@ -42,13 +42,13 @@ export class EvaluationRecordModel {
     });
   };
 
-  findById = async (id: number) => {
+  findById = async (id: string) => {
     return this.db.query.evaluationRecords.findFirst({
       where: and(eq(evaluationRecords.id, id), eq(evaluationRecords.userId, this.userId)),
     });
   };
 
-  findByEvaluationId = async (evaluationId: number) => {
+  findByEvaluationId = async (evaluationId: string) => {
     return this.db.query.evaluationRecords.findMany({
       where: and(
         eq(evaluationRecords.evaluationId, evaluationId),
@@ -57,7 +57,7 @@ export class EvaluationRecordModel {
     });
   };
 
-  update = async (id: number, value: Partial<NewEvaluationRecordsItem>) => {
+  update = async (id: string, value: Partial<NewEvaluationRecordsItem>) => {
     return this.db
       .update(evaluationRecords)
       .set(value)

@@ -1,4 +1,4 @@
-import type { HomeStore } from '@/store/home/store';
+import { type HomeStore } from '@/store/home/store';
 
 const recentTopics = (s: HomeStore) => s.recentTopics;
 const recentResources = (s: HomeStore) => s.recentResources;

@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 // https://openrouter.ai/docs/api-reference/list-available-models
 const openrouterChatModels: AIChatModelCard[] = [
@@ -442,7 +442,8 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 is the flagship model for complex tasks and cross-domain problem solving.',
+    description:
+      'GPT-4.1 is the flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     id: 'openai/gpt-4.1',
     maxOutput: 32_768,
@@ -523,7 +524,8 @@ const openrouterChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 200_000,
-    description: 'o3-mini delivers higher intelligence at the same cost and latency targets as o1-mini.',
+    description:
+      'o3-mini delivers higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'openai/o3-mini',
     maxOutput: 100_000,
@@ -1060,14 +1062,16 @@ const openrouterChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen2 is a new large language model family with stronger understanding and generation.',
+    description:
+      'Qwen2 is a new large language model family with stronger understanding and generation.',
     displayName: 'Qwen2 7B (Free)',
     id: 'qwen/qwen-2-7b-instruct:free',
     type: 'chat',
   },
   {
     contextWindowTokens: 131_072,
-    description: 'LLaMA 3.1 offers multilingual support and is one of the leading generative models.',
+    description:
+      'LLaMA 3.1 offers multilingual support and is one of the leading generative models.',
     displayName: 'Llama 3.1 8B (Free)',
     id: 'meta-llama/llama-3.1-8b-instruct:free',
     type: 'chat',

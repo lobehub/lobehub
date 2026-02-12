@@ -133,8 +133,8 @@ const TodoList = memo(() => {
   return (
     <div className={styles.container} onClick={toggleExpanded}>
       {/* Header */}
-      <Flexbox align="center" gap={8} horizontal justify="space-between">
-        <Flexbox align="center" gap={8} horizontal style={{ flex: 1, minWidth: 0 }}>
+      <Flexbox horizontal align="center" gap={8} justify="space-between">
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
           <Icon icon={ListTodo} size={16} style={{ color: cssVar.colorPrimary, flexShrink: 0 }} />
           <span className={styles.header}>
             {currentPendingTask?.text || t('document.todos.allCompleted')}
@@ -153,7 +153,7 @@ const TodoList = memo(() => {
       </Flexbox>
 
       {/* Progress Bar */}
-      <Flexbox gap={8} horizontal style={{ marginTop: 8 }}>
+      <Flexbox horizontal gap={8} style={{ marginTop: 8 }}>
         <div className={styles.progress}>
           <div className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
         </div>
@@ -165,13 +165,13 @@ const TodoList = memo(() => {
           <Checkbox
             backgroundColor={cssVar.colorSuccess}
             checked={item.completed}
+            key={index}
+            shape="circle"
+            style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
             classNames={{
               text: item.completed ? styles.textChecked : undefined,
               wrapper: styles.itemRow,
             }}
-            key={index}
-            shape="circle"
-            style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
             textProps={{
               type: item.completed ? 'secondary' : undefined,
             }}

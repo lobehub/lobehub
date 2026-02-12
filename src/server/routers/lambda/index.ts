@@ -33,6 +33,7 @@ import { knowledgeBaseRouter } from './knowledgeBase';
 import { marketRouter } from './market';
 import { messageRouter } from './message';
 import { notebookRouter } from './notebook';
+import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { pluginRouter } from './plugin';
 import { ragEvalRouter } from './ragEval';
 import { searchRouter } from './search';
@@ -74,6 +75,7 @@ export const lambdaRouter = router({
   market: marketRouter,
   message: messageRouter,
   notebook: notebookRouter,
+  oauthDeviceFlow: oauthDeviceFlowRouter,
   plugin: pluginRouter,
   ragEval: ragEvalRouter,
   search: searchRouter,

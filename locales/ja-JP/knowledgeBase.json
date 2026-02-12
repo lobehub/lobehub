@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "ファイルが正常に追加されました",
+  "addToKnowledgeBase.alreadyExists": "このファイルはすでにライブラリに存在します",
   "addToKnowledgeBase.confirm": "追加",
   "addToKnowledgeBase.error": "ファイルのナレッジベースへの追加に失敗しました",
   "addToKnowledgeBase.id.placeholder": "追加するナレッジベースを選択してください",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "ナレッジベース名",
   "createNew.name.required": "ナレッジベース名を入力してください",
   "createNew.title": "新しいナレッジベースを作成",
+  "moveToKnowledgeBase.error": "ファイルのライブラリへの移動に失敗しました",
+  "moveToKnowledgeBase.success": "ファイルを正常にライブラリへ移動しました",
   "tab.evals": "評価",
   "tab.files": "ドキュメント",
   "tab.settings": "設定",

@@ -8,8 +8,8 @@ interface PersonaPromptVars {
   personaNotes?: string;
   recentEvents?: string;
   retrievedMemories?: string;
-  userProfile?: string;
   username: string;
+  userProfile?: string;
 }
 
 export default async function generatePrompt({ vars }: { vars: PersonaPromptVars }) {

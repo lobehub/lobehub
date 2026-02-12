@@ -24,6 +24,9 @@ const ModelList = memo(() => {
     <TooltipGroup>
       <Block variant={'outlined'}>
         <InlineTable
+          dataSource={models}
+          rowKey="id"
+          scroll={{ x: 900 }}
           columns={[
             {
               dataIndex: 'id',
@@ -31,7 +34,7 @@ const ModelList = memo(() => {
               render: (_, record) => {
                 return (
                   <Link style={{ color: 'inherit' }} to={urlJoin('/community/model', record.id)}>
-                    <Flexbox align="center" gap={8} horizontal>
+                    <Flexbox horizontal align="center" gap={8}>
                       <ModelIcon model={record.id} size={24} type={'avatar'} />
                       <Flexbox style={{ overflow: 'hidden' }}>
                         <div style={{ fontWeight: 500 }}>{record.displayName}</div>
@@ -131,7 +134,7 @@ const ModelList = memo(() => {
               key: 'action',
               render: (_, record) => {
                 return (
-                  <Flexbox align="center" gap={4} horizontal justify={'flex-end'}>
+                  <Flexbox horizontal align="center" gap={4} justify={'flex-end'}>
                     <Link style={{ color: 'inherit' }} to={urlJoin('/community/model', record.id)}>
                       <ActionIcon
                         color={cssVar.colorTextDescription}
@@ -147,9 +150,6 @@ const ModelList = memo(() => {
               width: 60,
             },
           ]}
-          dataSource={models}
-          rowKey="id"
-          scroll={{ x: 900 }}
         />
       </Block>
     </TooltipGroup>

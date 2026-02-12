@@ -4,7 +4,8 @@ import { useMemo } from 'react';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
-import { type MarkdownElement, markdownElements } from '../../Markdown/plugins';
+import { type MarkdownElement } from '../../Markdown/plugins';
+import { markdownElements } from '../../Markdown/plugins';
 import { messageStateSelectors, useConversationStore } from '../../store';
 
 const rehypePlugins = markdownElements

@@ -1,4 +1,4 @@
-import { AgentGroupDetail } from '@lobechat/types';
+import { type AgentGroupDetail } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

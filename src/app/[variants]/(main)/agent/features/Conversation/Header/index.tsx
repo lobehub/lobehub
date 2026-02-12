@@ -22,7 +22,7 @@ const Header = memo(() => {
         </Flexbox>
       }
       right={
-        <Flexbox align={'center'} horizontal style={{ backgroundColor: cssVar.colorBgContainer }}>
+        <Flexbox horizontal align={'center'} style={{ backgroundColor: cssVar.colorBgContainer }}>
           {isDesktop && <WorkingDirectory />}
           <NotebookButton />
           <ShareButton />

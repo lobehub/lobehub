@@ -69,11 +69,11 @@ const ProviderConfig = memo(() => {
       className={styles.button}
       icon={<Icon icon={ChevronDownIcon} />}
       menu={{ items }}
-      onClick={openSettings}
       overlayStyle={{ minWidth: 267 }}
       size={'large'}
       style={{ flex: 1, width: 'unset' }}
       type={'primary'}
+      onClick={openSettings}
     >
       {t('providers.config')}
     </Dropdown.Button>

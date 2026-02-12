@@ -72,6 +72,7 @@ const useProviderCard = (): ProviderItem => {
           <SkeletonInput />
         ) : (
           <AutoComplete
+            placeholder={'20XX-XX-XX'}
             options={[
               '2024-10-21',
               '2024-06-01',
@@ -79,7 +80,6 @@ const useProviderCard = (): ProviderItem => {
               '2024-09-01-preview',
               '2024-10-01-preview',
             ].map((i) => ({ label: i, value: i }))}
-            placeholder={'20XX-XX-XX'}
           />
         ),
         desc: (

@@ -6,11 +6,8 @@ import { memo } from 'react';
 import { withSuspense } from '@/components/withSuspense';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
-import {
-  type AssistantMarketSource,
-  type AssistantQueryParams,
-  DiscoverTab,
-} from '@/types/discover';
+import { type AssistantMarketSource, type AssistantQueryParams } from '@/types/discover';
+import { DiscoverTab } from '@/types/discover';
 
 import Pagination from '../features/Pagination';
 import List from './features/List';

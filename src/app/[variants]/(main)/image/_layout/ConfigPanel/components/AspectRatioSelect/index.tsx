@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Center, Grid, type GridProps, Text } from '@lobehub/ui';
+import { type GridProps } from '@lobehub/ui';
+import { Block, Center, Grid, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import useMergeState from 'use-merge-value';
@@ -32,21 +33,21 @@ const AspectRatioSelect = memo<AspectRatioSelectProps>(
             const isActive = active === item.value;
             return (
               <Block
-                align={'center'}
                 clickable
+                align={'center'}
                 gap={4}
                 justify={'center'}
                 key={item.value}
+                padding={8}
+                shadow={isActive && !isDarkMode}
+                variant={'filled'}
+                style={{
+                  backgroundColor: isActive ? cssVar.colorBgElevated : 'transparent',
+                }}
                 onClick={() => {
                   setActive(item.value);
                   onChange?.(item.value);
                 }}
-                padding={8}
-                shadow={isActive && !isDarkMode}
-                style={{
-                  backgroundColor: isActive ? cssVar.colorBgElevated : 'transparent',
-                }}
-                variant={'filled'}
               >
                 <Center height={16} style={{ marginTop: 4 }} width={16}>
                   <div

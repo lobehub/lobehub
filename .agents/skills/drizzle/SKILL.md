@@ -73,9 +73,16 @@ export type AgentItem = typeof agents.$inferSelect;
 export const agents = pgTable(
   'agents',
   {
-    id: text('id').primaryKey().$defaultFn(() => idGenerator('agents')).notNull(),
-    slug: varchar('slug', { length: 100 }).$defaultFn(() => randomSlug(4)).unique(),
-    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => idGenerator('agents'))
+      .notNull(),
+    slug: varchar('slug', { length: 100 })
+      .$defaultFn(() => randomSlug(4))
+      .unique(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
     clientId: text('client_id'),
     chatConfig: jsonb('chat_config').$type<LobeAgentChatConfig>(),
     ...timestamps,
@@ -92,9 +99,15 @@ export const agents = pgTable(
 export const agentsKnowledgeBases = pgTable(
   'agents_knowledge_bases',
   {
-    agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }).notNull(),
-    knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, { onDelete: 'cascade' }).notNull(),
-    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    agentId: text('agent_id')
+      .references(() => agents.id, { onDelete: 'cascade' })
+      .notNull(),
+    knowledgeBaseId: text('knowledge_base_id')
+      .references(() => knowledgeBases.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
     enabled: boolean('enabled').default(true),
     ...timestamps,
   },

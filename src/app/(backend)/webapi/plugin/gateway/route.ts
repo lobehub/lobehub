@@ -1,6 +1,6 @@
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { ChatErrorType, TraceNameMap } from '@lobechat/types';
-import type { PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
+import { type PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
 import { createGatewayOnEdgeRuntime } from '@lobehub/chat-plugins-gateway';
 
 import { LOBE_CHAT_TRACE_ID } from '@/const/trace';

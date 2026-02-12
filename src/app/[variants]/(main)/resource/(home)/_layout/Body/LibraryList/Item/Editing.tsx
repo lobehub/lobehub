@@ -1,4 +1,4 @@
-import { Input, Popover } from '@lobehub/ui';
+import { Input, Popover, stopPropagation } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -33,36 +33,36 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
 
   return (
     <Popover
+      open={editing}
+      placement="bottomLeft"
+      trigger="click"
       content={
         <Input
           autoFocus
           defaultValue={name}
           maxLength={64}
+          onChange={(e) => setNewName(e.target.value)}
+          onClick={stopPropagation}
           onBlur={() => {
             handleUpdate();
             toggleEditing(false);
           }}
-          onChange={(e) => setNewName(e.target.value)}
-          onClick={(e) => e.stopPropagation()}
           onPressEnter={() => {
             handleUpdate();
             toggleEditing(false);
           }}
         />
       }
-      onOpenChange={(open) => {
-        if (!open) handleUpdate();
-        toggleEditing(open);
-      }}
-      open={editing}
-      placement="bottomLeft"
       styles={{
         content: {
           padding: 4,
           width: 320,
         },
       }}
-      trigger="click"
+      onOpenChange={(open) => {
+        if (!open) handleUpdate();
+        toggleEditing(open);
+      }}
     >
       <div />
     </Popover>

@@ -25,11 +25,11 @@ export const LoadingState = memo<LoadingStateProps>(
         align={'center'}
         className={styles.placeholderContainer}
         justify={'center'}
+        variant={'filled'}
         style={{
           aspectRatio,
           maxWidth: getThumbnailMaxWidth(generation, generationBatch),
         }}
-        variant={'filled'}
       >
         <Center gap={8}>
           <Spin indicator={<LoadingOutlined spin />} />

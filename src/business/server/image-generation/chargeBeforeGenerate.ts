@@ -1,5 +1,5 @@
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
-import type { CreateImageServicePayload } from '@/server/routers/lambda/image';
+import { type CreateImageServicePayload } from '@/server/routers/lambda/image';
 
 interface ChargeParams {
   clientIp?: string | null;
@@ -23,7 +23,7 @@ type ChargeResult =
     };
 
 export async function chargeBeforeGenerate(
-  // eslint-disable-next-line unused-imports/no-unused-vars, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line unused-imports/no-unused-vars
   params: ChargeParams,
 ): Promise<ChargeResult> {
   return undefined;

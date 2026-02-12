@@ -1,5 +1,5 @@
 import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import React, { Suspense, memo } from 'react';
+import React, { memo,Suspense } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -27,7 +27,7 @@ const ChatConversation = memo(() => {
 
   return (
     <Suspense fallback={<Loading debugId="Agent > ChatConversation" />}>
-      <DragUploadZone onUploadFiles={handleUploadFiles} style={wrapperStyle}>
+      <DragUploadZone style={wrapperStyle} onUploadFiles={handleUploadFiles}>
         <Flexbox
           height={'100%'}
           style={{ overflow: 'hidden', position: 'relative' }}

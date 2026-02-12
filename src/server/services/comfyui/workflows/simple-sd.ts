@@ -19,7 +19,7 @@ import {
   WORKFLOW_DEFAULTS,
 } from '@/server/services/comfyui/config/constants';
 import { type ModelConfig } from '@/server/services/comfyui/config/modelRegistry';
-import type { WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
+import { type WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
 import { getModelConfig } from '@/server/services/comfyui/utils/staticModelLookup';
 import { getWorkflowFilenamePrefix } from '@/server/services/comfyui/utils/workflowUtils';
 

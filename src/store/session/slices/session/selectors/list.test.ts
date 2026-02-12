@@ -1,6 +1,7 @@
 import { DEFAULT_AGENT_LOBE_SESSION } from '@/const/session';
-import type { SessionStore } from '@/store/session';
-import { LobeAgentSession, LobeSessionType } from '@/types/session';
+import { type SessionStore } from '@/store/session';
+import { type LobeAgentSession } from '@/types/session';
+import { LobeSessionType } from '@/types/session';
 
 import { sessionSelectors } from './list';
 

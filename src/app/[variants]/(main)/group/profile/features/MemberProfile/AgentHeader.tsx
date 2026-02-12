@@ -6,7 +6,7 @@ import { useDebounceFn } from 'ahooks';
 import { message } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
-import { Suspense, memo, useCallback, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SupervisorAvatar from '@/app/[variants]/(main)/group/features/GroupAvatar';
@@ -102,13 +102,13 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
     return (
       <Flexbox
         gap={16}
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
         paddingBlock={16}
         style={{
           cursor: 'default',
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
         }}
       >
         <Block height={72} width={72}>
@@ -129,18 +129,23 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
   return (
     <Flexbox
       gap={16}
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      }}
       paddingBlock={16}
       style={{
         cursor: 'default',
       }}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }}
     >
       <EmojiPicker
-        allowDelete={!!agentMeta.avatar}
         allowUpload
+        allowDelete={!!agentMeta.avatar}
+        loading={uploading}
+        locale={locale}
+        shape={'square'}
+        size={72}
+        value={agentMeta.avatar}
         background={
           agentMeta.backgroundColor && agentMeta.backgroundColor !== 'rgba(0,0,0,0)'
             ? agentMeta.backgroundColor
@@ -176,10 +181,10 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
                 >
                   <BackgroundSwatches
                     gap={8}
-                    onChange={handleBackgroundColorChange}
                     shape={'square'}
                     size={38}
                     value={agentMeta.backgroundColor}
+                    onChange={handleBackgroundColorChange}
                   />
                 </Suspense>
               </Flexbox>
@@ -187,32 +192,27 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
             value: 'background',
           },
         ]}
-        loading={uploading}
-        locale={locale}
-        onChange={handleAvatarChange}
-        onDelete={handleAvatarDelete}
-        onUpload={handleAvatarUpload}
         popupProps={{
           placement: 'bottomLeft',
         }}
-        shape={'square'}
-        size={72}
-        value={agentMeta.avatar}
+        onChange={handleAvatarChange}
+        onDelete={handleAvatarDelete}
+        onUpload={handleAvatarUpload}
       />
       <Input
-        onChange={(e) => {
-          setLocalTitle(e.target.value);
-          debouncedSaveTitle(e.target.value);
-        }}
         placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
+        value={localTitle}
+        variant={'borderless'}
         style={{
           fontSize: 36,
           fontWeight: 600,
           padding: 0,
           width: '100%',
         }}
-        value={localTitle}
-        variant={'borderless'}
+        onChange={(e) => {
+          setLocalTitle(e.target.value);
+          debouncedSaveTitle(e.target.value);
+        }}
       />
     </Flexbox>
   );

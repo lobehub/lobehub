@@ -41,33 +41,34 @@ const SortModelModal = memo<SortModelModalProps>(({ open, onCancel, defaultItems
     <Modal
       allowFullscreen
       footer={null}
-      onCancel={onCancel}
       open={open}
       title={t('sortModal.title')}
       width={400}
+      onCancel={onCancel}
     >
       <Flexbox gap={16}>
         <SortableList
           items={items}
-          onChange={async (items: AiProviderModelListItem[]) => {
-            setItems(items);
-          }}
           renderItem={(item: AiProviderModelListItem) => (
             <SortableList.Item
+              horizontal
               align={'center'}
               className={styles.container}
               gap={4}
-              horizontal
               id={item.id}
               justify={'space-between'}
             >
               <ListItem {...item} />
             </SortableList.Item>
           )}
+          onChange={async (items: AiProviderModelListItem[]) => {
+            setItems(items);
+          }}
         />
         <Button
           block
           loading={loading}
+          type={'primary'}
           onClick={async () => {
             if (!providerId) return;
 
@@ -83,7 +84,6 @@ const SortModelModal = memo<SortModelModalProps>(({ open, onCancel, defaultItems
             message.success(t('sortModal.success'));
             onCancel();
           }}
-          type={'primary'}
         >
           {t('sortModal.update')}
         </Button>

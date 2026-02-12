@@ -92,11 +92,11 @@ const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, sho
   return (
     <div
       className={styles.item}
-      onClick={showCheckbox ? handleClick : undefined}
       ref={ref}
       style={{ cursor: showCheckbox ? 'pointer' : 'default' }}
+      onClick={showCheckbox ? handleClick : undefined}
     >
-      <Flexbox align="center" gap={8} horizontal width="100%">
+      <Flexbox horizontal align="center" gap={8} width="100%">
         {showCheckbox && (
           <Checkbox
             checked={isSelected}
@@ -114,7 +114,7 @@ const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, sho
           shape="circle"
           size={28}
         />
-        <Text className={styles.title} ellipsis>
+        <Text ellipsis className={styles.title}>
           {title}
         </Text>
         {showRemove && (

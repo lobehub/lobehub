@@ -3,9 +3,9 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import type {
-  CreateAgentCronJobData,
-  UpdateAgentCronJobData,
+import {
+  type CreateAgentCronJobData,
+  type UpdateAgentCronJobData,
 } from '@/database/schemas/agentCronJob';
 import { agentCronJobService } from '@/services/agentCronJob';
 

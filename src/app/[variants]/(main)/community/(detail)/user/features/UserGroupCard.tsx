@@ -1,16 +1,17 @@
 'use client';
 
 import {
-  Tag as AntTag,
   Avatar,
   Block,
   DropdownMenu,
   Flexbox,
   Icon,
+  Tag as AntTag,
   Tag,
   Text,
   Tooltip,
   TooltipGroup,
+  stopPropagation,
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import {
@@ -184,20 +185,20 @@ const UserGroupCard = memo<UserGroupCardProps>(
 
     return (
       <Block
-        className={styles.wrapper}
         clickable
+        className={styles.wrapper}
         height={'100%'}
-        onClick={handleCardClick}
+        variant={'outlined'}
+        width={'100%'}
         style={{
           cursor: 'pointer',
           overflow: 'hidden',
           position: 'relative',
         }}
-        variant={'outlined'}
-        width={'100%'}
+        onClick={handleCardClick}
       >
         {isOwner && (
-          <div onClick={(e) => e.stopPropagation()}>
+          <div onClick={stopPropagation}>
             <DropdownMenu items={menuItems as any}>
               <div className={cx('more-button', styles.moreButton)}>
                 <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />
@@ -206,16 +207,16 @@ const UserGroupCard = memo<UserGroupCardProps>(
           </div>
         )}
         <Flexbox
+          horizontal
           align={'flex-start'}
           gap={16}
-          horizontal
           justify={'space-between'}
           padding={16}
           width={'100%'}
         >
           <Flexbox
-            gap={12}
             horizontal
+            gap={12}
             style={{
               overflow: 'hidden',
             }}
@@ -228,13 +229,13 @@ const UserGroupCard = memo<UserGroupCardProps>(
                 overflow: 'hidden',
               }}
             >
-              <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} gap={8}>
                 <Link
-                  onClick={(e) => e.stopPropagation()}
                   style={{ color: 'inherit', flex: 1, overflow: 'hidden' }}
                   to={link}
+                  onClick={stopPropagation}
                 >
-                  <Text as={'h3'} className={styles.title} ellipsis style={{ flex: 1 }}>
+                  <Text ellipsis as={'h3'} className={styles.title} style={{ flex: 1 }}>
                     {title}
                   </Text>
                 </Link>
@@ -265,7 +266,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
             {description}
           </Text>
           <TooltipGroup>
-            <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} gap={4}>
               {memberCount !== undefined && memberCount > 0 && (
                 <Tooltip
                   placement={'top'}
@@ -303,19 +304,19 @@ const UserGroupCard = memo<UserGroupCardProps>(
           </TooltipGroup>
         </Flexbox>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.footer}
-          horizontal
           justify={'space-between'}
           padding={16}
         >
           <Flexbox
+            horizontal
             align={'center'}
             className={styles.secondaryDesc}
-            horizontal
             justify={'space-between'}
           >
-            <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
                 className={styles.secondaryDesc}

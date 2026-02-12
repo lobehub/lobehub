@@ -1,3 +1,4 @@
+/* eslint-disable import-x/consistent-type-specifier-style */
 import type {
   EditLocalFileParams,
   EditLocalFileResult,
@@ -38,25 +39,27 @@ import {
   formatRenameResult,
   formatWriteResult,
 } from '@lobechat/prompts';
-import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
+import { type BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 import { localFileService } from '@/services/electron/localFileService';
 
-import {
-  type EditLocalFileState,
-  type GetCommandOutputState,
-  type GlobFilesState,
-  type GrepContentState,
-  type KillCommandState,
-  type LocalFileListState,
-  type LocalFileSearchState,
-  type LocalMoveFilesState,
-  type LocalReadFileState,
-  type LocalReadFilesState,
-  type LocalRenameFileState,
-  LocalSystemIdentifier,
-  type RunCommandState,
+import type {
+  EditLocalFileState,
+  GetCommandOutputState,
+  GlobFilesState,
+  GrepContentState,
+  KillCommandState,
+  LocalFileListState,
+  LocalFileSearchState,
+  LocalMoveFilesState,
+  LocalReadFilesState,
+  LocalReadFileState,
+  LocalRenameFileState,
+  RunCommandState,
 } from '../types';
+import { LocalSystemIdentifier } from '../types';
+import { resolveArgsWithScope } from '../utils/path';
 
 const LocalSystemApiEnum = {
   editLocalFile: 'editLocalFile' as const,
@@ -166,9 +169,17 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   searchLocalFiles = async (params: LocalSearchFilesParams): Promise<BuiltinToolResult> => {
     try {
-      const result: LocalFileItem[] = await localFileService.searchLocalFiles(params);
+      const resolvedParams = resolveArgsWithScope(params, 'directory');
 
-      const state: LocalFileSearchState = { searchResults: result };
+      const result: LocalFileItem[] = await localFileService.searchLocalFiles(resolvedParams);
+
+      // Extract engine from first result (all results use same engine)
+      const engine = result[0]?.engine;
+      const state: LocalFileSearchState = {
+        engine,
+        resolvedPath: resolvedParams.directory,
+        searchResults: result,
+      };
 
       const content = formatFileSearchResults(result);
 
@@ -421,16 +432,22 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   grepContent = async (params: GrepContentParams): Promise<BuiltinToolResult> => {
     try {
-      const result: GrepContentResult = await localFileService.grepContent(params);
+      const resolvedParams = resolveArgsWithScope(params, 'path');
+
+      const result: GrepContentResult = await localFileService.grepContent(resolvedParams);
 
       const content = result.success
         ? formatGrepResults({
             matches: result.matches,
             totalMatches: result.total_matches,
           })
-        : 'Search failed';
+        : `Search failed: ${result.error || 'Unknown error'}`;
 
-      const state: GrepContentState = { message: content.split('\n')[0], result };
+      const state: GrepContentState = {
+        message: content.split('\n')[0],
+        resolvedPath: resolvedParams.path,
+        result,
+      };
 
       return {
         content,
@@ -448,16 +465,22 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   globLocalFiles = async (params: GlobFilesParams): Promise<BuiltinToolResult> => {
     try {
-      const result: GlobFilesResult = await localFileService.globFiles(params);
+      const resolvedParams = resolveArgsWithScope(params, 'pattern');
+
+      const result: GlobFilesResult = await localFileService.globFiles(resolvedParams);
 
       const content = result.success
         ? formatGlobResults({
             files: result.files,
             totalFiles: result.total_files,
           })
-        : 'Glob search failed';
+        : `Glob search failed: ${result.error || 'Unknown error'}`;
 
-      const state: GlobFilesState = { message: content.split('\n')[0], result };
+      const state: GlobFilesState = {
+        message: content.split('\n')[0],
+        resolvedPath: resolvedParams.pattern,
+        result,
+      };
 
       return {
         content,

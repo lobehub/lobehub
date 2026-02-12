@@ -1,11 +1,11 @@
-import { Form, type FormItemProps, SliderWithInput, Tag } from '@lobehub/ui';
-import { Checkbox, Flexbox } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Checkbox, Flexbox, Form, SliderWithInput, Tag } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
+import { type ComponentType } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
-import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
@@ -64,8 +64,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 // Wrapper component to handle checkbox + slider
 interface ParamControlWrapperProps {
-  Component: ComponentType<any>;
   checked: boolean;
+  Component: ComponentType<any>;
   disabled: boolean;
   onChange?: (value: number) => void;
   onToggle: (checked: boolean) => void;
@@ -86,7 +86,7 @@ const ParamControlWrapper = memo<ParamControlWrapperProps>(
           }}
         />
         <div style={{ flex: 1 }}>
-          <Component disabled={disabled} onChange={onChange} value={value} />
+          <Component disabled={disabled} value={value} onChange={onChange} />
         </div>
       </div>
     );
@@ -274,13 +274,13 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
           Component={Component}
           checked={enabled}
           disabled={!enabled}
-          onToggle={(checked) => handleToggle(key, checked)}
           styles={styles}
           value={form.getFieldValue(PARAM_NAME_MAP[key])}
+          onToggle={(checked) => handleToggle(key, checked)}
         />
       ),
       label: (
-        <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
           {t(meta.labelKey)}
           <InfoTooltip title={t(meta.descKey)} />
         </Flexbox>
@@ -295,7 +295,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     {
       children: <Switch />,
       label: (
-        <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
           {t('settingModel.enableMaxTokens.title')}
         </Flexbox>
       ),
@@ -306,9 +306,9 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     ...(enableMaxTokens
       ? [
           {
-            children: <SliderWithInput max={32_000} min={0} step={100} unlimitedInput />,
+            children: <SliderWithInput unlimitedInput max={32_000} min={0} step={100} />,
             label: (
-              <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
                 {t('settingModel.maxTokens.title')}
                 <InfoTooltip title={t('settingModel.maxTokens.desc')} />
               </Flexbox>
@@ -325,7 +325,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     {
       children: <Switch />,
       label: (
-        <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
           {t('settingModel.enableContextCompression.title')}
           <InfoTooltip title={t('settingModel.enableContextCompression.desc')} />
         </Flexbox>
@@ -343,6 +343,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
       form={form}
       initialValues={config}
       itemMinWidth={220}
+      itemsType={'flat'}
       items={
         mobile
           ? allItems
@@ -351,14 +352,13 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
               desc: <Tag size={'small'}>{tag}</Tag>,
             }))
       }
-      itemsType={'flat'}
-      onValuesChange={handleValuesChange}
       styles={{
         group: {
           background: 'transparent',
           paddingBottom: 12,
         },
       }}
+      onValuesChange={handleValuesChange}
     />
   );
 });

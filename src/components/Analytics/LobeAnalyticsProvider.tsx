@@ -3,10 +3,11 @@
 import {
   type GoogleAnalyticsProviderConfig,
   type PostHogProviderAnalyticsConfig,
-  createSingletonAnalytics,
 } from '@lobehub/analytics';
+import { createSingletonAnalytics } from '@lobehub/analytics';
 import { AnalyticsProvider } from '@lobehub/analytics/react';
-import { type ReactNode, memo, useMemo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 
 import { BUSINESS_LINE } from '@/const/analytics';
 import { isDesktop } from '@/const/version';

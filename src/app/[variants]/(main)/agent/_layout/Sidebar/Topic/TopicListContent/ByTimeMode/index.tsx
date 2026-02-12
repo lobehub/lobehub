@@ -55,7 +55,7 @@ const ByTimeMode = memo(() => {
       </Accordion>
       {isExpandingPageSize && <SkeletonList rows={3} />}
       {hasMore && !isExpandingPageSize && (
-        <NavItem icon={MoreHorizontal} onClick={openAllTopicsDrawer} title={t('loadMore')} />
+        <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={openAllTopicsDrawer} />
       )}
     </Flexbox>
   );

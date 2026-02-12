@@ -1,4 +1,5 @@
-import { TimeoutError } from "./errorType";
+import { TimeoutError } from './errorType';
+
 export const DEFAULT_TIMEOUT = 10_000;
 
 /**

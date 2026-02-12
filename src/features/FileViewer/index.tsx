@@ -1,6 +1,7 @@
 'use client';
 
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import { type FileListItem } from '@/types/files';
 

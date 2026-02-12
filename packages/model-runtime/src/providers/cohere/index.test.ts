@@ -2,7 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeCohereAI, params } from './index';
 
@@ -217,11 +217,11 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        temperature: 1.0,
+        temperature: 1,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ temperature: 1.0 }),
+        expect.objectContaining({ temperature: 1 }),
         expect.anything(),
       );
     });
@@ -264,9 +264,9 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: 2.0,
-        presence_penalty: 2.0,
-        top_p: 2.0,
+        frequency_penalty: 2,
+        presence_penalty: 2,
+        top_p: 2,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
@@ -283,9 +283,9 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: -1.0,
-        presence_penalty: -1.0,
-        top_p: -1.0,
+        frequency_penalty: -1,
+        presence_penalty: -1,
+        top_p: -1,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
@@ -899,16 +899,16 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: 1.0,
-        presence_penalty: 0.0,
-        top_p: 1.0,
+        frequency_penalty: 1,
+        presence_penalty: 0,
+        top_p: 1,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          frequency_penalty: 1.0,
-          presence_penalty: 0.0,
-          top_p: 1.0,
+          frequency_penalty: 1,
+          presence_penalty: 0,
+          top_p: 1,
         }),
         expect.anything(),
       );
@@ -1044,9 +1044,9 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: 10.0,
-        presence_penalty: -5.0,
-        top_p: 100.0,
+        frequency_penalty: 10,
+        presence_penalty: -5,
+        top_p: 100,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(

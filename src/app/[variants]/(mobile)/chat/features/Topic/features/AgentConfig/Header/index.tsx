@@ -18,10 +18,10 @@ const HeaderInfo = memo(() => {
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       flex={1}
       gap={8}
-      horizontal
       style={{
         overflow: 'hidden',
       }}

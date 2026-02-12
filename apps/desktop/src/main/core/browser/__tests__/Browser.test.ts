@@ -41,6 +41,7 @@ const { mockBrowserWindow, mockNativeTheme, mockIpcMain, mockScreen, MockBrowser
           },
         },
         on: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
       },
     };
 

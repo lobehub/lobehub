@@ -6,8 +6,8 @@ import { ToolErrorBoundary } from '@/features/Conversation/Messages/Tool/ErrorBo
 
 import BuiltinType from './BuiltinType';
 import DefaultType from './DefaultType';
-import MCP from './MCPType';
 import Markdown from './MarkdownType';
+import MCP from './MCPType';
 import Standalone from './StandaloneType';
 
 export interface PluginRenderProps {

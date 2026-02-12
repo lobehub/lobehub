@@ -1,7 +1,8 @@
-import type { SidebarAgentItem } from '@lobechat/types';
+import { type SidebarAgentItem } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { MoreHorizontal } from 'lucide-react';
-import { type CSSProperties, memo, useMemo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
@@ -44,8 +45,8 @@ const List = memo<SessionListProps>(
       return (
         <EmptyNavItem
           className={itemClassName}
-          onClick={() => createAgent({ groupId })}
           title={t('emptyAgentAction')}
+          onClick={() => createAgent({ groupId })}
         />
       );
     }
@@ -62,8 +63,8 @@ const List = memo<SessionListProps>(
         {hasMore && (
           <NavItem
             icon={MoreHorizontal}
-            onClick={onMoreClick || openAllAgentsDrawer}
             title={t('input.more')}
+            onClick={onMoreClick || openAllAgentsDrawer}
           />
         )}
       </Flexbox>

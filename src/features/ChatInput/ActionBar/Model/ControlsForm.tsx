@@ -1,5 +1,5 @@
+import { type FormItemProps } from '@lobehub/ui';
 import { Form } from '@lobehub/ui';
-import type { FormItemProps } from '@lobehub/ui';
 import { Form as AntdForm, Grid, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
@@ -85,11 +85,11 @@ const ControlsForm = memo(() => {
           <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
             基于 Claude Thinking 机制限制（
             <a
+              rel="noreferrer nofollow"
+              target="_blank"
               href={
                 'https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?utm_source=lobechat#why-thinking-blocks-must-be-preserved'
               }
-              rel="noreferrer nofollow"
-              target="_blank"
             >
               了解更多
             </a>
@@ -292,18 +292,18 @@ const ControlsForm = memo(() => {
     <Form
       form={form}
       initialValues={config}
+      itemsType={'flat'}
+      size={'small'}
+      style={{ fontSize: 12 }}
+      variant={'borderless'}
       items={
         (modelExtendParams || [])
           .map((item: any) => items.find((i) => i.name === item))
           .filter(Boolean) as FormItemProps[]
       }
-      itemsType={'flat'}
       onValuesChange={async (_, values) => {
         await updateAgentChatConfig(values);
       }}
-      size={'small'}
-      style={{ fontSize: 12 }}
-      variant={'borderless'}
     />
   );
 });

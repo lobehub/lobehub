@@ -11,17 +11,17 @@ const FileItem = memo<ChatFileItem>(({ id, fileType, size, name }) => {
 
   return (
     <Block
-      align={'center'}
       clickable
-      gap={12}
       horizontal
+      align={'center'}
+      gap={12}
       key={id}
-      onClick={() => {
-        openFilePreview({ fileId: id });
-      }}
       paddingBlock={8}
       paddingInline={'12px 16px'}
       variant={'outlined'}
+      onClick={() => {
+        openFilePreview({ fileId: id });
+      }}
     >
       <FileIcon fileName={name} fileType={fileType} size={32} />
       <Flexbox style={{ overflow: 'hidden' }}>

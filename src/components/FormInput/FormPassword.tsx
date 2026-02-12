@@ -1,4 +1,5 @@
-import { InputPassword, type InputProps as Props } from '@lobehub/ui';
+import { type InputProps as Props } from '@lobehub/ui';
+import { InputPassword } from '@lobehub/ui';
 import { type InputRef } from 'antd/es/input/Input';
 import { memo, useEffect, useRef, useState } from 'react';
 
@@ -18,6 +19,7 @@ const FormPassword = memo<FormPasswordProps>(({ onChange, value: defaultValue, .
 
   return (
     <InputPassword
+      ref={ref}
       onBlur={() => {
         onChange?.(value);
       }}
@@ -34,7 +36,6 @@ const FormPassword = memo<FormPasswordProps>(({ onChange, value: defaultValue, .
         if (isChineseInput.current) return;
         onChange?.(value);
       }}
-      ref={ref}
       {...props}
       value={value}
     />

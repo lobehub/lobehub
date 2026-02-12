@@ -1,9 +1,9 @@
 'use client';
 
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
-import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Editor } from '@lobehub/editor/react';
-import { type CSSProperties, memo } from 'react';
+import { type ChatInputActionsProps, type Editor } from '@lobehub/editor/react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import DocumentIdMode from './DocumentIdMode';
 import EditorDataMode from './EditorDataMode';

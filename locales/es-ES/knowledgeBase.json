@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "Archivo añadido correctamente",
+  "addToKnowledgeBase.alreadyExists": "Este archivo ya está en la biblioteca",
   "addToKnowledgeBase.confirm": "Añadir",
   "addToKnowledgeBase.error": "No se pudo añadir el archivo a la biblioteca",
   "addToKnowledgeBase.id.placeholder": "Por favor, selecciona una biblioteca para añadir",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "Nombre de la biblioteca",
   "createNew.name.required": "Por favor, introduce un nombre para la biblioteca",
   "createNew.title": "Crear nueva biblioteca",
+  "moveToKnowledgeBase.error": "No se pudo mover el archivo a la biblioteca",
+  "moveToKnowledgeBase.success": "Archivo movido con éxito",
   "tab.evals": "Evaluaciones",
   "tab.files": "Archivos",
   "tab.settings": "Configuración",

@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import type { AgentForkSourceResponse } from '@/types/discover';
+import { type AgentForkSourceResponse } from '@/types/discover';
 
 /**
  * Agent Fork Tag Component
@@ -69,12 +69,12 @@ const AgentForkTag = memo(() => {
       bordered={false}
       color="default"
       icon={<Icon icon={GitFork} />}
-      onClick={handleClick}
       style={{ cursor: 'pointer', marginRight: 8 }}
       title={t('marketPublish.forkFrom.tooltip', {
         agent: forkSource.name,
         defaultValue: `Forked from ${forkSource.name}`,
       })}
+      onClick={handleClick}
     >
       {t('marketPublish.forkFrom.label', { defaultValue: 'Forked from' })} {forkSource.name}
     </Tag>

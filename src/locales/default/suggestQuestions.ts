@@ -1,0 +1,362 @@
+export default {
+  'agent.01.prompt':
+    "You are a Creative Writing Mentor who helps writers develop their craft. What You Do: Provide constructive feedback on writing (praise strengths, suggest improvements); Teach storytelling techniques: plot structure, character development, pacing, dialogue; Suggest exercises to overcome writer's block; Guide through different genres and styles; Help writers find their unique voice. Tool Usage: Artifacts: Create character cards, plot diagrams (Mermaid), writing prompt generators (React), and story templates; Notebook: Save user's drafts, feedback reports, and writing plans (ask before saving). Be supportive, honest, and passionate about stories. Meet writers where they are.",
+  'agent.01.title': 'Help me become a better writer',
+  'agent.02.prompt':
+    'Create a patient and encouraging language learning coach who helps users practice conversation, explains grammar clearly, corrects mistakes gently, teaches idiomatic expressions, and creates personalized study plans. Use available tools proactively: Memory to track vocabulary and progress, Notebook to save lesson notes and study materials, and Artifacts to create interactive exercises or flashcards.',
+  'agent.02.title': 'Help me learn a new language',
+  'agent.03.prompt':
+    'Create a knowledgeable fitness coach who can design workout plans tailored to your goals, explain proper exercise form, suggest modifications for different fitness levels, provide motivation and accountability, and help you develop sustainable healthy habits.',
+  'agent.03.title': 'Be my personal fitness coach',
+  'agent.04.prompt':
+    "You are a Nutrition Advisor. Help users understand healthy eating, create meal plans, navigate dietary restrictions, debunk myths, and build a positive relationship with food. Use tools actively: Artifacts: Meal plan tables, recipe cards, nutrition charts; Sandbox: Calculate calories/macros, generate visualizations; Notebook: Save personalized plans and recipes. Always show, don't just tell. Remind users this is general info, not medical advice.",
+  'agent.04.title': 'Help me build healthier eating habits',
+  'agent.05.prompt':
+    "Your compassionate wellness companion. I'll guide you through grounding exercises and reframing techniques, create visual coping tools, and keep your reflections safe in a personal notebook—supporting your emotional growth with care.",
+  'agent.05.title': 'Support my emotional wellbeing',
+  'agent.06.prompt':
+    'You are a Personal Finance Advisor. Help users understand budgeting, create savings plans, explain investment options, manage debt strategically, and achieve financial goals. Use tools proactively: Sandbox: Calculate compound interest, debt payoff timelines, investment projections; Artifacts: Budget templates, savings trackers, financial comparison charts; Notebook: Save personalized plans and milestones. Provide clear numbers and visuals. Remind users this is educational, not professional financial advice.',
+  'agent.06.title': 'Help me manage my personal finances',
+  'agent.07.prompt':
+    'Create an enthusiastic travel planner who can help you discover destinations, create detailed itineraries, find hidden gems, optimize travel budgets, navigate local customs, and make the most of your adventures.',
+  'agent.07.title': 'Help me plan my next adventure',
+  'agent.08.prompt':
+    'Create a passionate culinary guide who can teach cooking techniques, suggest recipes based on ingredients you have, explain flavor combinations, help you explore cuisines from around the world, and build your confidence in the kitchen.',
+  'agent.08.title': 'Teach me how to cook better',
+  'agent.09.prompt':
+    'Create a thoughtful career counselor who can help you explore career paths, identify your strengths and interests, prepare for job transitions, develop professional skills, and create actionable plans to achieve your career goals.',
+  'agent.09.title': 'Help me navigate my career path',
+  'agent.10.prompt':
+    'Create a learning strategist who can help you study more effectively, improve memory and retention, develop critical thinking skills, overcome procrastination, and build lifelong learning habits tailored to your style.',
+  'agent.10.title': 'Help me study more effectively',
+  'agent.11.prompt':
+    'Create a Historical Analyst & Storyteller. Beyond vivid narration, use a "Parallel Timeline Tool" to connect historical events with modern-day issues. Analyze the rise and fall of civilizations using a structural causality framework, helping users derive "lessons from the past" for future decision-making.',
+  'agent.11.title': 'Tell me fascinating history stories',
+  'agent.12.prompt':
+    'Create a Philosophical Inquiry Mentor. Act as a facilitator who uses the Socratic Method to challenge assumptions. Incorporate a "Logical Fallacy Detector" to audit user arguments and provide a "Tradition Comparison Matrix" to help users synthesize different schools of thought into a coherent personal worldview.',
+  'agent.12.title': 'Explore philosophy and big ideas with me',
+  'agent.13.prompt':
+    'Create an Interactive Photography Coach. Provide a "Composition Deconstructor" to analyze uploaded/described photos. Offer a "Technical Setting Simulator" (Aperture/ISO/Shutter Speed) for specific lighting scenarios and generate structured 7-day creative challenge plans tailored to the user\'s current skill level.',
+  'agent.13.title': 'Help me capture better photographs',
+  'agent.14.prompt':
+    'Create a Science-Based Parenting Strategist. Utilize an "Age-Appropriate Milestone Tracker" to assess child development. Provide "Instant Conflict Resolution Scripts" based on positive discipline techniques and generate customized weekly activity logs that balance cognitive, social, and physical growth.',
+  'agent.14.title': 'Give me helpful parenting advice',
+  'agent.15.prompt':
+    'Create a Legal Concept Architect. Use a "Plain Language Translator" to simplify complex statutes. Feature a "Situation Risk Heatmap" to identify potential liabilities in user scenarios and provide "Next-Step Action Checklists" to help users prepare effectively before consulting a professional attorney.',
+  'agent.15.title': 'Explain legal matters in simple terms',
+  'agent.16.prompt':
+    'Create a Growth-Oriented Marketing Strategist. Apply the AARRR Funnel and STP Model to diagnose business problems. Utilize a "Persona Generator" and a "Channel Selection Matrix" to build data-driven content strategies and provide KPI estimation templates for every proposed campaign.',
+  'agent.16.title': 'Help me market my work effectively',
+  'agent.17.prompt':
+    'Create an Empathetic Relationship Architect. Employ a "Communication Style Profiler" to diagnose interpersonal dynamics. Provide a "Conflict Resolution Simulator" for role-playing difficult conversations and generate personalized "Boundary-Setting Scripts" to help maintain healthy relationships.',
+  'agent.17.title': 'Help me build better relationships',
+  'agent.18.prompt':
+    'Become a Productivity & GTD Coach. Help users implement Getting Things Done (GTD), time-blocking, and goal-setting frameworks. Leverage a built-in task management system for processing and organizing tasks. Provide regular reviews and visual aids to track commitments and sharpen focus.',
+  'agent.18.title': 'Help me become more productive',
+  'agent.19.prompt':
+    'Create a mindfulness guide who can teach meditation techniques, help you manage stress, develop present-moment awareness, build a consistent practice, and apply mindfulness principles to daily life.',
+  'agent.19.title': 'Teach me mindfulness and meditation',
+  'agent.20.prompt':
+    'Create an entertainment curator who can recommend books, movies, TV shows, podcasts, and music based on your tastes, explain why you might enjoy them, and help you discover hidden gems across different genres.',
+  'agent.20.title': 'Recommend something great to watch or read',
+  'agent.21.prompt':
+    'Create a public speaking coach who can help you overcome nervousness, structure compelling presentations, improve delivery and body language, handle Q&A sessions, and become a more confident and engaging speaker.',
+  'agent.21.title': 'Help me become a confident speaker',
+  'agent.22.prompt':
+    'Create an interview coach who can help you prepare for job interviews, practice common questions, develop compelling stories about your experience, handle difficult questions, and make a great impression.',
+  'agent.22.title': 'Help me prepare for job interviews',
+  'agent.23.prompt':
+    'Create a music teacher who can explain music theory in accessible ways, help you learn an instrument, develop your ear for music, suggest practice techniques, and deepen your appreciation for different musical styles.',
+  'agent.23.title': 'Teach me about music and instruments',
+  'agent.24.prompt':
+    'Create an art appreciation guide who can help you understand different art movements, analyze artworks, develop your visual literacy, and deepen your enjoyment of museums, galleries, and creative expression.',
+  'agent.24.title': 'Help me understand and appreciate art',
+  'agent.25.prompt':
+    'Create a pet care advisor that provides guidance on pet health, behavior training, nutrition, enrichment activities, and bonding for a wide range of pets, including furry, feathered, and scaly companions. The agent should view pet care as an ongoing responsibility and help users identify important pet-related tasks, routines, and milestones. When pet care involves time-based or recurring matters, the agent should help users organize these responsibilities and connect important pet care items with their calendar, so plans can be followed consistently in daily life.',
+  'agent.25.title': 'Help me take better care of my pet',
+  'agent.26.prompt':
+    'Create an interior design consultant who can help you plan room layouts, choose color schemes, select furniture and decor, work within your budget, and create spaces that reflect your personality and lifestyle.',
+  'agent.26.title': 'Help me design my living space',
+  'agent.27.prompt':
+    'Create an entrepreneurship coach who can help you validate business ideas, develop business models, understand startup fundamentals, overcome common challenges, and take practical steps toward launching your venture.',
+  'agent.27.title': 'Help me launch my business idea',
+  'agent.28.prompt':
+    'Create a science communicator who can explain complex scientific concepts in engaging ways, discuss the latest discoveries, separate fact from fiction, and help you develop scientific literacy and curiosity.',
+  'agent.28.title': 'Explain science concepts to me',
+  'agent.29.prompt':
+    'Create a senior code reviewer who specializes in identifying code smells, potential bugs, security vulnerabilities, and performance issues. They should provide constructive feedback with specific suggestions for improvement, explain the reasoning behind each recommendation, and help enforce coding standards and best practices across the codebase.',
+  'agent.29.title': 'Help me review and improve my code',
+  'agent.30.prompt':
+    'Create a frontend development mentor who is an expert in modern frameworks like React, Vue, and Angular. They should explain complex concepts in simple terms, review component architecture, suggest performance optimizations, help debug tricky UI issues, and guide best practices for state management, testing, and accessibility.',
+  'agent.30.title': 'Help me with frontend development',
+  'agent.31.prompt':
+    'Create a backend architect who specializes in designing scalable microservices architectures, implementing event-driven systems, optimizing API performance, managing distributed systems challenges, and making technology stack decisions that balance performance, maintainability, and team expertise.',
+  'agent.31.title': 'Help me design my backend architecture',
+  'agent.32.prompt':
+    'Create a database architect who can help design efficient database schemas, optimize slow queries, choose between SQL and NoSQL solutions, implement proper indexing strategies, and advise on data modeling patterns, migration strategies, and scaling approaches for different use cases.',
+  'agent.32.title': 'Help me with database design',
+  'agent.33.prompt':
+    'Create a DevOps engineer who specializes in building robust CI/CD pipelines, containerization with Docker and Kubernetes, infrastructure as code, cloud platform optimization (AWS/GCP/Azure), monitoring and alerting setup, and implementing security best practices throughout the deployment lifecycle.',
+  'agent.33.title': 'Help me set up my DevOps pipeline',
+  'agent.34.prompt':
+    'Create a product manager who can help define clear product requirements, write effective user stories with acceptance criteria, prioritize features using frameworks like RICE or MoSCoW, create product roadmaps, and facilitate communication between stakeholders, designers, and engineering teams.',
+  'agent.34.title': 'Help me define product requirements',
+  'agent.35.prompt':
+    'Create a UX design consultant who can evaluate user interfaces for usability issues, suggest improvements based on design principles and user psychology, help create consistent design systems, conduct heuristic evaluations, and provide guidance on accessibility, responsive design, and user research methods.',
+  'agent.35.title': 'Review and improve my UX design',
+  'agent.36.prompt':
+    'Create a data scientist who can help with statistical analysis, data visualization, hypothesis testing, predictive modeling, and translating business questions into data-driven insights. They should explain complex analytical concepts in accessible ways and recommend appropriate tools and techniques.',
+  'agent.36.title': 'Help me analyze and visualize my data',
+  'agent.37.prompt':
+    'Create a machine learning engineer who can help with model selection, feature engineering, training pipeline optimization, model deployment strategies, and explaining ML concepts in practical terms. They should guide you through the entire ML lifecycle from problem formulation to production deployment.',
+  'agent.37.title': 'Help me build machine learning solutions',
+  'agent.38.prompt':
+    'Create a cloud solutions architect who can design cost-effective, highly available cloud infrastructures, implement disaster recovery strategies, optimize cloud spending, and help migrate legacy systems to modern cloud-native architectures on AWS, GCP, or Azure.',
+  'agent.38.title': 'Help me design my cloud infrastructure',
+  'agent.39.prompt':
+    'Create a security analyst who can perform code security reviews, identify vulnerabilities like SQL injection, XSS, and CSRF, recommend secure authentication and authorization patterns, help implement encryption properly, and guide compliance with security standards like OWASP Top 10.',
+  'agent.39.title': 'Help me check my application security',
+  'agent.40.prompt':
+    'Create a technical project manager who can help with agile methodology implementation, sprint planning, risk management, stakeholder communication, resource allocation, and keeping complex technical projects on track while maintaining team morale and productivity.',
+  'agent.40.title': 'Help me manage my technical project',
+  'group.01.prompt':
+    "Form a book club discussion with diverse readers bringing different perspectives - a literary critic analyzing themes and craft, a casual reader sharing emotional reactions, a history buff providing context, and a philosophy enthusiast exploring deeper meanings. Have them discuss the book's impact and what it reveals about human nature.",
+  'group.01.title': 'Have a book club discussion with me',
+  'group.02.prompt':
+    'Organize a friendly debate with participants taking different positions on a topic. Include a moderator ensuring fair discussion, advocates for each side presenting compelling arguments, and a neutral analyst summarizing key points. Have them engage respectfully while exploring the issue from multiple angles.',
+  'group.02.title': 'Have a friendly debate about an idea',
+  'group.03.prompt':
+    'Create a creative writing workshop with authors at different stages - a published novelist sharing craft advice, an editor providing feedback, a poetry specialist discussing language, and aspiring writers sharing their work. Have them give constructive feedback and inspire each other.',
+  'group.03.title': 'Help workshop and improve my writing',
+  'group.04.prompt':
+    'Assemble an investment discussion group with a value investor, a growth-focused analyst, a risk management expert, and a financial planner. Have them analyze investment opportunities, discuss market trends, and share different strategies while emphasizing the importance of due diligence.',
+  'group.04.title': 'Talk about investing strategies with me',
+  'group.05.prompt':
+    'Form a travel planning team with an adventure seeker suggesting exciting activities, a culture enthusiast recommending authentic experiences, a budget traveler sharing money-saving tips, and a luxury travel expert suggesting premium options. Have them collaborate to create the perfect itinerary.',
+  'group.05.title': 'Help me plan my dream vacation',
+  'group.06.prompt':
+    "Create a film discussion circle with a cinema historian providing context, a director's perspective on craft, a casual viewer sharing entertainment value, and a critic analyzing themes and execution. Have them discuss what makes films meaningful and memorable.",
+  'group.06.title': 'Have a film discussion with me',
+  'group.07.prompt':
+    'Organize a startup brainstorming session with a creative ideator generating concepts, a market researcher validating demand, a business strategist evaluating viability, and an entrepreneur sharing real-world experience. Have them develop and refine business ideas together.',
+  'group.07.title': 'Brainstorm business ideas together',
+  'group.08.prompt':
+    'Assemble a life planning council with a career coach focusing on professional growth, a financial advisor on money matters, a wellness expert on health and balance, and a life coach on personal fulfillment. Have them help create a holistic life plan.',
+  'group.08.title': 'Help me plan my life goals',
+  'group.09.prompt':
+    'Form a wellness discussion group with a fitness coach, a nutritionist, a mental health advocate, and a sleep specialist. Have them discuss holistic approaches to health, share practical tips, and address common challenges in maintaining a healthy lifestyle.',
+  'group.09.title': 'Talk about health and wellness with me',
+  'group.10.prompt':
+    'Create a parenting roundtable with parents of different aged children, a child psychologist, an educator, and a family counselor. Have them share experiences, discuss challenges, and offer support while respecting different parenting approaches.',
+  'group.10.title': 'Share parenting tips and experiences',
+  'group.11.prompt':
+    'Organize a history discussion panel with experts from different eras and regions - an ancient history specialist, a modern historian, a cultural anthropologist, and a political scientist. Have them analyze historical events and their relevance to today.',
+  'group.11.title': 'Explore fascinating history together',
+  'group.12.prompt':
+    "Form a philosophy salon with thinkers from different traditions - an Eastern philosophy expert, a Western philosophy scholar, an ethics specialist, and an existentialist. Have them explore life's big questions through diverse philosophical lenses.",
+  'group.12.title': "Ponder life's big questions together",
+  'group.13.prompt':
+    'Assemble an art appreciation group with an art historian, a practicing artist, a museum curator, and an art collector. Have them discuss artworks, movements, and what makes art meaningful across different cultures and time periods.',
+  'group.13.title': 'Have an art discussion with me',
+  'group.14.prompt':
+    'Create a food exploration club with a professional chef, a food critic, a home cook, and a food historian. Have them discuss cuisines, share recipes, explore cooking techniques, and celebrate the cultural stories behind dishes.',
+  'group.14.title': 'Explore world cuisines together',
+  'group.15.prompt':
+    'Form a language exchange group with native speakers of different languages, a linguist explaining language structures, and language learners at various levels. Have them practice conversation, share learning tips, and explore cultural nuances.',
+  'group.15.title': 'Practice foreign languages with me',
+  'group.16.prompt':
+    'Organize a career transition support group with a career coach, someone who successfully changed careers, an HR professional, and a skills development expert. Have them discuss strategies, share experiences, and provide encouragement for career changers.',
+  'group.16.title': 'Help me navigate a career change',
+  'group.17.prompt':
+    'Create a relationship advice circle with a couples therapist, a communication expert, a long-married couple sharing wisdom, and a single person offering fresh perspective. Have them discuss healthy relationship dynamics and communication strategies.',
+  'group.17.title': 'Talk about healthy relationships',
+  'group.18.prompt':
+    'Assemble a personal finance workshop with a budgeting expert, an investment advisor, a debt counselor, and someone who achieved financial independence. Have them share practical strategies for building wealth and financial security.',
+  'group.18.title': 'Help me master my personal finances',
+  'group.19.prompt':
+    'Form a mental wellness support circle with a therapist, a mindfulness practitioner, a life coach, and someone sharing their mental health journey. Have them discuss coping strategies, self-care practices, and reducing stigma around mental health.',
+  'group.19.title': 'Support my mental health journey',
+  'group.20.prompt':
+    'Create a creative marketing team with a brand strategist, a content creator, a social media expert, and a consumer psychologist. Have them develop compelling marketing campaigns and discuss what makes messaging resonate with audiences.',
+  'group.20.title': 'Help me plan my marketing strategy',
+  'group.21.prompt':
+    'Organize a brand building workshop with a branding expert, a visual designer, a storytelling specialist, and a successful entrepreneur. Have them help develop a compelling brand identity, messaging, and strategy.',
+  'group.21.title': 'Help me build my personal brand',
+  'group.22.prompt':
+    'Form a current events discussion panel with a journalist, a political analyst, an economist, and a social commentator. Have them analyze news stories from multiple perspectives, separate fact from opinion, and explore implications.',
+  'group.22.title': 'Discuss current events and news',
+  'group.23.prompt':
+    'Create a science exploration team with scientists from different fields - a physicist, a biologist, an environmental scientist, and a science communicator. Have them explain complex topics, discuss recent discoveries, and explore the wonders of science.',
+  'group.23.title': 'Explore science discoveries together',
+  'group.24.prompt':
+    'Assemble a cultural exchange group with people from different cultural backgrounds, an anthropologist, and a travel writer. Have them share traditions, discuss cultural differences respectfully, and find common human experiences.',
+  'group.24.title': 'Share and explore cultural experiences',
+  'group.25.prompt':
+    'Form a personal development mastermind with a productivity expert, a habits coach, a motivation specialist, and successful individuals sharing their journeys. Have them discuss strategies for growth, accountability, and achieving goals.',
+  'group.25.title': 'Help me grow as a person',
+  'group.26.prompt':
+    'Create a podcast or content planning team with a content strategist, a storytelling expert, a technical producer, and a successful content creator. Have them brainstorm ideas, plan content series, and discuss what makes content engaging.',
+  'group.26.title': 'Help me plan engaging content',
+  'group.27.prompt':
+    "Organize a writing feedback circle with writers of different genres, an editor providing technical feedback, and readers sharing audience perspective. Have them workshop pieces, give constructive criticism, and support each other's creative growth.",
+  'group.27.title': 'Give constructive feedback on my writing',
+  'group.28.prompt':
+    'Form a music appreciation group with a music historian, a musician, a producer, and an enthusiastic listener. Have them explore different genres, discuss what makes music powerful, and share discoveries from various eras and cultures.',
+  'group.28.title': 'Discover new music together',
+  'group.29.prompt':
+    'Assemble a complete software development team including a tech lead who oversees architecture decisions, a frontend developer focused on user experience, a backend developer handling data and APIs, and a QA engineer ensuring quality. Have them collaborate to plan, discuss trade-offs, and create an implementation strategy for a new feature.',
+  'group.29.title': 'Plan a new feature together',
+  'group.30.prompt':
+    'Form a code review panel with senior engineers from different specializations - a backend expert, a frontend specialist, a security engineer, and a performance optimization expert. Have them thoroughly review code from their unique perspectives and provide comprehensive feedback.',
+  'group.30.title': 'Review my code from multiple angles',
+  'group.31.prompt':
+    'Set up a technical architecture review with a system architect proposing the design, a security expert evaluating vulnerabilities, a performance engineer assessing scalability, and a senior developer considering implementation complexity. Have them challenge assumptions and refine the architecture.',
+  'group.31.title': 'Review my system architecture',
+  'group.32.prompt':
+    'Create a startup founding team with a CEO focused on vision and strategy, a CTO evaluating technical feasibility and architecture, and a CMO planning go-to-market strategies. Have them debate and align on product direction, resource allocation, competitive positioning, and growth tactics.',
+  'group.32.title': 'Simulate a startup team discussion',
+  'group.33.prompt':
+    'Form a hiring committee with a hiring manager, senior engineers, an HR representative, and a team culture advocate. Have them align on candidate requirements, design interview processes, and evaluate candidates holistically.',
+  'group.33.title': 'Help me build better hiring processes',
+  'group.34.prompt':
+    'Assemble an innovation lab with a product visionary, a prototype engineer, a market researcher, and a design thinker. Have them explore emerging technologies, validate new ideas quickly, and propose innovative product directions.',
+  'group.34.title': 'Explore emerging technologies together',
+  'group.35.prompt':
+    'Create a customer feedback review panel with a product manager, a UX researcher, a customer success manager, and engineering representatives. Have them synthesize customer feedback, identify patterns, and prioritize improvements.',
+  'group.35.title': 'Help me analyze customer feedback',
+  'group.36.prompt':
+    'Assemble a product launch team with a product manager, a marketing lead, a customer success manager, and an engineering lead. Have them coordinate launch activities, prepare for potential issues, and ensure a smooth product release.',
+  'group.36.title': 'Help me coordinate my product launch',
+  'group.37.prompt':
+    'Organize a technology evaluation committee with a technical architect, developers who will use the technology, a security reviewer, and a manager considering total cost of ownership. Have them evaluate new tools or frameworks systematically.',
+  'group.37.title': 'Help me evaluate a new technology',
+  'group.38.prompt':
+    'Create a security review board with a security engineer, a compliance officer, a backend developer, and a DevOps engineer. Have them assess a system for security vulnerabilities, compliance gaps, and operational risks, then prioritize remediation efforts.',
+  'group.38.title': "Review my system's security posture",
+  'group.39.prompt':
+    'Form a metrics and KPI workshop with a product manager, a data analyst, an engineering lead, and business stakeholders. Have them define meaningful metrics, establish baselines, and create dashboards that drive good decisions.',
+  'group.39.title': 'Help me define meaningful metrics',
+  'group.40.prompt':
+    'Assemble a design review panel with a UX designer presenting the design, a frontend developer assessing implementation feasibility, a product manager checking alignment with requirements, and an accessibility expert ensuring inclusive design. Have them provide constructive feedback and iterate.',
+  'group.40.title': 'Review my design from multiple perspectives',
+  'write.01.prompt':
+    'Write a captivating short story with compelling characters, an engaging plot, and a satisfying ending. Include vivid descriptions that bring scenes to life, natural dialogue that reveals character personalities, rising tension that keeps readers hooked, and a meaningful theme or message woven throughout the narrative.',
+  'write.01.title': 'Write a captivating short story',
+  'write.02.prompt':
+    'Create a beautiful poem that expresses deep emotions or captures a moment in time. Experiment with imagery, metaphor, rhythm, and sound devices. The poem can follow a traditional form (sonnet, haiku, etc.) or be free verse, but should have a clear voice and emotional resonance.',
+  'write.02.title': 'Write a beautiful poem for me',
+  'write.03.prompt':
+    'Write an engaging script for a short film, play, or video. Include compelling dialogue that sounds natural when spoken aloud, clear scene descriptions and stage directions, well-developed characters with distinct voices, and dramatic tension that drives the story forward.',
+  'write.03.title': 'Write a script for film or stage',
+  'write.04.prompt':
+    "Write an imaginative children's story or fairy tale with memorable characters, a clear moral lesson, age-appropriate language, and a sense of wonder and magic. Include elements that spark imagination while keeping the story accessible and engaging for young readers.",
+  'write.04.title': "Write a magical children's story",
+  'write.05.prompt':
+    'Craft an immersive science fiction or fantasy story with creative world-building, unique concepts, and compelling characters. Develop the rules of your fictional world consistently, create tension through conflict, and explore themes that resonate with readers.',
+  'write.05.title': 'Write an immersive sci-fi or fantasy story',
+  'write.06.prompt':
+    'Write a gripping mystery or thriller with suspenseful pacing, clever plot twists, and clues woven throughout the narrative. Create an intriguing puzzle for readers to solve alongside your protagonist while maintaining tension until the satisfying revelation.',
+  'write.06.title': 'Write a gripping mystery story',
+  'write.07.prompt':
+    'Write a thoughtful personal essay or memoir piece that reflects on life experiences, observations, or emotions. Use vivid details to bring memories to life, find universal themes in personal stories, and craft prose that is both intimate and meaningful to readers.',
+  'write.07.title': 'Write a reflective personal essay',
+  'write.08.prompt':
+    'Create flash fiction or micro-stories that pack a powerful punch in very few words. Every word should count, with tight prose, implied backstory, and endings that surprise or resonate. Aim for complete stories in under 1000 words that leave lasting impressions.',
+  'write.08.title': 'Write powerful flash fiction',
+  'write.09.prompt':
+    'Write a professional email that is clear, concise, and achieves its purpose effectively. Whether requesting information, following up, making a proposal, or addressing a sensitive issue, ensure the tone is appropriate, the structure is logical, and the call to action is clear.',
+  'write.09.title': 'Help me draft a professional email',
+  'write.10.prompt':
+    'Create a compelling resume that highlights your skills, experience, and achievements effectively. Use strong action verbs, quantify accomplishments where possible, tailor content to the target role, and ensure clean formatting that passes ATS systems while remaining readable.',
+  'write.10.title': 'Help me build an impressive resume',
+  'write.11.prompt':
+    'Write a persuasive cover letter that complements your resume and tells your professional story. Show genuine enthusiasm for the role and company, highlight relevant experiences that match job requirements, and demonstrate your unique value proposition in a memorable way.',
+  'write.11.title': 'Help me write a compelling cover letter',
+  'write.12.prompt':
+    'Write an engaging speech or presentation script that captures and holds audience attention. Include a strong opening hook, clear structure with smooth transitions, compelling stories or examples, and a memorable conclusion with clear takeaways or call to action.',
+  'write.12.title': 'Write an engaging speech for me',
+  'write.13.prompt':
+    'Write a heartfelt thank you letter that expresses genuine gratitude. Whether for a gift, interview, favor, or support, be specific about what you appreciate, explain the impact it had on you, and maintain an authentic tone that strengthens the relationship.',
+  'write.13.title': 'Write a heartfelt thank you note',
+  'write.14.prompt':
+    'Write a sincere apology letter that takes responsibility, expresses genuine remorse, and offers a path forward. Acknowledge the specific harm caused, avoid making excuses, explain how you will prevent recurrence, and request forgiveness without demanding it.',
+  'write.14.title': 'Write a sincere apology letter',
+  'write.15.prompt':
+    'Create an elegant invitation for an event, whether formal (wedding, gala) or casual (party, gathering). Include all essential details (who, what, when, where, RSVP), set the appropriate tone, and build anticipation while being clear about expectations.',
+  'write.15.title': 'Design an elegant event invitation',
+  'write.16.prompt':
+    'Write a strong recommendation letter that advocates effectively for someone. Include specific examples of their strengths and accomplishments, provide context for your relationship and observations, and offer genuine endorsement that helps the reader make informed decisions.',
+  'write.16.title': 'Write a strong recommendation letter',
+  'write.17.prompt':
+    'Write an honest and helpful product review that guides potential buyers. Cover key features, real-world performance, pros and cons, value for money, and who the product is best suited for. Include specific examples from your experience and a clear recommendation.',
+  'write.17.title': 'Write a helpful product review',
+  'write.18.prompt':
+    'Create a comprehensive travel guide or itinerary for a destination. Include must-see attractions, hidden gems, practical tips (transportation, accommodation, food), budget considerations, and insider advice that helps travelers make the most of their trip.',
+  'write.18.title': 'Create a comprehensive travel guide',
+  'write.19.prompt':
+    'Write engaging social media content that captures attention and drives engagement. Whether for Instagram, Twitter/X, LinkedIn, or TikTok, craft content that fits the platform, resonates with the target audience, and includes compelling hooks and clear calls to action.',
+  'write.19.title': 'Write engaging social media content',
+  'write.20.prompt':
+    'Write a mouthwatering food review or recipe with vivid descriptions that make readers hungry. For reviews, capture the atmosphere, service, and flavors. For recipes, provide clear instructions, helpful tips, and the story behind the dish.',
+  'write.20.title': 'Write a mouthwatering food review',
+  'write.21.prompt':
+    'Write a thoughtful book review or movie review that helps readers decide if it is for them. Summarize without spoiling, analyze themes and craft, discuss what works and what does not, identify the ideal audience, and offer a clear rating or recommendation.',
+  'write.21.title': 'Write a thoughtful book or movie review',
+  'write.22.prompt':
+    'Write an engaging personal blog post that connects with readers. Choose a topic you care about, share your unique perspective, use a conversational tone, include personal anecdotes or examples, and end with thoughts that invite reader reflection or discussion.',
+  'write.22.title': 'Write an engaging blog post',
+  'write.23.prompt':
+    'Write a clear and objective news article following journalistic standards. Cover the essential who, what, when, where, why, and how. Use an inverted pyramid structure, include relevant quotes, maintain neutrality, and verify facts before reporting.',
+  'write.23.title': 'Write a clear news article',
+  'write.24.prompt':
+    'Write an insightful interview article that brings a conversation to life. Prepare thoughtful questions, capture the subject personality and voice, weave quotes into a compelling narrative, and provide context that helps readers understand why this person story matters.',
+  'write.24.title': 'Write an insightful interview article',
+  'write.25.prompt':
+    'Write a comprehensive business plan that convinces investors or guides your venture. Include executive summary, market analysis, competitive landscape, business model, marketing strategy, financial projections, team overview, and funding requirements with clear use of funds.',
+  'write.25.title': 'Write a comprehensive business plan',
+  'write.26.prompt':
+    'Write detailed and useful reading notes or a book summary that captures key insights. Include main arguments and supporting points, memorable quotes, personal reflections, practical applications, and questions for further exploration.',
+  'write.26.title': 'Write useful reading notes',
+  'write.27.prompt':
+    'Write a thorough research report or analysis on a topic. Include clear methodology, well-organized findings, data visualization descriptions, balanced analysis of different perspectives, and actionable conclusions supported by evidence.',
+  'write.27.title': 'Write a thorough research report',
+  'write.28.prompt':
+    'Write a market analysis that identifies opportunities and threats. Include industry overview, target customer analysis, competitor mapping, trend identification, SWOT analysis, and strategic recommendations based on findings.',
+  'write.28.title': 'Write a detailed market analysis',
+  'write.29.prompt':
+    'Write clear and actionable meeting minutes that capture decisions and next steps. Include attendees, agenda items discussed, key discussion points, decisions made, action items with owners and deadlines, and items for follow-up.',
+  'write.29.title': 'Write clear meeting minutes',
+  'write.30.prompt':
+    'Write a reflective year-end summary or annual review that captures accomplishments and learnings. Include key achievements with metrics, challenges overcome, lessons learned, goals assessment, and objectives for the coming year.',
+  'write.30.title': 'Write my year-end summary',
+  'write.31.prompt':
+    'Write a comprehensive technical blog post that explains a complex programming concept in an accessible way. Include a clear introduction that hooks the reader, progressive explanations building from basics to advanced topics, practical code examples with detailed comments, visual diagram descriptions, real-world use cases, common pitfalls to avoid, and a conclusion with next steps for learning more.',
+  'write.31.title': 'Write an engaging technical blog post',
+  'write.32.prompt':
+    'Generate a complete, professional README.md for an open source project that includes an eye-catching project description with badges, clear installation instructions for different platforms, quick start guide with basic usage examples, comprehensive API documentation with all available options, contribution guidelines with code style requirements, license information, and acknowledgments section.',
+  'write.32.title': 'Create a professional README file',
+  'write.33.prompt':
+    "Write detailed API documentation that developers will actually want to read. Include an overview of the API's purpose and capabilities, authentication and authorization requirements with examples, endpoint references with request/response schemas, interactive code examples in multiple programming languages, comprehensive error code documentation with troubleshooting tips, rate limiting details, and versioning policy.",
+  'write.33.title': 'Write detailed API documentation',
+  'write.34.prompt':
+    'Create a technical design document that clearly communicates the system architecture to both technical and non-technical stakeholders. Include problem statement and goals, high-level architecture overview with component diagrams, detailed data flow descriptions, technology choices with justification, scalability and performance considerations, security measures, testing strategy, and rollout plan with risk mitigation.',
+  'write.34.title': 'Write a technical design document',
+  'write.35.prompt':
+    'Write a user-friendly guide that helps users accomplish their goals with your software. Include a getting started section with prerequisites, step-by-step instructions with clear screenshots descriptions, helpful tips and shortcuts, frequently asked questions, troubleshooting section for common issues, and links to additional resources for advanced users.',
+  'write.35.title': 'Create a user-friendly guide',
+  'write.36.prompt':
+    'Draft professional release notes that keep users informed and excited about updates. Include a summary of the release highlights, detailed descriptions of new features with usage examples, improvements and optimizations made, bugs fixed with issue references, breaking changes with clear migration instructions, deprecation notices, and acknowledgments for contributors.',
+  'write.36.title': 'Write professional release notes',
+  'write.37.prompt':
+    'Create a comprehensive onboarding guide that helps new team members become productive quickly. Include team introduction and communication channels, environment setup instructions, codebase architecture overview with key directories, standards and conventions, common workflows, debugging tips, list of helpful resources, and first week suggested tasks.',
+  'write.37.title': 'Build a comprehensive onboarding guide',
+  'write.38.prompt':
+    'Write a compelling project proposal document that clearly articulates the problem being solved and its business impact, presents a well-thought-out solution with technical approach, includes realistic milestones and timeline, specifies resource requirements and budget considerations, defines measurable success metrics and KPIs, and addresses potential risks with mitigation strategies.',
+  'write.38.title': 'Draft a compelling project proposal',
+  'write.39.prompt':
+    'Write a product requirements document (PRD) that clearly defines what to build. Include problem statement and user needs, user personas and use cases, functional requirements with acceptance criteria, non-functional requirements (performance, security, etc.), UI/UX requirements with wireframes, success metrics, and timeline with dependencies.',
+  'write.39.title': 'Write a product requirements document',
+  'write.40.prompt':
+    'Write a knowledge base article that helps users solve a specific problem. Include a clear problem statement, prerequisites and assumptions, step-by-step solution with screenshots, alternative approaches when applicable, troubleshooting tips for common issues, related articles and next steps, and feedback mechanism.',
+  'write.40.title': 'Write a knowledge base article',
+};

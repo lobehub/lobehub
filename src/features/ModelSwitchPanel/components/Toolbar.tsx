@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { styles } from '../styles';
-import type { GroupMode } from '../types';
+import { type GroupMode } from '../types';
 
 interface ToolbarProps {
   groupMode: GroupMode;
@@ -19,18 +19,26 @@ export const Toolbar = memo<ToolbarProps>(
     const { t } = useTranslation('components');
 
     return (
-      <Flexbox align="center" className={styles.toolbar} gap={4} horizontal paddingBlock={8} paddingInline={8}>
+      <Flexbox
+        horizontal
+        align="center"
+        className={styles.toolbar}
+        gap={4}
+        paddingBlock={8}
+        paddingInline={8}
+      >
         <SearchBar
           allowClear
-          onChange={(e) => onSearchKeywordChange(e.target.value)}
           placeholder={t('ModelSwitchPanel.searchPlaceholder')}
           size="small"
           style={{ flex: 1 }}
           value={searchKeyword}
           variant="borderless"
+          onChange={(e) => onSearchKeywordChange(e.target.value)}
         />
         <Segmented
-          onChange={(value) => onGroupModeChange(value as GroupMode)}
+          size="small"
+          value={groupMode}
           options={[
             {
               icon: <Icon icon={Brain} />,
@@ -43,8 +51,7 @@ export const Toolbar = memo<ToolbarProps>(
               value: 'byProvider',
             },
           ]}
-          size="small"
-          value={groupMode}
+          onChange={(value) => onGroupModeChange(value as GroupMode)}
         />
       </Flexbox>
     );

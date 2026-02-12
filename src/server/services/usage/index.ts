@@ -102,7 +102,7 @@ export class UsageRecordService {
     }
     const spends = await this.findByMonth(month);
     // Clustering by time
-    let usages = new Map<string, { date: Date; logs: UsageRecordItem[] }>();
+    const usages = new Map<string, { date: Date; logs: UsageRecordItem[] }>();
     spends.forEach((spend) => {
       if (!usages.has(formatDate(spend.createdAt))) {
         usages.set(formatDate(spend.createdAt), { date: spend.createdAt, logs: [spend] });
@@ -111,7 +111,7 @@ export class UsageRecordService {
       usages.get(formatDate(spend.createdAt))?.logs.push(spend);
     });
     // Calculate usage
-    let usageLogs: UsageLog[] = [];
+    const usageLogs: UsageLog[] = [];
     usages.forEach((spends, date) => {
       const totalSpend = spends.logs.reduce((acc, spend) => acc + spend.spend, 0);
       const totalTokens = spends.logs.reduce((acc, spend) => (spend.totalTokens || 0) + acc, 0);

@@ -1,6 +1,6 @@
-import { GroundingSearch } from '../../search';
-import { ThreadStatus } from '../../topic/thread';
-import {
+import type { GroundingSearch } from '../../search';
+import type { ThreadStatus } from '../../topic/thread';
+import type {
   ChatImageItem,
   ChatMessageError,
   MessageMetadata,
@@ -8,15 +8,15 @@ import {
   ModelReasoning,
   ModelUsage,
 } from '../common';
-import {
+import type {
   ChatPluginPayload,
   ChatToolPayload,
   ChatToolPayloadWithResult,
   ToolIntervention,
 } from '../common/tools';
-import { ChatMessageExtra } from './extra';
-import { ChatFileChunk } from './rag';
-import { ChatVideoItem } from './video';
+import type { ChatMessageExtra } from './extra';
+import type { ChatFileChunk } from './rag';
+import type { ChatVideoItem } from './video';
 
 export type UIMessageRoleType =
   | 'user'

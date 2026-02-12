@@ -1,7 +1,8 @@
 'use client';
 
 import { Button, Flexbox, FluentEmoji } from '@lobehub/ui';
-import { ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MAX_WIDTH } from '@/const/layoutTokens';
@@ -37,7 +38,7 @@ const NotFound = memo<{
         <div style={{ marginTop: '0.5em' }}>{t('notFound.check')}</div>
       </div>
       {extra || (
-        <Button onClick={() => (window.location.href = '/')} type={'primary'}>
+        <Button type={'primary'} onClick={() => (window.location.href = '/')}>
           {t('notFound.backHome')}
         </Button>
       )}

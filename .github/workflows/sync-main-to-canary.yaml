@@ -1,0 +1,46 @@
+name: 🔄 Branch Synchronization
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config --global user.name 'lobehubbot'
+          git config --global user.email 'i@lobehub.com'
+
+      - name: Prepare sync branch
+        id: branch
+        run: |
+          echo "SYNC_BRANCH_MAIN_CANARY=sync/main-to-canary-$(date +'%Y%m%d')" >> $GITHUB_ENV
+
+      - name: Sync main to canary
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Sync main to canary
+          git checkout main
+          SYNC_BRANCH_CANARY=${{ env.SYNC_BRANCH_MAIN_CANARY }}
+          git checkout -B $SYNC_BRANCH_CANARY
+          DIFF=$(git diff origin/canary...)
+          if [ -z "$DIFF" ]; then
+            echo "No changes to sync"
+            exit 0
+          fi
+          git push origin $SYNC_BRANCH_CANARY -f
+          gh pr create --base canary --head $SYNC_BRANCH_CANARY --title "Sync main branch to canary branch" --body "Automatic sync" || exit 0
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}

@@ -36,8 +36,8 @@ const GroupPublishButton = memo(() => {
       <PublishButton action={action} onPublishSuccess={handlePublishSuccess} />
       <GroupPublishResultModal
         identifier={publishedIdentifier}
-        onCancel={() => setShowResultModal(false)}
         open={showResultModal}
+        onCancel={() => setShowResultModal(false)}
       />
     </>
   );

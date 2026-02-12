@@ -102,6 +102,31 @@ table agent_cron_jobs {
   }
 }
 
+table agent_skills {
+  id text [pk, not null]
+  name text [not null]
+  description text [not null]
+  identifier text [not null]
+  source text [not null]
+  manifest jsonb [not null, default: `{}`]
+  content text
+  editor_data jsonb
+  resources jsonb [default: `{}`]
+  zip_file_hash varchar(64)
+  user_id text [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, name) [name: 'agent_skills_user_name_idx', unique]
+    identifier [name: 'agent_skills_identifier_idx']
+    user_id [name: 'agent_skills_user_id_idx']
+    source [name: 'agent_skills_source_idx']
+    zip_file_hash [name: 'agent_skills_zip_hash_idx']
+  }
+}
+
 table ai_models {
   id varchar(150) [not null]
   display_name varchar(200)
@@ -155,7 +180,7 @@ table ai_providers {
 }
 
 table api_keys {
-  id integer [pk, not null]
+  id text [pk, not null]
   name varchar(256) [not null]
   key varchar(256) [not null, unique]
   enabled boolean [default: true]
@@ -938,8 +963,8 @@ table unstructured_chunks {
 }
 
 table rag_eval_dataset_records {
-  id integer [pk, not null]
-  dataset_id integer [not null]
+  id text [pk, not null]
+  dataset_id text [not null]
   ideal text
   question text
   reference_files text[]
@@ -955,7 +980,7 @@ table rag_eval_dataset_records {
 }
 
 table rag_eval_datasets {
-  id integer [pk, not null]
+  id text [pk, not null]
   description text
   name text [not null]
   knowledge_base_id text
@@ -970,13 +995,13 @@ table rag_eval_datasets {
 }
 
 table rag_eval_evaluations {
-  id integer [pk, not null]
+  id text [pk, not null]
   name text [not null]
   description text
   eval_records_url text
   status text
   error jsonb
-  dataset_id integer [not null]
+  dataset_id text [not null]
   knowledge_base_id text
   language_model text
   embedding_model text
@@ -991,7 +1016,7 @@ table rag_eval_evaluations {
 }
 
 table rag_eval_evaluation_records {
-  id integer [pk, not null]
+  id text [pk, not null]
   question text [not null]
   answer text
   context text[]
@@ -1002,8 +1027,8 @@ table rag_eval_evaluation_records {
   embedding_model text
   question_embedding_id uuid
   duration integer
-  dataset_record_id integer [not null]
-  evaluation_id integer [not null]
+  dataset_record_id text [not null]
+  evaluation_id text [not null]
   user_id text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1015,7 +1040,7 @@ table rag_eval_evaluation_records {
 }
 
 table rbac_permissions {
-  id integer [pk, not null]
+  id text [pk, not null]
   code text [not null, unique]
   name text [not null]
   description text
@@ -1027,8 +1052,8 @@ table rbac_permissions {
 }
 
 table rbac_role_permissions {
-  role_id integer [not null]
-  permission_id integer [not null]
+  role_id text [not null]
+  permission_id text [not null]
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
@@ -1039,7 +1064,7 @@ table rbac_role_permissions {
 }
 
 table rbac_roles {
-  id integer [pk, not null]
+  id text [pk, not null]
   name text [not null, unique]
   display_name text [not null]
   description text
@@ -1053,7 +1078,7 @@ table rbac_roles {
 
 table rbac_user_roles {
   user_id text [not null]
-  role_id integer [not null]
+  role_id text [not null]
   created_at "timestamp with time zone" [not null, default: `now()`]
   expires_at "timestamp with time zone"
 
@@ -1522,6 +1547,10 @@ table user_memory_persona_documents {
     user_id [name: 'user_persona_documents_user_id_index']
   }
 }
+
+ref: agent_skills.user_id - users.id
+
+ref: agent_skills.zip_file_hash - global_files.hash_id
 
 ref: accounts.user_id > users.id
 

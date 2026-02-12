@@ -26,13 +26,13 @@ const PreferenceTimelineView = memo<PreferenceTimelineViewProps>(
         groupBy="day"
         hasMore={preferencesHasMore}
         isLoading={isLoading}
-        onLoadMore={loadMorePreferences}
         renderHeader={(periodKey) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
         renderItem={(preference) => (
           <TimelineItemWrapper>
-            <PreferenceCard onClick={() => onClick?.(preference)} preference={preference} />
+            <PreferenceCard preference={preference} onClick={() => onClick?.(preference)} />
           </TimelineItemWrapper>
         )}
+        onLoadMore={loadMorePreferences}
       />
     );
   },

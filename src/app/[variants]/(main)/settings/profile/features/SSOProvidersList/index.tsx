@@ -1,7 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon, DropdownMenu, Flexbox, type MenuProps, Text } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
 import { ArrowRight, Plus, Unlink } from 'lucide-react';
-import { type CSSProperties, memo, useMemo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { modal, notification } from '@/components/AntdStaticMethods';
@@ -99,13 +101,13 @@ export const SSOProvidersList = memo(() => {
     <Flexbox gap={8}>
       {providers.map((item) => (
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'space-between'}
           key={[item.provider, item.providerAccountId].join('-')}
         >
-          <Flexbox align={'center'} gap={6} horizontal style={{ fontSize: 12 }}>
+          <Flexbox horizontal align={'center'} gap={6} style={{ fontSize: 12 }}>
             {AuthIcons(item.provider, 16)}
             <span style={providerNameStyle}>{item.provider}</span>
             {item.email && (
@@ -118,8 +120,8 @@ export const SSOProvidersList = memo(() => {
             <ActionIcon
               disabled={!allowUnlink}
               icon={Unlink}
-              onClick={() => handleUnlinkSSO(item.provider)}
               size={'small'}
+              onClick={() => handleUnlinkSSO(item.provider)}
             />
           )}
         </Flexbox>
@@ -128,7 +130,7 @@ export const SSOProvidersList = memo(() => {
       {/* Link Account Button - Only show for logged in users with available providers */}
       {enableAuthActions && availableProviders.length > 0 && (
         <DropdownMenu items={linkMenuItems} popupProps={{ style: { maxWidth: '200px' } }}>
-          <Flexbox align={'center'} gap={6} horizontal style={{ cursor: 'pointer', fontSize: 12 }}>
+          <Flexbox horizontal align={'center'} gap={6} style={{ cursor: 'pointer', fontSize: 12 }}>
             <Plus size={14} />
             <span>{t('profile.sso.link.button')}</span>
             <ArrowRight size={14} />

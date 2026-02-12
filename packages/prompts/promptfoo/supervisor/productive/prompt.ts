@@ -1,5 +1,6 @@
 // TypeScript prompt wrapper that uses actual buildSupervisorPrompt implementation
-import { type SupervisorPromptParams, buildSupervisorPrompt } from '../../../src';
+import type { SupervisorPromptParams } from '../../../src';
+import { buildSupervisorPrompt } from '../../../src';
 
 const generatePrompt = ({
   vars,

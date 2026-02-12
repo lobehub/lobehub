@@ -1,7 +1,7 @@
-import { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatStoreState } from '@/store/chat';
+import { type ChatStoreState } from '@/store/chat';
 
 import { PortalViewType } from './initialState';
 import { chatPortalSelectors } from './selectors';

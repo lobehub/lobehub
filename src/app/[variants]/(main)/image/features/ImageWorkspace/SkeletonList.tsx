@@ -14,7 +14,7 @@ const SkeletonList = memo(() => {
           <Skeleton.Button active style={{ height: 20, width: '95%' }} />
 
           {/* Metadata skeleton */}
-          <Flexbox gap={12} horizontal style={{ width: '100%' }}>
+          <Flexbox horizontal gap={12} style={{ width: '100%' }}>
             <Skeleton.Button active style={{ height: 16, width: 120 }} />
             <Skeleton.Button active style={{ height: 16, width: 80 }} />
             <Skeleton.Button active style={{ height: 16, width: 60 }} />

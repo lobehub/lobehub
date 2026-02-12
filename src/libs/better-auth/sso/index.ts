@@ -1,5 +1,5 @@
-import type { GenericOAuthConfig } from 'better-auth/plugins';
-import type { SocialProviders } from 'better-auth/social-providers';
+import { type GenericOAuthConfig } from 'better-auth/plugins';
+import { type SocialProviders } from 'better-auth/social-providers';
 
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';

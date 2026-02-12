@@ -1,4 +1,4 @@
-import type { State } from '../../initialState';
+import { type State } from '../../initialState';
 
 const context = (s: State) => s.context;
 const agentId = (s: State) => s.context.agentId;

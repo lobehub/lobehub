@@ -10,9 +10,8 @@
  *
  * @see RFC 147: LOBE-2850 - Phase 3
  */
-
 import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -24,7 +23,6 @@ const SPA_FILES = [
   'src/app/[variants]/(main)/group/_layout/Sidebar/Header/Nav.tsx',
   'src/app/[variants]/(main)/group/_layout/Sidebar/Topic/hooks/useTopicNavigation.ts',
   'src/app/[variants]/(main)/group/_layout/Sidebar/Topic/hooks/useThreadNavigation.ts',
-  'src/app/[variants]/(main)/chat/_layout/Sidebar/Header/AddTopicButon.tsx',
   'src/app/[variants]/(main)/chat/_layout/Sidebar/Header/Nav.tsx',
   'src/app/[variants]/(main)/chat/_layout/Sidebar/Topic/hooks/useTopicNavigation.ts',
   'src/app/[variants]/(main)/chat/_layout/Sidebar/Topic/hooks/useThreadNavigation.ts',
@@ -44,7 +42,7 @@ async function migrateFile(relativePath: string): Promise<MigrationResult | null
 
   // Check what hooks are being imported from @/libs/next/navigation
   const importMatch = content.match(
-    /import\s*\{([^}]+)\}\s*from\s*['"]@\/libs\/next\/navigation['"]/
+    /import\s*\{([^}]+)\}\s*from\s*["']@\/libs\/next\/navigation["']/,
   );
 
   if (!importMatch) {
@@ -64,20 +62,31 @@ async function migrateFile(relativePath: string): Promise<MigrationResult | null
   const newImports: string[] = [];
 
   for (const hook of importedHooks) {
-    if (hook === 'usePathname') {
-      newImports.push(`import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';`);
-      changes.push('usePathname -> React Router version');
-    } else if (hook === 'useSearchParams') {
-      newImports.push(
-        `import { useSearchParams } from '@/app/[variants]/(main)/hooks/useSearchParams';`
-      );
-      changes.push('useSearchParams -> React Router version');
-    } else if (hook === 'useRouter') {
-      newImports.push(`import { useRouter } from '@/app/[variants]/(main)/hooks/useRouter';`);
-      changes.push('useRouter -> React Router version');
-    } else {
-      // Keep other imports (like notFound, redirect) from next/navigation
-      console.log(`   ⚠️  Unknown hook "${hook}" - keeping original import`);
+    switch (hook) {
+      case 'usePathname': {
+        newImports.push(`import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';`);
+        changes.push('usePathname -> React Router version');
+
+        break;
+      }
+      case 'useSearchParams': {
+        newImports.push(
+          `import { useSearchParams } from '@/app/[variants]/(main)/hooks/useSearchParams';`,
+        );
+        changes.push('useSearchParams -> React Router version');
+
+        break;
+      }
+      case 'useRouter': {
+        newImports.push(`import { useRouter } from '@/app/[variants]/(main)/hooks/useRouter';`);
+        changes.push('useRouter -> React Router version');
+
+        break;
+      }
+      default: {
+        // Keep other imports (like notFound, redirect) from next/navigation
+        console.log(`   ⚠️  Unknown hook "${hook}" - keeping original import`);
+      }
     }
   }
 
@@ -88,8 +97,8 @@ async function migrateFile(relativePath: string): Promise<MigrationResult | null
 
   // Replace the old import with new imports
   newContent = newContent.replace(
-    /import\s*\{[^}]+\}\s*from\s*['"]@\/libs\/next\/navigation['"];?\n?/,
-    newImports.join('\n') + '\n'
+    /import\s*\{[^}]+\}\s*from\s*["']@\/libs\/next\/navigation["'];?\n?/,
+    newImports.join('\n') + '\n',
   );
 
   if (newContent !== content) {

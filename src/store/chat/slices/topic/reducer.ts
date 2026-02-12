@@ -3,21 +3,21 @@ import { produce } from 'immer';
 
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 
-interface AddChatTopicAction {
+type AddChatTopicAction = {
   type: 'addTopic';
   value: CreateTopicParams & { id?: string };
-}
+};
 
-interface UpdateChatTopicAction {
+type UpdateChatTopicAction = {
   id: string;
   type: 'updateTopic';
   value: Partial<ChatTopic>;
-}
+};
 
-interface DeleteChatTopicAction {
+type DeleteChatTopicAction = {
   id: string;
   type: 'deleteTopic';
-}
+};
 
 export type ChatTopicDispatch = AddChatTopicAction | UpdateChatTopicAction | DeleteChatTopicAction;
 

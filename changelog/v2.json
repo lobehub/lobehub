@@ -1,5 +1,66 @@
 [
   {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-02-10",
+    "version": "2.1.26"
+  },
+  {
+    "children": {},
+    "date": "2026-02-09",
+    "version": "2.1.25"
+  },
+  {
+    "children": {
+      "fixes": ["Fix multimodal content_part images rendered as base64 text."]
+    },
+    "date": "2026-02-09",
+    "version": "2.1.24"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fix editor content missing when send error, use custom avatar for group chat in sidebar."
+      ],
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-02-09",
+    "version": "2.1.23"
+  },
+  {
+    "children": {
+      "fixes": ["Register Notebook tool in server runtime."]
+    },
+    "date": "2026-02-08",
+    "version": "2.1.22"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Add end-user info on OpenAI Responses API call, enable vertical scrolling for topic list on mobile."
+      ]
+    },
+    "date": "2026-02-08",
+    "version": "2.1.21"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Add api/version and api/desktop to public routes, show notification when file upload fails due to storage plan limit."
+      ]
+    },
+    "date": "2026-02-08",
+    "version": "2.1.20"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed in community pluings tab the lobehub skills not display."]
+    },
+    "date": "2026-02-06",
+    "version": "2.1.19"
+  },
+  {
     "children": {},
     "date": "2026-02-04",
     "version": "2.1.18"
@@ -42,9 +103,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Hide password features when AUTH_DISABLE_EMAIL_PASSWORD is set."
-      ]
+      "fixes": ["Hide password features when AUTH_DISABLE_EMAIL_PASSWORD is set."]
     },
     "date": "2026-02-02",
     "version": "2.1.11"
@@ -56,54 +115,42 @@
   },
   {
     "children": {
-      "fixes": [
-        "Use oauth2.link for generic OIDC provider account linking."
-      ]
+      "fixes": ["Use oauth2.link for generic OIDC provider account linking."]
     },
     "date": "2026-02-02",
     "version": "2.1.9"
   },
   {
     "children": {
-      "improvements": [
-        "Improve tasks display."
-      ]
+      "improvements": ["Improve tasks display."]
     },
     "date": "2026-02-01",
     "version": "2.1.8"
   },
   {
     "children": {
-      "fixes": [
-        "Add missing description parameter docs in Notebook system prompt."
-      ]
+      "fixes": ["Add missing description parameter docs in Notebook system prompt."]
     },
     "date": "2026-02-01",
     "version": "2.1.7"
   },
   {
     "children": {
-      "improvements": [
-        "Improve local-system tool implement."
-      ]
+      "improvements": ["Improve local-system tool implement."]
     },
     "date": "2026-02-01",
     "version": "2.1.6"
   },
   {
     "children": {
-      "fixes": [
-        "Slove the group member agents cant set skills problem."
-      ]
+      "fixes": ["Slove the group member agents cant set skills problem."]
     },
     "date": "2026-01-31",
     "version": "2.1.5"
   },
   {
     "children": {
-      "improvements": [
-        "Update i18n, Update Kimi K2.5 & Qwen3 Max Thinking models."
-      ]
+      "improvements": ["Update i18n, Update Kimi K2.5 & Qwen3 Max Thinking models."]
     },
     "date": "2026-01-31",
     "version": "2.1.4"
@@ -115,63 +162,49 @@
   },
   {
     "children": {
-      "fixes": [
-        "Fix feishu sso provider."
-      ]
+      "fixes": ["Fix feishu sso provider."]
     },
     "date": "2026-01-30",
     "version": "2.1.2"
   },
   {
     "children": {
-      "fixes": [
-        "Correct desktop download URL path."
-      ]
+      "fixes": ["Correct desktop download URL path."]
     },
     "date": "2026-01-30",
     "version": "2.1.1"
   },
   {
     "children": {
-      "features": [
-        "Refactor cron job UI and use runtime enableBusinessFeatures flag."
-      ]
+      "features": ["Refactor cron job UI and use runtime enableBusinessFeatures flag."]
     },
     "date": "2026-01-30",
     "version": "2.1.0"
   },
   {
     "children": {
-      "improvements": [
-        "Fix usage table display issues."
-      ]
+      "improvements": ["Fix usage table display issues."]
     },
     "date": "2026-01-29",
     "version": "2.0.13"
   },
   {
     "children": {
-      "fixes": [
-        "Group publish to market should set local group market identifer."
-      ]
+      "fixes": ["Group publish to market should set local group market identifer."]
     },
     "date": "2026-01-29",
     "version": "2.0.12"
   },
   {
     "children": {
-      "improvements": [
-        "Fix group task render."
-      ]
+      "improvements": ["Fix group task render."]
     },
     "date": "2026-01-29",
     "version": "2.0.11"
   },
   {
     "children": {
-      "fixes": [
-        "Add ExtendParamsTypeSchema for enhanced model settings."
-      ]
+      "fixes": ["Add ExtendParamsTypeSchema for enhanced model settings."]
     },
     "date": "2026-01-29",
     "version": "2.0.10"
@@ -183,9 +216,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Fix inbox agent in mobile."
-      ]
+      "fixes": ["Fix inbox agent in mobile."]
     },
     "date": "2026-01-28",
     "version": "2.0.8"
@@ -197,27 +228,21 @@
   },
   {
     "children": {
-      "fixes": [
-        "The klavis in onboarding connect timeout fixed."
-      ]
+      "fixes": ["The klavis in onboarding connect timeout fixed."]
     },
     "date": "2026-01-27",
     "version": "2.0.6"
   },
   {
     "children": {
-      "fixes": [
-        "Update the artifact prompt."
-      ]
+      "fixes": ["Update the artifact prompt."]
     },
     "date": "2026-01-27",
     "version": "2.0.5"
   },
   {
     "children": {
-      "fixes": [
-        "Rename docker image and update docs for v2."
-      ]
+      "fixes": ["Rename docker image and update docs for v2."]
     },
     "date": "2026-01-27",
     "version": "2.0.4"
@@ -233,9 +258,7 @@
   },
   {
     "children": {
-      "fixes": [
-        "Slove the recentTopicLinkError."
-      ]
+      "fixes": ["Slove the recentTopicLinkError."]
     },
     "date": "2026-01-27",
     "version": "2.0.2"

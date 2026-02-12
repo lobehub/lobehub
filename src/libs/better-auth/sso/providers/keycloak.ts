@@ -1,7 +1,7 @@
 import { authEnv } from '@/envs/auth';
 
 import { buildOidcConfig } from '../helpers';
-import type { GenericProviderDefinition } from '../types';
+import { type GenericProviderDefinition } from '../types';
 
 const provider: GenericProviderDefinition<{
   AUTH_KEYCLOAK_ID: string;

@@ -1,8 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 
-import { OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
 const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
@@ -166,7 +166,7 @@ export const buildAnthropicMessages = async (
   const messages: Anthropic.Messages.MessageParam[] = [];
   let pendingToolResults: Anthropic.ToolResultBlockParam[] = [];
 
-  // 首先收集所有 assistant 消息中的 tool_call_id 以便后续查找
+  // First collect all tool_call_id from assistant messages for subsequent lookup
   const validToolCallIds = new Set<string>();
   for (const message of oaiMessages) {
     if (message.role === 'assistant' && message.tool_calls?.length) {
@@ -190,7 +190,7 @@ export const buildAnthropicMessages = async (
           ? [{ text: '<empty_content>', type: 'text' as const }]
           : [{ text: message.content, type: 'text' as const }];
 
-      // 检查这个工具消息是否有对应的 assistant 工具调用
+      // Check if this tool message has a corresponding assistant tool call
       if (message.tool_call_id && validToolCallIds.has(message.tool_call_id)) {
         pendingToolResults.push({
           content: toolResultContent as Anthropic.ToolResultBlockParam['content'],
@@ -198,7 +198,7 @@ export const buildAnthropicMessages = async (
           type: 'tool_result',
         });
 
-        // 如果这是最后一个消息或者下一个消息不是 'tool'，则添加累积的工具结果作为一个 'user' 消息
+        // If this is the last message or the next message is not 'tool', add accumulated tool results as a 'user' message
         if (index === oaiMessages.length - 1 || oaiMessages[index + 1].role !== 'tool') {
           messages.push({
             content: pendingToolResults,
@@ -207,7 +207,7 @@ export const buildAnthropicMessages = async (
           pendingToolResults = [];
         }
       } else {
-        // 如果工具消息没有对应的 assistant 工具调用，则作为普通文本处理
+        // If tool message has no corresponding assistant tool call, treat as plain text
         const fallbackContent = Array.isArray(message.content)
           ? JSON.stringify(message.content)
           : message.content || '<empty_content>';

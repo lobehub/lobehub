@@ -1,7 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
   desc: css`
@@ -37,17 +38,17 @@ const ProgressItem = memo<ProgressItemProps>(
 
     return (
       <Flexbox className={className} paddingInline={16} style={style} width={'100%'}>
-        <Flexbox align={'center'} horizontal justify={'space-between'} width={'100%'}>
-          <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} justify={'space-between'} width={'100%'}>
+          <Flexbox horizontal align={'center'} gap={8}>
             {legend && (
               <Flexbox
                 height={8}
+                width={8}
                 style={{
                   background: cssVar.geekblue,
                   borderRadius: '50%',
                   flex: 'none',
                 }}
-                width={8}
               />
             )}
             <Flexbox align={'baseline'} gap={mobile ? 0 : 8} horizontal={!mobile}>

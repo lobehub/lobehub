@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeMistralAI, params } from './index';
 
@@ -106,11 +106,11 @@ describe('LobeMistralAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'open-mistral-7b',
-        temperature: 2.0,
+        temperature: 2,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ temperature: 1.0 }),
+        expect.objectContaining({ temperature: 1 }),
         expect.anything(),
       );
     });

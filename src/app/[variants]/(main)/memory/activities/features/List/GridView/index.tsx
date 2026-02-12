@@ -1,4 +1,4 @@
-import type { ActivityListItem } from '@lobechat/types';
+import { type ActivityListItem } from '@lobechat/types';
 import { memo } from 'react';
 
 import { useUserMemoryStore } from '@/store/userMemory';
@@ -21,10 +21,10 @@ const ActivitiesGridView = memo<GridViewProps>(({ activities, isLoading, onClick
       hasMore={activitiesHasMore}
       isLoading={isLoading}
       items={activities}
-      onLoadMore={loadMoreActivities}
       renderItem={(activity: ActivityListItem) => (
         <ActivityCard activity={activity} onClick={() => onClick(activity)} />
       )}
+      onLoadMore={loadMoreActivities}
     />
   );
 });

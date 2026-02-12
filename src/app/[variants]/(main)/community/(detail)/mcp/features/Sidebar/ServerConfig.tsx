@@ -28,7 +28,7 @@ const ServerConfig = memo(() => {
       <Title more={t('mcp.details.sidebar.moreServerConfig')} moreLink={installLink}>
         {t('mcp.details.sidebar.serverConfig')}
       </Title>
-      <Platform connection={recommendedDeployment?.connection} identifier={identifier} lite />
+      <Platform lite connection={recommendedDeployment?.connection} identifier={identifier} />
     </Flexbox>
   );
 });

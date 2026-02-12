@@ -1,4 +1,4 @@
-import { Flexbox, Input, Popover } from '@lobehub/ui';
+import { Flexbox, Input, Popover, stopPropagation } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 import { useHomeStore } from '@/store/home';
@@ -30,32 +30,32 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
 
   return (
     <Popover
+      open={editing}
+      placement="bottomLeft"
+      trigger="click"
       content={
-        <Flexbox gap={4} horizontal onClick={(e) => e.stopPropagation()} style={{ width: 280 }}>
+        <Flexbox horizontal gap={4} style={{ width: 280 }} onClick={stopPropagation}>
           <Input
             autoFocus
             defaultValue={title}
+            style={{ flex: 1 }}
             onChange={(e) => setNewTitle(e.target.value)}
             onPressEnter={() => {
               handleUpdate();
               toggleEditing(false);
             }}
-            style={{ flex: 1 }}
           />
         </Flexbox>
       }
-      onOpenChange={(open) => {
-        if (!open) handleUpdate();
-        toggleEditing(open);
-      }}
-      open={editing}
-      placement="bottomLeft"
       styles={{
         content: {
           padding: 4,
         },
       }}
-      trigger="click"
+      onOpenChange={(open) => {
+        if (!open) handleUpdate();
+        toggleEditing(open);
+      }}
     >
       <div />
     </Popover>

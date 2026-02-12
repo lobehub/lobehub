@@ -2,13 +2,14 @@ import type { ChatModelCard } from '@lobechat/types';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import debug from 'debug';
-import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import type { AiModelType } from 'model-bank';
-import OpenAI, { ClientOptions } from 'openai';
-import { Stream } from 'openai/streaming';
+import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
+import type { ClientOptions } from 'openai';
+import OpenAI from 'openai';
+import type { Stream } from 'openai/streaming';
 
 import { responsesAPIModels } from '../../const/models';
-import {
+import type {
   ChatCompletionErrorPayload,
   ChatCompletionTool,
   ChatMethodOptions,
@@ -22,8 +23,9 @@ import {
   TextToSpeechOptions,
   TextToSpeechPayload,
 } from '../../types';
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '../../types/error';
-import { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { ILobeAgentRuntimeErrorType } from '../../types/error';
+import { AgentRuntimeErrorType } from '../../types/error';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugResponse, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
@@ -32,9 +34,10 @@ import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { StreamingResponse } from '../../utils/response';
-import { LobeRuntimeAI } from '../BaseAI';
+import type { LobeRuntimeAI } from '../BaseAI';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
-import { OpenAIResponsesStream, OpenAIStream, OpenAIStreamOptions } from '../streams';
+import type { OpenAIStreamOptions } from '../streams';
+import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import { createOpenAICompatibleImage } from './createImage';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 
@@ -334,7 +337,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           processedPayload = { ...payload, apiMode: 'responses' } as any;
         }
 
-        // 再进行工厂级处理
+        // Then perform factory-level processing
         const postPayload = chatCompletion?.handlePayload
           ? chatCompletion.handlePayload(processedPayload, this._options)
           : ({
@@ -413,7 +416,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           ) as any;
         } else {
           // Remove internal apiMode parameter before sending to API
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
           const { apiMode: _, ...cleanedPayload } = postPayload as any;
           const finalPayload = {
             ...cleanedPayload,
@@ -907,6 +910,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         store: false,
         stream: !isStreaming ? undefined : isStreaming,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
+        user: options?.user,
       } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
 
       if (debugParams?.responses?.()) {

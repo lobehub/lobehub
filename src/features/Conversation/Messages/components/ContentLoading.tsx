@@ -6,7 +6,7 @@ import BubblesLoading from '@/components/BubblesLoading';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import type { OperationType } from '@/store/chat/slices/operation/types';
+import { type OperationType } from '@/store/chat/slices/operation/types';
 import { shinyTextStyles } from '@/styles/loading';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
@@ -60,7 +60,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
 
   if (operationType === 'contextCompression') {
     return (
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <NeuralNetworkLoading size={16} />
         <span className={shinyTextStyles.shinyText}>{t('operation.contextCompression')}</span>
       </Flexbox>
@@ -68,7 +68,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   }
 
   return (
-    <Flexbox align={'center'} horizontal>
+    <Flexbox horizontal align={'center'}>
       <BubblesLoading />
       {operationLabel && (
         <Text type={'secondary'}>

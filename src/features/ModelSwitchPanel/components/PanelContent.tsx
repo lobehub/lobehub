@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import { type FC } from 'react';
 import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 
@@ -40,26 +40,26 @@ export const PanelContent: FC<PanelContentProps> = ({
       enableResizing={ENABLE_RESIZING}
       maxWidth={MAX_WIDTH}
       minWidth={MIN_WIDTH}
-      onResizeStop={(_e, _direction, ref) => {
-        handlePanelWidthChange(ref.offsetWidth);
-      }}
       position={{ x: 0, y: 0 }}
       size={{ height: panelHeight, width: panelWidth }}
       style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
+      onResizeStop={(_e, _direction, ref) => {
+        handlePanelWidthChange(ref.offsetWidth);
+      }}
     >
       <Toolbar
         groupMode={groupMode}
+        searchKeyword={searchKeyword}
         onGroupModeChange={handleGroupModeChange}
         onSearchKeywordChange={setSearchKeyword}
-        searchKeyword={searchKeyword}
       />
       <List
         groupMode={groupMode}
         model={modelProp}
-        onModelChange={onModelChangeProp}
-        onOpenChange={onOpenChange}
         provider={providerProp}
         searchKeyword={searchKeyword}
+        onModelChange={onModelChangeProp}
+        onOpenChange={onOpenChange}
       />
       <Footer onClose={handleClose} />
     </Rnd>

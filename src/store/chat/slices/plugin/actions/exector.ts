@@ -62,7 +62,7 @@ export const klavisExecutor: RemoteToolExecutor = async (p) => {
   return createFailedResult('Klavis tool returned empty result');
 };
 
-export const lobehubSkillExecutor: RemoteToolExecutor = async (p) => {
+export const lobehubSkillExecutor: RemoteToolExecutor = async (p: any) => {
   // payload.identifier is the provider id (e.g., 'linear', 'microsoft')
   const provider = p.identifier;
 

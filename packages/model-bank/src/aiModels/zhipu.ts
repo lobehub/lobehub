@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // price: https://bigmodel.cn/pricing
 // ref: https://docs.bigmodel.cn/cn/guide/start/model-overview

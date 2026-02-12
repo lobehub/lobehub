@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { RedisManager, initializeRedis, resetRedisClient } from './manager';
-import { RedisConfig } from './types';
+import { initializeRedis, RedisManager, resetRedisClient } from './manager';
+import { type RedisConfig } from './types';
 
 const { mockIoRedisInitialize, mockIoRedisDisconnect } = vi.hoisted(() => ({
   mockIoRedisInitialize: vi.fn().mockResolvedValue(undefined),

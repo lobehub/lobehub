@@ -1,8 +1,8 @@
 'use client';
 
+import MobileMainLayout from '@/app/[variants]/(mobile)/_layout';
 import MobileHome from '@/app/[variants]/(mobile)/(home)/';
 import MobileHomeLayout from '@/app/[variants]/(mobile)/(home)/_layout';
-import MobileMainLayout from '@/app/[variants]/(mobile)/_layout';
 import MobileChatLayout from '@/app/[variants]/(mobile)/chat/_layout';
 import MobileMeHomeLayout from '@/app/[variants]/(mobile)/me/(home)/layout';
 import MobileMeProfileLayout from '@/app/[variants]/(mobile)/me/profile/layout';
@@ -12,7 +12,8 @@ import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
-import { ErrorBoundary, type RouteConfig, dynamicElement, redirectElement } from '@/utils/router';
+import { type RouteConfig } from '@/utils/router';
+import { dynamicElement, ErrorBoundary, redirectElement } from '@/utils/router';
 
 import MobileSettingsLayout from '../settings/_layout';
 

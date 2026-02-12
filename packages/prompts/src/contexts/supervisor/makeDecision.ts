@@ -1,4 +1,4 @@
-import { ChatCompletionTool, ChatStreamPayload, UIChatMessage } from '@lobechat/types';
+import type { ChatCompletionTool, ChatStreamPayload, UIChatMessage } from '@lobechat/types';
 
 import { groupChatPrompts, groupSupervisorPrompts } from '../../prompts';
 import { SupervisorToolName, SupervisorTools } from './tools';

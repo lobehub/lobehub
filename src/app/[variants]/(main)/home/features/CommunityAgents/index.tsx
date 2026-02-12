@@ -2,7 +2,7 @@
 
 import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { BotIcon, MoreHorizontal } from 'lucide-react';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,6 +17,8 @@ const CommunityAgents = memo(() => {
   const navigate = useNavigate();
   return (
     <GroupBlock
+      icon={BotIcon}
+      title={t('home.communityAgents')}
       action={
         <DropdownMenu
           items={[
@@ -32,8 +34,6 @@ const CommunityAgents = memo(() => {
           <ActionIcon icon={MoreHorizontal} size="small" />
         </DropdownMenu>
       }
-      icon={BotIcon}
-      title={t('home.communityAgents')}
     >
       <ScrollShadowWithButton>
         <Suspense

@@ -1,7 +1,8 @@
 'use client';
 
 import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Breadcrumb as AntdBreadcrumb, type BreadcrumbProps } from 'antd';
+import { type BreadcrumbProps } from 'antd';
+import { Breadcrumb as AntdBreadcrumb } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,9 +29,9 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
         {
           title: (
             <Flexbox
+              horizontal
               align="center"
               gap={4}
-              horizontal
               style={{
                 color: cssVar.colorTextSecondary,
               }}
@@ -52,9 +53,9 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
       {
         title: (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
             style={{
               color: cssVar.colorTextSecondary,
             }}

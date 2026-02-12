@@ -17,78 +17,60 @@ tags:
 
 LobeHub 的核心技术栈如下：
 
-- **框架**：我们选择了 [Next.js](https://nextjs.org/)，这是一款强大的 React 框架，为我们的项目提供了服务端渲染、路由框架、Router Handler 等关键功能。
-- **组件库**：我们使用了 [Ant Design (antd)](https://ant.design/) 作为基础组件库，同时引入了 [lobe-ui](https://github.com/lobehub/lobe-ui) 作为我们的业务组件库。
-- **状态管理**：我们选用了 [zustand](https://github.com/pmndrs/zustand)，一款轻量级且易于使用的状态管理库。
-- **网络请求**：我们采用 [swr](https://swr.vercel.app/)，这是一款用于数据获取的 React Hooks 库。
-- **路由**：路由管理我们直接使用 [Next.js](https://nextjs.org/) 自身提供的解决方案。
-- **国际化**：我们使用 [i18next](https://www.i18next.com/) 来实现应用的多语言支持。
-- **样式**：我们使用 [antd-style](https://github.com/ant-design/antd-style)，这是一款与 Ant Design 配套的 CSS-in-JS 库。
-- **单元测试**：我们使用 [vitest](https://github.com/vitest-dev/vitest) 进行单元测试。
+- **框架**：[Next.js](https://nextjs.org/) 16 + [React](https://react.dev/) 19，为项目提供服务端渲染、Router Handler 等关键功能。
+- **组件库**：[Ant Design (antd)](https://ant.design/) 作为基础组件库，[@lobehub/ui](https://github.com/lobehub/lobe-ui) 作为业务组件库。
+- **状态管理**：[zustand](https://github.com/pmndrs/zustand)，一款轻量级且易于使用的状态管理库。
+- **数据获取**：[SWR](https://swr.vercel.app/) 用于客户端数据获取。
+- **路由**：采用混合路由架构 —— [Next.js App Router](https://nextjs.org/) 处理静态页面（如认证页），[React Router DOM](https://reactrouter.com/) 承载主应用 SPA。
+- **API**：[tRPC](https://trpc.io/) 实现端到端类型安全的 API 通信。
+- **数据库**：[Drizzle ORM](https://orm.drizzle.team/) + PostgreSQL。
+- **国际化**：[react-i18next](https://react.i18next.com/) 实现多语言支持。
+- **样式**：[antd-style](https://github.com/ant-design/antd-style)，与 Ant Design 配套的 CSS-in-JS 库。
+- **单元测试**：[Vitest](https://github.com/vitest-dev/vitest) 进行单元测试。
 
 ## 文件夹目录架构
 
-LobeHub 的文件夹目录架构如下：
+LobeHub 采用 Monorepo 架构（`@lobechat/` 命名空间），顶层目录结构如下：
 
 ```bash
-src
-├── app            # Next.js App Router 实现，包含路由组和 API 路由
-├── business       # 业务逻辑模块（客户端和服务端）
-├── components     # 可复用的 UI 组件
-├── config         # 应用的配置文件，包含客户端环境变量与服务端环境变量
-├── const          # 应用常量和枚举
-├── envs           # 环境变量定义和校验（分析、认证、LLM 等）
-├── features       # 与业务功能相关的功能模块，如 Agent 设置、插件开发弹窗等
-├── helpers        # 工具辅助函数，用于工具工程、占位符解析等
-├── hooks          # 全应用复用自定义的工具 Hooks
-├── layout         # 应用的布局组件，如导航栏、侧边栏等
-├── libs           # 第三方集成（分析、OIDC 等）
-├── locales        # 国际化的语言文件
-├── server         # 服务端模块和服务
-├── services       # 封装的后端服务接口，如 HTTP 请求
-├── store          # 用于状态管理的 zustand store
-├── styles         # 全局样式和 CSS-in-JS 配置
-├── tools          # 内置工具（artifacts、inspectors、interventions 等）
-├── types          # TypeScript 的类型定义文件
-└── utils          # 通用的工具函数
+lobe-chat/
+├── apps/desktop/          # Electron 桌面应用
+├── packages/              # 共享包（@lobechat/*）
+│   ├── database/          # 数据库 schemas、models、repositories
+│   ├── agent-runtime/     # Agent 运行时
+│   ├── model-runtime/     # 模型运行时
+│   └── ...                # 更多共享包
+├── src/                   # 主应用源码
+│   ├── app/               # Next.js App Router，包含路由组和 API 路由
+│   ├── components/        # 可复用的 UI 组件
+│   ├── config/            # 应用配置文件，包含客户端与服务端环境变量
+│   ├── const/             # 应用常量和枚举
+│   ├── envs/              # 环境变量定义和校验（分析、认证、LLM 等）
+│   ├── features/          # 业务功能模块，如 Agent 设置、插件开发弹窗等
+│   ├── helpers/           # 工具辅助函数
+│   ├── hooks/             # 全应用复用的自定义 Hooks
+│   ├── layout/            # 布局组件（AuthProvider、GlobalProvider 等）
+│   ├── libs/              # 第三方集成（better-auth、OIDC、tRPC 等）
+│   ├── locales/           # 国际化的语言文件
+│   ├── server/            # 服务端模块、路由和服务
+│   ├── services/          # 客户端服务接口
+│   ├── store/             # zustand 状态管理
+│   ├── styles/            # 全局样式和 CSS-in-JS 配置
+│   ├── tools/             # 内置工具（artifacts、inspectors、interventions 等）
+│   ├── types/             # TypeScript 类型定义
+│   └── utils/             # 通用工具函数
+├── locales/               # 国际化翻译文件（zh-CN、en-US 等）
+└── e2e/                   # E2E 测试（Cucumber + Playwright）
 ```
 
 有关目录架构的详细介绍，详见： [文件夹目录架构](/zh/docs/development/basic/folder-structure)
 
 ## 本地开发环境设置
 
-本节将概述搭建开发环境并进行本地开发。 在开始之前，请确保你的本地环境中已安装 Node.js、Git 以及你选择的包管理器（Bun 或 PNPM）。
-
-我们推荐使用 WebStorm 作为你的集成开发环境（IDE）。
-
-1. **获取代码**：克隆 LobeHub 的代码库到本地：
-
-```bash
-git clone https://github.com/lobehub/lobehub.git
-```
-
-2. **安装依赖**：进入项目目录，并安装所需依赖：
-
-```bash
-cd lobehub
-# 如果你使用 Bun
-bun install
-# 如果你使用 PNPM
-pnpm install
-```
-
-3. **运行与调试**：启动本地开发服务器，开始你的开发之旅：
-
-```bash
-# 使用 Bun 启动开发服务器
-bun run dev
-# 访问 http://localhost:3010 查看应用
-```
-
-> \[!IMPORTANT]\
-> 如果使用`npm`安装依赖出现`Could not find "stylelint-config-recommended"`错误，请使用 `pnpm` 或者 `bun` 重新安装依赖。
-
-现在，你应该可以在浏览器中看到 LobeHub 的欢迎页面。详细的环境配置指南，请参考 [开发环境设置指南](/zh/docs/development/basic/setup-development)。
+请参考
+[开发环境设置指南](/zh/docs/development/basic/setup-development)
+了解完整的环境搭建流程，
+包括软件安装、项目配置、Docker 服务启动和数据库迁移等步骤。
 
 ## 代码风格与贡献指南
 
@@ -103,9 +85,12 @@ bun run dev
 
 ## 国际化实现指南
 
-LobeHub 采用 `i18next` 和 `lobe-i18n` 实现多语言支持，确保用户全球化体验。
+LobeHub 采用 `react-i18next` 实现多语言支持，确保用户全球化体验。
 
-国际化文件位于 `src/locales`，包含默认语言（中文）。 我们会通过 `lobe-i18n` 自动生成其他的语言 JSON 文件。
+默认语言文件位于 `src/locales/default/`（英文），
+翻译文件位于 `locales/` 目录。
+开发时只需编辑 `src/locales/default/` 中的 key，
+CI 会自动生成其他语言的翻译文件。
 
 如果要添加新语种，需遵循特定步骤，详见 [新语种添加指南](/zh/docs/development/internationalization/add-new-locale)。 我们鼓励你参与我们的国际化努力，共同为全球用户提供更好的服务。
 

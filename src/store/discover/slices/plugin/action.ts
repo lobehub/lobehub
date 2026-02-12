@@ -5,30 +5,29 @@ import {
   type PluginQueryParams,
 } from '@lobechat/types';
 import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
-import useSWR, { type SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
+import { type StoreSetter } from '@/store/types';
 
-export interface PluginAction {
-  usePluginCategories: (params: CategoryListQuery) => SWRResponse<CategoryItem[]>;
-  usePluginDetail: (params: {
-    identifier?: string;
-    withManifest?: boolean;
-  }) => SWRResponse<DiscoverPluginDetail | undefined>;
-  usePluginIdentifiers: () => SWRResponse<IdentifiersResponse>;
-  usePluginList: (params?: PluginQueryParams) => SWRResponse<PluginListResponse>;
-}
+type Setter = StoreSetter<DiscoverStore>;
+export const createPluginSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>
+  new PluginActionImpl(set, get, _api);
 
-export const createPluginSlice: StateCreator<
-  DiscoverStore,
-  [['zustand/devtools', never]],
-  [],
-  PluginAction
-> = () => ({
-  usePluginCategories: (params) => {
+export class PluginActionImpl {
+  readonly #get: () => DiscoverStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => DiscoverStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  usePluginCategories = (params: CategoryListQuery): SWRResponse<CategoryItem[]> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
       ['plugin-categories', locale, ...Object.values(params)].filter(Boolean).join('-'),
@@ -37,9 +36,15 @@ export const createPluginSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
+  };
 
-  usePluginDetail: ({ identifier, withManifest }) => {
+  usePluginDetail = ({
+    identifier,
+    withManifest,
+  }: {
+    identifier?: string;
+    withManifest?: boolean;
+  }): SWRResponse<DiscoverPluginDetail | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
       !identifier
@@ -50,15 +55,15 @@ export const createPluginSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
+  };
 
-  usePluginIdentifiers: () => {
+  usePluginIdentifiers = (): SWRResponse<IdentifiersResponse> => {
     return useSWR('plugin-identifiers', async () => discoverService.getPluginIdentifiers(), {
       revalidateOnFocus: false,
     });
-  },
+  };
 
-  usePluginList: (params = {}) => {
+  usePluginList = (params: PluginQueryParams = {}): SWRResponse<PluginListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
       ['plugin-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
@@ -72,5 +77,7 @@ export const createPluginSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type PluginAction = Pick<PluginActionImpl, keyof PluginActionImpl>;

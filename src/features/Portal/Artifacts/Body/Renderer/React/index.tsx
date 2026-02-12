@@ -15,6 +15,9 @@ const ReactRenderer = memo<ReactRendererProps>(({ code }) => {
 
   return (
     <SandpackProvider
+      style={{ height: '100%' }}
+      template="vite-react-ts"
+      theme="auto"
       customSetup={{
         dependencies: {
           '@ant-design/icons': 'latest',
@@ -38,9 +41,6 @@ const ReactRenderer = memo<ReactRendererProps>(({ code }) => {
         externalResources: ['https://cdn.tailwindcss.com'],
         visibleFiles: ['App.tsx'],
       }}
-      style={{ height: '100%' }}
-      template="vite-react-ts"
-      theme="auto"
     >
       <SandpackLayout style={{ height: '100%' }}>
         <SandpackPreview style={{ height: '100%' }} />

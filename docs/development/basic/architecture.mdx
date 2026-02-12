@@ -1,50 +1,114 @@
 ---
 title: Architecture Design
 description: >-
-  Explore the architecture of LobeHub, an AI chat app built on Next.js,
-  featuring frontend, APIs, and markets.
+  Explore the architecture of LobeHub, an open-source AI Agent platform
+  built on Next.js, covering frontend, backend, runtime, and data storage.
 tags:
   - LobeHub
-  - AI Chat Application
-  - Next.js
   - Architecture Design
-  - Frontend Development
+  - Agent Platform
+  - Next.js
 ---
 
 # Architecture Design
 
-LobeHub is an AI chat application built on the Next.js framework, aiming to provide an AI productivity platform that enables users to interact with AI through natural language. The following is an overview of the architecture design of LobeHub:
+LobeHub is an open-source AI Agent platform built on Next.js, enabling users to interact with AI through natural language, use tools, manage knowledge bases, and more. The following is an overview of LobeHub's architecture design.
 
 ## Application Architecture Overview
 
-The overall architecture of LobeHub consists of the frontend, EdgeRuntime API, Agents Market, Plugin Market, and independent plugins. These components collaborate to provide a complete AI experience.
+The overall architecture of LobeHub consists of the following core layers:
+
+```plaintext
++---------------------+--------------------------------------------------+
+| Layer               | Description                                      |
++---------------------+--------------------------------------------------+
+| Frontend            | Next.js RSC + React Router DOM hybrid SPA        |
+| Backend API         | RESTful WebAPI + tRPC Routers                    |
+| Runtime             | Model Runtime + Agent Runtime                    |
+| Auth                | Better Auth (email/password + SSO)               |
+| Data Storage        | PostgreSQL + Redis + S3                          |
+| Marketplace         | Agent Market + MCP Tool Market                   |
++---------------------+--------------------------------------------------+
+```
 
 ## Frontend Architecture
 
-The frontend of LobeHub adopts the Next.js framework, leveraging its powerful server-side rendering (SSR) capability and routing functionality. The frontend utilizes a stack of technologies, including the antd component library, lobe-ui AIGC component library, zustand state management, swr request library, i18next internationalization library, and more. These technologies collectively support the functionality and features of LobeHub.
+The frontend uses the Next.js framework with a **Next.js RSC + React Router DOM hybrid routing** approach: Next.js App Router handles server-rendered pages (e.g., auth pages), while React Router DOM powers the main SPA.
 
-The components in the frontend architecture include app, components, config, const, features, helpers, hooks, layout, locales, migrations, prompts, services, store, styles, types, and utils. Each component has specific responsibilities and collaborates with others to achieve different functionalities.
+Key tech stack:
 
-## Edge Runtime API
+- **UI Components**: `@lobehub/ui`, antd
+- **CSS-in-JS**: antd-style
+- **State Management**: zustand (slice pattern)
+- **Data Fetching**: SWR + tRPC
+- **i18n**: react-i18next
 
-The Edge Runtime API is one of the core components of LobeHub, responsible for handling the core logic of AI conversations. It provides interaction interfaces with the AI engine, including natural language processing, intent recognition, and response generation. The EdgeRuntime API communicates with the frontend, receiving user input and returning corresponding responses.
+Frontend code is organized by responsibility under `src/`. See [Directory Structure](/docs/development/basic/folder-structure) for details.
 
-## Agents Market
+## Backend API
 
-The Agents Market is a crucial part of LobeHub, providing various AI agents for different scenarios to handle specific tasks and domains. The Agents Market also offers functionality for discovering and uploading agents, allowing users to find agents created by others and easily share their own agents in the market.
+The backend provides two API styles:
 
-## Plugin Market
+- **RESTful WebAPI** (`src/app/(backend)/webapi/`): Handles endpoints requiring special processing such as chat streaming, TTS, and file serving
+- **tRPC Routers** (`src/server/routers/`): Type-safe main business routes, grouped by runtime:
+  - `lambda/` — Main business (agent, session, message, topic, file, knowledge, settings, etc.)
+  - `async/` — Long-running async operations (file processing, image generation, RAG evaluation)
+  - `tools/` — Tool invocations (search, MCP, market)
+  - `mobile/` — Mobile-specific routes
 
-The Plugin Market is another key component of LobeHub, offering various plugins to extend the functionality and features of LobeHub. Plugins can be independent functional modules or integrated with agents from the Agents Market. During conversations, the assistant automatically identifies user input, recognizes suitable plugins, and passes them to the corresponding plugins for processing and returns the results.
+## Runtime
 
-## Security and Performance Optimization
+### Model Runtime
 
-LobeHub's security strategy includes authentication and permission management. Users need to authenticate before using LobeHub, and operations are restricted based on the user's permissions.
+`@lobechat/model-runtime` (`packages/model-runtime/`) is the LLM API adapter layer that normalizes API differences across 30+ AI providers (OpenAI, Anthropic, Google, Bedrock, Ollama, etc.), providing a unified calling interface. Each provider has its own adapter implementation. It is stateless — each call is independent.
 
-To optimize performance, LobeHub utilizes Next.js SSR functionality to achieve fast page loading and response times. Additionally, a series of performance optimization measures are implemented, including code splitting, caching, and resource compression.
+### Agent Runtime
 
-## Development and Deployment Process
+`@lobechat/agent-runtime` (`packages/agent-runtime/`) is the agent orchestration engine that sits above Model Runtime, driving the full lifecycle of multi-step AI agent behavior:
 
-LobeHub's development process includes version control, testing, continuous integration, and continuous deployment. The development team uses version control systems for code management and conducts unit and integration testing to ensure code quality. Continuous integration and deployment processes ensure rapid delivery and deployment of code.
+- **Plan-Execute Loop**: Core state machine cycling through LLM calls → tool execution → result processing
+- **Tool Invocation & Batch Execution**: Supports single and batch tool calls
+- **Human-in-the-Loop**: Security checks and human approval flows
+- **Context Compression**: Manages context window limits
+- **Usage & Cost Tracking**: Accumulates token usage and monetary costs
+- **Multi-Agent Orchestration**: `GroupOrchestrationRuntime` supports Supervisor + Executor pattern for multi-agent collaboration
 
-The above is a brief introduction to the architecture design of LobeHub, detailing the responsibilities and collaboration of each component, as well as the impact of design decisions on application functionality and performance.
+In short: Model Runtime handles "how to communicate with an LLM provider"; Agent Runtime handles "how to run a complete agent using LLMs, tools, and human approvals."
+
+## Authentication
+
+LobeHub uses [Better Auth](https://www.better-auth.com/) as the authentication framework, supporting:
+
+- Email + password registration and login
+- SSO single sign-on (GitHub, Google, and various OAuth providers)
+
+Auth configuration is in `src/auth.ts`, with related routes under `src/app/(backend)/api/`.
+
+## Data Storage
+
+```plaintext
++---------------+----------------------------------------------+
+| Storage       | Usage                                        |
++---------------+----------------------------------------------+
+| PostgreSQL    | Primary database for users, sessions,        |
+|               | messages, agent configs, etc.                |
+| Redis         | Caching, session state, rate limiting        |
+| S3            | File storage (uploads, images, knowledge     |
+|               | base files, etc.)                            |
++---------------+----------------------------------------------+
+```
+
+Database operations use Drizzle ORM, with schemas defined in `packages/database/src/schemas/`.
+
+## Marketplace
+
+- **Agent Market**: Provides AI agents for various scenarios; users can discover, use, and share agents
+- **MCP Tool Market**: Discover and integrate MCP tools to extend agent capabilities
+
+## Development and Deployment
+
+- **Version Control**: Git + GitHub, gitmoji commit conventions
+- **Code Quality**: ESLint, Stylelint, TypeScript type checking, circular dependency detection (dpdm), dead code detection (knip)
+- **Testing**: Vitest unit tests + Cucumber/Playwright E2E tests
+- **CI/CD**: GitHub Actions for automated testing, building, and releasing
+- **Deployment**: Supports Vercel, Docker, and self-hosting on major cloud platforms

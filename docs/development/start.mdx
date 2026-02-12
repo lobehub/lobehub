@@ -19,78 +19,63 @@ Welcome to the LobeHub Technical Development Getting Started Guide. LobeHub is a
 
 The core technology stack of LobeHub is as follows:
 
-- **Framework**: We chose [Next.js](https://nextjs.org/), a powerful React framework that provides key features such as server-side rendering, routing framework, and Router Handler.
-- **Component Library**: We use [Ant Design (antd)](https://ant.design/) as the basic component library, along with [lobe-ui](https://github.com/lobehub/lobe-ui) as our business component library.
-- **State Management**: We selected [zustand](https://github.com/pmndrs/zustand), a lightweight and easy-to-use state management library.
-- **Network Requests**: We use [swr](https://swr.vercel.app/), a React Hooks library for data fetching.
-- **Routing**: For routing management, we directly use the solution provided by [Next.js](https://nextjs.org/).
-- **Internationalization**: We use [i18next](https://www.i18next.com/) to support multiple languages in the application.
-- **Styling**: We use [antd-style](https://github.com/ant-design/antd-style), a CSS-in-JS library that complements Ant Design.
-- **Unit Testing**: We use [vitest](https://github.com/vitest-dev/vitest) for unit testing.
+- **Framework**: [Next.js](https://nextjs.org/) 16 + [React](https://react.dev/) 19, providing server-side rendering, Router Handler, and other key features.
+- **Component Library**: [Ant Design (antd)](https://ant.design/) as the base component library, [@lobehub/ui](https://github.com/lobehub/lobe-ui) as the business component library.
+- **State Management**: [zustand](https://github.com/pmndrs/zustand), a lightweight and easy-to-use state management library.
+- **Data Fetching**: [SWR](https://swr.vercel.app/) for client-side data fetching.
+- **Routing**: Hybrid routing architecture — [Next.js App Router](https://nextjs.org/) for static pages (e.g., auth pages), [React Router DOM](https://reactrouter.com/) for the main SPA.
+- **API**: [tRPC](https://trpc.io/) for end-to-end type-safe API communication.
+- **Database**: [Drizzle ORM](https://orm.drizzle.team/) + PostgreSQL.
+- **Internationalization**: [react-i18next](https://react.i18next.com/) for multilingual support.
+- **Styling**: [antd-style](https://github.com/ant-design/antd-style), a CSS-in-JS library that complements Ant Design.
+- **Unit Testing**: [Vitest](https://github.com/vitest-dev/vitest) for unit testing.
 
 ## Folder Directory Structure
 
-The folder directory structure of LobeHub is as follows:
+LobeHub uses a Monorepo architecture
+(`@lobechat/` namespace).
+The top-level directory structure is as follows:
 
 ```bash
-src
-├── app            # Next.js App Router implementation with route groups and API routes
-├── business       # Business logic modules (client and server)
-├── components     # Reusable UI components
-├── config         # Application configuration files, including client and server environment variables
-├── const          # Application constants and enums
-├── envs           # Environment variable definitions and validation (analytics, auth, llm, etc.)
-├── features       # Business-related feature modules, such as Agent settings, plugin development pop-ups, etc.
-├── helpers        # Utility helpers for tool engineering, placeholder parsing, etc.
-├── hooks          # Custom utility Hooks reusable across the application
-├── layout         # Application layout components, such as navigation bars, sidebars, etc.
-├── libs           # Third-party integrations (analytics, OIDC, etc.)
-├── locales        # Language files for internationalization
-├── server         # Server-side modules and services
-├── services       # Encapsulated backend service interfaces, such as HTTP requests
-├── store          # Zustand store for state management
-├── styles         # Global styles and CSS-in-JS configurations
-├── tools          # Built-in tools (artifacts, inspectors, interventions, etc.)
-├── types          # TypeScript type definition files
-└── utils          # General utility functions
+lobe-chat/
+├── apps/desktop/          # Electron desktop app
+├── packages/              # Shared packages (@lobechat/*)
+│   ├── database/          # Database schemas, models, repositories
+│   ├── agent-runtime/     # Agent runtime
+│   ├── model-runtime/     # Model runtime
+│   └── ...                # More shared packages
+├── src/                   # Main application source code
+│   ├── app/               # Next.js App Router with route groups and API routes
+│   ├── components/        # Reusable UI components
+│   ├── config/            # App configuration, client and server env vars
+│   ├── const/             # Application constants and enums
+│   ├── envs/              # Env var definitions and validation (analytics, auth, LLM, etc.)
+│   ├── features/          # Business feature modules (Agent settings, plugin dev, etc.)
+│   ├── helpers/           # Utility helper functions
+│   ├── hooks/             # Reusable custom Hooks
+│   ├── layout/            # Layout components (AuthProvider, GlobalProvider, etc.)
+│   ├── libs/              # Third-party integrations (better-auth, OIDC, tRPC, etc.)
+│   ├── locales/           # Internationalization language files
+│   ├── server/            # Server-side modules, routers, and services
+│   ├── services/          # Client-side service interfaces
+│   ├── store/             # Zustand state management
+│   ├── styles/            # Global styles and CSS-in-JS configurations
+│   ├── tools/             # Built-in tools (artifacts, inspectors, interventions, etc.)
+│   ├── types/             # TypeScript type definitions
+│   └── utils/             # General utility functions
+├── locales/               # i18n translation files (zh-CN, en-US, etc.)
+└── e2e/                   # E2E tests (Cucumber + Playwright)
 ```
 
 For a detailed introduction to the directory structure, see: [Folder Directory Structure](/docs/development/basic/folder-structure)
 
 ## Local Development Environment Setup
 
-This section outlines setting up the development environment and local development. Before starting, please ensure that Node.js, Git, and your chosen package manager (Bun or PNPM) are installed in your local environment.
-
-We recommend using WebStorm as your integrated development environment (IDE).
-
-1. **Get the code**: Clone the LobeHub code repository locally:
-
-```bash
-git clone https://github.com/lobehub/lobehub.git
-```
-
-2. **Install dependencies**: Enter the project directory and install the required dependencies:
-
-```bash
-cd lobehub
-# If you use Bun
-bun install
-# If you use PNPM
-pnpm install
-```
-
-3. **Run and debug**: Start the local development server and begin your development journey:
-
-```bash
-# Start the development server with Bun
-bun run dev
-# Visit http://localhost:3010 to view the application
-```
-
-> \[!IMPORTANT]\
-> If you encounter the error "Could not find 'stylelint-config-recommended'" when installing dependencies with `npm`, please reinstall the dependencies using `pnpm` or `bun`.
-
-Now, you should be able to see the welcome page of LobeHub in your browser. For a detailed environment setup guide, please refer to [Development Environment Setup Guide](/docs/development/basic/setup-development).
+Please refer to the
+[Environment Setup Guide](/docs/development/basic/setup-development)
+for the complete setup process,
+including software installation, project configuration,
+Docker service startup, and database migrations.
 
 ## Code Style and Contribution Guide
 
@@ -105,9 +90,14 @@ For detailed code style and contribution guidelines, please refer to [Code Style
 
 ## Internationalization Implementation Guide
 
-LobeHub uses `i18next` and `lobe-i18n` to implement multilingual support, ensuring a global user experience.
+LobeHub uses `react-i18next` for multilingual support,
+ensuring a global user experience.
 
-Internationalization files are located in `src/locales`, containing the default language (Chinese). We generate other language JSON files automatically through `lobe-i18n`.
+Default language files are located in `src/locales/default/`
+(English). Translation files are in the `locales/` directory.
+During development, you only need to edit keys in
+`src/locales/default/` — CI automatically generates
+translation files for other languages.
 
 If you want to add a new language, follow specific steps detailed in [New Language Addition Guide](/docs/development/internationalization/add-new-locale). We encourage you to participate in our internationalization efforts to provide better services to global users.
 

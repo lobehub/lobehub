@@ -1,7 +1,7 @@
 'use client';
 
-import { Avatar, Button, Empty, Form, type FormGroupItemType, Tag, Tooltip } from '@lobehub/ui';
-import { Center, Flexbox } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Avatar, Button, Center, Empty, Flexbox, Form, Tag, Tooltip } from '@lobehub/ui';
 import { Space, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { BlocksIcon, LucideTrash2, Store } from 'lucide-react';
@@ -59,7 +59,7 @@ const AgentPlugin = memo(() => {
       ),
       desc: pluginHelpers.getPluginDesc(meta),
       label: (
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {pluginHelpers.getPluginTitle(meta)}
           <PluginTag author={author} type={type} />
         </Flexbox>
@@ -85,7 +85,7 @@ const AgentPlugin = memo(() => {
         />
       ),
       label: (
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {id}
           <Tag color={'red'}>{t('plugin.installStatus.deprecated')}</Tag>
         </Flexbox>
@@ -106,13 +106,13 @@ const AgentPlugin = memo(() => {
         <Tooltip title={t('plugin.clearDeprecated')}>
           <Button
             icon={LucideTrash2}
+            size={'small'}
             onClick={(e) => {
               e.stopPropagation();
               for (const i of deprecatedList) {
                 toggleAgentPlugin(i.tag as string);
               }
             }}
-            size={'small'}
           />
         </Tooltip>
       ) : null}
@@ -120,11 +120,11 @@ const AgentPlugin = memo(() => {
         <Tooltip title={t('plugin.store')}>
           <Button
             icon={Store}
+            size={'small'}
             onClick={(e) => {
               e.stopPropagation();
               handleOpenStore();
             }}
-            size={'small'}
           />
         </Tooltip>
       ) : null}
@@ -134,26 +134,26 @@ const AgentPlugin = memo(() => {
   const empty = (
     <Center padding={40}>
       <Empty
+        descriptionProps={{ fontSize: 14 }}
+        icon={BlocksIcon}
+        style={{ maxWidth: 400 }}
         description={
           <Trans i18nKey={'plugin.empty'} ns={'setting'}>
             暂无安装插件，
             <Link
+              to={'/community/mcp'}
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
                 handleOpenStore();
                 navigate('/community/mcp');
               }}
-              to={'/community/mcp'}
             >
               前往插件市场
             </Link>
             安装
           </Trans>
         }
-        descriptionProps={{ fontSize: 14 }}
-        icon={BlocksIcon}
-        style={{ maxWidth: 400 }}
       />
     </Center>
   );

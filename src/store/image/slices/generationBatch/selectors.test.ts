@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { ImageStore } from '@/store/image';
+import { type ImageStore } from '@/store/image';
 import { initialState } from '@/store/image/initialState';
 import { AsyncTaskStatus } from '@/types/asyncTask';
-import { Generation, GenerationBatch } from '@/types/generation';
+import { type Generation, type GenerationBatch } from '@/types/generation';
 import { merge } from '@/utils/merge';
 
 import { generationBatchSelectors } from './selectors';

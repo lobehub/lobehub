@@ -6,8 +6,8 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { messageStateSelectors, useConversationStore } from '../../store';
 import ExtraContainer from '../components/Extras/ExtraContainer';
-import TTS from '../components/Extras/TTS';
 import Translate from '../components/Extras/Translate';
+import TTS from '../components/Extras/TTS';
 
 interface UserMessageExtraProps {
   content: string;

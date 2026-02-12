@@ -1,16 +1,16 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS, isDesktop } from '@lobechat/const';
+import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentGroupConfig,
-  type GTDConfig,
   type GroupAgentBuilderContext,
   type GroupOfficialToolItem,
+  type GTDConfig,
   type LobeToolManifest,
-  MessagesEngine,
 } from '@lobechat/context-engine';
+import { MessagesEngine } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
   type OpenAIChatMessage,

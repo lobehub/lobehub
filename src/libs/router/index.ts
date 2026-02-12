@@ -8,7 +8,7 @@
  * - import { useRouter, usePathname, useSearchParams } from '@/libs/router';
  * - import Link from '@/libs/router/Link';
  *
- * @see RFC 147: LOBE-2850 - Phase 3
+ * @see RFC 147
  */
 
 // Navigation exports

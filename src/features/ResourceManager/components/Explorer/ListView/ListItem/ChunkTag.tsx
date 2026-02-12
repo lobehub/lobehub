@@ -25,15 +25,15 @@ const ChunksBadge = memo<ChunkTagProps>(({ id, ...res }) => {
 
   return (
     <FileParsingStatusTag
+      preparingEmbedding={isCreatingChunkEmbeddingTask}
+      onEmbeddingClick={() => embeddingChunks([id])}
       onClick={(status) => {
         if (status === 'success') openChunkDrawer(id);
       }}
-      onEmbeddingClick={() => embeddingChunks([id])}
       onErrorClick={(task) => {
         if (task === 'chunking') reParseFile(id);
         if (task === 'embedding') reEmbeddingChunks(id);
       }}
-      preparingEmbedding={isCreatingChunkEmbeddingTask}
       {...res}
     />
   );

@@ -1,6 +1,7 @@
 'use client';
 
-import { type ReactNode, createContext, memo, useContext, useMemo, useState } from 'react';
+import { type ReactNode } from 'react';
+import { createContext, memo, use, useMemo, useState } from 'react';
 
 import { ChatGroupWizard } from '@/components/ChatGroupWizard';
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
@@ -35,7 +36,7 @@ interface MemberSelectionCallbacks {
 const AgentModalContext = createContext<AgentModalContextValue | null>(null);
 
 export const useAgentModal = () => {
-  const context = useContext(AgentModalContext);
+  const context = use(AgentModalContext);
   if (!context) {
     throw new Error('useAgentModal must be used within AgentModalProvider');
   }
@@ -95,25 +96,26 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
   );
 
   return (
-    <AgentModalContext.Provider value={contextValue}>
+    <AgentModalContext value={contextValue}>
       {children}
 
       {/* All modals rendered at top level */}
       {createGroupModalOpen && (
         <CreateGroupModal
           id={createGroupSessionId}
-          onCancel={() => setCreateGroupModalOpen(false)}
           open={createGroupModalOpen}
+          onCancel={() => setCreateGroupModalOpen(false)}
         />
       )}
 
       <ConfigGroupModal
-        onCancel={() => setConfigGroupModalOpen(false)}
         open={configGroupModalOpen}
+        onCancel={() => setConfigGroupModalOpen(false)}
       />
 
       <ChatGroupWizard
         isCreatingFromTemplate={groupWizardLoading}
+        open={groupWizardOpen}
         onCancel={() => {
           groupWizardCallbacks.onCancel?.();
           setGroupWizardOpen(false);
@@ -124,11 +126,11 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         onCreateFromTemplate={async (templateId: string, selectedMemberTitles?: string[]) => {
           await groupWizardCallbacks.onCreateFromTemplate?.(templateId, selectedMemberTitles);
         }}
-        open={groupWizardOpen}
       />
 
       <MemberSelectionModal
         mode="create"
+        open={memberSelectionOpen}
         onCancel={() => {
           memberSelectionCallbacks.onCancel?.();
           setMemberSelectionOpen(false);
@@ -136,8 +138,7 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
         onConfirm={async (selectedAgents: string[]) => {
           await memberSelectionCallbacks.onConfirm?.(selectedAgents);
         }}
-        open={memberSelectionOpen}
       />
-    </AgentModalContext.Provider>
+    </AgentModalContext>
   );
 });

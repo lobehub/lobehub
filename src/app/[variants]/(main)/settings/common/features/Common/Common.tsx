@@ -1,14 +1,7 @@
 'use client';
 
-import {
-  Flexbox,
-  Form,
-  type FormGroupItemType,
-  Icon,
-  ImageSelect,
-  LobeSelect as Select,
-  Skeleton,
-} from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Flexbox, Form, Icon, ImageSelect, LobeSelect as Select, Skeleton } from '@lobehub/ui';
 import { Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
@@ -52,7 +45,9 @@ const Common = memo(() => {
         children: (
           <ImageSelect
             height={60}
-            onChange={(value) => setTheme(value === 'auto' ? 'system' : value)}
+            unoptimized={isDesktop}
+            value={currentTheme}
+            width={100}
             options={[
               {
                 icon: Sun,
@@ -73,9 +68,7 @@ const Common = memo(() => {
                 value: 'system',
               },
             ]}
-            unoptimized={isDesktop}
-            value={currentTheme}
-            width={100}
+            onChange={(value) => setTheme(value === 'auto' ? 'system' : value)}
           />
         ),
         label: t('settingCommon.themeMode.title'),
@@ -86,7 +79,6 @@ const Common = memo(() => {
           <Flexbox horizontal justify={'flex-end'}>
             <Select
               defaultValue={language}
-              onChange={handleLangChange}
               options={[
                 { label: t('settingCommon.lang.autoMode'), value: 'auto' },
                 ...localeOptions,
@@ -94,6 +86,7 @@ const Common = memo(() => {
               style={{
                 width: '50%',
               }}
+              onChange={handleLangChange}
             />
           </Flexbox>
         ),
@@ -153,11 +146,11 @@ const Common = memo(() => {
         children: (
           <Flexbox horizontal justify={'flex-end'}>
             <Select
+              placeholder={t('settingCommon.responseLanguage.placeholder')}
               options={[
                 { label: t('settingCommon.responseLanguage.auto'), value: '' },
                 ...localeOptions,
               ]}
-              placeholder={t('settingCommon.responseLanguage.placeholder')}
               style={{
                 width: '50%',
               }}
@@ -185,7 +178,7 @@ const Common = memo(() => {
         valuePropName: 'checked',
       },
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('settingCommon.title'),
   };
 
@@ -195,12 +188,12 @@ const Common = memo(() => {
       initialValues={general}
       items={[themeFormGroup]}
       itemsType={'group'}
+      variant={'filled'}
       onValuesChange={async (v) => {
         setLoading(true);
         await setSettings({ general: v });
         setLoading(false);
       }}
-      variant={'filled'}
       {...FORM_STYLE}
     />
   );

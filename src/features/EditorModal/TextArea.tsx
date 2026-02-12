@@ -1,5 +1,5 @@
 import { TextArea } from '@lobehub/ui';
-import { FC } from 'react';
+import { type FC } from 'react';
 
 interface EditorCanvasProps {
   defaultValue?: string;
@@ -11,9 +11,8 @@ const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, value, onChange }) 
   return (
     <TextArea
       defaultValue={defaultValue}
-      onChange={(e) => {
-        onChange?.(e.target.value);
-      }}
+      value={value}
+      variant={'borderless'}
       style={{
         cursor: 'text',
         maxHeight: '80vh',
@@ -21,8 +20,9 @@ const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, value, onChange }) 
         overflowY: 'auto',
         padding: 16,
       }}
-      value={value}
-      variant={'borderless'}
+      onChange={(e) => {
+        onChange?.(e.target.value);
+      }}
     />
   );
 };

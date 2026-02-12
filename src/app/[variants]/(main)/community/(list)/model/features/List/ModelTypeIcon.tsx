@@ -1,11 +1,11 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
+import { type LucideIcon } from 'lucide-react';
 import {
   AudioLines,
   BoltIcon,
   ImageIcon,
-  type LucideIcon,
   MessageSquareTextIcon,
   MicIcon,
   MusicIcon,

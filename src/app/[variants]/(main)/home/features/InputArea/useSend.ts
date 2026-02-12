@@ -21,16 +21,10 @@ export const useSend = () => {
     const { inputMessage, mainInputEditor } = useChatStore.getState();
     const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
     const contextList = fileChatSelectors.chatContextSelections(useFileStore.getState());
-    const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsImage, sendAsResearch, inputActiveMode } =
+    const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsResearch, inputActiveMode } =
       useHomeStore.getState();
 
-    // Image mode: no input content required
-    if (inputActiveMode === 'image') {
-      sendAsImage();
-      return;
-    }
-
-    // Other modes require input content
+    // Require input content (except for default inbox which can have files/context)
     if (!inputMessage && fileList.length === 0 && contextList.length === 0) return;
 
     try {

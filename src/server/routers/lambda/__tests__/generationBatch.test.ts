@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { GenerationBatchModel } from '@/database/models/generationBatch';
-import { GenerationBatchItem } from '@/database/schemas/generation';
+import { type GenerationBatchItem } from '@/database/schemas/generation';
 import { FileService } from '@/server/services/file';
 
 import { generationBatchRouter } from '../generationBatch';

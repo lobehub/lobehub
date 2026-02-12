@@ -41,7 +41,7 @@ const Inspectors = memo<InspectorProps>(
       const args = safeParseJSON(argsStr);
       const partialJson = safeParsePartialJSON(argsStr);
       return (
-        <Flexbox align={'center'} gap={6} horizontal>
+        <Flexbox allowShrink horizontal align={'center'} gap={6}>
           <StatusIndicator intervention={intervention} result={result} />
           <CustomInspector
             apiName={apiName}
@@ -61,7 +61,7 @@ const Inspectors = memo<InspectorProps>(
     const partialJson = safeParsePartialJSON(argsStr);
 
     return (
-      <Flexbox align={'center'} gap={6} horizontal>
+      <Flexbox horizontal align={'center'} gap={6}>
         <StatusIndicator intervention={intervention} result={result} />
         <ToolTitle
           apiName={apiName}

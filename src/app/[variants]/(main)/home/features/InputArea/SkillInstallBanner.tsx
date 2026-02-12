@@ -27,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorBgContainer};
     box-shadow:
-      0 0 8px -2px rgba(0, 0, 0, 5%),
+      0 0 8px -2px rgb(0 0 0 / 5%),
       0 0 0 1px ${cssVar.colorFillTertiary};
   `,
   banner: css`
@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     z-index: 0;
     inset-block-end: 0;
-    inset-inline: 0 0;
+    inset-inline: 0;
 
     display: flex;
     gap: 12px;
@@ -50,7 +50,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 20px;
 
     background: color-mix(in srgb, ${cssVar.colorFillQuaternary} 50%, ${cssVar.colorBgContainer});
-    box-shadow: 0 12px 32px rgb(0 0 0 / 4%);
   `,
   icon: css`
     color: ${cssVar.colorTextSecondary};
@@ -113,12 +112,9 @@ const SkillInstallBanner = memo(() => {
     createSkillStoreModal();
   }, []);
 
-  // Don't show banner if no skills are enabled
-  if (!isLobehubSkillEnabled && !isKlavisEnabled) return null;
-
   return (
     <div className={styles.banner} onClick={handleOpenStore}>
-      <Flexbox align="center" gap={8} horizontal>
+      <Flexbox horizontal align="center" gap={8}>
         <Icon className={styles.icon} icon={Blocks} size={18} />
         <span className={styles.text}>{t('skillInstallBanner.title')}</span>
       </Flexbox>

@@ -1,4 +1,4 @@
-import { ChatTranslate } from '../common';
+import type { ChatTranslate } from '../common';
 
 export interface ChatTTS {
   contentMd5?: string;

@@ -1,4 +1,4 @@
-import { type SearchQuery, type UniformSearchResponse } from '@lobechat/types';
+import type { SearchQuery, UniformSearchResponse } from '@lobechat/types';
 import { Block, Button, Empty, Flexbox, Icon, ScrollShadow, Skeleton } from '@lobehub/ui';
 import { uniq } from 'es-toolkit/compat';
 import { Edit2Icon, SearchIcon } from 'lucide-react';
@@ -35,7 +35,7 @@ const SearchResult = memo<SearchResultProps>(
 
     if (loading || !pluginState)
       return (
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           {['1', '2', '3', '4', '5'].map((id) => (
             <Skeleton.Block active height={ITEM_HEIGHT} key={id} width={ITEM_WIDTH} />
           ))}
@@ -50,11 +50,11 @@ const SearchResult = memo<SearchResultProps>(
               <Button
                 color={'default'}
                 icon={<Icon icon={Edit2Icon} />}
+                size={'small'}
+                variant={'filled'}
                 onClick={() => {
                   setEditing(true);
                 }}
-                size={'small'}
-                variant={'filled'}
               >
                 {t('edit', { ns: 'common' })}
               </Button>
@@ -65,8 +65,8 @@ const SearchResult = memo<SearchResultProps>(
 
     return (
       <ScrollShadow
-        gap={8}
         horizontal
+        gap={8}
         offset={8}
         orientation={'horizontal'}
         size={4}

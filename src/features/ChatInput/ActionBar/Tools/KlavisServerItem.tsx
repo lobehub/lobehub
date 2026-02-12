@@ -1,4 +1,4 @@
-import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
+import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type KlavisServer } from '@/store/tool/slices/klavisStore';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -239,8 +240,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
       // 正在连接中
       if (isConnecting) {
         return (
-          <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-            <Icon icon={Loader2} spin />
+          <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+            <Icon spin icon={Loader2} />
           </Flexbox>
         );
       }
@@ -249,14 +250,14 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
       if (!server) {
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={(e) => {
               e.stopPropagation();
               handleConnect();
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.klavis.connect', { defaultValue: 'Connect' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -269,7 +270,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         case KlavisServerStatus.CONNECTED: {
           // 正在切换状态
           if (isToggling) {
-            return <Icon icon={Loader2} spin />;
+            return <Icon spin icon={Loader2} />;
           }
           return (
             <Checkbox
@@ -285,16 +286,17 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           // 正在等待认证
           if (isWaitingAuth) {
             return (
-              <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-                <Icon icon={Loader2} spin />
+              <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+                <Icon spin icon={Loader2} />
               </Flexbox>
             );
           }
           return (
             <Flexbox
+              horizontal
               align="center"
               gap={4}
-              horizontal
+              style={{ cursor: 'pointer', opacity: 0.65 }}
               onClick={(e) => {
                 e.stopPropagation();
                 // 点击重新打开 OAuth 窗口
@@ -302,7 +304,6 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
                   openOAuthWindow(server.oauthUrl, server.identifier);
                 }
               }}
-              style={{ cursor: 'pointer', opacity: 0.65 }}
             >
               {t('tools.klavis.pendingAuth', { defaultValue: 'Authorize' })}
               <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -324,9 +325,9 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={24}
-        horizontal
         justify={'space-between'}
         onClick={(e) => {
           e.stopPropagation();
@@ -336,7 +337,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           }
         }}
       >
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {label}
         </Flexbox>
         {renderRightControl()}

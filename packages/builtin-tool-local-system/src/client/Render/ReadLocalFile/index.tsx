@@ -1,6 +1,6 @@
 import type { LocalReadFileState } from '@lobechat/builtin-tool-local-system';
-import { type LocalReadFileParams } from '@lobechat/electron-client-ipc';
-import { type ChatMessagePluginError } from '@lobechat/types';
+import type { LocalReadFileParams } from '@lobechat/electron-client-ipc';
+import type { ChatMessagePluginError } from '@lobechat/types';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';

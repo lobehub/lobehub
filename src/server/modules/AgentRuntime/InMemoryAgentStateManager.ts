@@ -1,8 +1,8 @@
-import type { AgentState } from '@lobechat/agent-runtime';
+import { type AgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
-import type { AgentOperationMetadata, StepResult } from './AgentStateManager';
-import type { IAgentStateManager } from './types';
+import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
+import { type IAgentStateManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:in-memory-state-manager');
 

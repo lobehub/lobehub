@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AgentCronJob } from '@/database/schemas/agentCronJob';
+import { type AgentCronJob } from '@/database/schemas/agentCronJob';
 
 // Form data interface - excludes server-managed fields
 interface CronJobFormData {
@@ -121,11 +121,11 @@ const CronJobForm = memo<CronJobFormProps>(({ editingJob, formRef, onSubmit }) =
   return (
     <Form
       form={form}
+      layout="vertical"
       initialValues={{
         cronPattern: '*/30 * * * *', // Default to every 30 minutes
         weekdays: [],
       }}
-      layout="vertical"
       onFinish={handleSubmit}
     >
       <Form.Item
@@ -142,10 +142,10 @@ const CronJobForm = memo<CronJobFormProps>(({ editingJob, formRef, onSubmit }) =
         rules={[{ message: t('agentCronJobs.form.validation.contentRequired'), required: true }]}
       >
         <TextArea
+          showCount
           maxLength={1000}
           placeholder={t('agentCronJobs.form.content.placeholder')}
           rows={3}
-          showCount
         />
       </Form.Item>
 
@@ -178,11 +178,11 @@ const CronJobForm = memo<CronJobFormProps>(({ editingJob, formRef, onSubmit }) =
       >
         <TimePicker.RangePicker
           format="HH:mm"
+          style={{ width: '100%' }}
           placeholder={[
             t('agentCronJobs.form.timeRange.start'),
             t('agentCronJobs.form.timeRange.end'),
           ]}
-          style={{ width: '100%' }}
         />
       </Form.Item>
 

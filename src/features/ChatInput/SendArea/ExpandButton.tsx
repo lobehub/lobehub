@@ -12,15 +12,15 @@ const ExpandButton = memo(() => {
     <ActionIcon
       className="show-on-hover"
       icon={expand ? Minimize2Icon : Maximize2Icon}
+      size={{ blockSize: 32, size: 16, strokeWidth: 2.3 }}
+      title={t(expand ? 'actions.expand.off' : 'actions.expand.on')}
+      style={{
+        zIndex: 10,
+      }}
       onClick={() => {
         setExpand?.(!expand);
         editor?.focus();
       }}
-      size={{ blockSize: 32, size: 16, strokeWidth: 2.3 }}
-      style={{
-        zIndex: 10,
-      }}
-      title={t(expand ? 'actions.expand.off' : 'actions.expand.on')}
     />
   );
 });

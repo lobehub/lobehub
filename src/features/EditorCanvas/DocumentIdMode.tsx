@@ -10,7 +10,7 @@ import { useSaveDocumentHotkey } from '@/hooks/useHotkeys';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
-import type { EditorCanvasProps } from './EditorCanvas';
+import { type EditorCanvasProps } from './EditorCanvas';
 import InternalEditor from './InternalEditor';
 
 /**
@@ -30,8 +30,8 @@ const EditorError = memo<{ error: Error }>(({ error }) => {
 
   return (
     <Alert
-      description={error.message || t('pageEditor.loadError', 'Failed to load document')}
       showIcon
+      description={error.message || t('pageEditor.loadError', 'Failed to load document')}
       style={{ margin: 16 }}
       title={t('pageEditor.error', 'Error')}
       type="error"
@@ -114,10 +114,10 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         {error && <EditorError error={error as Error} />}
         <InternalEditor
           editor={editor}
-          onContentChange={handleChange}
-          onInit={onEditorInit}
           placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
           style={style}
+          onContentChange={handleChange}
+          onInit={onEditorInit}
           {...editorProps}
         />
       </>

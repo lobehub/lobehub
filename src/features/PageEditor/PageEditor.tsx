@@ -4,7 +4,8 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { type FC, memo, useEffect } from 'react';
+import type { FC } from 'react';
+import { memo, useEffect } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
@@ -23,8 +24,8 @@ import Header from './Header';
 import PageAgentProvider from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import PageTitle from './PageTitle';
-import TitleSection from './TitleSection';
 import { usePageEditorStore } from './store';
+import TitleSection from './TitleSection';
 
 const styles = StyleSheet.create({
   contentWrapper: {
@@ -89,15 +90,15 @@ const PageEditorCanvas = memo(() => {
     <>
       <PageTitle />
       <Flexbox
-        height={'100%'}
         horizontal
+        height={'100%'}
         style={{ backgroundColor: cssVar.colorBgContainer }}
         width={'100%'}
       >
         <Flexbox flex={1} height={'100%'} style={styles.editorContainer}>
           <Header />
-          <Flexbox height={'100%'} horizontal style={styles.contentWrapper} width={'100%'}>
-            <WideScreenContainer onClick={() => editor?.focus()} wrapperStyle={{ cursor: 'text' }}>
+          <Flexbox horizontal height={'100%'} style={styles.contentWrapper} width={'100%'}>
+            <WideScreenContainer wrapperStyle={{ cursor: 'text' }} onClick={() => editor?.focus()}>
               <Flexbox flex={1} style={styles.editorContent}>
                 <TitleSection />
                 <EditorCanvas />
@@ -143,14 +144,14 @@ export const PageEditor: FC<PageEditorProps> = ({
         <PageEditorProvider
           emoji={emoji}
           knowledgeBaseId={knowledgeBaseId}
+          pageId={pageId}
+          title={title}
           onBack={onBack}
           onDelete={() => deletePage(pageId || '')}
           onDocumentIdChange={onDocumentIdChange}
           onEmojiChange={onEmojiChange}
           onSave={onSave}
           onTitleChange={onTitleChange}
-          pageId={pageId}
-          title={title}
         >
           <PageEditorCanvas />
         </PageEditorProvider>

@@ -2,7 +2,8 @@
 
 import { DEFAULT_INBOX_AVATAR, SESSION_CHAT_URL } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -26,17 +27,17 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
     <Link aria-label={inboxAgentTitle} to={SESSION_CHAT_URL(inboxAgentId, false)}>
       <NavItem
         className={className}
+        loading={isLoading}
+        style={style}
+        title={inboxAgentTitle}
         icon={
           <Avatar
-            avatar={DEFAULT_INBOX_AVATAR}
             emojiScaleWithBackground
+            avatar={DEFAULT_INBOX_AVATAR}
             shape={'square'}
             size={24}
           />
         }
-        loading={isLoading}
-        style={style}
-        title={inboxAgentTitle}
       />
     </Link>
   );

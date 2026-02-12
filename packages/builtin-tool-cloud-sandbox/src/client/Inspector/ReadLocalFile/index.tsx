@@ -1,13 +1,13 @@
 'use client';
 
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type ReadLocalFileState } from '../../../types';
+import type { ReadLocalFileState } from '../../../types';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 const styles = createStaticStyles(({ css }) => ({

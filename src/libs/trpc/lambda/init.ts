@@ -10,7 +10,7 @@
 import { initTRPC } from '@trpc/server';
 import superjson from 'superjson';
 
-import type { LambdaContext } from './context';
+import { type LambdaContext } from './context';
 
 export const trpc = initTRPC.context<LambdaContext>().create({
   /**

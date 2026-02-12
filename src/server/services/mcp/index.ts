@@ -1,6 +1,10 @@
 import { type CheckMcpInstallResult, type CustomPluginMetadata } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import type { LobeChatPluginApi, LobeChatPluginManifest, PluginSchema } from '@lobehub/chat-plugin-sdk';
+import {
+  type LobeChatPluginApi,
+  type LobeChatPluginManifest,
+  type PluginSchema,
+} from '@lobehub/chat-plugin-sdk';
 import { type DeploymentOption } from '@lobehub/market-sdk';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
@@ -8,15 +12,16 @@ import retry from 'async-retry';
 import debug from 'debug';
 
 import {
-  MCPClient,
   type MCPClientParams,
   type McpPrompt,
   type McpResource,
   type McpTool,
   type StdioMCPParams,
 } from '@/libs/mcp';
+import { MCPClient } from '@/libs/mcp';
 
-import { type ProcessContentBlocksFn, contentBlocksToString } from './contentProcessor';
+import { type ProcessContentBlocksFn } from './contentProcessor';
+import { contentBlocksToString } from './contentProcessor';
 import { mcpSystemDepsCheckService } from './deps';
 
 const log = debug('lobe-mcp:service');
@@ -77,7 +82,7 @@ export class MCPService {
 
   private sanitizeForLogging = <T extends Record<string, any>>(obj: T): Omit<T, 'env'> => {
     if (!obj) return obj;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { env: _, ...rest } = obj;
     return rest as Omit<T, 'env'>;
   };

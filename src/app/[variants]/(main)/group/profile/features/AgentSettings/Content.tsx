@@ -1,8 +1,8 @@
 'use client';
 
 import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { type ItemType } from 'antd/es/menu/interface';
 import { useTheme } from 'antd-style';
-import type { ItemType } from 'antd/es/menu/interface';
 import { MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -88,22 +88,22 @@ const Content = memo(() => {
         height={'100%'}
         paddingBlock={24}
         paddingInline={8}
+        width={200}
         style={{
           background: theme.colorBgLayout,
           borderRight: `1px solid ${theme.colorBorderSecondary}`,
         }}
-        width={200}
       >
         <Block
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           paddingBlock={'14px 16px'}
           paddingInline={4}
+          variant={'borderless'}
           style={{
             overflow: 'hidden',
           }}
-          variant={'borderless'}
         >
           <Avatar
             avatar={currentGroup?.avatar || DEFAULT_AVATAR}
@@ -115,7 +115,7 @@ const Content = memo(() => {
             {displayTitle}
           </Text>
         </Block>
-        <Menu items={menuItems} selectable selectedKeys={[tab]} style={{ width: '100%' }} />
+        <Menu selectable items={menuItems} selectedKeys={[tab]} style={{ width: '100%' }} />
       </Flexbox>
       <Flexbox
         flex={1}
@@ -128,9 +128,9 @@ const Content = memo(() => {
           id={groupId}
           loading={false}
           meta={agentMeta}
+          tab={tab}
           onConfigChange={updateGroupConfig}
           onMetaChange={updateGroupMeta}
-          tab={tab}
         />
       </Flexbox>
     </Flexbox>

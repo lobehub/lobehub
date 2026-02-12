@@ -4,8 +4,8 @@ import {
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
   type InstructionExecutor,
-  UsageCounter,
 } from '@lobechat/agent-runtime';
+import { UsageCounter } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
@@ -17,7 +17,7 @@ import { type LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type ToolExecutionService } from '@/server/services/toolExecution';
 
-import type { IStreamEventManager } from './types';
+import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -113,16 +113,16 @@ export const createRuntimeExecutors = (
       let toolsCalling: ChatToolPayload[] = [];
       let tool_calls: MessageToolCall[] = [];
       let thinkingContent = '';
-      let imageList: any[] = [];
+      const imageList: any[] = [];
       let grounding: any = null;
       let currentStepUsage: any = undefined;
 
       // Multimodal content parts tracking
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
-      let contentParts: ContentPart[] = [];
-      let reasoningParts: ContentPart[] = [];
-      let hasContentImages = false;
-      let hasReasoningImages = false;
+      const contentParts: ContentPart[] = [];
+      const reasoningParts: ContentPart[] = [];
+      const hasContentImages = false;
+      const hasReasoningImages = false;
 
       // Initialize ModelRuntime (read user's keyVaults from database)
       const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
@@ -145,9 +145,9 @@ export const createRuntimeExecutors = (
       const BUFFER_INTERVAL = 50;
       let textBuffer = '';
       let reasoningBuffer = '';
-      // eslint-disable-next-line no-undef
+
       let textBufferTimer: NodeJS.Timeout | null = null;
-      // eslint-disable-next-line no-undef
+
       let reasoningBufferTimer: NodeJS.Timeout | null = null;
 
       const flushTextBuffer = async () => {
@@ -386,7 +386,7 @@ export const createRuntimeExecutors = (
       }
 
       // ===== 2. Then accumulate to AgentState =====
-      let newState = structuredClone(state);
+      const newState = structuredClone(state);
 
       newState.messages.push({
         content,

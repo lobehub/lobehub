@@ -36,13 +36,13 @@ const MonthSpend = memo<UsageChartProps>(({ data, isLoading }) => {
   return (
     <StatisticCard
       loading={isLoading}
+      title={<TitleWithPercentage title={t('usage.cards.month.title')} />}
       statistic={{
         description: <Statistic title={t('usage.cards.month.modelCalls')} value={calls} />,
         precision: 2,
         prefix: '$',
         value: spend,
       }}
-      title={<TitleWithPercentage title={t('usage.cards.month.title')} />}
     />
   );
 });

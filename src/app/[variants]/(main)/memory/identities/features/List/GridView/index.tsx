@@ -1,4 +1,4 @@
-import type { IdentityListItem } from '@lobechat/types';
+import { type IdentityListItem } from '@lobechat/types';
 import { memo } from 'react';
 
 import { useUserMemoryStore } from '@/store/userMemory';
@@ -21,10 +21,10 @@ const IdentityGridView = memo<GridViewProps>(({ identities, isLoading, onClick }
       hasMore={identitiesHasMore}
       isLoading={isLoading}
       items={identities}
-      onLoadMore={loadMoreIdentities}
       renderItem={(identity) => (
         <IdentityCard identity={identity} onClick={() => onClick?.(identity)} />
       )}
+      onLoadMore={loadMoreIdentities}
     />
   );
 });

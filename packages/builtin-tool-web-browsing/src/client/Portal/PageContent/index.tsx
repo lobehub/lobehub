@@ -1,5 +1,5 @@
-import { type CrawlResult } from '@lobechat/types';
-import { type CrawlSuccessResult } from '@lobechat/web-crawler';
+import type { CrawlResult } from '@lobechat/types';
+import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 import {
   Alert,
   CopyButton,
@@ -9,6 +9,7 @@ import {
   Markdown,
   Segmented,
   Text,
+  stopPropagation,
 } from '@lobehub/ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -110,20 +111,21 @@ const PageContent = memo<PageContentProps>(({ result }) => {
       <Flexbox className={styles.footer} gap={4}>
         <div>
           <Descriptions
+            column={1}
+            size="small"
             classNames={{
               content: styles.footerText,
             }}
-            column={1}
             items={[
               {
                 children: result.crawler,
                 label: t('search.crawPages.meta.crawler'),
               },
             ]}
-            size="small"
           />
         </div>
         <Alert
+          type={'error'}
           extra={
             <div style={{ maxWidth: 500, overflowX: 'scroll' }}>
               <Highlighter language={'json'}>{JSON.stringify(result.data, null, 2)}</Highlighter>
@@ -134,7 +136,6 @@ const PageContent = memo<PageContentProps>(({ result }) => {
               {result.data.errorMessage || result.data.content}
             </div>
           }
-          type={'error'}
         />
       </Flexbox>
     );
@@ -145,10 +146,10 @@ const PageContent = memo<PageContentProps>(({ result }) => {
     <Flexbox gap={24}>
       <Flexbox gap={8}>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.titleRow}
           gap={24}
-          horizontal
           justify={'space-between'}
         >
           <Flexbox>
@@ -160,15 +161,15 @@ const PageContent = memo<PageContentProps>(({ result }) => {
             {description}
           </Text>
         )}
-        <Flexbox align={'center'} className={styles.url} gap={4} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.url} gap={4}>
           {siteName && <div>{siteName} · </div>}
           <Link
             className={styles.url}
             href={url}
-            onClick={(e) => e.stopPropagation()}
             rel={'nofollow'}
             style={{ display: 'flex', gap: 4 }}
             target={'_blank'}
+            onClick={stopPropagation}
           >
             {result.originalUrl}
             <Icon icon={ExternalLink} />
@@ -177,10 +178,11 @@ const PageContent = memo<PageContentProps>(({ result }) => {
 
         <div className={styles.footer}>
           <Descriptions
+            column={2}
+            size="small"
             classNames={{
               content: styles.footerText,
             }}
-            column={2}
             items={[
               {
                 children: result.data.content?.length,
@@ -191,7 +193,6 @@ const PageContent = memo<PageContentProps>(({ result }) => {
                 label: t('search.crawPages.meta.crawler'),
               },
             ]}
-            size="small"
           />
         </div>
       </Flexbox>
@@ -199,22 +200,22 @@ const PageContent = memo<PageContentProps>(({ result }) => {
         <Flexbox gap={12} paddingBlock={'0 12px'}>
           <Flexbox horizontal justify={'space-between'}>
             <Segmented
-              onChange={(value) => setDisplay(value as DisplayType)}
+              value={display}
+              variant={'filled'}
               options={[
                 { label: t('search.crawPages.detail.preview'), value: DisplayType.Render },
                 { label: t('search.crawPages.detail.raw'), value: DisplayType.Raw },
               ]}
-              value={display}
-              variant={'filled'}
+              onChange={(value) => setDisplay(value as DisplayType)}
             />
             <CopyButton content={content} />
           </Flexbox>
           {content.length > CRAWL_CONTENT_LIMITED_COUNT && (
             <Alert
+              variant={'borderless'}
               title={t('search.crawPages.detail.tooLong', {
                 characters: CRAWL_CONTENT_LIMITED_COUNT,
               })}
-              variant={'borderless'}
             />
           )}
           {display === DisplayType.Render ? (

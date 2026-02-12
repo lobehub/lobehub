@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StreamingHandler } from './StreamingHandler';
-import type { StreamingCallbacks, StreamingContext } from './types/streaming';
+import { type StreamingCallbacks, type StreamingContext } from './types/streaming';
 
 const createMockCallbacks = (): StreamingCallbacks => ({
   onContentUpdate: vi.fn(),

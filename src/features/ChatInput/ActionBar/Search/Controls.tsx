@@ -2,7 +2,8 @@ import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { GlobeOffIcon } from '@lobehub/ui/icons';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type LucideIcon, SparkleIcon } from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
+import { SparkleIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -70,10 +71,10 @@ const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
 
   return (
     <Flexbox
+      horizontal
       align={'flex-start'}
       className={cx(styles.option, mode === value && styles.active)}
       gap={12}
-      horizontal
       key={value}
       onClick={async () => {
         await updateAgentChatConfig({ searchMode: value });

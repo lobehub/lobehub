@@ -36,22 +36,23 @@ const TopicsList = memo(() => {
       gap={12}
       padding={12}
       ref={ref}
+      width={'100%'}
       style={{
         maxHeight: '100%',
         overflowY: 'auto',
       }}
-      width={'100%'}
     >
       <NewTopicButton
         count={generationTopics?.length}
-        onClick={openNewGenerationTopic}
         showMoreInfo={showMoreInfo}
+        onClick={openNewGenerationTopic}
       />
       <Flexbox align="center" gap={12} ref={parent} width={'100%'}>
         {generationTopics.map((topic, index) => (
           <TopicItem
             key={topic.id}
             showMoreInfo={showMoreInfo}
+            topic={topic}
             style={{
               padding:
                 // fix the avatar border is clipped by overflow hidden
@@ -61,7 +62,6 @@ const TopicsList = memo(() => {
                     ? '0 0 4px'
                     : '0',
             }}
-            topic={topic}
           />
         ))}
       </Flexbox>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Modal } from '@lobehub/ui';
+import { Button, Flexbox, Modal, stopPropagation } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import { agentService } from '@/services/agent';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
-import type { AgentItemData } from './AgentItem';
+import { type AgentItemData } from './AgentItem';
 import AvailableAgentList from './AvailableAgentList';
 import SelectedAgentList from './SelectedAgentList';
 import { useAgentSelectionStore } from './store';
@@ -111,29 +111,29 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
   const isConfirmDisabled = groupName.trim() === '' || selectedAgentIds.length === 0 || isCreating;
 
   return (
-    <div onClick={(e) => e.stopPropagation()}>
+    <div onClick={stopPropagation}>
       <Modal
         allowFullscreen
         destroyOnHidden
+        open={open}
+        title={t('sessionGroup.createGroup')}
+        width={800}
         footer={
-          <Flexbox gap={8} horizontal justify="end">
+          <Flexbox horizontal gap={8} justify="end">
             <Button onClick={handleCancel}>{t('cancel', { ns: 'common' })}</Button>
             <Button
               disabled={isConfirmDisabled}
               loading={isCreating}
-              onClick={handleConfirm}
               type="primary"
+              onClick={handleConfirm}
             >
               {t('sessionGroup.createGroup')}
             </Button>
           </Flexbox>
         }
         onCancel={handleCancel}
-        open={open}
-        title={t('sessionGroup.createGroup')}
-        width={800}
       >
-        <Flexbox className={styles.container} horizontal>
+        <Flexbox horizontal className={styles.container}>
           {/* Left Column - Available Agents */}
           <AvailableAgentList agents={allAgents} isLoading={isLoadingAgents} />
 

@@ -1,6 +1,6 @@
-import type { PromptBuilder } from '@saintno/comfyui-sdk';
+import { type PromptBuilder } from '@saintno/comfyui-sdk';
 
-import type { WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
+import { type WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
 // Import all workflow builders
 import { buildFluxDevWorkflow } from '@/server/services/comfyui/workflows/flux-dev';
 import { buildFluxKontextWorkflow } from '@/server/services/comfyui/workflows/flux-kontext';

@@ -1,5 +1,6 @@
 {
   "addToKnowledgeBase.addSuccess": "فایل با موفقیت اضافه شد",
+  "addToKnowledgeBase.alreadyExists": "این فایل قبلاً در کتابخانه وجود دارد",
   "addToKnowledgeBase.confirm": "افزودن",
   "addToKnowledgeBase.error": "افزودن فایل به کتابخانه با شکست مواجه شد",
   "addToKnowledgeBase.id.placeholder": "لطفاً یک کتابخانه برای افزودن انتخاب کنید",
@@ -13,6 +14,8 @@
   "createNew.name.placeholder": "نام کتابخانه",
   "createNew.name.required": "لطفاً نام کتابخانه را وارد کنید",
   "createNew.title": "ایجاد کتابخانه جدید",
+  "moveToKnowledgeBase.error": "انتقال فایل به کتابخانه ناموفق بود",
+  "moveToKnowledgeBase.success": "فایل با موفقیت منتقل شد",
   "tab.evals": "ارزیابی‌ها",
   "tab.files": "فایل‌ها",
   "tab.settings": "تنظیمات",

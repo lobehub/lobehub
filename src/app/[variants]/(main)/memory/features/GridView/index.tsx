@@ -1,5 +1,7 @@
-import { type DivProps, Grid } from '@lobehub/ui';
-import { type ReactNode, forwardRef, memo } from 'react';
+import { type DivProps } from '@lobehub/ui';
+import { Grid } from '@lobehub/ui';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { VirtuosoGrid } from 'react-virtuoso';
 
 import Loading from '@/app/[variants]/(main)/memory/features/Loading';
@@ -55,11 +57,17 @@ function GridViewInner<T extends { id: string }>({
 
   return (
     <VirtuosoGrid
+      customScrollParent={scrollParent}
+      data={items}
+      endReached={hasMore && onLoadMore ? onLoadMore : undefined}
+      increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
+      overscan={48}
+      style={{ minHeight: '100%' }}
       components={{
         Footer: isLoading
           ? () => <Loading rows={defaultColumnCount} viewMode={'grid'} />
           : undefined,
-        List: forwardRef<HTMLDivElement, DivProps>((props, ref) => (
+        List: (({ ref, ...props }: DivProps & { ref?: React.RefObject<HTMLDivElement | null> }) => (
           <Grid
             gap={8}
             maxItemWidth={maxItemWidth}
@@ -67,12 +75,8 @@ function GridViewInner<T extends { id: string }>({
             rows={defaultColumnCount}
             {...props}
           />
-        )),
+        )) as any,
       }}
-      customScrollParent={scrollParent}
-      data={items}
-      endReached={hasMore && onLoadMore ? onLoadMore : undefined}
-      increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
       itemContent={(index, item) => {
         if (!item || !item.id) {
           return null;
@@ -86,8 +90,6 @@ function GridViewInner<T extends { id: string }>({
 
         return renderItem(item, actions);
       }}
-      overscan={48}
-      style={{ minHeight: '100%' }}
     />
   );
 }

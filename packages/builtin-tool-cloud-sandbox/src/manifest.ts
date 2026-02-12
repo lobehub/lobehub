@@ -5,7 +5,6 @@ import { CloudSandboxApiName } from './types';
 
 export const CloudSandboxIdentifier = 'lobe-cloud-sandbox';
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const CloudSandboxManifest: BuiltinToolManifest = {
   api: [
     {
@@ -327,6 +326,9 @@ export const CloudSandboxManifest: BuiltinToolManifest = {
   identifier: CloudSandboxIdentifier,
   meta: {
     avatar: '💻',
+    description: 'Execute code, run commands, and manage files in a secure cloud environment',
+    readme:
+      'Execute Python, JavaScript, and TypeScript code in an isolated cloud environment. Run shell commands, manage files, search content with regex, and export results securely.',
     title: 'Cloud Sandbox',
   },
   systemRole: systemPrompt,

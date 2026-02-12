@@ -113,13 +113,13 @@ const AssistantItem = memo<DiscoverAssistantItem>(
         clickable
         data-testid="assistant-item"
         height={'100%'}
-        onClick={handleClick}
+        variant={'outlined'}
+        width={'100%'}
         style={{
           overflow: 'hidden',
           position: 'relative',
         }}
-        variant={'outlined'}
-        width={'100%'}
+        onClick={handleClick}
       >
         {isGroupAgent && (
           <Tag
@@ -135,21 +135,21 @@ const AssistantItem = memo<DiscoverAssistantItem>(
           </Tag>
         )}
         <Flexbox
+          horizontal
           align={'flex-start'}
           gap={16}
-          horizontal
           justify={'space-between'}
           padding={16}
           style={{ paddingRight: isGroupAgent ? 80 : 16 }}
           width={'100%'}
         >
           <Flexbox
-            gap={12}
             horizontal
+            gap={12}
+            title={identifier}
             style={{
               overflow: 'hidden',
             }}
-            title={identifier}
           >
             <Avatar
               avatar={avatar}
@@ -166,16 +166,16 @@ const AssistantItem = memo<DiscoverAssistantItem>(
               }}
             >
               <Flexbox
+                horizontal
                 align={'center'}
                 flex={1}
                 gap={8}
-                horizontal
                 style={{
                   overflow: 'hidden',
                 }}
               >
                 <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
-                  <Text as={'h2'} className={styles.title} ellipsis>
+                  <Text ellipsis as={'h2'} className={styles.title}>
                     {title}
                   </Text>
                 </Link>
@@ -183,8 +183,8 @@ const AssistantItem = memo<DiscoverAssistantItem>(
               {author && (
                 <div
                   className={userName ? styles.author : undefined}
-                  onClick={userName ? handleAuthorClick : undefined}
                   style={userName ? undefined : { color: 'inherit' }}
+                  onClick={userName ? handleAuthorClick : undefined}
                 >
                   {author}
                 </div>
@@ -210,19 +210,19 @@ const AssistantItem = memo<DiscoverAssistantItem>(
           />
         </Flexbox>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.footer}
-          horizontal
           justify={'space-between'}
           padding={16}
         >
           <Flexbox
+            horizontal
             align={'center'}
             className={styles.secondaryDesc}
-            horizontal
             justify={'space-between'}
           >
-            <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
                 className={styles.secondaryDesc}

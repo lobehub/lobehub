@@ -1,9 +1,9 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { memo } from 'react';
 
-import { CreateDocumentArgs, CreateDocumentState } from '../../../types';
+import type { CreateDocumentArgs, CreateDocumentState } from '../../../types';
 import DocumentCard from './DocumentCard';
 
 export type CreateDocumentRenderProps = Pick<

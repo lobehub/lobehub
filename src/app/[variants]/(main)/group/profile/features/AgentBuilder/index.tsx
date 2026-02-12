@@ -33,17 +33,17 @@ const AgentBuilder = memo(() => {
       expandable={false}
       maxWidth={600}
       minWidth={360}
+      placement="right"
+      size={{
+        height: '100%',
+        width,
+      }}
       onExpandChange={setChatPanelExpanded}
       onSizeChange={(_, size) => {
         if (size?.width) {
           const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
           if (!!w) updateSystemStatus({ groupAgentBuilderPanelWidth: w });
         }
-      }}
-      placement="right"
-      size={{
-        height: '100%',
-        width,
       }}
     >
       {groupAgentBuilderId ? (

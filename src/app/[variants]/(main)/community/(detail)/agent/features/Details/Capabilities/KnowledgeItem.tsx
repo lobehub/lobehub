@@ -25,7 +25,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const KnowledgeItem = memo<{ avatar?: string; description?: string; title: string }>(
   ({ avatar, title, description }) => {
     return (
-      <Block gap={12} horizontal padding={12} variant={'outlined'}>
+      <Block horizontal gap={12} padding={12} variant={'outlined'}>
         <Avatar avatar={avatar} shape={'square'} size={40} style={{ flex: 'none' }} />
         <Flexbox
           flex={1}
@@ -34,7 +34,7 @@ const KnowledgeItem = memo<{ avatar?: string; description?: string; title: strin
             overflow: 'hidden',
           }}
         >
-          <Text as={'h2'} className={styles.title} ellipsis>
+          <Text ellipsis as={'h2'} className={styles.title}>
             {title}
           </Text>
           <Text

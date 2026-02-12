@@ -57,5 +57,5 @@ export interface EmailServiceImpl {
   /**
    * Send an email
    */
-  sendMail(payload: EmailPayload): Promise<EmailResponse>;
+  sendMail: (payload: EmailPayload) => Promise<EmailResponse>;
 }

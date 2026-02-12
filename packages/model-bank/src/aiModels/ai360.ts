@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const ai360ChatModels: AIChatModelCard[] = [
   {
@@ -85,7 +85,8 @@ const ai360ChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_000,
-    description: 'A translation-specialized model, deeply fine-tuned for leading translation quality.',
+    description:
+      'A translation-specialized model, deeply fine-tuned for leading translation quality.',
     displayName: '360GPT Pro Trans',
     id: '360gpt-pro-trans',
     pricing: {

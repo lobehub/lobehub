@@ -1,5 +1,5 @@
 /* eslint-disable typescript-sort-keys/interface, sort-keys-fix/sort-keys-fix */
-import type { ConversationContext } from '@lobechat/types';
+import { type ConversationContext } from '@lobechat/types';
 
 /**
  * Operation Type Definitions
@@ -22,7 +22,7 @@ export type OperationType =
   | 'createAssistantMessage' // Create assistant message (sub-operation of execAgentRuntime)
   // === LLM execution (sub-operations) ===
   | 'callLLM' // Call LLM streaming response (sub-operation of execAgentRuntime)
-  // === (sub-operations) ===
+  // === (sub-operations) = ==
   | 'reasoning' // AI reasoning process (child operation)
 
   // === RAG and retrieval ===
@@ -82,19 +82,19 @@ export type OperationStatus =
  * Captured when Operation is created, never changes afterwards
  */
 export interface OperationContext extends Partial<ConversationContext> {
-  messageId?: string; // Associated message ID
-  groupId?: string; // Associated group ID (Group Chat)
   agentId?: string; // Associated agent ID (specific agent in Group Chat)
+  groupId?: string; // Associated group ID (Group Chat)
+  messageId?: string; // Associated message ID
 }
 
 /**
  * Operation cancel context - passed to cancel handler
  */
 export interface OperationCancelContext {
-  operationId: string;
-  type: OperationType;
-  reason: string;
   metadata?: OperationMetadata;
+  operationId: string;
+  reason: string;
+  type: OperationType;
 }
 
 /**
@@ -118,17 +118,13 @@ export interface RuntimeHooks {
  * Operation metadata
  */
 export interface OperationMetadata {
-  // Progress information
-  progress?: {
-    current: number;
-    total: number;
-    percentage?: number;
-  };
+  // Other metadata (extensible)
+  [key: string]: any;
 
-  // Performance information
-  startTime: number;
-  endTime?: number;
+  // Cancel information
+  cancelReason?: string;
   duration?: number;
+  endTime?: number;
 
   // Error information
   error?: {
@@ -138,61 +134,65 @@ export interface OperationMetadata {
     details?: any;
   };
 
-  // Cancel information
-  cancelReason?: string;
-
   // UI state (for sendMessage operation)
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
+
   inputSendErrorMsg?: string; // Error message to display in UI
+  // Progress information
+  progress?: {
+    current: number;
+    total: number;
+    percentage?: number;
+  };
 
   // Runtime hooks (collected during execution, executed after completion)
   runtimeHooks?: RuntimeHooks;
 
-  // Other metadata (extensible)
-  [key: string]: any;
+  // Performance information
+  startTime: number;
 }
 
 /**
  * Operation definition
  */
 export interface Operation {
-  // === Basic information ===
-  id: string; // Unique operation ID (using nanoid)
-  type: OperationType; // Operation type
-  status: OperationStatus; // Operation status
-
+  // === Control ===
+  abortController: AbortController; // Abort controller
+  childOperationIds?: string[]; // Child operation IDs
   // === Context (core: capture and fix business context) ===
   context: OperationContext; // Associated entities, captured at creation
 
-  // === Control ===
-  abortController: AbortController; // Abort controller
+  description?: string; // Operation description (for tooltip)
+
+  // === Basic information ===
+  id: string; // Unique operation ID (using nanoid)
+
+  // === UI display ===
+  label?: string; // Operation display label (for UI)
 
   // === Metadata ===
   metadata: OperationMetadata;
 
   // === Cancel handler ===
   onCancelHandler?: (context: OperationCancelContext) => void | Promise<void>; // Cancel callback
-
   // === Dependencies ===
   parentOperationId?: string; // Parent operation ID (for operation nesting)
-  childOperationIds?: string[]; // Child operation IDs
 
-  // === UI display ===
-  label?: string; // Operation display label (for UI)
-  description?: string; // Operation description (for tooltip)
+  status: OperationStatus; // Operation status
+  type: OperationType; // Operation type
 }
 
 /**
  * Operation filter for querying operations
  */
 export interface OperationFilter {
-  type?: OperationType | OperationType[];
-  status?: OperationStatus | OperationStatus[];
   agentId?: string;
-  topicId?: string | null;
-  messageId?: string;
-  threadId?: string;
   groupId?: string;
+  messageId?: string;
+  status?: OperationStatus | OperationStatus[];
+  threadId?: string;
+  topicId?: string | null;
+  type?: OperationType | OperationType[];
 }
 
 // === Operation Type Constants ===

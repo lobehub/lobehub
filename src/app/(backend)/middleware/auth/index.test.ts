@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createErrorResponse } from '@/utils/errorResponse';
 
-import { RequestHandler, checkAuth } from './index';
+import { type RequestHandler } from './index';
+import { checkAuth } from './index';
 import { checkAuthMethod } from './utils';
 
 vi.mock('@/utils/errorResponse', () => ({

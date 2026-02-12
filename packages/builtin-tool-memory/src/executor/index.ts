@@ -8,7 +8,8 @@ import type {
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory/schemas';
 import { formatMemorySearchResults } from '@lobechat/prompts';
-import { BaseExecutor, type BuiltinToolResult, SearchMemoryParams } from '@lobechat/types';
+import type { BuiltinToolResult, SearchMemoryParams } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 import type { z } from 'zod';
 
 import { userMemoryService } from '@/services/userMemory';

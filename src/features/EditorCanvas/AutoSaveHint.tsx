@@ -1,6 +1,7 @@
 'use client';
 
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import AutoSaveHintBase from '@/components/Editor/AutoSaveHint';
 import { useDocumentStore } from '@/store/document';

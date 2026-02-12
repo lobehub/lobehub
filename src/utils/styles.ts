@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
 
 export const StyleSheet = {
   compose: (...styles: Array<CSSProperties | undefined | null | false>): CSSProperties => {
