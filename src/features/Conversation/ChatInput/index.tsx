@@ -154,7 +154,7 @@ const ChatInput = memo<ChatInputProps>(
             />
           </Flexbox>
         )}
-        <DesktopChatInput />
+        <DesktopChatInput borderRadius={12} />
       </WideScreenContainer>
     );
 

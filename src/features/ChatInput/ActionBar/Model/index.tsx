@@ -56,7 +56,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ModelSwitch = memo(() => {
   const { t } = useTranslation('chat');
-  const { dropdownPlacement } = useActionBarContext();
+  const { borderRadius, dropdownPlacement } = useActionBarContext();
 
   const agentId = useAgentId();
   const [model, provider, updateAgentConfigById] = useAgentStore((s) => [
@@ -77,7 +77,12 @@ const ModelSwitch = memo(() => {
   );
 
   return (
-    <Flexbox horizontal align={'center'} className={isModelHasExtendParams ? styles.container : ''}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={isModelHasExtendParams ? styles.container : ''}
+      style={borderRadius ? { borderRadius } : undefined}
+    >
       <ModelSwitchPanel
         model={model}
         placement={dropdownPlacement}
@@ -87,6 +92,7 @@ const ModelSwitch = memo(() => {
         <Center
           className={cx(styles.model, isModelHasExtendParams && styles.modelWithControl)}
           height={36}
+          style={borderRadius ? { borderRadius } : undefined}
           width={36}
         >
           <div className={styles.icon}>
@@ -99,7 +105,7 @@ const ModelSwitch = memo(() => {
         <Action
           icon={Settings2Icon}
           showTooltip={false}
-          style={{ borderRadius: 24, marginInlineStart: -4 }}
+          style={{ borderRadius: borderRadius ?? 24, marginInlineStart: -4 }}
           title={t('extendParams.title')}
           popover={{
             content: <ControlsForm />,

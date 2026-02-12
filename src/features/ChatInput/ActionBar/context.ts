@@ -8,6 +8,7 @@ import { createContext, useContext } from 'react';
 type DropdownPlacement = 'bottom' | 'bottomLeft' | 'bottomRight' | 'top' | 'topLeft' | 'topRight';
 
 export interface ActionBarContextValue {
+  borderRadius?: number;
   dropdownPlacement?: DropdownPlacement;
 }
 
