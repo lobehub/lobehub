@@ -6,9 +6,9 @@ import { memo, useMemo } from 'react';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, pluginSelectors } from '@/store/tool/selectors';
 
+import AgentSkillItem from '../AgentSkillItem';
 import Empty from '../Empty';
 import { gridStyles } from '../style';
-import AgentSkillItem from './AgentSkillItem';
 import Item from './Item';
 
 export const CustomList = memo(() => {

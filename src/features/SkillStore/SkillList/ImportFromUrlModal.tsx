@@ -45,9 +45,9 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
   };
 
   return (
-    <Modal destroyOnClose footer={null} onCancel={handleClose} open={open} title={null} width={480}>
+    <Modal destroyOnClose footer={null} open={open} title={null} width={480} onCancel={handleClose}>
       <Flexbox align="center" gap={16} padding={'16px 0'}>
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Icon icon={Link} size={28} />
           <Icon
             icon={ArrowLeftRight}
@@ -73,17 +73,17 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
         <Flexbox gap={8}>
           <Typography.Text strong>URL</Typography.Text>
           <Input
+            placeholder={t('agentSkillModal.url.urlPlaceholder')}
+            value={url}
+            onPressEnter={handleImport}
             onChange={(e) => {
               setUrl(e.target.value);
               if (error) setError(null);
             }}
-            onPressEnter={handleImport}
-            placeholder={t('agentSkillModal.url.urlPlaceholder')}
-            value={url}
           />
         </Flexbox>
 
-        <Button block loading={loading} onClick={handleImport} type="primary">
+        <Button block loading={loading} type="primary" onClick={handleImport}>
           {t('common:import')}
         </Button>
       </Flexbox>

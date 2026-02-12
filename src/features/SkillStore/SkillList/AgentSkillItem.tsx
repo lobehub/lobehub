@@ -1,18 +1,18 @@
 'use client';
 
-import { type SkillListItem } from '@lobechat/types';
 import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MoreVerticalIcon, PackageSearch, PuzzleIcon, Trash2 } from 'lucide-react';
-import { Suspense, lazy, memo, useState } from 'react';
+import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
+import { type SkillListItem } from '@/types/index';
 import { downloadFile } from '@/utils/client/downloadFile';
 
-import { itemStyles } from '../style';
+import { itemStyles } from './style';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
@@ -78,16 +78,16 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
     <>
       <Flexbox className={itemStyles.container} gap={0}>
         <Block
+          horizontal
           align={'center'}
           gap={12}
-          horizontal
           paddingBlock={12}
           paddingInline={12}
           variant={'outlined'}
         >
           <Avatar avatar={'🧩'} shape={'square'} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>
                 {skill.name}
               </span>
@@ -100,10 +100,12 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           <Flexbox horizontal>
             <ActionIcon
               icon={PackageSearch}
-              onClick={() => setEditOpen(true)}
               title={t('store.actions.manifest')}
+              onClick={() => setEditOpen(true)}
             />
             <DropdownMenu
+              nativeButton={false}
+              placement="bottomRight"
               items={[
                 ...(skill.zipFileHash
                   ? [
@@ -124,8 +126,6 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
                   onClick: handleDelete,
                 },
               ]}
-              nativeButton={false}
-              placement="bottomRight"
             >
               <ActionIcon icon={MoreVerticalIcon} loading={loading} />
             </DropdownMenu>
@@ -135,18 +135,18 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
       <Modal
         destroyOnHidden
         footer={null}
-        onCancel={() => setDetailOpen(false)}
         open={detailOpen}
         styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
         title={t('dev.title.skillDetails')}
         width={960}
+        onCancel={() => setDetailOpen(false)}
       >
         <Suspense fallback={<div style={{ height: '100%' }} />}>
           <AgentSkillDetail skillId={skill.id} />
         </Suspense>
       </Modal>
       <Suspense>
-        <AgentSkillEdit onClose={() => setEditOpen(false)} open={editOpen} skillId={skill.id} />
+        <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
       </Suspense>
     </>
   );

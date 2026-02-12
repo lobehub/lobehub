@@ -1,6 +1,6 @@
 import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDown, FileArchive, Github, Grid2x2Plus, Link, PenLine } from 'lucide-react';
-import { type ReactNode, forwardRef, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DevModal from '@/features/PluginDevModal';
@@ -20,7 +20,7 @@ const MenuLabel = ({ desc, title }: { desc: string; title: ReactNode }) => (
   </Flexbox>
 );
 
-const AddSkillButton = forwardRef<HTMLButtonElement>((props, ref) => {
+const AddSkillButton = ({ ref, ...props }) => {
   const { t } = useTranslation('setting');
   const [showMcpModal, setMcpModal] = useState(false);
   const [showUrlModal, setUrlModal] = useState(false);
@@ -40,18 +40,20 @@ const AddSkillButton = forwardRef<HTMLButtonElement>((props, ref) => {
       }}
     >
       <DevModal
+        open={showMcpModal}
         onOpenChange={setMcpModal}
+        onValueChange={updateNewDevPlugin}
         onSave={async (devPlugin) => {
           await installCustomPlugin(devPlugin);
           await togglePlugin(devPlugin.identifier);
         }}
-        onValueChange={updateNewDevPlugin}
-        open={showMcpModal}
       />
-      <ImportFromUrlModal onOpenChange={setUrlModal} open={showUrlModal} />
-      <ImportFromGithubModal onOpenChange={setGithubModal} open={showGithubModal} />
-      <UploadSkillModal onOpenChange={setUploadModal} open={showUploadModal} />
+      <ImportFromUrlModal open={showUrlModal} onOpenChange={setUrlModal} />
+      <ImportFromGithubModal open={showGithubModal} onOpenChange={setGithubModal} />
+      <UploadSkillModal open={showUploadModal} onOpenChange={setUploadModal} />
       <DropdownMenu
+        nativeButton={false}
+        placement="bottomRight"
         items={[
           {
             icon: <Icon icon={Link} />,
@@ -81,8 +83,6 @@ const AddSkillButton = forwardRef<HTMLButtonElement>((props, ref) => {
             onClick: () => setMcpModal(true),
           },
         ]}
-        nativeButton={false}
-        placement="bottomRight"
       >
         <Button icon={Grid2x2Plus} ref={ref}>
           {t('tab.addCustomSkill')}
@@ -91,6 +91,6 @@ const AddSkillButton = forwardRef<HTMLButtonElement>((props, ref) => {
       </DropdownMenu>
     </div>
   );
-});
+};
 
 export default AddSkillButton;

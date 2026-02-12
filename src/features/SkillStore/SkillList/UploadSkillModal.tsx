@@ -59,17 +59,17 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
 
   return (
     <Modal
-      closable={!loading}
       destroyOnClose
+      closable={!loading}
       footer={null}
       maskClosable={!loading}
-      onCancel={handleClose}
       open={open}
       title={null}
       width={480}
+      onCancel={handleClose}
     >
       <Flexbox align="center" gap={16} padding={'16px 0'}>
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Icon icon={UploadIcon} size={28} />
           <Icon
             icon={ArrowLeftRight}
@@ -94,12 +94,12 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
 
         <Upload.Dragger
           accept=".zip,.skill"
+          disabled={loading}
+          showUploadList={false}
           beforeUpload={(file) => {
             handleUploadFile(file);
             return false;
           }}
-          disabled={loading}
-          showUploadList={false}
         >
           <Flexbox align="center" gap={8} padding={24}>
             {loading ? (

@@ -12,7 +12,7 @@ import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { type DiscoverMcpItem } from '@/types/discover';
 
-import AgentSkillItem from '../CustomList/AgentSkillItem';
+import AgentSkillItem from '../AgentSkillItem';
 import Empty from '../Empty';
 import Loading from '../Loading';
 import { virtuosoGridStyles } from '../style';
@@ -125,6 +125,12 @@ export const CommunityList = memo(() => {
         endReached={loadMoreMCPPlugins}
         increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
         itemClassName={virtuosoGridStyles.item}
+        listClassName={virtuosoGridStyles.list}
+        overscan={24}
+        style={{ height: '60vh', width: '100%' }}
+        components={{
+          Footer: renderFooter,
+        }}
         itemContent={(_, item) =>
           item.itemType === 'agentSkill' ? (
             <AgentSkillItem skill={item.skill} />
@@ -132,12 +138,6 @@ export const CommunityList = memo(() => {
             <Item {...item.data} />
           )
         }
-        listClassName={virtuosoGridStyles.list}
-        overscan={24}
-        style={{ height: '60vh', width: '100%' }}
-        components={{
-          Footer: renderFooter,
-        }}
       />
     );
   };
