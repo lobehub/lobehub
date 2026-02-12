@@ -1,7 +1,7 @@
 'use client';
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, stopPropagation } from '@lobehub/ui';
 import { App, Space } from 'antd';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
@@ -86,38 +86,40 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
     });
   };
 
-  // ===== Actions =====
+  // ===== Status & Actions =====
+
+  const renderStatus = () => {
+    if (!isBuiltin) return null;
+    if (isBuiltinInstalled) {
+      return <span className={styles.connected}>{t('tools.builtins.installed')}</span>;
+    }
+    return <span className={styles.disconnected}>{t('tools.builtins.uninstalled')}</span>;
+  };
 
   const renderActions = () => {
     if (isBuiltin) {
       if (isBuiltinInstalled) {
         return (
-          <Flexbox horizontal align="center" gap={12}>
-            <span className={styles.connected}>{t('tools.builtins.installed')}</span>
-            <DropdownMenu
-              placement="bottomRight"
-              items={[
-                {
-                  danger: true,
-                  icon: <Icon icon={Trash2} />,
-                  key: 'uninstall',
-                  label: tp('store.actions.uninstall'),
-                  onClick: handleUninstall,
-                },
-              ]}
-            >
-              <Button icon={MoreHorizontalIcon} />
-            </DropdownMenu>
-          </Flexbox>
+          <DropdownMenu
+            placement="bottomRight"
+            items={[
+              {
+                danger: true,
+                icon: <Icon icon={Trash2} />,
+                key: 'uninstall',
+                label: tp('store.actions.uninstall'),
+                onClick: handleUninstall,
+              },
+            ]}
+          >
+            <Button icon={MoreHorizontalIcon} />
+          </DropdownMenu>
         );
       }
       return (
-        <Flexbox horizontal align="center" gap={12}>
-          <span className={styles.disconnected}>{t('tools.builtins.uninstalled')}</span>
-          <Button icon={Plus} onClick={() => installBuiltinTool(skill.identifier)}>
-            {tp('store.actions.install')}
-          </Button>
-        </Flexbox>
+        <Button icon={Plus} onClick={() => installBuiltinTool(skill.identifier)}>
+          {tp('store.actions.install')}
+        </Button>
       );
     }
 
@@ -198,21 +200,34 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
         gap={16}
         justify="space-between"
       >
-        <Flexbox horizontal align="center" gap={12} style={{ flex: 1, overflow: 'hidden' }}>
-          <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
-            <Avatar avatar={avatar} size={32} />
-          </div>
-          <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
-            <span
-              className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}
-              onClick={handleOpenDetail}
-            >
-              {title}
-            </span>
-            <SkillSourceTag source={skill.source} />
+        <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
+          <Flexbox
+            horizontal
+            align="center"
+            gap={16}
+            style={{ cursor: 'pointer' }}
+            onClick={handleOpenDetail}
+          >
+            <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
+              <Avatar avatar={avatar} size={32} />
+            </div>
+            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+              <Flexbox horizontal align="center" gap={8}>
+                <span
+                  className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}
+                >
+                  {title}
+                </span>
+                <SkillSourceTag source={skill.source} />
+              </Flexbox>
+              {showDisconnected && renderStatus()}
+            </Flexbox>
           </Flexbox>
         </Flexbox>
-        {renderActions()}
+        <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
+          {isBuiltin && isBuiltinInstalled && renderStatus()}
+          {renderActions()}
+        </Flexbox>
       </Flexbox>
       {renderDetailModal()}
     </>

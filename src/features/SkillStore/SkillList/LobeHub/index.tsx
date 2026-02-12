@@ -1,12 +1,13 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { type LobeToolMeta } from '@lobechat/types';
+import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  createBuiltinAgentSkillDetailModal,
   createBuiltinSkillDetailModal,
   createKlavisSkillDetailModal,
   createLobehubSkillDetailModal,
@@ -48,6 +49,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
   // Use custom selector to get only actual builtin tools (not Klavis)
   const builtinTools = useToolStore(getBuiltinToolsOnly, isEqual);
+  const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
 
   const [useFetchLobehubSkillConnections, useFetchUserKlavisServers] = useToolStore((s) => [
     s.useFetchLobehubSkillConnections,
@@ -75,10 +77,16 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
     const items: Array<
       | { provider: (typeof LOBEHUB_SKILL_PROVIDERS)[number]; type: 'lobehub' }
       | { serverType: (typeof KLAVIS_SERVER_TYPES)[number]; type: 'klavis' }
+      | { skill: BuiltinSkill; type: 'builtinAgentSkill' }
       | { tool: LobeToolMeta; type: 'builtin' }
     > = [];
 
-    // Add builtin tools first
+    // Add builtin agent skills first
+    for (const skill of builtinSkills) {
+      items.push({ skill, type: 'builtinAgentSkill' });
+    }
+
+    // Add builtin tools
     for (const tool of builtinTools) {
       items.push({ tool, type: 'builtin' });
     }
@@ -102,6 +110,11 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
     if (!lowerKeywords) return items;
 
     return items.filter((item) => {
+      if (item.type === 'builtinAgentSkill') {
+        const name = item.skill.name.toLowerCase();
+        const identifier = item.skill.identifier.toLowerCase();
+        return name.includes(lowerKeywords) || identifier.includes(lowerKeywords);
+      }
       if (item.type === 'builtin') {
         const title = item.tool.meta?.title?.toLowerCase() || '';
         const identifier = item.tool.identifier?.toLowerCase() || '';
@@ -110,7 +123,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
       const label = item.type === 'lobehub' ? item.provider.label : item.serverType.label;
       return label.toLowerCase().includes(lowerKeywords);
     });
-  }, [keywords, isLobehubSkillEnabled, isKlavisEnabled, builtinTools]);
+  }, [keywords, isLobehubSkillEnabled, isKlavisEnabled, builtinTools, builtinSkills]);
 
   const hasSearchKeywords = Boolean(keywords && keywords.trim());
 
@@ -120,6 +133,26 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
     <>
       <div className={gridStyles.grid}>
         {filteredItems.map((item) => {
+          if (item.type === 'builtinAgentSkill') {
+            const localizedTitle = t(`tools.builtins.${item.skill.identifier}.title`, {
+              defaultValue: item.skill.name,
+            });
+            const localizedDescription = t(`tools.builtins.${item.skill.identifier}.description`, {
+              defaultValue: item.skill.description,
+            });
+            return (
+              <BuiltinItem
+                avatar={item.skill.avatar}
+                description={localizedDescription}
+                identifier={item.skill.identifier}
+                key={item.skill.identifier}
+                title={localizedTitle}
+                onOpenDetail={() =>
+                  createBuiltinAgentSkillDetailModal({ identifier: item.skill.identifier })
+                }
+              />
+            );
+          }
           if (item.type === 'builtin') {
             const localizedTitle = t(`tools.builtins.${item.tool.identifier}.title`, {
               defaultValue: item.tool.meta?.title || item.tool.identifier,
