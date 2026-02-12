@@ -18,6 +18,7 @@ export interface DetailContextValue {
   localizedReadme: string;
   readme: string;
   serverName?: Klavis.McpServerName;
+  skillContent?: string;
   tools: Array<{ description?: string; inputSchema?: any; name: string }>;
   toolsLoading: boolean;
 }

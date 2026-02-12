@@ -1,11 +1,13 @@
 'use client';
 
 import { Flexbox, Modal } from '@lobehub/ui';
-import { Suspense, memo, useState } from 'react';
+import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MCPTag from '@/components/Plugins/MCPTag';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
+import SkillSourceTag from '@/components/SkillSourceTag';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import PluginDetailModal from '@/features/PluginDetailModal';
@@ -44,15 +46,20 @@ const McpSkillItem = memo<McpSkillItemProps>(
           gap={16}
           justify="space-between"
         >
-          <Flexbox align="center" gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={12} style={{ flex: 1, overflow: 'hidden' }}>
             <div className={styles.icon}>
               <PluginAvatar avatar={avatar} size={32} />
             </div>
-            <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
+            <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>
                 {title}
               </span>
-              <PluginTag author={author} isMCP={isMCP} type={type} />
+              {isCustomPlugin ? (
+                <MCPTag showText={false} />
+              ) : (
+                <PluginTag author={author} isMCP={isMCP} type={type} />
+              )}
+              <SkillSourceTag source={isCustomPlugin ? 'user' : 'market'} />
             </Flexbox>
           </Flexbox>
           <Actions identifier={identifier} isMCP={isMCP} type={type} />

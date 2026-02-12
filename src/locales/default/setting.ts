@@ -137,6 +137,7 @@ export default {
   'agentSkillDetail.addedAt': 'Added',
   'agentSkillDetail.publishedAt': 'Published',
   'agentSkillDetail.repository': 'GitHub Repository',
+  'agentSkillDetail.skillContent': 'Skill Content',
   'agentSkillDetail.sourceUrl': 'Skill Import Source',
   'agentSkillDetail.updatedAt': 'Updated',
   'agentSkillEdit.descriptionDesc':
@@ -845,8 +846,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-local-system.readme':
     'Access your local filesystem on desktop. Read, write, search, and organize files. Execute shell commands with background task support and grep content with regex patterns.',
   'tools.builtins.lobe-local-system.title': 'Local System',
-  'tools.builtins.lobe-notebook.description':
-    'Create and manage documents in the topic notebook',
+  'tools.builtins.lobe-notebook.description': 'Create and manage documents in the topic notebook',
   'tools.builtins.lobe-notebook.readme':
     'Create and manage persistent documents within conversation topics. Save notes, reports, articles, and markdown content that stays accessible across sessions.',
   'tools.builtins.lobe-notebook.title': 'Notebook',

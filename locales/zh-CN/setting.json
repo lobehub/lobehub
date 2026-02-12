@@ -132,6 +132,7 @@
   "agentSkillDetail.addedAt": "添加于",
   "agentSkillDetail.publishedAt": "发布于",
   "agentSkillDetail.repository": "GitHub 仓库地址",
+  "agentSkillDetail.skillContent": "技能内容",
   "agentSkillDetail.sourceUrl": "Skill 导入路径",
   "agentSkillDetail.updatedAt": "更新于",
   "agentSkillEdit.descriptionDesc": "简要说明该技能的功能，帮助智能体判断何时使用该技能",

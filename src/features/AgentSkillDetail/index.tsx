@@ -1,6 +1,6 @@
 'use client';
 
-import type { SkillResourceTreeNode } from '@lobechat/types';
+import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { Skeleton } from 'antd';
@@ -95,11 +95,11 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
     <Flexbox style={{ height: '100%', overflow: 'hidden' }}>
       {skillDetail && (
         <div className={styles.meta}>
-          <Flexbox align={'center'} gap={12} horizontal>
+          <Flexbox horizontal align={'center'} gap={12}>
             <Avatar avatar={'🧩'} shape={'square'} size={40} />
             <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
-              <Flexbox align={'center'} gap={8} horizontal justify={'space-between'}>
-                <Flexbox align={'center'} className={styles.description} gap={4} horizontal>
+              <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+                <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
                   <span className={styles.name}>{skillDetail.name}</span>
                   {version && (
                     <>
@@ -116,7 +116,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
                   />
                 </Flexbox>
                 {(repository || sourceUrl) && (
-                  <Flexbox align={'center'} gap={2} horizontal style={{ flexShrink: 0 }}>
+                  <Flexbox horizontal align={'center'} gap={2} style={{ flexShrink: 0 }}>
                     {repository && (
                       <a href={repository} rel="noreferrer" target={'_blank'}>
                         <ActionIcon
@@ -145,9 +145,9 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
       <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>
         <div className={styles.left}>
           <FileTree
-            onSelectFile={setSelectedFile}
             resourceTree={resourceTree}
             selectedFile={selectedFile}
+            onSelectFile={setSelectedFile}
           />
         </div>
         <div className={styles.divider} />

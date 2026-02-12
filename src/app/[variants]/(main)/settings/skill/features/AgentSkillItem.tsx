@@ -8,6 +8,7 @@ import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkillSourceTag from '@/components/SkillSourceTag';
+import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
@@ -17,9 +18,6 @@ import { styles } from './style';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
-const BuiltinAgentSkillDetail = lazy(
-  () => import('@/features/AgentSkillDetail/BuiltinAgentSkillDetail'),
-);
 
 const isBuiltinSkill = (skill: BuiltinSkill | SkillListItem): skill is BuiltinSkill =>
   !('id' in skill);
@@ -87,10 +85,6 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
       type: 'error',
     });
   };
-
-  // ===== Tags =====
-
-  const renderSourceTag = () => <SkillSourceTag source={skill.source} />;
 
   // ===== Actions =====
 
@@ -161,24 +155,16 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
 
   // ===== Detail Modal =====
 
-  const renderDetailModal = () => {
+  const handleOpenDetail = () => {
     if (isBuiltin) {
-      return (
-        <Modal
-          destroyOnHidden
-          footer={null}
-          open={detailOpen}
-          styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
-          title={tp('dev.title.skillDetails')}
-          width={960}
-          onCancel={() => setDetailOpen(false)}
-        >
-          <Suspense fallback={<div style={{ height: '100%' }} />}>
-            <BuiltinAgentSkillDetail skill={skill} />
-          </Suspense>
-        </Modal>
-      );
+      createBuiltinAgentSkillDetailModal({ identifier: skill.identifier });
+    } else {
+      setDetailOpen(true);
     }
+  };
+
+  const renderDetailModal = () => {
+    if (isBuiltin) return null;
     return (
       <>
         <Modal
@@ -219,12 +205,12 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
             <span
               className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}
-              onClick={() => setDetailOpen(true)}
+              onClick={handleOpenDetail}
             >
               {title}
             </span>
             <Tag icon={<Icon icon={PuzzleIcon} />} size={'small'} />
-            {renderSourceTag()}
+            <SkillSourceTag source={skill.source} />
           </Flexbox>
         </Flexbox>
         {renderActions()}
