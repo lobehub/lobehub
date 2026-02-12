@@ -80,8 +80,7 @@ const Schema = memo(() => {
         </Flexbox>
       )}
       {skillContent && (
-        <Flexbox gap={8} style={{ marginTop: 24 }}>
-          <Title level={3}>{ts('agentSkillDetail.skillContent')}</Title>
+        <Flexbox gap={8}>
           <Flexbox
             horizontal
             style={{
