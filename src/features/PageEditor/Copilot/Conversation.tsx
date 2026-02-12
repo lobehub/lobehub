@@ -1,9 +1,9 @@
-import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
+import { ActionBarContext } from '@/features/ChatInput/ActionBar/context';
 import { ChatInput, ChatList } from '@/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -17,6 +17,11 @@ import Welcome from './Welcome';
 const Search = actionMap['search'];
 
 const EMPTY_LEFT_ACTIONS: [] = [];
+
+const COMPACT_ACTION_SIZE = { blockSize: 28, size: 16 };
+const COMPACT_CONTEXT_VALUE = { actionSize: COMPACT_ACTION_SIZE };
+const COMPACT_ACTION_BAR_STYLE = { paddingLeft: 8, paddingRight: 4 };
+const COMPACT_SEND_BUTTON_PROPS = { size: 28 };
 
 interface ConversationProps {
   agentId: string;
@@ -52,17 +57,15 @@ const Conversation = memo<ConversationProps>(({ agentId }) => {
     [setActiveAgentId],
   );
 
-  const copilotItems: ChatInputActionsProps['items'] = useMemo(
-    () => [
-      {
-        alwaysDisplay: true,
-        children: (
+  const leftContent = useMemo(
+    () => (
+      <ActionBarContext value={COMPACT_CONTEXT_VALUE}>
+        <Flexbox horizontal align={'center'} gap={2}>
           <AgentSelectorAction agentId={currentAgentId} onAgentChange={handleAgentChange} />
-        ),
-        key: 'agent-selector',
-      },
-      { children: <Search />, key: 'search' },
-    ],
+          <Search />
+        </Flexbox>
+      </ActionBarContext>
+    ),
     [currentAgentId, handleAgentChange],
   );
 
@@ -82,10 +85,12 @@ const Conversation = memo<ConversationProps>(({ agentId }) => {
           <ChatList welcome={<Welcome />} />
         </Flexbox>
         <ChatInput
+          actionBarStyle={COMPACT_ACTION_BAR_STYLE}
           allowExpand={false}
-          extraActionItems={copilotItems}
           leftActions={EMPTY_LEFT_ACTIONS}
+          leftContent={leftContent}
           sendAreaPrefix={modelSelector}
+          sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
         />
       </Flexbox>
     </DragUploadZone>

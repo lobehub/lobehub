@@ -22,6 +22,10 @@ import { messageStateSelectors, useConversationStore } from '../store';
 
 export interface ChatInputProps {
   /**
+   * Custom style for the action bar container
+   */
+  actionBarStyle?: React.CSSProperties;
+  /**
    * Whether to allow fullscreen expand button
    */
   allowExpand?: boolean;
@@ -38,6 +42,10 @@ export interface ChatInputProps {
    * Left action buttons configuration
    */
   leftActions?: ActionKeys[];
+  /**
+   * Custom left content to replace the default ActionBar entirely
+   */
+  leftContent?: ReactNode;
   /**
    * Mention items for @ mentions (for group chat)
    */
@@ -76,8 +84,10 @@ export interface ChatInputProps {
  */
 const ChatInput = memo<ChatInputProps>(
   ({
+    actionBarStyle,
     allowExpand,
     leftActions = [],
+    leftContent,
     rightActions = [],
     children,
     extraActionItems,
@@ -170,7 +180,13 @@ const ChatInput = memo<ChatInputProps>(
             />
           </Flexbox>
         )}
-        <DesktopChatInput borderRadius={12} extraActionItems={extraActionItems} sendAreaPrefix={sendAreaPrefix} />
+        <DesktopChatInput
+          actionBarStyle={actionBarStyle}
+          borderRadius={12}
+          extraActionItems={extraActionItems}
+          leftContent={leftContent}
+          sendAreaPrefix={sendAreaPrefix}
+        />
       </WideScreenContainer>
     );
 

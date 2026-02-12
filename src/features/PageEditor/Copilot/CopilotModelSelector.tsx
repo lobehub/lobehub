@@ -1,10 +1,9 @@
-import { Center, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Center, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, Settings2Icon } from 'lucide-react';
-import { memo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { memo, useCallback, useState } from 'react';
 
-import Action from '@/features/ChatInput/ActionBar/components/Action';
+import ActionPopover from '@/features/ChatInput/ActionBar/components/ActionPopover';
 import ControlsForm from '@/features/ChatInput/ActionBar/Model/ControlsForm';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useAgentStore } from '@/store/agent';
@@ -28,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   trigger: css`
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 6px;
 
     :hover {
       background: ${cssVar.colorFillTertiary};
@@ -41,7 +40,7 @@ interface CopilotModelSelectorProps {
 }
 
 const CopilotModelSelector = memo<CopilotModelSelectorProps>(({ agentId }) => {
-  const { t } = useTranslation('chat');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [model, provider, updateAgentConfigById] = useAgentStore((s) => [
     agentByIdSelectors.getAgentModelById(agentId)(s),
@@ -65,8 +64,13 @@ const CopilotModelSelector = memo<CopilotModelSelectorProps>(({ agentId }) => {
 
   return (
     <Flexbox horizontal align={'center'}>
-      <ModelSwitchPanel model={model} provider={provider} onModelChange={handleModelChange}>
-        <Center horizontal className={styles.trigger} height={36} paddingInline={8}>
+      <ModelSwitchPanel
+        model={model}
+        openOnHover={false}
+        provider={provider}
+        onModelChange={handleModelChange}
+      >
+        <Center horizontal className={styles.trigger} height={28} paddingInline={6}>
           <Flexbox horizontal align={'center'} gap={2}>
             <span className={styles.name}>{displayName}</span>
             <ChevronDownIcon className={styles.chevron} size={12} />
@@ -74,17 +78,20 @@ const CopilotModelSelector = memo<CopilotModelSelectorProps>(({ agentId }) => {
         </Center>
       </ModelSwitchPanel>
       {isModelHasExtendParams && (
-        <Action
-          icon={Settings2Icon}
-          showTooltip={false}
-          style={{ borderRadius: 8 }}
-          title={t('extendParams.title')}
-          popover={{
-            content: <ControlsForm />,
-            minWidth: 350,
-            placement: 'topRight',
-          }}
-        />
+        <ActionPopover
+          content={<ControlsForm />}
+          minWidth={350}
+          open={settingsOpen}
+          placement={'topRight'}
+          trigger={'click'}
+          onOpenChange={setSettingsOpen}
+        >
+          <ActionIcon
+            icon={Settings2Icon}
+            size={{ blockSize: 28, size: 16 }}
+            onClick={() => setSettingsOpen(true)}
+          />
+        </ActionPopover>
       )}
     </Flexbox>
   );

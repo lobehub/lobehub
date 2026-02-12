@@ -58,6 +58,10 @@ export interface ModelSwitchPanelProps {
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   /**
+   * Whether to open the panel on hover. Defaults to true.
+   */
+  openOnHover?: boolean;
+  /**
    * Dropdown placement. Defaults to 'topLeft'.
    */
   placement?: DropdownPlacement;

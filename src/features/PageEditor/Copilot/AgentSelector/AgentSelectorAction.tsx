@@ -20,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     cursor: pointer;
-    border-radius: 24px;
+    border-radius: 12px;
     background: ${cssVar.colorFillTertiary};
 
     :hover {
@@ -122,7 +122,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ agentId, onAgentCh
       }}
       onOpenChange={setOpen}
     >
-      <Center horizontal className={cx(styles.container)} height={36} paddingInline={8}>
+      <Center horizontal className={cx(styles.container)} height={28} paddingInline={6}>
         <Flexbox horizontal align={'center'} gap={4}>
           <AgentAvatar
             avatar={typeof activeAgent?.avatar === 'string' ? activeAgent.avatar : undefined}
