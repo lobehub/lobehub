@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import fs from 'fs-extra';
 
-type ReleaseChannel = 'stable' | 'beta' | 'nightly';
+type ReleaseChannel = 'stable' | 'beta' | 'nightly' | 'canary';
 
 const rootDir = path.resolve(__dirname, '../..');
 const desktopDir = path.join(rootDir, 'apps/desktop');
@@ -74,7 +74,7 @@ const restoreFile = async (filePath: string, content?: Buffer) => {
 };
 
 const validateChannel = (channel: string): channel is ReleaseChannel =>
-  channel === 'stable' || channel === 'beta' || channel === 'nightly';
+  channel === 'stable' || channel === 'beta' || channel === 'nightly' || channel === 'canary';
 
 const runCommand = (command: string, env?: Record<string, string | undefined>) => {
   execSync(command, {
@@ -89,7 +89,7 @@ const main = async () => {
 
   if (!validateChannel(channel)) {
     console.error(
-      'Missing or invalid channel. Usage: npm run desktop:build-channel -- <stable|beta|nightly> [version] [--keep-changes]',
+      'Missing or invalid channel. Usage: npm run desktop:build-channel -- <stable|beta|nightly|canary> [version] [--keep-changes]',
     );
     process.exit(1);
   }

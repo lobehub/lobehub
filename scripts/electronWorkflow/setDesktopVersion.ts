@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import fs from 'fs-extra';
 
-type ReleaseType = 'stable' | 'beta' | 'nightly';
+type ReleaseType = 'stable' | 'beta' | 'nightly' | 'canary';
 
 // 获取脚本的命令行参数
 const version = process.argv[2];
@@ -11,14 +11,14 @@ const releaseType = process.argv[3] as ReleaseType;
 // 验证参数
 if (!version || !releaseType) {
   console.error(
-    'Missing parameters. Usage: bun run setDesktopVersion.ts <version> <stable|beta|nightly>',
+    'Missing parameters. Usage: bun run setDesktopVersion.ts <version> <stable|beta|nightly|canary>',
   );
   process.exit(1);
 }
 
-if (!['stable', 'beta', 'nightly'].includes(releaseType)) {
+if (!['stable', 'beta', 'nightly', 'canary'].includes(releaseType)) {
   console.error(
-    `Invalid release type: ${releaseType}. Must be one of 'stable', 'beta', 'nightly'.`,
+    `Invalid release type: ${releaseType}. Must be one of 'stable', 'beta', 'nightly', 'canary'.`,
   );
   process.exit(1);
 }
@@ -92,6 +92,13 @@ function updatePackageJson() {
         packageJson.productName = 'LobeHub-Nightly'; // Or 'LobeHub-Nightly'
         packageJson.name = 'lobehub-desktop-nightly'; // Or 'lobehub-desktop-nightly'
         console.log('🌙 Setting as Nightly version.');
+        updateAppIcon('nightly');
+        break;
+      }
+      case 'canary': {
+        packageJson.productName = 'LobeHub-Canary';
+        packageJson.name = 'lobehub-desktop-canary';
+        console.log('🐤 Setting as Canary version.');
         updateAppIcon('nightly');
         break;
       }
