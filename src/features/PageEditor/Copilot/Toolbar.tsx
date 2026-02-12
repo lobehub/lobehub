@@ -40,7 +40,13 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId }) => {
     <NavHeader
       showTogglePanelButton={false}
       left={
-        <Text ellipsis style={{ fontSize: 13, fontWeight: 500, maxWidth: 200 }} type={'secondary'}>
+        <Text
+          style={{ fontSize: 13, fontWeight: 500, marginLeft: 8 }}
+          type={'secondary'}
+          ellipsis={{
+            tooltipWhenOverflow: true,
+          }}
+        >
           {topicTitle}
         </Text>
       }

@@ -29,6 +29,7 @@ const NavHeader = memo<NavHeaderProps>(
 
     return (
       <Flexbox
+        allowShrink
         horizontal
         align={'center'}
         flex={'none'}
@@ -40,7 +41,14 @@ const NavHeader = memo<NavHeaderProps>(
         {...rest}
       >
         <TooltipGroup>
-          <Flexbox horizontal align={'center'} gap={2} justify={'flex-start'} style={styles?.left}>
+          <Flexbox
+            allowShrink
+            horizontal
+            align={'center'}
+            gap={2}
+            justify={'flex-start'}
+            style={styles?.left}
+          >
             {showTogglePanelButton && !expand && <ToggleLeftPanelButton />}
             {left}
           </Flexbox>
