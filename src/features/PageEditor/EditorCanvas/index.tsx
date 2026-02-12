@@ -21,7 +21,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
 
-  const slashItems = useSlashItems(editor);
+  const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor);
 
   return (
