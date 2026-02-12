@@ -198,6 +198,15 @@ const config = {
   dmg: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
     background: 'resources/dmg.png',
+    contents: [
+      { type: 'file', x: 256, y: 400 },
+      { type: 'link', path: '/Applications', x: 768, y: 400 },
+    ],
+    iconSize: 80,
+    window: {
+      height: 680,
+      width: 1024,
+    },
   },
 
   electronDownload: {
