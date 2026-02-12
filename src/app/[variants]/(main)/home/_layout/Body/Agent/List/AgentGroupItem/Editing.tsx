@@ -88,6 +88,7 @@ const Editing = memo<EditingProps>(({ id, title, avatar, memberAvatars, toggleEd
 
   return (
     <Popover
+      arrow={false}
       open={editing}
       overlayInnerStyle={{ padding: 4 }}
       placement="bottomLeft"
