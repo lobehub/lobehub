@@ -1,9 +1,9 @@
 'use client';
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal } from '@lobehub/ui';
 import { App, Space } from 'antd';
-import { DownloadIcon, MoreHorizontalIcon, Plus, PuzzleIcon, Trash2 } from 'lucide-react';
+import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -209,7 +209,6 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             >
               {title}
             </span>
-            <Tag icon={<Icon icon={PuzzleIcon} />} size={'small'} />
             <SkillSourceTag source={skill.source} />
           </Flexbox>
         </Flexbox>
