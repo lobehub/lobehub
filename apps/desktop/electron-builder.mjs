@@ -199,13 +199,13 @@ const config = {
     artifactName: '${productName}-${version}-${arch}.${ext}',
     background: 'resources/dmg.png',
     contents: [
-      { type: 'file', x: 256, y: 400 },
-      { type: 'link', path: '/Applications', x: 768, y: 400 },
+      { type: 'file', x: 150, y: 240 },
+      { type: 'link', path: '/Applications', x: 450, y: 240 },
     ],
     iconSize: 80,
     window: {
-      height: 680,
-      width: 1024,
+      height: 400,
+      width: 600,
     },
   },
 
