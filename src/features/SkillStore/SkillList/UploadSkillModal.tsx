@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { lambdaClient } from '@/libs/trpc/client/lambda';
 import { uploadService } from '@/services/upload';
+import { useToolStore } from '@/store/tool';
 
 interface UploadSkillModalProps {
   onOpenChange: (open: boolean) => void;
@@ -19,6 +20,7 @@ interface UploadSkillModalProps {
 const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { message } = App.useApp();
+  const importAgentSkillFromZip = useToolStore((s) => s.importAgentSkillFromZip);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +49,7 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
         url: metadata.path,
       });
 
-      await lambdaClient.agentSkills.importFromZip.mutate({ zipFileId: result.id });
+      await importAgentSkillFromZip({ zipFileId: result.id });
       message.success(t('agentSkillModal.importSuccess'));
       handleClose();
     } catch (err: any) {

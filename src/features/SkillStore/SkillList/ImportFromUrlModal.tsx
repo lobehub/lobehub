@@ -6,7 +6,7 @@ import { ArrowLeftRight, Link, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaClient } from '@/libs/trpc/client/lambda';
+import { useToolStore } from '@/store/tool';
 
 interface ImportFromUrlModalProps {
   onOpenChange: (open: boolean) => void;
@@ -16,6 +16,7 @@ interface ImportFromUrlModalProps {
 const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { message } = App.useApp();
+  const importAgentSkillFromUrl = useToolStore((s) => s.importAgentSkillFromUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
@@ -34,7 +35,7 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
     setError(null);
 
     try {
-      await lambdaClient.agentSkills.importFromUrl.mutate({ url: trimmed });
+      await importAgentSkillFromUrl({ url: trimmed });
       message.success(t('agentSkillModal.importSuccess'));
       handleClose();
     } catch (err: any) {

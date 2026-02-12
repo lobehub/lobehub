@@ -6,7 +6,7 @@ import { ArrowLeftRight, Github, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaClient } from '@/libs/trpc/client/lambda';
+import { useToolStore } from '@/store/tool';
 
 interface ImportFromGithubModalProps {
   onOpenChange: (open: boolean) => void;
@@ -16,6 +16,7 @@ interface ImportFromGithubModalProps {
 const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenChange }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { message } = App.useApp();
+  const importAgentSkillFromGitHub = useToolStore((s) => s.importAgentSkillFromGitHub);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
@@ -34,7 +35,7 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
     setError(null);
 
     try {
-      await lambdaClient.agentSkills.importFromGitHub.mutate({ gitUrl: trimmed });
+      await importAgentSkillFromGitHub({ gitUrl: trimmed });
       message.success(t('agentSkillModal.importSuccess'));
       handleClose();
     } catch (err: any) {
