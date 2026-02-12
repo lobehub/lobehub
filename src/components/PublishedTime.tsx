@@ -16,7 +16,8 @@ const formatTime = (time?: string) => {
   }
 };
 
-const formatDate = (date: string, t: (key: string) => string) => {
+const formatDate = (date: string, t: (key: string) => string, template?: string) => {
+  if (template) return dayjs(date).format(template);
   const d = dayjs(date);
   const now = dayjs();
 
@@ -40,10 +41,11 @@ interface PublishedTimeProps {
   className?: string;
   date: string;
   style?: CSSProperties;
+  template?: string;
 }
-const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className }) => {
+const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, template }) => {
   const { t } = useTranslation('discover');
-  const time = formatDate(date, t);
+  const time = formatDate(date, t as (key: string) => string, template);
 
   return (
     <time
