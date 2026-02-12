@@ -1,4 +1,4 @@
-import type { BuiltinSkill } from '@lobechat/types';
+import { type BuiltinSkill } from '@lobechat/types';
 
 import { systemPrompt } from './content';
 
@@ -11,4 +11,5 @@ export const ArtifactsSkill: BuiltinSkill = {
     'Generate visual and interactive artifacts like SVG graphics, HTML pages, and React components',
   identifier: ArtifactsIdentifier,
   name: 'Artifacts',
+  source: 'builtin',
 };

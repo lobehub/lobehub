@@ -1,12 +1,12 @@
 'use client';
 
 import {
-  type KlavisServerType,
-  type LobehubSkillProviderType,
   getKlavisServerByServerIdentifier,
   getLobehubSkillProviderById,
   KLAVIS_SERVER_TYPES,
+  type KlavisServerType,
   LOBEHUB_SKILL_PROVIDERS,
+  type LobehubSkillProviderType,
   RECOMMENDED_SKILLS,
   RecommendedSkillType,
 } from '@lobechat/const';
@@ -24,8 +24,8 @@ import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
-  builtinToolSelectors,
   agentSkillsSelectors,
+  builtinToolSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
@@ -34,8 +34,8 @@ import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
 
-import BuiltinSkillItem from './BuiltinSkillItem';
 import AgentSkillItem from './AgentSkillItem';
+import BuiltinSkillItem from './BuiltinSkillItem';
 import KlavisSkillItem from './KlavisSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
@@ -67,19 +67,24 @@ const SkillList = memo(() => {
   const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
+  const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
   const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
   const uninstalledBuiltinTools = useToolStore(
     builtinToolSelectors.uninstalledBuiltinTools,
     isEqual,
   );
 
-  const [useFetchLobehubSkillConnections, useFetchUserKlavisServers, useFetchAgentSkills, useFetchUninstalledBuiltinTools] =
-    useToolStore((s) => [
-      s.useFetchLobehubSkillConnections,
-      s.useFetchUserKlavisServers,
-      s.useFetchAgentSkills,
-      s.useFetchUninstalledBuiltinTools,
-    ]);
+  const [
+    useFetchLobehubSkillConnections,
+    useFetchUserKlavisServers,
+    useFetchAgentSkills,
+    useFetchUninstalledBuiltinTools,
+  ] = useToolStore((s) => [
+    s.useFetchLobehubSkillConnections,
+    s.useFetchUserKlavisServers,
+    s.useFetchAgentSkills,
+    s.useFetchUninstalledBuiltinTools,
+  ]);
 
   useFetchInstalledPlugins();
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
@@ -260,6 +265,7 @@ const SkillList = memo(() => {
   ]);
 
   const hasAnySkills =
+    builtinSkills.length > 0 ||
     integrations.length > 0 ||
     marketAgentSkills.length > 0 ||
     userAgentSkills.length > 0 ||
@@ -274,6 +280,9 @@ const SkillList = memo(() => {
       </Center>
     );
   }
+
+  const renderBuiltinAgentSkills = () =>
+    builtinSkills.map((skill) => <AgentSkillItem key={skill.identifier} skill={skill} />);
 
   const renderIntegrations = () =>
     integrations.map((item) => {
@@ -340,16 +349,18 @@ const SkillList = memo(() => {
       />
     ));
 
+  const hasIntegrationsSection = builtinSkills.length > 0 || integrations.length > 0;
   const hasCommunitySection = communityMCPs.length > 0 || marketAgentSkills.length > 0;
   const hasCustomSection = userAgentSkills.length > 0 || customMCPs.length > 0;
 
   return (
     <div className={styles.container}>
+      {builtinSkills.length > 0 && renderBuiltinAgentSkills()}
       {integrations.length > 0 && renderIntegrations()}
-      {integrations.length > 0 && hasCommunitySection && <Divider style={{ margin: 0 }} />}
+      {hasIntegrationsSection && hasCommunitySection && <Divider style={{ margin: 0 }} />}
       {marketAgentSkills.length > 0 && renderMarketAgentSkills()}
       {communityMCPs.length > 0 && renderCommunityMCPs()}
-      {(integrations.length > 0 || hasCommunitySection) && hasCustomSection && (
+      {(hasIntegrationsSection || hasCommunitySection) && hasCustomSection && (
         <Divider style={{ margin: 0 }} />
       )}
       {userAgentSkills.length > 0 && renderUserAgentSkills()}

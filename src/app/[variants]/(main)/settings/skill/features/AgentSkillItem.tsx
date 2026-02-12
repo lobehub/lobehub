@@ -1,51 +1,31 @@
 'use client';
 
-import { type SkillListItem } from '@lobechat/types';
-import { Avatar, DropdownMenu, Flexbox, Icon, Button as LobeButton, Modal, Tag } from '@lobehub/ui';
+import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
+import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
 import { App, Space } from 'antd';
-import { createStaticStyles } from 'antd-style';
-import { DownloadIcon, MoreHorizontalIcon, Package, PuzzleIcon, Trash2 } from 'lucide-react';
-import { Suspense, lazy, memo, useState } from 'react';
+import { DownloadIcon, MoreHorizontalIcon, Plus, PuzzleIcon, Trash2 } from 'lucide-react';
+import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SkillSourceTag from '@/components/SkillSourceTag';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
+import { builtinToolSelectors } from '@/store/tool/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
+
+import { styles } from './style';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
+const BuiltinAgentSkillDetail = lazy(
+  () => import('@/features/AgentSkillDetail/BuiltinAgentSkillDetail'),
+);
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 12px;
-    padding-inline: 0;
-  `,
-  icon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  title: css`
-    cursor: pointer;
-    font-size: 15px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-}));
+const isBuiltinSkill = (skill: BuiltinSkill | SkillListItem): skill is BuiltinSkill =>
+  !('id' in skill);
 
 interface AgentSkillItemProps {
-  skill: SkillListItem;
+  skill: BuiltinSkill | SkillListItem;
 }
 
 const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
@@ -56,11 +36,26 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  const isBuiltin = isBuiltinSkill(skill);
+
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
+  const [installBuiltinTool, uninstallBuiltinTool, isBuiltinInstalled] = useToolStore((s) => [
+    s.installBuiltinTool,
+    s.uninstallBuiltinTool,
+    isBuiltin ? builtinToolSelectors.isBuiltinToolInstalled(skill.identifier)(s) : true,
+  ]);
+
+  const title = isBuiltin
+    ? t(`tools.builtins.${skill.identifier}.title`, { defaultValue: skill.name })
+    : skill.name;
+
+  const avatar = isBuiltin ? skill.avatar : '🧩';
+
+  // ===== Handlers =====
 
   const handleDownload = async () => {
-    if (!skill.zipFileHash) return;
-
+    if (isBuiltin || !skill.zipFileHash) return;
     setLoading(true);
     try {
       const result = await agentSkillService.getZipUrl(skill.id);
@@ -77,86 +72,164 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
       centered: true,
       okButtonProps: { danger: true },
       onOk: async () => {
-        setLoading(true);
-        try {
-          await deleteAgentSkill(skill.id);
-        } finally {
-          setLoading(false);
+        if (isBuiltin) {
+          await uninstallBuiltinTool(skill.identifier);
+        } else {
+          setLoading(true);
+          try {
+            await deleteAgentSkill(skill.id);
+          } finally {
+            setLoading(false);
+          }
         }
       },
-      title: t('store.actions.confirmUninstall', { ns: 'plugin' }),
+      title: tp('store.actions.confirmUninstall'),
       type: 'error',
     });
   };
 
+  // ===== Tags =====
+
+  const renderSourceTag = () => <SkillSourceTag source={skill.source} />;
+
+  // ===== Actions =====
+
+  const renderActions = () => {
+    if (isBuiltin) {
+      if (isBuiltinInstalled) {
+        return (
+          <Flexbox horizontal align="center" gap={12}>
+            <span className={styles.connected}>{t('tools.builtins.installed')}</span>
+            <DropdownMenu
+              placement="bottomRight"
+              items={[
+                {
+                  danger: true,
+                  icon: <Icon icon={Trash2} />,
+                  key: 'uninstall',
+                  label: tp('store.actions.uninstall'),
+                  onClick: handleUninstall,
+                },
+              ]}
+            >
+              <Button icon={MoreHorizontalIcon} />
+            </DropdownMenu>
+          </Flexbox>
+        );
+      }
+      return (
+        <Flexbox horizontal align="center" gap={12}>
+          <span className={styles.disconnected}>{t('tools.builtins.uninstalled')}</span>
+          <Button icon={Plus} onClick={() => installBuiltinTool(skill.identifier)}>
+            {tp('store.actions.install')}
+          </Button>
+        </Flexbox>
+      );
+    }
+
+    return (
+      <Space.Compact>
+        <Button onClick={() => setEditOpen(true)}>{tp('store.actions.configure')}</Button>
+        <DropdownMenu
+          placement="bottomRight"
+          items={[
+            ...(skill.zipFileHash
+              ? [
+                  {
+                    icon: <DownloadIcon size={16} />,
+                    key: 'download',
+                    label: tc('download'),
+                    onClick: handleDownload,
+                  },
+                  { type: 'divider' as const },
+                ]
+              : []),
+            {
+              danger: true,
+              icon: <Trash2 size={16} />,
+              key: 'uninstall',
+              label: tp('store.actions.uninstall'),
+              onClick: handleUninstall,
+            },
+          ]}
+        >
+          <Button icon={MoreHorizontalIcon} loading={loading} />
+        </DropdownMenu>
+      </Space.Compact>
+    );
+  };
+
+  // ===== Detail Modal =====
+
+  const renderDetailModal = () => {
+    if (isBuiltin) {
+      return (
+        <Modal
+          destroyOnHidden
+          footer={null}
+          open={detailOpen}
+          styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
+          title={tp('dev.title.skillDetails')}
+          width={960}
+          onCancel={() => setDetailOpen(false)}
+        >
+          <Suspense fallback={<div style={{ height: '100%' }} />}>
+            <BuiltinAgentSkillDetail skill={skill} />
+          </Suspense>
+        </Modal>
+      );
+    }
+    return (
+      <>
+        <Modal
+          destroyOnHidden
+          footer={null}
+          open={detailOpen}
+          styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
+          title={tp('dev.title.skillDetails')}
+          width={960}
+          onCancel={() => setDetailOpen(false)}
+        >
+          <Suspense fallback={<div style={{ height: '100%' }} />}>
+            <AgentSkillDetail skillId={skill.id} />
+          </Suspense>
+        </Modal>
+        <Suspense>
+          <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
+        </Suspense>
+      </>
+    );
+  };
+
+  const showDisconnected = isBuiltin && !isBuiltinInstalled;
+
   return (
     <>
       <Flexbox
+        horizontal
         align="center"
         className={styles.container}
         gap={16}
-        horizontal
         justify="space-between"
       >
-        <Flexbox align="center" gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-          <div className={styles.icon}>
-            <Avatar avatar={'🧩'} size={32} />
+        <Flexbox horizontal align="center" gap={12} style={{ flex: 1, overflow: 'hidden' }}>
+          <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
+            <Avatar avatar={avatar} size={32} />
           </div>
-          <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
-            <span className={styles.title} onClick={() => setDetailOpen(true)}>
-              {skill.name}
+          <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
+            <span
+              className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}
+              onClick={() => setDetailOpen(true)}
+            >
+              {title}
             </span>
             <Tag icon={<Icon icon={PuzzleIcon} />} size={'small'} />
-            <Tag color={'warning'} icon={<Icon icon={Package} />} size={'small'}>
-              {t('store.customPlugin', { ns: 'plugin' })}
-            </Tag>
+            {renderSourceTag()}
           </Flexbox>
         </Flexbox>
-        <Space.Compact>
-          <LobeButton onClick={() => setEditOpen(true)}>{tp('store.actions.configure')}</LobeButton>
-          <DropdownMenu
-            items={[
-              ...(skill.zipFileHash
-                ? [
-                    {
-                      icon: <DownloadIcon size={16} />,
-                      key: 'download',
-                      label: tc('download'),
-                      onClick: handleDownload,
-                    },
-                    { type: 'divider' as const },
-                  ]
-                : []),
-              {
-                danger: true,
-                icon: <Trash2 size={16} />,
-                key: 'uninstall',
-                label: t('store.actions.uninstall', { ns: 'plugin' }),
-                onClick: handleUninstall,
-              },
-            ]}
-            placement="bottomRight"
-          >
-            <LobeButton icon={MoreHorizontalIcon} loading={loading} />
-          </DropdownMenu>
-        </Space.Compact>
+        {renderActions()}
       </Flexbox>
-      <Modal
-        destroyOnHidden
-        footer={null}
-        onCancel={() => setDetailOpen(false)}
-        open={detailOpen}
-        styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
-        title={tp('dev.title.skillDetails')}
-        width={960}
-      >
-        <Suspense fallback={<div style={{ height: '100%' }} />}>
-          <AgentSkillDetail skillId={skill.id} />
-        </Suspense>
-      </Modal>
-      <Suspense>
-        <AgentSkillEdit onClose={() => setEditOpen(false)} open={editOpen} skillId={skill.id} />
-      </Suspense>
+      {renderDetailModal()}
     </>
   );
 });

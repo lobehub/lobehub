@@ -45,6 +45,7 @@ export interface BuiltinSkill {
   description: string;
   identifier: string;
   name: string;
+  source: 'builtin';
 }
 
 // ===== Skill Source =====
