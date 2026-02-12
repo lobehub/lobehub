@@ -4,6 +4,8 @@ import debug from 'debug';
 import { sha256 } from 'js-sha256';
 import { z } from 'zod';
 
+import { AgentSkillModel } from '@/database/models/agentSkill';
+import { FileModel } from '@/database/models/file';
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
@@ -87,7 +89,7 @@ const callCodeInterpreterToolSchema = z.object({
   params: z.record(z.any()),
   toolName: z.string(),
   topicId: z.string(),
-  userId: z.string(),
+  userId: z.string().optional(), // Optional: fallback to ctx.userId if not provided
 });
 
 // Schema for export and upload file (combined operation)
@@ -228,7 +230,9 @@ export const marketRouter = router({
   callCodeInterpreterTool: marketToolProcedure
     .input(callCodeInterpreterToolSchema)
     .mutation(async ({ input, ctx }) => {
-      const { toolName, params, userId, topicId } = input;
+      const { toolName, params, topicId } = input;
+      // Use client-provided userId if available, otherwise fallback to authenticated userId
+      const userId = input?.userId || ctx.userId;
 
       log('Calling cloud code interpreter tool: %s with params: %O', toolName, {
         params,
@@ -237,13 +241,68 @@ export const marketRouter = router({
       });
 
       try {
+        // For execScript tool, look up skill zipUrl if config is provided
+        let enhancedParams = params;
+        if (toolName === 'execScript' && params.config) {
+          const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId);
+
+          // Look up skill by name
+          let skill;
+          if (params.config.name) {
+            skill = await agentSkillModel.findByName(params.config.name);
+
+            // If skill not found, return error with available skills
+            if (!skill) {
+              const allSkills = await agentSkillModel.findAll();
+              const availableSkills = allSkills.data.map((s) => s.name).join(', ');
+
+              const errorMessage = availableSkills
+                ? `Skill "${params.config.name}" not found. Available skills: ${availableSkills}`
+                : `Skill "${params.config.name}" not found. No skills available. Please import a skill first.`;
+
+              log('Skill not found: %s. Available skills: %s', params.config.name, availableSkills);
+
+              return {
+                error: {
+                  message: errorMessage,
+                  name: 'SkillNotFound',
+                },
+                result: null,
+                sessionExpiredAndRecreated: false,
+                success: false,
+              } as CallToolResult;
+            }
+          }
+
+          // If skill exists and has zipFileHash, get the full URL
+          if (skill?.zipFileHash) {
+            const fileService = ctx.fileService;
+            // Get S3 key from globalFiles
+            const fileModel = new FileModel(ctx.serverDB, userId);
+            const fileInfo = await fileModel.checkHash(skill.zipFileHash);
+
+            if (fileInfo.isExist && fileInfo.url) {
+              // Convert S3 key to full URL
+              const fullUrl = await fileService.getFullFileUrl(fileInfo.url);
+              if (fullUrl) {
+                // Add zipUrl to params
+                enhancedParams = {
+                  ...params,
+                  zipUrl: fullUrl,
+                };
+                log('Added zipUrl to execScript params for skill %s: %s', skill.name, fullUrl);
+              }
+            }
+          }
+        }
+
         // Use marketService from ctx
         const market = ctx.marketService.market;
 
         // Call market-sdk's runBuildInTool
         const response = await market.plugins.runBuildInTool(
           toolName as CodeInterpreterToolName,
-          params as any,
+          enhancedParams as any,
           { topicId, userId },
         );
 

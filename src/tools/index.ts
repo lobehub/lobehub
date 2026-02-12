@@ -8,16 +8,26 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { isDesktop } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
-import { ArtifactsManifest } from './artifacts';
+/**
+ * Default tool IDs that will always be added to the tools list.
+ * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
+ */
+export const defaultToolIds = [
+  WebBrowsingManifest.identifier,
+  KnowledgeBaseManifest.identifier,
+  SkillsManifest.identifier,
+];
 
 export const builtinTools: LobeBuiltinTool[] = [
   {
-    identifier: ArtifactsManifest.identifier,
-    manifest: ArtifactsManifest,
+    hidden: true,
+    identifier: SkillsManifest.identifier,
+    manifest: SkillsManifest,
     type: 'builtin',
   },
   {

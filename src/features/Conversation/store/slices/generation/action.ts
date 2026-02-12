@@ -223,7 +223,7 @@ export const generationSlice: StateCreator<
       type: 'regenerate',
     });
 
-    // IMPORTANT: Delete first, then regenerate (LOBE-2533)
+    // IMPORTANT: Delete first, then regenerate
     // If we regenerate first, it switches to a new branch, causing the original
     // message to no longer appear in displayMessages. Then deleteMessage cannot
     // find the message and fails silently.

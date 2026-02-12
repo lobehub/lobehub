@@ -8,18 +8,17 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-
-import { ArtifactsManifest } from './artifacts';
 
 export const builtinToolIdentifiers: string[] = [
   AgentBuilderManifest.identifier,
-  ArtifactsManifest.identifier,
   LocalSystemManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   CloudSandboxManifest.identifier,
   PageAgentManifest.identifier,
+  SkillsManifest.identifier,
   GroupAgentBuilderManifest.identifier,
   GroupManagementManifest.identifier,
   GTDManifest.identifier,

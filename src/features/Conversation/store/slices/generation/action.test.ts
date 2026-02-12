@@ -464,7 +464,7 @@ describe('Generation Actions', () => {
     });
 
     it('should delete message BEFORE regeneration to prevent message not found issue (LOBE-2533)', async () => {
-      // This test verifies the fix for LOBE-2533:
+      // This test verifies the fix:
       // When "delete and regenerate" is called, if regeneration happens first,
       // it switches to a new branch, causing the original message to no longer
       // appear in displayMessages. Then deleteMessage cannot find the message

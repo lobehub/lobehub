@@ -1,0 +1,14 @@
+{
+  "name": "@lobechat/builtin-skills",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {},
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

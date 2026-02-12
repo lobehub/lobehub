@@ -102,10 +102,21 @@ export class FileService {
   }
 
   /**
-   * Upload media file
+   * Upload media file (images only)
    */
   public async uploadMedia(key: string, buffer: Buffer): Promise<{ key: string }> {
     return this.impl.uploadMedia(key, buffer);
+  }
+
+  /**
+   * Upload buffer with specified content type (for any file type)
+   */
+  public async uploadBuffer(
+    key: string,
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<{ key: string }> {
+    return this.impl.uploadBuffer(key, buffer, contentType);
   }
 
   /**
@@ -146,6 +157,71 @@ export class FileService {
       fileId: id,
       url: `${appEnv.APP_URL}/f/${id}`,
     };
+  }
+
+  /**
+   * Delete user file record but keep globalFiles record
+   * Used for GitHub skill imports where we only need globalFiles for foreign key
+   *
+   * @param fileId - File ID to delete from user's files table
+   */
+  public async deleteUserFileRecord(fileId: string): Promise<void> {
+    await this.fileModel.delete(fileId, false); // false = don't remove globalFiles
+  }
+
+  /**
+   * Create global file record only (no user file record)
+   * Used for skill resources that should not appear in user's file list
+   *
+   * @param params - File parameters
+   * @returns fileHash for reference
+   */
+  public async createGlobalFile(params: {
+    fileHash: string;
+    fileType: string;
+    metadata?: { dirname: string; filename: string; path: string };
+    size: number;
+    url: string;
+  }): Promise<{ fileHash: string }> {
+    // Check if hash already exists
+    const { isExist } = await this.fileModel.checkHash(params.fileHash);
+
+    // Only create if not exists
+    if (!isExist) {
+      await this.fileModel.createGlobalFile({
+        creator: this.userId,
+        fileType: params.fileType,
+        hashId: params.fileHash,
+        metadata: params.metadata,
+        size: params.size,
+        url: params.url,
+      });
+    }
+
+    return { fileHash: params.fileHash };
+  }
+
+  /**
+   * Get file content by hash from globalFiles
+   * Used for reading skill resources stored in globalFiles only
+   *
+   * @param fileHash - File hash (globalFiles.hashId)
+   * @returns File content as string
+   */
+  public async getFileContentByHash(fileHash: string): Promise<string> {
+    const result = await this.fileModel.checkHash(fileHash);
+    if (!result.isExist || !result.url) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: `Global file not found: ${fileHash}` });
+    }
+    return this.getFileContent(result.url);
+  }
+
+  public async getFileByteArrayByHash(fileHash: string): Promise<Uint8Array> {
+    const result = await this.fileModel.checkHash(fileHash);
+    if (!result.isExist || !result.url) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: `Global file not found: ${fileHash}` });
+    }
+    return this.getFileByteArray(result.url);
   }
 
   /**

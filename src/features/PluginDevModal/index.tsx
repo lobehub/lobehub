@@ -1,12 +1,11 @@
+import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { Button, Drawer, Flexbox, Segmented, Tag } from '@lobehub/ui';
+import { type LobeToolCustomPlugin } from '@lobechat/types';
+import { Button, Drawer, Flexbox } from '@lobehub/ui';
 import { App, Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { isDesktop } from '@/const/version';
-import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
@@ -24,7 +23,6 @@ interface DevModalProps {
 const DevModal = memo<DevModalProps>(
   ({ open, mode = 'create', value, onValueChange, onSave, onOpenChange, onDelete }) => {
     const isEditMode = mode === 'edit';
-    const [configMode, setConfigMode] = useState<'mcp' | 'claude'>('mcp');
     const { t } = useTranslation('plugin');
     const { message } = App.useApp();
 
@@ -138,34 +136,6 @@ const DevModal = memo<DevModalProps>(
             }}
           >
             <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
-              <Segmented
-                block
-                value={configMode}
-                variant={'filled'}
-                options={[
-                  {
-                    label: t('dev.manifest.mode.mcp'),
-                    value: 'mcp',
-                  },
-                  {
-                    disabled: true,
-                    label: (
-                      <Flexbox horizontal align={'center'} gap={4} justify={'center'}>
-                        {t('dev.manifest.mode.claude')}
-                        <div>
-                          <Tag variant={'filled'}>{t('dev.manifest.mode.claudeWip')}</Tag>
-                        </div>
-                      </Flexbox>
-                    ),
-                    value: 'claude',
-                  },
-                ]}
-                onChange={(e) => {
-                  if (e === 'claude') return; // Claude Skill is disabled
-                  setConfigMode(e as 'mcp' | 'claude');
-                }}
-              />
-
               <MCPManifestForm form={form} isEditMode={isEditMode} />
             </Flexbox>
             <PluginPreview form={form} />

@@ -48,12 +48,17 @@ export interface FileServiceImpl {
   getKeyFromFullUrl: (url: string) => Promise<string | null>;
 
   /**
+   * Upload buffer with specified content type (for any file type)
+   */
+  uploadBuffer(key: string, buffer: Buffer, contentType: string): Promise<{ key: string }>;
+
+  /**
    * Upload content
    */
   uploadContent: (path: string, content: string) => Promise<any>;
 
   /**
-   * Upload media file
+   * Upload media file (images only)
    */
   uploadMedia: (key: string, buffer: Buffer) => Promise<{ key: string }>;
 }

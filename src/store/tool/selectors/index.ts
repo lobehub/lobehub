@@ -1,3 +1,4 @@
+export { agentSkillsSelectors } from '../slices/agentSkills/selectors';
 export {
   builtinToolSelectors,
   type LobeToolMetaWithAvailability,

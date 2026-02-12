@@ -133,6 +133,7 @@ class ChatService {
       chatConfig,
       enabledManifests = [],
       enabledToolIds = [],
+      plugins,
       tools,
     } = resolvedAgentConfig;
 
@@ -251,6 +252,7 @@ class ChatService {
       manifests: enabledManifests,
       messages,
       model: payload.model,
+      plugins,
       provider: payload.provider!,
       sessionId: options?.trace?.sessionId,
       stepContext: options?.stepContext,

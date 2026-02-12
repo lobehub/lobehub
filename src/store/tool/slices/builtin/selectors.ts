@@ -1,8 +1,9 @@
-import { type LobeToolMeta } from '@lobechat/types';
+import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 
 import { shouldEnableTool } from '@/helpers/toolFilters';
 
 import { type ToolStoreState } from '../../initialState';
+import { agentSkillsSelectors } from '../agentSkills/selectors';
 import { KlavisServerStatus } from '../klavisStore';
 
 export interface LobeToolMetaWithAvailability extends LobeToolMeta {
@@ -25,6 +26,22 @@ const toBuiltinMetaWithAvailability = (
 ): LobeToolMetaWithAvailability => ({
   ...toBuiltinMeta(t),
   availableInWeb: shouldEnableTool(t.identifier),
+});
+
+const toSkillMeta = (s: BuiltinSkill): LobeToolMeta => ({
+  author: 'LobeHub',
+  identifier: s.identifier,
+  meta: {
+    avatar: s.avatar,
+    description: s.description,
+    title: s.name,
+  },
+  type: 'builtin' as const,
+});
+
+const toSkillMetaWithAvailability = (s: BuiltinSkill): LobeToolMetaWithAvailability => ({
+  ...toSkillMeta(s),
+  availableInWeb: true,
 });
 
 const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
@@ -72,7 +89,10 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
     })
     .map(toBuiltinMeta);
 
-  return [...builtinMetas, ...getKlavisMetas(s)];
+  const skillMetas = (s.builtinSkills || []).map(toSkillMeta);
+  const agentSkillMetas = agentSkillsSelectors.agentSkillMetaList(s);
+
+  return [...skillMetas, ...agentSkillMetas, ...builtinMetas, ...getKlavisMetas(s)];
 };
 
 // Tools that should never be exposed in agent profile configuration
@@ -80,6 +100,7 @@ const EXCLUDED_TOOLS = new Set([
   'lobe-agent-builder',
   'lobe-group-agent-builder',
   'lobe-group-management',
+  'lobe-skills',
 ]);
 
 /**
@@ -97,7 +118,12 @@ const allMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[] => {
     })
     .map(toBuiltinMetaWithAvailability);
 
-  return [...builtinMetas, ...getKlavisMetasWithAvailability(s)];
+  const skillMetas = (s.builtinSkills || []).map(toSkillMetaWithAvailability);
+  const agentSkillMetas = agentSkillsSelectors
+    .agentSkillMetaList(s)
+    .map((meta) => ({ ...meta, availableInWeb: true }));
+
+  return [...skillMetas, ...agentSkillMetas, ...builtinMetas, ...getKlavisMetasWithAvailability(s)];
 };
 
 /**

@@ -16,6 +16,7 @@ import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
 import { notebookExecutor } from './lobe-notebook';
 import { pageAgentExecutor } from './lobe-page-agent';
+import { skillsExecutor } from './lobe-skills';
 import { webBrowsing } from './lobe-web-browsing';
 
 // ==================== Import and register all executors ====================
@@ -130,5 +131,6 @@ registerExecutors([
   memoryExecutor,
   notebookExecutor,
   pageAgentExecutor,
+  skillsExecutor,
   webBrowsing,
 ]);

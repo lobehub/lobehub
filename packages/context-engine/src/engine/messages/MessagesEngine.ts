@@ -32,6 +32,7 @@ import {
   KnowledgeInjector,
   PageEditorContextInjector,
   PageSelectionsInjector,
+  SkillContextProvider,
   SystemRoleInjector,
   ToolSystemRoleProvider,
   UserMemoryInjector,
@@ -120,6 +121,7 @@ export class MessagesEngine {
       historySummary,
       formatHistorySummary,
       knowledge,
+      skillsConfig,
       toolsConfig,
       capabilities,
       variableGenerators,
@@ -202,6 +204,15 @@ export class MessagesEngine {
         enabled: isGroupAgentBuilderEnabled,
         groupContext: groupAgentBuilderContext,
       }),
+
+      // 7.5. Skill context injection (conditionally added)
+      ...(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0
+        ? [
+            new SkillContextProvider({
+              enabledSkills: skillsConfig.enabledSkills,
+            }),
+          ]
+        : []),
 
       // 8. Tool system role injection (conditionally added)
       ...(toolsConfig?.manifests && toolsConfig.manifests.length > 0

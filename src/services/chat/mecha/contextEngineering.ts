@@ -43,6 +43,7 @@ import {
   resolveGlobalIdentities,
   resolveTopicMemories,
 } from './memoryManager';
+import { createSkillEngine } from './skillEngineering';
 
 const log = debug('context-engine:contextEngineering');
 
@@ -69,6 +70,8 @@ interface ContextEngineeringContext {
   memoryContext?: MemoryContext;
   messages: UIChatMessage[];
   model: string;
+  /** Agent's enabled plugin/tool/skill identifiers (from agentConfig.plugins) */
+  plugins?: string[];
   provider: string;
   sessionId?: string;
   /**
@@ -99,6 +102,7 @@ export const contextEngineering = async ({
   agentId,
   groupId,
   initialContext,
+  plugins,
   stepContext,
   topicId,
   memoryContext,
@@ -380,6 +384,11 @@ export const contextEngineering = async ({
     // runtime context
     initialContext,
     stepContext,
+
+    // Skills configuration
+    skillsConfig: {
+      enabledSkills: plugins ? createSkillEngine().getEnabledSkills(plugins) : undefined,
+    },
 
     // Tools configuration
     toolsConfig: {

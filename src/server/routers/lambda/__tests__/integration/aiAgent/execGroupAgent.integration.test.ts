@@ -305,7 +305,6 @@ describe('execGroupAgent', () => {
   });
 
   describe('Stream Events', () => {
-    // TODO: LOBE-1748 - Fix missing agent_runtime_end event
     // This test documents the current bug where agent_runtime_end is not sent
     // When fixed, remove .todo and the test should pass
     it.todo('should emit agent_runtime_end event when agent completes', async () => {
@@ -334,7 +333,6 @@ describe('execGroupAgent', () => {
 
       // IMPORTANT: This test verifies that agent_runtime_end event is sent
       // If this test fails, it means the SSE stream won't close properly
-      // See LOBE-1748 for details
       expect(eventTypes).toContain('agent_runtime_end');
 
       // Also verify the event has correct data structure

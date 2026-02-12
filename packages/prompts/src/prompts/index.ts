@@ -10,5 +10,6 @@ export * from './knowledgeBaseQA';
 export * from './messagesToText';
 export * from './plugin';
 export * from './search';
+export * from './skills';
 export * from './systemRole';
 export * from './userMemory';

@@ -1,5 +1,5 @@
 export * from './base64';
-export * from './chunkers'
+export * from './chunkers';
 export * from './client/cookie';
 export * from './detectChinese';
 export * from './env';
@@ -9,6 +9,7 @@ export * from './format';
 export * from './imageToBase64';
 export * from './keyboard';
 export * from './merge';
+export * from './mimeType';
 export * from './multimodalContent';
 export * from './number';
 export * from './object';

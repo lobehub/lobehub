@@ -16,7 +16,7 @@ import { type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
 import debug from 'debug';
 
-import { builtinTools } from '@/tools';
+import { builtinTools, defaultToolIds } from '@/tools';
 
 import {
   type ServerAgentToolsContext,
@@ -109,7 +109,7 @@ export const createServerAgentToolsEngine = (
     // Pass additional manifests (e.g., LobeHub Skills)
     additionalManifests,
     // Add default tools based on configuration
-    defaultToolIds: [WebBrowsingManifest.identifier, KnowledgeBaseManifest.identifier],
+    defaultToolIds,
     // Create search-aware enableChecker for this request
     enableChecker: ({ pluginId }) => {
       // Filter LocalSystem tool on server (it's desktop-only)

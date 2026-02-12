@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
  * Integration tests for multi-round tool execution
- * Tests for LOBE-1657 fix: tool messages should not be duplicated across rounds
+ * Tests fix: tool messages should not be duplicated across rounds
  *
  * Note: AgentStateManager and StreamEventManager will automatically use
  * InMemory implementations when Redis is not available (test environment).
@@ -242,7 +242,7 @@ afterEach(async () => {
 
 describe('Multi-Round Tool Execution', () => {
   /**
-   * This test verifies the fix for LOBE-1657:
+   * This test verifies the fix:
    * When executing multiple rounds of batch tool calls, tool messages should not be duplicated.
    *
    * Scenario: LLM returns multiple tool calls in each round

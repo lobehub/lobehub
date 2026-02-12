@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Modal } from '@lobehub/ui';
-import { memo, Suspense, useState } from 'react';
+import { Suspense, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -44,20 +44,16 @@ const McpSkillItem = memo<McpSkillItemProps>(
           gap={16}
           justify="space-between"
         >
-          <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
-            <Flexbox
-              horizontal
-              align="center"
-              gap={16}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setDetailOpen(true)}
-            >
-              <div className={styles.icon}>
-                <PluginAvatar avatar={avatar} size={32} />
-              </div>
-              <span className={styles.title}>{title}</span>
+          <Flexbox align="center" gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+            <div className={styles.icon}>
+              <PluginAvatar avatar={avatar} size={32} />
+            </div>
+            <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
+              <span className={styles.title} onClick={() => setDetailOpen(true)}>
+                {title}
+              </span>
+              <PluginTag author={author} isMCP={isMCP} type={type} />
             </Flexbox>
-            <PluginTag author={author} isMCP={isMCP} type={type} />
           </Flexbox>
           <Actions identifier={identifier} isMCP={isMCP} type={type} />
         </Flexbox>

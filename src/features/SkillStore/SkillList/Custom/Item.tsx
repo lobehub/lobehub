@@ -7,6 +7,7 @@ import { MoreVerticalIcon, PackageSearch, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MCPTag from '@/components/Plugins/MCPTag';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginDetailModal from '@/features/PluginDetailModal';
 import DevModal from '@/features/PluginDevModal';
@@ -88,9 +89,12 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
         >
           <PluginAvatar avatar={avatar} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <span className={styles.title} onClick={() => setDetailOpen(true)}>
-              {title || identifier}
-            </span>
+            <Flexbox align="center" gap={8} horizontal>
+              <span className={styles.title} onClick={() => setDetailOpen(true)}>
+                {title || identifier}
+              </span>
+              <MCPTag showText={false} />
+            </Flexbox>
             {description && <span className={itemStyles.description}>{description}</span>}
           </Flexbox>
           <Flexbox horizontal>
