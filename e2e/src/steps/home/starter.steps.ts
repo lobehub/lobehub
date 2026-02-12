@@ -12,7 +12,7 @@ import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { llmMockManager, presetResponses } from '../../mocks/llm';
-import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
+import { type CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // Store created IDs for verification
 let createdAgentId: string | null = null;
@@ -124,8 +124,12 @@ When('用户在输入框中输入 {string}', async function (this: CustomWorld, 
   console.log(`   ✅ 已输入 "${message}"`);
 });
 
-When('用户按 Enter 发送', async function (this: CustomWorld) {
+When('用户按 Enter 发送', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 按 Enter 发送...');
+
+  // Wait for editor's debounced onChange (100ms default) to sync inputMessage to store
+  // Without this, inputMessage is empty and send() silently returns
+  await this.page.waitForTimeout(200);
 
   // Listen for navigation to capture the agent/group ID
   const navigationPromise = this.page.waitForURL(/\/(agent|group)\/.*\/profile/, {
@@ -156,8 +160,11 @@ When('用户按 Enter 发送', async function (this: CustomWorld) {
   console.log('   ✅ 已发送消息');
 });
 
-When('用户按 Enter 发送创建文档', async function (this: CustomWorld) {
+When('用户按 Enter 发送创建文档', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 按 Enter 发送创建文档...');
+
+  // Wait for editor's debounced onChange (100ms default) to sync inputMessage to store
+  await this.page.waitForTimeout(200);
 
   // Listen for navigation to capture the document ID
   const navigationPromise = this.page.waitForURL(/\/page\/[^/]+/, {
