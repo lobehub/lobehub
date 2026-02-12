@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import { type LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeZhipuAI, params } from './index';
 
@@ -378,39 +378,6 @@ describe('LobeZhipuAI - custom features', () => {
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
           expect.objectContaining({
             thinking: { type: 'disabled' },
-          }),
-          expect.anything(),
-        );
-      });
-    });
-
-    describe('Stream parameter', () => {
-      it('should always set stream to true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            stream: true,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should override stream parameter to true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          stream: false,
-          temperature: 0.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            stream: true,
           }),
           expect.anything(),
         );

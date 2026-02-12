@@ -1,7 +1,9 @@
 import { ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import {
+  createOpenAICompatibleRuntime,
+  type OpenAICompatibleFactoryOptions,
+} from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
 import { OpenAIStream } from '../../core/streams/openai';
 import { convertIterableToStream } from '../../core/streams/protocol';
@@ -17,8 +19,17 @@ export const params = {
   baseURL: 'https://open.bigmodel.cn/api/paas/v4',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { enabledSearch, max_tokens, model, temperature, thinking, tools, top_p, ...rest } =
-        payload;
+      const {
+        enabledSearch,
+        max_tokens,
+        model,
+        stream,
+        temperature,
+        thinking,
+        tools,
+        top_p,
+        ...rest
+      } = payload;
 
       const zhipuTools = enabledSearch
         ? [
@@ -58,8 +69,9 @@ export const params = {
         ...rest,
         ...resolvedParams,
         model,
-        stream: true,
+        stream,
         thinking: thinking ? { type: thinking.type } : undefined,
+        tool_stream: stream && /^glm-(?:4\.(?:6|7)|5)$/.test(model) ? true : undefined,
         tools: zhipuTools,
       } as any;
     },
