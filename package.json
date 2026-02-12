@@ -295,7 +295,7 @@
     "motion": "^12.29.0",
     "nanoid": "^5.1.6",
     "next": "^16.1.5",
-    "next-mdx-remote": "^5.0.0",
+    "next-mdx-remote": "^6.0.0",
     "next-themes": "^0.4.6",
     "nextjs-toploader": "^3.9.17",
     "node-machine-id": "^1.1.12",
