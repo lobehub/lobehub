@@ -20,7 +20,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     cursor: pointer;
+
     border-radius: 12px;
+    border-start-start-radius: 8px;
+    border-end-start-radius: 8px;
+
     background: ${cssVar.colorFillTertiary};
 
     :hover {
@@ -55,7 +59,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ agentId, onAgentCh
           description: pageAgentData?.description || null,
           id: pageAgentId,
           pinned: false,
-          title: t('builtinCopilot', { defaultValue: 'Built-in Copilot', ns: 'chat' }),
+          title: t('builtinCopilot'),
           type: 'agent' as const,
           updatedAt: new Date(),
         },

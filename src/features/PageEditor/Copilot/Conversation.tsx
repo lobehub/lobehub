@@ -20,7 +20,7 @@ const EMPTY_LEFT_ACTIONS: [] = [];
 
 const COMPACT_ACTION_SIZE = { blockSize: 28, size: 16 };
 const COMPACT_CONTEXT_VALUE = { actionSize: COMPACT_ACTION_SIZE };
-const COMPACT_ACTION_BAR_STYLE = { paddingLeft: 8, paddingRight: 4 };
+const COMPACT_ACTION_BAR_STYLE = { paddingLeft: 4, paddingRight: 4 };
 const COMPACT_SEND_BUTTON_PROPS = { size: 28 };
 
 interface ConversationProps {
