@@ -20,7 +20,7 @@ const MenuLabel = ({ desc, title }: { desc: string; title: ReactNode }) => (
   </Flexbox>
 );
 
-const AddSkillButton = ({ ref, ...props }) => {
+const AddSkillButton = () => {
   const { t } = useTranslation('setting');
   const [showMcpModal, setMcpModal] = useState(false);
   const [showUrlModal, setUrlModal] = useState(false);
@@ -84,7 +84,7 @@ const AddSkillButton = ({ ref, ...props }) => {
           },
         ]}
       >
-        <Button icon={Grid2x2Plus} ref={ref}>
+        <Button icon={Grid2x2Plus}>
           {t('tab.addCustomSkill')}
           <Icon icon={ChevronDown} size={14} />
         </Button>

@@ -35,7 +35,8 @@ type ToolStoreAction = CustomPluginAction &
   BuiltinToolAction &
   PluginMCPStoreAction &
   KlavisStoreAction &
-  LobehubSkillStoreAction;
+  LobehubSkillStoreAction &
+  AgentSkillsAction;
 
 const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<ToolStore, [['zustand/devtools', never]]>>
