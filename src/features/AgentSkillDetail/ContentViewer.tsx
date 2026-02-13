@@ -157,6 +157,12 @@ const isMarkdownFile = (path: string) => {
   return ext === 'md' || ext === 'mdx';
 };
 
+const parseFrontmatter = (content: string): { body: string; frontmatter?: string } => {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { body: content };
+  return { body: match[2], frontmatter: match[1] };
+};
+
 interface ContentViewerProps {
   contentMap: Record<string, string>;
   liveContent?: string;
@@ -168,13 +174,22 @@ const ContentViewer = memo<ContentViewerProps>(
   ({ skillDetail, selectedFile, contentMap, liveContent }) => {
     if (selectedFile === 'SKILL.md') {
       const displayContent = liveContent ?? skillDetail?.content;
+      if (!displayContent) {
+        return (
+          <div className={styles.docWrapper}>
+            <p style={{ opacity: 0.45 }}>No content</p>
+          </div>
+        );
+      }
+      const { frontmatter, body } = parseFrontmatter(displayContent);
       return (
         <div className={styles.docWrapper}>
-          {displayContent ? (
-            <Markdown variant={'chat'}>{displayContent}</Markdown>
-          ) : (
-            <p style={{ opacity: 0.45 }}>No content</p>
+          {frontmatter && (
+            <Highlighter fullFeatured language={'yaml'} variant={'outlined'}>
+              {frontmatter}
+            </Highlighter>
           )}
+          <Markdown variant={'chat'}>{body}</Markdown>
         </div>
       );
     }
@@ -182,9 +197,15 @@ const ContentViewer = memo<ContentViewerProps>(
     const content = contentMap[selectedFile];
 
     if (isMarkdownFile(selectedFile)) {
+      const { frontmatter, body } = parseFrontmatter(content);
       return (
         <div className={styles.docWrapper}>
-          <Markdown variant={'chat'}>{content}</Markdown>
+          {frontmatter && (
+            <Highlighter fullFeatured language={'yaml'} variant={'outlined'}>
+              {frontmatter}
+            </Highlighter>
+          )}
+          <Markdown variant={'chat'}>{body}</Markdown>
         </div>
       );
     }
