@@ -8,13 +8,9 @@ import { memo } from 'react';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   codeWrapper: css`
     position: relative;
+    overflow-x: auto;
     margin-block-start: 16px;
     padding-block-end: calc(100cqb - 1lh);
-
-    div,
-    pre {
-      overflow: visible !important;
-    }
 
     pre {
       margin: 0;
@@ -45,10 +41,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   docWrapper: css`
-    max-width: 720px;
+    max-width: 798px;
     margin-inline: auto;
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: 24px;
   `,
 }));
 

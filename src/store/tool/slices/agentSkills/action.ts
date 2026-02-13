@@ -1,24 +1,24 @@
-import type {
-  CreateSkillInput,
-  ImportGitHubInput,
-  ImportUrlInput,
-  ImportZipInput,
-  SkillImportResult,
-  SkillItem,
-  SkillListItem,
-  SkillResourceTreeNode,
-  UpdateSkillInput,
+import {
+  type CreateSkillInput,
+  type ImportGitHubInput,
+  type ImportUrlInput,
+  type ImportZipInput,
+  type SkillImportResult,
+  type SkillItem,
+  type SkillListItem,
+  type SkillResourceTreeNode,
+  type UpdateSkillInput,
 } from '@lobechat/types';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
+import useSWR, { mutate, type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { agentSkillService } from '@/services/skill';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { ToolStore } from '../../store';
-import type { AgentSkillsState } from './initialState';
+import { type ToolStore } from '../../store';
+import { type AgentSkillsState } from './initialState';
 
 const n = setNamespace('agentSkills');
 
@@ -63,6 +63,9 @@ export const createAgentSkillsSlice: StateCreator<
       false,
       n('deleteAgentSkill'),
     );
+
+    // Clear SWR cache
+    await mutate(['fetchAgentSkillDetail', id].join('-'), undefined, { revalidate: false });
 
     await get().refreshAgentSkills();
   },
@@ -120,6 +123,9 @@ export const createAgentSkillsSlice: StateCreator<
         n('updateAgentSkill'),
       );
     }
+
+    // Clear SWR cache so next open refetches instead of showing stale data
+    await mutate(['fetchAgentSkillDetail', params.id].join('-'), undefined, { revalidate: false });
 
     await get().refreshAgentSkills();
     return result;

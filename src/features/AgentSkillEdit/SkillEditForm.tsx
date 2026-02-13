@@ -25,16 +25,10 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 8px;
   `,
   wrapper: css`
+    max-width: 798px;
+    margin-inline: auto;
     padding-block: 0;
-    padding-inline: 16px;
-
-    .ant-form-item {
-      padding-block: 8px;
-    }
-
-    .ant-form-item .ant-row {
-      gap: 4px;
-    }
+    padding-inline: 24px;
   `,
 }));
 

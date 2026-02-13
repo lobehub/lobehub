@@ -16,35 +16,21 @@ import { useToolStore } from '@/store/tool';
 import SkillEditForm, { type SkillEditFormValues } from './SkillEditForm';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  detailFileTree: css`
-    overflow-y: auto;
-    flex-shrink: 0;
-    width: 200px;
-    padding: 8px;
-  `,
-  detailPanel: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  detailViewer: css`
-    container-type: size;
-    overflow: auto;
-    flex: 1;
-  `,
   divider: css`
     flex-shrink: 0;
     width: 1px;
     background: ${cssVar.colorBorderSecondary};
   `,
-  formPanel: css`
+  left: css`
     overflow-y: auto;
     flex-shrink: 0;
-    width: 50%;
-    min-width: 400px;
+    width: 240px;
+    padding: 8px;
+  `,
+  right: css`
+    container-type: size;
+    overflow: auto;
+    flex: 1;
   `,
 }));
 
@@ -78,7 +64,6 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
   const [saving, setSaving] = useState(false);
   const [form] = AForm.useForm();
-  const liveContent = AForm.useWatch('content', form);
 
   const { data, isLoading } = useToolStore((s) => s.useFetchAgentSkillDetail)(
     open ? skillId : undefined,
@@ -179,37 +164,40 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
             e.stopPropagation();
           }}
         >
-          <div className={styles.formPanel}>
-            <SkillEditForm
-              form={form}
-              initialValues={initialValues}
-              name={skillDetail?.name}
-              onSubmit={handleSubmit}
+          <div className={styles.left}>
+            <FileTree
+              resourceTree={resourceTree}
+              selectedFile={selectedFile}
+              onSelectFile={setSelectedFile}
             />
           </div>
-          <div className={styles.detailPanel}>
-            <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>
-              <div className={styles.detailFileTree}>
-                <FileTree
-                  resourceTree={resourceTree}
-                  selectedFile={selectedFile}
-                  onSelectFile={setSelectedFile}
-                />
-              </div>
-              <div className={styles.divider} />
-              <div className={styles.detailViewer}>
-                {selectedFile !== 'SKILL.md' && (
-                  <Alert banner showIcon message={t('agentSkillEdit.fileReadonly')} type="info" />
-                )}
+          <div className={styles.divider} />
+          <div className={styles.right}>
+            <div
+              style={{
+                display: selectedFile === 'SKILL.md' ? undefined : 'none',
+                height: '100%',
+                overflow: 'auto',
+              }}
+            >
+              <SkillEditForm
+                form={form}
+                initialValues={initialValues}
+                name={skillDetail?.name}
+                onSubmit={handleSubmit}
+              />
+            </div>
+            {selectedFile !== 'SKILL.md' && (
+              <>
+                <Alert banner showIcon message={t('agentSkillEdit.fileReadonly')} type="info" />
                 <ContentViewer
                   contentMap={contentMap}
                   key={selectedFile}
-                  liveContent={selectedFile === 'SKILL.md' ? liveContent : undefined}
                   selectedFile={selectedFile}
                   skillDetail={skillDetail}
                 />
-              </div>
-            </Flexbox>
+              </>
+            )}
           </div>
         </Flexbox>
       )}
