@@ -98,11 +98,13 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             )}
           </Flexbox>
           <Flexbox horizontal>
-            <ActionIcon
-              icon={PackageSearch}
-              title={t('store.actions.manifest')}
-              onClick={() => setEditOpen(true)}
-            />
+            {skill.source === 'user' && (
+              <ActionIcon
+                icon={PackageSearch}
+                title={t('store.actions.manifest')}
+                onClick={() => setEditOpen(true)}
+              />
+            )}
             <DropdownMenu
               nativeButton={false}
               placement="bottomRight"
@@ -145,9 +147,11 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           <AgentSkillDetail skillId={skill.id} />
         </Suspense>
       </Modal>
-      <Suspense>
-        <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
-      </Suspense>
+      {skill.source === 'user' && (
+        <Suspense>
+          <AgentSkillEdit open={editOpen} skillId={skill.id} onClose={() => setEditOpen(false)} />
+        </Suspense>
+      )}
     </>
   );
 });
