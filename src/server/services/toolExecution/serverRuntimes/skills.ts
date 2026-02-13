@@ -1,5 +1,10 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
-import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
+import {
+  type CommandResult,
+  type MarketSkillItem,
+  type SearchSkillParams,
+  SkillsIdentifier,
+} from '@lobechat/builtin-tool-skills';
 import {
   type ExportFileResult,
   type SkillImportServiceResult,
@@ -259,6 +264,40 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         filename,
         success: false,
       };
+    }
+  };
+
+  searchSkill = async (
+    params: SearchSkillParams,
+  ): Promise<{ items: MarketSkillItem[]; page: number; pageSize: number; total: number }> => {
+    log('Searching skills with params: %O', params);
+
+    try {
+      const result = await this.marketService.searchSkill(params);
+      log('Search skills result: %O', result);
+      return result;
+    } catch (error) {
+      log('Error searching skills: %O', error);
+      throw error;
+    }
+  };
+
+  importFromMarket = async (identifier: string): Promise<SkillImportServiceResult> => {
+    log('Importing skill from market: %s', identifier);
+
+    try {
+      // Get download URL and import ZIP
+      // The ZIP contains SKILL.md (manifest + content) and resources
+      // Everything is extracted and stored according to DB structure
+      const downloadUrl = this.marketService.getSkillDownloadUrl(identifier);
+      log('Download URL: %s', downloadUrl);
+
+      const result = await this.importFromZipUrl(downloadUrl);
+      log('Import from market result: %O', result);
+      return result;
+    } catch (error) {
+      log('Error importing skill from market: %O', error);
+      throw error;
     }
   };
 }

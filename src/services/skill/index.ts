@@ -35,6 +35,10 @@ class AgentSkillService {
     return lambdaClient.agentSkills.importFromZip.mutate(params);
   }
 
+  async importFromMarket(identifier: string): Promise<SkillImportResult | undefined> {
+    return lambdaClient.agentSkills.importFromMarket.mutate({ identifier });
+  }
+
   // ===== Query =====
 
   async getById(id: string): Promise<SkillItem | undefined> {

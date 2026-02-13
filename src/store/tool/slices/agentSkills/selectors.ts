@@ -26,16 +26,21 @@ const isAgentSkill =
     (s.agentSkills || []).some((skill) => skill.identifier === identifier);
 
 const agentSkillMetaList = (s: ToolStoreState): LobeToolMeta[] =>
-  (s.agentSkills || []).map((skill) => ({
-    author: skill.manifest?.author?.name || 'User',
-    identifier: skill.identifier,
-    meta: {
-      avatar: '🧩',
-      description: skill.description ?? skill.manifest?.description ?? '',
-      title: skill.name,
-    },
-    type: 'builtin' as const,
-  }));
+  (s.agentSkills || []).map((skill) => {
+    const author = skill.manifest?.author;
+    const authorName = typeof author === 'string' ? author : author?.name || 'User';
+
+    return {
+      author: authorName,
+      identifier: skill.identifier,
+      meta: {
+        avatar: '🧩',
+        description: skill.description ?? skill.manifest?.description ?? '',
+        title: skill.name,
+      },
+      type: 'builtin' as const,
+    };
+  });
 
 export const agentSkillsSelectors = {
   agentSkillMetaList,
