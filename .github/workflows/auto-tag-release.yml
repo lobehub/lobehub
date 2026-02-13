@@ -41,19 +41,28 @@ jobs:
             echo "⏭️ Not a release PR"
           fi
 
-      - name: Detect hotfix PR (branch prefix)
+      - name: Detect hotfix PR (branch prefix + commit prefix gate)
         id: hotfix
         if: steps.release.outputs.should_tag != 'true'
         run: |
           HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
           echo "Head ref: $HEAD_REF"
+          echo "PR Title: $PR_TITLE"
 
-          if [[ "$HEAD_REF" == hotfix/* ]]; then
-            echo "should_tag=true" >> $GITHUB_OUTPUT
-            echo "✅ Detected hotfix PR"
-          else
+          if [[ "$HEAD_REF" != hotfix/* ]]; then
             echo "should_tag=false" >> $GITHUB_OUTPUT
             echo "⏭️ Not a hotfix PR"
+            exit 0
+          fi
+
+          # Gate: PR title must match style/feat/fix/refactor prefix (with optional gitmoji)
+          if echo "$PR_TITLE" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:'; then
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "✅ Detected hotfix PR with valid commit prefix"
+          else
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Hotfix PR but title does not match style/feat/fix/refactor prefix, skipping tag"
           fi
 
       - name: Prepare main branch
