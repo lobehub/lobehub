@@ -144,6 +144,9 @@
       "stylelint --fix",
       "eslint --fix",
       "prettier --parser=typescript --write"
+    ],
+    "*.{yml,yaml}": [
+      "eslint --fix"
     ]
   },
   "overrides": {
