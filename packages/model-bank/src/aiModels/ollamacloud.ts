@@ -1,6 +1,32 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import  { type AIChatModelCard } from '../types/aiModel';
 
 const ollamaCloudModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
+      'MiniMax-M2.5 is a state-of-the-art large language model designed for real-world productivity and coding tasks.',
+    displayName: 'MiniMax M2.5',
+    enabled: true,
+    id: 'minimax-m2.5',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
+    displayName: 'GLM-5',
+    enabled: true,
+    id: 'glm-5',
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -46,20 +72,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 3 Pro is Google’s most intelligent model, with state-of-the-art reasoning, multimodal understanding, and strong agent and vibe-coding capabilities.',
-    displayName: 'Gemini 3 Pro Preview',
-    id: 'gemini-3-pro-preview',
-    releasedAt: '2025-11-20',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576,
-    description:
       'Gemini 3 Flash is the smartest model built for speed, combining cutting-edge intelligence with excellent search grounding.',
     displayName: 'Gemini 3 Flash Preview',
     id: 'gemini-3-flash-preview',
@@ -73,7 +85,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 204_800,
     displayName: 'MiniMax M2.1',
-    enabled: true,
     id: 'minimax-m2.1',
     type: 'chat',
   },
@@ -98,7 +109,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       "GLM-4.7 is Zhipu's latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities, long-term task planning, and tool collaboration. It achieves leading performance among open-source models on multiple public benchmarks. General capabilities are improved with more concise and natural responses and more immersive writing. For complex agent tasks, instruction following during tool calls is stronger, and the frontend aesthetics and long-term task completion efficiency of Artifacts and Agentic Coding are further enhanced.",
     displayName: 'GLM-4.7',
-    enabled: true,
     id: 'glm-4.7',
     type: 'chat',
   },

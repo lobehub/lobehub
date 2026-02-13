@@ -1,7 +1,7 @@
-import type { ChatModelCard } from '@lobechat/types';
-import type { AIBaseModelCard, AiModelSettings, ExtendParamsType } from 'model-bank';
+import  { type ChatModelCard } from '@lobechat/types';
+import  { type AIBaseModelCard, type AiModelSettings, type ExtendParamsType } from 'model-bank';
 
-import type { ModelProviderKey } from '../types';
+import  { type ModelProviderKey } from '../types';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -31,7 +31,7 @@ export const MODEL_LIST_CONFIGS = {
   },
   deepseek: {
     functionCallKeywords: ['v3', 'r1', 'deepseek-chat'],
-    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.1', 'v3.2'],
+    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.'],
     visionKeywords: ['ocr'],
   },
   google: {
@@ -65,14 +65,14 @@ export const MODEL_LIST_CONFIGS = {
   },
   moonshot: {
     functionCallKeywords: ['moonshot', 'kimi'],
-    reasoningKeywords: ['thinking'],
-    visionKeywords: ['vision', 'kimi-latest', 'kimi-thinking-preview'],
+    reasoningKeywords: ['thinking', 'k2.5'],
+    visionKeywords: ['vision', 'kimi-latest', 'kimi-thinking-preview', 'k2.5'],
   },
   openai: {
     excludeKeywords: ['audio'],
-    functionCallKeywords: ['4o', '4.1', 'o3', 'o4', 'oss'],
-    reasoningKeywords: ['o1', 'o3', 'o4', 'oss'],
-    visionKeywords: ['4o', '4.1', 'o4'],
+    functionCallKeywords: ['4o', '4.1', 'o3', 'o4', 'oss', '-5'],
+    reasoningKeywords: ['o1', 'o3', 'o4', 'oss', '-5'],
+    visionKeywords: ['4o', '4.1', 'o4', '-5'],
   },
   qwen: {
     functionCallKeywords: [
@@ -85,7 +85,7 @@ export const MODEL_LIST_CONFIGS = {
       'qwen2.5',
       'qwen3',
     ],
-    reasoningKeywords: ['qvq', 'qwq', 'qwen3', '!-instruct-', '!-coder-', '!-max-'],
+    reasoningKeywords: ['qvq', 'qwq', 'qwen3', '!-instruct-', '!-coder-'],
     visionKeywords: ['qvq', '-vl', '-omni'],
   },
   replicate: {
@@ -106,7 +106,7 @@ export const MODEL_LIST_CONFIGS = {
     visionKeywords: ['v0'],
   },
   volcengine: {
-    functionCallKeywords: ['1.5', '1-5', '1.6', '1-6'],
+    functionCallKeywords: ['seed'],
     reasoningKeywords: ['thinking', 'seed', 'ui-tars'],
     visionKeywords: ['vision', '-m', 'seed', 'ui-tars'],
   },
@@ -130,8 +130,8 @@ export const MODEL_LIST_CONFIGS = {
     visionKeywords: ['vision'],
   },
   zhipu: {
-    functionCallKeywords: ['glm-4', 'glm-z1'],
-    reasoningKeywords: ['glm-zero', 'glm-z1', 'glm-4.'],
+    functionCallKeywords: ['glm-4', 'glm-z1', 'glm-5'],
+    reasoningKeywords: ['glm-zero', 'glm-z1', 'glm-4.', 'glm-5'],
     visionKeywords: ['re:glm-4(\\.\\d)?v'],
   },
 } as const;
