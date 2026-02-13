@@ -8,6 +8,13 @@ export const DEFAULT_SEARCH_USER_MEMORY_TOP_K = {
   experiences: 0,
   preferences: 3,
 };
+
+export const MEMORY_SEARCH_TOP_K_LIMITS = {
+  high: { activities: 6, contexts: 4, experiences: 4, preferences: 6 },
+  low: { activities: 2, contexts: 0, experiences: 0, preferences: 2 },
+  medium: { ...DEFAULT_SEARCH_USER_MEMORY_TOP_K },
+} as const;
+
 export interface UserMemoryConfigItem {
   model: string;
   provider: string;
