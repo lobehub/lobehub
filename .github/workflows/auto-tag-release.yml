@@ -41,7 +41,7 @@ jobs:
             echo "⏭️ Not a release PR"
           fi
 
-      - name: Detect hotfix PR (branch prefix + commit prefix gate)
+      - name: Detect hotfix PR (branch first, title fallback)
         id: hotfix
         if: steps.release.outputs.should_tag != 'true'
         run: |
@@ -50,19 +50,20 @@ jobs:
           echo "Head ref: $HEAD_REF"
           echo "PR Title: $PR_TITLE"
 
-          if [[ "$HEAD_REF" != hotfix/* ]]; then
-            echo "should_tag=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Not a hotfix PR"
+          # Priority 1: hotfix/* branch always counts as hotfix, ignore PR title gate.
+          if [[ "$HEAD_REF" == hotfix/* ]]; then
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "✅ Detected hotfix PR from hotfix/* branch (title gate bypassed)"
             exit 0
           fi
 
-          # Gate: PR title must match style/feat/fix/refactor prefix (with optional gitmoji)
-          if echo "$PR_TITLE" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:'; then
+          # Priority 2: fallback to PR title prefix gate (legacy behavior).
+          if echo "$PR_TITLE" | grep -qiE '^(💄[[:space:]]*)?style(\(.+\))?:|^(✨[[:space:]]*)?feat(\(.+\))?:|^(🐛[[:space:]]*)?fix(\(.+\))?:|^(♻️[[:space:]]*)?refactor(\(.+\))?:|^((🐛|🩹)[[:space:]]*)?hotfix(\(.+\))?:'; then
             echo "should_tag=true" >> $GITHUB_OUTPUT
-            echo "✅ Detected hotfix PR with valid commit prefix"
+            echo "✅ Detected hotfix PR from title prefix gate"
           else
             echo "should_tag=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Hotfix PR but title does not match style/feat/fix/refactor prefix, skipping tag"
+            echo "⏭️ Not a hotfix PR (neither hotfix/* branch nor style/feat/fix/refactor/hotfix title prefix)"
           fi
 
       - name: Prepare main branch
