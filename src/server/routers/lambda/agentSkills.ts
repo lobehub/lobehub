@@ -7,6 +7,7 @@ import { FileModel } from '@/database/models/file';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { MarketService } from '@/server/services/market';
 import {
   SkillImportError,
   SkillImporter,
@@ -58,6 +59,7 @@ const skillProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
     ctx: {
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
       fileService: new FileService(ctx.serverDB, ctx.userId),
+      marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
       skillImporter: new SkillImporter(ctx.serverDB, ctx.userId),
       skillModel: new AgentSkillModel(ctx.serverDB, ctx.userId),
       skillResourceService: new SkillResourceService(ctx.serverDB, ctx.userId),
@@ -167,6 +169,19 @@ export const agentSkillsRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         return await ctx.skillImporter.importFromZip(input);
+      } catch (error) {
+        handleSkillImportError(error);
+      }
+    }),
+
+  importFromMarket: skillProcedure
+    .input(z.object({ identifier: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Get download URL from market service
+        const downloadUrl = ctx.marketService.getSkillDownloadUrl(input.identifier);
+        // Import using the download URL
+        return await ctx.skillImporter.importFromUrl({ url: downloadUrl });
       } catch (error) {
         handleSkillImportError(error);
       }

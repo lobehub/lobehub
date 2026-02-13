@@ -9,7 +9,8 @@ export const skillAuthorSchema = z.object({
 
 export const skillManifestSchema = z
   .object({
-    author: skillAuthorSchema.optional(),
+    // Author can be either a string or an object (for compatibility with market skills)
+    author: z.union([z.string(), skillAuthorSchema]).optional(),
 
     // Required: skill description
     description: z.string().min(1, 'Skill description is required'),

@@ -15,7 +15,7 @@ import { AgentSkillModel } from '@/database/models/agentSkill';
 import { GitHub, GitHubNotFoundError, GitHubParseError } from '@/server/modules/GitHub';
 import { FileService } from '@/server/services/file';
 
-import { SkillImportError } from './errors';
+import { SkillImportError, SkillManifestError } from './errors';
 import { SkillParser } from './parser';
 import { SkillResourceService } from './resource';
 
@@ -291,32 +291,75 @@ export class SkillImporter {
       throw new SkillImportError('Invalid URL format', 'INVALID_URL');
     }
 
-    // 2. Fetch SKILL.md content
-    let content: string;
+    // 2. Fetch content (auto-detect SKILL.md or ZIP)
+    let manifest: SkillManifest;
+    let skillContent: string;
+    let zipHash: string | undefined;
+    let resources: Map<string, Buffer> | undefined;
+    let zipBuffer: Buffer | undefined;
+
     try {
       log('importFromUrl: fetching URL...');
-      const response = await fetch(input.url);
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
+      let response: Response;
+      try {
+        response = await fetch(input.url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
       if (!response.ok) {
         if (response.status === 404) {
-          throw new SkillImportError(`SKILL.md not found at ${input.url}`, 'NOT_FOUND');
+          throw new SkillImportError(`Resource not found at ${input.url}`, 'NOT_FOUND');
         }
         throw new SkillImportError(
           `Failed to fetch URL: ${response.status} ${response.statusText}`,
           'DOWNLOAD_FAILED',
         );
       }
-      content = await response.text();
-      log('importFromUrl: fetched content length=%d', content.length);
+
+      // Detect if it's a ZIP file based on URL or content-type
+      const contentType = response.headers.get('content-type') || '';
+      const isZip =
+        url.pathname.endsWith('.zip') ||
+        url.pathname.includes('/download') ||
+        contentType.includes('application/zip') ||
+        contentType.includes('application/octet-stream');
+
+      if (isZip) {
+        // Handle ZIP file
+        log('importFromUrl: detected ZIP file, parsing as package...');
+        zipBuffer = Buffer.from(await response.arrayBuffer());
+        const parsed = await this.parser.parseZipPackage(zipBuffer);
+        manifest = parsed.manifest;
+        skillContent = parsed.content;
+        zipHash = parsed.zipHash;
+        resources = parsed.resources;
+        log('importFromUrl: parsed ZIP, manifest=%o, resources count=%d', manifest, resources.size);
+      } else {
+        // Handle plain SKILL.md
+        log('importFromUrl: detected SKILL.md, parsing as markdown...');
+        const content = await response.text();
+        const parsed = this.parser.parseSkillMd(content);
+        manifest = parsed.manifest;
+        skillContent = parsed.content;
+        log('importFromUrl: parsed SKILL.md, manifest=%o', manifest);
+      }
     } catch (error) {
-      if (error instanceof SkillImportError) throw error;
+      if (error instanceof SkillImportError || error instanceof SkillManifestError) throw error;
+      log('importFromUrl: fetch error: %O', error);
+      log('importFromUrl: error type: %s', error?.constructor?.name);
+      log('importFromUrl: error message: %s', (error as Error).message);
+      log('importFromUrl: error stack: %s', (error as Error).stack);
       throw new SkillImportError(
-        `Failed to fetch URL: ${(error as Error).message}`,
+        `Failed to process URL: ${(error as Error).message}`,
         'DOWNLOAD_FAILED',
       );
     }
 
-    // 3. Parse SKILL.md content
-    const { manifest, content: skillContent } = this.parser.parseSkillMd(content);
     log('importFromUrl: parsed manifest=%o', manifest);
 
     // 4. Generate identifier based on URL host and path
@@ -336,10 +379,43 @@ export class SkillImporter {
       sourceUrl: input.url,
     };
 
-    // 7. Update existing skill or create new
+    // 7. Handle ZIP resources if present
+    let resourceMap: Record<string, { fileHash: string; size: number }> | undefined;
+    if (resources && resources.size > 0 && zipHash) {
+      log('importFromUrl: storing %d resource files...', resources.size);
+      resourceMap = await this.resourceService.storeResources(zipHash, resources);
+      log('importFromUrl: stored resource files');
+    }
+
+    // 8. Upload ZIP file to S3 and create globalFiles record (for zipFileHash foreign key)
+    let zipFileHash: string | undefined;
+    if (zipHash && zipBuffer) {
+      const zipKey = `skills/zip/${zipHash}.zip`;
+      await this.fileService.uploadBuffer(zipKey, zipBuffer, 'application/zip');
+      // Use createGlobalFile directly - no need to create then delete user file record
+      await this.fileService.createGlobalFile({
+        fileHash: zipHash,
+        fileType: 'application/zip',
+        metadata: {
+          dirname: 'skills/zip',
+          filename: `${zipHash}.zip`,
+          path: zipKey,
+        },
+        size: zipBuffer.length,
+        url: zipKey,
+      });
+      zipFileHash = zipHash;
+      log(
+        'importFromUrl: uploaded ZIP file, hash=%s, size=%d bytes',
+        zipFileHash,
+        zipBuffer.length,
+      );
+    }
+
+    // 9. Update existing skill or create new
     if (existing) {
       // Check if content is the same (simple deduplication based on content)
-      if (existing.content === skillContent) {
+      if (existing.content === skillContent && existing.zipFileHash === zipFileHash) {
         log('importFromUrl: skill unchanged, skipping update id=%s', existing.id);
         return { skill: existing, status: 'unchanged' };
       }
@@ -350,12 +426,14 @@ export class SkillImporter {
         description: manifest.description,
         manifest: fullManifest,
         name: manifest.name,
+        ...(resourceMap && { resources: resourceMap }),
+        ...(zipFileHash && { zipFileHash }),
       });
       log('importFromUrl: updated skill id=%s', skill.id);
       return { skill, status: 'updated' };
     }
 
-    // 8. Create new skill record
+    // 10. Create new skill record
     log('importFromUrl: creating new skill...');
     const skill = await this.skillModel.create({
       content: skillContent,
@@ -363,7 +441,9 @@ export class SkillImporter {
       identifier,
       manifest: fullManifest,
       name: manifest.name,
+      ...(resourceMap && { resources: resourceMap }),
       source: 'market', // URL source marked as market
+      ...(zipFileHash && { zipFileHash }),
     });
     log('importFromUrl: created skill id=%s', skill.id);
     return { skill, status: 'created' };

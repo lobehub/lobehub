@@ -20,6 +20,7 @@ import {
 import { agentRouter } from './agent';
 import { agentGroupRouter } from './agentGroup';
 import { oidcRouter } from './oidc';
+import { skillRouter } from './skill';
 import { socialRouter } from './social';
 import { userRouter } from './user';
 
@@ -53,7 +54,10 @@ export const marketRouter = router({
   // ============================== Agent Group Management (authenticated) ==============================
   agentGroup: agentGroupRouter,
 
-  
+  // ============================== Skill Management ==============================
+  skill: skillRouter,
+
+
   getAgentsByPlugin: marketProcedure
     .input(
       z.object({

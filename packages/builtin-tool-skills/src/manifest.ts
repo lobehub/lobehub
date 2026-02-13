@@ -132,6 +132,61 @@ export const SkillsManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+    {
+      description:
+        'Search for skills in the LobeHub Market. Use this to discover available skills that can extend Claude\'s capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).',
+      name: SkillsApiName.searchSkill,
+      parameters: {
+        properties: {
+          locale: {
+            description: 'Locale for search results (e.g., "en-US", "zh-CN"). Optional.',
+            type: 'string',
+          },
+          order: {
+            description: 'Sort order: "asc" for ascending, "desc" for descending. Default: "desc".',
+            enum: ['asc', 'desc'],
+            type: 'string',
+          },
+          page: {
+            description: 'Page number for pagination. Default: 1.',
+            type: 'number',
+          },
+          pageSize: {
+            description: 'Number of results per page. Default: 20.',
+            type: 'number',
+          },
+          search: {
+            description:
+              'Search query to filter skills. Searches across skill name, description, and summary. Optional.',
+            type: 'string',
+          },
+          sort: {
+            description:
+              'Field to sort by. Options: createdAt (creation date), downloadCount (downloads), forks (GitHub forks), name (alphabetical), stars (GitHub stars), updatedAt (last update), watchers (GitHub watchers). Default: "updatedAt".',
+            enum: ['createdAt', 'downloadCount', 'forks', 'name', 'stars', 'updatedAt', 'watchers'],
+            type: 'string',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Import/install a skill directly from the LobeHub Market using its identifier. This is the recommended way to install skills from the market after searching with searchSkill. The skill will be downloaded and installed automatically. Requires user confirmation before installation.',
+      humanIntervention: 'required',
+      name: SkillsApiName.importFromMarket,
+      parameters: {
+        properties: {
+          identifier: {
+            description:
+              'The unique identifier of the skill in the market (e.g., "github.anthropics.skills.skills.skill-creator"). You can get this from searchSkill results.',
+            type: 'string',
+          },
+        },
+        required: ['identifier'],
+        type: 'object',
+      },
+    },
   ],
   identifier: SkillsIdentifier,
   meta: {
