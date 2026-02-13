@@ -1,6 +1,6 @@
 'use client';
 
-import type { SkillItem } from '@lobechat/types';
+import { type SkillItem } from '@lobechat/types';
 import { CopyButton, Highlighter, Markdown } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
@@ -163,47 +163,54 @@ const isMarkdownFile = (path: string) => {
 
 interface ContentViewerProps {
   contentMap: Record<string, string>;
+  liveContent?: string;
   selectedFile: string;
   skillDetail?: SkillItem;
 }
 
-const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, contentMap }) => {
-  if (selectedFile === 'SKILL.md') {
+const ContentViewer = memo<ContentViewerProps>(
+  ({ skillDetail, selectedFile, contentMap, liveContent }) => {
+    if (selectedFile === 'SKILL.md') {
+      const displayContent = liveContent ?? skillDetail?.content;
+      return (
+        <div className={styles.docWrapper}>
+          {displayContent ? (
+            <Markdown variant={'chat'}>{displayContent}</Markdown>
+          ) : (
+            <p style={{ opacity: 0.45 }}>No content</p>
+          )}
+        </div>
+      );
+    }
+
+    const content = contentMap[selectedFile];
+
+    if (isMarkdownFile(selectedFile)) {
+      return (
+        <div className={styles.docWrapper}>
+          <Markdown variant={'chat'}>{content}</Markdown>
+        </div>
+      );
+    }
+
     return (
-      <div className={styles.docWrapper}>
-        {skillDetail?.content ? (
-          <Markdown variant={'chat'}>{skillDetail.content}</Markdown>
-        ) : (
-          <p style={{ opacity: 0.45 }}>No content</p>
-        )}
+      <div className={styles.codeWrapper}>
+        <CopyButton
+          content={content}
+          style={{ position: 'absolute', right: 8, top: 0, zIndex: 1 }}
+        />
+        <Highlighter
+          copyable={false}
+          language={getLanguage(selectedFile)}
+          showLanguage={false}
+          variant={'borderless'}
+        >
+          {content}
+        </Highlighter>
       </div>
     );
-  }
-
-  const content = contentMap[selectedFile];
-
-  if (isMarkdownFile(selectedFile)) {
-    return (
-      <div className={styles.docWrapper}>
-        <Markdown variant={'chat'}>{content}</Markdown>
-      </div>
-    );
-  }
-
-  return (
-    <div className={styles.codeWrapper}>
-      <CopyButton content={content} style={{ position: 'absolute', right: 8, top: 0, zIndex: 1 }} />
-      <Highlighter
-        copyable={false}
-        language={getLanguage(selectedFile)}
-        showLanguage={false}
-        variant={'borderless'}
-      >
-        {content}
-      </Highlighter>
-    </div>
-  );
-});
+  },
+);
 
 ContentViewer.displayName = 'ContentViewer';
 

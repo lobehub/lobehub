@@ -2,9 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import type { SkillResourceTreeNode } from '@lobechat/types';
+import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Button, Drawer, Flexbox } from '@lobehub/ui';
-import { Form as AForm, Alert, App, Popconfirm, Skeleton } from 'antd';
+import { Alert, App, Form as AForm, Popconfirm, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,21 +16,35 @@ import { useToolStore } from '@/store/tool';
 import SkillEditForm, { type SkillEditFormValues } from './SkillEditForm';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  detailFileTree: css`
+    overflow-y: auto;
+    flex-shrink: 0;
+    width: 200px;
+    padding: 8px;
+  `,
+  detailPanel: css`
+    overflow: hidden;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  detailViewer: css`
+    container-type: size;
+    overflow: auto;
+    flex: 1;
+  `,
   divider: css`
     flex-shrink: 0;
     width: 1px;
     background: ${cssVar.colorBorderSecondary};
   `,
-  left: css`
+  formPanel: css`
     overflow-y: auto;
     flex-shrink: 0;
-    width: 240px;
-    padding: 8px;
-  `,
-  right: css`
-    container-type: size;
-    overflow: auto;
-    flex: 1;
+    width: 50%;
+    min-width: 400px;
   `,
 }));
 
@@ -64,6 +78,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
   const [saving, setSaving] = useState(false);
   const [form] = AForm.useForm();
+  const liveContent = AForm.useWatch('content', form);
 
   const { data, isLoading } = useToolStore((s) => s.useFetchAgentSkillDetail)(
     open ? skillId : undefined,
@@ -105,29 +120,29 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   };
 
   const footer = (
-    <Flexbox flex={1} gap={12} horizontal justify={'space-between'}>
+    <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
       <Popconfirm
         arrow={false}
         cancelText={tc('cancel')}
+        okText={tc('ok')}
+        placement={'topLeft'}
+        title={tp('dev.confirmDeleteDevPlugin')}
         okButtonProps={{
           danger: true,
           type: 'primary',
         }}
-        okText={tc('ok')}
         onConfirm={handleDelete}
-        placement={'topLeft'}
-        title={tp('dev.confirmDeleteDevPlugin')}
       >
         <Button danger>{tc('delete')}</Button>
       </Popconfirm>
-      <Flexbox gap={12} horizontal>
+      <Flexbox horizontal gap={12}>
         <Button onClick={onClose}>{tc('cancel')}</Button>
         <Button
           loading={saving}
+          type={'primary'}
           onClick={() => {
             form.submit();
           }}
-          type={'primary'}
         >
           {tp('dev.update')}
         </Button>
@@ -137,67 +152,64 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
 
   return (
     <Drawer
-      containerMaxWidth={'auto'}
       destroyOnHidden
+      containerMaxWidth={'auto'}
       footer={footer}
       height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
-      onClose={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
       open={open}
       placement={'bottom'}
       push={false}
+      title={t('agentSkillEdit.title')}
       styles={{
         body: { padding: 0 },
         bodyContent: { height: '100%' },
       }}
-      title={t('agentSkillEdit.title')}
+      onClose={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       {isLoading ? (
         <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />
       ) : (
         <Flexbox
-          height={'100%'}
           horizontal
+          height={'100%'}
           onClick={(e) => {
             e.stopPropagation();
           }}
         >
-          <div className={styles.left}>
-            <FileTree
-              onSelectFile={setSelectedFile}
-              resourceTree={resourceTree}
-              selectedFile={selectedFile}
+          <div className={styles.formPanel}>
+            <SkillEditForm
+              form={form}
+              initialValues={initialValues}
+              name={skillDetail?.name}
+              onSubmit={handleSubmit}
             />
           </div>
-          <div className={styles.divider} />
-          <div className={styles.right}>
-            <div
-              style={{
-                display: selectedFile === 'SKILL.md' ? undefined : 'none',
-                height: '100%',
-                overflow: 'auto',
-              }}
-            >
-              <SkillEditForm
-                form={form}
-                initialValues={initialValues}
-                name={skillDetail?.name}
-                onSubmit={handleSubmit}
-              />
-            </div>
-            {selectedFile !== 'SKILL.md' && (
-              <>
-                <Alert banner message={t('agentSkillEdit.fileReadonly')} showIcon type="info" />
+          <div className={styles.detailPanel}>
+            <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>
+              <div className={styles.detailFileTree}>
+                <FileTree
+                  resourceTree={resourceTree}
+                  selectedFile={selectedFile}
+                  onSelectFile={setSelectedFile}
+                />
+              </div>
+              <div className={styles.divider} />
+              <div className={styles.detailViewer}>
+                {selectedFile !== 'SKILL.md' && (
+                  <Alert banner showIcon message={t('agentSkillEdit.fileReadonly')} type="info" />
+                )}
                 <ContentViewer
                   contentMap={contentMap}
                   key={selectedFile}
+                  liveContent={selectedFile === 'SKILL.md' ? liveContent : undefined}
                   selectedFile={selectedFile}
                   skillDetail={skillDetail}
                 />
-              </>
-            )}
+              </div>
+            </Flexbox>
           </div>
         </Flexbox>
       )}
