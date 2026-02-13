@@ -42,7 +42,12 @@ jobs:
             git merge --abort
 
             SYNC_BRANCH="sync/main-to-canary-$(date +'%Y%m%d')"
-            git checkout -B "$SYNC_BRANCH" origin/main
+            git checkout -B "$SYNC_BRANCH" origin/canary
+            # Attempt merge main, commit conflict markers if unresolved
+            if ! git merge origin/main --no-edit; then
+              git add -A
+              git commit --no-edit -m "chore: merge main into canary (has conflicts to resolve)"
+            fi
             git push origin "$SYNC_BRANCH" -f
 
             # Avoid duplicate PR
@@ -50,11 +55,27 @@ jobs:
             if [ -n "$EXISTING_PR" ]; then
               echo "PR #$EXISTING_PR already exists"
             else
+              printf '%s\n' \
+                'Automatic sync from main to canary. Merge conflicts detected.' \
+                '' \
+                '**Resolution steps:**' \
+                '```bash' \
+                'git fetch origin' \
+                "git checkout $SYNC_BRANCH" \
+                'git merge origin/main' \
+                '# Resolve conflicts' \
+                'git add -A && git commit' \
+                'git push' \
+                '```' \
+                '' \
+                '> Do NOT merge canary into a main-based branch — always merge main INTO the canary-based branch to keep a clean commit graph.' \
+                > /tmp/pr-body.md
+
               gh pr create \
                 --base canary \
                 --head "$SYNC_BRANCH" \
                 --title "Sync main branch to canary branch" \
-                --body "Automatic sync from main to canary. Manual conflict resolution required."
+                --body-file /tmp/pr-body.md
             fi
           fi
         env:
