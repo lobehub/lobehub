@@ -5,6 +5,7 @@ import {
   documents,
   files,
   knowledgeBaseFiles,
+  knowledgeBases,
   messages,
   topics,
   userMemories,
@@ -22,7 +23,8 @@ export type SearchResultType =
   | 'message'
   | 'mcp'
   | 'plugin'
-  | 'communityAgent';
+  | 'communityAgent'
+  | 'knowledgeBase';
 
 export interface BaseSearchResult {
   // 1=exact, 2=prefix, 3=contains
@@ -111,6 +113,11 @@ export interface PluginSearchResult extends BaseSearchResult {
   type: 'plugin';
 }
 
+export interface KnowledgeBaseSearchResult extends BaseSearchResult {
+  avatar: string | null;
+  type: 'knowledgeBase';
+}
+
 export interface AssistantSearchResult extends BaseSearchResult {
   author: string;
   avatar?: string | null;
@@ -131,7 +138,8 @@ export type SearchResult =
   | MemorySearchResult
   | MCPSearchResult
   | PluginSearchResult
-  | AssistantSearchResult;
+  | AssistantSearchResult
+  | KnowledgeBaseSearchResult;
 
 export interface SearchOptions {
   agentId?: string;
@@ -192,6 +200,9 @@ export class SearchRepo {
     if ((!type || type === 'memory') && limits.memory > 0) {
       searchPromises.push(this.searchMemories(trimmedQuery, limits.memory));
     }
+    if ((!type || type === 'knowledgeBase') && limits.knowledgeBase > 0) {
+      searchPromises.push(this.searchKnowledgeBases(trimmedQuery, limits.knowledgeBase));
+    }
 
     const results = await Promise.all(searchPromises);
 
@@ -213,6 +224,7 @@ export class SearchRepo {
     agent: number;
     file: number;
     folder: number;
+    knowledgeBase: number;
     memory: number;
     message: number;
     page: number;
@@ -225,6 +237,7 @@ export class SearchRepo {
         agent: type === 'agent' ? baseLimit : 0,
         file: type === 'file' ? baseLimit : 0,
         folder: type === 'folder' ? baseLimit : 0,
+        knowledgeBase: type === 'knowledgeBase' ? baseLimit : 0,
         memory: type === 'memory' ? baseLimit : 0,
         message: type === 'message' ? baseLimit : 0,
         page: type === 'page' ? baseLimit : 0,
@@ -239,6 +252,7 @@ export class SearchRepo {
         agent: 3,
         file: 3,
         folder: 3,
+        knowledgeBase: 3,
         memory: 3,
         message: 3,
         page: 6,
@@ -253,6 +267,7 @@ export class SearchRepo {
         agent: 3,
         file: 6,
         folder: 6,
+        knowledgeBase: 6,
         memory: 3,
         message: 3,
         page: 3,
@@ -267,6 +282,7 @@ export class SearchRepo {
         agent: 3,
         file: 3,
         folder: 3,
+        knowledgeBase: 3,
         memory: 3,
         message: 6,
         page: 3,
@@ -280,6 +296,7 @@ export class SearchRepo {
       agent: 3,
       file: 3,
       folder: 3,
+      knowledgeBase: 3,
       memory: 3,
       message: 3,
       page: 3,
@@ -611,6 +628,42 @@ export class SearchRepo {
       relevance: this.calculateRelevance(row.title, query),
       title: row.title || 'Untitled Memory',
       type: 'memory' as const,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  /**
+   * Search knowledge bases by name and description
+   */
+  private async searchKnowledgeBases(
+    query: string,
+    limit: number,
+  ): Promise<KnowledgeBaseSearchResult[]> {
+    const searchTerm = `%${query}%`;
+
+    const rows = await this.db
+      .select()
+      .from(knowledgeBases)
+      .where(
+        and(
+          eq(knowledgeBases.userId, this.userId),
+          or(
+            ilike(knowledgeBases.name, searchTerm),
+            ilike(sql`COALESCE(${knowledgeBases.description}, '')`, searchTerm),
+          ),
+        ),
+      )
+      .orderBy(desc(knowledgeBases.updatedAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      avatar: row.avatar,
+      createdAt: row.createdAt,
+      description: row.description,
+      id: row.id,
+      relevance: this.calculateRelevance(row.name, query),
+      title: row.name,
+      type: 'knowledgeBase' as const,
       updatedAt: row.updatedAt,
     }));
   }

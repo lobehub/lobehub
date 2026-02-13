@@ -1,20 +1,20 @@
 'use client';
 
+import { BRANDING_EMAIL } from '@lobechat/business-const';
+import { MarketSDK } from '@lobehub/market-sdk';
 import { Button, Flexbox, Icon, Modal } from '@lobehub/ui';
-import { App, Form, Input, Upload } from 'antd';
+import { App, Form, Upload } from 'antd';
 import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TextArea from '@/components/TextArea';
-import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserStore } from '@/store/user/store';
 
 interface FeedbackInitialValues {
   message?: string;
-  title?: string;
 }
 
 interface FeedbackModalProps {
@@ -25,7 +25,6 @@ interface FeedbackModalProps {
 
 interface FormValues {
   message: string;
-  title: string;
 }
 
 const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }) => {
@@ -74,17 +73,30 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
       const values = await form.validateFields();
       setLoading(true);
 
-      const response = await lambdaClient.market.submitFeedback.mutate({
+      const sdk = new MarketSDK();
+
+      // Generate title from first few words of message
+      const words = values.message.trim().split(/\s+/);
+      const titleWords = words.slice(0, 8).join(' ');
+      const generatedTitle =
+        titleWords.length < values.message.length ? `${titleWords}...` : titleWords;
+
+      // Build message with screenshot if available
+      let feedbackMessage = values.message;
+      if (screenshotUrl) {
+        feedbackMessage += `\n\n**Screenshot**: ${screenshotUrl}`;
+      }
+
+      const response = await sdk.feedback.submitFeedback({
         clientInfo: {
           language: navigator.language,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           url: window.location.href,
           userAgent: navigator.userAgent,
         },
-        email: userEmail || undefined,
-        message: values.message,
-        screenshotUrl: screenshotUrl || undefined,
-        title: values.title,
+        email: userEmail,
+        message: feedbackMessage,
+        title: generatedTitle,
       });
 
       message.success(t('feedback.success'));
@@ -126,20 +138,12 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
       }
       onCancel={handleCancel}
     >
+      <p style={{ color: 'var(--colorTextSecondary)', fontSize: 14, marginBottom: 16 }}>
+        {t('feedback.emailContact', { email: BRANDING_EMAIL.business })}
+      </p>
+
       <Form form={form} initialValues={initialValues} layout="vertical">
         <Form.Item
-          label={t('feedback.fields.title.label')}
-          name="title"
-          rules={[
-            { message: t('feedback.fields.title.required'), required: true },
-            { max: 200, message: t('feedback.fields.title.maxLength') },
-          ]}
-        >
-          <Input showCount maxLength={200} placeholder={t('feedback.fields.title.placeholder')} />
-        </Form.Item>
-
-        <Form.Item
-          label={t('feedback.fields.message.label')}
           name="message"
           rules={[
             { message: t('feedback.fields.message.required'), required: true },
