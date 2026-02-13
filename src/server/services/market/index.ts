@@ -385,130 +385,70 @@ export class MarketService {
     await this.market.user.register(params);
   }
 
-  // ============================== Skills Methods ==============================
+  // ============================== Skills Methods (using SDK) ==============================
 
   /**
    * Search for skills in the LobeHub Market
-   * @param params - Search parameters (locale, search, page, pageSize, sort, order)
-   * @returns Search results with pagination info
    */
   async searchSkill(params: {
+    category?: string;
     locale?: string;
     order?: 'asc' | 'desc';
     page?: number;
     pageSize?: number;
     search?: string;
     sort?: 'createdAt' | 'downloadCount' | 'forks' | 'name' | 'stars' | 'updatedAt' | 'watchers';
-  }): Promise<{
-    items: Array<{
-      category?: string;
-      createdAt: string;
-      description: string;
-      downloadCount: number;
-      identifier: string;
-      name: string;
-      repository?: string;
-      sourceUrl?: string;
-      summary?: string;
-      updatedAt: string;
-      version?: string;
-    }>;
-    page: number;
-    pageSize: number;
-    total: number;
-  }> {
-    const { locale, search, page = 1, pageSize = 20, sort = 'updatedAt', order = 'desc' } = params;
+  }) {
+    log('searchSkill: %O', params);
 
-    const queryParams = new URLSearchParams();
-    if (locale) queryParams.set('locale', locale);
-    if (search) queryParams.set('search', search);
-    queryParams.set('page', page.toString());
-    queryParams.set('pageSize', pageSize.toString());
-    queryParams.set('sort', sort);
-    queryParams.set('order', order);
+    const result = await this.market.marketSkills.getSkillList(params);
 
-    const url = `${MARKET_BASE_URL}/api/v1/skills?${queryParams.toString()}`;
+    log('searchSkill response: %O', result);
 
-    log('searchSkill: %s', url);
-
-    try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to search skills: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      log('searchSkill response: %O', data);
-
-      return {
-        items: data.items || [],
-        page: data.page || page,
-        pageSize: data.pageSize || pageSize,
-        total: data.total || 0,
-      };
-    } catch (error) {
-      log('searchSkill error: %O', error);
-      throw error;
-    }
+    return {
+      items: result.items,
+      page: result.currentPage,
+      pageSize: result.pageSize,
+      total: result.totalCount,
+    };
   }
 
   /**
    * Get skill detail from market
-   * @param identifier - The skill identifier
-   * @returns Skill detail including manifest, content, resources
    */
-  async getSkillDetail(identifier: string): Promise<{
-    author?: { name: string; url?: string };
-    category?: string;
-    content: string;
-    createdAt: string;
-    description: string;
-    downloadCount: number;
-    identifier: string;
-    license?: string;
-    manifest: {
-      author?: { name: string; url?: string };
-      description: string;
-      license?: string;
-      name: string;
-      repository?: string;
-      sourceUrl?: string;
-      version?: string;
-    };
-    name: string;
-    repository?: string;
-    resources: Record<string, any>;
-    sourceUrl?: string;
-    summary?: string;
-    updatedAt: string;
-    version?: string;
-    versionNumber?: number;
-  }> {
-    const url = `${MARKET_BASE_URL}/api/v1/skills/${identifier}`;
-    log('getSkillDetail: %s', url);
+  async getSkillDetail(identifier: string, options?: { locale?: string; version?: string }) {
+    log('getSkillDetail: %s, options: %O', identifier, options);
 
-    try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to get skill detail: ${response.statusText}`);
-      }
+    const result = await this.market.marketSkills.getSkillDetail(identifier, options);
 
-      const data = await response.json();
-      log('getSkillDetail response: %O', data);
-      return data;
-    } catch (error) {
-      log('getSkillDetail error: %O', error);
-      throw error;
-    }
+    log('getSkillDetail response: %O', result);
+
+    return result;
   }
 
   /**
    * Get skill download URL from market
-   * @param identifier - The skill identifier
-   * @returns Download URL for the skill ZIP file
    */
-  getSkillDownloadUrl(identifier: string): string {
-    return `${MARKET_BASE_URL}/api/v1/skills/${identifier}/download`;
+  getSkillDownloadUrl(identifier: string, version?: string): string {
+    return this.market.marketSkills.getDownloadUrl(identifier, version);
+  }
+
+  /**
+   * Download skill ZIP directly
+   */
+  async downloadSkill(identifier: string, version?: string) {
+    log('downloadSkill: %s, version: %s', identifier, version);
+
+    return this.market.marketSkills.downloadSkill(identifier, version);
+  }
+
+  /**
+   * Get skill categories
+   */
+  async getSkillCategories() {
+    log('getSkillCategories');
+
+    return this.market.marketSkills.getCategories();
   }
 
   /**

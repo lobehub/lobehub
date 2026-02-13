@@ -18,6 +18,7 @@ import { sha256 } from 'js-sha256';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
+import { UserModel } from '@/database/models/user';
 import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
@@ -307,7 +308,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
  * Per-request runtime (needs serverDB, userId, topicId)
  */
 export const skillsRuntime: ServerRuntimeRegistration = {
-  factory: (context) => {
+  factory: async (context) => {
     if (!context.serverDB) {
       throw new Error('serverDB is required for Skills execution');
     }
@@ -315,10 +316,28 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       throw new Error('userId is required for Skills execution');
     }
 
+    // Fetch market access token from user settings
+    let marketAccessToken: string | undefined;
+    try {
+      const userModel = new UserModel(context.serverDB, context.userId);
+      const userSettings = await userModel.getUserSettings();
+      marketAccessToken = (userSettings?.market as any)?.accessToken;
+      log(
+        'Fetched market accessToken for user %s: %s',
+        context.userId,
+        marketAccessToken ? 'exists' : 'not found',
+      );
+    } catch (error) {
+      log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
+    }
+
     const skillModel = new AgentSkillModel(context.serverDB, context.userId);
     const resourceService = new SkillResourceService(context.serverDB, context.userId);
     const importer = new SkillImporter(context.serverDB, context.userId);
-    const marketService = new MarketService({ userInfo: { userId: context.userId } });
+    const marketService = new MarketService({
+      accessToken: marketAccessToken,
+      userInfo: { userId: context.userId },
+    });
     const fileService = new FileService(context.serverDB, context.userId);
     const fileModel = new FileModel(context.serverDB, context.userId);
 

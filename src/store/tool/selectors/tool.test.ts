@@ -5,8 +5,19 @@ import { type ToolStoreState } from '../initialState';
 import { initialState } from '../initialState';
 import { toolSelectors } from './tool';
 
+// Mock builtin skill for testing
+const mockBuiltinSkill = {
+  avatar: '🧪',
+  content: '# Test Skill',
+  description: 'A test skill',
+  identifier: 'test-skill',
+  name: 'Test Skill',
+  source: 'builtin' as const,
+};
+
 const mockState = {
   ...initialState,
+  builtinSkills: [mockBuiltinSkill],
   installedPlugins: [
     {
       identifier: 'plugin-1',
@@ -88,6 +99,12 @@ describe('toolSelectors', () => {
     it('should return the correct list of tool metadata', () => {
       const result = toolSelectors.metaList(mockState);
       expect(result).toEqual([
+        {
+          author: 'LobeHub',
+          identifier: 'test-skill',
+          meta: { avatar: '🧪', description: 'A test skill', title: 'Test Skill' },
+          type: 'builtin',
+        },
         {
           type: 'builtin',
           author: 'LobeHub',
