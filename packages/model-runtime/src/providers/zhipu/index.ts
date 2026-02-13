@@ -1,4 +1,4 @@
-import { ModelProvider } from 'model-bank';
+import { ModelProvider,zhipu as zhipuChatModels } from 'model-bank';
 
 import {
   createOpenAICompatibleRuntime,
@@ -7,6 +7,7 @@ import {
 import { resolveParameters } from '../../core/parameterResolver';
 import { OpenAIStream } from '../../core/streams/openai';
 import { convertIterableToStream } from '../../core/streams/protocol';
+import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface ZhipuModelCard {
@@ -48,7 +49,14 @@ export const params = {
 
       // Resolve parameters based on model-specific constraints
       const resolvedParams = resolveParameters(
-        { max_tokens, temperature, top_p },
+        {
+          max_tokens:
+            max_tokens !== undefined
+              ? max_tokens
+              : getModelMaxOutputs(payload.model, zhipuChatModels),
+          temperature,
+          top_p,
+        },
         {
           // max_tokens constraints
           maxTokensRange: model.includes('glm-4v')

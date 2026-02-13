@@ -2,12 +2,8 @@ import { minimax as minimaxChatModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
+import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { createMiniMaxImage } from './createImage';
-
-export const getMinimaxMaxOutputs = (modelId: string): number | undefined => {
-  const model = minimaxChatModels.find((model) => model.id === modelId);
-  return model ? model.maxOutput : undefined;
-};
 
 export const LobeMinimaxAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.minimaxi.com/v1',
@@ -46,7 +42,10 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
       // Resolve parameters with constraints
       const resolvedParams = resolveParameters(
         {
-          max_tokens: max_tokens !== undefined ? max_tokens : getMinimaxMaxOutputs(payload.model),
+          max_tokens:
+            max_tokens !== undefined
+              ? max_tokens
+              : getModelMaxOutputs(payload.model, minimaxChatModels),
           temperature,
           top_p,
         },
