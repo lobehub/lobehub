@@ -322,7 +322,8 @@ export class SkillImporter {
       }
 
       // Detect if it's a ZIP file based on URL or content-type
-      const contentType = response.headers.get('content-type') || '';
+      // Use optional chaining for headers to handle mock responses in tests
+      const contentType = response.headers?.get?.('content-type') || '';
       const isZip =
         url.pathname.endsWith('.zip') ||
         url.pathname.includes('/download') ||
@@ -414,8 +415,11 @@ export class SkillImporter {
 
     // 9. Update existing skill or create new
     if (existing) {
-      // Check if content is the same (simple deduplication based on content)
-      if (existing.content === skillContent && existing.zipFileHash === zipFileHash) {
+      // Check if content is the same (simple deduplication based on content and zipHash)
+      // Use nullish coalescing to handle null/undefined comparison correctly
+      const existingHash = existing.zipFileHash ?? undefined;
+      const isSameContent = existing.content === skillContent && existingHash === zipFileHash;
+      if (isSameContent) {
         log('importFromUrl: skill unchanged, skipping update id=%s', existing.id);
         return { skill: existing, status: 'unchanged' };
       }
