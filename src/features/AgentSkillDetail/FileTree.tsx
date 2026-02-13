@@ -1,6 +1,6 @@
 'use client';
 
-import type { SkillResourceTreeNode } from '@lobechat/types';
+import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDown, ChevronRight, File, FolderIcon, FolderOpenIcon } from 'lucide-react';
@@ -66,9 +66,9 @@ const TreeNode = memo<{
     <>
       <div
         className={`${styles.item} ${isSelected ? styles.itemSelected : ''}`}
-        onClick={handleClick}
         style={{ paddingInlineStart: 8 + depth * 16 }}
         title={node.path}
+        onClick={handleClick}
       >
         {isDir && <Icon icon={isExpanded ? ChevronDown : ChevronRight} size={14} />}
         {!isDir && <span style={{ flexShrink: 0, width: 14 }} />}
@@ -83,9 +83,9 @@ const TreeNode = memo<{
             expandedFolders={expandedFolders}
             key={child.path}
             node={child}
+            selectedFile={selectedFile}
             onSelectFile={onSelectFile}
             onToggleFolder={onToggleFolder}
-            selectedFile={selectedFile}
           />
         ))}
     </>
@@ -132,8 +132,8 @@ const FileTree = memo<FileTreeProps>(({ resourceTree, selectedFile, onSelectFile
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div
         className={`${styles.item} ${isSkillMdSelected ? styles.itemSelected : ''}`}
-        onClick={() => onSelectFile('SKILL.md')}
         style={{ paddingInlineStart: 8 }}
+        onClick={() => onSelectFile('SKILL.md')}
       >
         <span style={{ flexShrink: 0, width: 14 }} />
         <Icon icon={File} size={16} />
@@ -146,9 +146,9 @@ const FileTree = memo<FileTreeProps>(({ resourceTree, selectedFile, onSelectFile
             expandedFolders={expandedFolders}
             key={node.path}
             node={node}
+            selectedFile={selectedFile}
             onSelectFile={onSelectFile}
             onToggleFolder={handleToggleFolder}
-            selectedFile={selectedFile}
           />
         ))}
     </div>
