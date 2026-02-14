@@ -1,6 +1,18 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import { type AIChatModelCard } from '../types/aiModel';
 
 const nvidiaChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
+    displayName: 'GLM-5',
+    id: 'z-ai/glm5',
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -10,7 +22,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2 is a compact, fast, cost-effective MoE model (230B total, 10B active) built for top-tier coding and agent performance while retaining strong general intelligence. It excels at multi-file edits, code-run-fix loops, test validation, and complex toolchains.',
     displayName: 'MiniMax-M2',
-    enabled: true,
     id: 'minimaxai/minimax-m2',
     maxOutput: 16_384,
     type: 'chat',
@@ -24,7 +35,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek V3.1 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought for deep analysis tasks.',
     displayName: 'DeepSeek V3.1 Terminus',
-    enabled: true,
     id: 'deepseek-ai/deepseek-v3.1-terminus',
     maxOutput: 16_384,
     settings: {

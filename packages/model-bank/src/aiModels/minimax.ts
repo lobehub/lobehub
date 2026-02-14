@@ -1,4 +1,4 @@
-import  { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
+import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
 
 const minimaxChatModels: AIChatModelCard[] = [
   {
