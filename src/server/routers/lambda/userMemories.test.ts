@@ -115,7 +115,7 @@ describe('memoryRouter.reEmbedMemories', () => {
       userMemoriesActivities: {
         findMany: vi.fn().mockResolvedValue(activitiesRows),
       },
-    }) as const;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(dbStub as any);
 
