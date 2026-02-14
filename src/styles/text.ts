@@ -19,12 +19,14 @@ export const oneLineEllipsis = lineEllipsis(1);
 export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
+    display: flex;
+    align-items: center;
+
+    min-width: 0;
 
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
