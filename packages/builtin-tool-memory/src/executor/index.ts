@@ -45,14 +45,31 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     }
   };
 
+  private resolveMemoryEffort = (agentId?: string): 'high' | 'low' | 'medium' | undefined => {
+    const state = getAgentStoreState();
+    if (!state) return undefined;
+
+    const chatConfig = agentId
+      ? chatConfigByIdSelectors.getChatConfigById(agentId)(state)
+      : agentChatConfigSelectors.currentChatConfig(state);
+
+    return chatConfig?.memory?.effort;
+  };
+
   // ==================== Search API ====================
 
   /**
    * Search user memories based on query
    */
-  searchUserMemory = async (params: SearchMemoryParams): Promise<BuiltinToolResult> => {
+  searchUserMemory = async (
+    params: SearchMemoryParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
     try {
-      const result = await userMemoryService.searchMemory(params);
+      const result = await userMemoryService.searchMemory({
+        ...params,
+        effort: this.resolveMemoryEffort(ctx?.agentId),
+      });
 
       return {
         content: formatMemorySearchResults({ query: params.query, results: result }),

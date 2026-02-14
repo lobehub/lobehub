@@ -173,14 +173,17 @@ const searchUserMemories = async (
     model: embeddingModel,
   });
 
-  const limits = {
-    activities: input.topK?.activities ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.activities,
-    contexts: input.topK?.contexts ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.contexts,
-    experiences: input.topK?.experiences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.experiences,
-    preferences: input.topK?.preferences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.preferences,
+  const effectiveEffort = normalizeMemoryEffort(input.effort ?? ctx.memoryEffort);
+  const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
+
+  const requestedLimits = {
+    activities: input.topK?.activities ?? effortDefaults.activities,
+    contexts: input.topK?.contexts ?? effortDefaults.contexts,
+    experiences: input.topK?.experiences ?? effortDefaults.experiences,
+    preferences: input.topK?.preferences ?? effortDefaults.preferences,
   };
 
-  const effortConstrainedLimits = applySearchLimitsByEffort(ctx.memoryEffort, limits);
+  const effortConstrainedLimits = applySearchLimitsByEffort(effectiveEffort, requestedLimits);
 
   const layeredResults = await ctx.memoryModel.searchWithEmbedding({
     embedding: queryEmbeddings?.[0],
