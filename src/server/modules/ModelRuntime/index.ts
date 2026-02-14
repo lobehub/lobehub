@@ -153,6 +153,17 @@ export const buildPayloadFromKeyVaults = (
   }
 };
 
+const _resolveApiKey = (payload: ClientSecretPayload, serverApiKey: string | undefined) => {
+  // if user set baseURL, apiKey must be from payload
+  if (payload.baseURL && !payload.apiKey) {
+    throw { errorType: 'InvalidProviderAPIKey' };
+  }
+
+  const keys = payload.baseURL ? payload.apiKey : payload.apiKey || serverApiKey;
+
+  return apiKeyManager.pick(keys);
+};
+
 /**
  * Retrieves the options object from environment and apikeymanager
  * based on the provider and payload.
@@ -182,10 +193,7 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
 
       const baseURL = payload?.baseURL || process.env[`${upperProvider}_PROXY_URL`];
 
-      // if user set baseURL, apiKey must be from payload
-      const apiKey = payload?.baseURL
-        ? payload?.apiKey
-        : apiKeyManager.pick(payload?.apiKey || llmConfig[`${upperProvider}_API_KEY`]);
+      const apiKey = _resolveApiKey(payload, llmConfig[`${upperProvider}_API_KEY`]);
 
       return baseURL ? { apiKey, baseURL } : { apiKey };
     }
@@ -200,9 +208,7 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
       const { AZURE_API_KEY, AZURE_API_VERSION, AZURE_ENDPOINT } = llmConfig;
       const baseURL = payload?.baseURL || AZURE_ENDPOINT;
       const apiVersion = payload?.azureApiVersion || AZURE_API_VERSION;
-      const apiKey = payload?.baseURL
-        ? payload?.apiKey
-        : apiKeyManager.pick(payload?.apiKey || AZURE_API_KEY);
+      const apiKey = _resolveApiKey(payload, AZURE_API_KEY);
 
       return { apiKey, apiVersion, baseURL };
     }
@@ -210,9 +216,7 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
     case ModelProvider.AzureAI: {
       const { AZUREAI_ENDPOINT, AZUREAI_ENDPOINT_KEY } = llmConfig;
       const baseURL = payload?.baseURL || AZUREAI_ENDPOINT;
-      const apiKey = payload?.baseURL
-        ? payload?.apiKey
-        : apiKeyManager.pick(payload?.apiKey || AZUREAI_ENDPOINT_KEY);
+      const apiKey = _resolveApiKey(payload, AZUREAI_ENDPOINT_KEY);
 
       return { apiKey, baseURL };
     }
