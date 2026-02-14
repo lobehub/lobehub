@@ -33,7 +33,6 @@ const UserPanel = memo<PropsWithChildren>(({ children }) => {
     <Suspense fallback={children}>
       <UpgradeBadge showBadge={hasNewVersion}>
         <Popover
-          inset
           arrow={false}
           open={open}
           placement="topLeft"
