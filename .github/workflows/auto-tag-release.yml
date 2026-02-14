@@ -186,8 +186,8 @@ jobs:
 
           echo "✅ Tag v$VERSION created successfully!"
 
-      - name: Create GitHub Release (release)
-        if: env.SHOULD_TAG == 'true' && env.KIND == 'release' && steps.check-tag.outputs.exists == 'false'
+      - name: Create GitHub Release
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ env.VERSION }}
@@ -196,26 +196,6 @@ jobs:
             ## 📦 Release v${{ env.VERSION }}
 
             This release was automatically published from PR #${{ github.event.pull_request.number }}.
-
-            ### Changes
-            See PR description: ${{ github.event.pull_request.html_url }}
-
-            ### Commit Message
-            ${{ github.event.pull_request.body }}
-          draft: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-      - name: Create GitHub Release (hotfix)
-        if: env.SHOULD_TAG == 'true' && env.KIND == 'hotfix' && steps.check-tag.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ env.VERSION }}
-          name: 🩹 Hotfix v${{ env.VERSION }}
-          body: |
-            ## 📦 Hotfix v${{ env.VERSION }}
-
-            This hotfix was automatically published from PR #${{ github.event.pull_request.number }}.
 
             ### Changes
             See PR description: ${{ github.event.pull_request.html_url }}
