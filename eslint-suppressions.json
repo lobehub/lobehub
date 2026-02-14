@@ -632,11 +632,6 @@
       "count": 1
     }
   },
-  "src/server/modules/ModelRuntime/trace.ts": {
-    "object-shorthand": {
-      "count": 1
-    }
-  },
   "src/server/modules/S3/index.ts": {
     "object-shorthand": {
       "count": 3
