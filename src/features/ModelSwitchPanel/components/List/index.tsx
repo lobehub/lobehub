@@ -1,4 +1,4 @@
-import { Flexbox, TooltipGroup } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { type FC, type ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -88,15 +88,13 @@ export const List: FC<ListProps> = ({
         height: listHeight,
       }}
     >
-      <TooltipGroup>
-        <Virtuoso
-          isScrolling={handleScrollingStateChange}
-          itemContent={itemContent}
-          overscan={200}
-          style={{ height: listHeight }}
-          totalCount={listItems.length}
-        />
-      </TooltipGroup>
+      <Virtuoso
+        isScrolling={handleScrollingStateChange}
+        itemContent={itemContent}
+        overscan={200}
+        style={{ height: listHeight }}
+        totalCount={listItems.length}
+      />
     </Flexbox>
   );
 };
