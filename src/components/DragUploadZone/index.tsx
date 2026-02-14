@@ -48,8 +48,6 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorBgMask};
 
     transition: all 0.2s ease-in-out;
