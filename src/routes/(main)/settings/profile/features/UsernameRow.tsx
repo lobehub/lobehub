@@ -1,15 +1,16 @@
 'use client';
 
-import { Button, Flexbox, Input, Text } from '@lobehub/ui';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { LoadingOutlined } from '@ant-design/icons';
+import { Flexbox, Input, Text } from '@lobehub/ui';
+import { Spin } from 'antd';
 import { type ChangeEvent } from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { labelStyle, rowStyle } from './ProfileRow';
+import { INPUT_WIDTH, labelStyle, rowStyle } from './ProfileRow';
 
 interface UsernameRowProps {
   mobile?: boolean;
@@ -19,24 +20,11 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
   const { t } = useTranslation('auth');
   const username = useUserStore(userProfileSelectors.username);
   const updateUsername = useUserStore((s) => s.updateUsername);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const usernameRegex = /^\w+$/;
-
-  const handleStartEdit = () => {
-    setEditValue(username || '');
-    setError('');
-    setIsEditing(true);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    setEditValue('');
-    setError('');
-  };
 
   const validateUsername = (value: string): string => {
     const trimmed = value.trim();
@@ -47,7 +35,13 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
   };
 
   const handleSave = useCallback(async () => {
-    const validationError = validateUsername(editValue);
+    const value = inputRef.current?.value?.trim();
+    if (!value || value === username) {
+      setError('');
+      return;
+    }
+
+    const validationError = validateUsername(value);
     if (validationError) {
       setError(validationError);
       return;
@@ -56,11 +50,9 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
     try {
       setSaving(true);
       setError('');
-      await updateUsername(editValue.trim());
-      setIsEditing(false);
+      await updateUsername(value);
     } catch (err: any) {
       console.error('Failed to update username:', err);
-      // Handle duplicate username error
       if (err?.data?.code === 'CONFLICT' || err?.message === 'USERNAME_TAKEN') {
         setError(t('profile.usernameDuplicate'));
       } else {
@@ -69,104 +61,61 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
     } finally {
       setSaving(false);
     }
-  }, [editValue, updateUsername, t]);
+  }, [username, updateUsername, t]);
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setEditValue(value);
-
     if (!value.trim()) {
       setError('');
       return;
     }
-
     if (!usernameRegex.test(value)) {
       setError(t('profile.usernameRule'));
       return;
     }
-
     setError('');
   };
 
-  const editingContent = (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      initial={{ opacity: 0, y: -10 }}
-      key="editing"
-      transition={{ duration: 0.2 }}
-    >
-      <Flexbox gap={12}>
-        {!mobile && <Text strong>{t('profile.usernameInputHint')}</Text>}
+  const input = (
+    <Flexbox gap={4}>
+      <Flexbox horizontal align="center" gap={8}>
         <Input
-          autoFocus
-          showCount
-          maxLength={64}
+          defaultValue={username || ''}
+          disabled={saving}
+          key={username}
           placeholder={t('profile.usernamePlaceholder')}
+          ref={inputRef}
           status={error ? 'error' : undefined}
-          value={editValue}
-          onChange={handleInputChange}
+          style={mobile ? undefined : { textAlign: 'right', width: INPUT_WIDTH }}
+          variant="filled"
+          onBlur={handleSave}
+          onChange={handleChange}
           onPressEnter={handleSave}
         />
-        {error && (
-          <Text style={{ fontSize: 12 }} type="danger">
-            {error}
-          </Text>
-        )}
-        <Flexbox horizontal gap={8} justify="flex-end">
-          <Button disabled={saving} size="small" onClick={handleCancel}>
-            {t('profile.cancel')}
-          </Button>
-          <Button loading={saving} size="small" type="primary" onClick={handleSave}>
-            {t('profile.save')}
-          </Button>
-        </Flexbox>
+        {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
       </Flexbox>
-    </motion.div>
-  );
-
-  const displayContent = (
-    <motion.div
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      initial={{ opacity: 0 }}
-      key="display"
-      transition={{ duration: 0.2 }}
-    >
-      {mobile ? (
-        <Text>{username || '--'}</Text>
-      ) : (
-        <Flexbox horizontal align="center" justify="space-between">
-          <Text>{username || '--'}</Text>
-          <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
-            {t('profile.updateUsername')}
-          </Text>
-        </Flexbox>
+      {error && (
+        <Text style={{ fontSize: 12, textAlign: 'right' }} type="danger">
+          {error}
+        </Text>
       )}
-    </motion.div>
+    </Flexbox>
   );
 
   if (mobile) {
     return (
       <Flexbox gap={12} style={rowStyle}>
-        <Flexbox horizontal align="center" justify="space-between">
-          <Text strong>{t('profile.username')}</Text>
-          {!isEditing && (
-            <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
-              {t('profile.updateUsername')}
-            </Text>
-          )}
-        </Flexbox>
-        <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>
+        <Text strong>{t('profile.username')}</Text>
+        {input}
       </Flexbox>
     );
   }
 
   return (
-    <Flexbox horizontal gap={24} style={rowStyle}>
+    <Flexbox horizontal align="center" gap={24} style={rowStyle}>
       <Text style={labelStyle}>{t('profile.username')}</Text>
-      <Flexbox style={{ flex: 1 }}>
-        <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>
+      <Flexbox align="flex-end" style={{ flex: 1 }}>
+        {input}
       </Flexbox>
     </Flexbox>
   );
