@@ -180,8 +180,12 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
         upperProvider = ModelProvider.OpenAI.toUpperCase(); // Use OpenAI options as default
       }
 
-      const apiKey = apiKeyManager.pick(payload?.apiKey || llmConfig[`${upperProvider}_API_KEY`]);
       const baseURL = payload?.baseURL || process.env[`${upperProvider}_PROXY_URL`];
+
+      // if user set baseURL, apiKey must be from payload
+      const apiKey = payload?.baseURL
+        ? payload?.apiKey
+        : apiKeyManager.pick(payload?.apiKey || llmConfig[`${upperProvider}_API_KEY`]);
 
       return baseURL ? { apiKey, baseURL } : { apiKey };
     }
@@ -194,16 +198,22 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
 
     case ModelProvider.Azure: {
       const { AZURE_API_KEY, AZURE_API_VERSION, AZURE_ENDPOINT } = llmConfig;
-      const apiKey = apiKeyManager.pick(payload?.apiKey || AZURE_API_KEY);
       const baseURL = payload?.baseURL || AZURE_ENDPOINT;
       const apiVersion = payload?.azureApiVersion || AZURE_API_VERSION;
+      const apiKey = payload?.baseURL
+        ? payload?.apiKey
+        : apiKeyManager.pick(payload?.apiKey || AZURE_API_KEY);
+
       return { apiKey, apiVersion, baseURL };
     }
 
     case ModelProvider.AzureAI: {
       const { AZUREAI_ENDPOINT, AZUREAI_ENDPOINT_KEY } = llmConfig;
-      const apiKey = payload?.apiKey || AZUREAI_ENDPOINT_KEY;
       const baseURL = payload?.baseURL || AZUREAI_ENDPOINT;
+      const apiKey = payload?.baseURL
+        ? payload?.apiKey
+        : apiKeyManager.pick(payload?.apiKey || AZUREAI_ENDPOINT_KEY);
+
       return { apiKey, baseURL };
     }
 
@@ -261,7 +271,7 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
       // ComfyUI supports multiple auth types: none, basic, bearer, custom
       // Extract all relevant auth fields from the payload or environment
       const authType = payload?.authType || COMFYUI_AUTH_TYPE || 'none';
-      const apiKey = payload?.apiKey || COMFYUI_API_KEY;
+      const apiKey = payload?.baseURL ? payload?.apiKey : payload?.apiKey || COMFYUI_API_KEY;
       const username = payload?.username || COMFYUI_USERNAME;
       const password = payload?.password || COMFYUI_PASSWORD;
 

@@ -38,6 +38,9 @@ vi.mock('@/envs/llm', () => ({
     AZURE_API_KEY: 'test-azure-key',
     AZURE_ENDPOINT: 'endpoint',
 
+    AZUREAI_ENDPOINT_KEY: 'test-azureai-key',
+    AZUREAI_ENDPOINT: 'azureai-endpoint',
+
     ZHIPU_API_KEY: 'test.zhipu-key',
     MOONSHOT_API_KEY: 'test-moonshot-key',
     AWS_SECRET_ACCESS_KEY: 'test-aws-secret',
@@ -493,6 +496,53 @@ describe('initModelRuntimeWithUserPayload method', () => {
       // 根据实际实现，你可能需要检查是否返回了默认的 runtime 实例，或者是否抛出了异常
       // 例如，如果默认使用 OpenAI:
       expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
+    });
+  });
+
+  describe('should not leak global API key when custom baseURL is provided', () => {
+    it('OpenAI provider: should throw error when only baseURL is provided', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        baseURL: 'https://user-custom-endpoint.com/v1',
+      };
+      try {
+        await initModelRuntimeWithUserPayload(ModelProvider.OpenAI, jwtPayload);
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toEqual(expect.objectContaining({ errorType: 'InvalidProviderAPIKey' }));
+      }
+    });
+
+    it('Azure provider: should throw error when only baseURL is provided', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        baseURL: 'https://user-custom-azure-endpoint.com',
+      };
+      try {
+        await initModelRuntimeWithUserPayload(ModelProvider.Azure, jwtPayload);
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toEqual(expect.objectContaining({ errorType: 'InvalidProviderAPIKey' }));
+      }
+    });
+
+    it('AzureAI provider: should throw error when only baseURL is provided', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        baseURL: 'https://user-custom-azureai-endpoint.com',
+      };
+      try {
+        await initModelRuntimeWithUserPayload(ModelProvider.AzureAI, jwtPayload);
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toEqual(expect.objectContaining({ errorType: 'InvalidProviderAPIKey' }));
+      }
+    });
+
+    it('ComfyUI provider: should use undefined api key when only baseURL is provided', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        baseURL: 'http://user-custom-comfyui:8188',
+      };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, jwtPayload);
+      const comfyUIRuntime = runtime['_runtime'] as LobeComfyUI;
+      expect(comfyUIRuntime.options.apiKey).toBeUndefined();
     });
   });
 });
