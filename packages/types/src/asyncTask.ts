@@ -20,7 +20,7 @@ export enum AsyncTaskErrorType {
    * Free plan users are not allowed to use this feature
    */
   FreePlanLimit = 'FreePlanLimit',
-  // eslint-disable-next-line typescript-sort-keys/string-enum
+
   InvalidProviderAPIKey = 'InvalidProviderAPIKey',
   /* ↑ cloud slot ↑ */
 

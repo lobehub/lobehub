@@ -957,14 +957,17 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  searchMemory: memoryProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
-    try {
-      return await searchUserMemories(ctx, input);
-    } catch (error) {
-      console.error('Failed to retrieve memories:', error);
-      return EMPTY_SEARCH_RESULT;
+  searchMemory: memoryProcedure
+    .input(searchMemorySchema)
+    .query(async ({ input, ctx }) => {
+      try {
+        return await searchUserMemories(ctx, input);
+      } catch (error) {
+        console.error('Failed to retrieve memories:', error);
+        return EMPTY_SEARCH_RESULT;
+      }
     }
-  }),
+  ),
 
   toolAddActivityMemory: memoryProcedure
     .input(ActivityMemoryItemSchema)
