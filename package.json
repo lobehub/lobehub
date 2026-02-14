@@ -126,23 +126,30 @@
     ],
     "*.mdx": [
       "remark -r ./.remarkrc.mdx.mjs --silent --output --",
-      "eslint --quiet --fix"
+      "eslint --quiet --fix --prune-suppressions",
+      "git add eslint-suppressions.json"
     ],
     "*.json": [
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.{mjs,cjs}": [
-      "prettier --write",
-      "eslint --fix"
+      "eslint --fix --prune-suppressions",
+      "git add eslint-suppressions.json",
+      "prettier --write"
     ],
     "*.{js,jsx}": [
-      "prettier --write",
+      "eslint --fix --prune-suppressions",
+      "git add eslint-suppressions.json",
       "stylelint --fix",
-      "eslint --fix"
+      "prettier --write"
     ],
     "*.{ts,tsx}": [
-      "prettier --parser=typescript --write",
       "stylelint --fix",
+      "eslint --fix --prune-suppressions",
+      "git add eslint-suppressions.json",
+      "prettier --parser=typescript --write"
+    ],
+    "*.{yml,yaml}": [
       "eslint --fix"
     ]
   },

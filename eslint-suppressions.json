@@ -183,11 +183,6 @@
       "count": 1
     }
   },
-  "src/features/NavPanel/SideBarHeaderLayout.tsx": {
-    "@eslint-react/dom/no-flush-sync": {
-      "count": 1
-    }
-  },
   "src/features/PluginsUI/Render/utils/iframeOnReady.test.ts": {
     "unicorn/no-invalid-remove-event-listener": {
       "count": 1

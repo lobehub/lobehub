@@ -107,6 +107,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
               if (href) {
                 event.preventDefault();
                 event.stopPropagation();
+                // eslint-disable-next-line @eslint-react/dom/no-flush-sync
                 flushSync(() => navigate(href));
               }
             },
