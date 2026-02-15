@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { AnimatePresence, m as motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
@@ -26,6 +26,20 @@ const InputArea = () => {
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
   const showSkillBanner = isLobehubSkillEnabled || isKlavisEnabled;
+  const chatInputRef = useRef<HTMLDivElement>(null);
+
+  // When a starter mode is activated (e.g. Create Agent / Create Group / Write),
+  // the SuggestQuestions panel renders below the ChatInput and may push the total
+  // content height beyond the viewport, causing the ChatInput to scroll out of view.
+  // Re-focus the editor and scroll it into view so the user can type immediately.
+  useEffect(() => {
+    if (!inputActiveMode) return;
+
+    requestAnimationFrame(() => {
+      chatInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      useChatStore.getState().mainInputEditor?.focus();
+    });
+  }, [inputActiveMode]);
 
   // Get agent's model info for vision support check
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(inboxAgentId)(s));
@@ -66,7 +80,10 @@ const InputArea = () => {
 
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
-      <Flexbox style={{ paddingBottom: showSkillBanner ? 32 : 0, position: 'relative' }}>
+      <Flexbox
+        ref={chatInputRef}
+        style={{ paddingBottom: showSkillBanner ? 32 : 0, position: 'relative' }}
+      >
         {showSkillBanner && <SkillInstallBanner />}
         <DragUploadZone
           style={{ position: 'relative', zIndex: 1 }}
