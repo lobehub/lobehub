@@ -81,7 +81,7 @@ jobs:
             gh pr create \
               --base canary \
               --head "$SYNC_BRANCH" \
-              --title "Sync main branch to canary branch" \
+              --title "🚀 release: sync main branch to canary" \
               --body "Automatic sync from main to canary. Direct push failed, please merge this PR." || true
             exit 0
           fi
@@ -121,7 +121,7 @@ jobs:
             gh pr create \
               --base canary \
               --head "$SYNC_BRANCH" \
-              --title "Sync main branch to canary branch" \
+              --title "🚀 release: sync main branch to canary" \
               --body-file /tmp/pr-body.md
           fi
         env:

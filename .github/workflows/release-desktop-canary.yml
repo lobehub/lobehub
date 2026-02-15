@@ -4,15 +4,16 @@ name: Release Desktop Canary
 # Canary 自动发版工作流
 # ============================================
 # 触发条件:
-#   1. canary 分支有 push (合入 PR) 且 commit 前缀为 style/feat/fix/refactor
+#   1. canary 分支有 push (合入 PR) 且 commit 前缀为 style/feat/fix/refactor/release (支持 gitmoji)
 #   2. 手动触发 (workflow_dispatch)
 #
 # 并发策略:
 #   同一 workflow 仅保留最新一次运行，自动取消排队中的旧 build
 #
 # 版本策略:
-#   基于最新 stable tag 的 minor+1, 格式: X.(Y+1).0-canary.YYYYMMDDHHMM
-#   例: 当前 tag v2.1.28 → v2.2.0-canary.202602121400
+#   基于最新 stable tag 的 patch+1, postfix 为递增序号
+#   格式: X.Y.(Z+1)-canary.N
+#   例: 当前 tag v2.1.28 → v2.1.29-canary.1, 下次 → v2.1.29-canary.2
 # ============================================
 
 on:
@@ -74,13 +75,13 @@ jobs:
           commit_msg=$(git log -1 --pretty=%s HEAD)
           echo "📝 Head commit: $commit_msg"
 
-          # 检查是否匹配 style/feat/fix/refactor 前缀 (支持 gitmoji 前缀)
-          if echo "$commit_msg" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:'; then
+          # 检查是否匹配 style/feat/fix/refactor/release 前缀 (支持 gitmoji 前缀)
+          if echo "$commit_msg" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:|^(🚀\s*)?release(\(.+\))?:'; then
             echo "should_build=true" >> $GITHUB_OUTPUT
             echo "✅ Commit matches canary build trigger: $commit_msg"
           else
             echo "should_build=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Commit does not match style/feat/fix/refactor prefix, skipping: $commit_msg"
+            echo "⏭️ Commit does not match style/feat/fix/refactor/release prefix, skipping: $commit_msg"
           fi
 
       - name: Calculate canary version
@@ -97,17 +98,23 @@ jobs:
 
           echo "📌 Latest stable tag: $latest_tag"
 
-          # 去掉 v 前缀
+          # 去掉 v 前缀，解析 major.minor.patch → a.b.c 取 c+1
           base_version="${latest_tag#v}"
-
-          # 解析 major.minor.patch
           IFS='.' read -r major minor patch <<< "$base_version"
+          new_patch=$((patch + 1))
+          base_canary="${major}.${minor}.${new_patch}"
 
-          # minor + 1, patch 归零
-          new_minor=$((minor + 1))
-          timestamp=$(date -u +"%Y%m%d%H%M")
+          # postfix: 同 base 下已有 canary 标签的最大序号 + 1
+          max_seq=0
+          for t in $(git tag -l "v${base_canary}-canary.*" 2>/dev/null || true); do
+            seq=$(echo "$t" | grep -oE '[0-9]+$' || true)
+            if [ -n "$seq" ] && [ "$seq" -gt "$max_seq" ] 2>/dev/null; then
+              max_seq=$seq
+            fi
+          done
+          next_seq=$((max_seq + 1))
 
-          version="${major}.${new_minor}.0-canary.${timestamp}"
+          version="${base_canary}-canary.${next_seq}"
           tag="v${version}"
 
           echo "version=${version}" >> $GITHUB_OUTPUT
