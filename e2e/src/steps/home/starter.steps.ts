@@ -1,3 +1,4 @@
+/* eslint-disable  no-console */
 /**
  * Home Starter Steps
  *
@@ -24,7 +25,7 @@ let createdDocumentId: string | null = null;
 // ============================================
 
 Given('用户在 Home 页面', async function (this: CustomWorld) {
-  console.info('   📍 Step: 设置 LLM mock...');
+  console.log('   📍 Step: 设置 LLM mock...');
   // Setup LLM mock before navigation (for agent/group/page builder message)
   llmMockManager.setResponse('E2E Test Agent', presetResponses.greeting);
   llmMockManager.setResponse('E2E Test Group', presetResponses.greeting);
@@ -34,7 +35,7 @@ Given('用户在 Home 页面', async function (this: CustomWorld) {
   );
   await llmMockManager.setup(this.page);
 
-  console.info('   📍 Step: 导航到 Home 页面...');
+  console.log('   📍 Step: 导航到 Home 页面...');
   await this.page.goto('/');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
   await this.page.waitForTimeout(1000);
@@ -44,7 +45,7 @@ Given('用户在 Home 页面', async function (this: CustomWorld) {
   createdGroupId = null;
   createdDocumentId = null;
 
-  console.info('   ✅ 已进入 Home 页面');
+  console.log('   ✅ 已进入 Home 页面');
 });
 
 // ============================================
@@ -52,7 +53,7 @@ Given('用户在 Home 页面', async function (this: CustomWorld) {
 // ============================================
 
 When('用户点击创建 Agent 按钮', async function (this: CustomWorld) {
-  console.info('   📍 Step: 点击创建 Agent 按钮...');
+  console.log('   📍 Step: 点击创建 Agent 按钮...');
 
   // Find the "Create Agent" button by text (supports both English and Chinese)
   const createAgentButton = this.page
@@ -65,11 +66,11 @@ When('用户点击创建 Agent 按钮', async function (this: CustomWorld) {
   // Wait for mode switch animation and ChatInput scroll-into-view to settle
   await this.page.waitForTimeout(800);
 
-  console.info('   ✅ 已点击创建 Agent 按钮');
+  console.log('   ✅ 已点击创建 Agent 按钮');
 });
 
 When('用户点击创建 Group 按钮', async function (this: CustomWorld) {
-  console.info('   📍 Step: 点击创建 Group 按钮...');
+  console.log('   📍 Step: 点击创建 Group 按钮...');
 
   // Find the "Create Group" button by text (supports both English and Chinese)
   const createGroupButton = this.page
@@ -82,11 +83,11 @@ When('用户点击创建 Group 按钮', async function (this: CustomWorld) {
   // Wait for mode switch animation and ChatInput scroll-into-view to settle
   await this.page.waitForTimeout(800);
 
-  console.info('   ✅ 已点击创建 Group 按钮');
+  console.log('   ✅ 已点击创建 Group 按钮');
 });
 
 When('用户点击写作按钮', async function (this: CustomWorld) {
-  console.info('   📍 Step: 点击写作按钮...');
+  console.log('   📍 Step: 点击写作按钮...');
 
   // Find the "Write" button by text (supports both English and Chinese)
   const writeButton = this.page.getByRole('button', { name: /write|写作/i }).first();
@@ -97,11 +98,11 @@ When('用户点击写作按钮', async function (this: CustomWorld) {
   // Wait for mode switch animation and ChatInput scroll-into-view to settle
   await this.page.waitForTimeout(800);
 
-  console.info('   ✅ 已点击写作按钮');
+  console.log('   ✅ 已点击写作按钮');
 });
 
 When('用户在输入框中输入 {string}', async function (this: CustomWorld, message: string) {
-  console.info(`   📍 Step: 在输入框中输入 "${message}"...`);
+  console.log(`   📍 Step: 在输入框中输入 "${message}"...`);
 
   // The chat input is a contenteditable editor, need to click first then type.
   // Target the contenteditable element INSIDE the ChatInput container directly,
@@ -114,11 +115,11 @@ When('用户在输入框中输入 {string}', async function (this: CustomWorld, 
   await this.page.waitForTimeout(300);
   await this.page.keyboard.type(message, { delay: 30 });
 
-  console.info(`   ✅ 已输入 "${message}"`);
+  console.log(`   ✅ 已输入 "${message}"`);
 });
 
 When('用户按 Enter 发送', { timeout: 30_000 }, async function (this: CustomWorld) {
-  console.info('   📍 Step: 按 Enter 发送...');
+  console.log('   📍 Step: 按 Enter 发送...');
 
   // Wait for editor's debounced onChange (100ms default) to sync inputMessage to store.
   // The send() function reads directly from the editor as a fallback, but this wait
@@ -142,20 +143,20 @@ When('用户按 Enter 发送', { timeout: 30_000 }, async function (this: Custom
   const agentMatch = currentUrl.match(/\/agent\/([^/]+)/);
   if (agentMatch) {
     createdAgentId = agentMatch[1];
-    console.info(`   📍 Created agent ID: ${createdAgentId}`);
+    console.log(`   📍 Created agent ID: ${createdAgentId}`);
   }
 
   const groupMatch = currentUrl.match(/\/group\/([^/]+)/);
   if (groupMatch) {
     createdGroupId = groupMatch[1];
-    console.info(`   📍 Created group ID: ${createdGroupId}`);
+    console.log(`   📍 Created group ID: ${createdGroupId}`);
   }
 
-  console.info('   ✅ 已发送消息');
+  console.log('   ✅ 已发送消息');
 });
 
 When('用户按 Enter 发送创建文档', { timeout: 30_000 }, async function (this: CustomWorld) {
-  console.info('   📍 Step: 按 Enter 发送创建文档...');
+  console.log('   📍 Step: 按 Enter 发送创建文档...');
 
   // Wait for editor's debounced onChange (100ms default) to sync inputMessage to store
   await this.page.waitForTimeout(200);
@@ -176,20 +177,20 @@ When('用户按 Enter 发送创建文档', { timeout: 30_000 }, async function (
   const pageMatch = currentUrl.match(/\/page\/([^/?]+)/);
   if (pageMatch) {
     createdDocumentId = pageMatch[1];
-    console.info(`   📍 Created document ID: ${createdDocumentId}`);
+    console.log(`   📍 Created document ID: ${createdDocumentId}`);
   }
 
-  console.info('   ✅ 已发送并创建文档');
+  console.log('   ✅ 已发送并创建文档');
 });
 
 When('用户返回 Home 页面', async function (this: CustomWorld) {
-  console.info('   📍 Step: 返回 Home 页面...');
+  console.log('   📍 Step: 返回 Home 页面...');
 
   await this.page.goto('/');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
   await this.page.waitForTimeout(1000);
 
-  console.info('   ✅ 已返回 Home 页面');
+  console.log('   ✅ 已返回 Home 页面');
 });
 
 // ============================================
@@ -197,27 +198,27 @@ When('用户返回 Home 页面', async function (this: CustomWorld) {
 // ============================================
 
 Then('页面应该跳转到 Agent 的 profile 页面', async function (this: CustomWorld) {
-  console.info('   📍 Step: 验证页面跳转到 Agent profile 页面...');
+  console.log('   📍 Step: 验证页面跳转到 Agent profile 页面...');
 
   // Check current URL matches /agent/{id}/profile pattern
   const currentUrl = this.page.url();
   expect(currentUrl).toMatch(/\/agent\/[^/]+\/profile/);
 
-  console.info('   ✅ 已跳转到 Agent profile 页面');
+  console.log('   ✅ 已跳转到 Agent profile 页面');
 });
 
 Then('页面应该跳转到 Group 的 profile 页面', async function (this: CustomWorld) {
-  console.info('   📍 Step: 验证页面跳转到 Group profile 页面...');
+  console.log('   📍 Step: 验证页面跳转到 Group profile 页面...');
 
   // Check current URL matches /group/{id}/profile pattern
   const currentUrl = this.page.url();
   expect(currentUrl).toMatch(/\/group\/[^/]+\/profile/);
 
-  console.info('   ✅ 已跳转到 Group profile 页面');
+  console.log('   ✅ 已跳转到 Group profile 页面');
 });
 
 Then('新创建的 Agent 应该在侧边栏中显示', async function (this: CustomWorld) {
-  console.info('   📍 Step: 验证 Agent 在侧边栏中显示...');
+  console.log('   📍 Step: 验证 Agent 在侧边栏中显示...');
 
   // Wait for sidebar to be visible and data to load
   await this.page.waitForTimeout(1500);
@@ -230,17 +231,17 @@ Then('新创建的 Agent 应该在侧边栏中显示', async function (this: Cus
 
   const agentLink = this.page.locator(`a[href="/agent/${createdAgentId}"]`).first();
   await expect(agentLink).toBeVisible({ timeout: WAIT_TIMEOUT });
-  console.info(`   ✅ 找到 Agent 链接: /agent/${createdAgentId}`);
+  console.log(`   ✅ 找到 Agent 链接: /agent/${createdAgentId}`);
 
   // Get the aria-label or text content to verify it's the correct agent
   const ariaLabel = await agentLink.getAttribute('aria-label');
-  console.info(`   📍 Agent aria-label: ${ariaLabel}`);
+  console.log(`   📍 Agent aria-label: ${ariaLabel}`);
 
-  console.info('   ✅ Agent 已在侧边栏中显示');
+  console.log('   ✅ Agent 已在侧边栏中显示');
 });
 
 Then('新创建的 Group 应该在侧边栏中显示', async function (this: CustomWorld) {
-  console.info('   📍 Step: 验证 Group 在侧边栏中显示...');
+  console.log('   📍 Step: 验证 Group 在侧边栏中显示...');
 
   // Wait for sidebar to be visible and data to load
   await this.page.waitForTimeout(1500);
@@ -253,17 +254,17 @@ Then('新创建的 Group 应该在侧边栏中显示', async function (this: Cus
 
   const groupLink = this.page.locator(`a[href="/group/${createdGroupId}"]`).first();
   await expect(groupLink).toBeVisible({ timeout: WAIT_TIMEOUT });
-  console.info(`   ✅ 找到 Group 链接: /group/${createdGroupId}`);
+  console.log(`   ✅ 找到 Group 链接: /group/${createdGroupId}`);
 
   // Get the aria-label or text content to verify it's the correct group
   const ariaLabel = await groupLink.getAttribute('aria-label');
-  console.info(`   📍 Group aria-label: ${ariaLabel}`);
+  console.log(`   📍 Group aria-label: ${ariaLabel}`);
 
-  console.info('   ✅ Group 已在侧边栏中显示');
+  console.log('   ✅ Group 已在侧边栏中显示');
 });
 
 Then('页面应该跳转到文档编辑页面', async function (this: CustomWorld) {
-  console.info('   📍 Step: 验证页面跳转到文档编辑页面...');
+  console.log('   📍 Step: 验证页面跳转到文档编辑页面...');
 
   // Check current URL matches /page/{id} pattern
   const currentUrl = this.page.url();
@@ -273,11 +274,11 @@ Then('页面应该跳转到文档编辑页面', async function (this: CustomWorl
     throw new Error('Document ID was not captured during creation');
   }
 
-  console.info(`   ✅ 已跳转到文档编辑页面: /page/${createdDocumentId}`);
+  console.log(`   ✅ 已跳转到文档编辑页面: /page/${createdDocumentId}`);
 });
 
 Then('Page Agent 应该收到用户的提示词', async function (this: CustomWorld) {
-  console.info('   📍 Step: 验证 Page Agent 收到用户的提示词...');
+  console.log('   📍 Step: 验证 Page Agent 收到用户的提示词...');
 
   // Wait for the page to fully load and Page Agent panel to appear
   await this.page.waitForTimeout(2000);
@@ -290,10 +291,10 @@ Then('Page Agent 应该收到用户的提示词', async function (this: CustomWo
   const messageVisible = await userMessage.isVisible().catch(() => false);
 
   if (messageVisible) {
-    console.info('   ✅ 找到用户发送的提示词');
+    console.log('   ✅ 找到用户发送的提示词');
   } else {
     // Alternative: check if there's any chat content indicating the message was sent
-    console.info('   ⚠️ 用户消息可能在聊天面板中，但未直接可见');
+    console.log('   ⚠️ 用户消息可能在聊天面板中，但未直接可见');
   }
 
   // Verify that the Page Agent responded (mock response should appear)
@@ -305,10 +306,10 @@ Then('Page Agent 应该收到用户的提示词', async function (this: CustomWo
   const responseVisible = await aiResponse.isVisible().catch(() => false);
 
   if (responseVisible) {
-    console.info('   ✅ Page Agent 已响应用户的提示词');
+    console.log('   ✅ Page Agent 已响应用户的提示词');
   } else {
-    console.info('   ⚠️ Page Agent 响应可能正在生成或在其他位置');
+    console.log('   ⚠️ Page Agent 响应可能正在生成或在其他位置');
   }
 
-  console.info('   ✅ Page Agent 验证完成');
+  console.log('   ✅ Page Agent 验证完成');
 });
