@@ -31,9 +31,9 @@ const minimaxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description: 'M2.5 Lightning: Same performance, faster and more agile (approx. 100 tps).',
-    displayName: 'MiniMax M2.5 Lightning',
-    id: 'MiniMax-M2.5-Lightning',
+    description: 'M2.5 Highspeed: Same performance, faster and more agile (approx. 100 tps).',
+    displayName: 'MiniMax M2.5 Highspeed',
+    id: 'MiniMax-M2.5-highspeed',
     maxOutput: 131_072,
     pricing: {
       currency: 'CNY',
@@ -78,8 +78,8 @@ const minimaxChatModels: AIChatModelCard[] = [
     contextWindowTokens: 204_800,
     description:
       'Powerful multilingual programming capabilities, comprehensively upgraded programming experience. Faster and more efficient.',
-    displayName: 'MiniMax M2.1 Lightning',
-    id: 'MiniMax-M2.1-Lightning',
+    displayName: 'MiniMax M2.1 Highspeed',
+    id: 'MiniMax-M2.1-highspeed',
     maxOutput: 131_072,
     pricing: {
       currency: 'CNY',
