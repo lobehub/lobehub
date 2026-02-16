@@ -1,8 +1,50 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import  { type AIChatModelCard } from '../types/aiModel';
 
 // https://cloud.infini-ai.com/genstudio/model
 
 const infiniaiChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 198_000,
+    description:
+      'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
+    displayName: 'GLM-5',
+    enabled: true,
+    id: 'glm-5',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 22, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-02-13',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
+      'MiniMax-M2.5 is a state-of-the-art large language model designed for real-world productivity and coding tasks.',
+    displayName: 'MiniMax M2.5',
+    enabled: true,
+    id: 'minimax-m2.5',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-02-13',
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
@@ -38,7 +39,7 @@ export const useSessionGroupMenuItems = () => {
    * Rename group menu item
    */
   const renameGroupMenuItem = useCallback(
-    (onToggleEdit: (visible?: boolean) => void): ItemType => {
+    (groupId: string, groupName: string, anchor: HTMLElement | null): ItemType => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
         icon: iconElement,
@@ -46,7 +47,9 @@ export const useSessionGroupMenuItems = () => {
         label: t('sessionGroup.rename'),
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
-          onToggleEdit(true);
+          if (anchor) {
+            openEditingPopover({ anchor, id: groupId, title: groupName, type: 'group' });
+          }
         },
       };
     },

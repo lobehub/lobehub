@@ -4,7 +4,7 @@ permissions:
   contents: write
 
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
     branches:
       - main
@@ -41,7 +41,7 @@ jobs:
             echo "⏭️ Not a release PR"
           fi
 
-      - name: Detect hotfix PR (branch prefix + commit prefix gate)
+      - name: Detect hotfix PR (branch first, title fallback)
         id: hotfix
         if: steps.release.outputs.should_tag != 'true'
         run: |
@@ -50,19 +50,20 @@ jobs:
           echo "Head ref: $HEAD_REF"
           echo "PR Title: $PR_TITLE"
 
-          if [[ "$HEAD_REF" != hotfix/* ]]; then
-            echo "should_tag=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Not a hotfix PR"
+          # Priority 1: hotfix/* branch always counts as hotfix, ignore PR title gate.
+          if [[ "$HEAD_REF" == hotfix/* ]]; then
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "✅ Detected hotfix PR from hotfix/* branch (title gate bypassed)"
             exit 0
           fi
 
-          # Gate: PR title must match style/feat/fix/refactor prefix (with optional gitmoji)
-          if echo "$PR_TITLE" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:'; then
+          # Priority 2: fallback to PR title prefix gate (legacy behavior).
+          if echo "$PR_TITLE" | grep -qiE '^(💄[[:space:]]*)?style(\(.+\))?:|^(✨[[:space:]]*)?feat(\(.+\))?:|^(🐛[[:space:]]*)?fix(\(.+\))?:|^(♻️[[:space:]]*)?refactor(\(.+\))?:|^((🐛|🩹)[[:space:]]*)?hotfix(\(.+\))?:'; then
             echo "should_tag=true" >> $GITHUB_OUTPUT
-            echo "✅ Detected hotfix PR with valid commit prefix"
+            echo "✅ Detected hotfix PR from title prefix gate"
           else
             echo "should_tag=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Hotfix PR but title does not match style/feat/fix/refactor prefix, skipping tag"
+            echo "⏭️ Not a hotfix PR (neither hotfix/* branch nor style/feat/fix/refactor/hotfix title prefix)"
           fi
 
       - name: Prepare main branch
@@ -185,8 +186,8 @@ jobs:
 
           echo "✅ Tag v$VERSION created successfully!"
 
-      - name: Create GitHub Release (release)
-        if: env.SHOULD_TAG == 'true' && env.KIND == 'release' && steps.check-tag.outputs.exists == 'false'
+      - name: Create GitHub Release
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ env.VERSION }}
@@ -195,26 +196,6 @@ jobs:
             ## 📦 Release v${{ env.VERSION }}
 
             This release was automatically published from PR #${{ github.event.pull_request.number }}.
-
-            ### Changes
-            See PR description: ${{ github.event.pull_request.html_url }}
-
-            ### Commit Message
-            ${{ github.event.pull_request.body }}
-          draft: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-      - name: Create GitHub Release (hotfix)
-        if: env.SHOULD_TAG == 'true' && env.KIND == 'hotfix' && steps.check-tag.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ env.VERSION }}
-          name: 🩹 Hotfix v${{ env.VERSION }}
-          body: |
-            ## 📦 Hotfix v${{ env.VERSION }}
-
-            This hotfix was automatically published from PR #${{ github.event.pull_request.number }}.
 
             ### Changes
             See PR description: ${{ github.event.pull_request.html_url }}

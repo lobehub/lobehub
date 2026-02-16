@@ -317,32 +317,6 @@ describe('createSidebarUISlice', () => {
   });
 
   // ========== UI State Actions ==========
-  describe('setAgentRenamingId', () => {
-    it('should set agent renaming id', () => {
-      const { result } = renderHook(() => useHomeStore());
-
-      act(() => {
-        result.current.setAgentRenamingId('agent-123');
-      });
-
-      expect(result.current.agentRenamingId).toBe('agent-123');
-    });
-
-    it('should clear agent renaming id when set to null', () => {
-      const { result } = renderHook(() => useHomeStore());
-
-      act(() => {
-        result.current.setAgentRenamingId('agent-123');
-      });
-
-      act(() => {
-        result.current.setAgentRenamingId(null);
-      });
-
-      expect(result.current.agentRenamingId).toBeNull();
-    });
-  });
-
   describe('setAgentUpdatingId', () => {
     it('should set agent updating id', () => {
       const { result } = renderHook(() => useHomeStore());
@@ -366,32 +340,6 @@ describe('createSidebarUISlice', () => {
       });
 
       expect(result.current.agentUpdatingId).toBeNull();
-    });
-  });
-
-  describe('setGroupRenamingId', () => {
-    it('should set group renaming id', () => {
-      const { result } = renderHook(() => useHomeStore());
-
-      act(() => {
-        result.current.setGroupRenamingId('group-123');
-      });
-
-      expect(result.current.groupRenamingId).toBe('group-123');
-    });
-
-    it('should clear group renaming id when set to null', () => {
-      const { result } = renderHook(() => useHomeStore());
-
-      act(() => {
-        result.current.setGroupRenamingId('group-123');
-      });
-
-      act(() => {
-        result.current.setGroupRenamingId(null);
-      });
-
-      expect(result.current.groupRenamingId).toBeNull();
     });
   });
 

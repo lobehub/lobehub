@@ -92,4 +92,11 @@ export default eslint(
       'unicorn/prefer-top-level-await': 0,
     },
   },
+  // E2E and test files - allow console.log for debugging
+  {
+    files: ['e2e/**/*', '**/*.test.ts', '**/*.test.tsx'],
+    rules: {
+      'no-console': 0,
+    },
+  },
 );

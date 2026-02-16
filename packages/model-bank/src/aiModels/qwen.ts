@@ -1,4 +1,4 @@
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
 
 // https://help.aliyun.com/zh/model-studio/models?spm=a2c4g.11186623
 

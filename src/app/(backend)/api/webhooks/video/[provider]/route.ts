@@ -11,6 +11,7 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
+import { type RuntimeVideoGenParams } from 'model-bank';
 import { NextResponse } from 'next/server';
 
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
@@ -19,6 +20,7 @@ import { GenerationModel } from '@/database/models/generation';
 import { generationBatches } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { VideoGenerationService } from '@/server/services/generation/video';
+import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:webhook');
 
@@ -184,7 +186,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       {
         fileHash: processResult.fileHash,
         fileType: processResult.mimeType,
-        name: `video_${generation.id}.mp4`,
+        name: `${sanitizeFileName(batch?.prompt ?? '', generation.id)}.mp4`,
         size: processResult.fileSize,
         url: processResult.videoKey,
       },
@@ -198,7 +200,10 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
     // Charge after successful video generation
     try {
       await chargeAfterGenerate({
-        generateAudio: result.generateAudio,
+        computePriceParams: {
+          generateAudio: (batch?.config as RuntimeVideoGenParams)?.generateAudio,
+        },
+        latency: Date.now() - asyncTask.createdAt.getTime(),
         metadata: {
           asyncTaskId: asyncTask.id,
           generationBatchId: generation.generationBatchId!,

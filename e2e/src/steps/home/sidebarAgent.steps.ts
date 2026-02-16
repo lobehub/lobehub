@@ -10,7 +10,7 @@ import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { TEST_USER } from '../../support/seedTestUser';
-import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
+import { type CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // Helper Functions
@@ -23,67 +23,29 @@ async function inputNewName(
 ): Promise<void> {
   await this.page.waitForTimeout(300);
 
-  // Try to find the popover input
-  const popoverInputSelectors = [
-    '.ant-popover-inner input',
-    '.ant-popover-content input',
-    '.ant-popover input',
-  ];
+  // Primary: find input inside EditingPopover (data-testid) or antd Popover
+  const renameInput = this.page
+    .locator('[data-testid="editing-popover"] input, .ant-popover input')
+    .first();
 
-  let renameInput = null;
+  await renameInput.waitFor({ state: 'visible', timeout: 5000 });
+  await renameInput.click();
+  await renameInput.clear();
+  await renameInput.fill(newName);
 
-  for (const selector of popoverInputSelectors) {
-    try {
-      const locator = this.page.locator(selector).first();
-      await locator.waitFor({ state: 'visible', timeout: 2000 });
-      renameInput = locator;
-      break;
-    } catch {
-      // Try next selector
-    }
-  }
-
-  if (!renameInput) {
-    // Fallback: find any visible input
-    const allInputs = this.page.locator('input:visible');
-    const count = await allInputs.count();
-
-    for (let i = 0; i < count; i++) {
-      const input = allInputs.nth(i);
-      const placeholder = (await input.getAttribute('placeholder').catch(() => '')) || '';
-      if (placeholder.includes('Search') || placeholder.includes('搜索')) continue;
-
-      const isInPopover = await input.evaluate((el) => {
-        return el.closest('.ant-popover') !== null || el.closest('[class*="popover"]') !== null;
-      });
-
-      if (isInPopover || count <= 2) {
-        renameInput = input;
-        break;
-      }
-    }
-  }
-
-  if (renameInput) {
-    await renameInput.click();
-    await renameInput.clear();
-    await renameInput.fill(newName);
-
-    if (pressEnter) {
-      await renameInput.press('Enter');
-    } else {
-      await this.page.click('body', { position: { x: 10, y: 10 } });
-    }
+  if (pressEnter) {
+    await renameInput.press('Enter');
   } else {
-    // Keyboard fallback
-    await this.page.keyboard.press('Meta+A');
-    await this.page.waitForTimeout(50);
-    await this.page.keyboard.type(newName, { delay: 20 });
-
-    if (pressEnter) {
-      await this.page.keyboard.press('Enter');
-    } else {
-      await this.page.click('body', { position: { x: 10, y: 10 } });
+    // Click the save button (ActionIcon with Check icon) next to the input
+    const saveButton = this.page
+      .locator('[data-testid="editing-popover"] svg.lucide-check, .ant-popover svg.lucide-check')
+      .first();
+    try {
+      await saveButton.waitFor({ state: 'visible', timeout: 2000 });
+      await saveButton.click();
+    } catch {
+      // Fallback: press Enter to save
+      await renameInput.press('Enter');
     }
   }
 

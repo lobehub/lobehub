@@ -84,6 +84,8 @@ jobs:
     steps:
       - name: Check release info
         id: check
+        env:
+          RELEASE_BODY: ${{ github.event.release.body || '' }}
         run: |
           # 判断触发方式
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
@@ -100,7 +102,7 @@ jobs:
             version="${version#v}"
             echo "is_manual=false" >> $GITHUB_OUTPUT
             echo "version=${version}" >> $GITHUB_OUTPUT
-            release_body="${{ github.event.release.body }}"
+            release_body="${RELEASE_BODY:-}"
             {
               echo "release_notes<<EOF"
               printf '%s\n' "$release_body"

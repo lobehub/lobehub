@@ -1,6 +1,8 @@
 interface ChargeParams {
-  generateAudio?: boolean;
+  computePriceParams?: { generateAudio?: boolean };
   isError?: boolean;
+  /** Total time from task submission to webhook callback (ms) */
+  latency?: number;
   metadata: {
     asyncTaskId: string;
     generationBatchId: string;
