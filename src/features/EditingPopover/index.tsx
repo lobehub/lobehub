@@ -19,7 +19,7 @@ const EditingPopover = () => {
     >
       <PopoverPortal>
         <PopoverPositioner anchor={target?.anchor ?? document.body} placement="bottomLeft">
-          <PopoverPopup style={{ padding: 4 }}>
+          <PopoverPopup data-testid="editing-popover" style={{ padding: 4 }}>
             {target?.type === 'agent' ? (
               <AgentContent
                 avatar={target.avatar}
