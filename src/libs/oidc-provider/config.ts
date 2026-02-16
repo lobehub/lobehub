@@ -6,51 +6,51 @@ import { appEnv } from '@/envs/app';
 const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
 
 /**
- * 默认 OIDC 客户端配置
+ * Default OIDC client configuration
  */
 export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'web',
     client_id: 'lobehub-desktop',
     client_name: 'LobeHub Desktop',
-    // 仅支持授权码流程
+    // Only supports authorization code flow
     grant_types: ['authorization_code', 'refresh_token'],
 
     logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
 
     post_logout_redirect_uris: [
-      // 动态构建 Web 页面回调 URL
+      // Dynamically construct web page callback URL
       urlJoin(appEnv.APP_URL!, '/oauth/logout'),
       'http://localhost:3210/oauth/logout',
     ],
 
-    // 桌面端授权回调 - 改为 Web 页面路径
+    // Desktop authorization callback - changed to web page path
     redirect_uris: [
-      // 动态构建 Web 页面回调 URL
+      // Dynamically construct web page callback URL
       urlJoin(appEnv.APP_URL!, '/oidc/callback/desktop'),
       'http://localhost:3210/oidc/callback/desktop',
     ],
 
-    // 支持授权码获取令牌和刷新令牌
+    // Supports authorization code for obtaining tokens and refresh tokens
     response_types: ['code'],
 
-    // 标记为公共客户端客户端，无密钥
+    // Marked as public client with no secret
     token_endpoint_auth_method: 'none',
   },
 
   {
-    application_type: 'native', // 移动端使用 native 类型
+    application_type: 'native', // Mobile uses native type
     client_id: 'lobehub-mobile',
     client_name: 'LobeHub Mobile',
-    // 支持授权码流程和刷新令牌
+    // Supports authorization code flow and refresh token
     grant_types: ['authorization_code', 'refresh_token'],
     logo_uri: 'https://hub-apac-1.lobeobjects.space/docs/73f69adfa1b802a0e250f6ff9d62f70b.png',
-    // 移动端不需要 post_logout_redirect_uris，因为注销通常在应用内处理
+    // Mobile does not need post_logout_redirect_uris as logout is typically handled within the app
     post_logout_redirect_uris: [],
-    // 移动端使用自定义 URL Scheme
+    // Mobile uses custom URL Scheme
     redirect_uris: ['com.lobehub.app://auth/callback'],
     response_types: ['code'],
-    // 公共客户端，无密钥
+    // Public client with no secret
     token_endpoint_auth_method: 'none',
   },
 
@@ -74,21 +74,21 @@ export const defaultClients: ClientMetadata[] = [
 ];
 
 /**
- * OIDC Scopes 定义
+ * OIDC Scopes definition
  */
 export const defaultScopes = [
   'openid',
   'profile',
   'email',
-  'offline_access', // 允许获取 refresh_token
+  'offline_access', // Allows obtaining refresh_token
 ];
 
 /**
- * OIDC Claims 定义
+ * OIDC Claims definition
  */
 export const defaultClaims = {
   email: ['email', 'email_verified'],
   openid: ['sub'],
-  // subject (用户唯一标识)
+  // subject (unique user identifier)
   profile: ['name', 'picture'],
 };
