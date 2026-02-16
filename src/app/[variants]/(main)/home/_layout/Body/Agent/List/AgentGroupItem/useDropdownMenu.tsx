@@ -11,14 +11,18 @@ import { useHomeStore } from '@/store/home';
 
 interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
+  avatar?: string;
   id: string;
+  memberAvatars?: { avatar?: string; background?: string }[];
   pinned: boolean;
   title: string;
 }
 
 export const useGroupDropdownMenu = ({
   anchor,
+  avatar,
   id,
+  memberAvatars,
   pinned,
   title,
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
@@ -48,7 +52,7 @@ export const useGroupDropdownMenu = ({
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
             if (anchor) {
-              openEditingPopover({ anchor, id, title, type: 'agentGroup' });
+              openEditingPopover({ anchor, avatar, id, memberAvatars, title, type: 'agentGroup' });
             }
           },
         },
@@ -92,6 +96,8 @@ export const useGroupDropdownMenu = ({
       ] as MenuProps['items'],
     [
       anchor,
+      avatar,
+      memberAvatars,
       t,
       pinned,
       pinAgentGroup,

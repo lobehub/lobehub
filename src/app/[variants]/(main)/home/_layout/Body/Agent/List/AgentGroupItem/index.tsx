@@ -88,9 +88,14 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
     );
   }, [isUpdating, avatar, backgroundColor]);
 
+  const customAvatar = typeof avatar === 'string' ? avatar : undefined;
+  const memberAvatars = Array.isArray(avatar) ? avatar : [];
+
   const dropdownMenu = useGroupDropdownMenu({
     anchor,
+    avatar: customAvatar,
     id,
+    memberAvatars,
     pinned: pinned ?? false,
     title: displayTitle,
   });

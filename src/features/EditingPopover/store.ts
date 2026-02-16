@@ -4,6 +4,7 @@ export interface EditingTarget {
   anchor: HTMLElement;
   avatar?: string;
   id: string;
+  memberAvatars?: { avatar?: string; background?: string }[];
   title: string;
   type: 'agent' | 'group' | 'agentGroup';
 }

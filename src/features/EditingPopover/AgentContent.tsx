@@ -1,5 +1,6 @@
-import { Avatar, Block, Flexbox, Input, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, Flexbox, Input, stopPropagation } from '@lobehub/ui';
 import { type InputRef } from 'antd';
+import { Check } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import EmojiPicker from '@/components/EmojiPicker';
@@ -56,7 +57,7 @@ const AgentContent = memo<AgentContentProps>(({ id, title, avatar, onClose }) =>
     });
   }, []);
   return (
-    <Flexbox horizontal gap={4} style={{ width: 320 }} onClick={stopPropagation}>
+    <Flexbox horizontal align={'center'} gap={4} style={{ width: 320 }} onClick={stopPropagation}>
       <EmojiPicker
         locale={locale}
         shape={'square'}
@@ -83,6 +84,7 @@ const AgentContent = memo<AgentContentProps>(({ id, title, avatar, onClose }) =>
         onChange={(e) => setNewTitle(e.target.value)}
         onPressEnter={handleUpdate}
       />
+      <ActionIcon icon={Check} size={'small'} onClick={handleUpdate} />
     </Flexbox>
   );
 });

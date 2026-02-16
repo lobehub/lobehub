@@ -29,7 +29,9 @@ const EditingPopover = () => {
               />
             ) : target ? (
               <GroupContent
+                avatar={target.avatar}
                 id={target.id}
+                memberAvatars={target.memberAvatars}
                 title={target.title}
                 type={target.type}
                 onClose={close}
