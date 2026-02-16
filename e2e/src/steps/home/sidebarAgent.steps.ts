@@ -10,7 +10,7 @@ import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { TEST_USER } from '../../support/seedTestUser';
-import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
+import { type CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // Helper Functions
@@ -23,8 +23,9 @@ async function inputNewName(
 ): Promise<void> {
   await this.page.waitForTimeout(300);
 
-  // Try to find the popover input
+  // Try to find the popover input (supports both antd Popover and @lobehub/ui Popover atoms)
   const popoverInputSelectors = [
+    '[data-scope="popover"] input',
     '.ant-popover-inner input',
     '.ant-popover-content input',
     '.ant-popover input',
@@ -44,7 +45,7 @@ async function inputNewName(
   }
 
   if (!renameInput) {
-    // Fallback: find any visible input
+    // Fallback: find any visible input inside a popover-like container
     const allInputs = this.page.locator('input:visible');
     const count = await allInputs.count();
 
@@ -53,8 +54,12 @@ async function inputNewName(
       const placeholder = (await input.getAttribute('placeholder').catch(() => '')) || '';
       if (placeholder.includes('Search') || placeholder.includes('搜索')) continue;
 
-      const isInPopover = await input.evaluate((el) => {
-        return el.closest('.ant-popover') !== null || el.closest('[class*="popover"]') !== null;
+      const isInPopover = await input.evaluate((el: any) => {
+        return (
+          el.closest('.ant-popover') !== null ||
+          el.closest('[data-scope="popover"]') !== null ||
+          el.closest('[class*="popover"]') !== null
+        );
       });
 
       if (isInPopover || count <= 2) {
@@ -72,7 +77,19 @@ async function inputNewName(
     if (pressEnter) {
       await renameInput.press('Enter');
     } else {
-      await this.page.click('body', { position: { x: 10, y: 10 } });
+      // Click the save button (ActionIcon with Check icon) next to the input
+      const saveButton = this.page
+        .locator(
+          '[data-scope="popover"] button svg.lucide-check, .ant-popover button svg.lucide-check',
+        )
+        .first();
+      try {
+        await saveButton.waitFor({ state: 'visible', timeout: 2000 });
+        await saveButton.click();
+      } catch {
+        // Fallback: press Enter to save
+        await renameInput.press('Enter');
+      }
     }
   } else {
     // Keyboard fallback
@@ -83,7 +100,7 @@ async function inputNewName(
     if (pressEnter) {
       await this.page.keyboard.press('Enter');
     } else {
-      await this.page.click('body', { position: { x: 10, y: 10 } });
+      await this.page.keyboard.press('Enter');
     }
   }
 
