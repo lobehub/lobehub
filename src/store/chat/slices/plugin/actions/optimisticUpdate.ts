@@ -95,7 +95,7 @@ export class PluginOptimisticUpdateActionImpl {
       context,
     );
 
-    // 同样需要更新 assistantMessage 的 pluginArguments
+    // Also need to update the pluginArguments in assistantMessage
     if (assistantMessage) {
       this.#get().internal_dispatchMessage(
         {
