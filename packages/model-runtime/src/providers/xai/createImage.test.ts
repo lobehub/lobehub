@@ -184,8 +184,8 @@ describe('createXAIImage', () => {
       });
     });
 
-    it('should not include resolution when value is auto', async () => {
-      const mockImageUrl = 'https://xai-cdn.com/images/generated/auto-res.jpg';
+    it('should not include resolution when value is 1k', async () => {
+      const mockImageUrl = 'https://xai-cdn.com/images/generated/1k-res.jpg';
 
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -202,7 +202,7 @@ describe('createXAIImage', () => {
         model: 'grok-imagine-image',
         params: {
           prompt: 'Test image',
-          resolution: 'auto',
+          resolution: '1k',
         },
       };
 
@@ -220,47 +220,6 @@ describe('createXAIImage', () => {
 
       expect(result).toEqual({
         imageUrl: mockImageUrl,
-      });
-    });
-
-    it('should handle n parameter for multiple images', async () => {
-      const mockImageUrls = [
-        'https://xai-cdn.com/images/generated/img1.jpg',
-        'https://xai-cdn.com/images/generated/img2.jpg',
-        'https://xai-cdn.com/images/generated/img3.jpg',
-        'https://xai-cdn.com/images/generated/img4.jpg',
-      ];
-
-      global.fetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: mockImageUrls.map((url) => ({ url })),
-        }),
-      });
-
-      const payload: CreateImagePayload = {
-        model: 'grok-imagine-image',
-        params: {
-          prompt: 'A futuristic city skyline at night',
-          n: 4,
-        },
-      };
-
-      const result = await createXAIImage(payload, mockOptions);
-
-      expect(fetch).toHaveBeenCalledWith(
-        'https://api.x.ai/v1/images/generations',
-        expect.objectContaining({
-          body: JSON.stringify({
-            model: 'grok-imagine-image',
-            prompt: 'A futuristic city skyline at night',
-            n: 4,
-          }),
-        }),
-      );
-
-      expect(result).toEqual({
-        imageUrl: mockImageUrls[0],
       });
     });
 
@@ -282,7 +241,7 @@ describe('createXAIImage', () => {
         model: 'grok-imagine-image',
         params: {
           prompt: 'Change the landmarks to be New York City landmarks',
-          imageUrls: ['https://example.com/landmarks.jpg'],
+          imageUrl: 'https://example.com/landmarks.jpg',
         },
       };
 

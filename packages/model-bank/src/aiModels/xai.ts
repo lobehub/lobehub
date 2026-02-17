@@ -317,8 +317,8 @@ const xaiImageModels: AIImageModelCard[] = [
           '2:1',
         ],
       },
-      imageUrls: {
-        default: [],
+      imageUrl: {
+        default: '',
       },
       prompt: {
         default: '',
@@ -360,8 +360,8 @@ const xaiImageModels: AIImageModelCard[] = [
           '2:1',
         ],
       },
-      imageUrls: {
-        default: [],
+      imageUrl: {
+        default: '',
       },
       prompt: {
         default: '',

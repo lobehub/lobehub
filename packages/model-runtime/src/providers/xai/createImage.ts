@@ -23,7 +23,7 @@ export async function createXAIImage(
   const { model, params } = payload;
 
   try {
-    const isImageEdit = params.imageUrls && params.imageUrls.length > 0;
+    const isImageEdit = params.imageUrl && params.imageUrl !== '';
     const endpoint = isImageEdit ? `${baseURL}/images/edits` : `${baseURL}/images/generations`;
 
     const requestBody: any = {
@@ -35,18 +35,14 @@ export async function createXAIImage(
       requestBody.aspect_ratio = params.aspectRatio;
     }
 
-    if (params.resolution && params.resolution !== 'auto') {
+    if (params.resolution && params.resolution !== '1k') {
       requestBody.resolution = params.resolution;
     }
 
-    if (params.n && params.n > 1) {
-      requestBody.n = params.n;
-    }
-
-    if (isImageEdit && params.imageUrls && params.imageUrls.length > 0) {
+    if (isImageEdit) {
       requestBody.image = {
         type: 'image_url',
-        url: params.imageUrls[0],
+        url: params.imageUrl,
       };
     }
 
