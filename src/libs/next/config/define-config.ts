@@ -42,6 +42,7 @@ export function defineConfig(config: CustomNextConfig) {
               // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
               // which may not be picked up by Next.js output tracing.
               'node_modules/@napi-rs/canvas/**/*',
+              'node_modules/@napi-rs/canvas-*/**/*',
               // pnpm real package locations (including platform-specific bindings with `.node`)
               'node_modules/.pnpm/@napi-rs+canvas*/**/*',
               'node_modules/.pnpm/@napi-rs+canvas-*/**/*',
