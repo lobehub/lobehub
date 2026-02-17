@@ -323,6 +323,10 @@ const xaiImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
+      },
     },
     pricing: {
       units: [{ name: 'imageGeneration', rate: 0.07, strategy: 'fixed', unit: 'image' }],
@@ -361,6 +365,10 @@ const xaiImageModels: AIImageModelCard[] = [
       },
       prompt: {
         default: '',
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
       },
     },
     pricing: {

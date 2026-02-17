@@ -2,6 +2,7 @@ import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { createXAIImage } from './createImage';
 
 export interface XAIModelCard {
   id: string;
@@ -14,6 +15,7 @@ export const isGrokReasoningModel = (model: string) =>
 
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
+  createImage: createXAIImage,
   chatCompletion: {
     handlePayload: (payload) => {
       const { enabledSearch, frequency_penalty, model, presence_penalty, ...rest } = payload;
