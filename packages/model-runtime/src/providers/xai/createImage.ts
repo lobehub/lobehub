@@ -31,11 +31,11 @@ export async function createXAIImage(
       prompt: params.prompt,
     };
 
-    if (params.aspectRatio && params.aspectRatio !== 'auto') {
+    if (!isImageEdit && params.aspectRatio) {
       requestBody.aspect_ratio = params.aspectRatio;
     }
 
-    if (params.resolution && params.resolution !== '1k') {
+    if (params.resolution) {
       requestBody.resolution = params.resolution;
     }
 

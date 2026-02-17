@@ -266,6 +266,50 @@ describe('createXAIImage', () => {
       });
     });
 
+    it('should not include aspectRatio in image editing mode', async () => {
+      const mockImageUrl = 'https://xai-cdn.com/images/generated/edited-no-aspect.jpg';
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              url: mockImageUrl,
+            },
+          ],
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'grok-imagine-image',
+        params: {
+          prompt: 'Change the landmarks to be New York City landmarks',
+          imageUrl: 'https://example.com/landmarks.jpg',
+          aspectRatio: '16:9',
+        },
+      };
+
+      const result = await createXAIImage(payload, mockOptions);
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://api.x.ai/v1/images/edits',
+        expect.objectContaining({
+          body: JSON.stringify({
+            model: 'grok-imagine-image',
+            prompt: 'Change the landmarks to be New York City landmarks',
+            image: {
+              type: 'image_url',
+              url: 'https://example.com/landmarks.jpg',
+            },
+          }),
+        }),
+      );
+
+      expect(result).toEqual({
+        imageUrl: mockImageUrl,
+      });
+    });
+
     it('should handle multiple generated images and return the first one', async () => {
       const mockImageUrls = [
         'https://xai-cdn.com/images/generated/image-1.jpg',
