@@ -7,12 +7,30 @@ const sparkChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
+    contextWindowTokens: 131_072,
+    description:
+      'X2 Capabilities Overview: 1. Introduces dynamic adjustment of reasoning mode, controlled via the `thinking` field. 2. Expanded context length: 64K input tokens and 128K output tokens. 3. Supports Function Call functionality.',
+    displayName: 'Spark X2',
+    enabled: true,
+    id: 'spark-x',
+    maxOutput: 131_072,
+    settings: {
+      extendParams: ['thinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
     contextWindowTokens: 65_535,
     description:
       'X1.5 updates: (1) adds dynamic thinking mode controlled by the `thinking` field; (2) larger context length with 64K input and 64K output; (3) supports FunctionCall.',
     displayName: 'Spark X1.5',
-    enabled: true,
-    id: 'spark-x',
+    id: 'x1',
     maxOutput: 65_535,
     settings: {
       extendParams: ['thinking'],

@@ -188,6 +188,70 @@ describe('createVolcengineImage', () => {
         size: '1024x1024',
       });
     });
+
+    it('should convert height and width to size parameter', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        height: 768,
+        width: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        size: '1024x768',
+      });
+    });
+
+    it('should not convert size when only height is provided', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        height: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        height: 1024,
+      });
+    });
+
+    it('should not convert size when only width is provided', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        width: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        width: 1024,
+      });
+    });
   });
 
   describe('image input handling', () => {

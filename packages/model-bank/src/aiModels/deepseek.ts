@@ -10,7 +10,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     description:
       'DeepSeek V3.2 is DeepSeek’s latest general model with a hybrid reasoning architecture and stronger agent capabilities.',
-    displayName: 'DeepSeek V3.2 Exp',
+    displayName: 'DeepSeek V3.2',
     enabled: true,
     id: 'deepseek-chat',
     maxOutput: 8192,
@@ -33,7 +33,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     description:
       'DeepSeek V3.2 thinking mode outputs a chain-of-thought before the final answer to improve accuracy.',
-    displayName: 'DeepSeek V3.2 Exp Thinking',
+    displayName: 'DeepSeek V3.2 Thinking',
     enabled: true,
     id: 'deepseek-reasoner',
     maxOutput: 65_536,

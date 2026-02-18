@@ -5,6 +5,29 @@ import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 const stepfunChatModels: AIChatModelCard[] = [
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'The flagship language reasoning model from Stepfun. This model delivers top-tier reasoning capabilities along with fast and reliable execution. It can decompose and plan complex tasks, quickly and reliably invoke tools to carry them out, and excel in logical reasoning, mathematics, software engineering, deep research, and other sophisticated tasks. The context length is 256K.',
+    displayName: 'Step 3.5 Flash',
+    enabled: true,
+    id: 'step-3.5-flash',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
       reasoning: true,
       vision: true,
     },
@@ -17,6 +40,15 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.3, upTo: 0.004 },
+            { rate: 0.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
         {
           name: 'textInput',
           strategy: 'tiered',
@@ -54,6 +86,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -75,6 +108,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -96,6 +130,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 70, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -117,6 +152,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 19, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 95, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 300, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -140,6 +176,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -162,6 +199,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 7.6, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 38, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -184,6 +222,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 7.6, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 38, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -207,8 +246,9 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -229,8 +269,9 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 70, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -251,8 +292,9 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 70, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-01-22',
@@ -271,6 +313,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -299,6 +342,10 @@ const stepfunImageModels: AIImageModelCard[] = [
       },
       steps: { default: 50, max: 100, min: 1 },
     },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
+    },
     releasedAt: '2024-08-07',
     type: 'image',
   },
@@ -318,6 +365,10 @@ const stepfunImageModels: AIImageModelCard[] = [
         enum: ['256x256', '512x512', '768x768', '1024x1024', '1280x800', '800x1280'],
       },
       steps: { default: 50, max: 100, min: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-07-15',
     type: 'image',
@@ -339,6 +390,10 @@ const stepfunImageModels: AIImageModelCard[] = [
         enum: ['512x512', '768x768', '1024x1024'],
       },
       steps: { default: 28, max: 100, min: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-03-04',
     type: 'image',

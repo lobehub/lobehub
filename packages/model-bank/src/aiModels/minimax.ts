@@ -194,6 +194,7 @@ const minimaxImageModels: AIImageModelCard[] = [
         default: '1:1',
         enum: ['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'],
       },
+      imageUrls: { default: [] },
       prompt: {
         default: '',
       },
@@ -211,8 +212,9 @@ const minimaxImageModels: AIImageModelCard[] = [
     parameters: {
       aspectRatio: {
         default: '1:1',
-        enum: ['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'],
+        enum: ['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16'],
       },
+      imageUrls: { default: [] },
       prompt: {
         default: '',
       },

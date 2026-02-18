@@ -34,15 +34,24 @@ export async function createMiniMaxImage(
   try {
     const endpoint = `${baseURL}/image_generation`;
 
+    const requestBody: Record<string, unknown> = {
+      aspect_ratio: params.aspectRatio,
+      model,
+      n: 1,
+      prompt: params.prompt,
+      //prompt_optimizer: true, // 开启 prompt 自动优化
+      ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
+    };
+
+    if (params.imageUrls && params.imageUrls.length > 0) {
+      requestBody.subject_reference = params.imageUrls.map((url) => ({
+        type: 'character',
+        image_file: url,
+      }));
+    }
+
     const response = await fetch(endpoint, {
-      body: JSON.stringify({
-        aspect_ratio: params.aspectRatio,
-        model,
-        n: 1,
-        prompt: params.prompt,
-        //prompt_optimizer: true, // 开启 prompt 自动优化
-        ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
-      }),
+      body: JSON.stringify(requestBody),
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',

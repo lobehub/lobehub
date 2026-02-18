@@ -6,18 +6,18 @@ import { SparkAIStream, transformSparkResponseToStream } from '../../core/stream
 import type { ChatStreamPayload } from '../../types';
 
 const getBaseURLByModel = (model: string): string => {
-  if (model.includes('x1-preview')) {
-    return 'https://spark-api-open-preview.xf-yun.com/v2';
-  }
-  if (model.includes('spark-x')) {
-    return 'https://spark-api-open.xf-yun.com/v2';
+  const v1Regex = /^(?:lite|generalv3|pro-128k|generalv3\.5|max-32k|4\.0Ultra)$/i;
+
+  // Legacy models via v1 endpoint
+  if (v1Regex.test(model)) {
+    return 'https://spark-api-open.xf-yun.com/v1';
   }
 
-  return 'https://spark-api-open.xf-yun.com/v1';
+  return 'https://spark-api-open.xf-yun.com/v2';
 };
 
 export const params = {
-  baseURL: 'https://spark-api-open.xf-yun.com/v1',
+  baseURL: 'https://spark-api-open.xf-yun.com/v2',
   chatCompletion: {
     handlePayload: (payload: ChatStreamPayload, options) => {
       const { enabledSearch, thinking, tools, ...rest } = payload;

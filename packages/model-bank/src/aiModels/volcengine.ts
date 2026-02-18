@@ -1108,6 +1108,48 @@ const doubaoChatModels: AIChatModelCard[] = [
 
 const volcengineImageModels: AIImageModelCard[] = [
   {
+    description:
+      'Doubao-Seedream-5.0-lite is ByteDance’s latest image-generation model. For the first time, it integrates online retrieval capabilities, allowing it to incorporate real-time web information and enhance the timeliness of generated images. The model’s intelligence has also been upgraded, enabling precise interpretation of complex instructions and visual content. Additionally, it offers improved global knowledge coverage, reference consistency, and generation quality in professional scenarios, better meeting enterprise-level visual creation needs.',
+    displayName: 'Seedream 5.0 Lite',
+    enabled: true,
+    id: 'doubao-seedream-5-0-260128',
+    parameters: {
+      height: { default: 2048, max: 16_384, min: 480, step: 1 },
+      imageUrls: { default: [], maxCount: 14, maxFileSize: 10 * 1024 * 1024 },
+      prompt: {
+        default: '',
+      },
+      width: { default: 2048, max: 16_384, min: 480, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'image',
+  },
+  {
+    description:
+      'Seedream 4.5 is ByteDance’s latest multimodal image model, integrating text-to-image, image-to-image, and batch image generation capabilities, while incorporating commonsense and reasoning abilities. Compared to the previous 4.0 version, it delivers significantly improved generation quality, with better editing consistency and multi-image fusion. It offers more precise control over visual details, producing small text and small faces more naturally, and achieves more harmonious layout and color, enhancing overall aesthetics.',
+    displayName: 'Seedream 4.5',
+    enabled: true,
+    id: 'doubao-seedream-4-5-251128',
+    parameters: {
+      height: { default: 2048, max: 16_384, min: 480, step: 1 },
+      imageUrls: { default: [], maxCount: 14, maxFileSize: 10 * 1024 * 1024 },
+      prompt: {
+        default: '',
+      },
+      width: { default: 2048, max: 16_384, min: 480, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-11-28',
+    type: 'image',
+  },
+  {
     /*
     // TODO: AIImageModelCard does not support config.deploymentName
     config: {
@@ -1120,23 +1162,16 @@ const volcengineImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'doubao-seedream-4-0-250828',
     parameters: {
+      height: { default: 2048, max: 16_384, min: 240, step: 1 },
       imageUrls: { default: [], maxCount: 10, maxFileSize: 10 * 1024 * 1024 },
       prompt: {
         default: '',
       },
-      size: {
-        default: '1024x1024',
-        enum: [
-          '2048x2048',
-          '2304x1728',
-          '1728x2304',
-          '2560x1440',
-          '1440x2560',
-          '2496x1664',
-          '1664x2496',
-          '3024x1296',
-        ],
-      },
+      width: { default: 2048, max: 16_384, min: 240, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-09-09',
     type: 'image',
@@ -1155,23 +1190,16 @@ const volcengineImageModels: AIImageModelCard[] = [
     id: 'doubao-seedream-3-0-t2i-250415',
     parameters: {
       cfg: { default: 2.5, max: 10, min: 1, step: 0.1 },
+      height: { default: 1024, max: 3549, min: 296, step: 1 },
       prompt: {
         default: '',
       },
       seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: [
-          '1024x1024',
-          '864x1152',
-          '1152x864',
-          '1280x720',
-          '720x1280',
-          '832x1248',
-          '1248x832',
-          '1512x648',
-        ],
-      },
+      width: { default: 1024, max: 3549, min: 296, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.259, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-04-15',
     type: 'image',

@@ -39,6 +39,16 @@ export async function createVolcengineImage(
     ]),
   );
 
+  // Convert height and weight/width to size parameter
+  const imgHeight = userInput.height;
+  const imgWidth = userInput.width;
+
+  if (imgHeight !== undefined && imgWidth !== undefined) {
+    userInput.size = `${imgWidth}x${imgHeight}`;
+    delete userInput.height;
+    delete userInput.width;
+  }
+
   // Volcengine supports direct URL or base64, no need to convert to File objects
   // Check if there is image input
   const hasImageInput =
