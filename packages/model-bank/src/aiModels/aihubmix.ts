@@ -1,4 +1,4 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import { type AIChatModelCard } from '../types/aiModel';
 
 const aihubmixModels: AIChatModelCard[] = [
   {
@@ -616,7 +616,6 @@ const aihubmixModels: AIChatModelCard[] = [
     description:
       'Latest Grok flagship with unmatched performance in language, math, and reasoning — a true all-rounder. Currently points to grok-4-0709; due to limited resources it is temporarily 10% higher than official pricing and is expected to return to official price later.',
     displayName: 'Grok 4 0709',
-    enabled: true,
     id: 'grok-4',
     pricing: {
       units: [
@@ -814,10 +813,49 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 200_000,
+    description: 'Claude Sonnet 4.6 is Anthropic’s best combination of speed and intelligence.',
+    displayName: 'Claude Sonnet 4.6',
+    enabled: true,
+    id: 'claude-sonnet-4-6',
+    maxOutput: 64_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 6, '5m': 3.75 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-17',
+    settings: {
+      extendParams: [
+        'disableContextCaching',
+        'enableAdaptiveThinking',
+        'enableReasoning',
+        'reasoningBudgetToken',
+        'effort',
+      ],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 200_000,
     description:
       'Sonnet 4.5 is the world’s best model for agents, coding, and computer use. It is also our most accurate and detailed model on long-running tasks, with enhanced knowledge in coding, finance, and cybersecurity.',
     displayName: 'Claude Sonnet 4.5',
-    enabled: true,
     id: 'claude-sonnet-4-5-20250929',
     maxOutput: 64_000,
     pricing: {
