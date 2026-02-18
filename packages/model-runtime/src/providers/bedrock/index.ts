@@ -8,6 +8,8 @@ import { cloudModelIdMapping } from '@lobechat/business-const';
 import { ModelProvider } from 'model-bank';
 
 import { hasTemperatureTopPConflict } from '../../const/models';
+import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
+import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
 import { resolveParameters } from '../../core/parameterResolver';
@@ -28,8 +30,6 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
-import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
-import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -86,9 +86,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     this.id = id ?? ModelProvider.Bedrock;
     this.client = new BedrockRuntimeClient({
       credentials: {
-        accessKeyId: accessKeyId,
+        accessKeyId,
         secretAccessKey: accessKeySecret,
-        sessionToken: sessionToken,
+        sessionToken,
       },
       region: this.region,
     });
@@ -199,8 +199,8 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
 
-    // Claude Opus 4.6 does not support assistant turn prefill
-    if (model.includes('opus-4-6') && postMessages.at(-1)?.role === 'assistant') {
+    // Claude 4.6 models do not support assistant turn prefill
+    if (model.includes('-4-6') && postMessages.at(-1)?.role === 'assistant') {
       postMessages.pop();
     }
 
@@ -218,10 +218,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       const resolvedThinking =
         thinking.type === 'enabled'
           ? {
-              budget_tokens: Math.min(
-                thinking?.budget_tokens || 1024,
-                resolvedMaxTokens - 1,
-              ),
+              budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
               type: 'enabled' as const,
             }
           : { type: 'adaptive' as const };
