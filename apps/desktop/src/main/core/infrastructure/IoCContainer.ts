@@ -1,5 +1,5 @@
 /**
- * 存储应用中需要用装饰器的类
+ * Stores classes in the application that require decorators
  */
 export class IoCContainer {
   static shortcuts: WeakMap<any, { methodName: string; name: string }[]> = new WeakMap();
