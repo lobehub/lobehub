@@ -80,11 +80,13 @@ export const contentBlocksToString = (blocks: ToolCallContent[] | null | undefin
         }
 
         case 'image': {
-          return `![](${urlJoin(appEnv.APP_URL, item.data)})`;
+          const imageUrl = item.data.startsWith('http') ? item.data : urlJoin(appEnv.APP_URL, item.data);
+          return `![](${imageUrl})`;
         }
 
         case 'audio': {
-          return `<resource type="${item.type}" url="${urlJoin(appEnv.APP_URL, item.data)}" />`;
+          const audioUrl = item.data.startsWith('http') ? item.data : urlJoin(appEnv.APP_URL, item.data);
+          return `<resource type="${item.type}" url="${audioUrl}" />`;
         }
 
         case 'resource': {
