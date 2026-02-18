@@ -4,7 +4,7 @@ import { ActionIcon, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -14,7 +14,6 @@ import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 import Actions from '../Item/Actions';
-import Editing from './Editing';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
 interface GroupItemProps {
@@ -26,14 +25,11 @@ interface GroupItemProps {
 const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
   const { id, avatar, backgroundColor, title, pinned } = item;
   const { t } = useTranslation('chat');
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
-  // Get UI state from homeStore (editing, updating)
-  const [editing, isUpdating] = useHomeStore((s) => [
-    s.groupRenamingId === id,
-    s.groupUpdatingId === id,
-  ]);
+  const isUpdating = useHomeStore((s) => s.groupUpdatingId === id);
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');
@@ -60,13 +56,6 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
       }
     },
     [id, openAgentInNewWindow],
-  );
-
-  const toggleEditing = useCallback(
-    (visible?: boolean) => {
-      useHomeStore.getState().setGroupRenamingId(visible ? id : null);
-    },
-    [id],
   );
 
   // Memoize pin icon
@@ -99,33 +88,36 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
     );
   }, [isUpdating, avatar, backgroundColor]);
 
+  const customAvatar = typeof avatar === 'string' ? avatar : undefined;
+  const memberAvatars = Array.isArray(avatar) ? avatar : [];
+
   const dropdownMenu = useGroupDropdownMenu({
+    anchor,
+    avatar: customAvatar,
     id,
+    memberAvatars,
     pinned: pinned ?? false,
-    toggleEditing,
+    title: displayTitle,
   });
 
   return (
-    <>
-      <Link aria-label={id} to={groupUrl}>
-        <NavItem
-          actions={<Actions dropdownMenu={dropdownMenu} />}
-          className={className}
-          contextMenuItems={dropdownMenu}
-          disabled={editing || isUpdating}
-          draggable={!editing && !isUpdating}
-          extra={pinIcon}
-          icon={avatarIcon}
-          key={id}
-          style={style}
-          title={displayTitle}
-          onDoubleClick={handleDoubleClick}
-          onDragEnd={handleDragEnd}
-          onDragStart={handleDragStart}
-        />
-      </Link>
-      <Editing id={id} title={displayTitle} toggleEditing={toggleEditing} />
-    </>
+    <Link aria-label={id} ref={setAnchor} to={groupUrl}>
+      <NavItem
+        actions={<Actions dropdownMenu={dropdownMenu} />}
+        className={className}
+        contextMenuItems={dropdownMenu}
+        disabled={isUpdating}
+        draggable={!isUpdating}
+        extra={pinIcon}
+        icon={avatarIcon}
+        key={id}
+        style={style}
+        title={displayTitle}
+        onDoubleClick={handleDoubleClick}
+        onDragEnd={handleDragEnd}
+        onDragStart={handleDragStart}
+      />
+    </Link>
   );
 });
 

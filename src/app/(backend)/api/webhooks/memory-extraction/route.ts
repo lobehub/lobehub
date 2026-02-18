@@ -45,6 +45,7 @@ export const POST = async (req: Request) => {
         buildWorkflowPayloadInput(params),
         { extraHeaders: upstashWorkflowExtraHeaders },
       );
+
       return NextResponse.json(
         { message: 'Memory extraction scheduled via workflow.', workflowRunId },
         { status: 202 },

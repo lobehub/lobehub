@@ -1628,6 +1628,7 @@ describe('AiInfraRepos', () => {
           { id: 'openai', logo: 'logo1', name: 'OpenAI', source: 'builtin' },
         ],
         enabledImageAiProviders: [],
+        enabledVideoAiProviders: [],
         runtimeConfig: {
           openai: {
             apiKey: 'test-key',
@@ -1718,6 +1719,7 @@ describe('AiInfraRepos', () => {
             name: 'Fal',
           }),
         ],
+        enabledVideoAiProviders: [],
         runtimeConfig: {
           fal: {
             apiKey: 'test-fal-key',
@@ -1782,6 +1784,7 @@ describe('AiInfraRepos', () => {
       enabledAiProviders: [],
       enabledChatAiProviders: [],
       enabledImageAiProviders: [],
+      enabledVideoAiProviders: [],
       runtimeConfig: {},
     });
 

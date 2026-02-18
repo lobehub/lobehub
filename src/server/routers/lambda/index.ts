@@ -47,6 +47,7 @@ import { usageRouter } from './usage';
 import { userRouter } from './user';
 import { userMemoriesRouter } from './userMemories';
 import { userMemoryRouter } from './userMemory';
+import { videoRouter } from './video';
 
 export const lambdaRouter = router({
   agent: agentRouter,
@@ -89,6 +90,7 @@ export const lambdaRouter = router({
   user: userRouter,
   userMemories: userMemoriesRouter,
   userMemory: userMemoryRouter,
+  video: videoRouter,
   /* eslint-disable sort-keys-fix/sort-keys-fix */
   accountDeletion: accountDeletionRouter,
   referral: referralRouter,

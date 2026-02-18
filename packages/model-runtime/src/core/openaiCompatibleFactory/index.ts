@@ -26,6 +26,12 @@ import type {
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateVideoPayload,
+  CreateVideoResponse,
+  HandleCreateVideoWebhookPayload,
+  HandleCreateVideoWebhookResult,
+} from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugResponse, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
@@ -58,6 +64,11 @@ export const CHAT_MODELS_BLOCK_LIST = [
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
 export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
+  apiKey: string;
+  provider: string;
+};
+
+export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
 };
@@ -112,6 +123,10 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     payload: CreateImagePayload,
     options: CreateImageOptions,
   ) => Promise<CreateImageResponse>;
+  createVideo?: (
+    payload: CreateVideoPayload,
+    options: CreateVideoOptions,
+  ) => Promise<CreateVideoResponse>;
   customClient?: CustomClientOptions<T>;
   debug?: {
     chatCompletion: () => boolean;
@@ -140,6 +155,10 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
      */
     useToolsCalling?: boolean;
   };
+  handleCreateVideoWebhook?: (
+    payload: HandleCreateVideoWebhookPayload,
+    options: CreateVideoOptions,
+  ) => Promise<HandleCreateVideoWebhookResult>;
   models?:
     | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
     | {
@@ -166,6 +185,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   customClient,
   responses,
   createImage: customCreateImage,
+  createVideo: customCreateVideo,
+  handleCreateVideoWebhook: customHandleCreateVideoWebhook,
   generateObject: generateObjectConfig,
 }: OpenAICompatibleFactoryOptions<T>) => {
   const ErrorType = {
@@ -515,6 +536,28 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       log('using default createOpenAICompatibleImage');
       // Use the new createOpenAICompatibleImage function
       return createOpenAICompatibleImage(this.client, payload, this.id);
+    }
+
+    async createVideo(payload: CreateVideoPayload) {
+      if (!customCreateVideo) {
+        throw new Error('createVideo is not supported by this provider');
+      }
+      return customCreateVideo(payload, {
+        ...this._options,
+        apiKey: this._options.apiKey!,
+        provider,
+      });
+    }
+
+    async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
+      if (!customHandleCreateVideoWebhook) {
+        throw new Error('handleCreateVideoWebhook is not supported by this provider');
+      }
+      return customHandleCreateVideoWebhook(payload, {
+        ...this._options,
+        apiKey: this._options.apiKey!,
+        provider,
+      });
     }
 
     async models() {

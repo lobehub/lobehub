@@ -9,6 +9,7 @@ interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
   outputFileTracingExcludes?: NextConfig['outputFileTracingExcludes'];
+  outputFileTracingIncludes?: NextConfig['outputFileTracingIncludes'];
   redirects?: Redirect[];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
@@ -259,6 +260,9 @@ export function defineConfig(config: CustomNextConfig) {
     },
     ...(config.outputFileTracingExcludes && {
       outputFileTracingExcludes: config.outputFileTracingExcludes,
+    }),
+    ...(config.outputFileTracingIncludes && {
+      outputFileTracingIncludes: config.outputFileTracingIncludes,
     }),
     reactStrictMode: true,
     redirects: async () => [

@@ -1,33 +1,37 @@
-/* eslint-disable unicorn/no-array-push-push */
-import {
-  EditLocalFileParams,
-  EditLocalFileResult,
-  GlobFilesParams,
-  GlobFilesResult,
-  GrepContentParams,
-  GrepContentResult,
-  ListLocalFileParams,
-  LocalMoveFilesResultItem,
-  LocalReadFileParams,
-  LocalReadFileResult,
-  LocalReadFilesParams,
-  LocalSearchFilesParams,
-  MoveLocalFilesParams,
-  OpenLocalFileParams,
-  OpenLocalFolderParams,
-  RenameLocalFileResult,
-  ShowSaveDialogParams,
-  ShowSaveDialogResult,
-  WriteLocalFileParams,
-} from '@lobechat/electron-client-ipc';
-import { SYSTEM_FILES_TO_IGNORE, loadFile } from '@lobechat/file-loaders';
-import { createPatch } from 'diff';
-import { dialog, shell } from 'electron';
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { FileResult, SearchOptions } from '@/modules/fileSearch';
+import {
+  type EditLocalFileParams,
+  type EditLocalFileResult,
+  type GlobFilesParams,
+  type GlobFilesResult,
+  type GrepContentParams,
+  type GrepContentResult,
+  type ListLocalFileParams,
+  type LocalMoveFilesResultItem,
+  type LocalReadFileParams,
+  type LocalReadFileResult,
+  type LocalReadFilesParams,
+  type LocalSearchFilesParams,
+  type MoveLocalFilesParams,
+  type OpenLocalFileParams,
+  type OpenLocalFolderParams,
+  type PickFileParams,
+  type PickFileResult,
+  type RenameLocalFileResult,
+  type ShowOpenDialogParams,
+  type ShowOpenDialogResult,
+  type ShowSaveDialogParams,
+  type ShowSaveDialogResult,
+  type WriteLocalFileParams,
+} from '@lobechat/electron-client-ipc';
+import { loadFile, SYSTEM_FILES_TO_IGNORE } from '@lobechat/file-loaders';
+import { createPatch } from 'diff';
+import { dialog, shell } from 'electron';
+
+import { type FileResult, type SearchOptions } from '@/modules/fileSearch';
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
 import { makeSureDirExist } from '@/utils/file-system';
@@ -83,6 +87,67 @@ export default class LocalFileCtr extends ControllerModule {
       logger.error(`Failed to open folder ${folderPath}:`, error);
       return { error: (error as Error).message, success: false };
     }
+  }
+
+  @IpcMethod()
+  async handleShowOpenDialog({
+    filters,
+    multiple,
+    title,
+  }: ShowOpenDialogParams): Promise<ShowOpenDialogResult> {
+    logger.debug('Showing open dialog:', { filters, multiple, title });
+
+    const result = await dialog.showOpenDialog({
+      filters,
+      properties: multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+      title,
+    });
+
+    logger.debug('Open dialog result:', { canceled: result.canceled, filePaths: result.filePaths });
+
+    return {
+      canceled: result.canceled,
+      filePaths: result.filePaths,
+    };
+  }
+
+  @IpcMethod()
+  async handlePickFile({ filters, title }: PickFileParams): Promise<PickFileResult> {
+    logger.debug('Picking file:', { filters, title });
+
+    const result = await dialog.showOpenDialog({
+      filters,
+      properties: ['openFile'],
+      title,
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true };
+    }
+
+    const filePath = result.filePaths[0];
+    const data = await readFile(filePath);
+    const name = path.basename(filePath);
+    const ext = path.extname(filePath).toLowerCase().slice(1);
+
+    const MIME_MAP: Record<string, string> = {
+      avif: 'image/avif',
+      gif: 'image/gif',
+      jpeg: 'image/jpeg',
+      jpg: 'image/jpeg',
+      png: 'image/png',
+      svg: 'image/svg+xml',
+      webp: 'image/webp',
+    };
+
+    return {
+      canceled: false,
+      file: {
+        data: new Uint8Array(data),
+        mimeType: MIME_MAP[ext] || 'application/octet-stream',
+        name,
+      },
+    };
   }
 
   @IpcMethod()

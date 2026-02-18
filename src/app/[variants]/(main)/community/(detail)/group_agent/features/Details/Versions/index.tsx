@@ -101,7 +101,7 @@ const Versions = memo(() => {
               align: 'end',
               dataIndex: 'createdAt',
               render: (_: any, record: any) => (
-                <PublishedTime date={record.createdAt} showPrefix={false} />
+                <PublishedTime date={record.createdAt} />
               ),
               title: t('groupAgents.details.version.table.publishAt', {
                 defaultValue: 'Published At',

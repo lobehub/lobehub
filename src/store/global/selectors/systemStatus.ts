@@ -43,6 +43,10 @@ const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
+const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
+const videoTopicPanelWidth = (s: GlobalState) => s.status.videoTopicPanelWidth;
+const showVideoPanel = (s: GlobalState) => s.status.showVideoPanel;
+const showVideoTopicPanel = (s: GlobalState) => s.status.showVideoTopicPanel;
 const wideScreen = (s: GlobalState) => !s.status.noWideScreen;
 const chatInputHeight = (s: GlobalState) => s.status.chatInputHeight || 64;
 const expandInputActionbar = (s: GlobalState) => s.status.expandInputActionbar;
@@ -102,9 +106,13 @@ export const systemStatusSelectors = {
   showLeftPanel,
   showRightPanel,
   showSystemRole,
+  showVideoPanel,
+  showVideoTopicPanel,
   systemStatus,
   tokenDisplayFormatShort,
   topicGroupKeys,
   topicPageSize,
+  videoPanelWidth,
+  videoTopicPanelWidth,
   wideScreen,
 };

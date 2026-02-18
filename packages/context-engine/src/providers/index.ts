@@ -36,4 +36,4 @@ export type { PageEditorContextInjectorConfig } from './PageEditorContextInjecto
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
 export type { ToolSystemRoleConfig } from './ToolSystemRole';
-export type { UserMemoryInjectorConfig } from './UserMemoryInjector';
+export type { MemoryContext, UserMemoryInjectorConfig } from './UserMemoryInjector';

@@ -9,9 +9,10 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { z } from 'zod';
 
+import mime from 'mime';
+
 import { fileEnv } from '@/envs/file';
 import { YEAR } from '@/utils/units';
-import { inferContentTypeFromImageUrl } from '@/utils/url';
 
 export const fileSchema = z.object({
   Key: z.string(),
@@ -178,12 +179,13 @@ export class S3 {
   }
 
   public async uploadMedia(key: string, buffer: Buffer) {
+    const contentType = mime.getType(key) || 'application/octet-stream';
     const command = new PutObjectCommand({
       ACL: this.setAcl ? 'public-read' : undefined,
       Body: buffer,
       Bucket: this.bucket,
       CacheControl: `public, max-age=${YEAR}`,
-      ContentType: inferContentTypeFromImageUrl(key)!,
+      ContentType: contentType,
       Key: key,
     });
 

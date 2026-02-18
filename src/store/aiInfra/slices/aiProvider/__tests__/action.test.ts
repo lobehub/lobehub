@@ -39,14 +39,14 @@ describe('aiProvider action helpers', () => {
   });
 
   describe('normalizeChatModel', () => {
-    it('fills missing optional fields with safe defaults', () => {
+    it('fills missing optional fields with safe defaults', async () => {
       const model = createChatModel({
         abilities: undefined,
         contextWindowTokens: undefined,
         displayName: undefined,
       });
 
-      const result = normalizeChatModel(model);
+      const result = await normalizeChatModel(model);
 
       expect(result).toEqual({
         abilities: {},

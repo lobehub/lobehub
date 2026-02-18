@@ -1,4 +1,4 @@
-import type { SidebarAgentItem, SidebarAgentListResponse, SidebarGroup } from '@lobechat/types';
+import  { type SidebarAgentItem, type SidebarAgentListResponse, type SidebarGroup } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, desc, eq, ilike, inArray, not, or } from 'drizzle-orm';
 
@@ -10,7 +10,7 @@ import {
   sessionGroups,
   sessions,
 } from '../../schemas';
-import type { LobeChatDatabase } from '../../type';
+import  { type LobeChatDatabase } from '../../type';
 
 // Re-export types for backward compatibility
 export type {
@@ -140,6 +140,7 @@ export class HomeRepository {
         avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
         backgroundColor: g.avatar ? g.backgroundColor : null,
         description: g.description,
+        groupAvatar: g.avatar,
         groupId: g.groupId,
         id: g.id,
         pinned: g.pinned ?? false,

@@ -1,4 +1,4 @@
-import { type IEditor, type SlashOptions } from '@lobehub/editor';
+import { type SlashOptions } from '@lobehub/editor';
 import {
   INSERT_CHECK_LIST_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
@@ -28,65 +28,9 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openFileSelector } from '@/features/EditorCanvas';
-import { useFileStore } from '@/store/file';
 
-export const useSlashItems = (editor: IEditor | undefined): SlashOptions['items'] => {
+export const useSlashItems = (): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
-
-  const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
-
-  const handleImageUpload = async (file: File) => {
-    if (!editor) return;
-
-    try {
-      // Create a blob URL for immediate preview
-      const blobUrl = URL.createObjectURL(file);
-
-      // Insert the image immediately with blob URL for preview
-      editor.dispatchCommand(INSERT_IMAGE_COMMAND, {
-        file,
-      });
-
-      // Upload the image to storage in background
-      const result = await uploadWithProgress({
-        file,
-        skipCheckFileType: false,
-        source: 'page-editor',
-      });
-
-      if (result) {
-        // Replace the blob URL with permanent URL in the editor state
-        const currentDoc = editor.getDocument('json');
-        if (currentDoc) {
-          // Recursively search and replace blob URL with permanent URL
-          const replaceBlobUrl = (obj: any): any => {
-            if (typeof obj === 'string' && obj.startsWith('blob:')) {
-              // Replace any blob URL with our permanent URL
-              return result.url;
-            }
-            if (obj && typeof obj === 'object') {
-              const newObj: any = Array.isArray(obj) ? [] : {};
-              const entries = Object.entries(obj);
-              for (const [key, value] of entries) {
-                newObj[key] = replaceBlobUrl(value);
-              }
-              return newObj;
-            }
-            return obj;
-          };
-
-          const updatedDoc = replaceBlobUrl(currentDoc);
-          editor.setDocument('json', JSON.stringify(updatedDoc));
-        }
-
-        // Clean up the blob URL
-        URL.revokeObjectURL(blobUrl);
-        console.log('Image uploaded and URL updated:', result.url);
-      }
-    } catch (error) {
-      console.error('Failed to upload image:', error);
-    }
-  };
 
   return useMemo(() => {
     const data: SlashOptions['items'] = [
@@ -148,11 +92,11 @@ export const useSlashItems = (editor: IEditor | undefined): SlashOptions['items'
         icon: ImageIcon,
         key: 'image',
         label: t('typobar.image'),
-        onSelect: () => {
+        onSelect: (editor) => {
           openFileSelector((files) => {
             for (const file of files) {
               if (file && file.type.startsWith('image/')) {
-                void handleImageUpload(file);
+                editor.dispatchCommand(INSERT_IMAGE_COMMAND, { file });
               }
             }
           }, 'image/*');

@@ -2,6 +2,7 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinInspectorProps } from '@lobechat/types';
+import { safeParsePartialJSON } from '@lobechat/utils';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
@@ -11,7 +12,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { shinyTextStyles } from '@/styles';
 
-import type { ExecuteTasksParams } from '../../../types';
+import type { ExecuteTasksParams, TaskItem } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
@@ -31,8 +32,19 @@ export const ExecuteAgentTasksInspector = memo<BuiltinInspectorProps<ExecuteTask
   ({ args, partialArgs, isArgumentsStreaming }) => {
     const { t } = useTranslation('plugin');
 
-    const tasks = args?.tasks || partialArgs?.tasks || [];
-    const agentIds = useMemo(() => tasks.map((task) => task.agentId).filter(Boolean), [tasks]);
+    // Handle case where LLM returns tasks as stringified JSON instead of array
+    const tasks = useMemo(() => {
+      const rawTasks = args?.tasks || partialArgs?.tasks;
+      if (!rawTasks) return [];
+      if (typeof rawTasks === 'string') {
+        return safeParsePartialJSON<TaskItem[]>(rawTasks) || [];
+      }
+      return rawTasks;
+    }, [args?.tasks, partialArgs?.tasks]);
+
+    const agentIds = useMemo(() => {
+      return tasks?.map((task) => task?.agentId)?.filter(Boolean);
+    }, [tasks]);
 
     // Get active group ID and agents from store
     const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);

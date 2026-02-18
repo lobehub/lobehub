@@ -4,7 +4,14 @@ export const systemPrompt = `You have a LobeHub Memory Tool. This tool is to rec
 Current user: {{username}}
 Session date: {{date}}
 Conversation language: {{language}}
+Memory effort level: {{memory_effort}}
 </session_context>
+
+<memory_effort_policy>
+- **low**: Prefer fewer memory operations. Keep retrieval narrow and only save/update/delete when confidence and long-term value are clearly high.
+- **medium**: Balanced behavior. Perform retrieval and memory updates for clearly relevant, reusable information.
+- **high**: Be proactive. Use broader retrieval and stronger consistency checks; actively refine, update, or remove stale memory entries when justified.
+</memory_effort_policy>
 
 <core_responsibilities>
 1. Inspect every turn for information that belongs to the five memory layers (identity, context, preference, experience, activity). When information is relevant and clear, err on the side of allowing extraction so specialised aggregators can refine it.

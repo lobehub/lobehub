@@ -218,7 +218,7 @@ const FavoriteAgentCard = memo<FavoriteAgentCardProps>(
               <PublishedTime
                 className={styles.secondaryDesc}
                 date={createdAt}
-                template={'MMM DD, YYYY'}
+               
               />
             </Flexbox>
             {category && t(`category.assistant.${category}` as any)}

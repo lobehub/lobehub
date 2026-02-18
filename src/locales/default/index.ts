@@ -37,6 +37,7 @@ import thread from './thread';
 import tool from './tool';
 import topic from './topic';
 import ui from './ui';
+import video from './video';
 import welcome from './welcome';
 
 const resources = {
@@ -81,6 +82,7 @@ const resources = {
   tool,
   topic,
   ui,
+  video,
   welcome,
 } as const;
 

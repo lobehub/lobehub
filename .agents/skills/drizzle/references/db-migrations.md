@@ -38,13 +38,3 @@ ALTER TABLE "users" ADD COLUMN "avatar" text;
 DROP TABLE "old_table";
 CREATE INDEX "users_email_idx" ON "users" ("email");
 ```
-
-## Important
-
-After modifying migration SQL (e.g., adding `IF NOT EXISTS` clauses), run:
-
-```bash
-bun run db:generate:client
-```
-
-This updates the hash in `packages/database/src/core/migrations.json`.

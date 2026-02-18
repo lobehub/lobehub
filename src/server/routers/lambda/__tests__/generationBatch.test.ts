@@ -74,7 +74,7 @@ describe('generationBatchRouter', () => {
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
-      thumbnailUrls: [], // 没有缩略图
+      filesToDelete: [], // 没有缩略图
     });
     const mockDeleteFiles = vi.fn();
 
@@ -121,7 +121,7 @@ describe('generationBatchRouter', () => {
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
-      thumbnailUrls: mockThumbnailUrls,
+      filesToDelete: mockThumbnailUrls,
     });
     const mockDeleteFiles = vi.fn().mockResolvedValue(true);
 
@@ -168,7 +168,7 @@ describe('generationBatchRouter', () => {
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
-      thumbnailUrls: mockThumbnailUrls,
+      filesToDelete: mockThumbnailUrls,
     });
 
     // Mock thumbnail deletion to fail
@@ -197,7 +197,7 @@ describe('generationBatchRouter', () => {
     expect(mockDelete).toHaveBeenCalledWith(mockBatchId);
     expect(mockDeleteFiles).toHaveBeenCalledWith(mockThumbnailUrls);
     expect(consoleSpy).toHaveBeenCalledWith(
-      'Failed to delete thumbnail files from S3:',
+      'Failed to delete files from S3:',
       expect.any(Error),
     );
 
@@ -254,7 +254,7 @@ describe('generationBatchRouter', () => {
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
-      thumbnailUrls: mockThumbnailUrls,
+      filesToDelete: mockThumbnailUrls,
     });
     const mockDeleteFiles = vi.fn().mockResolvedValue(true);
 
@@ -336,7 +336,7 @@ describe('generationBatchRouter', () => {
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
-      thumbnailUrls: mockThumbnailUrls,
+      filesToDelete: mockThumbnailUrls,
     });
 
     // Mock partial failure - some thumbnails could not be deleted
@@ -367,7 +367,7 @@ describe('generationBatchRouter', () => {
     expect(mockDelete).toHaveBeenCalledWith(mockBatchId);
     expect(mockDeleteFiles).toHaveBeenCalledWith(mockThumbnailUrls);
     expect(consoleSpy).toHaveBeenCalledWith(
-      'Failed to delete thumbnail files from S3:',
+      'Failed to delete files from S3:',
       expect.any(Error),
     );
 

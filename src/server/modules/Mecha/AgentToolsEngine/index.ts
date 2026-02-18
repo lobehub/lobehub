@@ -94,7 +94,7 @@ export const createServerAgentToolsEngine = (
     model,
     provider,
   } = params;
-  const searchMode = agentConfig.chatConfig?.searchMode ?? 'off';
+  const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
 
   log(

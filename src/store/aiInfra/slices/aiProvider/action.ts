@@ -62,13 +62,22 @@ const createProviderModelCollector = (
   };
 };
 
-export const normalizeChatModel = (model: EnabledAiModel): ProviderModelListItem => ({
-  abilities: (model.abilities || {}) as ModelAbilities,
-  contextWindowTokens: model.contextWindowTokens,
-  displayName: model.displayName ?? '',
-  id: model.id,
-  releasedAt: model.releasedAt,
-});
+export const normalizeChatModel = async (model: EnabledAiModel): Promise<ProviderModelListItem> => {
+  const [description, pricing] = await Promise.all([
+    getModelPropertyWithFallback<string | undefined>(model.id, 'description', model.providerId),
+    getModelPropertyWithFallback<Pricing | undefined>(model.id, 'pricing', model.providerId),
+  ]);
+
+  return {
+    abilities: (model.abilities || {}) as ModelAbilities,
+    contextWindowTokens: model.contextWindowTokens,
+    displayName: model.displayName ?? '',
+    id: model.id,
+    releasedAt: model.releasedAt,
+    ...(description && { description }),
+    ...(pricing && { pricing }),
+  };
+};
 
 export const normalizeImageModel = async (
   model: EnabledAiModel,
@@ -117,11 +126,49 @@ export const normalizeImageModel = async (
   };
 };
 
+export const normalizeVideoModel = async (
+  model: EnabledAiModel,
+): Promise<ProviderModelListItem> => {
+  const fallbackParametersPromise = model.parameters
+    ? Promise.resolve<ModelParamsSchema | undefined>(model.parameters)
+    : getModelPropertyWithFallback<ModelParamsSchema | undefined>(
+        model.id,
+        'parameters',
+        model.providerId,
+      );
+
+  const fallbackDescriptionPromise = getModelPropertyWithFallback<string | undefined>(
+    model.id,
+    'description',
+    model.providerId,
+  );
+
+  const [fallbackParameters, fallbackDescription] = await Promise.all([
+    fallbackParametersPromise,
+    fallbackDescriptionPromise,
+  ]);
+
+  const parameters = model.parameters ?? fallbackParameters;
+  const description = fallbackDescription;
+
+  return {
+    abilities: (model.abilities || {}) as ModelAbilities,
+    contextWindowTokens: model.contextWindowTokens,
+    displayName: model.displayName ?? '',
+    id: model.id,
+    releasedAt: model.releasedAt,
+    ...(parameters && { parameters }),
+    ...(description && { description }),
+  };
+};
+
 export const getChatModelList = createProviderModelCollector('chat', async (model) =>
   normalizeChatModel(model),
 );
 
 export const getImageModelList = createProviderModelCollector('image', normalizeImageModel);
+
+export const getVideoModelList = createProviderModelCollector('video', normalizeVideoModel);
 
 const buildProviderModelLists = async (
   providers: EnabledProvider[],
@@ -156,6 +203,14 @@ const buildChatProviderModelLists = async (
   enabledAiModels: EnabledAiModel[],
 ) => buildProviderModelLists(providers, enabledAiModels, getChatModelList);
 
+/**
+ * Build video provider model lists with proper async handling
+ */
+const buildVideoProviderModelLists = async (
+  providers: EnabledProvider[],
+  enabledAiModels: EnabledAiModel[],
+) => buildProviderModelLists(providers, enabledAiModels, getVideoModelList);
+
 enum AiProviderSwrKey {
   fetchAiProviderItem = 'FETCH_AI_PROVIDER_ITEM',
   fetchAiProviderList = 'FETCH_AI_PROVIDER',
@@ -166,6 +221,7 @@ type AiProviderRuntimeStateWithBuiltinModels = AiProviderRuntimeState & {
   builtinAiModelList: LobeDefaultAiModelListItem[];
   enabledChatModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
+  enabledVideoModelList?: EnabledProviderWithModels[];
 };
 
 type Setter = StoreSetter<AiInfraStore>;
@@ -409,16 +465,19 @@ export class AiProviderActionImpl {
         if (isLogin) {
           const data = await aiProviderService.getAiProviderRuntimeState();
           // Build model lists with proper async handling
-          const [enabledChatModelList, enabledImageModelList] = await Promise.all([
-            buildChatProviderModelLists(data.enabledChatAiProviders, data.enabledAiModels),
-            buildImageProviderModelLists(data.enabledImageAiProviders, data.enabledAiModels),
-          ]);
+          const [enabledChatModelList, enabledImageModelList, enabledVideoModelList] =
+            await Promise.all([
+              buildChatProviderModelLists(data.enabledChatAiProviders, data.enabledAiModels),
+              buildImageProviderModelLists(data.enabledImageAiProviders, data.enabledAiModels),
+              buildVideoProviderModelLists(data.enabledVideoAiProviders, data.enabledAiModels),
+            ]);
 
           return {
             ...data,
             builtinAiModelList,
             enabledChatModelList,
             enabledImageModelList,
+            enabledVideoModelList,
           };
         }
 
@@ -440,12 +499,22 @@ export class AiProviderActionImpl {
           })
           .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
 
+        const enabledVideoAiProviders = enabledAiProviders
+          .filter((provider) => {
+            return builtinAiModelList.some(
+              (model) => model.providerId === provider.id && model.type === 'video',
+            );
+          })
+          .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
+
         // Build model lists for non-login state as well
         const enabledAiModels = builtinAiModelList.filter((m) => m.enabled);
-        const [enabledChatModelList, enabledImageModelList] = await Promise.all([
-          buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
-          buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
-        ]);
+        const [enabledChatModelList, enabledImageModelList, enabledVideoModelList] =
+          await Promise.all([
+            buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
+            buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
+            buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+          ]);
 
         return {
           builtinAiModelList,
@@ -455,6 +524,8 @@ export class AiProviderActionImpl {
           enabledChatModelList,
           enabledImageAiProviders,
           enabledImageModelList,
+          enabledVideoAiProviders,
+          enabledVideoModelList,
           runtimeConfig: {},
         };
       },
@@ -470,6 +541,7 @@ export class AiProviderActionImpl {
               enabledAiProviders: data.enabledAiProviders,
               enabledChatModelList: data.enabledChatModelList || [],
               enabledImageModelList: data.enabledImageModelList || [],
+              enabledVideoModelList: data.enabledVideoModelList || [],
               isInitAiProviderRuntimeState: true,
             },
             false,

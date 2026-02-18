@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "Token Kullanımı",
   "table.columns.type.enums.chat": "Metin Üretimi",
   "table.columns.type.enums.imageGeneration": "Görsel Üretimi",
+  "table.columns.type.enums.videoGeneration": "Video Oluşturma",
   "table.columns.type.title": "Tür",
   "table.desc": "Metin üretimi, gömme, görsel üretimi vb. işlemler için hesaplama kredisi kullanım detayları.",
   "table.more": "Detayları Görüntüle",

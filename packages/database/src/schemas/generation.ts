@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import type { ImageGenerationAsset } from '@lobechat/types';
+import type { GenerationAsset } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uuid, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -131,7 +131,7 @@ export const generations = pgTable(
     seed: integer('seed'),
 
     /** Generated asset information, including S3 storage key, actual image dimensions, thumbnail key, etc. */
-    asset: jsonb('asset').$type<ImageGenerationAsset>(),
+    asset: jsonb('asset').$type<GenerationAsset>(),
 
     ...timestamps,
   },

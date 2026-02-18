@@ -28,18 +28,18 @@ export const generationBatchRouter = router({
         return;
       }
 
-      const { deletedBatch, thumbnailUrls } = result;
+      const { deletedBatch, filesToDelete } = result;
 
-      // 2. Clean up thumbnail files from S3
+      // 2. Clean up asset files from S3 (videos, covers, thumbnails)
       // Note: Even if file deletion fails, we consider the batch deletion successful
       // since the database record has been removed and users won't see the batch anymore
-      if (thumbnailUrls.length > 0) {
+      if (filesToDelete.length > 0) {
         try {
-          await ctx.fileService.deleteFiles(thumbnailUrls);
+          await ctx.fileService.deleteFiles(filesToDelete);
         } catch (error) {
           // Log the error but don't throw - file cleanup failure shouldn't affect
           // the user experience since the database operation succeeded
-          console.error('Failed to delete thumbnail files from S3:', error);
+          console.error('Failed to delete files from S3:', error);
         }
       }
 

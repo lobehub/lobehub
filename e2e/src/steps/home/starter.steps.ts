@@ -1,3 +1,4 @@
+/* eslint-disable  no-console */
 /**
  * Home Starter Steps
  *
@@ -12,7 +13,7 @@ import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { llmMockManager, presetResponses } from '../../mocks/llm';
-import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
+import { type CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // Store created IDs for verification
 let createdAgentId: string | null = null;
@@ -61,7 +62,9 @@ When('用户点击创建 Agent 按钮', async function (this: CustomWorld) {
 
   await expect(createAgentButton).toBeVisible({ timeout: WAIT_TIMEOUT });
   await createAgentButton.click();
-  await this.page.waitForTimeout(500);
+
+  // Wait for mode switch animation and ChatInput scroll-into-view to settle
+  await this.page.waitForTimeout(800);
 
   console.log('   ✅ 已点击创建 Agent 按钮');
 });
@@ -76,7 +79,9 @@ When('用户点击创建 Group 按钮', async function (this: CustomWorld) {
 
   await expect(createGroupButton).toBeVisible({ timeout: WAIT_TIMEOUT });
   await createGroupButton.click();
-  await this.page.waitForTimeout(500);
+
+  // Wait for mode switch animation and ChatInput scroll-into-view to settle
+  await this.page.waitForTimeout(800);
 
   console.log('   ✅ 已点击创建 Group 按钮');
 });
@@ -89,7 +94,9 @@ When('用户点击写作按钮', async function (this: CustomWorld) {
 
   await expect(writeButton).toBeVisible({ timeout: WAIT_TIMEOUT });
   await writeButton.click();
-  await this.page.waitForTimeout(500);
+
+  // Wait for mode switch animation and ChatInput scroll-into-view to settle
+  await this.page.waitForTimeout(800);
 
   console.log('   ✅ 已点击写作按钮');
 });
@@ -97,35 +104,27 @@ When('用户点击写作按钮', async function (this: CustomWorld) {
 When('用户在输入框中输入 {string}', async function (this: CustomWorld, message: string) {
   console.log(`   📍 Step: 在输入框中输入 "${message}"...`);
 
-  // The chat input is a contenteditable editor, need to click first then type
+  // The chat input is a contenteditable editor, need to click first then type.
+  // Target the contenteditable element INSIDE the ChatInput container directly,
+  // since clicking the container might hit the action bar/footer area instead.
   const chatInputContainer = this.page.locator('[data-testid="chat-input"]').first();
+  await expect(chatInputContainer).toBeVisible({ timeout: WAIT_TIMEOUT });
 
-  // If data-testid not found, try alternative selectors
-  let inputFound = false;
-  if ((await chatInputContainer.count()) > 0) {
-    await chatInputContainer.click();
-    inputFound = true;
-  } else {
-    // Try to find the editor by its contenteditable attribute
-    const editor = this.page.locator('[contenteditable="true"]').first();
-    if ((await editor.count()) > 0) {
-      await editor.click();
-      inputFound = true;
-    }
-  }
-
-  if (!inputFound) {
-    throw new Error('Could not find chat input');
-  }
-
+  const editor = chatInputContainer.locator('[contenteditable="true"]').first();
+  await editor.click();
   await this.page.waitForTimeout(300);
   await this.page.keyboard.type(message, { delay: 30 });
 
   console.log(`   ✅ 已输入 "${message}"`);
 });
 
-When('用户按 Enter 发送', async function (this: CustomWorld) {
+When('用户按 Enter 发送', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 按 Enter 发送...');
+
+  // Wait for editor's debounced onChange (100ms default) to sync inputMessage to store.
+  // The send() function reads directly from the editor as a fallback, but this wait
+  // ensures maximum reliability.
+  await this.page.waitForTimeout(200);
 
   // Listen for navigation to capture the agent/group ID
   const navigationPromise = this.page.waitForURL(/\/(agent|group)\/.*\/profile/, {
@@ -156,8 +155,11 @@ When('用户按 Enter 发送', async function (this: CustomWorld) {
   console.log('   ✅ 已发送消息');
 });
 
-When('用户按 Enter 发送创建文档', async function (this: CustomWorld) {
+When('用户按 Enter 发送创建文档', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 按 Enter 发送创建文档...');
+
+  // Wait for editor's debounced onChange (100ms default) to sync inputMessage to store
+  await this.page.waitForTimeout(200);
 
   // Listen for navigation to capture the document ID
   const navigationPromise = this.page.waitForURL(/\/page\/[^/]+/, {

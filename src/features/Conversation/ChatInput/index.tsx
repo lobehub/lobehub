@@ -1,6 +1,7 @@
 'use client';
 
 import { type SlashOptions } from '@lobehub/editor';
+import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
@@ -21,14 +22,30 @@ import { messageStateSelectors, useConversationStore } from '../store';
 
 export interface ChatInputProps {
   /**
+   * Custom style for the action bar container
+   */
+  actionBarStyle?: React.CSSProperties;
+  /**
+   * Whether to allow fullscreen expand button
+   */
+  allowExpand?: boolean;
+  /**
    * Custom children to render instead of default Desktop component.
    * Use this to add custom UI like error alerts, MessageFromUrl, etc.
    */
   children?: ReactNode;
   /**
+   * Extra action items to append to the ActionBar
+   */
+  extraActionItems?: ChatInputActionsProps['items'];
+  /**
    * Left action buttons configuration
    */
   leftActions?: ActionKeys[];
+  /**
+   * Custom left content to replace the default ActionBar entirely
+   */
+  leftContent?: ReactNode;
   /**
    * Mention items for @ mentions (for group chat)
    */
@@ -41,6 +58,10 @@ export interface ChatInputProps {
    * Right action buttons configuration
    */
   rightActions?: ActionKeys[];
+  /**
+   * Custom content to render before the SendArea (right side of action bar)
+   */
+  sendAreaPrefix?: ReactNode;
   /**
    * Custom send button props override
    */
@@ -63,11 +84,16 @@ export interface ChatInputProps {
  */
 const ChatInput = memo<ChatInputProps>(
   ({
+    actionBarStyle,
+    allowExpand,
     leftActions = [],
+    leftContent,
     rightActions = [],
     children,
+    extraActionItems,
     mentionItems,
     sendMenu,
+    sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
     onEditorReady,
     skipScrollMarginWithList,
@@ -154,13 +180,20 @@ const ChatInput = memo<ChatInputProps>(
             />
           </Flexbox>
         )}
-        <DesktopChatInput />
+        <DesktopChatInput
+          actionBarStyle={actionBarStyle}
+          borderRadius={12}
+          extraActionItems={extraActionItems}
+          leftContent={leftContent}
+          sendAreaPrefix={sendAreaPrefix}
+        />
       </WideScreenContainer>
     );
 
     return (
       <ChatInputProvider
         agentId={agentId}
+        allowExpand={allowExpand}
         leftActions={leftActions}
         mentionItems={mentionItems}
         rightActions={rightActions}

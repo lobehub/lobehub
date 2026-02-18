@@ -15,6 +15,7 @@ import DesktopGroupLayout from '../(main)/group/_layout';
 import DesktopImageLayout from '../(main)/image/_layout';
 import DesktopMemoryLayout from '../(main)/memory/_layout';
 import DesktopPageLayout from '../(main)/page/_layout';
+import DesktopVideoLayout from '../(main)/video/_layout';
 
 // Desktop router configuration (declarative mode)
 export const desktopRoutes: RouteConfig[] = [
@@ -362,6 +363,19 @@ export const desktopRoutes: RouteConfig[] = [
         element: <DesktopMemoryLayout />,
         errorElement: <ErrorBoundary resetPath="/memory" />,
         path: 'memory',
+      },
+
+      // Video routes
+      {
+        children: [
+          {
+            element: dynamicElement(() => import('../(main)/video'), 'Desktop > Video'),
+            index: true,
+          },
+        ],
+        element: <DesktopVideoLayout />,
+        errorElement: <ErrorBoundary resetPath="/video" />,
+        path: 'video',
       },
 
       // Image routes

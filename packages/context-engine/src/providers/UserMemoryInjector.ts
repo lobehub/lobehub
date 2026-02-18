@@ -1,15 +1,20 @@
-import type { UserMemoryData } from '@lobechat/prompts';
+import  { type UserMemoryData } from '@lobechat/prompts';
 import { promptUserMemory } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
-import type { PipelineContext, ProcessorOptions } from '../types';
+import  { type PipelineContext, type ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:UserMemoryInjector');
 
 export interface UserMemoryInjectorConfig {
   /** User memories data */
   memories?: UserMemoryData;
+}
+
+export interface MemoryContext {
+  /** Effective memory effort for the current request */
+  effort?: 'high' | 'low' | 'medium';
 }
 
 /**

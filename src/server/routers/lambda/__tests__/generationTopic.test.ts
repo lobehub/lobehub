@@ -45,7 +45,7 @@ describe('generationTopicRouter', () => {
     const result = await caller.createTopic();
 
     expect(result).toBe(mockTopicId);
-    expect(mockCreate).toHaveBeenCalledWith('');
+    expect(mockCreate).toHaveBeenCalledWith('', undefined);
   });
 
   it('should get all generation topics', async () => {

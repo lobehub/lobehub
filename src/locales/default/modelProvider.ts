@@ -318,8 +318,8 @@ export default {
   'providerModels.item.modelConfig.type.options.realtime': 'Real-time Chat',
   'providerModels.item.modelConfig.type.options.stt': 'Speech-to-Text',
   'providerModels.item.modelConfig.type.options.text2music': 'Text-to-Music',
-  'providerModels.item.modelConfig.type.options.text2video': 'Text-to-Video',
   'providerModels.item.modelConfig.type.options.tts': 'Text-to-Speech',
+  'providerModels.item.modelConfig.type.options.video': 'Video Generation',
   'providerModels.item.modelConfig.type.placeholder': 'Please select a model type',
   'providerModels.item.modelConfig.type.title': 'Model Type',
   'providerModels.item.modelConfig.video.extra':

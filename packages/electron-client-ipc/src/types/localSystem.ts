@@ -273,6 +273,48 @@ export interface EditLocalFileResult {
   success: boolean;
 }
 
+// Open Dialog types
+export interface ShowOpenDialogParams {
+  /**
+   * File type filters
+   */
+  filters?: { extensions: string[]; name: string }[];
+  /**
+   * Allow selecting multiple files
+   */
+  multiple?: boolean;
+  /**
+   * Dialog title
+   */
+  title?: string;
+}
+
+export interface ShowOpenDialogResult {
+  /**
+   * Whether the dialog was cancelled
+   */
+  canceled: boolean;
+  /**
+   * The selected file paths (empty if cancelled)
+   */
+  filePaths: string[];
+}
+
+// Pick File (dialog + read in one IPC call)
+export interface PickFileParams {
+  filters?: { extensions: string[]; name: string }[];
+  title?: string;
+}
+
+export interface PickFileResult {
+  canceled: boolean;
+  file?: {
+    data: Uint8Array;
+    mimeType: string;
+    name: string;
+  };
+}
+
 // Save Dialog types
 export interface ShowSaveDialogParams {
   /**

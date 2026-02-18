@@ -84,7 +84,7 @@
     "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
     "lint:ts": "bash scripts/lint-ts.sh",
     "lint:ts:prune": "eslint \"{src,tests,packages}/**/*.{js,jsx,ts,tsx}\" --prune-suppressions --concurrency=auto",
-    "lint:ts:suppress": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --suppress-all --fix --concurrency=auto",
+    "lint:ts:suppress": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --suppress-all --concurrency=auto",
     "lint:unused": "knip --include files,exports,types,enumMembers,duplicates",
     "prepare": "husky",
     "prettier": "prettier -c --write \"**/**\"",
@@ -224,7 +224,7 @@
     "@lobehub/chat-plugin-sdk": "^1.32.4",
     "@lobehub/chat-plugins-gateway": "^1.9.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
-    "@lobehub/editor": "^3.14.0",
+    "@lobehub/editor": "^3.16.1",
     "@lobehub/icons": "^4.1.0",
     "@lobehub/market-sdk": "0.29.2",
     "@lobehub/tts": "^4.0.2",
@@ -279,6 +279,7 @@
     "es-toolkit": "^1.44.0",
     "fast-deep-equal": "^3.1.3",
     "fflate": "^0.8.2",
+    "ffmpeg-static": "^5.3.0",
     "file-type": "^21.3.0",
     "gray-matter": "^4.0.3",
     "html-to-text": "^9.0.5",
@@ -387,7 +388,7 @@
     "@inquirer/prompts": "^8.2.0",
     "@lobechat/types": "workspace:*",
     "@lobehub/i18n-cli": "^1.26.0",
-    "@lobehub/lint": "2.0.2",
+    "@lobehub/lint": "2.1.3",
     "@lobehub/market-types": "^1.12.3",
     "@lobehub/seo-cli": "^1.7.0",
     "@next/bundle-analyzer": "^16.1.5",
@@ -435,7 +436,7 @@
     "dpdm-fast": "^1.0.14",
     "drizzle-dbml-generator": "^0.10.0",
     "drizzle-kit": "^0.31.8",
-    "eslint": "^9.18.0",
+    "eslint": "10.0.0",
     "eslint-plugin-mdx": "^3.6.2",
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.3.3",
@@ -476,6 +477,9 @@
     "registry": "https://registry.npmjs.org"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "ffmpeg-static"
+    ],
     "overrides": {
       "@types/react": "19.2.13",
       "better-auth": "1.4.6",

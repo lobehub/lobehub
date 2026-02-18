@@ -27,6 +27,11 @@ export interface SidebarAgentItem {
    */
   backgroundColor?: string | null;
   description?: string | null;
+  /**
+   * Group's own avatar (emoji or uploaded image URL)
+   * Only present for chat groups (type === 'group')
+   */
+  groupAvatar?: string | null;
   id: string;
   pinned: boolean;
   sessionId?: string | null;

@@ -185,7 +185,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             <PublishedTime
               className={styles.time}
               date={createdAt as string}
-              template={'MMM DD, YYYY'}
+             
             />
             <GroupAgentForkTag />
             {!!forkCount && forkCount > 0 && (

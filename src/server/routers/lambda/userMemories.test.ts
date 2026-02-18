@@ -37,6 +37,14 @@ vi.mock('@/database/models/userMemory', async (importOriginal) => {
 
 const embeddingsMock = vi.fn();
 const mockCtx = { authorizationHeader: 'Bearer mock-token', userId: 'test-user' };
+const makeServerDBMock = (query: Record<string, any> = {}) => ({
+  query: {
+    userSettings: {
+      findFirst: vi.fn().mockResolvedValue({ memory: null }),
+    },
+    ...query,
+  },
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -88,28 +96,26 @@ describe('memoryRouter.reEmbedMemories', () => {
       { feedback: 'feedback text', id: 'activity-1', narrative: 'narrative text' },
     ];
 
-    const dbStub = {
-      query: {
-        userMemories: {
-          findMany: vi.fn().mockResolvedValue(userMemoriesRows),
-        },
-        userMemoriesContexts: {
-          findMany: vi.fn().mockResolvedValue(contextsRows),
-        },
-        userMemoriesExperiences: {
-          findMany: vi.fn().mockResolvedValue(experiencesRows),
-        },
-        userMemoriesIdentities: {
-          findMany: vi.fn().mockResolvedValue(identitiesRows),
-        },
-        userMemoriesPreferences: {
-          findMany: vi.fn().mockResolvedValue(preferencesRows),
-        },
-        userMemoriesActivities: {
-          findMany: vi.fn().mockResolvedValue(activitiesRows),
-        },
+    const dbStub = makeServerDBMock({
+      userMemories: {
+        findMany: vi.fn().mockResolvedValue(userMemoriesRows),
       },
-    } as const;
+      userMemoriesContexts: {
+        findMany: vi.fn().mockResolvedValue(contextsRows),
+      },
+      userMemoriesExperiences: {
+        findMany: vi.fn().mockResolvedValue(experiencesRows),
+      },
+      userMemoriesIdentities: {
+        findMany: vi.fn().mockResolvedValue(identitiesRows),
+      },
+      userMemoriesPreferences: {
+        findMany: vi.fn().mockResolvedValue(preferencesRows),
+      },
+      userMemoriesActivities: {
+        findMany: vi.fn().mockResolvedValue(activitiesRows),
+      },
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(dbStub as any);
 
@@ -169,9 +175,7 @@ describe('userMemories.queryMemories', () => {
         }) as any,
     );
 
-    vi.mocked(getServerDB).mockResolvedValue({
-      query: {},
-    } as any);
+    vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
     const caller = userMemoriesRouter.createCaller(mockCtx as any);
 
@@ -217,9 +221,7 @@ describe('userMemories.queryMemories', () => {
         }) as any,
     );
 
-    vi.mocked(getServerDB).mockResolvedValue({
-      query: {},
-    } as any);
+    vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
     const caller = userMemoriesRouter.createCaller(mockCtx as any);
 
@@ -242,9 +244,7 @@ describe('userMemories.getMemoryDetail', () => {
         }) as any,
     );
 
-    vi.mocked(getServerDB).mockResolvedValue({
-      query: {},
-    } as any);
+    vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
     const caller = userMemoriesRouter.createCaller(mockCtx as any);
 
@@ -270,9 +270,7 @@ describe('userMemories.getMemoryDetail', () => {
         }) as any,
     );
 
-    vi.mocked(getServerDB).mockResolvedValue({
-      query: {},
-    } as any);
+    vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
     const caller = userMemoriesRouter.createCaller(mockCtx as any);
 
@@ -350,9 +348,7 @@ describe('userMemories.retrieveMemory', () => {
         }) as any,
     );
 
-    vi.mocked(getServerDB).mockResolvedValue({
-      query: {},
-    } as any);
+    vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
     const caller = userMemoriesRouter.createCaller(mockCtx as any);
 
@@ -365,7 +361,7 @@ describe('userMemories.retrieveMemory', () => {
     expect(searchWithEmbedding.mock.calls[0][0]).toBeTypeOf('object');
     expect(searchWithEmbedding.mock.calls[0][0]).toStrictEqual({
       embedding: [1],
-      limits: { activities: 1, contexts: 1, experiences: 1, preferences: 1 },
+      limits: { activities: 1, contexts: 0, experiences: 0, preferences: 1 },
     });
 
     expect(result.contexts[0]).toMatchObject({
@@ -398,9 +394,7 @@ describe('userMemories.toolAddActivityMemory', () => {
         }) as any,
     );
 
-    vi.mocked(getServerDB).mockResolvedValue({
-      query: {},
-    } as any);
+    vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
     const caller = userMemoriesRouter.createCaller(mockCtx as any);
 

@@ -53,8 +53,11 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface DesktopChatInputProps extends ActionToolbarProps {
-  extenHeaderContent?: ReactNode;
+  actionBarStyle?: React.CSSProperties;
+  extentHeaderContent?: ReactNode;
   inputContainerProps?: ChatInputProps;
+  leftContent?: ReactNode;
+  sendAreaPrefix?: ReactNode;
   showFootnote?: boolean;
 }
 
@@ -62,9 +65,13 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
   ({
     showFootnote,
     inputContainerProps,
-    extenHeaderContent,
+    extentHeaderContent,
+    actionBarStyle,
+    borderRadius,
     extraActionItems,
     dropdownPlacement,
+    leftContent,
+    sendAreaPrefix,
   }) => {
     const { t } = useTranslation('chat');
     const [chatInputHeight, updateSystemStatus] = useGlobalStore((s) => [
@@ -107,19 +114,31 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           slashMenuRef={slashMenuRef}
           footer={
             <ChatInputActionBar
-              right={<SendArea />}
-              style={{ paddingRight: 8 }}
+              style={actionBarStyle ?? { paddingRight: 8 }}
               left={
-                <ActionBar
-                  dropdownPlacement={dropdownPlacement}
-                  extraActionItems={extraActionItems}
-                />
+                leftContent ?? (
+                  <ActionBar
+                    borderRadius={borderRadius}
+                    dropdownPlacement={dropdownPlacement}
+                    extraActionItems={extraActionItems}
+                  />
+                )
+              }
+              right={
+                sendAreaPrefix ? (
+                  <Flexbox horizontal align={'center'} gap={6}>
+                    {sendAreaPrefix}
+                    <SendArea />
+                  </Flexbox>
+                ) : (
+                  <SendArea />
+                )
               }
             />
           }
           header={
             <Flexbox gap={0}>
-              {extenHeaderContent}
+              {extentHeaderContent}
               {showTypoBar && <TypoBar />}
               {contextContainerNode}
             </Flexbox>

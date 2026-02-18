@@ -142,6 +142,9 @@ class ChatService {
     // =================== 1.1 process user memories =================== //
 
     const enableUserMemories = settingsSelectors.memoryEnabled(getUserStoreState());
+    const userMemorySettings = settingsSelectors.currentMemorySettings(getUserStoreState());
+    const effectiveMemoryEffort =
+      chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
 
     // =================== 1.2 build agent builder context =================== //
 
@@ -254,6 +257,9 @@ class ChatService {
       systemRole: agentConfig.systemRole,
       tools: enabledToolIds,
       topicId,
+      memoryContext: {
+        effort: effectiveMemoryEffort,
+      },
     });
 
     // ============  3. process extend params   ============ //

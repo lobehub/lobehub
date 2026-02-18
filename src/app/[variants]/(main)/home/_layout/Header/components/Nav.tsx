@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Tag } from '@lobehub/ui';
 import { HomeIcon, SearchIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,11 @@ import { getRouteById } from '@/config/routes';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 
 import { type NavItemProps } from '../../../../../../../features/NavPanel/components/NavItem';
 import NavItem from '../../../../../../../features/NavPanel/components/NavItem';
@@ -18,6 +22,7 @@ import NavItem from '../../../../../../../features/NavPanel/components/NavItem';
 interface Item {
   hidden?: boolean | undefined;
   icon: NavItemProps['icon'];
+  isNew?: boolean;
   key: string;
   onClick?: () => void;
   title: NavItemProps['title'];
@@ -30,6 +35,7 @@ const Nav = memo(() => {
   const { t } = useTranslation('common');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { showMarket, showAiImage } = useServerConfigStore(featureFlagsSelectors);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const items: Item[] = useMemo(
     () => [
@@ -54,6 +60,14 @@ const Nav = memo(() => {
         url: '/page',
       },
       {
+        hidden: !enableBusinessFeatures,
+        icon: getRouteById('video')!.icon,
+        isNew: true,
+        key: SidebarTabKey.Video,
+        title: t('tab.video'),
+        url: '/video',
+      },
+      {
         hidden: !showAiImage,
         icon: getRouteById('image')!.icon,
         key: SidebarTabKey.Image,
@@ -71,12 +85,20 @@ const Nav = memo(() => {
     [t],
   );
 
+  const newBadge = (
+    <Tag color="blue" size="small">
+      {t('new')}
+    </Tag>
+  );
+
   return (
     <Flexbox gap={1} paddingInline={4}>
       {items.map((item) => {
+        const extra = item.isNew ? newBadge : undefined;
         const content = (
           <NavItem
             active={tab === item.key}
+            extra={extra}
             hidden={item.hidden}
             icon={item.icon}
             key={item.key}
@@ -100,6 +122,7 @@ const Nav = memo(() => {
           >
             <NavItem
               active={tab === item.key}
+              extra={extra}
               hidden={item.hidden}
               icon={item.icon}
               title={item.title}

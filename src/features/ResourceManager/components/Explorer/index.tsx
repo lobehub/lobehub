@@ -13,6 +13,7 @@ import EmptyPlaceholder from './EmptyPlaceholder';
 import Header from './Header';
 import ListView from './ListView';
 import MasonryView from './MasonryView';
+import SearchResultsOverlay from './SearchResultsOverlay';
 import { useCheckTaskStatus } from './useCheckTaskStatus';
 import { useResourceExplorer } from './useResourceExplorer';
 
@@ -40,6 +41,8 @@ const ResourceExplorer = memo(() => {
       s.sortType,
     ]);
 
+  // searchQuery is still subscribed above for selection-clearing effect below
+
   // Get folder path for empty state check
   const { currentFolderSlug } = useFolderPath();
 
@@ -51,12 +54,11 @@ const ResourceExplorer = memo(() => {
       category: libraryId ? undefined : category,
       libraryId,
       parentId: currentFolderSlug || null,
-      q: searchQuery ?? undefined,
       showFilesInKnowledgeBase: false,
       sortType,
       sorter,
     }),
-    [category, libraryId, currentFolderSlug, searchQuery, sortType, sorter],
+    [category, libraryId, currentFolderSlug, sortType, sorter],
   );
 
   // Use SWR for data fetching with automatic caching and revalidation
@@ -98,13 +100,16 @@ const ResourceExplorer = memo(() => {
   return (
     <Flexbox height={'100%'}>
       <Header />
-      {showEmptyStatus ? (
-        <EmptyPlaceholder />
-      ) : viewMode === 'list' ? (
-        <ListView />
-      ) : (
-        <MasonryView />
-      )}
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {showEmptyStatus ? (
+          <EmptyPlaceholder />
+        ) : viewMode === 'list' ? (
+          <ListView />
+        ) : (
+          <MasonryView />
+        )}
+        <SearchResultsOverlay />
+      </div>
     </Flexbox>
   );
 });

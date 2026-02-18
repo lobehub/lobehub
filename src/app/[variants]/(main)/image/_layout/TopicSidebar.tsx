@@ -1,19 +1,24 @@
-import React, { memo,Suspense } from 'react';
+import { Suspense, memo } from 'react';
 
+import {
+  GenerationTopicStoreProvider,
+  SkeletonList,
+  TopicList,
+  TopicUrlSync,
+} from '@/features/GenerationTopicList';
 import ImageTopicPanel from '@/features/ImageTopicPanel';
-
-import Topics from './Topics';
-import TopicsSkeleton from './Topics/SkeletonList';
-import TopicUrlSync from './Topics/TopicUrlSync';
+import { useImageStore } from '@/store/image';
 
 const TopicSidebar = memo(() => {
   return (
-    <ImageTopicPanel>
-      <Suspense fallback={<TopicsSkeleton />}>
-        <Topics />
-        <TopicUrlSync />
-      </Suspense>
-    </ImageTopicPanel>
+    <GenerationTopicStoreProvider value={{ namespace: 'image', useStore: useImageStore as any }}>
+      <ImageTopicPanel>
+        <Suspense fallback={<SkeletonList />}>
+          <TopicList />
+          <TopicUrlSync />
+        </Suspense>
+      </ImageTopicPanel>
+    </GenerationTopicStoreProvider>
   );
 });
 

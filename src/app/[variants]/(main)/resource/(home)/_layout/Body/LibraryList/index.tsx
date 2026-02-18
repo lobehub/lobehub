@@ -39,7 +39,7 @@ const LibraryList = memo(() => {
   return (
     <Flexbox gap={1} paddingInline={4}>
       {data?.map((item) => (
-        <Item id={item.id} key={item.id} name={item.name} />
+        <Item description={item.description} id={item.id} key={item.id} name={item.name} />
       ))}
     </Flexbox>
   );

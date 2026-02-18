@@ -1,8 +1,9 @@
 import type {
   Generation,
-  GenerationAsset,
   GenerationBatch,
   GenerationConfig,
+  ImageGenerationAsset,
+  VideoGenerationAsset,
 } from '@lobechat/types';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
@@ -132,6 +133,11 @@ export class GenerationBatchModel {
               config.imageUrl = await this.fileService.getFullFileUrl(config.imageUrl);
             }
 
+            // Handle endImageUrl (video start/end frame)
+            if (config.endImageUrl) {
+              config.endImageUrl = await this.fileService.getFullFileUrl(config.endImageUrl);
+            }
+
             // Handle imageUrls array
             if (Array.isArray(config.imageUrls)) {
               config.imageUrls = await Promise.all(
@@ -164,19 +170,19 @@ export class GenerationBatchModel {
    * Delete a generation batch and return associated file URLs for cleanup
    *
    * This method follows the "database first, files second" deletion principle:
-   * 1. First queries the batch with its generations to collect thumbnail URLs
+   * 1. First queries the batch with its generations to collect asset file URLs
    * 2. Then deletes the database record (cascade delete handles related generations)
-   * 3. Returns the deleted batch data and thumbnail URLs for file cleanup
+   * 3. Returns the deleted batch data and file URLs for cleanup
    *
    * @param id - The batch ID to delete
-   * @returns Object containing deleted batch data and thumbnail URLs to clean, or undefined if batch not found or access denied
+   * @returns Object containing deleted batch data and file URLs to clean, or undefined if batch not found or access denied
    */
   async delete(
     id: string,
-  ): Promise<{ deletedBatch: GenerationBatchItem; thumbnailUrls: string[] } | undefined> {
+  ): Promise<{ deletedBatch: GenerationBatchItem; filesToDelete: string[] } | undefined> {
     log('Deleting generation batch: %s for user: %s', id, this.userId);
 
-    // 1. First, get generations with their assets to collect thumbnail URLs
+    // 1. First, get generations with their assets to collect file URLs for cleanup
     const batchWithGenerations = await this.db.query.generationBatches.findFirst({
       where: and(eq(generationBatches.id, id), eq(generationBatches.userId, this.userId)),
       with: {
@@ -193,13 +199,15 @@ export class GenerationBatchModel {
       return undefined;
     }
 
-    // 2. Collect thumbnail URLs that need to be deleted
-    const thumbnailUrls: string[] = [];
+    // 2. Collect asset file URLs that need to be deleted (video, cover, thumbnail)
+    const filesToDelete: string[] = [];
     if (batchWithGenerations.generations) {
       for (const gen of batchWithGenerations.generations) {
-        const asset = gen.asset as GenerationAsset;
-        if (asset?.thumbnailUrl) {
-          thumbnailUrls.push(asset.thumbnailUrl);
+        const asset = gen.asset as ImageGenerationAsset | VideoGenerationAsset | null;
+        if (asset?.url) filesToDelete.push(asset.url);
+        if (asset?.thumbnailUrl) filesToDelete.push(asset.thumbnailUrl);
+        if (asset && 'coverUrl' in asset && asset.coverUrl) {
+          filesToDelete.push(asset.coverUrl);
         }
       }
     }
@@ -211,14 +219,14 @@ export class GenerationBatchModel {
       .returning();
 
     log(
-      'Generation batch %s deleted successfully with %d thumbnails to clean',
+      'Generation batch %s deleted successfully with %d files to clean',
       id,
-      thumbnailUrls.length,
+      filesToDelete.length,
     );
 
     return {
       deletedBatch,
-      thumbnailUrls,
+      filesToDelete,
     };
   }
 }
