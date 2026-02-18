@@ -510,18 +510,20 @@ describe('DrizzleAdapter', () => {
     it('should throw error when using unsupported model name', async () => {
       const invalidAdapter = new DrizzleAdapter('InvalidModelName', serverDB);
       // Call a method that triggers getTable
-      await expect(invalidAdapter.find('any-id')).rejects.toThrow('不支持的模型: InvalidModelName');
+      await expect(invalidAdapter.find('any-id')).rejects.toThrow(
+        'Unsupported model: InvalidModelName',
+      );
       await expect(invalidAdapter.upsert('any-id', {}, 3600)).rejects.toThrow(
-        '不支持的模型: InvalidModelName',
+        'Unsupported model: InvalidModelName',
       );
       await expect(invalidAdapter.destroy('any-id')).rejects.toThrow(
-        '不支持的模型: InvalidModelName',
+        'Unsupported model: InvalidModelName',
       );
       await expect(invalidAdapter.consume('any-id')).rejects.toThrow(
-        '不支持的模型: InvalidModelName',
+        'Unsupported model: InvalidModelName',
       );
       await expect(invalidAdapter.revokeByGrantId('any-grant-id')).rejects.toThrow(
-        '不支持的模型: InvalidModelName',
+        'Unsupported model: InvalidModelName',
       );
     });
   });
