@@ -1313,13 +1313,26 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8 * 0.2,
-              '[0.128, 0.256]': 2 * 0.2,
-              '[0.256, infinity]': 4 * 0.2,
+              '[0, 0.128]': 0.8 * 0.1,
+              '[0.128, 0.256]': 2 * 0.1,
+              '[0.256, infinity]': 4 * 0.1,
             },
             pricingParams: ['textInputRange'],
           },
           name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8 * 1.25,
+              '[0.128, 0.256]': 2 * 1.25,
+              '[0.256, infinity]': 4 * 1.25,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheWrite',
           strategy: 'lookup',
           unit: 'millionTokens',
         },
