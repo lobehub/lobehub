@@ -18,8 +18,9 @@ interface ToolRenderProps {
 const ToolRender = memo<ToolRenderProps>(
   ({ showCustomToolRender, content, messageId, plugin, pluginState, toolCallId }) => {
     const hasCustomRender = !!getBuiltinRender(plugin?.identifier, plugin?.apiName);
+    const isMCP = (plugin?.type as string) === 'mcp';
 
-    if (hasCustomRender && showCustomToolRender) {
+    if ((hasCustomRender && showCustomToolRender) || isMCP) {
       return (
         <CustomRender
           content={content}
