@@ -1,0 +1,68 @@
+---
+title: LobeHub 自訂模型服務商模型列表及擴充功能能力設定
+description: 瞭解如何在 LobeHub 中自訂模型列表以及擴充功能能力設定的基本語法和規則。
+tags:
+  - LobeHub
+  - 自訂模型列表
+  - 擴充功能能力設定
+  - 模型展示名
+  - 模型能力
+---
+
+# Model List
+
+LobeHub 支援在部署時自訂模型列表，詳情請參考 [模型提供商](/zh/docs/self-hosting/environment-variables/model-provider) 。
+
+你可以使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名->部署名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。通過 `<>` 來新增擴充功能設定。基本語法如下：
+
+```text
+id->deploymentName=displayName<maxToken:vision:reasoning:search:fc:file:imageOutput>,model2,model3
+```
+
+部署名`->deploymentName`可以省略，預設為最新版本的模型。當前支援`->deploymentName`的模型服務商有：Azure、Volcengine 和 Qwen。
+
+例如： `+qwen-7b-chat,+glm-6b,-gpt-3.5-turbo,gpt-4-0125-preview=gpt-4-turbo`
+
+上面示例表示增加 `qwen-7b-chat` 和 `glm-6b` 到模型列表，而從列表中刪除 `gpt-3.5-turbo`，並將 `gpt-4-0125-preview` 模型名字展示為 `gpt-4-turbo`。如果你想先禁用所有模型，再啟用指定模型，可以使用 `-all,+gpt-3.5-turbo`，則表示僅啟用 `gpt-3.5-turbo`。
+
+### -all：隱藏所有模型
+
+- 描述：`-all` 表示先隱藏所有搭載模型。通常與 `+` 組合使用，用於只啟用你顯式指定的模型。
+- 示例：
+
+```text
+-all,+gpt-3.5-turbo,+gpt-4-0125-preview=gpt-4-turbo
+```
+
+僅啟用 gpt-3.5-turbo 和 gpt-4-turbo，而其他模型都隱藏。
+
+## 擴充功能能力
+
+考慮到模型的能力多樣性，我們在 `0.147.8` 版本開始增加擴充功能性設定，它的規則如下：
+
+```shell
+id->deploymentName=displayName<maxToken:vision:reasoning:search:fc:file:imageOutput>
+```
+
+尖括號第一個值約定為這個模型的 `maxToken` 。第二個及以後作為模型的擴充功能能力，能力與能力之間用冒號 `:` 作為分隔符，順序不重要。
+
+舉例如下：
+
+- `chatglm-6b=ChatGLM 6B<4096>`：ChatGLM 6B，最大上下文 4k，沒有高階能力；
+- `spark-v3.5=訊飛星火 v3.5<8192:fc>`：訊飛星火 3.5 模型，最大上下文 8k，支援 Function Call；
+- `gemini-1.5-flash-latest=Gemini 1.5 Flash<16000:vision>`：Google 視覺模型，最大上下文 16k，支援圖像識別；
+- `o3-mini=OpenAI o3-mini<200000:reasoning:fc>`：OpenAI o3-mini 模型，最大上下文 200k，支援推理及 Function Call；
+- `qwen-max-latest=Qwen Max<32768:search:fc>`：通義千問 2.5 Max 模型，最大上下文 32k，支援聯網搜尋及 Function Call；
+- `gpt-4-all=ChatGPT Plus<128000:fc:vision:file>`，hack 的 ChatGPT Plus 網頁版，上下 128k ，支援圖像識別、Function Call、檔案上傳；
+- `gemini-2.0-flash-exp-image-generation=Gemini 2.0 Flash (Image Generation) Experimental<32768:imageOutput:vision>`，Gemini 2.0 Flash 實驗模型，最大上下文 32k，支援圖像生成和識別
+
+目前支援的擴充功能能力有：
+
+| ---           | 描述                     |
+| ------------- | ---------------------- |
+| `fc`          | 函數調用（function calling） |
+| `vision`      | 視覺識別                   |
+| `imageOutput` | 圖像生成                   |
+| `reasoning`   | 支援推理                   |
+| `search`      | 支援聯網搜尋                 |
+| `file`        | 檔案上傳（比較 hack，不建議日常使用）  |

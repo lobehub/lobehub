@@ -1,0 +1,74 @@
+---
+title: 在 LobeHub 中設定 Keycloak 身分驗證
+description: 學習如何在 LobeHub 中設定 Keycloak SSO，包括建立客戶端和設定環境變數。
+tags:
+  - Keycloak
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+---
+
+# 設定 Keycloak 身分驗證
+
+[Keycloak](https://www.keycloak.org/) 是一個開源的身分和存取管理解決方案。
+
+<Steps>
+  ### 在 Keycloak 中建立客戶端
+
+  1. 登入 Keycloak 管理控制檯
+  2. 選擇你的 realm（或建立新的）
+  3. 前往 **Clients** > **Create client**
+  4. 設定客戶端：
+     - **Client type**: `OpenID Connect`
+     - **Client ID**: `lobechat`（或任意名稱）
+  5. 點擊 **Next**
+  6. 啟用 **Client authentication**（On）
+  7. 點擊 **Next** 然後 **Save**
+
+  ### 設定重新導向 URI
+
+  在客戶端 **Settings** 標籤頁中：
+
+  1. 在 **Valid redirect URIs** 下新增重新導向 URI
+
+  <Callout type={'info'}>
+    回調 URL 格式：
+
+    - 本地開發: `http://localhost:3210/api/auth/callback/keycloak`
+    - 生產環境: `https://your-domain.com/api/auth/callback/keycloak`
+  </Callout>
+
+  ### 獲取客戶端密鑰
+
+  前往 **Credentials** 標籤頁複製 **Client secret**。
+
+  ### 獲取 Issuer URL
+
+  Issuer URL 格式：`https://your-keycloak-domain/realms/your-realm`
+
+  例如：`https://keycloak.example.com/realms/master`
+
+  ### 設定環境變數
+
+  | 環境變數                   | 類型 | 描述                                               |
+  | ---------------------- | -- | ------------------------------------------------ |
+  | `AUTH_SECRET`          | 必選 | 會話加密密鑰，使用 `openssl rand -base64 32` 生成           |
+  | `AUTH_SSO_PROVIDERS`   | 必選 | 填寫 `keycloak`                                    |
+  | `AUTH_KEYCLOAK_ID`     | 必選 | Client ID                                        |
+  | `AUTH_KEYCLOAK_SECRET` | 必選 | Client Secret                                    |
+  | `AUTH_KEYCLOAK_ISSUER` | 必選 | `https://your-keycloak-domain/realms/your-realm` |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#keycloak)
+    可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以通過 Keycloak 身分認證並使用 LobeHub。
+</Callout>
+
+## 相關資源
+
+- [Keycloak 文件](https://www.keycloak.org/documentation)
+- [Keycloak OpenID Connect 指南](https://www.keycloak.org/docs/latest/securing_apps/#_oidc)

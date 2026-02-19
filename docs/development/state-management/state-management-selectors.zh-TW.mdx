@@ -1,0 +1,61 @@
+---
+title: 資料存儲取數模組
+description: 瞭解 LobeHub 資料存儲取數模組及其選擇器的使用和優勢。
+tags:
+  - LobeHub
+  - 資料存儲
+  - 選擇器
+  - TypeScript
+  - 前端開發
+---
+
+# 資料存儲取數模組
+
+selectors 是 LobeHub 資料流研發框架下的取數模組，它的作用是從 store 中以特定特務邏輯取出資料，供組件消費使用。
+
+以 `src/store/tool/slices/plugin/selectors.ts` 為例：
+
+這個 TypeScript 程式碼段定義了一個名為 `pluginSelectors` 的對象，該對象包含一系列用於從插件存儲狀態中檢索資料的選擇器函數。選擇器是一種從 zustand 中提取和衍生資料的函數。這個特定的例子是為了管理與前端應用程式的插件系統相關的狀態。
+
+下面是一些關鍵點的說明：
+
+- `getCustomPluginById`: 根據插件 ID 返回自訂插件資訊。
+- `getInstalledPluginById`: 根據插件 ID 返回已安裝插件的資訊。
+- `getPluginManifestById`: 根據插件 ID 返回插件清單。
+- `getPluginMetaById`: 根據插件 ID 返回插件元資料。
+- `getPluginSettingsById`: 根據插件 ID 返回插件設定。
+- `installedCustomPluginMetaList`: 返回所有已安裝的自訂插件的元資料列表。
+- `installedPluginManifestList`: 返回所有已安裝插件的清單列表。
+- `installedPluginMetaList`: 返回所有已安裝插件的元資料列表。
+- `installedPlugins`: 返回所有已安裝插件的列表。
+- `isPluginHasUI`: 根據插件 ID 確定插件是否有 UI 組件。
+- `isPluginInstalled`: 根據插件 ID 檢查插件是否已安裝。
+- `storeAndInstallPluginsIdList`: 返回 store 中和已安裝插件的所有 ID 列表。
+
+選擇器通過將複雜的狀態選擇邏輯封裝在單獨的函數中，使得在應用程式的其他部分調用狀態資料時，程式碼更加簡潔和直觀。此外，由於使用了 TypeScript，每個函數都可以具有明確的輸入和輸出類型，這有助於提高程式碼的可靠性和開發效率。
+
+在組件中，只需引入相應的選擇器即可直接獲取最終消費的資料：
+
+```tsx | pure
+import { useToolStore } from '@/store/tool';
+import { pluginSelectors } from '@/store/tool/selectors';
+
+const Render = () => {
+  const list = useToolStore(pluginSelectors.installedPluginMetaList);
+
+  return <> ...
+</>;
+};
+```
+
+這樣實現的好處在於：
+
+1. **解耦和重用**：通過將選擇器獨立於組件，我們可以在多個組件之間複用這些選擇器而不需要重寫取數邏輯。這減少了重複程式碼，提高了開發效率，並且使得程式碼庫更加乾淨和易於維護。
+2. **性能優化**：選擇器可以用來計算衍生資料，這樣可以避免在每個組件中重複計算相同的資料。當狀態發生變化時，只有依賴於這部分狀態的選擇器才會重新計算，從而減少不必要的渲染和計算。
+3. **易於測試**：選擇器是純函數，它們僅依賴於傳入的參數。這意味著它們可以在隔離的環境中進行測試，無需模擬整個 store 或組件樹。
+4. **類型安全**：由於 LobeHub 使用 TypeScript，每個選擇器都有明確的輸入和輸出類型定義。這為開發者提供了自動完成和編譯時檢查的優勢，減少了執行時錯誤。
+5. **可維護性**：選擇器集中了狀態的讀取邏輯，使得跟蹤狀態的變化和管理更加直觀。如果狀態結構發生變化，我們只需要更新相應的選擇器，而不是搜尋和替換整個程式碼庫中的多個位置。
+6. **可組合性**：選擇器可以組合其他選擇器，以建立更復雜的選擇邏輯。這種模式允許開發者構建一個選擇器層次結構，使得狀態選擇更加靈活和強大。
+7. **簡化組件邏輯**：組件不需要知道狀態的結構或如何獲取和計算需要的資料。組件只需調用選擇器即可獲取渲染所需的資料，這使得組件邏輯變得更簡單和清晰。
+
+通過這樣的設計，LobeHub 的開發者可以更專注於構建使用者界面和業務邏輯，而不必擔心資料的獲取和處理細節。這種模式也為未來可能的狀態結構變更提供了更好的適應性和擴充功能性。

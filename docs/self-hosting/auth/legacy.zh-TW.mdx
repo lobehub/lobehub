@@ -1,0 +1,109 @@
+---
+title: 舊版身分驗證（NextAuth 和 Clerk）
+description: 關於 NextAuth 和 Clerk 等舊版身分驗證方法的文件。對於新部署，我們建議使用 Better Auth。
+tags:
+  - 身分驗證服務
+  - Next Auth
+  - Clerk
+  - 舊版
+---
+
+# 舊版身分驗證
+
+<Callout type={'warning'}>
+  **舊版提示**：NextAuth 和 Clerk 是舊版身分驗證方案。對於新部署，我們強烈建議使用 [Better Auth](/zh/docs/self-hosting/auth)，它更簡潔、更靈活。
+</Callout>
+
+本頁面為仍在使用這些服務的使用者提供舊版身分驗證方案（NextAuth 和 Clerk）的文件。
+
+## Clerk
+
+Clerk 是一個全面的身分驗證解決方案，它提供了簡單而強大的 API 和服務來處理使用者認證和會話管理。
+
+LobeHub 與 Clerk 做了深度整合，能夠為使用者提供安全、便捷的登入和註冊體驗。
+
+在 LobeHub 的環境變數中設定 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` 和 `CLERK_SECRET_KEY`，即可開啟和使用 Clerk。
+
+<Callout type={'info'}>
+  詳細的 Clerk 設定請參閱 [Clerk 設定指南](/zh/docs/self-hosting/auth/clerk)。
+</Callout>
+
+<Callout type={'tip'}>
+  如需從 Clerk 遷移到 Better Auth，請參閱 [Clerk 遷移指南](/zh/docs/self-hosting/migration/v2/auth/clerk-to-betterauth)。
+</Callout>
+
+## Next Auth
+
+<Callout type={'tip'}>
+  如需從 NextAuth 遷移到 Better Auth，請參閱 [NextAuth 遷移指南](/zh/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth)。
+</Callout>
+
+在使用 NextAuth 之前，請先在 LobeHub 的環境變數中設定以下變數：
+
+| 環境變數                             | 類型 | 描述                                                                                                           |
+| -------------------------------- | -- | ------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | 必選 | 用於啟用 NextAuth 服務，設定為 `1` 以啟用，更改此項需要重新編譯應用程式。使用 `lobehub/lobehub` 鏡像部署的使用者已經預設新增了該項設定。                           |
+| `NEXT_AUTH_SECRET`               | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令： `openssl rand -base64 32`，或者存取 `https://generate-secret.vercel.app/32` 生成秘鑰。 |
+| `AUTH_URL`                       | 必選 | 該 URL 用於指定 Auth.js 在執行 OAuth 驗證時的回調位址，當預設生成的重新導向位址發生不正確時才需要設定。`https://example.com/api/auth`                  |
+| `NEXT_AUTH_SSO_PROVIDERS`        | 可選 | 該環境變數用於同時啟用多個身分驗證源，以逗號 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。                                       |
+| `NEXT_AUTH_SSO_SESSION_STRATEGY` | 可選 | Auth.js 的會話策略。選項為 `jwt` 或 `database`。預設值為 `jwt`。                                                             |
+
+目前支援的身分驗證服務有：
+
+<Cards>
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/auth0'} title={'Auth0'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/authentik'} title={'Authentik'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/github'} title={'Github'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/zitadel'} title={'ZITADEL'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/authelia'} title={'Authelia'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/logto'} title={'Logto'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/keycloak'} title={'Keycloak'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/okta'} title={'Okta'} />
+</Cards>
+
+點擊即可查看對應平臺的設定文件。
+
+## 進階設定
+
+同時啟用多個身分驗證源請設定 `NEXT_AUTH_SSO_PROVIDERS` 環境變數，以逗號 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。
+
+順序為 SSO 提供商的顯示順序。
+
+| SSO 提供商               | 值                       | 額外功能      |
+| --------------------- | ----------------------- | --------- |
+| Auth0                 | `auth0`                 |           |
+| Authenlia             | `authenlia`             |           |
+| Authentik             | `authentik`             |           |
+| Casdoor               | `casdoor`               | `Webhook` |
+| Cloudflare Zero Trust | `cloudflare-zero-trust` |           |
+| Github                | `github`                |           |
+| Logto                 | `logto`                 | `Webhook` |
+| Microsoft Entra ID    | `microsoft-entra-id`    |           |
+| ZITADEL               | `zitadel`               |           |
+| Keycloak              | `keycloak`              |           |
+| Okta                  | `okta`                  |           |
+
+## 額外功能
+
+### Webhook 支援
+
+允許 LobeHub 在身分提供商中使用者資訊更新時接收通知。支援的提供商包括 Casdoor 和 Logto。請參考具體提供商文件進行設定。
+
+### 資料庫會話
+
+允許會話存儲在資料庫中，詳情請參閱 [Auth.js 會話文件](https://authjs.dev/concepts/session-strategies#database-session)。
+
+## 其他 SSO 提供商
+
+請參考 [NextAuth.js](https://next-auth.js.org/providers) 文件，歡迎提交 Pull Request。

@@ -1,0 +1,56 @@
+---
+title: LobeHub 特性標誌環境變數設定指南
+description: 瞭解如何使用環境變數自訂 LobeHub 的特性標誌，包括控制否啟用某個功能、或者根據需要對特定使用者群體或環境啟用或禁用功能。
+tags:
+  - LobeHub
+  - 環境變數
+  - 設定指南
+  - 特徵標誌
+---
+
+# 特性標誌
+
+除了基礎的環境變數設定外，LobeHub 還提供了一些特性標誌（Feature Flags），用於控制是否全域啟用某個功能，或者根據需要對特定使用者群體或環境啟用或禁用功能。
+
+## 特性標誌環境變數 `FEATURE_FLAGS`
+
+- 類型：可選
+- 描述：用於控制 LobeHub 的特性功能，支援多個功能標誌，使用 `+` 增加一個功能，使用 `-` 來關閉一個功能，多個功能標誌之間使用英文逗號 `,` 隔開，最外層建議新增引號 `"` 以避免解析錯誤。
+- 預設值：`-`
+- 示例：`"-welcome_suggest"`
+
+所有的功能統一以特性標誌 `FEATURE_FLAGS` 作為唯一的設定變數。
+
+你可以通過上述設定語法來實現更多的功能組合。所有的功能設定項都是布爾類型，通過 `+` 來啟用，通過 `-` 來關閉。
+
+<Callout type={'tip'}>
+  注意：與 `OPENAI_MODEL_LIST` 變數不同，`FEATURE_FLAGS` 變數不支援 `all`
+  關鍵字，你需要手動控制所有的功能標誌（否則它們會採用對應的預設值）。
+</Callout>
+
+| 設定項                       | 解釋                                   | 預設值 |
+| ------------------------- | ------------------------------------ | --- |
+| `check_updates`           | 允許檢查更新。                              | 開啟  |
+| `pin_list`                | 控制側邊欄中置頂助手列表的顯示。                     | 關閉  |
+| `language_model_settings` | 啟用語言模型設定。                            | 開啟  |
+| `provider_settings`       | 控制模型供應商設定的顯示。                        | 開啟  |
+| `openai_api_key`          | 允許使用者自訂 OpenAI API Key。              | 開啟  |
+| `openai_proxy_url`        | 允許使用者自訂 OpenAI 代理 URL。               | 開啟  |
+| `api_key_manage`          | 控制 API 密鑰管理頁面 (/profile/apikey) 的存取。 | 關閉  |
+| `create_session`          | 允許使用者建立會話。                            | 開啟  |
+| `edit_agent`              | 允許使用者編輯助手。                            | 開啟  |
+| `plugins`                 | 控制聊天和助手設定中的插件功能。                     | 開啟  |
+| `dalle`                   | 啟用 DALL-E 功能。                        | 開啟  |
+| `ai_image`                | 控制 AI 圖像生成功能和頁面 (/image)。            | 開啟  |
+| `speech_to_text`          | 啟用語音轉文字功能。                           | 開啟  |
+| `token_counter`           | 保留用於令牌計數器顯示。                         | 開啟  |
+| `welcome_suggest`         | 顯示歡迎建議。                              | 開啟  |
+| `changelog`               | 控制更新日誌彈窗 / 頁面的顯示。                    | 開啟  |
+| `market`                  | 啟用助手市場功能。                            | 開啟  |
+| `knowledge_base`          | 啟用知識庫功能。                             | 開啟  |
+| `rag_eval`                | 控制 RAG 評估功能 (/repos/\[id]/evals)。    | 關閉  |
+| `cloud_promotion`         | 控制使用者選單中雲服務推廣連結的顯示。                   | 關閉  |
+| `commercial_hide_github`  | 隱藏設定頁面底部的 GitHub 相關連結（需要商業授權）。       | 關閉  |
+| `commercial_hide_docs`    | 隱藏文件和幫助選單，包括更新日誌、文件和回饋（需要商業授權）。      | 關閉  |
+
+你可以隨時檢查 [featureFlags](https://github.com/lobehub/lobehub/blob/main/src/config/featureFlags/schema.ts) 以獲取最新的特性標誌列表。

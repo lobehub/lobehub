@@ -1,0 +1,44 @@
+---
+title: 在 LobeHub 中整合 Azure OpenAI
+description: 瞭解如何在 LobeHub 中設定 Azure OpenAI。一步步指導從界面設定到部署時的環境變數設定。
+tags:
+  - Azure OpenAI
+  - 設定指南
+  - 使用限制
+  - 語言模型
+  - Azure API
+  - API密鑰
+  - 環境變數
+---
+
+# 與 Azure OpenAI 整合使用
+
+LobeHub 支援使用 [Azure OpenAI](https://learn.microsoft.com/zh-tw/azure/ai-services/openai/concepts/models) 作為 OpenAI 的模型服務商，本文將介紹如何設定 Azure OpenAI。
+
+## 在界面中設定
+
+點擊左下角「操作」 -「設定」，切到 「語言模型」 Tab 後通過開啟「Azure OpenAI」開關，即可開啟使用 Azure OpenAI。
+
+<Image alt="在界面中設定" src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/267083420-422a3714-627e-4bef-9fbc-141a2a8ca916.png" />
+
+你按需填寫相應的設定項：
+
+- **APIKey**：你在 Azure OpenAI 帳號頁面申請的 API 密鑰，可在 「密鑰和終結點」 部分中找到此值
+- **API 位址**：Azure API 位址，從 Azure 門戶檢查資源時，可在 「密鑰和終結點」 部分中找到此值
+- **Azure API Version**： Azure 的 API 版本，遵循 YYYY-MM-DD 格式，查閱[最新版本](https://learn.microsoft.com/zh-tw/azure/ai-services/openai/reference#chat-completions)
+- **模型列表**： 用來控制模型列表，你可以自行設定你的部署模型。
+
+完成上述字段設定後，點擊「檢查」，如果提示「檢查通過」，則說明設定成功。
+
+<br />
+
+## 在部署時設定
+
+如果你希望部署的版本直接設定好 Azure OpenAI，讓終端機使用者直接使用，那麼你需要在部署時設定以下環境變數：
+
+| 環境變數                | 類型 | 描述                                                                                                              | 預設值                | 示例                                                                                                  |
+| ------------------- | -- | --------------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------- |
+| `AZURE_API_KEY`     | 必選 | 這是你在 Azure OpenAI 帳號頁面申請的 API 密鑰                                                                                | -                  | `c55168be3874490ef0565d9779ecd5a6`                                                                  |
+| `AZURE_ENDPOINT`    | 必選 | Azure API 位址，從 Azure 門戶檢查資源時，可在 「密鑰和終結點」 部分中找到此值                                                                | -                  | `https://docs-test-001.openai.azure.com`                                                            |
+| `AZURE_API_VERSION` | 必選 | Azure 的 API 版本，遵循 YYYY-MM-DD 格式                                                                                 | 2023-08-01-preview | `-`，查閱[最新版本](https://learn.microsoft.com/zh-tw/azure/ai-services/openai/reference#chat-completions) |
+| `AZURE_MODEL_LIST`  | 必選 | 用來控制模型列表，使用 `模型名->部署名=展示名` 來自訂模型的展示名，用英文逗號隔開。支援擴充功能能力，其餘語法規則詳見 [模型列表](/zh/docs/self-hosting/advanced/model-list) | -                  | `gpt-35-turbo->my-deploy=GPT 3.5 Turbo` 或 `gpt-4-turbo->my-gpt4=GPT 4 Turbo<128000:vision:fc>`      |

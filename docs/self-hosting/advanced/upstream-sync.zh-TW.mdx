@@ -1,0 +1,147 @@
+---
+title: LobeHub 啟動自動更新 - Vercel / Zeabur 部署
+description: 按照指南重新部署項目以解決 LobeHub 在 Vercel 中預設建立新項目導致的「有可用更新」提示問題，並啟用自動更新。
+tags:
+  - Vercel
+  - Zeabur
+  - 自動更新
+  - Docker部署
+  - Github Actions
+---
+
+# 啟動自動更新
+
+## `A` Vercel / Zeabur 部署
+
+如果你根據 README 中的一鍵部署步驟部署了自己的項目，你可能會發現總是被提示 「有可用更新」。這是因為 Vercel 預設為你建立新項目而非 fork 本項目，這將導致無法準確檢測更新。我們建議按照以下步驟重新部署：
+
+- 刪除原有的倉庫；
+- 使用頁面右上角的 <kbd>Fork</kbd> 按鈕，Fork 本項目；
+- 在 `Vercel` 上重新選擇並部署。
+
+### 啟動自動更新
+
+<Callout>如果你在執行 `Upstream Sync` 時遇到錯誤，請嘗試手動執再行一次</Callout>
+
+當你 Fork 了項目後，由於 Github 的限制，你需要手動在你 Fork 的項目的 Actions 頁面啟用 Workflows，並啟動 Upstream Sync Action。啟用後，你可以設定每小時進行一次自動更新。
+
+<Image alt="啟動自動更新 S1" src="https://github-production-user-asset-6210df.s3.amazonaws.com/17870709/266985117-4d48fe7b-0412-4667-8129-b25ebcf2c9de.png" />
+
+<Image alt="啟動自動更新 S2" src="https://github-production-user-asset-6210df.s3.amazonaws.com/17870709/266985177-7677b4ce-c348-4145-9f60-829d448d5be6.png" />
+
+如果你遇到了同步失敗的情況，你需要手動重新點一次 「Update Branch」。
+
+<Image alt="GitHub Action 同步失敗" src="/blog/assets195200c7bc42360675e78a6bfa9fe320.webp" />
+
+<Image alt="手動同步 「Update Branch」" src="/blog/assetsbeefe4dbe3e6f141e09c62064c6dc397.webp" />
+
+## `B` Docker 部署
+
+Docker 部署版本的升級非常簡單，只需要重新部署 LobeHub 的最新鏡像即可。 以下是執行這些步驟所需的指令：
+
+<Steps>
+  ### 停止並刪除當前執行的 LobeHub 容器
+
+  假設 LobeHub 容器的名稱是 `lobehub`，使用以下指令停止並刪除當前執行的 LobeHub 容器：
+
+  ```fish
+  docker stop lobehub
+  docker rm lobehub
+  ```
+
+  ### 拉取最新的 LobeHub 鏡像
+
+  使用以下命令拉取 LobeHub 的最新 Docker 鏡像：
+
+  ```fish
+  docker pull lobehub/lobehub
+  ```
+
+  ### 重新啟動 Docker 容器
+
+  使用新拉取的鏡像重新部署 LobeHub 容器：
+
+  ```fish
+  docker run -d -p 3210:3210 \
+    -e OPENAI_API_KEY=sk-xxxx \
+    -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
+    --name lobehub \
+    lobehub/lobe-chat
+  ```
+</Steps>
+
+確保在執行這些命令之前，您有足夠的權限來停止和刪除容器，並且 Docker 有足夠的權限來拉取新的鏡像。
+
+<Callout type={'tip'}>
+  **重新部署的話，我本地的聊天記錄會丟失嗎？**
+
+  放心，不會的。LobeHub 的聊天記錄全部都存儲在你的本地瀏覽器中。因此使用 Docker 重新部署 LobeHub 時，你的聊天記錄並不會丟失。
+</Callout>
+
+如果你希望自動化執行以上步驟，你可以參照下面的方法，利用 Crontab 定時來完成。具體步驟如下。
+
+<Steps>
+  ### 撰寫自動更新腳本、組態檔
+
+  首先，新建一個 `lobe.env` 組態檔，內容為各種環境變數，例如：
+
+  ```env
+  OPENAI_API_KEY=sk-xxxx
+  OPENAI_PROXY_URL=https://api-proxy.com/v1
+  OPENAI_MODEL_LIST=-gpt-4,-gpt-4-32k,-gpt-3.5-turbo-16k,gpt-3.5-turbo-1106=gpt-3.5-turbo-16k,gpt-4-0125-preview=gpt-4-turbo,gpt-4-vision-preview=gpt-4-vision
+  ```
+
+  然後，你可以使用以下腳本來自動更新：
+
+  ```bash
+  #!/bin/bash
+  # auto-update-lobe-chat.sh
+
+  # 設定代理（可選）
+  # export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
+
+  # 拉取最新的鏡像並將輸出存儲在變數中
+  output=$(docker pull lobehub/lobehub:latest 2>&1)
+
+  # 檢查拉取命令是否成功執行
+  if [ $? -ne 0 ]; then
+    exit 1
+  fi
+
+  # 檢查輸出中是否包含特定的字符串
+  echo "$output" | grep -q "Image is up to date for lobehub/lobehub:latest"
+
+  # 如果鏡像已經是最新的，則不執行任何操作
+  if [ $? -eq 0 ]; then
+    exit 0
+  fi
+
+  echo "Detected lobe-chat update"
+
+  # 刪除舊的容器
+  echo "Removed: $(docker rm -f lobe-chat)"
+
+  # 執行新的容器(請將env組態檔位址改為你的實際位址)
+  echo "Started: $(docker run -d --network=host --env-file path/to/lobe.env --name=lobe-chat --restart=always lobehub/lobehub)"
+
+  # 列印更新的時間和版本
+  echo "Update time: $(date)"
+  echo "Version: $(docker inspect lobehub/lobehub:latest | grep 'org.opencontainers.image.version' | awk -F'"' '{print $4}')"
+
+  # 清理不再使用的鏡像
+  docker images | grep 'lobehub/lobehub' | grep -v 'latest' | awk '{print $3}' | xargs -r docker rmi > /dev/null 2>&1
+  echo "Removed old images."
+  ```
+
+  <Callout type={'warning'}>
+    此腳本可以在 Crontab 中使用，但請確認你的 Crontab 可以找到正確的 Docker 命令。建議使用絕對路徑。
+  </Callout>
+
+  ### 設定 Crontab 自動執行腳本
+
+  以下命令可以設定 Crontab 每 5 分鐘執行一次腳本，你也可以根據需要調整執行頻率：
+
+  ```bash
+  */5 * * * * /path/to/auto-update-lobe-chat.sh >> /path/to/auto-update-lobe-chat.log 2>&1
+  ```
+</Steps>

@@ -1,0 +1,112 @@
+---
+title: 在 Sealos 上部署 LobeHub 資料庫版
+description: 學習如何在 Sealos 上部署 LobeHub，包括準備 OpenAI API Key、點擊部署按鈕、綁定自訂域名等操作。
+tags:
+  - Sealos
+  - LobeHub
+  - OpenAI API Key
+  - 部署流程
+  - 自訂域名
+---
+
+# 使用 Sealos 部署 LobeHub 資料庫版
+
+<Callout type="info">
+  本文假設你已經熟悉 LobeHub
+  伺服器資料庫版的部署基本原理和流程，因此只包含與核心環境變數設定相關的內容。如果你對 LobeHub
+  伺服器資料庫版的部署原理不熟悉，請先參考[部署伺服器資料庫](/zh/docs/self-hosting/server-database)。
+</Callout>
+
+在 Sealos 的 LobeHub 資料庫版應用程式中總共包含有以下四個服務：
+
+- Logto 提供身分校驗（需額外部署）
+- 帶有 Vector 插件的 PostgreSQL 來做資料存儲和向量化
+- 一個對象存儲 Bucket
+- LobeHub Database 的實例
+
+這裡是在 Sealos 上部署 LobeHub 伺服器資料庫版的流程：
+
+## 預部署設定
+
+在開始部署之前，您需要完成以下設定：
+
+<Steps>
+  ### 部署 Logto 服務
+
+  點擊下方按鈕部署一個 Logto 服務：
+
+  [![](https://raw.githubusercontent.com/labring-actions/templates/main/Deploy-on-Sealos.svg)](https://template.hzh.sealos.run/deploy?templateName=logto)
+
+  > Logto 是一個開源的身分與存取管理（IAM）平臺，是 Auth0 的開源替代方案，旨在幫助開發者快速構建安全、可擴充功能的登入註冊系統和使用者身分體系。
+
+  部署完成後，等待應用程式的所有組件狀態都變成 「執行中」，點擊應用程式的【詳情】按鈕，進入應用程式詳情頁面。
+
+  ![Logto 應用程式詳情頁面部署完成狀態](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-app-deployment-status-sealos.png)
+
+  點擊 3002 連接埠對應的公網位址，即可使用公網域名存取 Logto 服務。
+
+  ![Logto 服務公網位址](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-public-address.png)
+
+  ### 建立 Application
+
+  註冊一個管理員帳號，然後點擊左側的 `Applications` 選單，進入應用程式列表頁面。再點擊右上角的 `Create application` 按鈕建立應用程式。
+
+  ![Logto 應用程式列表頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-application-list.png)
+
+  選擇 `Next.js (App Router)` 作為框架，然後點擊 `Start building` 按鈕。
+
+  ![Logto 建立應用程式頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-create-application.png)
+
+  在彈窗中填寫應用程式的名稱為 `LobeHub`，然後點擊 `Create application` 按鈕。接下來啥也不用填，直接點擊底部的 `Finish and done` 按鈕就建立完成了。
+
+  ![Logto 建立應用程式完成頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-create-application-done.png)
+
+  在 `LobeHub` 應用程式中找到以下三個參數，後面部署 LobeHub 資料庫版時需要用到。
+
+  ![Logto 應用程式詳情頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-app-detail.png)
+</Steps>
+
+## 部署 LobeHub 資料庫版
+
+點擊下方按鈕存取 LobeHub 資料庫版應用程式部署頁面：
+
+[![](https://raw.githubusercontent.com/labring-actions/templates/main/Deploy-on-Sealos.svg)](https://template.hzh.sealos.run/deploy?templateName=lobe-chat-db)
+
+填入三個必填參數：
+
+- `AUTH_LOGTO_ID`：Logto 應用程式的 App ID
+- `AUTH_LOGTO_SECRET`：Logto 應用程式的 App Secret
+- `AUTH_LOGTO_ISSUER`：Logto 應用程式的 Issuer endpoint
+
+點擊【部署】按鈕，部署完成後，等待應用程式的所有組件狀態都變成 「執行中」，點擊應用程式的【詳情】按鈕，進入應用程式詳情頁面。
+
+![LobeHub 資料庫版部署完成頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-deployment-done.png)
+
+找到公網位址，複製下來，後面需要用到。
+
+![LobeHub 資料庫版公網位址](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-public-address.png)
+
+## 部署後設定
+
+進入 Logto 的 `Applications` 頁面，找到 `LobeHub` 應用程式，點擊進入應用程式詳情頁面。
+
+在 `Settings` 頁面中找到 「Redirect URI」 和 「Post sign-out redirect URI」 這兩個參數，填入以下值：
+
+- Redirect URI：`https://<lobe-chat-db-public-address>/api/auth/callback/logto`
+- Post sign-out redirect URI：`https://<lobe-chat-db-public-address>`
+
+其中 `https://<lobe-chat-db-public-address>` 為 LobeHub 資料庫版的公網位址。
+
+填完之後點擊 `Save changes` 按鈕儲存設定。
+
+現在通過 `https://<lobe-chat-db-public-address>` 存取 LobeHub 資料庫版，點擊左上角的頭像，然後點擊【登入 / 註冊】按鈕：
+
+![LobeHub 資料庫版登入頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-login.png)
+
+接下來會跳轉到 Logto 的登入頁面，點擊【註冊】註冊一個帳號。
+
+![LobeHub 資料庫版註冊頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-register.png)
+
+註冊完成後，即可使用 Logto 登入 LobeHub 資料庫版。
+
+![LobeHub 資料庫版登入成功頁面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-login-success.png)

@@ -1,0 +1,67 @@
+---
+title: 在 Zeabur 上部署 LobeHub
+description: 按照指南準備 OpenAI API Key 並點擊按鈕進行部署。在部署完成後，即可開始使用 LobeHub 並選擇是否綁定自訂域名。
+tags:
+  - Zeabur
+  - LobeHub
+  - OpenAI API Key
+  - 部署流程
+  - 自訂域名
+---
+
+# 使用 Zeabur 部署 LobeHub 資料庫版
+
+<Callout type="info">
+  本文假設你已經熟悉 LobeHub
+  伺服器資料庫版的部署基本原理和流程，因此只包含與核心環境變數設定相關的內容。如果你對 LobeHub
+  伺服器資料庫版的部署原理不熟悉，請先參考[部署伺服器資料庫](/zh/docs/self-hosting/server-database)。
+</Callout>
+
+在 Zeabur 的模板中總共包含有以下四個服務：
+
+- Logto 提供身分校驗
+- 帶有 Vector 插件的 PostgreSQL 來做資料存儲和向量化
+- MinIO 作為對象存儲
+- LobeHub Database 的實例
+
+## 在 Zeabur 上部署
+
+這裡是在 Zeabur 上部署 LobeHub 伺服器資料庫版的流程：
+
+<Steps>
+  ### 前往 Zeabur 上的模板頁面
+
+  前往 [Zeabur 上的 LobeHub 資料庫模板頁面](https://zeabur.com/templates/RRSPSD) 並點擊 "Deploy" 按鈕。
+
+  ### 填寫必要的環境變數
+
+  在你點擊 「部署 「按鈕後，你會看到一個模態彈窗，你可以在這裡填寫必要的環境變數。
+
+  以下是你需要填寫的環境變數：
+
+  - OpenAI API key: 你的 OpenAI API key 用於獲取模型的存取權限。
+  - LobeHub Domain: 一個免費的 `.zeabur.app` 後綴的域名。
+  - MinIO Public Domain: 一個免費的 `.zeabur.app` 後綴的域名為了暴露 MinIO 服務以公開存取資源。
+  - Logto Console Domain: 一個免費的 `.zeabur.app` 後綴的域名來存取 Logto 的控制檯。
+  - Logto API Domain: 一個免費的 `.zeabur.app` 後綴的域名來存取 Logto 的 API。
+
+  ### 選擇一個區域並部署
+
+  在你填寫完所有必要的環境變數後，選擇一個你想要部署 LobeHub 資料庫的區域並點擊 「部署」 按鈕。
+
+  你會看到另一個模態彈窗，你可以在這裡看到部署的進度。
+
+  ### 設定 Logto
+
+  當部署完成後，你會被自動導航到你在 Zeabur 控制檯上剛剛建立的項目。你需要再進一步設定你的 Logto 服務。
+
+  使用你剛綁定的域名來存取你的 Logto 控制檯，建立一個新項目以獲得對應的客戶端 ID 與密鑰，將它們填入你的 LobeHub 服務的變數中。關於如何填入變數，可以參照 [Zeabur 的官方文件](https://zeabur.com/docs/deploy/variables)。
+
+  Logto 的詳細設定可以參考[這篇文件](/zh/docs/self-hosting/auth/providers/logto)。
+
+  ### 存取你的 LobeHub
+
+  按下 `LobeHub-Database` 你會看到你剛剛建立的公共域名，點擊它以存取你的 LobeHub 資料庫。
+
+  你可以選擇綁定一個自訂域名，這裡有一個關於如何在 Zeabur 上[綁定自訂域名](https://zeabur.com/docs/deploy/domain-binding)的指南。
+</Steps>

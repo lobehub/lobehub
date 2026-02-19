@@ -1,0 +1,63 @@
+---
+title: 解決 Vercel 上 AI 繪畫生圖超時問題
+description: 瞭解如何通過開啟 Fluid Compute 來解決在 Vercel 上使用 gpt-image-1 等 AI 繪畫模型時遇到的超時問題。
+tags:
+  - Vercel
+  - AI 繪畫
+  - 超時問題
+  - Fluid Compute
+  - gpt-image-1
+---
+
+# 解決 Vercel 上 AI 繪畫生圖超時問題
+
+## 問題描述
+
+在 Vercel 上使用 AI 繪畫模型（如 `gpt-image-1`）時，您可能會遇到超時錯誤。這是因為 AI 繪畫生成通常需要超過 1 分鐘的時間，超出了 Vercel 預設的函數執行時間限制。
+
+常見的錯誤症狀包括：
+
+- 圖像生成過程中出現函數超時錯誤
+- 圖像生成請求在大約 60 秒後失敗
+- 出現 "函數執行超時" 的錯誤訊息
+
+### 典型的日誌現象
+
+在您的 Vercel 函數日誌中，您可能會看到類似這樣的條目：
+
+```plaintext
+JUL 16 18:39:09.51 POST 504 /trpc/async/image.createImage
+Provider runtime map found for provider: openai
+```
+
+關鍵指標包括：
+
+- **狀態碼**: `504`（閘道超時）
+- **端點**: `/trpc/async/image.createImage` 或類似的圖像生成端點
+- **時間**: 通常在請求開始後約 60 秒出現
+
+## 解決方案：開啟 Fluid Compute
+
+對於在 Vercel 控制檯更新前建立的項目，您可以通過開啟 Fluid Compute 來解決此問題，這將最大執行時長延長至 300 秒。
+
+### 開啟 Fluid Compute 的步驟（舊版 Vercel 控制檯）
+
+1. 前往您在 Vercel 上的項目控制檯
+2. 進入 **Settings**（設定）索引標籤
+3. 找到 **Functions**（函數）部分
+4. 按照下方截圖所示開啟 **Fluid Compute**：
+
+![開啟 Fluid Compute](https://hub-apac-1.lobeobjects.space/docs/2e2ff332c4b440b584efe1d7ba46aed5.png)
+
+5. 開啟後，最大執行時長將預設延長至 300 秒
+
+### 重要說明
+
+- **新項目**：較新的 Vercel 項目預設已啟用 Fluid Compute，因此此問題主要影響舊版項目
+
+## 其他資源
+
+有關 Vercel 函數限制和 Fluid Compute 的更多資訊：
+
+- [Vercel Fluid Compute 文件](https://vercel.com/docs/fluid-compute)
+- [Vercel 函數限制說明](https://vercel.com/docs/functions/limitations#max-duration)

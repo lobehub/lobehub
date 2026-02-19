@@ -1,0 +1,63 @@
+---
+title: 在 LobeHub 中設定 Okta 身分驗證
+description: 學習如何在 LobeHub 中設定 Okta SSO，包括建立應用程式和設定環境變數。
+tags:
+  - Okta
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+  - OIDC
+---
+
+# 設定 Okta 身分驗證
+
+[Okta](https://www.okta.com/) 是領先的身分和存取管理平臺。
+
+<Steps>
+  ### 在 Okta 中建立應用程式
+
+  1. 登入 Okta 管理控制檯
+  2. 前往 **Applications** > **Applications**
+  3. 點擊 **Create App Integration**
+  4. 選擇：
+     - Sign-in method: **OIDC - OpenID Connect**
+     - Application type: **Web Application**
+  5. 設定應用程式：
+     - App integration name: `LobeHub`
+     - Sign-in redirect URIs: 新增回調 URL
+
+  <Callout type={'info'}>
+    **回調 URL 格式**: `https://your-domain.com/api/auth/callback/okta`
+  </Callout>
+
+  6. 建立後，記下 **Client ID** 和 **Client Secret**
+
+  ### 獲取 Issuer URL
+
+  Issuer URL 通常為：`https://your-okta-domain.okta.com`
+
+  對於自訂授權伺服器：`https://your-okta-domain.okta.com/oauth2/default`
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                 | 類型 | 描述                                                      |
+  | -------------------- | -- | ------------------------------------------------------- |
+  | `AUTH_SECRET`        | 必選 | 用於加密會話令牌的密鑰。使用以下命令生成：`openssl rand -base64 32`          |
+  | `AUTH_SSO_PROVIDERS` | 必選 | SSO 提供商。使用 Okta 請填寫 `okta`                              |
+  | `AUTH_OKTA_ID`       | 必選 | Okta 應用程式的 Client ID                                      |
+  | `AUTH_OKTA_SECRET`   | 必選 | Okta 應用程式的 Client Secret                                  |
+  | `AUTH_OKTA_ISSUER`   | 必選 | Okta Issuer URL（例如 `https://your-okta-domain.okta.com`） |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#okta) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Okta 身分認證並使用 LobeHub。</Callout>
+
+## 相關資源
+
+- [Okta 開發者文件](https://developer.okta.com/docs/)
+- [建立 OIDC 應用程式整合](https://developer.okta.com/docs/guides/implement-grant-type/authcode/main/)

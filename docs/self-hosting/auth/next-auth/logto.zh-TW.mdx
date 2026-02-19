@@ -1,0 +1,100 @@
+---
+title: 在 LobeHub 中設定 Logto 身分驗證服務
+description: 學習如何在 LobeHub 中設定 Logto 身分驗證服務，包括部署、建立、設定權限和環境變數。
+tags:
+  - Logto 身分驗證
+  - 環境變數設定
+  - 單點登入
+  - LobeHub
+---
+
+# 設定 Logto 身分驗證服務
+
+[Logto](https://github.com/logto-io/logto) 是一個開源的身分驗證服務，界面簡潔美觀、功能設定豐富且易於上手，你即可以選擇使用其官方提供的 Logto Cloud，也可以選擇私有部署 Logto。
+
+<Callout type={'tip'}>
+  若你想要私有部署 Logto，我們建議你將之與 LobeHub 一同使用 Docker Compose 部署，此時
+  LobeHub 可以與之共用同一個 Postgres 實例。
+</Callout>
+
+## Logto 設定流程
+
+下文假設你的 LobeHub 域名為 `https://lobe.example.com`。
+
+若你是私有部署的 Logto，假設其 endpoint 域名為 `https://lobe-auth-api.example.com`。
+
+若你是使用的 Logto Cloud，假設其 endpoint 域名為 `https://example.logto.app`。
+
+<Steps>
+  ### 建立 Logto 應用程式
+
+  存取你私有部署的 Logto WebUI 或者 [Logto Cloud](http://cloud.logto.io/) 進入控制檯，在 `Applications` 裡建立一個 `Next.js (App Router)` 應用程式，名稱隨意
+
+  ### 設定 Logto
+
+  設定 `Redirect URI` 為 `https://lobe.example.com/api/auth/callback/logto`，`Post sign-out redirect URI` 為 `https://lobe.example.com/`
+
+  設定 `CORS allowed origins` 為 `https://lobe.example.com`
+
+  <Image alt="設定 Logto" inStep src="/blog/assets2d41542b390020209bbd5814009abcdf.webp" />
+
+  建立成功後， 將 `Client ID` 和 `Client Secret` 儲存下來。
+
+  ### 設定 Webhook （可選）
+
+  設定 Logto 的 Webhook，以便在使用者資訊更新時 LobeHub 可以接收到通知。
+
+  前往 `Webhooks` ，建立一個 Webhook，填寫以下字段：
+
+  - 端點 URL： `https://lobe.example.com/api/webhooks/logto`
+  - 事件：
+    - `User.Data.Updated`: 允許 LobeHub 同步 Logto 中使用者資料資訊的更新。
+    - `User.SuspensionStatus.Updated`: 允許 LobeHub 將被暫停的使用者移除登入會話，僅在資料庫會話策略為 `database` 時可用。
+
+  建立成功後，複製 Webhook 的 `簽名密鑰`。填寫到環境變數中的 `LOGTO_WEBHOOK_SIGNING_KEY`。
+
+  ### 設定環境變數
+
+  <Image alt="設定環境變數" inStep src="/blog/assetsffb84575674e2bc5dfdd07af8f41e794.webp" />
+
+  將獲取到的 `Client ID` 和 `Client Secret`，設為 LobeHub 環境變數中的 `AUTH_LOGTO_ID` 和 `AUTH_LOGTO_SECRET`。
+
+  設定 LobeHub 環境變數中 `AUTH_LOGTO_ISSUER` 為：
+
+  - `https://lobe-auth-api.example.com/oidc`，若你是私有部署的 Logto
+  - `https://example.logto.app/oidc`，若你是使用的 Logto Cloud
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                        | 類型 | 描述                                                                                               |
+  | --------------------------- | -- | ------------------------------------------------------------------------------------------------ |
+  | `AUTH_SECRET`               | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令生成秘鑰： `openssl rand -base64 32`                                    |
+  | `NEXT_AUTH_SSO_PROVIDERS`   | 必選 | 選擇 LoboChat 的單點登入提供商。使用 Logto 請填寫 `logto`。                                                       |
+  | `AUTH_LOGTO_ID`             | 必選 | Logto App 詳情頁的 Client ID                                                                         |
+  | `AUTH_LOGTO_SECRET`         | 必選 | Logto App 詳情頁的 Client Secret                                                                     |
+  | `AUTH_LOGTO_ISSUER`         | 必選 | Logto 提供程式的 OpenID Connect 頒發者                                                                   |
+  | `AUTH_URL`                  | 必選 | 該 URL 用於指定 Auth.js 在執行 OAuth 驗證時的回調位址，當預設生成的重新導向位址發生不正確時才需要設定。`https://lobe.example.com/api/auth` |
+  | `LOGTO_WEBHOOK_SIGNING_KEY` | 可選 | 用於驗證 Logto 發送的 Webhook 請求是否合法的密鑰。                                                                |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#logto) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+### 故障排除
+
+若你在部署 Logto 過程中遇到問題，可以參考以下常見問題：
+
+- `Only roles with the xxx attribute may create roles`：請檢查你的資料庫使用者權限，確保你的 Logto 資料庫中的使用者具有 `admin` 角色，以便建立角色。
+
+- 在第三方資料庫例如 `Neon` 上執行`logto db seed`出錯：嘗試使用`logto db seed --encrypt-base-role`命令。
+
+- 資料庫播種失敗：請嘗試使用`--skip-seed`參數跳過播種。
+
+- `Error: role xxx already exists`：在資料庫中刪除已存在的角色即可。
+
+- 版本升級後，資料庫遷移失敗：請嘗試使用` npx @logto/cli db alteration deploy $version`命令 (例如`npx @logto/cli db alteration deploy 1.22.0`)
+
+- 我使用 docker 部署 希望一鍵升級：在容器中執行自訂命令：`sh -c "npm run cli db seed -- --swe --encrypt-base-role" && npx @logto/cli db alteration deploy $version && npm start`
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Logto 身分認證並使用 LobeHub。</Callout>

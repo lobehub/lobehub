@@ -1,0 +1,127 @@
+---
+title: 在 LobeHub 中設定 Apple 身分驗證
+description: 學習如何在 LobeHub 中設定 Apple 登入，包括在 Apple Developer Portal 建立憑證和設定環境變數。
+tags:
+  - Apple
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+---
+
+# 設定 Apple 身分驗證
+
+<Callout type={'warning'}>
+  Apple 登入需要付費的 Apple Developer 帳號（$99 / 年），且不支援
+  localhost。開發和生產環境都必須使用 HTTPS 域名。
+</Callout>
+
+<Steps>
+  ### 建立 App ID
+
+  1. 前往 [Apple Developer Portal](https://developer.apple.com/account/resources/identifiers/list)
+  2. 導航到 **Certificates, Identifiers & Profiles** > **Identifiers**
+  3. 點擊 **+** 註冊新標識符
+  4. 選擇 **App IDs** > **App** 類型 > **Continue**
+  5. 填寫：
+     - **Description**: 如 `LobeHub`
+     - **Bundle ID**: 如 `com.yourcompany.lobechat`
+  6. 啟用 **Sign In with Apple** 功能
+  7. 點擊 **Continue** > **Register**
+
+  ### 建立 Services ID
+
+  1. 返回 **Identifiers**，點擊 **+**
+  2. 選擇 **Services IDs** > **Continue**
+  3. 填寫：
+     - **Description**: 如 `LobeHub Web`
+     - **Identifier**: 如 `com.yourcompany.lobechat.web`（這是你的 Client ID）
+  4. 點擊 **Continue** > **Register**
+
+  ### 設定 Services ID
+
+  1. 點擊已建立的 Services ID
+  2. 啟用 **Sign In with Apple**
+  3. 點擊 **Configure**
+  4. 選擇 Primary App ID
+  5. 新增域名和回調 URL：
+     - **Domains**: `your-domain.com`
+     - **Return URLs**: `https://your-domain.com/api/auth/callback/apple`
+  6. 點擊 **Save** > **Continue** > **Save**
+
+  <Callout type={'info'}>
+    回調 URL 格式：
+
+    - 生產環境: `https://your-domain.com/api/auth/callback/apple`
+    - Apple **不支援** localhost 或 HTTP URL
+  </Callout>
+
+  ### 建立登入密鑰
+
+  1. 導航到 **Keys**，點擊 **+**
+  2. 填寫密鑰名稱
+  3. 啟用 **Sign In with Apple**，點擊 **Configure**
+  4. 選擇 Primary App ID
+  5. 點擊 **Save** > **Continue** > **Register**
+  6. **下載密鑰檔案**（`.p8`）- 只能下載一次
+  7. 記錄：
+     - **Key ID**: 密鑰頁面顯示
+     - **Team ID**: 開發者門戶右上角顯示
+
+  ### 生成 Client Secret
+
+  Apple 要求使用 JWT 作為 client secret。使用 `.p8` 密鑰檔案生成：
+
+  ```js
+  // Node.js 示例
+  const jwt = require('jsonwebtoken');
+  const fs = require('fs');
+
+  const privateKey = fs.readFileSync('AuthKey_XXXXX.p8');
+  const token = jwt.sign({}, privateKey, {
+    algorithm: 'ES256',
+    expiresIn: '180d', // 最長 6 個月
+    issuer: 'YOUR_TEAM_ID',
+    audience: 'https://appleid.apple.com',
+    subject: 'YOUR_SERVICES_ID', // Client ID
+    keyid: 'YOUR_KEY_ID',
+  });
+  ```
+
+  <Callout type={'warning'}>
+    JWT 最長有效期為 180 天。需要在過期前重新生成並更新。
+  </Callout>
+
+  ### 設定環境變數
+
+  | 環境變數                               | 類型 | 描述                                     |
+  | ---------------------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`                      | 必選 | 會話加密密鑰，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS`               | 必選 | 填寫 `apple`                             |
+  | `AUTH_APPLE_CLIENT_ID`             | 必選 | 你的 Services ID                         |
+  | `AUTH_APPLE_CLIENT_SECRET`         | 必選 | 生成的 JWT                                |
+  | `AUTH_APPLE_APP_BUNDLE_IDENTIFIER` | 可選 | App Bundle ID（用於原生應用程式整合）                |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#apple)
+    可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以通過 Apple 身分認證並使用 LobeHub。
+</Callout>
+
+## 常見問題
+
+### 不支援 localhost
+
+Apple 登入不支援 localhost 或非 HTTPS URL。本地開發請使用 ngrok 等隧道服務或部署到帶有 HTTPS 的測試環境。
+
+### 密鑰過期
+
+JWT client secret 最長有效期為 180 天。請設定提醒在過期前重新生成。
+
+## 相關資源
+
+- [Apple Developer Portal](https://developer.apple.com/account)
+- [Sign In with Apple 文件](https://developer.apple.com/sign-in-with-apple/)

@@ -1,0 +1,86 @@
+---
+title: 設定 S3 存儲服務
+description: 瞭解如何設定 S3 存儲服務以支援多模態 AI 會話和圖片上傳。
+tags:
+  - S3 存儲
+  - 多模態 AI
+  - 圖片上傳
+  - 檔案存儲
+---
+
+# 設定 S3 存儲服務
+
+LobeHub 支援多模態的 AI 會話，包括將圖片、檔案等非結構化資料上傳給大模型的功能。為了優化存儲和性能，我們使用 S3 相容的檔案存儲服務來存儲圖片檔案和支援檔案上傳 / 知識庫功能。
+
+## 核心環境變數
+
+### `S3_ACCESS_KEY_ID`
+
+- 類型：必填
+- 描述：用於存取 S3 存儲服務的存取密鑰 ID
+- 預設值：-
+- 示例：`AKIAIOSFODNN7EXAMPLE`
+
+### `S3_SECRET_ACCESS_KEY`
+
+- 類型：必填
+- 描述：用於存取 S3 存儲服務的秘密存取密鑰
+- 預設值：-
+- 示例：`wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`
+
+### `S3_ENDPOINT`
+
+- 類型：必填
+- 描述：存儲桶的請求端點，對於 `virtual-host` 模式，不應包含前綴存儲桶名稱
+- 預設值：-
+- 示例：`https://cos.ap-chengdu.myqcloud.com`
+
+### `S3_BUCKET`
+
+- 類型：必填
+- 描述：存儲桶的名稱
+- 預設值：-
+- 示例：`my-bucket`
+
+### `S3_REGION`
+
+- 類型：可選
+- 描述：存儲桶的區域
+- 預設值：-
+- 示例：`ap-chengdu`
+
+### `S3_SET_ACL`
+
+- 類型：可選
+- 描述：是否在上傳檔案時設定 ACL 為 `public-read`
+- 預設值：`1`
+- 示例：`0`
+
+### `S3_ENABLE_PATH_STYLE`
+
+- 類型：可選
+- 描述：是否啟用 S3 的 `path-style` 存取模式
+- 預設值：`0`
+- 示例：`1`
+
+<Callout type={'info'}>
+  `path-style` 和 `virtual-host` 在 S3 中是存取 bucket 和 object 的不同方式，URL 的結構和域名解析不太一樣
+
+  假設 S3 服務商的域名是 s3.example.net ，bucket 為 mybucket，object 為 config.env，具體區別如下：
+
+  - path-style : `s3.example.net/mybucket/config.env`
+  - virtual-host : `mybucket.s3.example.net/config.env`
+</Callout>
+
+### `LLM_VISION_IMAGE_USE_BASE64`
+
+- 類型：可選
+- 描述：設定為 1 則使用 base64 編碼上傳圖片
+- 預設值：undefined
+- 示例：`1`
+
+當設定為 `1` 時，LobeHub 會將圖片轉換為 base64 編碼後上傳到 LLM 模型中，當遇到如下錯誤時請考慮設定該環境變數為 1
+
+```log
+Route: [xai] ProviderBizError: Fetching images over plain http:// is not supported.
+```

@@ -1,0 +1,70 @@
+---
+title: LobeHub 的可觀測性和追蹤
+description: 使用 Langfuse 為你的 LobeHub 應用程式增強開源可觀測性和追蹤功能。自動捕獲每個請求的詳細追蹤和指標，以優化和除錯你的對話。
+tags:
+  - 可觀測性
+  - 追蹤
+  - Langfuse
+---
+
+# 使用 Langfuse 監控你的 LobeHub 應用程式
+
+## 什麼是 Langfuse？
+
+[Langfuse](https://langfuse.com/) 是一個 **開源的 LLM 可觀測性平臺**。啟用 Langfuse 整合後，你可以追蹤應用程式資料，以開發、監控和優化 LobeHub 的使用，包括：
+
+- 應用程式 [追蹤](https://langfuse.com/docs/tracing)
+- 使用模式
+- 按使用者和模型的成本資料
+- [評估](https://langfuse.com/docs/scores/overview)
+
+## 快速開始
+
+<Steps>
+  ### 設定 Langfuse
+
+  通過註冊 [Langfuse Cloud](https://cloud.langfuse.com) 或 [自託管](https://langfuse.com/docs/deployment/self-host) Langfuse 來獲取你的 Langfuse API 密鑰。
+
+  ### 設定 LobeHub
+
+  有多種方式可以 [自託管 LobeHub](https://lobehub.com/docs/self-hosting/start)。在本示例中，我們將使用 Docker Desktop 部署。
+
+  <Tabs items={["環境變數", "Docker Desktop 示例"]}>
+    <Tab>
+      在部署 LobeHub 之前，使用你在上一步建立的 Langfuse API 密鑰設定以下四個環境變數。
+
+      ```sh
+      ENABLE_LANGFUSE = '1'
+      LANGFUSE_SECRET_KEY = 'sk-lf...'
+      LANGFUSE_PUBLIC_KEY = 'pk-lf...'
+      LANGFUSE_HOST = 'https://cloud.langfuse.com'
+      ```
+    </Tab>
+
+    <Tab>
+      在執行 Docker 容器之前，在 Docker Desktop 中設定環境變數，並填入你在上一步建立的 Langfuse API 密鑰。
+
+      <Image alt={'Docker Desktop 中的環境變數'} src={'https://langfuse.com/images/docs/LobeHub-docker-desktop-env.png'} />
+    </Tab>
+  </Tabs>
+
+  ### 在設定中啟用分析功能
+
+  當 LobeHub 執行後，進入 **設定** 中的 **關於** 索引標籤，並啟用分析功能。這是將追蹤資料發送到 Langfuse 所必需的。
+
+  <Image alt={'LobeHub 設定'} src={'https://langfuse.com/images/docs/LobeHub-settings.png'} />
+
+  ### 在 Langfuse 中查看聊天追蹤
+
+  設定好 LLM 模型密鑰後，你就可以開始與 LobeHub 進行交互。
+
+  <Image alt={'LobeHub 對話'} src={'https://langfuse.com/images/docs/LobeHub-converstation.png'} />
+
+  所有對話都會被自動追蹤併發送到 Langfuse。你可以在 Langfuse UI 的 [追蹤部分](https://langfuse.com/docs/tracing) 查看這些資料。
+
+  <Image alt={'LobeHub Trace 示例'} src={'https://langfuse.com/images/docs/LobeHub-example-trace.png'} />
+</Steps>
+
+## 回饋
+
+如果你有任何回饋或需求，請在 GitHub 上建立 [Issue](https://langfuse.com/issue)，或在 [Discord](https://discord.langfuse.com/) 上與 Langfuse 社群分享你的想法。

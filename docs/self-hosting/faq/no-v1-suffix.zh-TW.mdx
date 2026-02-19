@@ -1,0 +1,27 @@
+---
+title: 在 LobeHub 中設定 `OPENAI_PROXY_URL` 環境變數但返回值為空
+description: 重新檢查並確認 LobeHub 環境變數 `OPENAI_PROXY_URL` 是否設定正確，包括是否正確地新增了 `/v1` 後綴（如果需要）。
+tags:
+  - OPENAI_PROXY_URL
+  - 環境變數設定
+  - 返回值為空
+  - 問題解決
+---
+
+# 設定 `OPENAI_PROXY_URL` 環境變數但返回值為空
+
+### 問題描述
+
+設定 `OPENAI_PROXY_URL` 環境變數後，可能會遇到 AI 的返回訊息為空的情況。這可能是由於 `OPENAI_PROXY_URL` 設定不正確導致。
+
+### 解決方案
+
+重新檢查並確認 `OPENAI_PROXY_URL` 是否設定正確，包括是否正確地新增了 `/v1` 後綴（如果需要）。
+
+### 相關討論連結
+
+- [Docker 安裝，設定好環境變數後，為何返回值是空白？](https://github.com/lobehub/lobehub/discussions/623)
+- [使用第三方接口報錯的原因](https://github.com/lobehub/lobehub/discussions/734)
+- [代理伺服器位址填了聊天沒任何反應](https://github.com/lobehub/lobehub/discussions/1065)
+
+如果問題依舊無法解決，建議在社群中提出問題，附上相關日誌和設定資訊，以便其他開發者或維護者提供幫助。

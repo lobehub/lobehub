@@ -1,0 +1,49 @@
+---
+title: 在 LobeHub 中使用書生浦語
+description: 學習如何在 LobeHub 中設定和使用書生浦語的 API Key，以便開始對話和交互。
+tags:
+  - LobeHub
+  - 書生浦語
+  - API密鑰
+  - Web UI
+---
+
+# 在 LobeHub 中使用書生浦語
+
+<Image cover src={'/blog/assetsf069368b9162f58247318dde850c0807.webp'} />
+
+[書生浦語（InternLM）](https://internlm.intern-ai.org.cn/) 是由上海人工智慧實驗室與書生集團聯合推出的一款大型預訓練語言模型。該模型專注於自然語言處理，旨在理解和生成自然語言，具備強大的語義理解和文字生成能力。
+
+本文將指導你如何在 LobeHub 中使用書生浦語。
+
+<Steps>
+  ### 步驟一：獲取書生浦語的 API 密鑰
+
+  - 註冊並登入 [浦語 API](https://internlm.intern-ai.org.cn/api/tokens)
+  - 建立一個 API 令牌
+  - 在彈出視窗中儲存 API 令牌
+
+  <Image alt={'儲存 API Token'} inStep src={'/blog/assets61324ea13398c8920f798b97ac19d58f.webp'} />
+
+  <Callout type={'warning'}>
+    妥善儲存彈窗中的 API 令牌，它只會出現一次，如果不小心丟失了，你需要重新建立一個 API 令牌。
+  </Callout>
+
+  ### 步驟二：在 LobeHub 中設定書生浦語
+
+  - 存取 LobeHub 的`設定`界面
+  - 在`AI 服務商`下找到 `書生` 的設定項
+
+  <Image alt={'填入 API 密鑰'} inStep src={'/blog/assets71b5cfd165bc907f437bf807048a3e67.webp'} />
+
+  - 填入獲得的 API Key
+  - 為你的 AI 助手選擇一個書生浦語的模型即可開始對話
+
+  <Image alt={'選擇書生浦語模型並開始對話'} inStep src={'/blog/assets5205b6dd0f80b8ba02c297fcdfc1aecb.webp'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，請參考書生浦語的相關費用政策。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用書生浦語提供的模型進行對話了。

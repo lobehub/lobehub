@@ -1,0 +1,214 @@
+---
+title: 設定聯網搜尋功能 - 增強 AI 的網路資訊獲取能力
+description: 瞭解如何為 LobeHub 設定 SearXNG 聯網搜尋功能，使 AI 能夠獲取最新的網路資訊。
+tags:
+  - 聯網搜尋
+  - SearXNG
+  - 網路資訊
+  - AI 增強
+---
+
+# 設定聯網搜尋功能
+
+LobeHub 支援為 AI 設定**聯網搜尋功能**，使其能夠即時獲取網路資訊，從而提供更準確、最新的回答。聯網搜尋支援多個搜尋引擎提供商，包括 [SearXNG](https://github.com/searxng/searxng)、[Search1API](https://www.search1api.com)、[Google](https://programmablesearchengine.google.com)、[Brave](https://brave.com/search/api) 等。
+
+<Callout type="info">
+  聯網搜尋可以讓 AI 獲取時效性內容，如最新新聞、技術動態或產品資訊。你可以使用開源的 SearXNG
+  自行部署，也可以選擇整合主流搜尋引擎服務，如 Search1API、Google、Brave
+  等，根據你的使用場景自由組合。
+</Callout>
+
+通過設定搜尋服務環境變數 `SEARCH_PROVIDERS` 和對應的 API Key，LobeHub 將在多個搜尋源中查詢並返回結果。你還可以搭配設定爬蟲服務環境變數 `CRAWLER_IMPLS`（如 `browserless`、`firecrawl`、`tavily` 等）以提取網頁內容，實現搜尋 + 閱讀的增強能力。
+
+# 核心環境變數
+
+## `CRAWLER_IMPLS`
+
+設定可用的網頁爬蟲，用於對網頁進行結構化內容提取。
+
+```env
+CRAWLER_IMPLS="naive,search1api"
+```
+
+支援的爬蟲類型如下：
+
+| 值             | 說明                                                               | 環境變數                                                                        |
+| ------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `browserless` | 基於 [Browserless](https://www.browserless.io/) 的無頭瀏覽器爬蟲，適合渲染複雜頁面。 | `BROWSERLESS_TOKEN`                                                         |
+| `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬蟲能力，需申請 API。                       | `EXA_API_KEY`                                                               |
+| `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 無頭瀏覽器 API，適合現代網站抓取。          | `FIRECRAWL_API_KEY`                                                         |
+| `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬蟲服務，支援快速提取摘要資訊。                 | `JINA_READER_API_KEY`                                                       |
+| `naive`       | 搭載簡易通用爬蟲，適用於標準網頁結構。                                              |                                                                             |
+| `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的頁面抓取能力，適合結構化內容提取。 | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的網頁抓取與摘要 API。               | `TAVILY_API_KEY`                                                            |
+
+> 💡 設定多個爬蟲可提升成功率，系統將根據優先級嘗試不同爬蟲。
+
+---
+
+## `SEARCH_PROVIDERS`
+
+設定聯網搜尋使用的搜尋引擎提供商。
+
+```env
+SEARCH_PROVIDERS="searxng"
+```
+
+支援的搜尋引擎如下：
+
+| 值            | 說明                                                                                    | 環境變數                                                                        |
+| ------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `anspire`    | 基於 [Anspire（安思派）](https://anspire.ai/) 提供的搜尋服務。                                       | `ANSPIRE_API_KEY`                                                           |
+| `bocha`      | 基於 [Bocha（博查）](https://open.bochaai.com/) 提供的搜尋服務。                                    | `BOCHA_API_KEY`                                                             |
+| `brave`      | [Brave](https://search.brave.com/help/api)，隱私友好的搜尋源。                                  | `BRAVE_API_KEY`                                                             |
+| `exa`        | [Exa](https://exa.ai/)，面向 AI 的搜尋 API。                                                 | `EXA_API_KEY`                                                               |
+| `firecrawl`  | 支援 [Firecrawl](https://firecrawl.dev/) 提供的搜尋服務。                                       | `FIRECRAWL_API_KEY`                                                         |
+| `google`     | 使用 [Google Programmable Search Engine](https://programmablesearchengine.google.com/)。 | `GOOGLE_PSE_API_KEY` `GOOGLE_PSE_ENGINE_ID`                                 |
+| `jina`       | 使用 [Jina AI](https://jina.ai/) 提供的語義搜尋服務。                                             | `JINA_READER_API_KEY`                                                       |
+| `kagi`       | [Kagi](https://kagi.com/) 提供的高級搜尋 API，需訂閱 Key。                                        | `KAGI_API_KEY`                                                              |
+| `search1api` | 使用 [Search1API](https://www.search1api.com) 聚合搜尋能力。                                   | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `searxng`    | 使用自託管或公共 [SearXNG](https://searx.space/) 實例。                                          | `SEARXNG_URL`                                                               |
+| `tavily`     | [Tavily](https://www.tavily.com/)，快速網頁摘要與答案返回。                                        | `TAVILY_API_KEY`                                                            |
+
+> ⚠️ 某些搜尋提供商需要單獨申請 API Key，並在 `.env` 中設定相關憑證。
+
+---
+
+## `BROWSERLESS_URL`
+
+指定 [Browserless](https://www.browserless.io/) 服務的 API 位址，用於執行網頁爬取任務。Browserless 是一個基於無頭瀏覽器（Headless Chrome）的瀏覽器自動化平臺，適合處理需要渲染的動態頁面。
+
+```env
+BROWSERLESS_URL=https://chrome.browserless.io
+```
+
+> 📌 通常需要搭配 `CRAWLER_IMPLS=browserless` 啟用。
+
+---
+
+## `BROWSERLESS_BLOCK_ADS`
+
+啟用廣告攔截功能，在使用 [Browserless](https://www.browserless.io/) 進行網頁抓取時自動屏蔽常見廣告資源（如腳本、圖片、追蹤器等），提高抓取速度與頁面清晰度。
+
+```env
+BROWSERLESS_BLOCK_ADS=1
+```
+
+> 📌 支援的值：
+>
+> - `1`：啟用廣告攔截（推薦）；
+> - `0`：禁用廣告攔截（預設）。
+
+> ✅ 建議與 `BROWSERLESS_STEALTH_MODE=1` 一起使用，提高爬蟲的隱蔽性和成功率。
+
+---
+
+## `BROWSERLESS_STEALTH_MODE`
+
+啟用無痕模式，在使用 [Browserless](https://www.browserless.io/) 抓取網頁時，通過一系列防檢測手段（如修改 UA、移除 webdriver 特徵、模擬使用者操作）來規避反爬蟲機制。
+
+```env
+BROWSERLESS_STEALTH_MODE=1
+```
+
+> 📌 支援的值：
+>
+> - `1`：啟用無痕模式（推薦）；
+> - `0`：禁用無痕模式（預設）。
+
+> ⚠️ 某些網站存在高級反爬機制，啟用無痕模式可以顯著提升抓取成功率。
+
+---
+
+## `GOOGLE_PSE_ENGINE_ID`
+
+設定 Google Programmable Search Engine（Google PSE）的搜尋引擎 ID，用於限定搜尋範圍。需配合 `GOOGLE_PSE_API_KEY` 一起使用。
+
+```env
+GOOGLE_PSE_ENGINE_ID=your-google-cx-id
+```
+
+> 🔑 獲取方式：存取 [programmablesearchengine.google.com](https://programmablesearchengine.google.com/)，建立搜尋引擎後獲取 `cx` 參數值。
+
+---
+
+## `FIRECRAWL_URL`
+
+設定 [Firecrawl](https://firecrawl.dev/) API 的存取位址。用於網頁內容抓取，預設值如下：
+
+```env
+FIRECRAWL_URL=https://api.firecrawl.dev/v2
+```
+
+> ⚙️ 一般無需修改，除非你使用的是自託管版本或代理服務。
+
+---
+
+## `TAVILY_SEARCH_DEPTH`
+
+設定 [Tavily](https://www.tavily.com/) 搜尋的結果深度。
+
+```env
+TAVILY_SEARCH_DEPTH=basic
+```
+
+支援的值：
+
+- `basic`: 快速搜尋，返回簡要結果；
+- `advanced`: 深度搜尋，返回更多上下文和網頁資訊。
+
+---
+
+## `TAVILY_EXTRACT_DEPTH`
+
+設定 Tavily 在抓取網頁內容時的提取深度。
+
+```env
+TAVILY_EXTRACT_DEPTH=basic
+```
+
+支援的值：
+
+- `basic`: 提取標題、正文摘要等基礎資訊；
+- `advanced`: 提取網頁的結構化資訊、列表、圖表等更多內容。
+
+---
+
+## `SEARXNG_URL`
+
+SearXNG 實例的 URL 位址，這是啟用聯網搜尋功能的必要設定。例如：
+
+```shell
+SEARXNG_URL=https://searxng-instance.com
+```
+
+這個 URL 應該指向一個可用的 SearXNG 實例。您可以選擇自行部署 SearXNG，或使用公共可用的 SearXNG 實例。
+
+您可以在 [SearXNG 實例列表](https://searx.space/) 中找到公開可用的 SearXNG 實例。選擇一個回應速度快、可靠性高的實例，然後將其 URL 設定到 LobeHub 中。
+
+> 注意，使用的 `searxng` 必須開啟 `json` 輸出，否則 `lobehub` 調用會報錯。如果是自託管，類似下面這樣，找到 `searxng` 的組態檔，追加 `json` 即可。
+
+```bash
+$ vi searxng/settings.yml
+...
+search:
+formats:
+- html
+- json
+```
+
+# 驗證聯網搜尋功能
+
+設定完成後，您可以通過以下步驟驗證聯網搜尋功能是否正常工作：
+
+1. 重啟 LobeHub 服務
+2. 啟動一個新的聊天，啟動智慧聯網，之後向 AI 提問一個需要最新資訊的問題，例如："今天的即時金價是多少？" 或 "最近的重大新聞有哪些？"
+3. 觀察 AI 是否能夠返回基於網路搜尋的最新資訊
+
+如果 AI 能夠回答這些時效性問題，說明聯網搜尋功能已經成功設定。
+
+## 參考資料
+
+- [LobeHub 聯網搜尋 RFC 討論](https://github.com/lobehub/lobe-chat/discussions/6447)
+- [SearXNG GitHub 來源](https://github.com/searxng/searxng)
+- [SearXNG 開啟 json 輸出的討論](https://github.com/searxng/searxng/discussions/3542)

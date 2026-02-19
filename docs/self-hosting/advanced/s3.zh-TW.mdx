@@ -1,0 +1,77 @@
+---
+title: 設定 S3 存儲服務 - 多模態 AI 會話
+description: 瞭解如何設定 S3 存儲服務以支援多模態 AI 會話和圖片上傳。
+tags:
+  - S3 存儲
+  - 多模態 AI
+  - 圖片上傳
+  - 檔案存儲
+---
+
+# 設定 S3 存儲服務
+
+LobeHub 在 [很早以前](https://x.com/lobehub/status/1724289575672291782) 就支援了多模態的 AI 會話，其中涉及到圖片上傳給大模型的功能。在客戶端資料庫方案中，圖片檔案直接以二進制資料存儲在瀏覽器 IndexedDB 資料庫，但在伺服端資料庫中這個方案並不可行。因為在 Postgres 中直接存儲檔案類二進制資料會大大浪費寶貴的資料庫存儲空間，並拖慢計算性能。
+
+這塊最佳實踐是使用檔案存儲服務（S3）來存儲圖片檔案，同時 S3 也是檔案上傳 / 知識庫功能所依賴的大容量靜態檔案存儲方案。
+
+<Callout type={'info'}>
+  在本文件庫中，S3 所指代的是指相容 S3 存儲方案，即支援 Amazon S3 API 的對象存儲系統，常見例如
+  Cloudflare R2 、阿里雲 OSS，可以自部署的 minio 等均支援 S3 相容 API。
+</Callout>
+
+## 核心環境變數
+
+<Steps>
+  ### `S3_ACCESS_KEY_ID` 與 `S3_SECRET_ACCESS_KEY`
+
+  所有 S3 相容存儲服務都需要的兩個密鑰，用於存取 S3 存儲服務，不詳細展開。
+
+  ### `S3_ENDPOINT`
+
+  存儲桶的請求端點， 注意此處連結不應該包含存儲桶的名稱。
+
+  <Callout type={'warning'}>`S3_ENDPOINT`必須刪除後綴路徑，否則會無法存取所上傳檔案</Callout>
+
+  例如 Cloudflare 為：
+
+  ```shell
+  S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
+  ```
+
+  ### `S3_BUCKET` 和 `S3_REGION`
+
+  存儲桶的名稱和區域，`S3_BUCKET` 是必須的，用於指定存儲桶的名稱。 `S3_REGION` 是可選的，用於指定存儲桶的區域，一般來說不需要新增，但某些服務商則需要設定。
+
+  ### `S3_SET_ACL`
+
+  是否在上傳檔案時設定 ACL 為 `public-read`。該選項預設啟用。如果服務商不支援為檔案設定單獨的 ACL（即所有檔案繼承存儲桶的 ACL），啟用此選項可能會導致請求錯誤，將 `S3_SET_ACL` 設定為 `0` 即可關閉。
+
+  ### `S3_ENABLE_PATH_STYLE`
+
+  是否啟用 S3 的 `path-style` 存取模式。此選項預設禁用。如果您的 S3 服務提供商使用 `path-style`，請將 `S3_ENABLE_PATH_STYLE` 設定為 `1` 以啟用它。
+
+  <Callout type={'info'}>
+    `path-style` 和 `virtual-host` 在 S3 中是存取 bucket 和 object 的不同方式，URL 的結構和域名解析不太一樣
+
+    假設 S3 服務商的域名是 s3.example.net ，bucket 為 mybucket，object 為 config.env，具體區別如下：
+
+    - path-style : `s3.example.net/mybucket/config.env`
+    - virtual-host : `mybucket.s3.example.net/config.env`
+  </Callout>
+
+  <Callout type={'tip'}>
+    常見的 S3 Cloud 服務商往往預設採用 `virtual-host` 模式，而自部署服務 minio 則預設使用的是 `path-style`。 因此如果你使用了 minio 作為 S3 服務，你需要設定 `S3_ENABLE_PATH_STYLE=1` 。
+  </Callout>
+</Steps>
+
+## S3 設定指南
+
+目前文件中包含的 S3 設定指南如下：
+
+<Cards>
+  <Card href={'/zh/docs/self-hosting/advanced/s3/cloudflare-r2'} title={'Cloudflare R2'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/s3/tencent-cloud'} title={'騰訊雲 COS'} />
+</Cards>
+
+點擊即可查看對應 S3 服務的部署指南，如果上述指南中不包含你所使用的 S3 服務商，歡迎提交 PR ，將共同完善 S3 對象存儲的指南。

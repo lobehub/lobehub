@@ -1,0 +1,65 @@
+---
+title: 新語種新增指南
+description: 學習如何在 LobeHub 中新增新的語言支援，提升使用者體驗。
+tags:
+  - LobeHub
+  - 國際化
+  - 語言支援
+  - lobe-i18n
+  - 越南語
+---
+
+# 新語種新增指南
+
+LobeHub 使用 [lobe-i18n](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n) 作為 i18n 解決方案，可以在應用程式中快速新增新的語言支援。
+
+## 新增新的語言支援
+
+為了在 LobeHub 中新增新的語言國際化支援，（例如新增越南語 `vi-VN`)，請按照以下步驟操作：
+
+### 步驟 1: 更新國際化組態檔
+
+1. 開啟 `.i18nrc.js` 檔案。你可以在項目的根目錄中找到此檔案。
+2. 將新的語言程式碼新增到組態檔中。例如，為了新增越南語，你需要在組態檔中新增 `'vi-VN'`。
+
+```js
+module.exports = {
+  // ... 其他設定
+
+  outputLocales: [
+    'zh-TW',
+    'en-US',
+    'ru-RU',
+    'ja-JP',
+    // ...其他語言
+
+    'vi-VN', // 在陣列中新增 'vi-VN'
+  ],
+};
+```
+
+### 步驟 2: 自動翻譯語言檔案
+
+LobeHub 使用 `lobe-i18n` 工具來自動翻譯語言檔案，因此不需要手動更新 i18n 檔案。
+
+執行以下命令來自動翻譯並生成越南語的語言檔案：
+
+```bash
+npm run i18n
+```
+
+這將會利用 `lobe-i18n` 工具來處理語言檔案。
+
+### 步驟 3: 提交和審查你的更改
+
+一旦你完成了上述步驟，你需要提交你的更改並建立一個 Pull Request。
+
+請確保你遵循了 LobeHub 的貢獻指南，並提供必要的描述來說明你的更改。例如，參考之前的類似 Pull Request [#759](https://github.com/lobehub/lobehub/pull/759)。
+
+### 附加資訊
+
+- 提交你的 Pull Request 後，請耐心等待項目維護人員的審查。
+- 如果遇到任何問題，可以聯繫 LobeHub 社群尋求幫助。
+- 為了更精確的結果，確保你的 Pull Request 是基於最新的主分支，並且與主分支保持同步。
+
+通過遵循上述步驟，你可以成功為 LobeHub 新增新的語言支援，並且確保應用程式能夠為更多使用者提供本地化的體驗。

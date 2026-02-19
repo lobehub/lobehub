@@ -1,0 +1,73 @@
+---
+title: 在 LobeHub 中設定 Logto 身分驗證
+description: 學習如何在 LobeHub 中設定 Logto SSO，包括建立應用程式和設定環境變數。
+tags:
+  - Logto
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+  - OIDC
+---
+
+# 設定 Logto 身分驗證
+
+[Logto](https://logto.io/) 是一個開源的 Auth0 替代方案，專為現代應用程式和 SaaS 產品設計。
+
+<Steps>
+  ### 在 Logto 中建立應用程式
+
+  1. 登入 Logto 控制檯
+  2. 前往 **Applications**，點擊 **Create application**
+  3. 選擇 **Traditional web** 作為應用程式類型
+  4. 填寫應用程式名稱：`LobeHub`
+  5. 設定重新導向 URI：
+
+  <Callout type={'info'}>
+    **回調 URL 格式**: `https://your-domain.com/api/auth/callback/logto`
+  </Callout>
+
+  6. 建立後，記下 **App ID** 和 **App Secret**
+
+  ### 獲取 Issuer URL
+
+  Issuer URL 是 Logto 端點，通常為：
+
+  - 雲版：`https://your-tenant.logto.app/oidc`
+  - 自託管：`https://your-logto-domain/oidc`
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                        | 類型 | 描述                                                        |
+  | --------------------------- | -- | --------------------------------------------------------- |
+  | `AUTH_SECRET`               | 必選 | 用於加密會話令牌的密鑰。使用以下命令生成：`openssl rand -base64 32`            |
+  | `AUTH_SSO_PROVIDERS`        | 必選 | SSO 提供商。使用 Logto 請填寫 `logto`                              |
+  | `AUTH_LOGTO_ID`             | 必選 | Logto 應用程式的 App ID                                          |
+  | `AUTH_LOGTO_SECRET`         | 必選 | Logto 應用程式的 App Secret                                      |
+  | `AUTH_LOGTO_ISSUER`         | 必選 | Logto Issuer URL（例如 `https://your-tenant.logto.app/oidc`） |
+  | `LOGTO_WEBHOOK_SIGNING_KEY` | 可選 | 用於驗證 Logto 發送的 Webhook 請求是否合法的密鑰                          |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#logto) 可查閱相關變數詳情。
+  </Callout>
+
+  ### 設定 Webhook（可選）
+
+  設定 Logto 的 [Webhook](https://docs.logto.io/developers/webhooks/configure-webhooks)，以便在使用者資訊更新時 LobeHub 可以接收到通知並同步資料。
+
+  1. 前往 Logto 控制檯的 `Webhooks`，建立一個 Webhook
+  2. 填寫以下字段：
+     - 端點 URL：`https://your-domain.com/api/webhooks/logto`
+     - 事件：
+       - `User.Data.Updated`：同步使用者資料資訊的更新
+       - `User.SuspensionStatus.Updated`：同步使用者暫停狀態
+  3. 建立後，複製 `簽名密鑰` 填寫到環境變數 `LOGTO_WEBHOOK_SIGNING_KEY`
+</Steps>
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Logto 身分認證並使用 LobeHub。</Callout>
+
+## 相關資源
+
+- [Logto 文件](https://docs.logto.io/)
+- [Logto 應用程式設定](https://docs.logto.io/docs/recipes/integrate-logto/)

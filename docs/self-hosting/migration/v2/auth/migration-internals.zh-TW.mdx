@@ -1,0 +1,200 @@
+---
+title: 認證遷移原理 - 技術深入解析
+description: >-
+  LobeHub 認證遷移的技術原理解析，包括資料庫 Schema、遷移原理和問題排查指南。
+tags:
+  - 認證
+  - 遷移
+  - 資料庫
+  - 問題排查
+---
+
+# 認證遷移原理
+
+本文件解釋 LobeHub 認證遷移的技術原理，適合有資料庫和開發經驗的使用者，幫助理解遷移的底層邏輯。
+
+<Callout type={'info'}>
+  如需分步遷移指南，請參閱 [NextAuth 遷移](/zh/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth) 或 [Clerk 遷移](/zh/docs/self-hosting/migration/v2/auth/clerk-to-betterauth)。
+</Callout>
+
+## 核心資料庫 Schema
+
+理解資料庫 Schema 是排查遷移問題的關鍵。
+
+### Users 表
+
+`users` 表是**認證框架無關**的通用使用者表，適用於任何認證系統。每條記錄代表一個唯一的使用者身分及其關聯的個人資訊。
+
+關鍵字段：
+
+| 字段                                | 說明         |
+| --------------------------------- | ---------- |
+| `id`                              | 使用者唯一標識（主鍵） |
+| `email`                           | 使用者信箱位址（唯一） |
+| `avatar`, `firstName`, `lastName` | 個人資料資訊     |
+
+### Accounts 表
+
+`accounts` 表存儲認證提供商連接。不同的 SSO 提供商和信箱密碼認證都被視為獨立的「帳號」，關聯到同一個使用者。
+
+帳號示例：
+
+- Google SSO 登入
+- GitHub SSO 登入
+- 信箱密碼憑證
+- Auth0（即使通過 Auth0 使用 Google 登入，也與直接使用 Google SSO 是不同的帳號）
+
+**關係**：一個使用者可以有多個帳號（1:N 關係）。
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│     users       │         │    accounts     │
+├─────────────────┤         ├─────────────────┤
+│ id (PK)         │◄───────┤│ user_id (FK)    │
+│ email (unique)  │         │ provider        │
+│ avatar          │         │ provider_id     │
+│ ...             │         │ ...             │
+└─────────────────┘         └─────────────────┘
+                                    │
+                            ┌───────┴───────┐
+                            │               │
+                    ┌───────▼──┐     ┌──────▼───┐
+                    │ Google   │     │ GitHub   │
+                    │ Account  │     │ Account  │
+                    └──────────┘     └──────────┘
+```
+
+## 遷移原理
+
+<Callout type={'warning'}>
+  遷移不會保留登入會話。使用者在遷移後必須重新登入。
+</Callout>
+
+### 簡單遷移
+
+簡單遷移**只**遷移 `users` 表，忽略 `accounts` 表。
+
+**工作原理：**
+
+1. 遷移後使用者使用信箱密碼或 SSO 登入
+2. Better Auth 檢查該信箱是否存在於 `users` 表中
+3. 如果找到，使用者將關聯到其現有資料
+4. 在 `accounts` 表中建立新的帳號記錄
+
+**為什麼有效：**
+
+當你重置密碼或使用 SSO 登入時，如果提供商返回的信箱與 `users` 表中的現有信箱匹配，系統會將你關聯到該現有使用者。
+
+**侷限性：**
+
+由於沒有遷移 `accounts` 表，系統不知道之前關聯的帳號資訊。
+
+**示例場景：**
+
+- 遷移前：使用者將 Google（`a@gmail.com`）和 Microsoft（`b@outlook.com`）關聯到同一個使用者
+- `users` 表存儲主信箱：`a@gmail.com`
+- 簡單遷移後：
+  - 使用 `a@gmail.com` 登入 → ✅ 關聯到現有使用者
+  - 使用 `b@outlook.com` 登入 → ❌ 建立**新使用者**（沒有帳號記錄將 `b@outlook.com` 關聯到原使用者）
+
+### 完整遷移
+
+完整遷移將帳號資料從之前的認證系統遷移到 Better Auth 的 `accounts` 表。
+
+**遷移的資料：**
+
+- NextAuth：`nextauth_accounts` 表 → Better Auth `accounts` 表
+- Clerk：Clerk API 中的 externalAccounts → Better Auth `accounts` 表
+
+**結果：**
+
+所有之前關聯的帳號繼續有效。使用 `b@outlook.com` 登入將正確關聯到現有使用者。
+
+## 問題排查
+
+### 問題：登入建立了新使用者而不是關聯到現有資料
+
+這通常發生在簡單遷移後使用副信箱登入時。
+
+**診斷步驟：**
+
+1. **找到你的原始使用者記錄**
+
+   通過主信箱查詢 `users` 表：
+
+   ```sql
+   SELECT id, email FROM users WHERE email = 'your-primary-email@example.com';
+   ```
+
+   記下 `id` 值。
+
+2. **檢查關聯到該使用者的帳號**
+
+   使用使用者 ID 查詢 `accounts` 表：
+
+   ```sql
+   SELECT * FROM accounts WHERE user_id = 'your-user-id';
+   ```
+
+3. **找到錯誤建立的帳號**
+
+   如果你使用副信箱登入並建立了新使用者，找到該帳號：
+
+   ```sql
+   SELECT * FROM accounts WHERE provider_account_id = 'secondary-email@example.com';
+   -- 或者對於 SSO 提供商，按提供商的使用者 ID 搜尋
+   ```
+
+**修復方法：**
+
+1. 刪除錯誤建立的帳號記錄：
+
+   ```sql
+   DELETE FROM accounts WHERE id = 'incorrect-account-id';
+   ```
+
+2. 如果建立了新使用者，可能還需要刪除它：
+
+   ```sql
+   DELETE FROM users WHERE id = 'new-user-id';
+   ```
+
+3. 使用你的**主信箱**（存儲在 `users` 表中的信箱）登入
+
+4. 登入後，進入 **設定 → 個人資料 → 關聯帳號** 重新關聯你的副帳號
+
+![個人資料頁面 - 關聯帳號](https://hub-apac-1.lobeobjects.space/docs/d9b41a1607d49319fd670e88529199cf.png)
+
+### 問題：遷移後 SSO 登入不工作
+
+**檢查：**
+
+1. 確保 SSO 提供商已在 `AUTH_SSO_PROVIDERS` 中設定
+2. 驗證提供商憑證（`AUTH_<PROVIDER>_ID`、`AUTH_<PROVIDER>_SECRET`）
+3. 對於完整遷移，驗證帳號記錄是否正確建立：
+
+   ```sql
+   SELECT * FROM accounts WHERE provider = 'google';  -- 或你的提供商
+   ```
+
+### 問題：找不到原始使用者資料
+
+**檢查：**
+
+1. 驗證你使用的信箱與 `users` 表中的信箱匹配
+2. 檢查你最初是否使用了不同的信箱或 SSO 提供商
+3. 直接查詢資料庫查找符合條件的使用者：
+
+   ```sql
+   SELECT * FROM users WHERE email LIKE '%your-domain.com';
+   ```
+
+## 相關閱讀
+
+<Cards>
+  <Card href={'/zh/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth'} title={'NextAuth 遷移指南'} />
+
+  <Card href={'/zh/docs/self-hosting/migration/v2/auth/clerk-to-betterauth'} title={'Clerk 遷移指南'} />
+
+  <Card href={'/zh/docs/self-hosting/auth'} title={'認證服務設定'} />
+</Cards>

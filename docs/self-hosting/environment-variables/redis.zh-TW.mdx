@@ -1,0 +1,67 @@
+---
+title: 設定 Redis 快取服務
+description: 瞭解如何設定 Redis 快取服務以優化性能和會話管理。
+tags:
+  - Redis
+  - 快取
+  - 會話存儲
+  - 環境變數
+---
+
+# 設定 Redis 快取服務
+
+LobeHub 使用 Redis 作為高性能快取和會話存儲服務。設定 Redis 可以優化認證會話管理、檔案代理快取等功能。
+
+## 核心環境變數
+
+### `REDIS_URL`
+
+- 類型：可選
+- 描述：Redis 伺服器的連接 URL
+- 預設值：-
+- 示例：`redis://localhost:6379`
+
+支援的 URL 格式：
+
+- 標準格式：`redis://localhost:6379`
+- 帶認證：`redis://username:password@localhost:6379`
+- 帶資料庫：`redis://localhost:6379/0`
+
+### `REDIS_PREFIX`
+
+- 類型：可選
+- 描述：Redis 鍵的前綴，用於在共享 Redis 實例中隔離資料
+- 預設值：`lobechat`
+- 示例：`my-lobechat`
+
+### `REDIS_TLS`
+
+- 類型：可選
+- 描述：是否啟用 TLS/SSL 加密連接
+- 預設值：`false`
+- 示例：`true`
+
+<Callout type={'tip'}>
+  雲服務商提供的 Redis 服務通常需要啟用 TLS 以確保資料傳輸安全。
+</Callout>
+
+### `REDIS_PASSWORD`
+
+- 類型：可選
+- 描述：Redis 認證密碼
+- 預設值：-
+- 示例：`your-password`
+
+### `REDIS_USERNAME`
+
+- 類型：可選
+- 描述：Redis 認證使用者名稱（Redis 6.0+ ACL 認證）
+- 預設值：-
+- 示例：`default`
+
+### `REDIS_DATABASE`
+
+- 類型：可選
+- 描述：Redis 資料庫索引（0-15）
+- 預設值：`0`
+- 示例：`1`

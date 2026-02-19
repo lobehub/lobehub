@@ -1,0 +1,85 @@
+---
+title: 在 LobeHub 中設定 Microsoft Entra ID 身分驗證服務
+description: 學習如何在 LobeHub 中設定 Microsoft Entra ID 身分驗證服務，包括建立應用程式、新增使用者和設定環境變數。詳細步驟和相關資料。
+tags:
+  - Microsoft Entra ID
+  - Microsoft Azure Portal
+  - 身分驗證服務
+  - 應用程式註冊
+  - 環境變數
+  - 使用者管理
+---
+
+# 設定 Microsoft Entra ID 身分驗證服務
+
+## Microsoft Entra ID 設定流程
+
+<Steps>
+  ### 建立 Microsoft Entra ID 應用程式
+
+  在你的 [Microsoft Azure Portal][microsoft-azure-portal] 進入 Microsoft Entra ID -> App registrations -> New registration 建立一個新的應用程式。
+
+  填寫你想向組織使用者顯示的應用程式名稱，選擇你期望支援的帳號類型，如果只支援內部使用者請選擇 `Accounts in this organizational directory only (Default Directory only - Single tenant)`。
+
+  在 `Redirect URI (optional)` 中，應用程式類型選擇 `Web`，Callback URL, 處填寫：
+
+  ```bash
+  https://your-domain/api/auth/callback/microsoft-entra-id
+  ```
+
+  <Callout type={'info'}>
+    - 可以在 Register 後再填寫或修改 Redirect URIs，但是務必保證填寫的 URL 與部署的 URL 一致。 -
+      your-domain 請填寫自己的域名
+  </Callout>
+
+  <Image alt="App Register" inStep src="/blog/assets13883964/4f9d83bd-b3fc-4abc-bcf4-ccbad65c219d.webp" />
+
+  點擊「Register」
+
+  建立成功後，點擊相應的應用程式，進入應用程式詳情頁，切換到「Overview」標籤頁，就可以看到相應的設定資訊。
+
+  <Image alt="App Overview" inStep src="/blog/assets13883964/48a0b702-05bd-4ce4-a007-a8ad00a36e5a.webp" />
+
+  進入「Certificates & secrets」，選擇「Client secrets」標籤，點擊「New client secret」，填寫描述，選擇過期時間，點擊「Add」，建立一個新的客戶端密鑰。
+
+  <Image alt="Create App Client Secret" inStep src="/blog/assets13883964/c9d66fa0-158c-4bd3-a1fa-969e638259d2.webp" />
+
+  <Callout type={'important'}>請務必儲存好你的客戶端密鑰，因為這是你唯一的機會查看它。</Callout>
+
+  ### 新增使用者
+
+  回到「Microsoft Entra ID」界面，進入「Users」，點擊「New user」，填寫使用者資訊，點擊「Create」，建立使用者以使用 LobeHub。
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                                | 類型 | 描述                                                                                          |
+  | ----------------------------------- | -- | ------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`                       | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令生成秘鑰： `openssl rand -base64 32`                               |
+  | `NEXT_AUTH_SSO_PROVIDERS`           | 必選 | 選擇 LoboChat 的單點登入提供商。使用 Microsoft Entra ID 請填寫 `microsoft-entra-id`。                        |
+  | `AUTH_MICROSOFT_ENTRA_ID_ID`        | 必選 | Microsoft Entra ID 應用程式的 Client ID                                                          |
+  | `AUTH_MICROSOFT_ENTRA_ID_SECRET`    | 必選 | Microsoft Entra ID 應用程式的 Client Secret                                                      |
+  | `AUTH_MICROSOFT_ENTRA_ID_TENANT_ID` | 必選 | Microsoft Entra ID 應用程式的 Tenant ID                                                          |
+  | `AUTH_URL`                          | 必選 | 該 URL 用於指定 Auth.js 在執行 OAuth 驗證時的回調位址，當預設生成的重新導向位址發生不正確時才需要設定。`https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variable#microsoft-entra-id) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以使用 Microsoft Entra ID 中設定的使用者通過身分認證並使用 LobeHub。
+</Callout>
+
+## 進階設定
+
+請在 [Microsoft Entra ID 學習中心][microsoft-learn-entra]，做進一步探索。
+
+## 相關資料
+
+- [快速註冊應用程式指導][microsoft-entra-register-app]
+
+[microsoft-azure-portal]: https://portal.azure.com/
+[microsoft-entra-register-app]: https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app
+[microsoft-learn-entra]: https://learn.microsoft.com/en-us/entra/identity/

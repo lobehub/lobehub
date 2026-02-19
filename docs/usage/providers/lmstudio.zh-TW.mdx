@@ -1,0 +1,73 @@
+---
+title: 在 LobeHub 中使用 LM Studio
+description: 學習如何設定和使用 LM Studio，並在 LobeHub 中 通過 LM Studio 執行 AI 模型進行對話。
+tags:
+  - LobeHub
+  - LM Studio
+  - 開源模型
+  - Web UI
+---
+
+# 在 LobeHub 中使用 LM Studio
+
+<Image alt={'在 LobeHub 中使用 LM Studio'} cover src={'/blog/assets28749075f0c4d62c1642694a4ed9ec08.webp'} />
+
+[LM Studio](https://lmstudio.ai/) 是一個用於測試和執行大型語言模型（LLM）的平臺，提供了直觀易用的界面，適合開發人員和 AI 愛好者使用。它支援在本地電腦上部署和執行各種開源 LLM 模型，例如 Deepseek 或 Qwen，實現離線 AI 聊天機器人的功能，從而保護使用者隱私並提供更大的靈活性。
+
+本文件將指導你如何在 LobeHub 中使用 LM Studio:
+
+<Steps>
+  ### 步驟一：獲取並安裝 LM Studio
+
+  - 前往 [LM Studio 官網](https://lmstudio.ai/)
+  - 選擇你的平臺並下載安裝包，LM Studio 目前支援 MacOS、Windows 和 Linux 平臺
+  - 按照提示完成安裝，執行 LM Studio
+
+  <Image alt={'安裝並執行 LM Studio'} inStep src={'/blog/assets73ba166f1e6d54e8c860b91f61c23355.webp'} />
+
+  ### 步驟二：搜尋並下載模型
+
+  - 開啟左側的 `Discover` 選單，搜尋並下載你想要使用的模型
+  - 找到合適的模型（如 Deepseek R1），點擊下載
+  - 下載可能需要一些時間，耐心等待完成
+
+  <Image alt={'搜尋並下載模型'} inStep src={'/blog/assets3e2af0090f02059c687b6add6b73a90b.webp'} />
+
+  ### 步驟三：部署並執行模型
+
+  - 在頂部的模型選擇欄中選擇下載好的模型，並載入模型
+  - 在彈出的面板中設定模型執行參數，詳細的參數設定請參考 [LM Studio 官方文件](https://lmstudio.ai/docs)
+
+  <Image alt={'設定模型執行參數'} inStep src={'/blog/assetsbbe90aa719d182d3d2f327e4182732c5.webp'} />
+
+  - 點擊 `載入模型` 按鈕，等待模型完成載入並執行
+  - 模型載入完成後，你可以在聊天界面中使用該模型進行對話
+
+  ### 步驟四：啟用本地服務
+
+  - 如果你希望通過其它程式使用該模型，需要啟動一個本地 API 服務，通過 `Developer` 面板或軟體選單啟動服務，LM Studio 服務預設啟動在本機的 `1234` 連接埠
+
+  <Image alt={'啟動本地服務'} inStep src={'/blog/assets5fd5fb937b9b05d50ce8659cea3210a4.webp'} />
+
+  - 本地服務啟動後，你還需要在服務設定中開啟 `CORS（跨域資源共享）`選項，這樣才能在其它程式中使用該模型
+
+  <Image alt={'開啟 CORS'} inStep src={'/blog/assets5f8cc99da9c3c1eaca284411833c99e3.webp'} />
+
+  ### 步驟五：在 LobeHub 中使用 LM Studio
+
+  - 存取 LobeHub 的 `應用程式設定` 的 `AI 服務供應商` 界面
+  - 在供應商列表中找到 `LM Studio` 的設定項
+
+  <Image alt={'填寫 LM Studio 的位址'} inStep src={'/blog/assetsc52da5833158f3b3143e40bf2a534ac7.webp'} />
+
+  - 開啟 LM Studio 服務商並填入 API 服務位址
+
+  <Callout type={'warning'}>如果你的 LM Studio 執行在本地，請確保開啟`客戶端請求模式`</Callout>
+
+  - 在下方的模型列表中新增你執行的模型
+  - 為你的助手選擇一個火山引擎模型即可開始對話
+
+    <Image alt={'選擇 LM Studio 模型'} inStep src={'/blog/assets4224bf4978bea84e82b3b3aec77656f0.webp'} />
+</Steps>
+
+至此你已經可以在 LobeHub 中使用 LM Studio 執行的模型進行對話了。

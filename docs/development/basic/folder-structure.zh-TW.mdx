@@ -1,0 +1,220 @@
+---
+title: 目錄架構
+description: 深入瞭解 LobeHub 的資料夾目錄架構及其功能模組。
+tags:
+  - LobeHub
+  - 目錄架構
+  - Next.js
+  - API路由
+  - 前端開發
+---
+
+# 目錄架構
+
+LobeHub 採用 Monorepo 架構（`@lobechat/` 命名空間），
+頂層目錄結構如下：
+
+```bash
+lobe-chat/
+├── apps/
+│   └── desktop/               # Electron 桌面應用程式
+├── packages/                  # 共享包（@lobechat/*）
+│   ├── agent-runtime/         # Agent 執行時
+│   ├── database/              # 資料庫 schemas、models、repositories
+│   ├── model-runtime/         # 模型執行時（各 AI 提供商相容）
+│   ├── builtin-tool-*/        # 搭載工具包
+│   ├── business/              # Cloud 業務插槽 packages
+│   ├── context-engine/        # 上下文引擎
+│   ├── conversation-flow/     # 會話流程
+│   ├── editor-runtime/        # 編輯器執行時
+│   ├── file-loaders/          # 檔案載入器
+│   ├── prompts/               # Prompt 模板
+│   └── ...                    # 更多共享包
+├── src/                       # 主應用程式源碼（見下方詳細說明）
+├── locales/                   # i18n 翻譯檔案（zh-TW、en-US 等）
+├── e2e/                       # E2E 測試（Cucumber + Playwright）
+└── docs/                      # 文件
+```
+
+## src 目錄
+
+```bash
+src/
+├── app/               # Next.js App Router（路由組和 API 路由）
+├── business/          # Cloud 版專用業務邏輯（客戶端/伺服端）
+├── components/        # 可複用的 UI 組件
+├── config/            # 應用程式設定（客戶端與伺服端環境變數）
+├── const/             # 應用程式常數和枚舉
+├── envs/              # 環境變數定義和校驗
+├── features/          # 業務功能模組（Agent 設定、插件開發彈窗等）
+├── helpers/           # 工具輔助函數
+├── hooks/             # 全應用程式複用的自訂 Hooks
+├── layout/            # 全域佈局組件（AuthProvider、GlobalProvider）
+├── libs/              # 第三方整合（better-auth、OIDC、tRPC、MCP 等）
+├── locales/           # 國際化預設語言檔案（英文）
+├── server/            # 伺服端模組
+│   ├── featureFlags/  # Feature Flags
+│   ├── globalConfig/  # 全域設定
+│   ├── modules/       # 伺服端模組（不存取資料庫）
+│   ├── routers/       # tRPC 路由（async、lambda、mobile、tools）
+│   └── services/      # 伺服端服務（可存取資料庫）
+├── services/          # 客戶端服務接口
+├── store/             # zustand 狀態管理
+├── styles/            # 全域樣式和 CSS-in-JS 設定
+├── tools/             # 搭載工具（artifacts、inspectors 等）
+├── types/             # TypeScript 類型定義
+├── utils/             # 通用工具函數
+├── auth.ts            # 認證設定（Better Auth）
+├── instrumentation.ts # 應用程式監控和遙測設定
+└── proxy.ts           # Next.js 中間件代理設定
+```
+
+## app 目錄
+
+`app` 目錄遵循 Next.js App Router 約定，
+使用[路由組](https://nextjs.org/docs/app/building-your-application/routing/route-groups)
+來組織後端服務、平臺變體和應用程式路由：
+
+```bash
+app/
+├── (backend)/                 # 後端 API 路由和服務
+│   ├── api/                   # REST API 端點（auth、webhooks）
+│   ├── f/                     # 檔案服務
+│   ├── market/                # 市場服務
+│   ├── middleware/            # 請求中間件
+│   ├── oidc/                  # OpenID Connect 路由
+│   ├── trpc/                  # tRPC API 端點
+│   │   ├── async/             # 非同步 tRPC 路由
+│   │   ├── desktop/           # 桌面端 tRPC 路由
+│   │   ├── lambda/            # Lambda tRPC 路由
+│   │   └── tools/             # 工具 tRPC 路由
+│   └── webapi/                # Web API 端點（chat、models、tts 等）
+├── [variants]/                # 平臺和設備變體
+│   ├── (auth)/                # 身分驗證頁面（login、signup）
+│   ├── (desktop)/             # 桌面端專用路由
+│   ├── (main)/                # 主應用程式路由（SPA）
+│   │   ├── _layout/           # 佈局組件
+│   │   ├── agent/             # Agent 頁面
+│   │   ├── home/              # 首頁
+│   │   ├── image/             # 圖像生成
+│   │   ├── memory/            # 記憶管理
+│   │   ├── resource/          # 資源管理
+│   │   └── settings/          # 應用程式設定
+│   ├── (mobile)/              # 行動端專用路由
+│   ├── onboarding/            # 新使用者引導
+│   ├── router/                # SPA 路由設定
+│   └── share/                 # 分享頁面
+├── manifest.ts                # PWA 清單
+├── robots.tsx                 # Robots.txt 生成
+├── sitemap.tsx                # 站點地圖生成
+└── sw.ts                      # Service Worker
+```
+
+### 架構說明
+
+**路由組：**
+
+- `(backend)` — 所有伺服端 API 路由、中間件和後端服務
+- `[variants]` — 處理不同平臺變體的動態路由組
+- `(main)` — 主應用程式 SPA，使用 React Router DOM
+
+**平臺組織：**
+
+- 通過路由組織支援多平臺（Web、桌面端、行動端）
+- 桌面端專用路由在 `(desktop)/` 下
+- 行動端專用路由在 `(mobile)/` 下
+- 共享佈局組件在 `_layout/` 目錄中
+
+**API 架構：**
+
+- REST API：`(backend)/api/` 和 `(backend)/webapi/`
+- tRPC 端點（`src/server/routers/`）：按執行時分組
+  - `lambda/` — 主要業務路由（agent、session、message、
+    topic、file、knowledge、settings 等）
+  - `async/` — 耗時非同步操作（檔案處理、圖像生成、RAG 評估）
+  - `tools/` — 工具調用（search、MCP、market、klavis）
+  - `mobile/` — 行動端專用路由
+
+**資料流：**
+
+以一個典型的使用者操作（如更新 Agent 設定）為例，資料在各層之間的流轉：
+
+```plaintext
+React UI (src/features/, src/app/)
+  │  使用者交互觸發事件
+  ▼
+Store Actions (src/store/)
+  │  zustand action 更新本地狀態，調用 service
+  ▼
+Client Service (src/services/)
+  │  封裝 tRPC 客戶端調用，處理請求參數
+  ▼
+tRPC Router (src/server/routers/lambda/)
+  │  校驗輸入（zod），路由到對應 service
+  ▼
+Server Service (src/server/services/)
+  │  執行業務邏輯，調用 DB model
+  ▼
+DB Model (packages/database/src/models/)
+  │  封裝 Drizzle ORM 查詢
+  ▼
+PostgreSQL
+```
+
+讀取資料的流程方向相反：UI 通過 store selector 消費資料，store 通過 SWR + tRPC query 從後端拉取。
+
+### 路由架構
+
+項目採用混合路由：
+Next.js App Router 處理靜態頁面（如認證頁），
+React Router DOM 承載主應用程式 SPA。
+
+**入口**：`src/app/[variants]/page.tsx`
+根據設備類型分發到桌面端或行動端路由。
+
+**關鍵組態檔：**
+
+- 桌面端路由：`src/app/[variants]/router/desktopRouter.config.tsx`
+- 行動端路由：`src/app/[variants]/(mobile)/router/mobileRouter.config.tsx`
+- 路由工具：`src/utils/router.tsx`
+
+**桌面端 SPA 路由（React Router DOM）：**
+
+```bash
+/                          # 首頁
+/agent/:aid                # Agent 會話
+/agent/:aid/profile        # Agent 詳情
+/agent/:aid/cron/:cronId   # 定時任務詳情
+/group/:gid                # 群組會話
+/group/:gid/profile        # 群組詳情
+/community                 # 社群發現（agent、model、provider、mcp）
+/community/agent/:slug     # Agent 詳情頁
+/community/model/:slug     # 模型詳情頁
+/community/provider/:slug  # 提供商詳情頁
+/community/mcp/:slug       # MCP 詳情頁
+/resource                  # 資源管理
+/resource/library/:id      # 知識庫詳情
+/settings/:tab             # 設定（profile、provider 等）
+/settings/provider/:id     # 模型提供商設定
+/memory                    # 記憶管理
+/image                     # 圖像生成
+/page/:id                  # 頁面詳情
+/share/t/:id               # 分享話題
+/onboarding                # 新使用者引導
+```
+
+**行動端 SPA 路由（React Router DOM）：**
+
+```bash
+/                          # 首頁
+/agent/:aid                # Agent 會話
+/community                 # 社群發現
+/settings                  # 設定首頁
+/settings/:tab             # 設定詳情
+/settings/provider/:id     # 模型提供商設定
+/me                        # 個人中心
+/me/profile                # 個人資料
+/me/settings               # 個人設定
+/share/t/:id               # 分享話題
+/onboarding                # 新使用者引導
+```

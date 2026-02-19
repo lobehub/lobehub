@@ -1,0 +1,83 @@
+---
+title: 在 LobeHub 中設定 Generic OIDC 身分驗證
+description: 學習如何使用 Generic OIDC 整合將 LobeHub 與任何 OpenID Connect 提供商對接。
+tags:
+  - Generic OIDC
+  - OpenID Connect
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+---
+
+# 設定 Generic OIDC 身分驗證
+
+使用 Generic OIDC 可以將 LobeHub 與任何符合 OpenID Connect 標準的身分提供商整合，適用於不在我們支援列表中的提供商。
+
+<Steps>
+  ### 設定你的 OIDC 提供商
+
+  在身分提供商的管理控制檯中：
+
+  1. 建立新的 OIDC/OAuth2 應用程式
+  2. 設定應用程式類型為 **Web Application** 或 **Confidential Client**
+  3. 啟用必需的 scopes：`openid`、`profile`、`email`
+  4. 記下 **Client ID** 和 **Client Secret**
+
+  ### 設定重新導向 URI
+
+  在 OIDC 提供商中新增回調 URL：
+
+  <Callout type={'info'}>
+    回調 URL 格式：
+
+    - 本地開發: `http://localhost:3210/api/auth/callback/generic-oidc`
+    - 生產環境: `https://your-domain.com/api/auth/callback/generic-oidc`
+  </Callout>
+
+  ### 查找 Issuer URL
+
+  Issuer URL 通常在提供商的 OIDC 發現文件中：
+
+  ```
+  https://your-provider/.well-known/openid-configuration
+  ```
+
+  在 JSON 回應中查找 `issuer` 字段。
+
+  ### 設定環境變數
+
+  | 環境變數                       | 類型 | 描述                                             |
+  | -------------------------- | -- | ---------------------------------------------- |
+  | `AUTH_SECRET`              | 必選 | 會話加密密鑰，使用 `openssl rand -base64 32` 生成         |
+  | `AUTH_SSO_PROVIDERS`       | 必選 | 填寫 `generic-oidc`                              |
+  | `AUTH_GENERIC_OIDC_ID`     | 必選 | Client ID                                      |
+  | `AUTH_GENERIC_OIDC_SECRET` | 必選 | Client Secret                                  |
+  | `AUTH_GENERIC_OIDC_ISSUER` | 必選 | OIDC Issuer URL（如 `https://your-provider.com`） |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#generic-oidc)
+    可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以通過你的 OIDC 提供商身分認證並使用 LobeHub。
+</Callout>
+
+## 故障排除
+
+### 常見問題
+
+1. **無效的重新導向 URI**：確保回調 URL 與提供商中設定的完全匹配
+2. **缺少 scopes**：確保 `openid`、`profile` 和 `email` scopes 已啟用
+3. **無效的 issuer**：Issuer URL 必須與 OIDC 發現文件中的完全匹配
+
+### 測試 OIDC 設定
+
+通過存取以下位址驗證 OIDC 設定：
+
+```
+https://your-provider/.well-known/openid-configuration
+```
+
+這應該返回包含所有必需端點的 JSON 文件。

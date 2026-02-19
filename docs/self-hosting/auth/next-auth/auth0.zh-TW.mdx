@@ -1,0 +1,94 @@
+---
+title: 在 LobeHub 中設定 Auth0 身分驗證服務 - 詳細步驟和環境變數設定
+description: 學習如何在 LobeHub 中設定 Auth0 身分驗證服務，包括建立應用程式、新增使用者、設定環境變數等。瞭解如何連接現有的單點登入服務和設定社交登入。
+tags:
+  - Auth0
+  - 身分驗證
+  - 單點登入
+  - 社交登入
+  - 環境變數
+  - 使用者管理
+---
+
+# 設定 Auth0 身分驗證服務
+
+<Steps>
+  ### 建立 Auth0 應用程式
+
+  註冊並登入 [Auth0](https://manage.auth0.com/dashboard)，點擊左側導航欄的「Applications」，切換到應用程式管理界面，點擊右上角「Create Application」以建立應用程式。
+
+  <Image alt="建立 Auth0 應用程式 S1" inStep src="/blog/assets30863298/f068190f-0027-4d3b-8667-d632e43d5a86.webp" />
+
+  填寫你想向組織使用者顯示的應用程式名稱，可選擇任意應用程式類型，點擊「Create」。
+
+  <Image alt="建立 Auth0 應用程式 S2" inStep src="/blog/assets30863298/3e0082df-9b6f-46f3-b67f-bdc79e1eb2cc.webp" />
+
+  建立成功後，點擊相應的應用程式，進入應用程式詳情頁，切換到「Settings」標籤頁，就可以看到相應的設定資訊
+
+  <Image alt="建立 Auth0 應用程式 S3" inStep src="/blog/assets30863298/df4cea85-616a-46f5-b2de-42725d9b82a6.webp" />
+
+  在應用程式設定頁面中，還需要設定 Allowed Callback URLs，在此處填寫:
+
+  ```bash
+  http(s)://your-domain/api/auth/callback/auth0
+  ```
+
+  <Image alt="建立 Auth0 應用程式 S4" inStep src="/blog/assets30863298/62fbd09f-a69a-4460-949b-0f6285fa65b9.webp" />
+
+  <Callout type={'important'}>
+    可以在部署後再填寫或修改 Allowed Callback URLs，但是務必保證填寫的 URL 與部署的 URL 一致
+  </Callout>
+
+  ### 新增使用者
+
+  點擊左側導航欄的「Users Management」，進入使用者管理界面，可以為你的組織新建使用者，用以登入 LobeHub
+
+  <Image alt="新增使用者" inStep src="/blog/assets30863298/0beda150-d0b6-43cf-a9f1-fce928b83a96.webp" />
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                      | 類型 | 描述                                                                                          |
+  | ------------------------- | -- | ------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令生成秘鑰： `openssl rand -base64 32`                               |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必選 | 選擇 LoboChat 的單點登入提供商。使用 Auth0 請填寫 `auth0`。                                                  |
+  | `AUTH_AUTH0_ID`           | 必選 | Auth0 應用程式的 Client ID                                                                       |
+  | `AUTH_AUTH0_SECRET`       | 必選 | Auth0 應用程式的 Client Secret                                                                   |
+  | `AUTH_AUTH0_ISSUER`       | 必選 | Auth0 應用程式的 Domain，`https://example.auth0.com`                                              |
+  | `AUTH_URL`                | 必選 | 該 URL 用於指定 Auth.js 在執行 OAuth 驗證時的回調位址，當預設生成的重新導向位址發生不正確時才需要設定。`https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#auth-0) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以使用 Auth0 中設定的使用者通過身分認證並使用 LobeHub。
+</Callout>
+
+## 進階設定
+
+### 連接現有的單點登入服務
+
+如果你的企業或組織已有現有的統一身分認證設施，可在 Applications -> SSO Integrations 中，連接現有的單點登入服務。
+
+Auth0 支援 Azure Active Directory / Slack / Google Workspace / Office 365 / Zoom 等單點登入服務，詳細支援列表可參考 [這裡](https://marketplace.auth0.com/features/sso-integrations)
+
+<Image alt="Connecting to an Existing Single Sign-On Service" src="/blog/assets30863298/9891347e-a338-4aa9-8714-f16c8dbcfcec.webp" />
+
+### 設定社交登入
+
+如果你的企業或組織需要支援外部人員登入，可以在 Authentication -> Social 中，設定社交登入服務。
+
+<Image alt="Configuring Social Login" src="/blog/assets30863298/880749a6-5ba4-4e20-a968-b583a54de7fa.webp" />
+
+<Callout type={'warning'}>
+  設定社交登入服務預設會允許所有人通過認證，這可能會導致 LobeHub 被外部人員濫用。
+</Callout>
+
+<Callout>
+  如果你需要限制登入人員，務必設定 **阻止策略**： 請在開啟社交登入選項後，參考
+  [這篇文章](https://auth0.com/blog/permit-or-deny-login-requests-using-auth0-actions/) 建立 Action
+  來設定阻止 / 允許列表。
+</Callout>

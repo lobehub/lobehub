@@ -1,0 +1,127 @@
+---
+title: 國際化實現指南
+description: 瞭解 LobeHub 的國際化機制，支援多語言體驗。
+tags:
+  - 國際化
+  - LobeHub
+  - i18next
+  - 多語言支援
+---
+
+# 國際化實現指南
+
+歡迎閱讀 LobeHub 國際化實現指南。本文件將指導你瞭解 LobeHub 的國際化機制，包括檔案結構、如何新增新語種。LobeHub 採用 `i18next` 和 `lobe-i18n` 作為國際化解決方案，旨在為使用者提供流暢的多語言支援。
+
+## 國際化概述
+
+國際化（Internationalization，簡稱為 i18n）是一個讓應用程式能夠適應不同語言和地區的過程。在 LobeHub 中，我們支援多種語言，並通過 `i18next` 庫來實現語言的動態切換和內容的本地化。我們的目標是讓 LobeHub 能夠為全球使用者提供本地化的體驗。
+
+## 檔案結構
+
+在 LobeHub 的項目中，國際化相關的檔案被組織如下：
+
+- `src/locales/default`: 包含預設開發語言（中文）的翻譯檔案，我們作為中文。
+- `locales`: 包含所有支援的語言資料夾，每個語言資料夾中包含相應語言的翻譯檔案，這些翻譯檔案通過 lobe-i18n 自動生成。
+
+在 `src/locales` 這個目錄結構中，`default` 資料夾包含了原始的翻譯檔案（中文），其他每個語言資料夾則包含了相應語言的 JSON 翻譯檔案。每個語言資料夾中的檔案對應 `default` 資料夾中的 TypeScript 檔案，確保了各語種之間的翻譯檔案結構一致性。
+
+```bash
+src/locales
+├── create.ts
+├── default
+│ ├── chat.ts
+│ ├── common.ts
+│ ├── error.ts
+│ ├── index.ts
+│ ├── market.ts
+│ ├── migration.ts
+│ ├── plugin.ts
+│ ├── setting.ts
+│ ├── tool.ts
+│ └── welcome.ts
+└── resources.ts
+```
+
+通過 lobe-i18n 自動生成的檔案結構如下：
+
+```bash
+locales
+├── ar
+│   ├── chat.json
+│   ├── common.json
+│   ├── error.json
+│   └── ... (其他翻譯檔案)
+├── de-DE
+│   ├── chat.json
+│   ├── common.json
+│   ├── error.json
+│   └── ... (其他翻譯檔案)
+├── en-US
+├── ... (其他語種目錄）
+├── zh-TW
+└── zh-TW
+```
+
+## 核心實現邏輯
+
+LobeHub 的國際化核心實現邏輯如下：
+
+- 使用 `i18next` 庫進行初始化和設定。
+- 使用 `i18next-browser-languagedetector` 自動檢測使用者的語言偏好。
+- 使用 `i18next-resources-to-backend` 動態載入翻譯資源。
+- 根據使用者的語言偏好，設定 HTML 文件的方向（LTR 或 RTL）。
+
+以下是一個簡化的偽程式碼示例，用以說明 LobeHub 國際化的核心實現邏輯：
+
+```ts
+import i18n from 'i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
+import resourcesToBackend from 'i18next-resources-to-backend';
+import { isRtlLang } from 'rtl-detect';
+
+// 建立 i18n 實例並設定
+const createI18nInstance = (lang) => {
+  const i18nInstance = i18n
+    .use(LanguageDetector) // 使用語言檢測
+    .use(
+      resourcesToBackend((language, namespace) => {
+        // 動態載入對應語言的翻譯資源
+        return import(`path/to/locales/${language}/${namespace}.json`);
+      }),
+    );
+
+  // 監聽語言變化事件，動態設定文件方向
+  i18nInstance.on('languageChanged', (language) => {
+    const direction = isRtlLang(language) ? 'rtl' : 'ltr';
+    document.documentElement.dir = direction; // 設定 HTML 文件方向
+  });
+
+  // 初始化 i18n 實例
+  i18nInstance.init({
+    // 相關設定
+  });
+
+  return i18nInstance;
+};
+```
+
+在這個示例中，我們展示瞭如何使用 `i18next` 和相關插件來初始化國際化設定。我們動態導入了翻譯資源，並回應語言變化事件來調整頁面的文字方向。這個過程為 LobeHub 提供了靈活的多語言支援能力。
+
+## 新增新的語言支援
+
+我們通過以下工作，已經支援了全球多種語言：
+
+- [✨ feat: adding Arabic Language Support #1049](https://github.com/lobehub/lobehub/pull/1049)
+- [🌐 style: Add Vietnamese files and add the vi-VN option in the General Settings #860](https://github.com/lobehub/lobehub/pull/860)
+- [🌐 style: support it-IT nl-NL and pl-PL locales #759](https://github.com/lobehub/lobehub/pull/759)
+- [🌐 feat(locale): Add fr-FR (#637) #645](https://github.com/lobehub/lobehub/pull/645)
+- [🌐 Add russian localy #137](https://github.com/lobehub/lobehub/pull/137)
+
+要新增新的語種支援， 詳細步驟請參考：[新語種新增指南](/zh/docs/development/internationalization/add-new-locale)。
+
+## 資源和進一步閱讀
+
+- [i18next 官方文件](https://www.i18next.com/)
+- [lobe-i18n 工具說明](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n)
+
+通過遵循本指南，你可以更好地理解和參與到 LobeHub 的國際化工作中，為全球使用者提供無縫的多語言體驗。

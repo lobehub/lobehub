@@ -1,0 +1,61 @@
+---
+title: 在 LobeHub 中使用通義千問 API Key
+description: 學習如何在 LobeHub 中設定和使用阿里雲的通義千問模型，提供強大的自然語言理解和生成能力。
+tags:
+  - LobeHub
+  - 通義千問
+  - DashScope
+  - DashScope
+  - API key
+  - Web UI
+---
+
+# 在 LobeHub 中使用通義千問
+
+<Image alt={'在 LobeHub 中使用通義千問'} cover src={'/blog/assets34400653/4e057b43-1e3e-4e96-a948-7cdbff303dcb.webp'} />
+
+[通義千問](https://tongyi.aliyun.com/)是阿里雲自主研發的超大規模語言模型，具有強大的自然語言理解和生成能力。它可以回答各種問題、創作文字內容、表達觀點看法、撰寫程式碼等，在多個領域發揮作用。
+
+本文件將指導你如何在 LobeHub 中使用通義千問:
+
+<Steps>
+  ### 步驟一：開通 DashScope 模型服務
+
+  - 存取並登入阿里雲 [DashScope](https://dashscope.console.aliyun.com/) 平臺
+  - 初次進入時需要開通 DashScope 服務
+  - 若你已開通，可跳過該步驟
+
+  <Image alt={'開通 DashScope 服務'} inStep src={'/blog/assets34400653/4f8d0102-7ca7-4f23-b96f-3fc5cf2cd66e.webp'} />
+
+  ### 步驟二：獲取 DashScope API 密鑰
+
+  - 進入`API-KEY` 界面，並建立一個 API 密鑰
+
+  <Image alt={'建立通義千問 API 密鑰'} inStep src={'/blog/assets34400653/eee046cb-189b-4635-ac94-19d50b17a18a.webp'} />
+
+  - 在彈出的對話框中複製 API 密鑰，並妥善儲存
+
+  <Image alt={'複製通義千問 API 密鑰'} inStep src={'/blog/assets34400653/cec2e032-54e1-49b1-a212-4d9736927156.webp'} />
+
+  <Callout type={'warning'}>
+    請安全地存儲密鑰，因為它只會出現一次。如果您意外丟失它，您將需要建立一個新密鑰。
+  </Callout>
+
+  ### 步驟三：在 LobeHub 中設定通義千問
+
+  - 存取 LobeHub 的`設定`界面
+  - 在`AI 服務商`下找到`通義千問`的設定項
+
+  <Image alt={'填寫 API 密鑰'} inStep src={'/blog/assets34400653/c2e6a58b-95eb-4f40-8add-83f4316a719b.webp'} />
+
+  - 開啟通義千問並填入獲得的 API 密鑰
+  - 為你的 AI 助手選擇一個 Qwen 的模型即可開始對話
+
+  <Image alt={'選擇 Qwen 模型並開始對話'} inStep src={'/blog/assets34400653/f4a23c2a-503e-4731-bc4d-922bce0b6039.webp'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，請參考通義千問的相關費用政策。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用通義千問提供的模型進行對話了。

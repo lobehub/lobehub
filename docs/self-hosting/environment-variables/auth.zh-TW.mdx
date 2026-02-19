@@ -1,0 +1,230 @@
+---
+title: LobeHub 身分驗證服務設定
+description: 瞭解如何設定 LobeHub 的身分驗證服務環境變數，包括 Better Auth、OAuth SSO 等。
+tags:
+  - LobeHub
+  - 身分驗證服務
+  - Better Auth
+  - 單點登入
+---
+
+# 身分驗證服務
+
+LobeHub 在部署時提供了完善的身分驗證服務能力，以下是相關的環境變數，你可以使用這些環境變數輕鬆定義需要在 LobeHub 中開啟的身分驗證服務。
+
+## Better Auth
+
+### 通用設定
+
+#### `AUTH_SECRET`
+
+- 類型：必選
+- 描述：用於加密會話令牌的密鑰。使用以下命令生成：`openssl rand -base64 32`
+- 預設值：`-`
+- 示例：`Tfhi2t2pelSMEA8eaV61KaqPNEndFFdMIxDaJnS1CUI=`
+
+#### `AUTH_EMAIL_VERIFICATION`
+
+- 類型：可選
+- 描述：設定為 `1` 以要求使用者在登入前驗證信箱。使用者註冊後必須驗證信箱位址。
+- 預設值：`0`
+- 示例：`1`
+
+#### `AUTH_SSO_PROVIDERS`
+
+- 類型：可選
+- 描述：啟用的 SSO 提供商列表，以逗號分隔。順序決定了登入頁面上提供商的顯示順序。
+- 預設值：`-`
+- 示例：`google,github,microsoft,cognito`
+
+#### `AUTH_ALLOWED_EMAILS`
+
+- 類型：可選
+- 描述：允許註冊的信箱或域名白名單，以逗號分隔。支援完整信箱位址（如 `user@example.com`）或域名（如 `example.com`）。留空表示允許所有信箱。
+- 預設值：`-`
+- 示例：`example.com,admin@other.com`
+
+#### `AUTH_DISABLE_EMAIL_PASSWORD`
+
+- 類型：可選
+- 描述：設定為 `1` 以禁用信箱密碼登入，強制使用者使用 SSO 登入。啟用後，登入頁面將隱藏信箱輸入框，註冊頁面將重新導向到登入頁。
+- 預設值：`0`
+- 示例：`1`
+
+#### `JWKS_KEY`
+
+- 類型：必選
+- 描述：用於簽名和驗證 JWT 的 JWKS（JSON Web Key Set）密鑰。用於 OIDC JWT token 簽名和內部服務調用認證 token。必須是包含 RS256 RSA 密鑰對的 JWKS JSON 字符串。
+- 預設值：`-`
+
+<GenerateJWKSKey />
+
+#### `INTERNAL_JWT_EXPIRATION`
+
+- 類型：可選
+- 描述：內部 JWT 令牌的過期時間，用於 lambda → async 調用。格式：數位後跟單位（s = 秒，m = 分鐘，h = 小時）。為了安全性應儘可能短，但需要足夠長以應對網路延遲和伺服器處理時間。
+- 預設值：`30s`
+- 示例：`30s`、`1m`、`1h`
+
+### 郵件服務（SMTP）
+
+啟用信箱驗證和密碼重置功能需要設定以下設定。
+
+#### `SMTP_HOST`
+
+- 類型：必選（用於郵件功能）
+- 描述：SMTP 伺服器主機名。
+- 預設值：`-`
+- 示例：`smtp.gmail.com`
+
+#### `SMTP_PORT`
+
+- 類型：必選（用於郵件功能）
+- 描述：SMTP 伺服器連接埠。TLS 通常為 `587`，SSL 為 `465`。
+- 預設值：`-`
+- 示例：`587`
+
+#### `SMTP_SECURE`
+
+- 類型：可選
+- 描述：是否使用安全連接。連接埠 465（SSL）設定為 `true`，連接埠 587（TLS）設定為 `false`。
+- 預設值：`false`
+- 示例：`false`
+
+#### `SMTP_USER`
+
+- 類型：必選（用於郵件功能）
+- 描述：SMTP 認證使用者名稱，通常是您的信箱位址。
+- 預設值：`-`
+- 示例：`your-email@example.com`
+
+#### `SMTP_PASS`
+
+- 類型：必選（用於郵件功能）
+- 描述：SMTP 認證密碼。Gmail 需使用應用程式專用密碼。
+- 預設值：`-`
+- 示例：`your-app-specific-password`
+
+#### `SMTP_FROM`
+
+- 類型：可選
+- 描述：發件人信箱位址。AWS SES 等服務需要此設定（因為 `SMTP_USER` 不是有效信箱位址）。若未設定，預設使用 `SMTP_USER`。
+- 預設值：`SMTP_USER` 的值
+- 示例：`noreply@example.com`
+
+### Google
+
+#### `AUTH_GOOGLE_ID`
+
+- 類型：必選
+- 描述：Google OAuth 應用程式的 Client ID。在 [Google Cloud Console](https://console.cloud.google.com/apis/credentials) 獲取。
+- 預設值：`-`
+- 示例：`123456789.apps.googleusercontent.com`
+
+#### `AUTH_GOOGLE_SECRET`
+
+- 類型：必選
+- 描述：Google OAuth 應用程式的 Client Secret。
+- 預設值：`-`
+- 示例：`GOCSPX-xxxxxxxxxxxxxxxxxxxx`
+
+### GitHub
+
+#### `AUTH_GITHUB_ID`
+
+- 類型：必選
+- 描述：GitHub OAuth 應用程式的 Client ID。在 [GitHub Developer Settings](https://github.com/settings/developers) 獲取。
+- 預設值：`-`
+- 示例：`Ov23xxxxxxxxxxxxx`
+
+#### `AUTH_GITHUB_SECRET`
+
+- 類型：必選
+- 描述：GitHub OAuth 應用程式的 Client Secret。
+- 預設值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### Microsoft
+
+#### `AUTH_MICROSOFT_ID`
+
+- 類型：必選
+- 描述：Microsoft Entra ID（Azure AD）應用程式的 Client ID。在 [Azure 門戶](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) 獲取。
+- 預設值：`-`
+- 示例：`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+#### `AUTH_MICROSOFT_SECRET`
+
+- 類型：必選
+- 描述：Microsoft Entra ID 應用程式的 Client Secret。
+- 預設值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_MICROSOFT_AUTHORITY_URL`
+
+- 類型：可選
+- 描述：Microsoft Entra ID 的 Authority URL。
+- 預設值：`https://login.microsoftonline.com`
+- 示例：`https://login.partner.microsoftonline.cn`
+
+#### `AUTH_MICROSOFT_TENANT_ID`
+
+- 類型：可選
+- 描述：單租戶 Microsoft Entra ID 應用程式的 Directory (tenant) ID。
+- 預設值：`common`
+- 示例：`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+### AWS Cognito
+
+#### `AUTH_COGNITO_ID`
+
+- 類型：必選
+- 描述：AWS Cognito 使用者池應用程式客戶端的 Client ID。在 [AWS Cognito 控制檯](https://console.aws.amazon.com/cognito) 獲取。
+- 預設值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_COGNITO_SECRET`
+
+- 類型：必選
+- 描述：AWS Cognito 應用程式客戶端的 Client Secret。
+- 預設值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_COGNITO_ISSUER`
+
+- 類型：必選
+- 描述：Cognito 使用者池的頒發者 URL。格式：`https://cognito-idp.{region}.amazonaws.com/{userPoolId}`
+- 預設值：`-`
+- 示例：`https://cognito-idp.us-east-1.amazonaws.com/us-east-1_xxxxxxxxx`
+
+### 飛書
+
+#### `AUTH_FEISHU_APP_ID`
+
+- 類型：必選
+- 描述：飛書應用程式的 App ID。在 [飛書開放平臺](https://open.feishu.cn/app) 獲取。
+- 預設值：`-`
+- 示例：`cli_xxxxxxxxxxxxxxxx`
+
+#### `AUTH_FEISHU_APP_SECRET`
+
+- 類型：必選
+- 描述：飛書應用程式的 App Secret。
+- 預設值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### 微信
+
+#### `AUTH_WECHAT_ID`
+
+- 類型：必選
+- 描述：微信開放平臺應用程式的 App ID。在 [微信開放平臺](https://open.weixin.qq.com/) 獲取。
+- 預設值：`-`
+- 示例：`wxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_WECHAT_SECRET`
+
+- 類型：必選
+- 描述：微信應用程式的 App Secret。
+- 預設值：`-`
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`

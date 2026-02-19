@@ -1,0 +1,98 @@
+---
+title: AiHubMix 提供商設定
+description: 學習如何在 LobeHub 中設定和使用 AiHubMix 提供商
+tags:
+  - AiHubMix
+  - 提供商設定
+  - 設定指南
+---
+
+# AiHubMix 提供商設定
+
+AiHubMix 是一個 AI 模型聚合平臺，通過統一的 OpenAI 相容 API 接口提供多種 AI 模型的存取服務。本指南將幫助您在 LobeHub 中設定 AiHubMix 提供商。
+
+## 前置條件
+
+在使用 AiHubMix API 之前，您需要：
+
+1. **建立 AiHubMix 帳號**
+   - 存取 [AiHubMix](https://lobe.li/MZmv94N)
+   - 註冊帳號
+
+2. **獲取 API 密鑰**
+   - 登入您的 AiHubMix 控制檯
+   - 導航到 API 設定
+   - 生成用於 LobeHub 的 API 密鑰
+
+## 設定
+
+### 環境變數
+
+在您的 `.env` 檔案中新增以下環境變數：
+
+```bash
+# AiHubMix API 密鑰（必需）
+AIHUBMIX_API_KEY=your_aihubmix_api_key
+```
+
+### 可用模型
+
+AiHubMix 提供多種熱門 AI 模型的存取，包括：
+
+- **GPT-4o Mini** - OpenAI 的高性價比小型模型
+- **GPT-4o** - OpenAI 的旗艦多模態模型
+- **Claude 3.5 Sonnet** - Anthropic 的高級推理模型
+- **Claude 3.5 Haiku** - 快速高效的 Claude 模型
+- **Gemini Pro 1.5** - Google 的長上下文支援模型
+- **DeepSeek V3** - 具有高級推理能力的模型
+
+## 使用方法
+
+1. **設定 API 密鑰**
+   - 在環境變數中設定您的 AiHubMix API 密鑰
+   - 重啟您的 LobeHub 實例
+
+2. **選擇模型**
+   - 進入 LobeHub 設定
+   - 導航到語言模型
+   - 選擇 AiHubMix 作為您的提供商
+   - 從可用模型中選擇
+
+3. **開始對話**
+   - 建立新對話
+   - 選擇 AiHubMix 模型
+   - 開始您的對話
+
+## 功能特性
+
+- **多模型存取**：通過單一 API 存取各種 AI 模型
+- **OpenAI 相容**：使用標準 OpenAI API 格式
+- **函數調用**：支援相容模型的函數調用功能
+- **視覺能力**：部分模型支援圖像分析
+- **模型獲取**：自動獲取可用模型列表
+
+## 故障排除
+
+### 常見問題
+
+1. **401 認證錯誤**
+   - 驗證您的 API 密鑰是否正確
+   - 確保 API 密鑰具有適當的權限
+   - 檢查您的帳號是否有足夠的積分
+
+2. **模型不可用**
+   - 某些模型可能有使用限制
+   - 查看 AiHubMix 文件瞭解模型可用性
+   - 驗證您的帳號等級是否支援請求的模型
+
+3. **速率限制**
+   - AiHubMix 可能根據您的計劃有速率限制
+   - 考慮升級您的計劃以獲得更高的限制
+
+## 支援
+
+如需更多支援：
+
+- 存取 [AiHubMix 文件](https://docs.aihubmix.com/)
+- 查看 [模型列表](https://aihubmix.com/models)
+- 聯繫 AiHubMix 支援團隊解決 API 相關問題

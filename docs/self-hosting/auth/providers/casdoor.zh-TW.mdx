@@ -1,0 +1,248 @@
+---
+title: 在 LobeHub 中設定 Casdoor 身分驗證
+description: 學習如何在 LobeHub 中設定 Casdoor SSO，包括建立應用程式和設定環境變數。
+tags:
+  - Casdoor
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+  - OIDC
+---
+
+# 設定 Casdoor 身分驗證
+
+[Casdoor](https://casdoor.org/) 是一個開源的身分存取管理 (IAM) 平臺，提供 Web UI 支援單點登入。
+
+<Steps>
+  ### 在 Casdoor 中建立應用程式
+
+  1. 登入 Casdoor 管理控制檯
+  2. 前往 **Applications**，點擊 **Add**
+  3. 設定應用程式：
+     - Name: `LobeHub`
+     - Organization: 選擇你的組織
+     - Redirect URLs: 新增回調 URL
+
+  <Callout type={'info'}>
+    **回調 URL 格式**: `https://your-domain.com/api/auth/callback/casdoor`
+  </Callout>
+
+  4. 儲存並記下 **Client ID** 和 **Client Secret**
+
+  ### 獲取 Issuer URL
+
+  Issuer URL 是 Casdoor 伺服器 URL，通常為：`https://your-casdoor-domain`
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                     | 類型 | 描述                                                |
+  | ------------------------ | -- | ------------------------------------------------- |
+  | `AUTH_SECRET`            | 必選 | 用於加密會話令牌的密鑰。使用以下命令生成：`openssl rand -base64 32`    |
+  | `AUTH_SSO_PROVIDERS`     | 必選 | SSO 提供商。使用 Casdoor 請填寫 `casdoor`                  |
+  | `AUTH_CASDOOR_ID`        | 必選 | Casdoor 應用程式的 Client ID                             |
+  | `AUTH_CASDOOR_SECRET`    | 必選 | Casdoor 應用程式的 Client Secret                         |
+  | `AUTH_CASDOOR_ISSUER`    | 必選 | Casdoor 伺服器 URL（例如 `https://your-casdoor-domain`） |
+  | `CASDOOR_WEBHOOK_SECRET` | 可選 | 用於驗證 Casdoor 發送的 Webhook 請求是否合法的密鑰                |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#casdoor) 可查閱相關變數詳情。
+  </Callout>
+
+  ### 設定 Webhook（可選）
+
+  > 在 Casdoor `>=1.843.0` 上可用。
+
+  設定 Casdoor 的 [Webhook](https://www.casdoor.org/docs/webhooks/overview#setting-up-a-webhook) 以便在使用者資訊更新時同步到 LobeHub。
+
+  **同步的資料字段**：
+
+  - 頭像 (`avatar`)
+  - 信箱 (`email`)
+  - 顯示名稱 (`displayName`)
+
+  **設定步驟**：
+
+  1. 前往 `管理工具` -> `Webhooks`，建立一個 Webhook
+  2. 填寫以下字段：
+     - 連結：`https://your-domain.com/api/webhooks/casdoor`
+     - 方法：`POST`
+     - 內容類型：`application/json`
+     - 協議頭：`casdoor-secret`: `你的Webhook密鑰`
+     - 事件：`update-user`
+  3. 密鑰可前往 [generate-secret.vercel.app/10](https://generate-secret.vercel.app/10) 生成
+  4. 將密鑰填寫到環境變數 `CASDOOR_WEBHOOK_SECRET`
+</Steps>
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Casdoor 身分認證並使用 LobeHub。</Callout>
+
+## Docker Compose 部署 Casdoor
+
+如果你使用 Docker Compose 部署 LobeHub，可以參考以下設定來整合 Casdoor 作為認證服務。
+
+### 反向代理設定
+
+在域名模式中，你需要完成反向代理設定，並確保局域網 / 公網能存取到 Casdoor 服務：
+
+| 域名                 | 反代連接埠   | 說明         |
+| ------------------ | ------ | ---------- |
+| `auth.example.com` | `8000` | Casdoor 服務 |
+
+<Callout type="important">
+  如果你使用如 [寶塔面板](https://www.bt.cn/) 等面板軟體進行反向代理設定，
+  你需要確保其對 `.well-known` 路徑的請求不進行攔截，以確保 Casdoor 的 OAuth2 設定能夠正常工作。
+  這裡提供一份針對 Casdoor 服務的 Nginx server 塊的路徑白名單設定：
+
+  ```nginx
+  location /.well-known/openid-configuration {
+    proxy_pass http://localhost:8000;  # 轉發到 localhost:8000
+    proxy_set_header Host $host;  # 保留原始主機頭
+    proxy_set_header X-Real-IP $remote_addr;  # 保留客戶端真實IP
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # 保留轉發的IP
+    proxy_set_header X-Forwarded-Proto $scheme;  # 保留請求協議
+  }
+  ```
+
+  ⚠️ 請不要在此類面板軟體的反向代理設定中開啟任何形式的快取，以免影響服務的正常執行。
+  詳情請見 [https://github.com/lobehub/lobe-chat/discussions/5986](https://github.com/lobehub/lobe-chat/discussions/5986)
+</Callout>
+
+### 必要設定
+
+1. LobeHub 需要與 Casdoor 通訊，因此你需要設定 Casdoor 的 Issuer：
+
+```env
+AUTH_CASDOOR_ISSUER=https://auth.example.com
+```
+
+該設定會影響 LobeHub 的登入認證服務，你需要確保 Casdoor 服務的位址正確。
+
+2. 在 Casdoor 中允許回調位址為 LobeHub 的位址：
+
+請在 Casdoor 的 Web 面板的 `身分認證 -> 應用程式` -> `<應用程式ID，預設為 app-built-in>` -> `重新導向URL` 中新增一行：
+
+```
+https://lobe.example.com/api/auth/callback/casdoor
+```
+
+3. Casdoor 需要在環境變數中提供存取的 Origin 資訊：
+
+```env
+origin=https://auth.example.com
+```
+
+### 使用 MinIO 存儲 Casdoor 頭像
+
+允許使用者在 Casdoor 中更換頭像：
+
+1. 你需要首先在 `buckets` 中建立一個名為 `casdoor` 的桶，選擇自訂策略，複製並貼上如下內容：
+
+   ```json
+   {
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "AWS": ["*"]
+         },
+         "Action": ["s3:GetBucketLocation"],
+         "Resource": ["arn:aws:s3:::casdoor"]
+       },
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "AWS": ["*"]
+         },
+         "Action": ["s3:ListBucket"],
+         "Resource": ["arn:aws:s3:::casdoor"],
+         "Condition": {
+           "StringEquals": {
+             "s3:prefix": ["files/*"]
+           }
+         }
+       },
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "AWS": ["*"]
+         },
+         "Action": ["s3:PutObject", "s3:DeleteObject", "s3:GetObject"],
+         "Resource": ["arn:aws:s3:::casdoor/**"]
+       }
+     ],
+     "Version": "2012-10-17"
+   }
+   ```
+
+2. 建立一個新的存取密鑰，將生成的 `Access Key` 和 `Secret Key` 存儲之
+
+3. 在 Casdoor 的 `身分認證 -> 提供商` 中關聯 MinIO S3 服務，以下是一個示例設定：
+
+   ![casdoor](/blog/assets18bb134dbc5792d6a624199cca8bf7d3.webp)
+
+   其中，客戶端 ID、客戶端密鑰為上一步建立的存取密鑰中的 `Access Key` 和 `Secret Key`，`192.168.31.251` 應當被替換為 `your_server_ip`。
+
+4. 在 Casdoor 的 `身分認證 -> 應用程式` 中，對 `app-built-in` 應用程式新增提供商，選擇 `minio`，儲存並退出
+
+5. 你可以在 Casdoor 的 `身分認證 -> 資源` 中，嘗試上傳檔案以測試設定是否正確
+
+### 常見問題
+
+#### 無法正常登陸
+
+請根據容器日誌檢查是否存在以下錯誤：
+
+```sh
+docker logs -f lobe-chat
+```
+
+**r3: "response" is not a conform Authorization Server Metadata response**
+
+```log
+lobe-chat      | [auth][error] r3: "response" is not a conform Authorization Server Metadata response (unexpected HTTP status code)
+```
+
+成因：該問題一般是由於你的反向代理設定不正確導致的，你需要確保你的反向代理設定不會攔截 Casdoor 的 OAuth2 設定請求。
+
+解決方案：
+
+- 請參考上方的反向代理設定注意事項。
+
+- 一個直接的排查方式，你可以直接存取 `https://auth.example.com/.well-known/openid-configuration`，如果：
+  - 返回了非 JSON 格式的資料，則說明你的反向代理設定錯誤。
+  - 如果返回的 JSON 格式資料中的 `"issuer": "URL"` 字段不是你設定的 `https://auth.example.com`，則說明你的環境變數設定錯誤。
+
+**TypeError: fetch failed**
+
+```log
+lobe-chat      | [auth][error] TypeError: fetch failed
+```
+
+成因：LobeHub 無法存取認證服務。
+
+解決方案：
+
+- 請檢查你的認證服務是否正常執行，以及 LobeHub 所在的網路是否能夠存取到認證服務。
+
+- 一個直接的排查方式，你可以在 LobeHub 容器的終端機中，使用 `curl` 命令存取你的認證服務 `https://auth.example.com/.well-known/openid-configuration`，如果返回了 JSON 格式的資料，則說明你的認證服務正常執行。
+
+#### 反向代理下 OAuth 令牌交換失敗
+
+如果在反向代理後使用 Docker 時 OAuth 認證在令牌交換階段失敗，這通常是由預設的 `MIDDLEWARE_REWRITE_THROUGH_LOCAL=1` 設定引起的，該設定會將 URL 重寫為 `127.0.0.1:3210`。
+
+**解決方案**: 在 `.env` 檔案中設定 `MIDDLEWARE_REWRITE_THROUGH_LOCAL=0` 並重啟 Docker 容器：
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+### Docker Compose 組態檔
+
+Casdoor 的 Docker Compose 組態檔可以在 [docker-compose/local/casdoor](https://github.com/lobehub/lobe-chat/tree/main/docker-compose/local/casdoor) 目錄中找到。
+
+## 相關資源
+
+- [Casdoor 文件](https://casdoor.org/docs/overview)
+- [Casdoor 應用程式設定](https://casdoor.org/docs/application/config)

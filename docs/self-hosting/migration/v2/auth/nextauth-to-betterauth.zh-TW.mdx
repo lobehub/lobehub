@@ -1,0 +1,374 @@
+---
+title: 從 NextAuth 遷移到 Better Auth
+description: 將 LobeHub 部署從 NextAuth 身分驗證遷移到 Better Auth 的指南，包括簡單遷移和完整遷移選項。
+tags:
+  - 身分驗證服務
+  - Better Auth
+  - NextAuth
+  - 遷移
+---
+
+# 從 NextAuth 遷移到 Better Auth
+
+本指南幫助您將現有的基於 NextAuth 的 LobeHub 部署遷移到 Better Auth。
+
+<Callout type={'info'}>
+  Better Auth 是 LobeHub 推薦的身分驗證解決方案。它提供更簡單的設定、更多的 SSO 提供商支援，以及更好的自託管體驗。
+</Callout>
+
+<Callout type={'error'}>
+  **重要提醒**：
+
+  - **務必先備份資料庫**！如使用 Neon，可通過 [Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 建立備份
+  - 遷移過程中可能出現的任何資料丟失或問題，LobeHub 概不負責
+  - 本指南適合有一定開發背景的使用者，不建議無技術經驗的使用者自行操作
+  - 如有任何疑問，歡迎到 [Discord](https://discord.com/invite/AYFPHvv2jT) 社群或 [GitHub Issue](https://github.com/lobehub/lobe-chat/issues) 提問
+</Callout>
+
+## 選擇遷移方式
+
+| 方式            | 適用場景          | 使用者影響    | 資料保留          |
+| ------------- | ------------- | ------- | ------------- |
+| [簡單遷移](#簡單遷移) | 小型部署（≤ 10 使用者） | 使用者需重新登入 | 聊天記錄、設定       |
+| [完整遷移](#完整遷移) | 大型部署          | 對使用者無感知  | 全部封包括 SSO 連接 |
+
+<Callout type={'info'}>
+  **注意**：NextAuth 從未支援信箱密碼登入，因此沒有密碼哈希需要遷移。完整遷移的主要好處是保留 SSO 連接（Google、GitHub 等）。
+</Callout>
+
+## 環境變數遷移對照表
+
+### 通用變數
+
+| NextAuth (舊)                     | Better Auth (新)      | 說明                           |
+| -------------------------------- | -------------------- | ---------------------------- |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | *(已廢棄)*              | 不再需要，Better Auth 在設定資料庫後自動啟用 |
+| `NEXT_AUTH_SECRET`               | `AUTH_SECRET`        | 會話加密密鑰                       |
+| `AUTH_URL`                       | `APP_URL`            | 應用程式 URL（用於 OAuth 回調）          |
+| `NEXT_AUTH_SSO_PROVIDERS`        | `AUTH_SSO_PROVIDERS` | SSO 提供商列表（逗號分隔）              |
+| `NEXT_AUTH_SSO_SESSION_STRATEGY` | *(已廢棄)*              | 不再需要，Better Auth 使用資料庫會話     |
+
+### SSO 提供商變數
+
+SSO 提供商的環境變數格式保持一致：`AUTH_<PROVIDER>_ID` 和 `AUTH_<PROVIDER>_SECRET`。
+
+| NextAuth (舊)                        | Better Auth (新)                | 說明               |
+| ----------------------------------- | ------------------------------ | ---------------- |
+| `AUTH_GITHUB_ID`                    | `AUTH_GITHUB_ID`               | ✅ 保持不變           |
+| `AUTH_GITHUB_SECRET`                | `AUTH_GITHUB_SECRET`           | ✅ 保持不變           |
+| `AUTH_GOOGLE_ID`                    | `AUTH_GOOGLE_ID`               | ✅ 保持不變           |
+| `AUTH_GOOGLE_SECRET`                | `AUTH_GOOGLE_SECRET`           | ✅ 保持不變           |
+| `AUTH_AUTH0_ID`                     | `AUTH_AUTH0_ID`                | ✅ 保持不變           |
+| `AUTH_AUTH0_SECRET`                 | `AUTH_AUTH0_SECRET`            | ✅ 保持不變           |
+| `AUTH_AUTH0_ISSUER`                 | `AUTH_AUTH0_ISSUER`            | ✅ 保持不變           |
+| `AUTH_AUTHENTIK_ID`                 | `AUTH_AUTHENTIK_ID`            | ✅ 保持不變           |
+| `AUTH_AUTHENTIK_SECRET`             | `AUTH_AUTHENTIK_SECRET`        | ✅ 保持不變           |
+| `AUTH_AUTHENTIK_ISSUER`             | `AUTH_AUTHENTIK_ISSUER`        | ✅ 保持不變           |
+| `microsoft-entra-id`                | `microsoft`                    | ⚠️ provider 名稱變更 |
+| `AUTH_MICROSOFT_ENTRA_ID_ID`        | `AUTH_MICROSOFT_ID`            | ⚠️ 變數名變更         |
+| `AUTH_MICROSOFT_ENTRA_ID_SECRET`    | `AUTH_MICROSOFT_SECRET`        | ⚠️ 變數名變更         |
+| `AUTH_MICROSOFT_ENTRA_ID_TENANT_ID` | `AUTH_MICROSOFT_TENANT_ID`     | ⚠️ 變數名變更         |
+| `AUTH_MICROSOFT_ENTRA_ID_BASE_URL`  | `AUTH_MICROSOFT_AUTHORITY_URL` | ⚠️ 變數名變更         |
+
+<Callout type={'warning'}>
+  **注意**：Microsoft Entra ID 的 provider 名稱從 `microsoft-entra-id` 改為 `microsoft`，相應的環境變數前綴也從 `AUTH_MICROSOFT_ENTRA_ID_` 改為 `AUTH_MICROSOFT_`。
+</Callout>
+
+### 新增功能變數
+
+Better Auth 支援更多功能，以下是新增的環境變數：
+
+| 環境變數                      | 說明                               |
+| ------------------------- | -------------------------------- |
+| `AUTH_ALLOWED_EMAILS`     | 信箱白名單（限制註冊）                      |
+| `AUTH_EMAIL_VERIFICATION` | 啟用信箱驗證（設為 `1`）                   |
+| `AUTH_ENABLE_MAGIC_LINK`  | 啟用魔法連結登入（設為 `1`）                 |
+| `EMAIL_SERVICE_PROVIDER`  | 郵件服務提供商（`nodemailer` 或 `resend`） |
+
+## 簡單遷移
+
+對於小型自託管部署，最簡單的方法是讓使用者使用 SSO 帳號重新登入。
+
+<Callout type={'tip'}>
+  **Casdoor 使用者注意**：如果你使用 Casdoor 作為身分提供商，請先閱讀
+  [email\_not\_found 錯誤](#email_not_found-錯誤) 部分，瞭解信箱設定要求。
+</Callout>
+
+<Callout type={'warning'}>
+  **限制**：此方法會丟失 SSO 連接資料。如需保留 SSO 連接，請使用 [完整遷移](#完整遷移)。
+
+  雖然 SSO 連接會丟失，但使用者可以在登入後通過個人資料頁手動重新綁定社交帳號。
+
+  **示例場景**：假設你之前的帳號綁定了兩個 SSO 帳號：
+
+  - 主信箱（Google）：`a@google.com`
+  - 副信箱（Microsoft）：`b@outlook.com`
+
+  遷移後使用 `b@outlook.com` 登入將會**建立新使用者**，而非關聯到原有帳號。
+</Callout>
+
+### 步驟
+
+1. **更新環境變數**
+
+   移除 NextAuth 變數並新增 Better Auth 變數：
+
+   <GenerateSecret envName="AUTH_SECRET" />
+
+   ```bash
+   # 移除這些
+   # NEXT_AUTH_SECRET=xxx
+   # AUTH_xxx 相關的 NextAuth 提供商設定
+
+   # 新增這些
+   AUTH_SECRET=your-secret-key  # openssl rand -base64 32
+
+   # 可選：啟用 Google SSO（示例）
+   AUTH_SSO_PROVIDERS=google
+   AUTH_GOOGLE_ID=your-google-client-id
+   AUTH_GOOGLE_SECRET=your-google-client-secret
+   ```
+
+   <Callout type={'tip'}>
+     查閱 [身分驗證服務設定](/zh/docs/self-hosting/auth) 瞭解完整的環境變數和 SSO 提供商設定。
+   </Callout>
+
+2. **重新部署 LobeHub**
+
+   部署啟用 Better Auth 的新版本。
+
+3. **通知使用者**
+
+   告知使用者使用之前的 SSO 帳號重新登入。由於使用者 ID 保持不變，聊天記錄和設定將被保留。
+
+<Callout type={'tip'}>
+  這種方法快速且設定簡單。使用者只需使用現有的 SSO 提供商重新登入即可。
+</Callout>
+
+## 完整遷移
+
+對於大型部署或需要保留 SSO 連接的情況，請使用遷移腳本。這會將資料從 `nextauth_accounts` 表遷移到 Better Auth 的 `accounts` 表。
+
+<Callout type={'error'}>
+  **重要說明**：
+
+  - **務必先備份資料庫**！如使用 Neon，可通過 [Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 建立備份
+  - 遷移腳本需要 **clone 倉庫後在本地執行**，不是在部署環境中執行
+  - 由於遷移涉及使用者資料，風險較高，**官方不提供部署時自動遷移功能**
+  - 請務必先使用 dry-run 模式測試腳本能夠順利執行再正式執行
+  - 請務必在測試環境驗證後再操作生產資料庫
+</Callout>
+
+### 前置條件
+
+**環境要求：**
+
+- Node.js 18+
+- Git（用於 clone 倉庫）
+- pnpm（用於安裝依賴）
+
+**準備工作：**
+
+1. Clone LobeHub 倉庫並安裝依賴：
+
+   ```bash
+   git clone https://github.com/lobehub/lobe-chat.git
+   cd lobe-chat
+   pnpm install
+   ```
+
+2. 準備資料庫連接字符串
+
+3. 確保資料庫 schema 為最新版本
+
+<Callout type={'info'}>
+  如果你長期停留在舊版本，資料庫 schema 可能不是最新的。請在 clone 的倉庫中執行：
+
+  ```bash
+  DATABASE_URL=your-database-url pnpm db:migrate
+  ```
+</Callout>
+
+### 步驟 1：設定遷移腳本環境變數
+
+在項目根目錄建立 `.env` 檔案（腳本會自動載入），設定所有環境變數：
+
+```bash
+# ============================================
+# 遷移模式：test 或 prod
+# 建議先用 test 模式在測試資料庫驗證，確認無誤後再切換到 prod
+# ============================================
+NEXTAUTH_TO_BETTERAUTH_MODE=test
+
+# ============================================
+# 資料庫連接（根據模式使用對應的環境變數）
+# TEST_ 前綴用於測試環境，PROD_ 前綴用於生產環境
+# ============================================
+TEST_NEXTAUTH_TO_BETTERAUTH_DATABASE_URL=postgresql://user:pass@test-host:5432/testdb
+PROD_NEXTAUTH_TO_BETTERAUTH_DATABASE_URL=postgresql://user:pass@prod-host:5432/proddb
+
+# ============================================
+# 資料庫驅動（可選）
+# neon: Neon serverless 驅動（預設）
+# node: node-postgres 驅動
+# ============================================
+NEXTAUTH_TO_BETTERAUTH_DATABASE_DRIVER=neon
+
+# ============================================
+# 批處理大小（可選）
+# 每批處理的記錄數，預設為 300
+# ============================================
+NEXTAUTH_TO_BETTERAUTH_BATCH_SIZE=300
+
+# ============================================
+# Dry Run 模式（可選）
+# 設為 1 時只列印日誌，不實際修改資料庫
+# 建議首次執行時啟用，驗證無誤後再關閉
+# ============================================
+NEXTAUTH_TO_BETTERAUTH_DRY_RUN=1
+```
+
+### 步驟 2：Dry-Run 驗證（測試環境）
+
+```bash
+# 執行遷移（NEXTAUTH_TO_BETTERAUTH_DRY_RUN=1，只列印日誌不修改資料庫）
+npx tsx scripts/nextauth-to-betterauth/index.ts
+```
+
+檢查輸出日誌，確認無異常後繼續下一步。
+
+### 步驟 3：執行遷移並驗證（測試環境）
+
+修改 `.env` 將 `NEXTAUTH_TO_BETTERAUTH_DRY_RUN` 改為 `0`，然後執行：
+
+```bash
+# 執行遷移
+npx tsx scripts/nextauth-to-betterauth/index.ts
+
+# 驗證遷移結果
+npx tsx scripts/nextauth-to-betterauth/verify.ts
+```
+
+驗證測試環境遷移結果無誤後，繼續下一步。
+
+### 步驟 4：Dry-Run 驗證（生產環境）
+
+1. 修改 `.env` 檔案：
+   - 將 `NEXTAUTH_TO_BETTERAUTH_MODE` 改為 `prod`
+   - 將 `NEXTAUTH_TO_BETTERAUTH_DRY_RUN` 改回 `1`
+2. 執行腳本：
+
+```bash
+# 執行遷移（dry-run 模式驗證）
+npx tsx scripts/nextauth-to-betterauth/index.ts
+```
+
+檢查輸出日誌，確認無異常後繼續下一步。
+
+### 步驟 5：執行遷移並驗證（生產環境）
+
+修改 `.env` 將 `NEXTAUTH_TO_BETTERAUTH_DRY_RUN` 改為 `0`，然後執行：
+
+```bash
+# 執行遷移
+npx tsx scripts/nextauth-to-betterauth/index.ts
+
+# 驗證遷移結果
+npx tsx scripts/nextauth-to-betterauth/verify.ts
+```
+
+### 步驟 6：設定 Better Auth 並重新部署
+
+遷移完成後，參照 [簡單遷移 - 步驟 1](#步驟) 設定 Better Auth 環境變數並重新部署。
+
+<Callout type={'tip'}>
+  完整的 Better Auth 設定請參閱 [身分驗證服務設定](/zh/docs/self-hosting/auth)，包括所有支援的 SSO 提供商和郵件服務設定。
+</Callout>
+
+## 遷移內容對比
+
+| 資料                      | 簡單遷移      | 完整遷移 |
+| ----------------------- | --------- | ---- |
+| 使用者帳號                    | ✅（通過重新登入） | ✅    |
+| SSO 連接（Google、GitHub 等） | ❌         | ✅    |
+| 聊天記錄                    | ✅         | ✅    |
+| 使用者設定                    | ✅         | ✅    |
+
+<Callout type={'info'}>
+  **注意**：Sessions 和 verification tokens 不會被遷移，因為它們是臨時資料。遷移後使用者需要重新登入。
+</Callout>
+
+## 常見問題
+
+### 存取前清除瀏覽器資料
+
+遷移完成後，如果遇到登入問題，請先嚐試清除瀏覽器的站點資料：
+
+1. 開啟瀏覽器開發者工具（F12 或右鍵 → 檢查）
+2. 進入 Application 標籤頁 → Storage → Clear site data
+3. 刷新頁面後重試
+
+![清除瀏覽器站點資料](https://hub-apac-1.lobeobjects.space/docs/733c50ee2302e5daa3d99dc0739238c8.png)
+
+### 遷移後使用者無法登入
+
+- 檢查 `AUTH_SECRET` 是否正確設定
+- 驗證資料庫連接是否正常
+- 確保 SSO 提供商已在 `AUTH_SSO_PROVIDERS` 中設定
+
+### SSO 使用者無法連接
+
+- 簡單遷移：使用者需要使用 SSO 帳號重新登入
+- 完整遷移：驗證 SSO 提供商已在 `AUTH_SSO_PROVIDERS` 中設定，且使用相同的 provider ID
+
+### 遷移腳本失敗
+
+- 檢查資料庫連接字符串
+- 查看腳本日誌瞭解具體錯誤
+- 確保資料庫中存在 `nextauth_accounts` 表
+
+### column "xxx" of relation "users" does not exist
+
+這是因為資料庫 schema 未更新。請先執行 `pnpm db:migrate` 更新資料庫結構，然後再執行遷移腳本。
+
+### email\_not\_found 錯誤
+
+如果登入時跳轉到 `signin?callbackUrl=...&error=email_not_found`，說明 LobeHub 無法獲取使用者信箱。
+
+<Callout type={'warning'}>
+  **重要提示**：Better Auth 目前**強依賴使用者信箱**進行身分認證。所有 SSO 提供商必須設定為返回信箱資訊，否則使用者無法登入。
+</Callout>
+
+常見原因：
+
+**原因 1：SSO 連接未請求信箱權限**
+
+設定 SSO 連接時（如 Auth0 中的 GitHub 連接），務必在 **Attributes** 部分勾選 **Email Address** 權限。LobeHub 需要使用者信箱進行身分認證。
+
+**原因 2：使用者在身分提供商中未設定信箱**
+
+對於 Casdoor、Logto 等身分提供商，使用者可能沒有設定信箱。
+
+<Callout type={'warning'}>
+  **Casdoor 使用者注意**：Casdoor 不要求使用者必須設定信箱，但 LobeHub 強依賴信箱進行身分認證。如果因為大量使用者沒有信箱而感覺遷移困難，建議暫時停留在 [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) 版本。後續官方計劃提供使用者端自助遷移功能，屆時沒有信箱的使用者登入時會被重新導向到綁定信箱頁面。
+</Callout>
+
+解決方案：
+
+1. 先在 LobeHub 中設定身分提供商的 Webhook 以同步使用者資料：
+   - [Casdoor Webhook 設定](/zh/docs/self-hosting/auth/providers/casdoor)
+   - [Logto Webhook 設定](/zh/docs/self-hosting/auth/providers/logto)
+2. 然後在身分提供商的管理後臺為使用者設定信箱
+3. 使用者資料通過 Webhook 同步到 LobeHub 後即可正常登入
+
+## 相關閱讀
+
+<Cards>
+  <Card href={'/zh/docs/self-hosting/migration/v2/auth/migration-internals'} title={'遷移技術原理'} />
+
+  <Card href={'/zh/docs/self-hosting/auth'} title={'身分驗證服務設定'} />
+
+  <Card href={'/zh/docs/self-hosting/environment-variables/auth'} title={'認證相關環境變數'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/legacy'} title={'舊版身分驗證（NextAuth 和 Clerk）'} />
+</Cards>

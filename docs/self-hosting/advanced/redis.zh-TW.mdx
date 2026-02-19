@@ -1,0 +1,126 @@
+---
+title: 設定 Redis 快取服務
+description: 瞭解如何設定 Redis 快取服務以優化 LobeHub 的性能和會話管理。
+tags:
+  - Redis
+  - 快取
+  - 會話存儲
+  - 性能優化
+---
+
+# 設定 Redis 快取服務
+
+LobeHub 使用 Redis 作為高性能快取和會話存儲服務，用於優化系統性能和管理使用者認證狀態。
+
+<Callout type={'info'}>
+  LobeHub 使用標準 Redis 協議（通過 ioredis 庫），支援任何相容 Redis 協議的服務，包括 Redis
+  官方服務、自部署 Redis、以及雲服務商提供的 Redis 服務（如 AWS ElastiCache、阿里雲 Redis
+  等）。
+</Callout>
+
+## 使用場景
+
+Redis 在 LobeHub 中主要用於以下場景：
+
+### 認證會話存儲
+
+作為 Better Auth 的二級存儲，用於存儲使用者認證 session 和 token 資料。這可以實現：
+
+- 跨多個服務實例共享會話狀態
+- 更快的會話驗證速度
+- 支援會話撤銷和管理
+
+### 檔案代理快取
+
+快取 S3 預簽名 URL，減少對 S3 API 的調用次數，優化檔案存取性能。
+
+### Agent 設定快取
+
+快取 Agent 設定資料，減少資料庫查詢，提升回應速度。
+
+## 核心環境變數
+
+<Steps>
+  ### `REDIS_URL`
+
+  Redis 伺服器的連接 URL，這是啟用 Redis 功能的必需設定。
+
+  ```shell
+  REDIS_URL=redis://localhost:6379
+  ```
+
+  支援的 URL 格式：
+
+  - 標準格式：`redis://localhost:6379`
+  - 帶認證：`redis://username:password@localhost:6379`
+  - 帶資料庫：`redis://localhost:6379/0`
+
+  ### `REDIS_PREFIX`
+
+  Redis 鍵的前綴，用於在共享 Redis 實例中隔離 LobeHub 的資料。
+
+  - 預設值：`lobechat`
+  - 示例：`REDIS_PREFIX=my-lobechat`
+
+  ### `REDIS_TLS`
+
+  是否啟用 TLS/SSL 加密連接。
+
+  - 預設值：`false`
+  - 示例：`REDIS_TLS=true`
+
+  <Callout type={'tip'}>
+    如果你使用雲服務商提供的 Redis 服務，通常需要啟用 TLS 以確保資料傳輸安全。
+  </Callout>
+
+  ### `REDIS_PASSWORD`
+
+  Redis 認證密碼（可選）。如果 Redis 伺服器設定了密碼認證，需要設定此變數。
+
+  ### `REDIS_USERNAME`
+
+  Redis 認證使用者名稱（可選）。Redis 6.0+ 支援 ACL 使用者認證，如果使用了使用者名稱認證，需要設定此變數。
+
+  ### `REDIS_DATABASE`
+
+  Redis 資料庫索引（可選）。Redis 支援多個資料庫（預設 0-15），可以指定使用的資料庫。
+
+  - 預設值：`0`
+  - 示例：`REDIS_DATABASE=1`
+</Steps>
+
+## 設定示例
+
+### 本地開發
+
+```shell
+REDIS_URL=redis://localhost:6379
+REDIS_PREFIX=lobechat-dev
+```
+
+### 生產環境（帶認證）
+
+```shell
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=your-strong-password
+REDIS_PREFIX=lobechat
+REDIS_TLS=true
+```
+
+### 雲服務（如 AWS ElastiCache）
+
+```shell
+REDIS_URL=redis://your-cluster.cache.amazonaws.com:6379
+REDIS_TLS=true
+REDIS_PREFIX=lobechat
+```
+
+## 注意事項
+
+<Callout type={'warning'}>
+  Redis 是可選服務。如果不設定 `REDIS_URL`，LobeHub 仍然可以正常執行，但會失去上述快取和會話管理的優化功能。
+</Callout>
+
+- **記憶體管理**：Redis 是記憶體資料庫，請確保伺服器有足夠的記憶體
+- **持久化**：建議啟用 Redis 的 RDB 或 AOF 持久化，防止資料丟失
+- **高可用**：生產環境建議使用 Redis Sentinel 或 Redis Cluster 實現高可用

@@ -1,0 +1,55 @@
+---
+title: 在 LobeHub 中設定 Cloudflare Zero Trust 身分驗證
+description: 學習如何在 LobeHub 中設定 Cloudflare Zero Trust SSO，包括建立 Access 應用程式。
+tags:
+  - Cloudflare Zero Trust
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+  - OIDC
+---
+
+# 設定 Cloudflare Zero Trust 身分驗證
+
+[Cloudflare Zero Trust](https://www.cloudflare.com/zero-trust/) 無需 VPN 即可提供應用程式的安全存取。
+
+<Steps>
+  ### 建立 Access 應用程式
+
+  1. 登入 [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
+  2. 前往 **Access** > **Applications**
+  3. 點擊 **Add an application**，選擇 **SaaS**
+  4. 設定應用程式：
+     - Application name: `LobeHub`
+     - 選擇 OIDC 作為認證協議
+     - 在 redirect URIs 中新增回調 URL
+
+  <Callout type={'info'}>
+    **回調 URL 格式**: `https://your-domain.com/api/auth/callback/cloudflare-zero-trust`
+  </Callout>
+
+  5. 記下 **Client ID**、**Client Secret** 和 **Issuer URL**
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                                | 類型 | 描述                                                      |
+  | ----------------------------------- | -- | ------------------------------------------------------- |
+  | `AUTH_SECRET`                       | 必選 | 用於加密會話令牌的密鑰。使用以下命令生成：`openssl rand -base64 32`          |
+  | `AUTH_SSO_PROVIDERS`                | 必選 | SSO 提供商。填寫 `cloudflare-zero-trust`                      |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`     | 必選 | Cloudflare Access 的 Client ID                           |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_SECRET` | 必選 | Cloudflare Access 的 Client Secret                       |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER` | 必選 | Issuer URL（例如 `https://your-team.cloudflareaccess.com`） |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#cloudflare-zero-trust) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Cloudflare Zero Trust 身分認證並使用 LobeHub。</Callout>
+
+## 相關資源
+
+- [Cloudflare Zero Trust 文件](https://developers.cloudflare.com/cloudflare-one/)
+- [設定 OIDC 應用程式](https://developers.cloudflare.com/cloudflare-one/identity/idp-integration/generic-oidc/)

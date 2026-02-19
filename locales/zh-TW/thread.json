@@ -1,6 +1,6 @@
 {
-  "actions.confirmRemoveThread": "即將刪除該子話題，刪除後將無法恢復，請謹慎操作。",
-  "newPortalThread.includeContext": "包含主題上下文",
-  "newPortalThread.title": "開啟新的子主題",
-  "notSupportMultiModals": "子主題暫不支持文件/圖片上傳，如有需求，歡迎留言：<1>💬 討論區</1>"
+  "actions.confirmRemoveThread": "將刪除該子話題，刪除後不可恢復。建議先複製需要保留的內容，再確認繼續",
+  "newPortalThread.includeContext": "包含話題上下文",
+  "newPortalThread.title": "開啟新的子話題",
+  "notSupportMultiModals": "子話題目前不支援檔案/圖片上傳。如有任何需求，歡迎在<1>💬 討論區</1>留言。"
 }

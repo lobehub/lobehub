@@ -1,0 +1,343 @@
+---
+title: 從 Clerk 遷移到 Better Auth
+description: 將 LobeHub 部署從 Clerk 身分驗證遷移到 Better Auth 的指南，包括簡單遷移和完整遷移選項。
+tags:
+  - 身分驗證服務
+  - Better Auth
+  - Clerk
+  - 遷移
+---
+
+# 從 Clerk 遷移到 Better Auth
+
+本指南幫助您將現有的基於 Clerk 的 LobeHub 部署遷移到 Better Auth。
+
+<Callout type={'info'}>
+  Better Auth 是 LobeHub 推薦的身分驗證解決方案。它提供更簡單的設定、更多的 SSO 提供商支援，以及更好的自託管體驗。
+</Callout>
+
+<Callout type={'error'}>
+  **重要提醒**：
+
+  - **務必先備份資料庫**！如使用 Neon，可通過 [Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 建立備份
+  - 遷移過程中可能出現的任何資料丟失或問題，LobeHub 概不負責
+  - 本指南適合有一定開發背景的使用者，不建議無技術經驗的使用者自行操作
+  - 如有任何疑問，歡迎到 [Discord](https://discord.com/invite/AYFPHvv2jT) 社群或 [GitHub Issue](https://github.com/lobehub/lobe-chat/issues/11707) 提問
+</Callout>
+
+## 選擇遷移方式
+
+| 方式            | 適用場景          | 使用者影響    | 資料保留     |
+| ------------- | ------------- | ------- | -------- |
+| [簡單遷移](#簡單遷移) | 小型部署（≤ 10 使用者） | 使用者需重置密碼 | 聊天記錄、設定  |
+| [完整遷移](#完整遷移) | 大型部署          | 對使用者無感知  | 全部封包括密碼 |
+
+## 簡單遷移
+
+對於小型自託管部署，最簡單的方法是讓使用者重置密碼。
+
+<Callout type={'warning'}>
+  **限制**：此方法會丟失 SSO 連接資料。如需保留 SSO 連接，請使用 [完整遷移](#完整遷移)。
+
+  雖然 SSO 連接會丟失，但使用者可以在使用信箱密碼登入後，通過個人資料頁手動重新綁定社交帳號。
+
+  **示例場景**：假設你之前的帳號綁定了兩個 SSO 帳號：
+
+  - 主信箱（Google）：`a@google.com`
+  - 副信箱（Microsoft）：`b@outlook.com`
+
+  遷移後使用 `a@google.com` 重置密碼，之後再用 `b@outlook.com` 登入將會**建立新使用者**，而非關聯到原有帳號。
+</Callout>
+
+![個人資料頁 - 關聯帳號資訊](https://hub-apac-1.lobeobjects.space/docs/43dfa498b82a58c9f99e805e88ea711a.png)
+
+### 步驟
+
+1. **設定郵件服務**
+
+   設定郵件服務以支援密碼重置功能。參閱 [郵件服務設定](/zh/docs/self-hosting/auth#郵件服務設定)。
+
+2. **更新環境變數**
+
+   移除 Clerk 變數並新增 Better Auth 變數：
+
+   <GenerateSecret envName="AUTH_SECRET" />
+
+   ```bash
+   # 移除這些
+   # NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=xxx
+   # CLERK_SECRET_KEY=xxx
+
+   # 新增這些
+   AUTH_SECRET=your-secret-key  # openssl rand -base64 32
+
+   # 可選：啟用 Google SSO（示例）
+   AUTH_SSO_PROVIDERS=google
+   AUTH_GOOGLE_ID=your-google-client-id
+   AUTH_GOOGLE_SECRET=your-google-client-secret
+   ```
+
+   <Callout type={'tip'}>
+     查閱 [身分驗證服務設定](/zh/docs/self-hosting/auth) 瞭解完整的環境變數和 SSO 提供商設定。
+   </Callout>
+
+3. **重新部署 LobeHub**
+
+   部署啟用 Better Auth 的新版本。
+
+4. **通知使用者**
+
+   告知使用者按以下步驟登入（聊天記錄和設定將被保留）：
+
+   1. 存取登入頁（如 `https://your-domain.com/signin`）
+   2. 輸入之前使用的信箱，Enter
+
+   如果啟用了 Magic Link：系統會自動發送登入連結郵件，使用者點擊郵件中的連結即可直接登入。
+
+   如果未啟用 Magic Link：頁面會顯示提示資訊，使用者可以選擇：
+
+   - 使用之前關聯的社交帳號（如 Google、GitHub）登入
+   - 點擊「設定密碼」連結，通過郵件設定新密碼後登入
+
+   ![LobeHub 登入頁面 - 社交帳號登入提示](https://hub-apac-1.lobeobjects.space/docs/8d0563701fcd17ad7252a72b1746dd42.png)
+
+   3. （可選）登入後可在個人資料頁進行以下操作：
+      - 已關聯帳號：手動關聯其他社交帳號
+      - 密碼：隨時設定或更新密碼
+
+<Callout type={'tip'}>
+  這種方法快速且設定簡單。使用者可通過 Magic Link、社交帳號或設定新密碼登入，所有資料完整保留。
+  登入後可隨時在 [個人資料頁](/settings/profile) 管理密碼和關聯帳號。
+</Callout>
+
+## 完整遷移
+
+對於大型部署或需要保留使用者密碼和 SSO 連接的情況，請使用遷移腳本。
+
+<Callout type={'error'}>
+  **重要說明**：
+
+  - **務必先備份資料庫**！如使用 Neon，可通過 [Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 建立備份
+  - 遷移腳本需要 **clone 倉庫後在本地執行**，不是在部署環境中執行
+  - 由於遷移涉及使用者資料，風險較高，**官方不提供部署時自動遷移功能**
+  - 請務必先使用 dry-run 模式測試腳本能夠順利執行再正式執行
+  - 請務必在測試環境驗證後再操作生產資料庫
+</Callout>
+
+### 前置條件
+
+**環境要求：**
+
+- Node.js 18+
+- Git（用於 clone 倉庫）
+- pnpm（用於安裝依賴）
+
+**準備工作：**
+
+1. Clone LobeHub 倉庫並安裝依賴：
+
+   ```bash
+   git clone https://github.com/lobehub/lobe-chat.git
+   cd lobe-chat
+   pnpm install
+   ```
+
+2. 準備以下資訊：
+   - Clerk 控制檯存取權限（用於 CSV 導出）
+   - Clerk API 密鑰（用於 API 導出）
+   - 資料庫連接字符串
+
+3. 確保資料庫 schema 為最新版本
+
+<Callout type={'info'}>
+  如果你長期停留在舊版本（如 1.x），資料庫 schema 可能不是最新的。請在 clone 的倉庫中執行：
+
+  ```bash
+  DATABASE_URL=your-database-url pnpm db:migrate
+  ```
+</Callout>
+
+### 步驟 1：設定遷移腳本環境變數
+
+在項目根目錄建立 `.env` 檔案（腳本會自動載入），設定所有環境變數：
+
+```bash
+# ============================================
+# 遷移模式：test 或 prod
+# 建議先用 test 模式在測試資料庫驗證，確認無誤後再切換到 prod
+# ============================================
+CLERK_TO_BETTERAUTH_MODE=test
+
+# ============================================
+# 資料庫連接（根據模式使用對應的環境變數）
+# TEST_ 前綴用於測試環境，PROD_ 前綴用於生產環境
+# ============================================
+TEST_CLERK_TO_BETTERAUTH_DATABASE_URL=postgresql://user:pass@test-host:5432/testdb
+PROD_CLERK_TO_BETTERAUTH_DATABASE_URL=postgresql://user:pass@prod-host:5432/proddb
+
+# ============================================
+# Clerk API 密鑰（用於通過 API 導出使用者資料）
+# 從 Clerk 控制檯獲取：Configure → Developers → API Keys
+# ============================================
+TEST_CLERK_TO_BETTERAUTH_CLERK_SECRET_KEY=sk_test_xxx
+PROD_CLERK_TO_BETTERAUTH_CLERK_SECRET_KEY=sk_live_xxx
+
+# ============================================
+# 資料庫驅動（可選）
+# neon: Neon serverless 驅動（預設）
+# node: node-postgres 驅動
+# ============================================
+CLERK_TO_BETTERAUTH_DATABASE_DRIVER=neon
+
+# ============================================
+# Dry Run 模式（可選）
+# 設為 1 時只列印日誌，不實際修改資料庫
+# 建議首次執行時啟用，驗證無誤後再關閉
+# ============================================
+CLERK_TO_BETTERAUTH_DRY_RUN=1
+```
+
+### 步驟 2：導出 Clerk 資料
+
+#### 停止新使用者註冊
+
+在導出資料前，先禁止新使用者註冊，確保遷移期間資料不變：
+
+1. 前往 [Clerk 控制檯](https://dashboard.clerk.com) → Configure → Restrictions
+2. 啟用「Restricted」模式
+
+#### 從 Clerk 控制檯導出 CSV
+
+1. 前往 [Clerk 控制檯](https://dashboard.clerk.com) → Configure → Settings → User exports
+2. 點擊「Export users」下載 CSV 檔案
+3. 儲存到 `scripts/clerk-to-betterauth/test/clerk_exported_users.csv`
+
+詳見 [Clerk 官方文件](https://clerk.com/docs/guides/development/migrating/overview#export-your-users-data-from-the-clerk-dashboard)。
+
+![Clerk Dashboard - 導出使用者 CSV](https://hub-apac-1.lobeobjects.space/docs/6523e1805a69d3ece3804e2bcd5d4552.png)
+
+#### 通過 API 導出 JSON
+
+```bash
+# 執行導出腳本（會根據 CLERK_TO_BETTERAUTH_MODE 自動選擇密鑰和輸出路徑）
+npx tsx scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
+```
+
+這將自動建立 `scripts/clerk-to-betterauth/test/clerk_users.json`，包含額外的使用者資料。
+
+### 步驟 3：Dry-Run 驗證（測試環境）
+
+```bash
+# 執行遷移（CLERK_TO_BETTERAUTH_DRY_RUN=1，只列印日誌不修改資料庫）
+npx tsx scripts/clerk-to-betterauth/index.ts
+```
+
+檢查輸出日誌，確認無異常後繼續下一步。
+
+### 步驟 4：執行遷移並驗證（測試環境）
+
+修改 `.env` 將 `CLERK_TO_BETTERAUTH_DRY_RUN` 改為 `0`，然後執行：
+
+```bash
+# 執行遷移
+npx tsx scripts/clerk-to-betterauth/index.ts
+
+# 驗證遷移結果
+npx tsx scripts/clerk-to-betterauth/verify.ts
+```
+
+驗證測試環境遷移結果無誤後，繼續下一步。
+
+### 步驟 5：Dry-Run 驗證（生產環境）
+
+1. 將 CSV 檔案複製到 prod 目錄：`scripts/clerk-to-betterauth/prod/clerk_exported_users.csv`
+2. 修改 `.env` 檔案：
+   - 將 `CLERK_TO_BETTERAUTH_MODE` 改為 `prod`
+   - 將 `CLERK_TO_BETTERAUTH_DRY_RUN` 改回 `1`
+3. 執行腳本：
+
+```bash
+# 導出生產環境使用者資料
+npx tsx scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
+
+# 執行遷移（dry-run 模式驗證）
+npx tsx scripts/clerk-to-betterauth/index.ts
+```
+
+檢查輸出日誌，確認無異常後繼續下一步。
+
+### 步驟 6：執行遷移並驗證（生產環境）
+
+修改 `.env` 將 `CLERK_TO_BETTERAUTH_DRY_RUN` 改為 `0`，然後執行：
+
+```bash
+# 執行遷移
+npx tsx scripts/clerk-to-betterauth/index.ts
+
+# 驗證遷移結果
+npx tsx scripts/clerk-to-betterauth/verify.ts
+```
+
+### 步驟 7：設定 Better Auth 並重新部署
+
+遷移完成後，參照 [簡單遷移 - 步驟 2](#步驟) 設定 Better Auth 環境變數並重新部署。
+
+<Callout type={'tip'}>
+  完整的 Better Auth 設定請參閱 [身分驗證服務設定](/zh/docs/self-hosting/auth)，包括所有支援的 SSO 提供商和郵件服務設定。
+</Callout>
+
+## 遷移內容對比
+
+| 資料                      | 簡單遷移      | 完整遷移 |
+| ----------------------- | --------- | ---- |
+| 使用者帳號                    | ✅（通過密碼重置） | ✅    |
+| 密碼哈希                    | ❌         | ✅    |
+| SSO 連接（Google、GitHub 等） | ❌         | ✅    |
+| 雙因素認證                   | ❌         | ✅    |
+| 聊天記錄                    | ✅         | ✅    |
+| 使用者設定                    | ✅         | ✅    |
+
+## 常見問題
+
+### 存取前清除瀏覽器資料
+
+遷移完成後，如果遇到登入問題，請先嚐試清除瀏覽器的站點資料：
+
+1. 開啟瀏覽器開發者工具（F12 或右鍵 → 檢查）
+2. 進入 Application 標籤頁 → Storage → Clear site data
+3. 刷新頁面後重試
+
+![清除瀏覽器站點資料](https://hub-apac-1.lobeobjects.space/docs/733c50ee2302e5daa3d99dc0739238c8.png)
+
+### 遷移後使用者無法登入
+
+- 確保郵件服務已設定用於密碼重置
+- 檢查 `AUTH_SECRET` 是否正確設定
+- 驗證資料庫連接是否正常
+
+### SSO 使用者無法連接
+
+- 簡單遷移：使用者需要在重置密碼後重新關聯 SSO 帳號
+- 完整遷移：驗證 SSO 提供商已在 `AUTH_SSO_PROVIDERS` 中設定
+
+### 遷移腳本失敗
+
+- 檢查資料庫連接字符串
+- 確保 CSV 和 JSON 檔案位於正確位置
+- 查看腳本日誌瞭解具體錯誤
+
+### column "xxx" of relation "users" does not exist
+
+這是因為資料庫 schema 未更新。請先執行 `pnpm db:migrate` 更新資料庫結構，然後再執行遷移腳本。
+
+## 相關閱讀
+
+<Cards>
+  <Card href={'/zh/docs/self-hosting/migration/v2/auth/migration-internals'} title={'遷移技術原理'} />
+
+  <Card href={'/zh/docs/self-hosting/auth'} title={'身分驗證服務設定'} />
+
+  <Card href={'/zh/docs/self-hosting/environment-variables/auth'} title={'認證相關環境變數'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/legacy'} title={'舊版身分驗證（NextAuth 和 Clerk）'} />
+</Cards>

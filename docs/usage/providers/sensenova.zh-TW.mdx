@@ -1,0 +1,54 @@
+---
+title: 在 LobeHub 中使用商湯日日新
+description: 學習如何在 LobeHub 中設定和使用商湯日日新的 API Key，以便開始對話和交互。
+tags:
+  - LobeHub
+  - 商湯日日新
+  - API密鑰
+  - Web UI
+---
+
+# 在 LobeHub 中使用商湯日日新
+
+<Image cover src={'/blog/assets0ca3e3989fb3884658765ee0ef2587a0.webp'} />
+
+[商湯日日新](https://platform.sensenova.cn/home) 是商湯科技（SenseTime）推出的一個大模型體系，旨在推動人工智慧（AI）技術的快速迭代和應用程式落地。
+
+本文將指導你如何在 LobeHub 中使用商湯日日新。
+
+<Steps>
+  ### 步驟一：獲取商湯日日新的 API 密鑰
+
+  - 註冊並登入 [永珍模型開發平臺](https://www.sensecore.cn/product/aistudio)
+  - 在產品選單中找到 `日日新大模型` 並開通服務
+
+  <Image alt={'開通日日新大模型'} inStep src={'/blog/assetsfae60ba54155478a1c363f0065ce76a6.webp'} />
+
+  - 進入 [AccessKey 存取密鑰](https://console.sensecore.cn/iam/Security/access-key) 頁面
+  - 建立一個存取密鑰
+  - 在彈出視窗中儲存存取密鑰 ID 和令牌
+
+  <Image alt={'儲存存取密鑰'} inStep src={'/blog/assetse5dff9a2e16a134d85e891e4eb98fe55.webp'} />
+
+  <Callout type={'warning'}>
+    妥善儲存彈窗中的存取密鑰，它只會出現一次，如果不小心丟失了，你需要重新建立一個存取密鑰。
+  </Callout>
+
+  ### 步驟二：在 LobeHub 中設定商湯日日新
+
+  - 存取 LobeHub 的`設定`界面
+  - 在`AI 服務商`下找到 `商湯日日新` 的設定項
+
+  <Image alt={'填入存取密鑰'} inStep src={'/blog/assets2a74d926ae05faf2ee9f8da858bec3f6.webp'} />
+
+  - 填入獲得的 `AccessKey ID` 和 `AccessKey Secret`
+  - 為你的 AI 助手選擇一個商湯日日新的模型即可開始對話
+
+  <Image alt={'選擇商湯日日新模型並開始對話'} inStep src={'/blog/assets52c8de6425a785409464561c09f8c98d.webp'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，請參考商湯日日新的相關費用政策。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用商湯日日新提供的模型進行對話了。

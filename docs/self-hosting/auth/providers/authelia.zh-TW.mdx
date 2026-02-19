@@ -1,0 +1,62 @@
+---
+title: 在 LobeHub 中設定 Authelia 身分驗證
+description: 學習如何在 LobeHub 中設定 Authelia SSO，包括設定 OIDC 客戶端和環境變數。
+tags:
+  - Authelia
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+  - OIDC
+---
+
+# 設定 Authelia 身分驗證
+
+[Authelia](https://www.authelia.com/) 是一個開源的身分驗證和授權伺服器，提供雙因素認證和單點登入功能。
+
+<Steps>
+  ### 在 Authelia 中設定 OIDC 客戶端
+
+  在 Authelia 組態檔中新增新的 OIDC 客戶端：
+
+  ```yaml
+  identity_providers:
+    oidc:
+      clients:
+        - client_id: 'lobechat'
+          client_name: 'LobeHub'
+          client_secret: 'your-client-secret'
+          redirect_uris:
+            - 'https://your-domain.com/api/auth/callback/authelia'
+          scopes:
+            - 'openid'
+            - 'profile'
+            - 'email'
+  ```
+
+  <Callout type={'info'}>
+    **回調 URL 格式**: `https://your-domain.com/api/auth/callback/authelia`
+  </Callout>
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                   | 類型 | 描述                                                     |
+  | ---------------------- | -- | ------------------------------------------------------ |
+  | `AUTH_SECRET`          | 必選 | 用於加密會話令牌的密鑰。使用以下命令生成：`openssl rand -base64 32`         |
+  | `AUTH_SSO_PROVIDERS`   | 必選 | SSO 提供商。使用 Authelia 請填寫 `authelia`                     |
+  | `AUTH_AUTHELIA_ID`     | 必選 | Authelia 中設定的 Client ID                                |
+  | `AUTH_AUTHELIA_SECRET` | 必選 | Authelia 中設定的 Client Secret                            |
+  | `AUTH_AUTHELIA_ISSUER` | 必選 | Authelia Issuer URL（例如 `https://auth.your-domain.com`） |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#authelia) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Authelia 身分認證並使用 LobeHub。</Callout>
+
+## 相關資源
+
+- [Authelia 文件](https://www.authelia.com/docs/)
+- [Authelia OIDC 設定](https://www.authelia.com/configuration/identity-providers/openid-connect/)

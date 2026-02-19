@@ -1,0 +1,172 @@
+---
+title: 環境設定指南
+description: 詳細介紹 LobeHub 的開發環境設定，包括軟體安裝和項目設定。
+tags:
+  - LobeHub
+  - 開發環境
+  - Node.js
+  - PNPM
+  - Git
+  - Docker
+  - PostgreSQL
+---
+
+# 環境設定指南
+
+歡迎閱讀 LobeHub 的開發環境設定指南。
+
+## 線上開發
+
+如果你有 GitHub Codespaces 的使用權限，可以點擊下方按鈕一鍵進入線上開發環境：
+
+[![][codespaces-shield]][codespaces-link]
+
+## 本地開發
+
+在開始開發 LobeHub 之前，你需要在本地環境中安裝和設定一些必要的軟體和工具。本文件將指導你完成這些步驟。
+
+### 開發環境需求
+
+首先，你需要安裝以下軟體：
+
+- Node.js：LobeHub 是基於 Node.js 構建的，因此你需要安裝 Node.js。我們建議安裝最新的穩定版。
+- PNPM：我們使用 PNPM 作為管理器。你可以從 [pnpm 的官方網站](https://pnpm.io/installation) 上下載並安裝。
+- Bun：我們使用 Bun 作為 npm scripts runner，你可以從 [Bun 的官方網站](https://bun.com/docs/installation) 上下載並安裝。
+- Git：我們使用 Git 進行版本控制。你可以從 Git 的官方網站上下載並安裝。
+- Docker：用於執行 PostgreSQL、RustFS 等服務。你可以從 [Docker 官方網站](https://www.docker.com/get-started) 下載並安裝。
+- IDE：你可以選擇你喜歡的整合開發環境（IDE），我們推薦使用 WebStorm/VSCode。
+
+### VSCode 使用者
+
+推薦安裝 [.vscode/extensions.json](https://github.com/lobehub/lobehub/blob/main/.vscode/extensions.json) 中推薦安裝的擴充功能獲得最佳開發體驗。
+
+### 項目設定
+
+完成上述軟體的安裝後，你可以開始設定 LobeHub 項目了。
+
+#### 1. 獲取程式碼
+
+首先，你需要從 GitHub 上複製 LobeHub 的程式碼庫。在終端機中執行以下命令：
+
+```bash
+git clone https://github.com/lobehub/lobehub.git
+cd lobehub
+```
+
+#### 2. 安裝依賴
+
+使用 PNPM 安裝項目的依賴包：
+
+```bash
+pnpm i
+```
+
+#### 3. 設定環境
+
+複製示例環境檔案：
+
+```bash
+# Docker 服務設定
+cp docker-compose/dev/.env.example docker-compose/dev/.env
+
+# Next.js 開發伺服器設定
+cp .env.example.development .env
+```
+
+根據需要編輯這些檔案：
+
+- `docker-compose/dev/.env` - Docker 服務設定（PostgreSQL、Redis、RustFS、SearXNG）
+- `.env` - Next.js 開發伺服器設定（資料庫連接、S3 存儲、認證等）
+
+#### 4. 啟動 Docker 服務
+
+使用 Docker Compose 啟動所有必需的服務：
+
+```bash
+bun run dev:docker
+```
+
+這將啟動以下服務：
+
+- PostgreSQL 資料庫（連接埠 5432）
+- Redis 快取（連接埠 6379）
+- RustFS 存儲（API 連接埠 9000，控制檯連接埠 9001）
+- SearXNG 搜尋（連接埠 8180）
+
+可以通過執行以下命令檢查所有 Docker 服務執行狀態：
+
+```bash
+docker compose -f docker-compose/dev/docker-compose.yml ps
+```
+
+#### 5. 執行資料庫遷移
+
+執行資料庫遷移腳本以建立所有必要的表：
+
+```bash
+pnpm db:migrate
+```
+
+預期輸出：`✅ database migration pass.`
+
+#### 6. 啟動開發伺服器
+
+啟動 LobeHub 開發伺服器：
+
+```bash
+bun run dev
+```
+
+現在，你可以在瀏覽器中開啟 `http://localhost:3010`，你應該能看到 LobeHub 的歡迎頁面。這表明你已經成功地設定了開發環境。
+
+![Chat Page](https://hub-apac-1.lobeobjects.space/docs/fc7b157a3bc016bc97719065f80c555c.png)
+
+## 服務位址
+
+執行 Docker Compose 開發環境時：
+
+- **PostgreSQL**：`postgres://postgres@localhost:5432/lobechat`
+- **Redis**：`redis://localhost:6379`
+- **RustFS API**：`http://localhost:9000`
+- **RustFS 控制檯**：`http://localhost:9001`
+- **SearXNG**：`http://localhost:8180`
+- **應用程式**：`http://localhost:3010`
+
+## 故障排除
+
+### 重置服務
+
+如遇到問題，可以重置整個服務堆棧：
+
+```bash
+# 完全重置 Docker 環境（刪除所有資料並重新啟動）
+bun run dev:docker:reset
+```
+
+### 連接埠衝突
+
+如果連接埠已被佔用：
+
+```bash
+# 檢查連接埠使用情況
+lsof -i :5432  # PostgreSQL
+lsof -i :6379  # Redis
+lsof -i :9000  # RustFS API
+lsof -i :9001  # RustFS 控制檯
+lsof -i :8180  # SearXNG
+```
+
+### 資料庫遷移
+
+如需手動執行遷移：
+
+```bash
+pnpm db:migrate
+```
+
+---
+
+在開發過程中，如果你在環境設定上遇到任何問題，或者有任何關於 LobeHub 開發的問題，歡迎隨時向我們提問。我們期待看到你的貢獻！
+
+[codespaces-link]: https://codespaces.new/lobehub/lobehub
+[codespaces-shield]: https://github.com/codespaces/badge.svg

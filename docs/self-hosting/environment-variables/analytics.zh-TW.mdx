@@ -1,0 +1,79 @@
+---
+title: 在 LobeHub 中 設定資料統計服務環境變數指南
+description: 瞭解如何在 LobeHub 中設定各種資料統計服務的環境變數，包括Vercel Analytics、Google Analytics 等。
+tags:
+  - 資料統計
+  - 環境變數
+  - Vercel Analytics
+  - Google Analytics
+  - Posthog Analytics
+  - Umami Analytics
+---
+
+# 資料統計
+
+我們在 LobeHub 中整合了若干免費 / 開源的資料統計服務，用於瞭解使用者的使用情況，以下是相關環境變數。
+
+## Vercel Analytics
+
+### `ENABLE_VERCEL_ANALYTICS`
+
+- 類型：可選
+- 描述：用於設定 Vercel Analytics 的環境變數，當設為 `1` 時開啟 Vercel Analytics
+- 預設值： `-`
+- 示例：`1`
+
+### `DEBUG_VERCEL_ANALYTICS`
+
+- 類型：可選
+- 描述：用於開啟 Vercel Analytics 的除錯模式
+- 預設值： `-`
+- 示例：`1`
+
+## Google Analytics
+
+### `GOOGLE_ANALYTICS_MEASUREMENT_ID`
+
+- 類型：必選
+- 描述：Google Analytics 的 Measurement ID，填寫此項後將自動開啟 Google Analytics
+- 預設值： `-`
+- 示例：`G-63LP2TV03T`
+
+## Posthog Analytics
+
+### `POSTHOG_KEY`
+
+- 類型：必選
+- 描述：設定 PostHog 項目 Key，設定此項後將自動開啟 PostHog Analytics
+- 預設值： `-`
+- 示例：`phc_xxxxxxxx`
+
+### `POSTHOG_HOST`
+
+- 類型：可選
+- 描述：設定 PostHog 服務的部署位址，預設為官方的 SaaS 位址
+- 預設值：`https://app.posthog.com`
+- 示例：`https://example.com`
+
+### `POSTHOG_DEBUG`
+
+- 類型：可選
+- 描述：開啟 PostHog 的除錯模式
+- 預設值： `-`
+- 示例：`1`
+
+## Umami Analytics
+
+### `UMAMI_WEBSITE_ID`
+
+- 類型：必選
+- 描述：你的 Umami 的 Website ID，填寫此項後將自動開啟 Umami Analytics
+- 預設值：`-`
+- 示例：`E738D82A-EE9E-4806-A81F-0CA3CAE57F65`
+
+### `UMAMI_SCRIPT_URL`
+
+- 類型：可選
+- 描述：Umami 腳本的網址，預設為 Umami Cloud 提供的腳本網址
+- 預設值：`https://analytics.umami.is/script.js`
+- 示例：`https://umami.your-site.com/script.js`

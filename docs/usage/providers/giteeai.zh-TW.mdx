@@ -1,0 +1,54 @@
+---
+title: 在 LobeHub 中使用 Gitee AI
+description: 學習如何在 LobeHub 中設定和使用 Gitee AI 的 API Key，以便開始對話和交互。
+tags:
+  - LobeHub
+  - Gitee AI
+  - API密鑰
+  - Web UI
+---
+
+# 在 LobeHub 中使用 Gitee AI
+
+<Image cover src={'/blog/assetsd94f3e0cf32639bea46dbf92e0862f89.webp'} />
+
+[Gitee AI](https://ai.gitee.com/) 是一個基於 Git 程式碼託管技術的開源平臺，專為人工智慧（AI）應用場景設計。它旨在為開發者和企業提供一站式的 AI 應用程式開發服務，包括模型體驗、推理、微調和部署等功能。
+
+本文將指導你如何在 LobeHub 中使用 Gitee AI。
+
+<Steps>
+  ### 步驟一：獲取 Gitee AI 的 API 密鑰
+
+  - 註冊並登入 [Gitee AI 官網](https://ai.gitee.com/)
+  - 在工作臺中購買並儲值 `Serverless API`
+
+  <Image alt={'Gitee Serverless API'} inStep src={'/blog/assets5a2f360c19fcf9a037b2d1609479b713.webp'} />
+
+  - 在 `設定` 中點擊 `存取令牌` 界面
+  - 建立一個新的存取令牌
+  - 在彈出視窗中儲存存取令牌
+
+  <Image alt={'Gitee Serverless API'} inStep src={'/blog/assetsf1e1ca1adaac36881ec6c3b2ce1a099e.webp'} />
+
+  <Callout type={'warning'}>
+    妥善儲存彈窗中的存取令牌，它只會出現一次，如果不小心丟失了，你需要重新建立一個存取令牌。
+  </Callout>
+
+  ### 步驟二：在 LobeHub 中設定 Gitee AI
+
+  - 存取 LobeHub 的`設定`界面
+  - 在`AI 服務商`下找到 `Gitee AI` 的設定項
+
+  <Image alt={'填入 API 密鑰'} inStep src={'/blog/assetsf5a62c963127764ebdf1cd226fac3dac.webp'} />
+
+  - 填入獲得的 API 密鑰
+  - 為你的 AI 助手選擇一個 Gitee AI 的模型即可開始對話
+
+  <Image alt={'選擇 Gitee AI 模型並開始對話'} inStep src={'/blog/assetsec0f694c9f6140620217bde441440170.webp'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，請參考 Gitee AI 的相關費用政策。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用 Gitee AI 提供的模型進行對話了。

@@ -1,0 +1,69 @@
+---
+title: 設定 Upstash Redis 服務
+description: 詳細指南：如何設定 Upstash Redis 用於 LobeHub 的快取和會話存儲。
+tags:
+  - Upstash
+  - Redis
+  - 快取
+  - 設定指南
+---
+
+# 設定 Upstash Redis 服務
+
+[Upstash](https://upstash.com/) 是一個 Serverless Redis 服務，提供免費額度和按量付費模式，非常適合 LobeHub 部署使用。
+
+## 設定步驟
+
+<Steps>
+  ### 在 Upstash 建立 Redis 資料庫
+
+  1. 存取 [Upstash 控制檯](https://console.upstash.com/) 並註冊
+  2. 點擊 **Create Database**，設定：名稱、區域、啟用 TLS
+  3. 從資料庫詳情頁複製 **Redis URL**（TCP 連接方式，不是 REST API）：
+
+  <Image alt={'從 Upstash 複製 Redis URL'} src={'https://hub-apac-1.lobeobjects.space/docs/43d110283ba816c0c2b45408e4f9d344.png'} />
+
+  ### 設定環境變數
+
+  ```shell
+  # Upstash Redis URL（從 Upstash 控制檯複製）
+  REDIS_URL=rediss://default:xxxxxxxxxxxxx@us1-xxxxx-xxxxx.upstash.io:6379
+
+  # 可選：啟用 TLS（Upstash 推薦）
+  REDIS_TLS=1
+
+  # 可選：設定 Redis 鍵前綴
+  REDIS_PREFIX=lobechat
+  ```
+
+  <Callout type={'info'}>
+    Upstash 使用 `rediss://`（雙's'）表示 TLS 連接，LobeHub 自動支援此格式。
+  </Callout>
+</Steps>
+
+## 環境變數概覽
+
+```shell
+# Upstash Redis 連接 URL
+REDIS_URL=rediss://default:xxxxxxxxxxxxx@us1-xxxxx-xxxxx.upstash.io:6379
+
+# 可選：啟用 TLS 加密（Upstash 推薦）
+REDIS_TLS=1
+
+# 可選：鍵前綴，用於資料隔離
+REDIS_PREFIX=lobechat
+```
+
+## 注意事項
+
+<Callout type={'tip'}>
+  Upstash 提供慷慨的免費額度：每天 10,000 次命令，足夠個人使用和小規模部署。
+</Callout>
+
+<Callout type={'warning'}>
+  請確保全全保管你的 Redis URL，切勿在客戶端程式碼或公開倉庫中暴露。
+</Callout>
+
+- **免費額度限制**：每天 10,000 次命令，256MB 存儲
+- **TLS 必需**：Upstash 要求 TLS 連接，確保設定 `REDIS_TLS=1`
+- **Regional vs Global**：如果使用者分佈全球，選擇 Global 可獲得更低延遲

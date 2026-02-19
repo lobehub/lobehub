@@ -1,0 +1,65 @@
+---
+title: 設定騰訊雲 COS 存儲服務
+description: 詳細步驟設定騰訊雲 COS 存儲服務，確保檔案存儲順利進行。
+tags:
+  - 騰訊雲 COS
+  - S3 存儲
+  - 檔案存儲
+  - 環境變數
+---
+
+# 設定騰訊雲 COS 存儲服務
+
+在伺服端資料庫中我們需要設定 S3 存儲服務來存儲檔案。
+
+## 設定步驟
+
+<Steps>
+  ### 設定並獲取 S3 存儲桶
+
+  你需要首先前往 [騰訊雲 COS](https://console.cloud.tencent.com/cos/bucket) 並建立一個新的存儲桶（Bucket）：
+
+  <Image alt={'騰訊雲 COS 存儲界面'} src={'/blog/assets0f244d5fe648127774636a54ae9ffafc.webp'} />
+
+  建立存儲桶時將指定其名稱，下文以 `lobe` 為例。選擇 `公有讀私有寫`，地域隨意，其餘設定一概預設即可，然後點擊建立。
+
+  <Image alt={'COS 建立存儲桶'} src={'/blog/assets2ad69e4e124f49710fcedf8e9827f2f3.webp'} />
+
+  ### 獲取存儲桶相關環境變數
+
+  在 COS 存儲桶的概覽設定中，可以看到桶設定的資訊：
+
+  <Image alt={'查看存儲桶的相關資訊'} src={'/blog/assetsc51018f1581b769727ad1bb3bb641567.webp'} />
+
+  其對應的環境變數為：
+
+  ```shell
+  # 存儲桶的名稱
+  S3_BUCKET=lobe-130xxxxxx2
+  # 存儲桶的請求端點，注意沒有前面的桶名
+  S3_ENDPOINT=https://cos.ap-chengdu.myqcloud.com
+  # 桶的區域
+  S3_REGION=ap-chengdu
+  ```
+
+  <Callout type={'warning'}>
+    請注意，`S3_ENDPOINT` 的值為 `https://cos.ap-chengdu.myqcloud.com`，而不是 `https://lobe-130xxxxxx2.cos.ap-chengdu.myqcloud.com`
+
+    且此處 URL 的 `https://` 不可缺失，須保持 URL 的完整性
+  </Callout>
+
+  ### 設定跨域
+
+  在左側 `安全管理 - 跨域存取 CORS 設定` 中，新增以下設定並儲存：
+
+  <Image alt={'設定跨域'} src={'/blog/assetsb6af626eeb0e1e638d80dc9ff7a6eba9.webp'} />
+
+  ### 獲取 S3 秘鑰
+
+  前往 [騰訊雲 API 密鑰管理](https://console.cloud.tencent.com/cam/capi) 建立一個新的 SecretId 和 SecretKey，填寫為 `S3_ACCESS_KEY_ID` 和 `S3_SECRET_ACCESS_KEY` 即可。
+</Steps>
+
+### 附加說明
+
+- 對於對象存儲，你可以選擇設定 CDN 加速，以提高不同區域的存取速度，提高併發的同時減少下行費用。
+- 建立 API 密鑰時，推薦使用角色管理，以提高安全性。

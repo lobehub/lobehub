@@ -1,0 +1,85 @@
+---
+title: 在 LobeHub 中設定 AWS Cognito 身分驗證
+description: 學習如何在 LobeHub 中設定 AWS Cognito SSO，包括在 AWS Console 建立使用者池和應用程式客戶端。
+tags:
+  - AWS Cognito
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+---
+
+# 設定 AWS Cognito 身分驗證
+
+<Steps>
+  ### 建立 Cognito 使用者池
+
+  1. 前往 [AWS Cognito Console](https://console.aws.amazon.com/cognito/)
+  2. 點擊 **Create user pool**
+  3. 設定登入體驗：
+     - 選擇 **Email** 作為登入選項
+     - 根據需要設定密碼策略和 MFA 設定
+     - 設定使用者帳號恢復選項
+
+  ### 設定應用程式客戶端
+
+  在 **App integration** 部分：
+
+  1. 點擊 **Add an app client**
+  2. 選擇 **Confidential client** 作為應用程式類型
+  3. 輸入應用程式客戶端名稱
+  4. 在 **OAuth 2.0 grant types** 下，啟用 **Authorization code grant**
+  5. 在 **OpenID Connect scopes** 下，選擇 `email`、`openid` 和 `profile`
+
+  ### 設定回調 URL
+
+  在應用程式客戶端設定中，新增回調 URL：
+
+  <Callout type={'info'}>
+    回調 URL 格式：
+
+    - 本地開發: `http://localhost:3210/api/auth/callback/cognito`
+    - 生產環境: `https://your-domain.com/api/auth/callback/cognito`
+  </Callout>
+
+  ### 設定域名
+
+  1. 前往 **App integration** > **Domain**
+  2. 設定 Cognito 域名（如 `your-app-name`）或自訂域名
+  3. 記錄完整域名（如 `your-app-name.auth.us-east-1.amazoncognito.com`）
+
+  ### 獲取設定值
+
+  收集以下資訊：
+
+  - **Client ID**：來自應用程式客戶端設定
+  - **Client Secret**：來自應用程式客戶端設定（點擊 "Show client secret"）
+  - **User Pool ID**：來自使用者池概覽（如 `us-east-1_XXXXXXXXX`）
+  - **Region**：AWS 區域（如 `us-east-1`）
+  - **Domain**：你的 Cognito 域名
+
+  ### 設定環境變數
+
+  | 環境變數                       | 類型 | 描述                                                        |
+  | -------------------------- | -- | --------------------------------------------------------- |
+  | `AUTH_SECRET`              | 必選 | 會話加密密鑰，使用 `openssl rand -base64 32` 生成                    |
+  | `AUTH_SSO_PROVIDERS`       | 必選 | 填寫 `cognito`                                              |
+  | `AUTH_COGNITO_ID`          | 必選 | 應用程式客戶端 ID                                                  |
+  | `AUTH_COGNITO_SECRET`      | 必選 | 應用程式客戶端 Secret                                              |
+  | `AUTH_COGNITO_DOMAIN`      | 必選 | Cognito 域名（如 `your-app.auth.us-east-1.amazoncognito.com`） |
+  | `AUTH_COGNITO_REGION`      | 必選 | AWS 區域（如 `us-east-1`）                                     |
+  | `AUTH_COGNITO_USERPOOL_ID` | 必選 | 使用者池 ID（如 `us-east-1_XXXXXXXXX`）                           |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#cognito)
+    可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以通過 AWS Cognito 身分認證並使用 LobeHub。
+</Callout>
+
+## 相關資源
+
+- [AWS Cognito Console](https://console.aws.amazon.com/cognito/)
+- [Amazon Cognito 文件](https://docs.aws.amazon.com/cognito/)

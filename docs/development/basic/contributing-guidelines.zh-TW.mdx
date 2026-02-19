@@ -1,0 +1,100 @@
+---
+title: 程式碼風格與貢獻指南
+description: 瞭解 LobeHub 的程式碼規範和貢獻流程，確保程式碼一致性。
+tags:
+  - 程式碼風格
+  - 貢獻指南
+  - LobeHub
+  - ESLint
+  - Prettier
+---
+
+# 程式碼風格與貢獻指南
+
+歡迎來到 LobeHub 的程式碼風格與貢獻指南。本指南將幫助您理解我們的程式碼規範和貢獻流程，確保程式碼的一致性和項目的順利進行。
+
+## 程式碼風格
+
+在 LobeHub 中，我們使用 [@lobehub/lint](https://github.com/lobehub/lobe-lint) 程式包來統一程式碼風格。該程式包搭載了 `ESLint`、`Prettier`、`remarklint` 和 `stylelint` 的設定，以確保我們的 JavaScript、Markdown 和 CSS 檔案遵循相同的編碼標準。
+
+### ESLint
+
+我們的項目使用 ESLint 來檢查 JavaScript 程式碼中的問題。您可以在項目根目錄下找到 `.eslintrc.js` 檔案，其中包含了我們對 `@lobehub/lint` 的 ESLint 設定的擴充功能和自訂規則。
+
+為了與 Next.js 框架相容，我們在設定中新增了 `plugin:@next/next/recommended`。此外，我們禁用了一些規則，以適應我們項目的特定需求。
+
+### Prettier
+
+Prettier 負責程式碼格式化，以保證程式碼的一致性。您可以在 `.prettierrc.js` 中找到我們的 Prettier 設定，它是從 `@lobehub/lint` 導入的。
+
+在儲存檔案時，建議您設定您的編輯器以自動執行 Prettier。
+
+### remarklint
+
+對於 Markdown 檔案，我們使用 remarklint 來確保文件格式的統一。您可以在項目中找到相應的組態檔。
+
+### stylelint
+
+我們使用 stylelint 來規範 CSS 程式碼的風格。在 `stylelint` 的組態檔中，我們基於 `@lobehub/lint` 的設定進行了一些自訂規則的調整。
+
+### 風格檢查
+
+你不需要手動執行這些檢查，項目設定了 husky 會在您提交程式碼時自動執行 lint-staged 檢查你提交的檔案是否符合以上規範。
+
+## 貢獻流程
+
+LobeHub 採用 gitmoji 和 semantic release 作為我們的程式碼提交和發佈流程。
+
+### Gitmoji
+
+在提交程式碼時，請使用 gitmoji 來標註您的提交資訊。這有助於其他貢獻者快速理解您提交的內容和目的。
+
+Gitmoji commit messages 使用特定的 emoji 來表示提交的類型或意圖。以下是一個示例：
+
+```markdown
+📝 Update README with contribution guidelines
+
+- Added section about code style preferences
+- Included instructions for running tests
+- Corrected typos and improved formatting
+```
+
+在這個示例中，📝 emoji 代表了文件的更新。提交資訊清晰地描述了更改的內容，提供了具體的細節。
+
+### Semantic Release
+
+我們使用 semantic release 來自動化版本控制和發佈流程。當 PR 合併到主分支後，系統會根據提交資訊中的 gitmoji 前綴自動判斷是否需要發佈新版本：
+
+- `✨ feat` 和 `🐛 fix` 前綴的提交會**觸發新版本發佈**
+- 如果只是小修改不想發新版本，可以使用 `💄 style` 或 `🔨 chore` 等前綴
+
+### Commitlint
+
+為了確保提交資訊的一致性，我們使用 `commitlint` 來檢查提交資訊格式。您可以在 `.commitlintrc.js` 組態檔中找到相關規則。
+
+在您提交程式碼之前，請確保您的提交資訊遵循我們的規範。
+
+### 測試
+
+LobeHub 設定了完善的單元測試（Vitest）和 E2E 測試（Cucumber + Playwright），並通過 GitHub Actions CI 在每次 PR 提交時自動執行。提交 PR 或請求合併前，請務必確保所有測試通過。
+
+你可以在本地執行指定測試檔案來驗證：
+
+```bash
+# 執行指定測試（不要執行 bun run test，全量測試耗時很長）
+bunx vitest run --silent='passed-only' '[file-path]'
+```
+
+更多測試相關資訊請參閱 [測試指南](/zh/docs/development/basic/test)。
+
+### 如何貢獻
+
+1. Fork 項目到您的帳號。
+2. 建立一個新的分支進行開發。
+3. 開發完成後，確保您的程式碼通過了程式碼風格檢查和測試。
+4. 提交您的更改，並使用合適的 gitmoji 標註您的提交資訊。
+5. 建立一個 Pull Request 到原項目的主分支。
+6. 確保 GitHub Actions CI 全部通過。
+7. 等待程式碼審查，並根據回饋進行必要的修改。
+
+感謝您遵循這些指導原則，它們有助於我們維護項目的品質和一致性。我們期待您的貢獻！

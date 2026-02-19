@@ -1,0 +1,160 @@
+---
+title: 使用 Docker 部署 LobeHub 資料庫
+description: 詳細步驟教你如何在 Docker 中部署 LobeHub 伺服端資料庫。
+tags:
+  - Docker
+  - LobeHub
+  - 資料庫部署
+  - Postgres
+---
+
+# 使用 Docker 部署 LobeHub
+
+<div style={{display:"flex", gap: 4}}>
+  [![][docker-release-shield]][docker-release-link]
+
+  [![][docker-size-shield]][docker-size-link]
+
+  [![][docker-pulls-shield]][docker-pulls-link]
+</div>
+
+<Callout type="info">
+  本文已經假定你瞭解了 LobeHub
+  的部署基本原理和流程，因此只包含核心環境變數設定的內容。如果你還不瞭解 LobeHub
+  的部署原理，請先查閱 [使用伺服端資料庫部署](/zh/docs/self-hosting/server-database) 。
+  此外，針對國內的騰訊雲儲存桶使用者，可查詢[設定騰訊雲 COS
+  存儲服務](/zh/docs/self-hosting/advanced/s3/tencent-cloud)。
+</Callout>
+
+## 在 Linux 伺服器上部署
+
+以下是在 Linux 伺服器上部署 LobeHub 的流程：
+
+<Steps>
+  ### 建立 Postgres 資料庫實例
+
+  請按照你自己的訴求建立一個 Postgres 資料庫實例，例如：
+
+  ```sh
+  docker network create pg
+
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17
+  ```
+
+  上述指令會建立一個名為 `my-postgres`，並且網路為 `pg` 的 PG 實例，其中 `paradedb/paradedb:latest-pg17` 是一個 Postgres 17 的鏡像，且預設安裝了 pgvector 和 pg\_search 插件。
+
+  <Callout type="info">
+    ParadeDB 鏡像包含了 pgvector（向量搜尋）和 pg\_search（全文搜尋）插件，是 LobeHub 實現 RAG 和知識庫搜尋的重要構件。
+  </Callout>
+
+  <Callout type="warning">
+    以上指令得到的 pg 實例並沒有指定持久化存儲位置，因此僅用於測試 /
+    演示，生產環境請自行設定持久化存儲。
+  </Callout>
+
+  ### 建立名為 `lobe-chat.env` 檔案用於存放環境變數：
+
+  點擊下方按鈕生成所需密鑰：
+
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+  <GenerateSecret envName="AUTH_SECRET" />
+
+  點擊下方按鈕一鍵生成 `JWKS_KEY`（用於簽名和驗證 JWT）：
+
+  <GenerateJWKSKey />
+
+  ```shell
+  # 網站域名
+  APP_URL=https://your-prod-domain.com
+
+  # DB 必須的環境變數
+  # 用於加密敏感資訊的密鑰，可以使用 openssl rand -base64 32 生成
+  KEY_VAULTS_SECRET='jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk='
+  # Postgres 資料庫連接字符串
+  # 格式：postgres://username:password@host:port/dbname，如果你的 pg 實例為 Docker 容器，請使用容器名
+  DATABASE_URL=postgres://postgres:mysecretpassword@my-postgres:5432/postgres
+
+  # 身分驗證（Better Auth）
+  # 會話加密密鑰（使用以下命令生成：openssl rand -base64 32）
+  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  # JWKS 密鑰，用於簽名和驗證 JWT
+  JWKS_KEY='{"keys":[...]}'
+
+  # S3 相關
+  S3_ACCESS_KEY_ID=xxxxxxxxxx
+  S3_SECRET_ACCESS_KEY=xxxxxxxxxx
+  # 用於 S3 API 存取的域名
+  S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
+  S3_BUCKET=LobeHub
+  # S3_REGION=ap-chengdu # 如果需要指定地域
+
+  ```
+
+  ### 啟動 lobehub docker 鏡像
+
+  ```sh
+  docker run -it -d -p 3210:3210 --network pg --env-file lobe-chat.env --name lobehub lobehub/lobehub
+  ```
+
+  你可以使用下述指令檢查日誌：
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  如果你在容器中看到了以下日誌，則說明已經啟動成功：
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 14.x.x
+    - Local:        http://localhost:3210
+    - Network:      http://0.0.0.0:3210
+
+   ✓ Starting...
+   ✓ Ready in 95ms
+  ```
+</Steps>
+
+<Callout type="tip">
+  在我們官方的 Docker 鏡像中，會在啟動鏡像前自動執行資料庫 schema 的 migration
+  ，我們的官方鏡像承諾「空資料庫 ->
+  完整表」這一段自動建表的穩定性。因此我們建議你的資料庫實例使用一個空表實例，進而省去手動維護表結構或者
+  migration 的麻煩。
+</Callout>
+
+## 在本地（Mac / Windows） 上使用
+
+LobeHub 也支援直接在本地的 Mac/Windows 本地使用。
+
+在此我們已假設你的本地有一個 5432 連接埠可用，帳號為 `postgres` ，密碼是 `mysecretpassword` 的 pg 實例，它在 `localhost:5432` 可用。
+
+那麼你需要執行的腳本指令為：
+
+```shell
+$ docker run -it -d --name lobehub -p 3210:3210 \
+  -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
+  -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e JWKS_KEY='{"keys":[...]}' \
+  -e APP_URL=http://localhost:3210 \
+  -e S3_ACCESS_KEY_ID=xxxxxxxxxx \
+  -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
+  -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
+  -e S3_BUCKET=LobeHub \
+  lobehub/lobehub
+```
+
+<Callout type="tip">
+  `Docker` 在 `Windows` 和 `macOS` 上走的是虛擬機方案，如果使用 `localhost` / `127.0.0.1`
+  ，將會走到自身容器的 `localhost`，此時請嘗試用 `host.docker.internal` 替代 `localhost`
+</Callout>
+
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver

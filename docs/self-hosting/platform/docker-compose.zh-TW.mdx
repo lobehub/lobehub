@@ -1,0 +1,356 @@
+---
+title: 通過 Docker Compose 部署 LobeHub
+description: 學習如何使用 Docker Compose 部署 LobeHub 服務，包括各種服務的設定教學。
+tags:
+  - Docker Compose
+  - LobeHub
+  - Docker 容器
+  - 部署指引
+---
+
+# 使用 Docker Compose 部署 LobeHub
+
+<div style={{display:"flex", gap: 4}}>
+  [![][docker-release-shield]][docker-release-link]
+
+  [![][docker-size-shield]][docker-size-link]
+
+  [![][docker-pulls-shield]][docker-pulls-link]
+</div>
+
+## 快速啟動
+
+<Callout type="info">
+  **系統相容性說明**
+
+  - 支援 Unix 環境（Linux/macOS）的一鍵部署
+
+  - Windows 使用者需通過 [WSL 2](https://aka.ms/wsl) 執行
+
+  - 一鍵啟動腳本為首次部署專用，非首次部署請參考 [自訂部署](#自訂部署) 章節
+
+  - 連接埠占用檢查：確保 `3210`、`9000`、`9001` 連接埠可用
+</Callout>
+
+執行以下命令初始化部署環境，目錄 `lobehub` 將用於存放你的組態檔和後續的資料庫檔案。
+
+```sh
+mkdir lobehub && cd lobehub
+```
+
+獲取並執行部署腳本：
+
+```sh
+bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_TW
+```
+
+腳本支援以下部署模式，請根據你的需求選擇相應的模式，並繼續閱讀文件的剩餘部分。
+
+- [本地模式（預設）](#本地模式)：僅能在本地存取，不支援局域網 / 公網存取，適用於初次體驗；
+- [連接埠模式](#連接埠模式)：支援局域網 / 公網的 `http` 存取，適用於無域名或內部辦公場景使用；
+- [域名模式](#域名模式)：支援局域網 / 公網在使用反向代理下的 `http/https` 存取，適用於個人或團隊日常使用；
+
+<Callout type="info">
+  在腳本的選項提示 `(選項1/選項2)[選項1]` 中：`(選項1 / 選項2)`
+  代表可以選擇的選項，`[選項1]`代表預設選項，直接Enter即可選擇預設選項。
+</Callout>
+
+### 本地模式
+
+<Steps>
+  ### 在交互式腳本中完成剩餘設定
+
+  持續Enter採用預設設定。
+
+  ### 查看設定生成報告
+
+  你需要在腳本執行結束後查看設定生成報告，包括各服務的存取位址和密碼。
+
+  ```log
+  安全密鑰生成結果如下：
+  LobeHub:
+    - URL: http://localhost:3210
+  RustFS:
+    - URL: http://localhost:9000
+    - Username: admin
+    - Password: 8c82ea41
+  ```
+
+  ### 啟動 Docker
+
+  ```sh
+  docker compose up -d
+  ```
+
+  ### 檢查日誌
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  如果你在容器中看到了以下日誌，則說明已經啟動成功：
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        http://localhost:3210
+    - Network:      http://0.0.0.0:3210
+
+   ✓ Starting...
+   ✓ Ready in 95ms
+  ```
+
+  ### 存取應用程式
+
+  通過 [http://localhost:3210](http://localhost:3210) 存取你的 LobeHub 服務。
+</Steps>
+
+### 連接埠模式
+
+<Steps>
+  ### 在交互式腳本中完成剩餘設定
+
+  在連接埠模式中，你需要根據腳本提示完成：
+
+  - 伺服器 IP 位址設定：以便局域網 / 公網存取。
+  - 安全密鑰重新生成：我們強烈建議你重新生成安全密鑰，如果你缺少腳本所需的密鑰生成庫，我們建議你參考 [自訂部署](#自訂部署) 章節對密鑰進行修改。
+
+  ### 查看設定生成報告
+
+  你需要在腳本執行結束後查看設定生成報告，包括各服務的存取位址和密碼。
+
+  ```log
+  安全密鑰生成結果如下：
+  LobeHub:
+    - URL: http://your_server_ip:3210
+  RustFS:
+    - URL: http://your_server_ip:9000
+    - Username: admin
+    - Password: dbac8440
+  ```
+
+  ### 啟動 Docker
+
+  ```sh
+  docker compose up -d
+  ```
+
+  ### 檢查日誌
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  如果你在容器中看到了以下日誌，則說明已經啟動成功：
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        http://your_server_ip:3210
+    - Network:      http://0.0.0.0:3210
+   ✓ Starting...
+   ✓ Ready in 95ms
+  ```
+
+  ### 存取應用程式
+
+  你可以通過 `http://your_server_ip:3210` 存取你的 LobeHub 服務。
+</Steps>
+
+### 域名模式
+
+<Steps>
+  ### 完成反向代理設定
+
+  在域名模式中，你需要完成反向代理設定，並確保局域網 / 公網能存取到以下服務。請使用反向代理將以下伺服連接埠映射到域名：
+
+  | 域名                  | 反代連接埠   | 是否必選 |
+  | ------------------- | ------ | ---- |
+  | `lobe.example.com`  | `3210` | 必選   |
+  | `s3.example.com`    | `9000` | 必選   |
+  | `s3-ui.example.com` | `9001` |      |
+
+  ### 在交互式腳本中完成剩餘設定
+
+  在域名模式中，你需要根據腳本提示完成：
+
+  - LobeHub 服務的域名設定：`lobe.example.com`
+  - S3 服務的域名設定：`s3.example.com`
+  - 選擇存取協議：`http` 或 `https`
+  - 安全密鑰重新生成：我們強烈建議你重新生成安全密鑰，如果你缺少腳本所需的密鑰生成庫，我們建議你參考 [自訂部署](#自訂部署) 章節對密鑰進行修改。
+
+  <Callout type="warning">
+    以下問題可能導致你的服務無法正常存取：
+
+    - 此處的域名設定需要與步驟`1`中的反向代理設定保持一致。
+
+    - 如果你使用 Cloudflare 的域名解析服務並開啟了 `全程代理`，請使用 `https` 協議。
+
+    - 如果你使用了 HTTPS 協議，請確保你的域名證書已經正確設定，一鍵部署預設不支援自簽發證書。
+  </Callout>
+
+  ### 查看設定生成報告
+
+  你需要在腳本執行結束後查看設定生成報告，包括各服務的存取位址和密碼。
+
+  ```log
+  安全密鑰生成結果如下：
+  LobeHub:
+    - URL: https://lobe.example.com
+  RustFS:
+    - URL: https://s3.example.com
+    - Username: admin
+    - Password: dbac8440
+  ```
+
+  ### 啟動 Docker
+
+  ```sh
+  docker compose up -d
+  ```
+
+  ### 檢查日誌
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  如果你在容器中看到了以下日誌，則說明已經啟動成功：
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        https://localhost:3210
+    - Network:      http://0.0.0.0:3210
+    ✓ Starting...
+    ✓ Ready in 95ms
+  ```
+
+  ### 存取應用程式
+
+  你可以通過 `https://lobe.example.com` 存取你的 LobeHub 服務。
+</Steps>
+
+## 自訂部署
+
+該章節主要為你介紹在不同的網路環境下自訂部署 LobeHub 服務必須要修改的設定。在開始前，你可以先下載 [Docker Compose 組態檔](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml) 以及 [環境變數組態檔](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-TW.example)。
+
+```sh
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-TW.example
+mv .env.zh-TW.example .env
+```
+
+<Callout type="info">
+  本章節並不包含所有完整變數，剩餘的變數可以查閱
+  [使用伺服端資料庫部署](/zh/docs/self-hosting/server-database) 。
+</Callout>
+
+### 預備知識
+
+一般來講，想要完整的執行 LobeHub，你需要至少擁有如下三個服務：
+
+- LobeHub 自身
+- 帶有 PGVector 插件的 PostgreSQL 資料庫
+- 支援 S3 協議的對象存儲服務
+
+這些服務可以通過自建或者線上雲服務組合搭配，以滿足不同層次的部署需求。本文中，我們提供了完全基於開源自建服務的 Docker Compose 設定，你可以直接使用這份組態檔來啟動 LobeHub，也可以對之進行修改以適應你的需求。
+
+我們預設使用 [RustFS](https://github.com/rustfs/rustfs) 作為本地 S3 對象存儲服務。如需設定 SSO 登入認證服務，請參考 [身分驗證服務](/zh/docs/self-hosting/auth) 文件。
+
+<Callout type="warning">
+  如果你的網路拓撲較為複雜，請先確保在你的網路環境中這些服務能夠正常通訊。
+</Callout>
+
+### 必要設定
+
+以下我們將介紹執行這些服務的必要設定：
+
+1. S3 對象存儲
+
+LobeHub 需要為 LLM 服務提供商提供檔案對象的公網存取位址，因此你需要設定 S3 的 Endpoint：
+
+```env
+S3_ENDPOINT=https://s3.example.com
+```
+
+2. PostgreSQL
+
+該設定位於 `docker-compose.yml` 檔案中，你需要設定資料庫的名稱和密碼：
+
+```yaml
+services:
+  lobe:
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+```
+
+## 常見問題
+
+#### 資料庫遷移問題
+
+你可以使用下述指令檢查日誌：
+
+```sh
+docker logs -f lobehub
+```
+
+<Callout type="tip">
+  在我們官方的 Docker 鏡像中，會在啟動鏡像前自動執行資料庫 schema 的 migration，我們的官方鏡像承諾「空資料庫 -> 完整表」這一段自動建表的穩定性。因此我們建議你的資料庫實例使用一個空表實例，進而省去手動維護表結構或者 migration 的麻煩。
+</Callout>
+
+如果你在建表的時候出現了問題，你可以嘗試使用如下命令強制移除資料庫容器並重新啟動：
+
+```sh
+docker compose down  # 停止服務
+sudo rm -rf ./data   # 移除掛載的資料庫資料
+docker compose up -d # 重新啟動
+```
+
+#### 使用 `INTERNAL_APP_URL` 設定內部伺服器通訊
+
+<Callout type="info">
+  如果你在 CDN（如 Cloudflare）或反向代理後部署 LobeHub，你可以設定內部伺服器到伺服器通訊以繞過 CDN / 代理層，以獲得更好的性能。
+</Callout>
+
+你可以設定 `INTERNAL_APP_URL` 環境變數：
+
+```yaml
+environment:
+  - 'APP_URL=https://lobe.example.com'  # 瀏覽器存取的公開 URL
+  - 'INTERNAL_APP_URL=http://localhost:3210'  # 伺服器到伺服器調用的內部 URL
+```
+
+**工作原理：**
+
+- `APP_URL`：用於瀏覽器 / 客戶端存取、OAuth 回調、webhook 等（通過 CDN / 代理）
+- `INTERNAL_APP_URL`：用於內部伺服器到伺服器通訊（繞過 CDN / 代理）
+
+如果未設定 `INTERNAL_APP_URL`，它將預設為 `APP_URL`。
+
+**設定選項：**
+
+- `http://localhost:3210` - 如果使用 Docker 主機網路模式
+- `http://lobe:3210` - 如果使用 Docker 網路與服務名稱
+- `http://127.0.0.1:3210` - 備用本地主機位址
+
+<Callout type="tip">
+  對於使用 `network_mode: 'service:network-service'` 的 Docker Compose 部署，請使用 `http://localhost:3210` 作為 `INTERNAL_APP_URL`。
+</Callout>
+
+## 設定身分驗證
+
+如需設定 SSO 登入認證服務（如 Casdoor、Logto 等），請參考 [身分驗證服務](/zh/docs/self-hosting/auth) 文件。
+
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver

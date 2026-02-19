@@ -1,0 +1,830 @@
+---
+title: LobeHub 模型服務商相關環境變數設定指南
+description: 瞭解如何設定各個模型服務商的環境變數以在 LobeHub 中使用不同的AI模型服務。
+tags:
+  - LobeHub
+  - 模型服務商
+  - 環境變數
+  - AI模型
+  - 設定指南
+---
+
+# 模型服務商
+
+LobeHub 在部署時提供了豐富的模型服務商相關的環境變數，你可以使用這些環境變數輕鬆定義需要在 LobeHub 中開啟的模型服務商。
+
+## OpenAI
+
+### `ENABLED_OPENAI`
+
+- 類型：可選
+- 描述：預設啟用 OpenAI 作為模型供應商，當設為 0 時關閉 OpenAI 服務
+- 預設值：`1`
+- 示例：`0`
+
+### `OPENAI_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 OpenAI 帳號頁面申請的 API 密鑰，可以前往 [這裡](https://platform.openai.com/api-keys) 查看
+- 預設值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `OPENAI_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 OpenAI 接口代理，可以使用此設定項來覆蓋預設的 OpenAI API 請求基礎 URL
+- 預設值：`https://api.openai.com/v1`
+- 示例：`https://api.chatanywhere.cn` 或 `https://aihubmix.com/v1`
+
+<Callout type={'warning'}>
+  請檢查你的代理服務商的請求後綴，有的代理服務商會在請求後綴新增
+  `/v1`，有的則不會。如果你在測試時發現 AI 返回的訊息為空，請嘗試新增 `/v1` 後綴後重試。
+</Callout>
+
+<Callout type={'info'}>
+  是否填寫 `/v1` 跟模型服務商有很大關係，比如 openai 的預設位址是 `api.openai.com/v1`
+  。如果你的代理商轉發了 `/v1` 這個接口，那麼直接填 `proxy.com` 即可。 但如果模型服務商是直接轉發了
+  `api.openai.com` 域名，那麼你就要自己加上 `/v1` 這個 url。
+</Callout>
+
+相關討論：
+
+- [Docker 安裝，設定好環境變數後，為何返回值是空白？](https://github.com/lobehub/lobe-chat/discussions/623)
+- [使用第三方接口報錯的原因](https://github.com/lobehub/lobe-chat/discussions/734)
+- [代理伺服器位址填了聊天沒任何反應](https://github.com/lobehub/lobe-chat/discussions/1065)
+
+### `OPENAI_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`+qwen-7b-chat,+glm-6b,-gpt-3.5-turbo,gpt-4-0125-preview=gpt-4-turbo`
+
+上面示例表示增加 `qwen-7b-chat` 和 `glm-6b` 到模型列表，而從列表中刪除 `gpt-3.5-turbo`，並將 `gpt-4-0125-preview` 模型名字展示為 `gpt-4-turbo`。如果你想先禁用所有模型，再啟用指定模型，可以使用 `-all,+gpt-3.5-turbo`，則表示僅啟用 `gpt-3.5-turbo`。
+
+你可以在 [modelProviders](https://github.com/lobehub/lobe-chat/tree/main/src/config/modelProviders) 查找到當前的所有模型名。
+
+## Azure OpenAI
+
+如果你需要使用 Azure OpenAI 來提供模型服務，可以查閱 [使用 Azure OpenAI 部署](/zh/docs/self-hosting/examples/azure-openai) 章節查看詳細步驟，這裡將列舉和 Azure OpenAI 相關的環境變數。
+
+### `AZURE_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Azure OpenAI 帳號頁面申請的 API 密鑰
+- 預設值：-
+- 示例：`c55168be3874490ef0565d9779ecd5a6`
+
+### `AZURE_ENDPOINT`
+
+- 類型：必選
+- 描述：Azure API 位址，從 Azure 門戶檢查資源時，可在 「密鑰和終結點」 部分中找到此值
+- 預設值：`-`
+- 示例：`https://docs-test-001.openai.azure.com`
+
+### `AZURE_API_VERSION`
+
+- 類型：必選
+- 描述：Azure 的 API 版本，遵循 YYYY-MM-DD 格式
+- 預設值：`-`
+- 示例：`2024-02-01`，查閱 [最新版本](https://docs.microsoft.com/zh-tw/azure/developer/javascript/api-reference/es-modules/azure-sdk/ai-translation/translationconfiguration?view=azure-node-latest#api-version)
+
+### `AZURE_MODEL_LIST`
+
+- 類型：必選
+- 描述：用來控制模型列表，使用 `模型名->部署名=展示名` 來自訂模型的展示名，用英文逗號隔開。支援擴充功能能力，其餘語法規則詳見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`gpt-35-turbo->my-deploy=GPT 3.5 Turbo` 或 `gpt-4-turbo->my-gpt4=GPT 4 Turbo<128000:vision:fc>`
+
+## Google AI
+
+### `GOOGLE_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Google AI Platform 申請的 API 密鑰，用於存取 Google AI 服務
+- 預設值：-
+- 示例：`AIraDyDwcw254kwJaGjI9wwaHcdDCS__Vt3xQE`
+
+### `GOOGLE_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Google 接口代理，可以使用此設定項來覆蓋預設的 Google API 請求基礎 URL
+- 預設值：`https://generativelanguage.googleapis.com`
+- 示例：`https://api.genai.gd.edu.kg/google`
+
+### `GOOGLE_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+gemini-1.5-flash-latest,+gemini-1.5-pro-latest`
+
+## Vertex AI
+
+### `VERTEXAI_CREDENTIALS`
+
+- 類型：必選
+- 描述：Google Cloud 服務帳號密鑰的 JSON 字符串。用於認證和授權存取 Vertex AI 服務，獲取方法請參考 [這裡](/zh/docs/usage/providers/vertexai)
+- 預設值：-
+- 示例：`{"type": "service_account", "project_id": "your-gcp-project-id", ...}`
+
+### `VERTEXAI_PROJECT`
+
+- 類型：可選
+- 描述：你的 Google Cloud 項目 ID。如果未設定，將從 `VERTEXAI_CREDENTIALS` 中的 `project_id` 字段獲取。
+- 預設值：-
+- 示例：`your-gcp-project-id`
+
+### `VERTEXAI_LOCATION`
+
+- 類型：可選
+- 描述：你的 Vertex AI 模型所在的區域。
+- 預設值：`global`
+- 示例：`us-central1`
+
+### `VERTEXAI_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+gemini-1.5-flash-latest,+gemini-1.5-pro-latest`
+
+## Anthropic AI
+
+### `ANTHROPIC_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Anthropic AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`sk-ant-apixx-xxxxxxxxx-xxxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-xxxxxxxx`
+
+### `ANTHROPIC_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Anthropic 接口代理，可以使用此設定項來覆蓋預設的 Anthropic API 請求基礎 URL
+- 預設值：`https://api.anthropic.com`
+- 示例：`https://my-anthropic-proxy.com`
+
+## AWS Bedrock
+
+### `ENABLED_AWS_BEDROCK`
+
+- 類型：可選
+- 描述：當設為 1 時啟用 AWS Bedrock 服務
+- 預設值：`0`
+- 示例：`1`
+
+### `AWS_ACCESS_KEY_ID`
+
+- 類型：必選
+- 描述：用於 AWS 服務認證的存取鍵 ID
+- 預設值：-
+- 示例：`AKIA5STVRLFSB4S9HWBR`
+
+### `AWS_SECRET_ACCESS_KEY`
+
+- 類型：必選
+- 描述：用於 AWS 服務認證的密鑰
+- 預設值：-
+- 示例：`Th3vXxLYpuKcv2BARktPSTPxx+jbSiFT6/0w7oEC`
+
+### `AWS_REGION`
+
+- 類型：可選
+- 描述：AWS 服務的區域設定
+- 預設值：`us-east-1`
+- 示例：`us-east-1`
+
+## ComfyUI
+
+### `ENABLED_COMFYUI`
+
+- 類型：可選
+- 描述：預設啟用 ComfyUI 作為模型供應商，當設為 0 時關閉 ComfyUI 服務
+- 預設值：`1`
+- 示例：`0`
+
+### `COMFYUI_BASE_URL`
+
+- 類型：可選
+- 描述：ComfyUI 服務的基礎 URL 位址
+- 預設值：`http://localhost:8000`
+- 示例：`http://192.168.1.100:8000` 或 `https://my-comfyui-server.com`
+
+### `COMFYUI_AUTH_TYPE`
+
+- 類型：可選
+- 描述：ComfyUI 的認證類型，支援 4 種認證方式
+  - `none`: 無認證（預設）
+  - `basic`: 基礎認證（使用者名稱 + 密碼）
+  - `bearer`: Bearer Token 認證（API 密鑰）
+  - `custom`: 自訂請求頭認證
+- 預設值：`none`
+- 示例：`basic`
+
+### `COMFYUI_API_KEY`
+
+- 類型：可選
+- 描述：當認證類型為 `bearer` 時使用的 API 密鑰
+- 預設值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `COMFYUI_USERNAME`
+
+- 類型：可選
+- 描述：當認證類型為 `basic` 時使用的使用者名稱
+- 預設值：-
+- 示例：`admin`
+
+### `COMFYUI_PASSWORD`
+
+- 類型：可選
+- 描述：當認證類型為 `basic` 時使用的密碼
+- 預設值：-
+- 示例：`password123`
+
+### `COMFYUI_CUSTOM_HEADERS`
+
+- 類型：可選
+- 描述：當認證類型為 `custom` 時使用的自訂請求頭，需要使用 JSON 格式字符串
+- 預設值：-
+- 示例：`{"X-Auth-Token": "your-token", "X-Custom-Header": "value"}`
+
+<Callout type={'info'}>
+  ComfyUI 支援多種認證方式，請根據您的 ComfyUI 服務設定選擇合適的認證類型和相應的認證參數。如果您的 ComfyUI 服務沒有設定認證，可以不設定認證相關的環境變數。
+</Callout>
+
+## DeepSeek AI
+
+### `DEEPSEEK_PROXY_URL`
+
+- 類型：可選
+- 描述：如果您手動設定了 DeepSeek API 代理，可以使用此設定項覆蓋預設的 DeepSeek API 請求基礎 URL
+- 預設值：`https://api.deepseek.com`
+- 示例：`https://my-deepseek-proxy.com`
+
+### `DEEPSEEK_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 DeepSeek AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `DEEPSEEK_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+deepseek-reasoner`
+
+## XAI
+
+### `XAI_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 XAI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xai-xxxxxx...xxxxxx`
+
+## 文心一言
+
+### `WENXIN_API_KEY`
+
+- 類型：必選
+- 描述：這是你在百度智慧雲平臺申請的文心一言 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## OpenRouter AI
+
+### `OPENROUTER_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 OpenRouter AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`sk-or-v1-xxxxxx...xxxxxx=`
+
+### `OPENROUTER_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+01-ai/yi-34b-chat,+huggingfaceh4/zephyr-7b-beta`
+
+## PPIO
+
+### `PPIO_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 PPIO 網站申請的 API 密鑰
+- 預設值：-
+- 示例：`sk_xxxxxxxxxxxx`
+
+### `PPIO_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+deepseek/deepseek-v3/community,+deepseek/deepseek-r1-distill-llama-70b`
+
+## Github
+
+### `GITHUB_TOKEN`
+
+- 類型：必選
+- 描述：這是你在 Github 申請的 Personal access tokens
+- 預設值：-
+- 示例：`ghp_xxxxxx...xxxxxx=`
+
+### `GITHUB_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+gpt-4o,+gpt-4o-mini`
+
+## TogetherAI
+
+### `TOGETHERAI_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 TogetherAI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+### `TOGETHERAI_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo,+meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo`
+
+## Fireworks AI
+
+### `FIREWORKSAI_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Fireworks AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+### `FIREWORKSAI_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+accounts/fireworks/models/firefunction-v2,+accounts/fireworks/models/firefunction-v1`
+
+## Ollama
+
+### `ENABLED_OLLAMA`
+
+- 類型：可選
+- 描述：預設啟用 Ollama 作為模型供應商，當設為 0 時關閉 Ollama 服務
+- 預設值：`1`
+- 示例：`0`
+
+### `OLLAMA_PROXY_URL`
+
+- 類型：必選
+- 描述：用於啟用 Ollama 服務，設定後可在語言模型列表內展示可選開源語言模型，也可以指定自訂語言模型
+- 預設值：-
+- 示例：`http://127.0.0.1:11434`
+
+### `OLLAMA_MODEL_LIST`
+
+- 類型：可選
+- 描述：用於指定自訂 Ollama 語言模型。模型定義語法規則見 [模型列表][model-list]
+- 預設值：-
+- 示例：`qwen:32B`
+
+## Moonshot AI
+
+### `MOONSHOT_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Moonshot AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`Y2xpdGhpMzNhZXNoYjVtdnZjMWc6bXNrLWIxQlk3aDNPaXpBWnc0V1RaMDhSRmRFVlpZUWY=`
+
+### `MOONSHOT_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Moonshot 接口代理，可以使用此設定項來覆蓋預設的 Moonshot API 請求基礎 URL
+- 預設值：`https://api.moonshot.cn/v1`
+- 示例：`https://my-moonshot-proxy.com/v1`
+
+## Perplexity AI
+
+### `PERPLEXITY_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Perplexity AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`pplx-xxxxxx...xxxxxx`
+
+### `PERPLEXITY_MODEL_LIST`
+
+- 類型：可選
+- 描述：用於指定自訂 Perplexity 語言模型。模型定義語法規則見 [模型列表][model-list]
+- 預設值：-
+- 示例： `-all,+llama-3.1-sonar-small-128k-online,+llama-3.1-sonar-small-128k-chat`
+
+### `PERPLEXITY_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Perplexity 接口代理，可以使用此設定項來覆蓋預設的 Perplexity API 請求基礎 URL
+- 預設值：`https://api.Perplexity.ai`
+- 示例：`https://my-Perplexity-proxy.com`
+
+## Minimax AI
+
+### `MINIMAX_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Minimax AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## Mistral AI
+
+### `MISTRAL_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Mistral AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx=`
+
+## Groq AI
+
+### `GROQ_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Groq AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`gsk_xxxxxx...xxxxxx`
+
+### `GROQ_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+gemma2-9b-it,+llama-3.1-8b-instant`
+
+### `GROQ_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Groq 接口代理，可以使用此設定項來覆蓋預設的 Groq API 請求基礎 URL
+- 預設值：`https://api.groq.com/openai/v1`
+- 示例：`https://my-groq-proxy.com/v1`
+
+## 智譜 AI
+
+### `ZHIPU_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 智譜 AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`4582d332441a313f5c2ed9824d1798ca.rC8EcTAhgbOuAuVT`
+
+### `ZHIPU_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+glm-4-alltools,+glm-4-plus`
+
+## 01 AI
+
+### `ZEROONE_API_KEY`
+
+- 類型：必選
+- 描述：這是你在零一萬物服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+### `ZEROONE_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+yi-large,+yi-large-rag`
+
+## 七牛雲
+
+### `QINIU_API_KEY`
+
+- 類型：必選
+- 描述：這是你在七牛雲上獲取的 API 密鑰
+- 預設值：-
+- 示例：`sk-xxxxx...xxxxx`
+
+### `QINIU_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+deepseek-r1,+deepseek-v3`
+
+### `QINIU_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Qiniu 接口代理，可以使用此設定項來覆蓋預設的 Qiniu API 請求基礎 URL
+- 預設值：`https://api.qnaigc.com/v1`
+- 示例：`https://my-qnaigc.com/v1`
+
+## 通義千問
+
+### `QWEN_API_KEY`
+
+- 類型：必選
+- 描述：這是你在阿里雲百鍊平臺上獲取的 DashScope API 密鑰
+- 預設值：-
+- 示例：`sk-xxxxx...xxxxx`
+
+### `QWEN_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名->部署名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。部署名`->部署名`可以省略，預設為最新版本的模型。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+qwen-turbo,+qwen-plus,+qwen-max->qwen-max-2025-01-25`
+
+### `QWEN_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Qwen 接口代理，可以使用此設定項來覆蓋預設的 Qwen API 請求基礎 URL
+- 預設值：`https://dashscope.aliyuncs.com/compatible-mode/v1`
+- 示例：`https://my-qwen-proxy.com/v1`
+
+## Stepfun AI
+
+### `STEPFUN_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Stepfun AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## Novita AI
+
+### `NOVITA_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Novita AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+### `NOVITA_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+meta-llama/llama-3.1-8b-instruct,+meta-llama/llama-3.1-70b-instruct`
+
+## 百川
+
+### `BAICHUAN_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 百川智慧 服務平臺申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## 紫東太初
+
+### `TAICHU_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 紫東太初 服務平臺申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## 360 AI
+
+### `AI360_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 360 智腦 服務平臺申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## Siliconflow
+
+### `SILICONCLOUD_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Siliconflow 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+### `SILICONCLOUD_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+deepseek-ai/DeepSeek-V2.5,+Qwen/Qwen2.5-7B-Instruct`
+
+### `SILICONCLOUD_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Siliconflow 接口代理，可以使用此設定項來覆蓋預設的 Siliconflow API 請求基礎 URL
+- 預設值：`https://api.siliconflow.cn/v1`
+- 示例：`https://my-siliconflow-proxy.com/v1`
+
+## Upstage AI
+
+### `UPSTAGE_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Upstage AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## Spark AI
+
+### `SPARK_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Spark AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## A21 AI
+
+### `AI21_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 A21 AI 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+## 騰訊混元
+
+### `HUNYUAN_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 騰訊混元 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`xxxxxx...xxxxxx`
+
+### `HUNYUAN_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+hunyuan-lite,+hunyuan-standard`
+
+## 火山引擎
+
+### `VOLCENGINE_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 火山引擎 服務中申請的 API 密鑰，可以前往 [這裡](https://console.volcengine.com/ark/region:ark+cn-beijing/endpoint) 查看
+- 預設值：-
+- 示例：`ad925b3d-aaaa-bbbb-cccc-51fde2f50547`
+
+### `VOLCENGINE_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名->部署名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。部署名`->部署名`可以省略，預設為最新版本的模型。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+deepseek-r1,+deepseek-v3->deepseek-v3-250324,+doubao-1.5-pro-256k,+doubao-1.5-pro-32k->doubao-1-5-pro-32k-250115,+doubao-1.5-lite-32k`
+
+### `VOLCENGINE_PROXY_URL`
+
+- 類型：可選
+- 描述：如果你手動設定了 Volcengine 接口代理，可以使用此設定項來覆蓋預設的 Volcengine API 請求基礎 URL
+- 預設值：`https://ark.cn-beijing.volces.com/api/v3`
+- 示例：`https://my-volcengine-proxy.com/v1`
+
+## InfiniAI
+
+### `INFINIAI_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 [Infini-AI](https://cloud.infini-ai.com) 申請的 API 密鑰。
+- 預設值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `INFINIAI_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名<擴充功能設定>` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則見 [模型列表][model-list]
+- 預設值：`-`
+- 示例：`-all,+qwq-32b,+deepseek-r1`
+
+## FAL
+
+### `ENABLED_FAL`
+
+- 類型：可選
+- 描述：預設啟用 FAL 作為模型供應商，當設為 0 時關閉 FAL 服務
+- 預設值：`1`
+- 示例：`0`
+
+### `FAL_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 FAL 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`fal-xxxxxx...xxxxxx`
+
+### `FAL_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制 FAL 模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則與其他 provider 保持一致。
+- 預設值：`-`
+- 示例：`-all,+fal-ai/flux/schnell,+fal-ai/flux-pro/kontext=FLUX.1 Kontext [pro]`
+
+上述示例表示先禁用所有模型，再啟用 `fal-ai/flux/schnell` 和 `fal-ai/flux-pro/kontext`（顯示名為 `FLUX.1 Kontext [pro]`）。
+
+## BFL
+
+### `BFL_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 BFL 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`12345678-1234-1234-1234-123456789abc`
+
+### `BFL_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制 BFL 模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則與其他 provider 保持一致。
+- 預設值：`-`
+- 示例：`-all,+flux-pro-1.1,+flux-kontext-pro=FLUX.1 Kontext [pro]`
+
+上述示例表示先禁用所有模型，再啟用 `flux-pro-1.1` 和 `flux-kontext-pro`（顯示名為 `FLUX.1 Kontext [pro]`）。
+
+## NewAPI
+
+### `NEWAPI_API_KEY`
+
+- 類型：可選
+- 描述：這是你的 NewAPI 服務實例的 API 密鑰。NewAPI 是一個多供應商模型聚合服務，提供對各種 AI 模型 API 的統一存取。
+- 預設值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `NEWAPI_PROXY_URL`
+
+- 類型：可選
+- 描述：你的 NewAPI 伺服器實例的基礎 URL。這應該指向你部署的 NewAPI 伺服端點。
+- 預設值：-
+- 示例：`https://your-newapi-server.com`
+
+<Callout type={'info'}>
+  NewAPI
+  是一個多供應商模型聚合服務，支援基於供應商檢測的自動模型路由。它提供成本管理功能，併為存取包括
+  OpenAI、Anthropic、Google 等多個供應商的模型提供單一端點。瞭解更多關於 NewAPI 的資訊請存取
+  [https://github.com/Calcium-Ion/new-api](https://github.com/Calcium-Ion/new-api)。
+</Callout>
+
+## Vercel AI Gateway
+
+### `VERCELAIGATEWAY_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Vercel AI Gateway 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`vck_xxxxxx...xxxxxx`
+
+### `VERCELAIGATEWAY_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制 Vercel AI Gateway 模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則與其他 provider 保持一致。
+- 預設值：`-`
+- 示例：`-all,+vercel-model-1,+vercel-model-2=vercel-special`
+
+## Cerebras
+
+### `CEREBRAS_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 Cerebras 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`csk-xxxxxx...xxxxxx`
+
+### `CEREBRAS_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制 Cerebras 模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則與其他 provider 保持一致。
+- 預設值：`-`
+- 示例：`-all,+cerebras-model-1,+cerebras-model-2=cerebras-special`
+
+## AiHubMix
+
+### `AIHUBMIX_API_KEY`
+
+- 類型：必選
+- 描述：這是你在 AiHubMix 服務中申請的 API 密鑰
+- 預設值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `AIHUBMIX_MODEL_LIST`
+
+- 類型：可選
+- 描述：用來控制 AiHubMix 模型列表，使用 `+` 增加一個模型，使用 `-` 來隱藏一個模型，使用 `模型名=展示名` 來自訂模型的展示名，用英文逗號隔開。模型定義語法規則與其他 provider 保持一致。
+- 預設值：`-`
+- 示例：`-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
+
+[model-list]: /zh/docs/self-hosting/advanced/model-list

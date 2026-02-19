@@ -1,0 +1,171 @@
+---
+title: 新增新的圖像模型
+description: 瞭解如何新增新的圖像模型併相容 OpenAI 請求格式。
+tags:
+  - 圖像模型
+  - AI 繪畫
+  - OpenAI 相容
+---
+
+# 新增新的圖像模型
+
+> 瞭解更多關於 AI 繪畫模態的設計，請參考 [AI 繪畫模態設計討論](https://github.com/lobehub/lobehub/discussions/7442)
+
+## 參數標準化
+
+所有圖像生成模型都必須使用 `packages/model-bank/src/standard-parameters/index.ts` 中定義的標準參數。這確保了不同 Provider 之間的參數一致性，讓使用者體驗更加統一。
+
+**支援的標準參數**：
+
+- `prompt` (必需)：生成圖像的提示詞
+- `aspectRatio`：寬高比（如 "16:9", "1:1"）
+- `width` / `height`：圖像寬高
+- `size`：預設尺寸（如 "1024x1024"）
+- `seed`：隨機種子
+- `steps`：生成步數
+- `cfg`：引導縮放
+- 其他參數請查看原始檔
+
+## 相容 OpenAI 請求格式的模型
+
+指的是可以使用 openai SDK 進行請求，並且請求參數和和返回值和 dall-e 以及 gpt-image-x 系列一致。
+
+以智譜的 CogView-4 為例，它是一個相容 openai 請求格式的模型。你只需要在對應的 ai models 檔案 `packages/model-bank/src/aiModels/zhipu.ts` 中，新增模型設定，例如：
+
+```ts
+const zhipuImageModels: AIImageModelCard[] = [
+  // 新增模型設定
+  // https://bigmodel.cn/dev/howuse/image-generation-model/cogview-4
+  {
+    description:
+      'CogView-4 是智譜首個支援生成漢字的開源文生圖模型，在語義理解、圖像生成品質、中英文字生成能力等方面全面提升，支援任意長度的中英雙語輸入，能夠生成在給定範圍內的任意解析度圖像。',
+    displayName: 'CogView-4',
+    enabled: true,
+    id: 'cogview-4',
+    parameters: {
+      prompt: {
+        default: '',
+      },
+      size: {
+        default: '1024x1024',
+        enum: ['1024x1024', '768x1344', '864x1152', '1344x768', '1152x864', '1440x720', '720x1440'],
+      },
+    },
+    releasedAt: '2025-03-04',
+    type: 'image',
+  },
+];
+```
+
+## 不相容 OpenAI 請求格式的模型
+
+對於不相容 OpenAI 格式的圖像生成模型，需要實現自訂的 `createImage` 方法。有兩種主要實現方式：
+
+### 方式一：使用 OpenAI Compatible Factory
+
+大部分 Provider 都使用 `openaiCompatibleFactory` 來相容 OpenAI，可以通過傳入自訂的 `createImage` 函數（參考 [PR #8534](https://github.com/lobehub/lobehub/pull/8534)）。
+
+**實現步驟**：
+
+1. **閱讀 Provider 官方文件和標準參數定義**
+   - 查看 Provider 的圖像生成 API 文件，瞭解請求格式和回應格式
+   - 閱讀 `packages/model-bank/src/standard-parameters/index.ts`，瞭解支援的參數
+   - 在對應的 ai models 檔案中增加 image model 設定
+
+2. **實現自訂的 createImage 方法**
+   - 建立獨立的圖像生成函數，接受標準生圖參數
+   - 將標準參數轉換為 Provider 特定的格式
+   - 調用 Provider 的生圖接口
+   - 返回統一格式的回應（imageUrl 和可選的寬高）
+
+3. **補充測試**
+   - 編寫單元測試覆蓋成功場景
+   - 測試各種錯誤情況和邊界條件
+
+**程式碼示例**：
+
+```ts
+// packages/model-runtime/src/providers/<provider-name>/createImage.ts
+export const createProviderImage = async (
+  payload: ImageGenerationPayload,
+  options: any,
+): Promise<ImageGenerationResponse> => {
+  const { model, prompt, ...params } = payload;
+
+  // 調用 Provider 的原生 API
+  const result = await callProviderAPI({
+    model,
+    prompt,
+    // 轉換參數格式
+    custom_param: params.width,
+    // ...
+  });
+
+  // 返回統一格式
+  return {
+    created: Date.now(),
+    data: [{ url: result.imageUrl }],
+  };
+};
+```
+
+```ts
+// packages/model-runtime/src/providers/<provider-name>/index.ts
+export const LobeProviderAI = openaiCompatibleFactory({
+  constructorOptions: {
+    // ... 其他設定
+  },
+  createImage: createProviderImage, // 傳入自訂實現
+  provider: ModelProvider.ProviderName,
+});
+```
+
+### 方式二：在 Provider 類中直接實現
+
+如果你的 Provider 有獨立的類實現，可以直接在類中新增 `createImage` 方法（參考 [PR #8503](https://github.com/lobehub/lobehub/pull/8503)）。
+
+**實現步驟**：
+
+1. **閱讀 Provider 官方文件和標準參數定義**
+   - 查看 Provider 的圖像生成 API 文件
+   - 閱讀 `packages/model-bank/src/standard-parameters/index.ts`
+   - 在對應的 ai models 檔案中增加 image model 設定
+
+2. **在 Provider 類中實現 createImage 方法**
+   - 直接在類中新增 `createImage` 方法
+   - 處理參數轉換和 API 調用
+   - 返回統一格式的回應
+
+3. **補充測試**
+   - 為新方法編寫完整的測試用例
+
+**程式碼示例**：
+
+```ts
+// packages/model-runtime/src/providers/<provider-name>/index.ts
+export class LobeProviderAI {
+  async createImage(
+    payload: ImageGenerationPayload,
+    options?: ChatStreamCallbacks,
+  ): Promise<ImageGenerationResponse> {
+    const { model, prompt, ...params } = payload;
+
+    // 調用原生 API 並處理回應
+    const result = await this.client.generateImage({
+      model,
+      prompt,
+      // 參數轉換
+    });
+
+    return {
+      created: Date.now(),
+      data: [{ url: result.url }],
+    };
+  }
+}
+```
+
+### 重要注意事項
+
+- **測試要求**：為自訂實現新增完整的單元測試，確保覆蓋成功場景和各種錯誤情況
+- **錯誤處理**：統一使用 `AgentRuntimeError` 進行錯誤封裝，保持錯誤訊息的一致性

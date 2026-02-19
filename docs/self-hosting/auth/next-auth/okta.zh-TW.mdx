@@ -1,0 +1,61 @@
+---
+title: 在 LobeHub 中設定 Okta 身分驗證服務 - 詳細步驟和環境變數設定
+description: 學習如何在 LobeHub 中為您的組織設定 Okta 身分驗證服務，包括建立應用程式、新增使用者和設定環境變數等。
+tags:
+  - Okta
+  - 身分驗證
+  - 單點登入
+  - 環境變數
+  - 使用者管理
+  - SSO 整合
+  - 社交登入
+---
+
+# 設定 Okta 身分驗證服務
+
+<Steps>
+  ### 建立 Okta 應用程式
+
+  註冊並登入 [Okta][okta-client-page]，開啟左側導航欄中的「Applications」子索引標籤，點擊「Applications」切換到應用程式管理界面。點擊左上角的「Create App Integration」建立應用程式。
+
+  在登入方法中選擇「OIDC - OpenID Connect」，然後在應用程式類型中選擇「Web Application」。
+
+  填寫以下設定：
+
+  | 設定名稱                   | 描述                                          | 示例資訊                                          |
+  | ---------------------- | ------------------------------------------- | --------------------------------------------- |
+  | App Integration Name   | 您的使用者將看到的應用程式名稱                              | LobeHub Instance                              |
+  | Sign-in redirect URIs  | Okta 將使用者登入請求的身分驗證回應和 ID 令牌發送到這些 URI         | (http(s)://your-domain/api/auth/callback/okta |
+  | Sign-out redirect URIs | 您的應用程式聯繫 Okta 關閉使用者會話後，Okta 將使用者重新導向到這些 URI 之一 | (http(s)://your-domain                        |
+
+  <Callout type={'important'}>
+    您可以在部署後填寫或修改所有字段，但請確保填寫的 URL 與部署的 URL 一致。
+  </Callout>
+
+  ### 新增使用者
+
+  點擊頂部導航欄中的「Assignments」進入使用者管理界面，您可以在此建立或分配組織中的使用者來登入 LobeHub。
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，您需要設定以下環境變數：
+
+  | 環境變數                      | 類型 | 描述                                                                                   |
+  | ------------------------- | -- | ------------------------------------------------------------------------------------ |
+  | `AUTH_SECRET`             | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令生成密鑰：`openssl rand -base64 32`                         |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必選 | 選擇 LoboChat 的單點登入提供商。使用 Okta 請填寫 `okta`。                                             |
+  | `AUTH_OKTA_ID`            | 必選 | Okta 應用程式的客戶端 ID                                                                     |
+  | `AUTH_OKTA_SECRET`        | 必選 | Okta 應用程式的客戶端密鑰                                                                      |
+  | `AUTH_OKTA_ISSUER`        | 必選 | Okta 應用程式的域名，`https://example.oktapreview.com`                                       |
+  | `AUTH_URL`                | 可選 | 該 URL 用於指定 Auth.js 在執行 OAuth 認證時的回調位址。僅當預設位址不正確時才需要設定。`https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    您可以在 [📘環境變數](/zh/docs/self-hosting/environment-variables/auth#okta) 查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout>
+  部署成功後，使用者將能夠使用在 Okta 中設定的使用者進行身分驗證並使用 LobeHub。
+</Callout>
+
+[okta-client-page]: https://login.okta.com

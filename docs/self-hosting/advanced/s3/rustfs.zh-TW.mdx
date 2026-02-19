@@ -1,0 +1,140 @@
+---
+title: 設定 RustFS 存儲服務
+description: 詳細步驟設定 RustFS 存儲服務，確保檔案存儲順利進行。
+tags:
+  - RustFS
+  - S3 存儲
+  - 檔案存儲
+---
+
+# 設定 RustFS 存儲服務
+
+在伺服端資料庫中我們需要設定 S3 存儲服務來存儲檔案。
+
+<Callout type={'info'}>
+  由於近期 MinIO 的商業化策略調整，我們不再推薦使用 MinIO 作為 S3 存儲服務，建議所有仍在使用 MinIO 的使用者遷移至 [RustFS](https://rustfs.com/) 或者 [ceph](https://ceph.io/) 等開源的 S3 存儲服務或者騰訊雲對象存儲、Cloudflare R2 等雲服務商的 S3 存儲服務。
+</Callout>
+
+## 設定步驟
+
+<Steps>
+  ### 部署 RustFS
+
+  首先，拉取 RustFS 的 Docker 鏡像：
+
+  ```shell
+  docker pull rustfs/rustfs:latest
+  ```
+
+  你可以使用如下命令來查看其版本，建議使用 v1.0.0 及以上版本：
+
+  ```shell
+  docker inspect --format='{{index .Config.Labels "version"}}' rustfs/rustfs:latest
+  ```
+
+  我們推薦使用 Docker Compose 來部署 RustFS：
+
+  ```yml
+  services:
+      rustfs:
+          image: rustfs/rustfs:latest
+          container_name: lobe-rustfs
+          ports:
+              - '9000:9000'
+              - '9001:9001'
+          environment:
+              - RUSTFS_CONSOLE_ENABLE=true
+              - RUSTFS_ACCESS_KEY=<YOUR_ACCESS_KEY>
+              - RUSTFS_SECRET_KEY=<YOUR_SECRET_KEY>
+          volumes:
+              - rustfs-data:/data
+
+  volumes:
+    rustfs-data:
+  ```
+
+  然後，啟動 RustFS：
+
+  ```shell
+  docker compose up -d
+  ```
+
+  ### 建立存儲桶
+
+  存取 RustFS 的 WebUI（`http://localhost:9001/`），即可自動跳轉到登入頁。輸入帳號（上述 `docker-compose.yml` 檔案中的 `RUSTFS_ACCESS_KEY`）、密碼（上述 `docker-compose.yml` 檔案中的 `RUSTFS_SECRET_KEY`），即可登入。
+
+  點擊左側邊欄的 `對象存儲` 選單，右上角 `建立存儲桶` 按鈕，建立一個新的存儲桶（Bucket）。建立存儲桶時將指定其名稱，下文以 `lobe` 為例。版本、對象鎖依照預設設定不開啟。
+
+  <Image alt={"Create Bucket"} src={'https://github.com/user-attachments/assets/27c37617-a813-4de5-b0bf-c7167999c856'} />
+
+  點擊存儲桶 - `設定` 按鈕，選擇策略為 `自訂`，然後填入如下 JSON，設定存儲桶的權限為 `公有讀私有寫`：
+
+  ```json
+  {
+    "ID": "",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": [
+            "*"
+          ]
+        },
+        "Action": [
+          "s3:GetObject"
+        ],
+        "NotAction": [],
+        "Resource": [
+          "arn:aws:s3:::lobe/*"
+        ],
+        "NotResource": [],
+        "Condition": {}
+      }
+    ]
+  }
+  ```
+
+  點擊儲存即可。
+
+  ### 設定存取密鑰
+
+  <Callout type={'warning'}>
+    有關這部分，你可以直接使用在 `docker-compose.yml` 檔案中設定的 `RUSTFS_ACCESS_KEY` 和 `RUSTFS_SECRET_KEY`，但出於安全考慮，我們推薦你手動建立一個存取密鑰。
+  </Callout>
+
+  點擊左側邊欄的 `存取密鑰` 選單，右上角 `新增存取密鑰` 按鈕，建立一個新的存取密鑰（Access Key）。名稱隨意，按照預設設定使用主帳號策略即可。
+
+  記錄好得到的存取密鑰和密鑰（你可以點擊 `導出` 按鈕以在本地儲存）。這裡 RustFS 的翻譯有點迷惑，但你只需要記住上面那個短的是 `Access Key`，長的是 `Secret Key` 即可（導出的 JSON 中是對的）。
+
+  <Image alt={"Add Key"} src={'https://github.com/user-attachments/assets/81f18b20-3918-4f77-8571-07d0c4a79aec'} />
+
+  <Image alt={"Export Key"} src={'https://github.com/user-attachments/assets/4dde41ec-985b-4781-8c77-aac65555a32f'} />
+
+  ### 設定反向代理
+
+  你還需要完成反向代理設定，並確保局域網 / 公網能存取到 RustFS 的服務。請使用反向代理將以下伺服連接埠映射到域名：
+
+  | 域名                        | 反代連接埠   | 是否必選 |
+  | ------------------------- | ------ | ---- |
+  | `lobe-s3-api.example.com` | `9000` | 必選   |
+  | `lobe-s3-ui.example.com`  | `9001` |      |
+
+  完成反向代理後，記得設定對應的 SSL 證書，啟用 HTTPS 存取。
+
+  ### 設定環境變數
+
+  修改 LobeHub 的 `.env` 檔案，新增如下環境變數，即可完成設定，使用 RustFS 作為 S3 存儲服務：
+
+  ```shell
+  # RustFS 的認證 Access Key / Secret Key
+  S3_ACCESS_KEY_ID=<YOUR_ACCESS_KEY>
+  S3_SECRET_ACCESS_KEY=<YOUR_SECRET_KEY>
+  # RustFS API 的請求端點
+  S3_ENDPOINT=https://lobe-s3-api.example.com
+  # 存儲桶的名稱
+  S3_BUCKET=lobe
+  S3_ENABLE_PATH_STYLE=1
+  ```
+</Steps>

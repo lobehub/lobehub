@@ -1,0 +1,242 @@
+---
+title: LobeHub 環境變數設定指南
+description: 瞭解如何使用環境變數自訂設定 LobeHub 部署，包括存取密碼、單點登入、basePath 設定等。
+tags:
+  - LobeHub
+  - 環境變數
+  - 設定指南
+  - 單點登入
+  - 插件服務
+  - 助手市場
+---
+
+# 環境變數
+
+LobeHub 在部署時提供了一些額外的設定項，你可以使用環境變數進行自訂設定。
+
+## 通用變數
+
+### `KEY_VAULTS_SECRET`
+
+- 類型：可選
+- 描述：新增存取 LobeHub 服務的密碼，你可以設定一個長密碼以防被爆破
+- 預設值：-
+- 示例：`Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=`
+
+<Callout type={'warning'}>
+  此密鑰用於加密敏感資料，一旦設定後請勿更改，否則已加密的資料將無法解密。
+</Callout>
+
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+### `API_KEY_SELECT_MODE`
+
+- 類型：可選
+- 描述：用於控制多個 API Keys 時，選擇 Key 的模式，當前支援 `random` 和 `turn`
+- 預設值：`random`
+- 示例：`random` 或 `turn`
+
+使用 `random` 模式下，將在多個 API Keys 中隨機獲取一個 API Key。
+
+使用 `turn` 模式下，將按照填寫的順序，輪詢獲取得到 API Key。
+
+### `DEFAULT_AGENT_CONFIG`
+
+- 類型：可選
+- 描述：用於設定 LobeHub 預設助理的預設設定。它支援多種資料類型和結構，包括鍵值對、嵌套字段、陣列值等。
+- 預設值：`-`
+- 示例：`'model=gpt-4-1106-preview;params.max_tokens=300;plugins=search-engine,lobe-image-designer'`
+
+`DEFAULT_AGENT_CONFIG` 用於設定 LobeHub 預設助理的預設設定。它支援多種資料類型和結構，包括鍵值對、嵌套字段、陣列值等。下表詳細說明了 `DEFAULT_AGENT_CONFIG` 環境變數的設定項、示例以及相應解釋：
+
+| 設定項類型 | 示例                                                                                                                      | 解釋                                                    |
+| ----- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 基本鍵值對 | `model=gpt-4`                                                                                                           | 設定模型為 `gpt-4`。                                        |
+| 嵌套字段  | `tts.sttLocale=en-US`                                                                                                   | 設定文字到語音服務的語言區域為 `en-US`。                              |
+| 陣列    | `plugins=search-engine,lobe-image-designer`                                                                             | 啟用 `search-engine` 和 `lobe-image-designer` 插件。        |
+| 中文逗號  | `plugins=search-engine，lobe-image-designer`                                                                             | 同上，演示支援中文逗號分隔。                                        |
+| 多個設定項 | `model=glm-4;provider=zhipu`                                                                                            | 設定模型為 `glm-4` 且模型服務商為 `zhipu`。                        |
+| 數位值   | `params.max_tokens=300`, `chatConfig.historyCount=5`                                                                    | 設定最大令牌數為 `300`，設定歷史訊息條數為 5。                           |
+| 布爾值   | `chatConfig.enableAutoCreateTopic=true`,`chatConfig.enableCompressThreshold=true`, `chatConfig.enableHistoryCount=true` | 啟用自動建立主題，歷史長度壓縮閾值，歷史記錄條數。                             |
+| 特殊字符  | `inputTemplate="Hello; I am a bot;"`                                                                                    | 設定輸入模板為 `Hello; I am a bot;`。                         |
+| 錯誤處理  | `model=gpt-4;maxToken`                                                                                                  | 忽略無效條目 `maxToken`，僅解析出 `model=gpt-4`。                 |
+| 值覆蓋   | `model=gpt-4;model=gpt-4-1106-preview`                                                                                  | 如果鍵重複，使用最後一次出現的值，此處 `model` 的值為 `gpt-4-1106-preview`。 |
+
+相關閱讀：
+
+- [\[RFC\] 022 - 環境變數設定預設助手參數](https://github.com/lobehub/lobe-chat/discussions/913)
+
+### `SYSTEM_AGENT`
+
+- 類型：可選
+- 描述：用於設定 LobeHub 系統助手（如主題生成、翻譯等功能）的模型和供應商。
+- 預設值：`-`
+- 示例：`default=ollama/deepseek-v3` 或 `topic=openai/gpt-4,translation=anthropic/claude-1`
+
+`SYSTEM_AGENT` 環境變數支援兩種設定方式：
+
+1. 使用 `default=供應商/模型` 為所有系統助手設定相同的預設設定
+2. 針對特定的系統助手進行單獨設定，格式為 `助手名稱=供應商/模型`
+
+設定項說明：
+
+| 設定項  | 格式                                              | 解釋                                  |
+| ---- | ----------------------------------------------- | ----------------------------------- |
+| 預設設定 | `default=ollama/deepseek-v3`                    | 為所有系統助手設定預設模型為 ollama 的 deepseek-v3 |
+| 特定設定 | `topic=openai/gpt-4`                            | 為主題生成設定特定的供應商和模型                    |
+| 混合設定 | `default=ollama/deepseek-v3,topic=openai/gpt-4` | 先為所有助手設定預設值，然後針對特定助手進行覆蓋            |
+
+可設定的系統助手及其作用：
+
+| 系統助手    | 鍵名                | 作用描述                        |
+| ------- | ----------------- | --------------------------- |
+| 主題生成    | `topic`           | 根據聊天內容自動生成主題名稱和摘要           |
+| 翻譯      | `translation`     | 文字翻譯使用的助手                   |
+| 元資料生成   | `agentMeta`       | 為助手生成描述性資訊和元資料              |
+| 歷史記錄壓縮  | `historyCompress` | 壓縮和整理長對話的歷史記錄，優化上下文管理       |
+| 知識庫查詢重寫 | `queryRewrite`    | 將後續問題改寫為包含上下文的獨立問題，提升對話的連貫性 |
+| 分支對話    | `thread`          | 自定生成分支對話的標題                 |
+
+### `FEATURE_FLAGS`
+
+- 類型：可選
+- 描述：用於控制 LobeHub 的特性功能，支援多個功能標誌，使用 `+` 增加一個功能，使用 `-` 來關閉一個功能，多個功能標誌之間使用英文逗號 `,` 隔開，最外層建議新增引號 `"` 以避免解析錯誤。
+- 預設值：`-`
+- 示例：`"-welcome_suggest"`
+
+具體的內容可以參見 [特性標誌](/zh/docs/self-hosting/advanced/feature-flags) 中的說明。
+
+### `PROXY_URL`
+
+- 類型：可選
+- 描述：用於指定連接到外部服務的代理 URL。該變數的值在不同的部署環境中應該有所不同。
+- 預設值：-
+- 示例：`http://127.0.0.1:7890` 或 `socks5://localhost:7891`
+
+<Callout type="info">
+  `Docker Desktop` 在 `Windows `和 `macOS `上走的是虛擬機方案，如果是 `localhost` / `127.0.0.1`
+  是走到自身容器的 `localhost`，此時請嘗試用 `host.docker.internal` 替代 `localhost`。 使用
+  `http://user:password@127.0.0.1:7890` 來連接到帶認證的代理伺服器。
+</Callout>
+
+### `ENABLE_PROXY_DNS`
+
+- 類型：可選
+- 描述：用於控制是否將 DNS 發送到代理伺服器，設定為 `0` 時所有 DNS 查詢在本地完成，當你的網路環境無法存取 API 或存取超時，請嘗試將該項設定為 `1`。
+- 預設值：`0`
+- 示例：`1` or `0`
+
+### `SSRF_ALLOW_PRIVATE_IP_ADDRESS`
+
+- 類型：可選
+- 描述：控制是否允許連接私有 IP 位址。設定為 `1` 時將關閉 SSRF 防護並允許所有私有 IP 位址。在可信環境（如內網部署）中，可以啟用此選項以存取內部資源。
+- 預設值：`0`
+- 示例：`1` 或 `0`
+
+<Callout type="warning">
+  **安全提示**：啟用此選項將關閉 SSRF 防護，允許連接私有 IP 位址段（127.0.0.0/8、10.0.0.0/8、172.16.0.0/12、192.168.0.0/16
+  等）。僅在需要存取內網資源的可信環境中啟用。
+</Callout>
+
+**應用場景**：
+
+LobeHub 會在以下場景執行 SSRF 安全檢查：
+
+1. **圖片 / 影片 URL 轉 Base64**：在處理媒體訊息時（例如視覺模型、多模態模型），LobeHub 會將圖片和影片 URL 轉換為 base64 格式。此檢查可防止惡意使用者通過媒體 URL 存取內網資源。
+
+   舉例：
+
+   - 圖片：使用者發送圖片訊息，URL 為 `http://192.168.1.100/admin/secrets.png`
+   - 影片：使用者發送影片訊息，URL 為 `http://10.0.0.50/internal/meeting.mp4`
+
+   若無 SSRF 防護，這些請求可能導致內網資源洩露。
+
+2. **網頁爬取**：使用網頁爬取功能獲取外部內容時。
+
+3. **代理請求**：代理外部 API 請求時。
+
+**設定示例**：
+
+```bash
+# 場景 1：公網部署（推薦）
+# 阻止所有私有 IP 存取，保證安全
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=0
+
+# 場景 2：內網部署
+# 允許所有私有 IP，可存取內網圖片伺服器等資源
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=1
+
+# 場景 3：混合部署（最常見）
+# 預設阻止私有 IP，但允許特定可信的內網伺服器
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=0
+SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
+```
+
+### `SSRF_ALLOW_IP_ADDRESS_LIST`
+
+- 類型：可選
+- 描述：允許存取的 IP 位址白名單，多個 IP 位址用逗號分隔。僅在 `SSRF_ALLOW_PRIVATE_IP_ADDRESS` 為 `0` 時生效。使用此選項可以在保持 SSRF 防護的同時，允許存取特定的內網 IP 位址。
+- 預設值：-
+- 示例：`192.168.1.100,10.0.0.50,172.16.0.10`
+
+**常見使用場景**：
+
+- 允許存取內網圖片存儲伺服器：`192.168.1.100`
+- 允許存取內網 API 閘道：`10.0.0.50`
+- 允許存取內網文件伺服器：`172.16.0.10`
+
+### `NEXT_PUBLIC_ASSET_PREFIX`
+
+- 類型：可選
+- 描述：靜態資源的路徑存取前綴，你可以設定為 CDN 存取的 URL，具體可參考： [assetPrefix](https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix)
+- 預設值：-
+- 示例：`https://cdn.example.com`
+
+## AI 圖像
+
+### `AI_IMAGE_DEFAULT_IMAGE_NUM`
+
+- 類型：可選
+- 描述：設定 AI 圖像生成的預設圖片數量。使用者仍可在個人設定中覆蓋此值。
+- 預設值：`4`
+- 示例：`6`
+- 範圍：`1-20`
+
+此環境變數允許管理員為其部署自訂預設圖片生成數量。值必須在 1 到 20 之間。如果未設定，預設為 4。使用者仍可在個人設定中調整此值。
+
+## 插件服務
+
+### `PLUGINS_INDEX_URL`
+
+- 類型：可選
+- 描述：LobeHub 插件市場的索引位址，如果你自行部署了插件市場的服務，可以使用該變數來覆蓋預設的插件市場位址
+- 預設值：`https://chat-plugins.lobehub.com`
+
+### `PLUGIN_SETTINGS`
+
+- 類型：可選
+- 描述：用於設定插件的設定，使用 `插件名:設定字段=設定值` 的格式來設定插件的設定，多個設定字段用英文分號 `;` 隔開，多個插件設定使用英文逗號`,`隔開。
+- 預設值：`-`
+- 示例：`search-engine:SERPAPI_API_KEY=xxxxx,plugin-2:key1=value1;key2=value2`
+
+上述示例表示設定 `search-engine` 插件的 `SERPAPI_API_KEY` 為 `xxxxx`，設定 `plugin-2` 的 `key1` 為 `value1`，`key2` 為 `value2`。生成的插件設定設定如下：
+
+```json
+{
+  "plugin-2": {
+    "key1": "value1",
+    "key2": "value2"
+  },
+  "search-engine": {
+    "SERPAPI_API_KEY": "xxxxx"
+  }
+}
+```
+
+## 助手市場
+
+### `AGENTS_INDEX_URL`
+
+- 類型：可選
+- 描述：LobeHub 助手市場的索引位址，如果你自行部署了助手市場的服務，可以使用該變數來覆蓋預設的市場位址
+- 預設值：`https://chat-agents.lobehub.com`

@@ -1,0 +1,219 @@
+---
+title: 狀態管理最佳實踐
+description: 探索 LobeHub 中的狀態管理最佳實踐，提升資料流架構的易用性與維護性。
+tags:
+  - 狀態管理
+  - LobeHub
+  - 資料流
+  - 最佳實踐
+---
+
+# 狀態管理最佳實踐
+
+LobeHub 不同於傳統 CRUD 的網頁，存在大量的富交互能力，如何設計一個易於開發與易於維護的資料流架構非常重要。本篇文件將介紹 LobeHub 中的資料流管理最佳實踐。
+
+## 概念要素
+
+| 概念名詞     | 解釋                                                                                                                                                   |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| store    | 狀態庫 (store)，包含存儲應用程式的狀態、動作。允許在應用程式渲染中存取和修改狀態。                                                                                                            |
+| state    | 狀態 (state) 是指應用程式的資料，存儲了應用程式的當前狀態，狀態的變化**一定會觸發應用程式的重新渲染**，以反映新的狀態。                                                                                     |
+| action   | 動作 (action) 是一個操作函數，它描述了應用程式中發生的交互事件。動作通常是由使用者交互、網路請求或定時器等觸發。 action 可以是**同步**的，也可以是**非同步**的。                                                          |
+| reducer  | 歸約器 (reducer) 是一個純函數，它接收當前狀態和動作作為參數，並返回一個新的狀態。它用於根據動作類型來更新應用程式的狀態。Reducer 是一個純函數，不存在副作用，因此一定是 **同步** 函數。                                             |
+| selector | 選擇器 (selector) 是一個函數，用於從應用程式的狀態中獲取特定的資料。它接收應用程式的狀態作為參數，並返回經過計算或轉換後的資料。Selector 可以將狀態的一部分或多個狀態組合起來，以生成衍生的資料。Selector 通常用於將應用程式的狀態映射到組件的 props，以供組件使用。 |
+| slice    | 切片 (slice) 是一個概念，用於表達資料模型狀態的一部分。它指定了一個狀態切片（slice），以及與該切片相關的 state、action、reducer 和 selector。使用 Slice 可以將大型的 Store 拆分為更小的、可維護的子類型。                    |
+
+## 結構分層
+
+在不同的複雜度下，我們可以將 Store 的結構組織可以由很大的不同：
+
+- **較低複雜度**：一般包含 2\~5 個 state 、3 \~ 4 個 action。此時的結構一般直接一個 `store.ts` + 一個 `initialState.ts` 即可。
+
+```bash
+DataFill/store
+├── index.ts
+└── initialState.ts
+```
+
+- **一般複雜度** ：一般複雜度存在 5 \~ 15 個 state、 5 \~ 10 個 action，可能會存在 selector 實現衍生狀態，也有可能存在 reducer 簡化部分資料變更的複雜度。此時的結構一般為一個 `store.ts` + 一個 `initialState.ts` + 一個 `selectors.ts`/`reducer.ts`。
+
+```bash
+IconPicker/store
+├── index.ts
+├── initialState.ts
+├── selectors.ts
+└── store.ts
+```
+
+```bash
+SortableList/store
+├── index.ts
+├── initialState.ts
+├── listDataReducer.ts
+└── store.ts
+```
+
+- **中等複雜度** ： 中等複雜度存在 15 \~ 30 個 state、 10 \~ 20 個 action，大概會存在 selector 來聚合衍生狀態，大概存在 reducer 簡化部分資料變更的複雜度。
+
+此時結構，用單一的 action store 已經較難維護，往往會拆解出來多個 slice 用於管理不同的 action。 下方的程式碼代表了 `SortableTree` 組件的內部資料流：
+
+```bash
+SortableTree/store
+├── index.ts
+├── initialState.ts
+├── selectors.ts
+├── slices
+├── crudSlice.ts
+├── dndSlice.ts
+└── selectionSlice.ts
+├── store.ts
+└── treeDataReducer.ts
+```
+
+- 高等複雜度：高等複雜度存在 30 個以上的 state、 20 個以上的 action。必然需要 slice 做模組化內聚。在每個 slice 中都各自聲明瞭各自的 initState、 action、reducer 與 selector。
+
+下述這個資料流的目錄結構是之前一版 SessionStore，具有很高的複雜度，實現了大量的業務邏輯。但藉助於 slice 的模組化和分形架構的心智，我們可以很容易地找到對應的模組，新增功能與迭代都很易於維護。
+
+```bash
+LobeHub SessionStore
+├── index.ts
+├── initialState.ts
+├── selectors.ts
+├── slices
+│ ├── agentConfig
+│ │ ├── action.ts
+│ │ ├── index.ts
+│ │ ├── initialState.ts
+│ │ └── selectors.ts
+│ ├── chat
+│ │ ├── actions
+│ │ │ ├── index.ts
+│ │ │ ├── message.ts
+│ │ │ └── topic.ts
+│ │ ├── index.ts
+│ │ ├── initialState.ts
+│ │ ├── reducers
+│ │ │ ├── message.ts
+│ │ │ └── topic.ts
+│ │ ├── selectors
+│ │ │ ├── chat.ts
+│ │ │ ├── index.ts
+│ │ │ ├── token.ts
+│ │ │ ├── topic.ts
+│ │ │ └── utils.ts
+│ │ └── utils.ts
+│ └── session
+│ ├── action.ts
+│ ├── index.ts
+│ ├── initialState.ts
+│ ├── reducers
+│ │ └── session.ts
+│ └── selectors
+│ ├── export.ts
+│ ├── index.ts
+│ └── list.ts
+└── store.ts
+```
+
+### LobeHub SessionStore 目錄結構最佳實踐
+
+在 LobeHub 應用程式中，由於會話管理是一個複雜的功能模組，因此我們採用了 [slice 模式](https://github.com/pmndrs/zustand/blob/main/docs/guides/slices-pattern.md) 來組織資料流。下面是 LobeHub SessionStore 的目錄結構，其中每個目錄和檔案都有其特定的用途：
+
+{/* eslint-disable no-irregular-whitespace */}
+
+```fish
+src/store/session
+├── index.ts                           # SessionStore 的聚合導出檔案
+├── initialState.ts                    # 聚合了所有 slice 的 initialState
+├── selectors.ts                       # 從各個 slices 導出的 selector
+├── store.ts                           # SessionStore 的建立和使用
+├── helpers.ts                         # 輔助函數
+└── slices                             # 各個獨立的功能切片
+    ├── agent                          # 助理 Slice
+    │   ├── action.ts
+    │   ├── index.ts
+    │   └── selectors.ts
+    └── session                        # 會話 Slice
+        ├── action.ts
+        ├── helpers.ts
+        ├── initialState.ts
+        └── selectors
+            ├── export.ts
+            ├── list.ts
+            └── index.ts
+
+```
+
+## SessionStore 的實現
+
+在 LobeHub 中，SessionStore 被設計為管理會話狀態和邏輯的核心模組。它由多個 Slices 組成，每個 Slice 管理一部分相關的狀態和邏輯。下面是一個簡化的 SessionStore 的實現示例：
+
+### store.ts
+
+```ts
+import { PersistOptions, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
+import { shallow } from 'zustand/shallow';
+import { devtools } from 'zustand/middleware';
+import { createWithEqualityFn } from 'zustand/traditional';
+
+import { SessionStoreState, initialState } from './initialState';
+import { AgentAction, createAgentSlice } from './slices/agent/action';
+import { SessionAction, createSessionSlice } from './slices/session/action';
+
+//  ===============  聚合 createStoreFn ============ //
+
+export type SessionStore = SessionAction & AgentAction & SessionStoreState;
+const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (...parameters) => ({
+  ...initialState,
+  ...createAgentSlice(...parameters),
+  ...createSessionSlice(...parameters),
+});
+
+//  ===============  實裝 useStore ============ //
+
+export const useSessionStore = createWithEqualityFn<SessionStore>()(
+  persist(
+    subscribeWithSelector(
+      devtools(createStore, {
+        name: 'LobeHub_Session' + (isDev ? '_DEV' : ''),
+      }),
+    ),
+    persistOptions,
+  ),
+  shallow,
+);
+
+```
+
+在這個 `store.ts` 檔案中，我們建立了一個 `useSessionStore` 鉤子，它使用 `zustand` 庫來建立一個全域狀態管理器。我們將 initialState 和每個 Slice 的動作合併，以建立完整的 SessionStore。
+
+### slices/session/action.ts
+
+```ts
+import { StateCreator } from 'zustand';
+
+import { SessionStore } from '@/store/session';
+
+export interface SessionActions {
+  /**
+   * A custom hook that uses SWR to fetch sessions data.
+   */
+  useFetchSessions: () => SWRResponse<any>;
+}
+
+export const createSessionSlice: StateCreator<
+  SessionStore,
+  [['zustand/devtools', never]],
+  [],
+  SessionAction
+> = (set, get) => ({
+  useFetchSessions: () => {
+    // ...初始化會話的邏輯
+  },
+  // ...其他動作的實現
+});
+```
+
+在 `action.ts` 檔案中，我們定義了一個 `SessionActions` 接口來描述會話相關的動作，並且實現了一個 `useFetchSessions` 函數來建立這些動作。然後，我們將這些動作與初始狀態合併，以形成會話相關的 Slice。
+
+通過這種結構分層和模組化的方法，我們可以確保 LobeHub 的 SessionStore 是清晰、可維護的，同時也便於擴充功能和測試。

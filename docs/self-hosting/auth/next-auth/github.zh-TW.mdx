@@ -1,0 +1,66 @@
+---
+title: 在 LobeHub 中設定 Github 身分驗證服務
+description: 學習如何在 LobeHub 中設定 Github 身分驗證服務，包括建立新的 Github App、設定權限和環境變數。
+tags:
+  - Github 身分驗證
+  - Github App
+  - 環境變數設定
+  - 單點登入
+  - LobeHub
+---
+
+# 設定 Github 身分驗證服務
+
+## Github 設定流程
+
+<Steps>
+  ### 建立 Github 提供應用程式
+
+  點擊 [這裡](https://github.com/settings/apps/new) 建立一個新的 Github App。
+
+  填寫 Github App name、Homepage URL、Callbak URL
+
+  <Image alt="建立 Github 提供程式" inStep src="/blog/assets64475363/2f919f99-2aaa-4fa7-9938-169d3ed09db7.webp" />
+
+  按照自己所需設定 Webhook 回調位址
+
+  <Image alt="填寫其他字段" inStep src="/blog/assets64475363/d7ef5ad1-b1a3-435e-b1bc-4436d2b6fecd.webp" />
+
+  設定讀取郵件位址權限
+
+  <Image alt="設定所需權限" inStep src="/blog/assets64475363/23131ca1-9e84-4a89-a840-ef79c4bc0251.webp" />
+
+  <Image alt="設定讀取郵件位址權限" inStep src="/blog/assets64475363/358bca8d-3d82-4e76-9a5e-90d16a39efde.webp" />
+
+  設定公開存取還是僅自己存取
+
+  <Image alt="設定公開存取還是僅自己存取" inStep src="/blog/assets64475363/995780cb-9096-4a36-ab17-d422703ab970.webp" />
+
+  點擊「Create Github App」
+
+  建立成功後，點擊「Generate a new client secret」建立客戶端 Secret
+
+  <Image alt="建立新的客戶端密鑰" inStep src="/blog/assets64475363/6d69bdca-7d18-4cbc-b3e0-220d8815cd29.webp" />
+
+  建立成功後， 將 `客戶端 ID` 和 `客戶端 Secret` 儲存下來。
+
+  <Image alt="建立新的客戶端密鑰" inStep src="/blog/assets64475363/c6108133-a918-48b0-ab1a-e3fa607572a4.webp" />
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                      | 類型 | 描述                                                                                          |
+  | ------------------------- | -- | ------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令生成秘鑰： `openssl rand -base64 32`                               |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必選 | 選擇 LoboChat 的單點登入提供商。使用 Github 請填寫 `github`。                                                |
+  | `AUTH_GITHUB_ID`          | 必選 | Github App 詳情頁的 客戶端 ID                                                                      |
+  | `AUTH_GITHUB_SECRET`      | 必選 | Github App 詳情頁的 客戶端 Secret                                                                  |
+  | `AUTH_URL`                | 必選 | 該 URL 用於指定 Auth.js 在執行 OAuth 驗證時的回調位址，當預設生成的重新導向位址發生不正確時才需要設定。`https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#github) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Github 身分認證並使用 LobeHub。</Callout>

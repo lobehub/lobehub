@@ -1,0 +1,71 @@
+---
+title: 使用 Grafana、Prometheus 和 Tempo 進行可觀測性監控
+description: >-
+  使用 Grafana、Prometheus 指標和 Tempo 鏈路追蹤，監控和分析你的 LobeHub
+  實例。本指南涵蓋自託管部署的搭建、設定和示例儀表盤。
+tags:
+  - 可觀測性
+  - Grafana
+  - Prometheus
+  - Tempo
+---
+
+# 使用 [Grafana](https://grafana.com/)、[Prometheus](https://prometheus.io/) 和 [Tempo](https://grafana.com/docs/tempo/latest/) 進行可觀測性監控
+
+LobeHub 支援通過開源工具實現自託管部署的高級可觀測性：
+
+- **Grafana**：儀表盤與視覺化
+- **Prometheus**：指標採集
+- **Tempo**：分佈式鏈路追蹤
+- **otel-collector**：採集 OpenTelemetry 支援的資料
+
+我們提供了 Docker Compose (`docker-compose`) 預設檔案，幫助你一鍵啟動包含高級可觀測性功能的自託管棧。
+
+## 前置條件
+
+- 已安裝 `docker` 命令行工具
+- OrbStack（macOS）或 Docker Desktop（Windows）
+- 啟用 `docker-compose` 插件（可通過 `docker compose version` 檢查）
+
+## 1. 部署
+
+```bash
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/production/grafana/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/production/grafana/.env.example
+mv .env.example .env
+```
+
+1. 根據需要修改 `.env` 檔案中的密碼和密鑰。
+2. 使用如下命令啟動服務：
+
+   ```sh
+   docker compose up -d
+   ```
+
+   這將會啟動 Grafana、Prometheus、Tempo、otel-collector 以及 LobeHub、Casdoor、Minio 等高級服務。
+
+## 2. 存取 Grafana 儀表盤
+
+- 在瀏覽器中開啟 [http://localhost:3000](http://localhost:3000)（或你的伺服器 IP）。
+- 預設登入資訊（如需）：
+  - **使用者名稱：** admin
+  - **密碼：** 見你的環境變數或 Docker Compose 檔案
+
+## 3. 探索鏈路追蹤與指標
+
+點擊左側邊欄的 「Explore」 進入查詢編輯器，可對 Prometheus 和 Tempo 資料源進行即席查詢。
+
+## 4. 故障排查
+
+- 確認所有容器已執行：`docker compose ps`
+- 查看服務日誌：`docker compose logs <服務名>`
+- 檢查 Prometheus 和 Tempo 是否正常採集 LobeHub 及 otel-collector 的資料。
+
+## 相關連結
+
+- [Langfuse 可觀測性](https://lobehub.com/zh/docs/self-hosting/advanced/observability/langfuse)
+- [自託管總覽](https://lobehub.com/zh/docs/self-hosting/start)
+
+---
+
+如有問題或建議，歡迎在 GitHub 提 Issue 或加入社群討論。

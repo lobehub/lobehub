@@ -1,0 +1,79 @@
+---
+title: LobeHub 2.0 破壞性變更
+description: LobeHub 2.0 破壞性變更完整指南，幫助使用者從 1.x 版本升級到 2.0 版本。
+tags:
+  - LobeHub 2.0
+  - 遷移指南
+  - 破壞性變更
+  - 身分驗證
+---
+
+# LobeHub 2.0 破壞性變更
+
+本文件概述了 LobeHub 2.0 中引入的破壞性變更，併為從 1.x 版本升級的使用者提供遷移指南。
+
+## 移除的環境變數
+
+以下環境變數在 LobeHub 2.0 中已被移除：
+
+| 環境變數                                | 移除原因                                         |
+| ----------------------------------- | -------------------------------------------- |
+| `ACCESS_CODE`                       | 不再支援，請使用 Better Auth 認證系統                    |
+| `NEXT_PUBLIC_SERVICE_MODE`          | 2.0 僅支援 Server DB 模式，不再支援 Client DB (PGlite) |
+| `NEXT_PUBLIC_ENABLE_BETTER_AUTH`    | 通過 `AUTH_SECRET` 是否存在自動檢測                    |
+| `NEXT_PUBLIC_AUTH_URL` / `AUTH_URL` | 從請求頭中自動檢測                                    |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`      | NextAuth 已移除                                 |
+| `NEXT_AUTH_SECRET`                  | NextAuth 已移除                                 |
+| `NEXT_AUTH_SSO_PROVIDERS`           | NextAuth 已移除                                 |
+| `NEXTAUTH_URL`                      | NextAuth 已移除                                 |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk 已移除                                    |
+| `CLERK_SECRET_KEY`                  | Clerk 已移除                                    |
+
+## 新增的必需環境變數
+
+LobeHub 2.0 僅支援 Better Auth 認證系統。以下環境變數現在是必需的：
+
+- `AUTH_SECRET`：用於加密會話令牌
+- `JWKS_KEY`：用於簽名和驗證 JWT，包括 OIDC JWT token 和內部服務調用認證 token
+
+## 新增的可選環境變數
+
+| 環境變數                      | 說明                      |
+| ------------------------- | ----------------------- |
+| `AUTH_SSO_PROVIDERS`      | 啟用的 SSO 提供商列表，以逗號分隔     |
+| `INTERNAL_JWT_EXPIRATION` | 內部 JWT 令牌過期時間（預設：`30s`） |
+| `AUTH_EMAIL_VERIFICATION` | 設定為 `1` 以要求信箱驗證         |
+| `SMTP_HOST`               | 郵件功能的 SMTP 伺服器主機名       |
+| `SMTP_PORT`               | SMTP 伺服器連接埠              |
+| `SMTP_USER`               | SMTP 認證使用者名稱              |
+| `SMTP_PASS`               | SMTP 認證密碼               |
+
+詳細設定請參閱[身分驗證環境變數](/docs/self-hosting/environment-variables/auth)。
+
+## 認證系統變更
+
+LobeHub 2.0 僅支援 Better Auth 認證系統，不再支援 NextAuth 和 Clerk。
+
+## 遷移指南
+
+### 從 NextAuth 遷移
+
+請參閱 [NextAuth 遷移指南](/zh/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth)。
+
+### 從 Clerk 遷移
+
+請參閱 [Clerk 遷移指南](/zh/docs/self-hosting/migration/v2/auth/clerk-to-betterauth)。
+
+## 資料庫模式變更
+
+LobeHub 2.0 僅支援 Server DB 模式，不再支援 Client DB (PGlite)。如果您之前使用 `NEXT_PUBLIC_SERVICE_MODE=client`，需要遷移到 Server DB 部署方式。
+
+詳細部署指南請參閱[伺服端資料庫部署](/docs/self-hosting/server-database)。
+
+## PostgreSQL 版本要求
+
+LobeHub 2.0 推薦使用 **PostgreSQL 17** 及以上版本。
+
+這是因為 LobeHub 2.0 使用了 [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search) 插件來提供全文搜尋能力。如果您使用 Neon 等 Serverless Postgres 服務，pg\_search 插件僅在 PostgreSQL 17 上可用。
+
+如果您使用 Docker 自建資料庫，推薦使用 `paradedb/paradedb:latest-pg17` 鏡像。

@@ -1,0 +1,110 @@
+---
+title: 架構設計
+description: 深入瞭解 LobeHub 的架構設計，包括前端、後端、執行時和資料存儲。
+tags:
+  - LobeHub
+  - 架構設計
+  - Agent 平臺
+  - Next.js
+---
+
+# 架構設計
+
+LobeHub 是一個基於 Next.js 構建的開源 AI Agent 平臺，使使用者能夠與 AI 進行自然語言交互、使用工具、管理知識庫等。以下是 LobeHub 的架構設計概覽。
+
+## 應用程式架構概覽
+
+LobeHub 的整體架構由以下核心層組成：
+
+```plaintext
++---------------------+--------------------------------------------------+
+| Layer               | Description                                      |
++---------------------+--------------------------------------------------+
+| Frontend            | Next.js RSC + React Router DOM 混合路由 SPA      |
+| Backend API         | RESTful WebAPI + tRPC Routers                    |
+| Runtime             | Model Runtime + Agent Runtime                    |
+| Auth                | Better Auth（信箱密碼 + SSO）                     |
+| Data Storage        | PostgreSQL + Redis + S3                          |
+| Marketplace         | Agent 市場 + MCP 工具市場                         |
++---------------------+--------------------------------------------------+
+```
+
+## 前端架構
+
+前端採用 Next.js 框架，使用 **Next.js RSC + React Router DOM 混合路由**方案：Next.js App Router 處理伺服端渲染頁面（如認證頁），React Router DOM 承載主應用程式 SPA。
+
+主要技術棧：
+
+- **UI 組件**：`@lobehub/ui`、antd
+- **CSS-in-JS**：antd-style
+- **狀態管理**：zustand（slice 模式）
+- **資料請求**：SWR + tRPC
+- **國際化**：react-i18next
+
+前端程式碼按職責分層在 `src/` 目錄下，詳見 [目錄架構](/zh/docs/development/basic/folder-structure)。
+
+## 後端 API
+
+後端提供兩種 API 形式：
+
+- **RESTful WebAPI**（`src/app/(backend)/webapi/`）：處理 chat 流式回應、TTS、檔案服務等需要特殊處理的端點
+- **tRPC Routers**（`src/server/routers/`）：類型安全的主要業務路由，按執行時分組：
+  - `lambda/` — 主業務（agent、session、message、topic、file、knowledge、settings 等）
+  - `async/` — 耗時非同步操作（檔案處理、圖像生成、RAG 評估）
+  - `tools/` — 工具調用（search、MCP、market）
+  - `mobile/` — 行動端專用
+
+## Runtime
+
+### Model Runtime
+
+`@lobechat/model-runtime`（`packages/model-runtime/`）是 LLM API 相容層，抹平了 30+ 不同 AI Provider 之間的 API 差異（OpenAI、Anthropic、Google、Bedrock、Ollama 等），提供統一的調用接口。每個 Provider 有獨立的相容器實現。它是無狀態的，每次調用獨立。
+
+### Agent Runtime
+
+`@lobechat/agent-runtime`（`packages/agent-runtime/`）是 Agent 編排引擎，位於 Model Runtime 之上，負責驅動多步 AI Agent 行為的完整生命週期：
+
+- **Plan-Execute 循環**：核心狀態機，循環執行 LLM 調用 → 工具執行 → 結果處理
+- **工具調用與批量執行**：支援單工具和批量工具調用
+- **Human-in-the-Loop**：安全檢查、人工審批流程
+- **上下文壓縮**：管理上下文視窗
+- **用量與成本追蹤**：累計 token 用量和費用
+- **多 Agent 協作**：`GroupOrchestrationRuntime` 支援 Supervisor + Executor 模式的多 Agent 編排
+
+簡言之：Model Runtime 解決 "如何與 LLM Provider 通訊"，Agent Runtime 解決 "如何執行一個使用 LLM、工具、人工審批的完整 Agent"。
+
+## 認證認證
+
+LobeHub 使用 [Better Auth](https://www.better-auth.com/) 作為認證框架，支援：
+
+- 信箱 + 密碼註冊登入
+- SSO 單點登入（GitHub、Google 等多種 OAuth Provider）
+
+認證設定位於 `src/auth.ts`，相關路由在 `src/app/(backend)/api/` 下。
+
+## 資料存儲
+
+```plaintext
++---------------+----------------------------------------------+
+| Storage       | Usage                                        |
++---------------+----------------------------------------------+
+| PostgreSQL    | 主資料庫，存儲使用者、會話、訊息、Agent 設定等  |
+| Redis         | 快取、會話狀態、速率限制                      |
+| S3            | 檔案存儲（使用者上傳、圖片、知識庫檔案等）      |
++---------------+----------------------------------------------+
+```
+
+資料庫使用 Drizzle ORM 操作，schema 定義在 `packages/database/src/schemas/`。
+
+## 市場
+
+- **Agent 市場**：提供各種場景的 AI Agent，使用者可以發現、使用和分享 Agent
+- **MCP 工具市場**：發現和整合 MCP 工具，擴充功能 Agent 的能力
+
+## 開發和部署
+
+- **版本控制**：Git + GitHub，gitmoji commit 規範
+- **程式碼品質**：ESLint、Stylelint、TypeScript 類型檢查、循環依賴檢測 (dpdm)、死程式碼檢測 (knip)
+- **測試**：Vitest 單元測試 + Cucumber/Playwright E2E 測試
+- **CI/CD**：GitHub Actions 自動化測試、構建和發佈
+- **部署**：支援 Vercel、Docker、各大雲平臺自託管

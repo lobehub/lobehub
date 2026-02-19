@@ -1,0 +1,100 @@
+---
+title: 在 LobeHub 中使用 vLLM API Key
+description: 學習如何在 LobeHub 中設定和使用 vLLM 語言模型，獲取 API 密鑰並開始對話。
+tags:
+  - LobeHub
+  - vLLM
+  - API密鑰
+  - Web UI
+---
+
+# 在 LobeHub 中使用 vLLM
+
+<Image alt={'在 LobeHub 中使用 vLLM'} cover src={'/blog/assets1049abec5850cebf8ce12cd50199b9c5.webp'} />
+
+[vLLM](https://github.com/vllm-project/vllm)是一個開源的本地大型語言模型（LLM）部署工具，允許使用者在本地設備上高效執行 LLM 模型，並提供相容 OpenAI API 的服務接口。
+
+本文件將指導你如何在 LobeHub 中使用 vLLM:
+
+<Steps>
+  ### 步驟一：準備工作
+
+  vLLM 對於硬體和軟體環境均有一定要求，請務必根據以下要求進行設定：
+
+  | 硬體需求      |                                                                         |
+  | --------- | ----------------------------------------------------------------------- |
+  | GPU       | - NVIDIA CUDA <br /> - AMD ROCm <br /> - Intel XPU                      |
+  | CPU       | - Intel/AMD x86 <br /> - ARM AArch64 <br /> - Apple silicon             |
+  | 其他 AI 加速器 | - Google TPU <br /> - Intel Gaudi <br /> - AWS Neuron <br /> - OpenVINO |
+
+  | 軟體需求                                    |
+  | --------------------------------------- |
+  | - OS: Linux <br /> - Python: 3.9 – 3.12 |
+
+  ### 步驟二：安裝 vLLM
+
+  如果你正在使用 NVIDIA GPU，你可以直接使用`pip`安裝 vLLM。但這裡建議使用`uv`，它一個非常快速的 Python 環境管理器，來建立和管理 Python 環境。請按照[文件](https://docs.astral.sh/uv/#getting-started)安裝 uv。安裝 uv 後，你可以使用以下命令建立一個新的 Python 環境並安裝 vLLM：
+
+  ```shell
+  uv venv myenv --python 3.12 --seed
+  source myenv/bin/activate
+  uv pip install vllm
+  ```
+
+  另一種方法是使用`uv run`與`--with [dependency]`選項，這允許你執行`vllm serve`等命令而無需建立環境：
+
+  ```shell
+  uv run --with vllm vllm --help
+  ```
+
+  你也可以使用 [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/getting-started.html) 來建立和管理你的 Python 環境。
+
+  ```shell
+  conda create -n myenv python=3.12 -y
+  conda activate myenv
+  pip install vllm
+  ```
+
+  <Callout type={'note'}>
+    對於非 CUDA
+    平臺，請參考[官方文件](https://docs.vllm.ai/en/latest/getting_started/installation/index.html#installation-index)瞭解如何安裝
+    vLLM
+  </Callout>
+
+  ### 步驟三：啟動本地服務
+
+  vLLM 可以部署為一個 OpenAI API 協議相容的伺服器。預設情況下，它將在 `http://localhost:8000` 啟動伺服器。你可以使用 `--host` 和 `--port` 參數指定位址。伺服器目前一次僅執行一個模型。
+
+  以下命令將啟動一個 vLLM 伺服器並執行 `Qwen2.5-1.5B-Instruct` 模型：
+
+  ```shell
+  vllm serve Qwen/Qwen2.5-1.5B-Instruct
+  ```
+
+  你可以通過傳遞參數 `--api-key` 或環境變數 `VLLM_API_KEY` 來啟用伺服器檢查頭部中的 API 密鑰。如不設定，則無需 API Key 即可存取。
+
+  <Callout type={'note'}>
+    更詳細的 vLLM 伺服器設定，請參考[官方文件](https://docs.vllm.ai/en/latest/)
+  </Callout>
+
+  ### 步驟四：在 LobeHub 中設定 vLLM
+
+  - 存取 LobeHub 的 `應用程式設定`界面
+  - 在 `AI 服務商` 下找到 `vLLM` 的設定項
+
+  <Image alt={'填寫 vLLM API 密鑰'} inStep src={'/blog/assets02dce7325584974cdba327fe2f996b9e.webp'} />
+
+  - 開啟 vLLM 服務商並填入 API 服務位址以及 API Key
+
+  <Callout type={'warning'}>
+    * 如果你的 vLLM 沒有設定 API Key，請將 API Key 留空 \* 如果你的 vLLM
+      執行在本地，請確保開啟`客戶端請求模式`
+  </Callout>
+
+  - 在下方的模型列表中新增你執行的模型
+  - 為你的助手選擇一個 vLLM 執行的模型即可開始對話
+
+    <Image alt={'選擇 vLLM 模型'} inStep src={'/blog/assets8477415ecec1f37e38ab38ff1217d0a7.webp'} />
+</Steps>
+
+至此你已經可以在 LobeHub 中使用 vLLM 提供的模型進行對話了。

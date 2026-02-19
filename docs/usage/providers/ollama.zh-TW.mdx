@@ -1,0 +1,171 @@
+---
+title: 在 LobeHub 中使用 Ollama
+description: 瞭解如何在 LobeHub 中使用 Ollama ，在你的本地執行大型語言模型，獲得最前沿的 AI 使用體驗。
+tags:
+  - Ollama
+  - Web UI
+  - API Key
+  - Local LLM
+  - Ollama WebUI
+---
+
+# 在 LobeHub 中使用 Ollama
+
+<Image alt={'在 LobeHub 中使用 Ollama'} borderless cover src={'/blog/assets17870709/f579b39b-e771-402c-a1d1-620e57a10c75.webp'} />
+
+Ollama 是一款強大的本地執行大型語言模型（LLM）的框架，支援多種語言模型，包括 Llama 2, Mistral 等。現在，LobeHub 已經支援與 Ollama 的整合，這意味著你可以在 LobeHub 中輕鬆使用 Ollama 提供的語言模型來增強你的應用程式。
+
+本文件將指導你如何在 LobeHub 中使用 Ollama：
+
+<Video alt={'在 LobeHub 中使用 Ollama的完整演示'} height={580} src="/blog/assets28616219/c32b56db-c6a1-4876-9bc3-acbd37ec0c0c.mp4" />
+
+## 在 macOS 下使用 Ollama
+
+<Steps>
+  ### 本地安裝 Ollama
+
+  [下載 Ollama for macOS](https://ollama.com/download?utm_source=lobehub\&utm_medium=docs\&utm_campaign=download-macos) 並解壓縮、安裝。
+
+  ### 設定 Ollama 允許跨域存取
+
+  由於 Ollama 的預設參數設定，啟動時設定了僅本地存取，所以跨域存取以及連接埠監聽需要進行額外的環境變數設定 `OLLAMA_ORIGINS`。使用 `launchctl` 設定環境變數：
+
+  ```bash
+  launchctl setenv OLLAMA_ORIGINS "*"
+  ```
+
+  完成設定後，需要重啟 Ollama 應用程式。
+
+  ### 在 LobeHub 中與本地大模型對話
+
+  接下來，你就可以使用 LobeHub 與本地 LLM 對話了。
+
+  <Image alt="在 LobeHub 中與 llama3 對話" height="573" src="/blog/assets28616219/7f9a9a9f-fd91-4f59-aac9-3f26c6d49a1e.webp" />
+</Steps>
+
+## 在 windows 下使用 Ollama
+
+<Steps>
+  ### 本地安裝 Ollama
+
+  [下載 Ollama for Windows](https://ollama.com/download?utm_source=lobehub\&utm_medium=docs\&utm_campaign=download-windows) 並安裝。
+
+  ### 設定 Ollama 允許跨域存取
+
+  由於 Ollama 的預設參數設定，啟動時設定了僅本地存取，所以跨域存取以及連接埠監聽需要進行額外的環境變數設定 `OLLAMA_ORIGINS`。
+
+  在 Windows 上，Ollama 繼承了您的使用者和系統環境變數。
+
+  1. 首先通過 Windows 任務欄點擊 Ollama 退出程式。
+  2. 從控制面板編輯系統環境變數。
+  3. 為您的使用者帳號編輯或新建 Ollama 的環境變數 `OLLAMA_ORIGINS`，值設為 `*` 。
+  4. 點擊`OK/套用`儲存後重啟系統。
+  5. 重新執行`Ollama`。
+
+  ### 在 LobeHub 中與本地大模型對話
+
+  接下來，你就可以使用 LobeHub 與本地 LLM 對話了。
+</Steps>
+
+## 在 linux 下使用 Ollama
+
+<Steps>
+  ### 本地安裝 Ollama
+
+  通過以下命令安裝：
+
+  ```bash
+  curl -fsSL https://ollama.com/install.sh | sh
+  ```
+
+  或者，你也可以參考 [Linux 手動安裝指南](https://github.com/ollama/ollama/blob/main/docs/linux.md)。
+
+  ### 設定 Ollama 允許跨域存取
+
+  由於 Ollama 的預設參數設定，啟動時設定了僅本地存取，所以跨域存取以及連接埠監聽需要進行額外的環境變數設定 `OLLAMA_ORIGINS`。如果 Ollama 作為 systemd 服務執行，應該使用`systemctl`設定環境變數：
+
+  1. 通過調用`sudo systemctl edit ollama.service`編輯 systemd 服務。
+
+  ```bash
+  sudo systemctl edit ollama.service
+  ```
+
+  2. 對於每個環境變數，在`[Service]`部分下新增`Environment`：
+
+  ```bash
+  [Service]
+  Environment="OLLAMA_HOST=0.0.0.0"
+  Environment="OLLAMA_ORIGINS=*"
+  ```
+
+  3. 儲存並退出。
+  4. 重載 `systemd` 並重啟 Ollama：
+
+  ```bash
+  sudo systemctl daemon-reload
+  sudo systemctl restart ollama
+  ```
+
+  ### 在 LobeHub 中與本地大模型對話
+
+  接下來，你就可以使用 LobeHub 與本地 LLM 對話了。
+</Steps>
+
+## 使用 docker 部署使用 Ollama
+
+<Steps>
+  ### 拉取 Ollama 鏡像
+
+  如果你更傾向於使用 Docker，Ollama 也提供了官方 Docker 鏡像，你可以通過以下命令拉取：
+
+  ```bash
+  docker pull ollama/ollama
+  ```
+
+  ### 設定 Ollama 允許跨域存取
+
+  由於 Ollama 的預設參數設定，啟動時設定了僅本地存取，所以跨域存取以及連接埠監聽需要進行額外的環境變數設定 `OLLAMA_ORIGINS`。
+
+  如果 Ollama 作為 Docker 容器執行，你可以將環境變數新增到 `docker run` 命令中。
+
+  ```bash
+  docker run -d --gpus=all -v ollama:/root/.ollama -e OLLAMA_ORIGINS="*" -p 11434:11434 --name ollama ollama/ollama
+  ```
+
+  ### 在 LobeHub 中與本地大模型對話
+
+  接下來，你就可以使用 LobeHub 與本地 LLM 對話了。
+</Steps>
+
+## 安裝 Ollama 模型
+
+Ollama 支援多種模型，你可以在 [Ollama Library](https://ollama.com/library) 中查看可用的模型列表，並根據需求選擇合適的模型。
+
+### LobeHub 中安裝
+
+在 LobeHub 中，我們預設開啟了一些常用的大語言模型，例如 llama3、 Gemma 、 Mistral 等。當你選中模型進行對話時，我們會提示你需要下載該模型。
+
+<Image alt="LobeHub 提示安裝 Ollama 模型" height="460" src="/blog/assets28616219/4e81decc-776c-43b8-9a54-dfb43e9f601a.webp" />
+
+下載完成後即可開始對話。
+
+### 用 Ollama 拉取模型到本地
+
+當然，你也可以通過在終端機執行以下命令安裝模型，以 llama3 為例：
+
+```bash
+ollama pull llama3
+```
+
+<Video height={524} src="/blog/assets28616219/95828c11-0ae5-4dfa-84ed-854124e927a6.mp4" />
+
+## 自訂設定
+
+你可以在 `設定` -> `AI 服務商` 中找到 Ollama 的設定選項，你可以在這裡設定 Ollama 的代理、模型名稱等。
+
+<Image alt={'Ollama 服務商設定'} height={274} src={'/blog/assets28616219/54b3696b-5b13-4761-8c1b-1e664867b2dd.webp'} />
+
+<Callout type={'info'}>
+  你可以前往 [與 Ollama 整合](/zh/docs/self-hosting/examples/ollama) 瞭解如何部署 LobeHub
+  ，以滿足與 Ollama 的整合需求。
+</Callout>

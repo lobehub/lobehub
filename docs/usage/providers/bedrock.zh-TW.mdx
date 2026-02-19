@@ -1,0 +1,85 @@
+---
+title: 在 LobeHub 中使用 Amazon Bedrock API Key
+description: 學習如何在 LobeHub 中設定和使用 Amazon Bedrock，一個完全託管的基礎模型API服務，以便開始對話。
+tags:
+  - Amazon Bedrock
+  - Claude 3.5 sonnect
+  - API keys
+  - Claude 3 Opus
+  - Web UI
+---
+
+# 在 LobeHub 中使用 Amazon Bedrock
+
+<Image alt={'在 LobeHub 中使用 Amazon Bedrock'} cover src={'/blog/assets34400653/74768b36-28ca-4ec3-a42d-b32abe2c7057.webp'} />
+
+Amazon Bedrock 是一個完全託管的基礎模型 API 服務，允許使用者通過 API 存取來自領先 AI 公司 (如 AI21 Labs、Anthropic、Cohere、Meta、Stability AI) 和 Amazon 自家的基礎模型。
+
+本文件將指導你如何在 LobeHub 中使用 Amazon Bedrock:
+
+<Steps>
+  ### 步驟一：在 AWS 中開啟 Amazon Bedrock 模型的存取權限
+
+  - 存取並登入 [AWS Console](https://console.aws.amazon.com/)
+  - 搜尋 beckrock 並進入 `Amazon Bedrock` 服務
+
+  <Image alt={'進入 Amazon Bedrock 服務'} inStep src={'/blog/assets34400653/4e0e87d1-4970-45c5-a9ef-287098f6a198.webp'} />
+
+  - 在左側選單中選擇 `Models acess`
+
+  <Image alt={'進入 Amazon Bedrock 模型存取權限'} inStep src={'/blog/assets34400653/fd06c0aa-4bd3-4f4e-bf2b-38374dfe775d.webp'} />
+
+  - 根據你所需要的模型，開啟模型存取權限
+
+  <Image alt={'開啟模型存取權限'} inStep src={'/blog/assets34400653/b695f26a-5bcd-477c-af08-bf03adb717c2.webp'} />
+
+  <Callout type={'info'}>某些模型可能需要你提供額外的資訊</Callout>
+
+  ### 步驟二：獲取 API 存取密鑰
+
+  - 繼續在 AWS console 中搜尋 IAM，進入 IAM 服務
+
+  <Image alt={'進入 IAM 服務'} inStep src={'/blog/assets34400653/f9a5a394-c8f8-4567-9d51-cf84811418ca.webp'} />
+
+  - 在 `使用者` 選單中，建立一個新的 IAM 使用者
+
+  <Image alt={'建立一個新的 IAM 使用者'} inStep src={'/blog/assets34400653/750b5cd1-f16a-4330-b899-c27b28b1e837.webp'} />
+
+  - 在彈出的對話框中，輸入使用者名稱
+
+  <Image alt={'輸入使用者名稱'} inStep src={'/blog/assets34400653/22ce5a72-bc46-41f3-b402-bda6dee90184.webp'} />
+
+  - 為這個使用者新增權限，或者加入一個已有的使用者組，確保使用者擁有 Amazon Bedrock 的存取權限
+
+  <Image alt={'為使用者新增權限'} inStep src={'/blog/assets34400653/94836b32-7fc5-45ca-8556-7a23f53b15f9.webp'} />
+
+  - 為已新增的使用者建立存取密鑰
+
+  <Image alt={'建立存取密鑰'} inStep src={'/blog/assets34400653/ac2ed716-d270-43f6-856b-3ff81265f4e6.webp'} />
+
+  - 複製並妥善儲存存取密鑰以及秘密存取密鑰，後續將會用到
+
+  <Image alt={'進入 IAM 服務'} inStep src={'/blog/assets34400653/3c64b747-f6f1-4ed2-84bc-bfa8e5d90966.webp'} />
+
+  <Callout type={'warning'}>
+    請安全地存儲密鑰，因為它只會出現一次。如果您意外丟失它，您將需要建立一個新存取密鑰。
+  </Callout>
+
+  ### 步驟三：在 LobeHub 中設定 Amazon Bedrock
+
+  - 存取 LobeHub 的`設定`界面
+  - 在`AI 服務商`下找到`Amazon Bedrock`的設定項並開啟
+
+  <Image alt={'LobeHub 中填寫 Amazon Bedrock 密鑰'} inStep src={'/blog/assets34400653/7468594b-3355-4cb9-85bc-c9dace137653.webp'} />
+
+  - 開啟 Amazon Bedrock 並填入獲得的存取密鑰與秘密存取密鑰
+  - 為你的助手選擇一個 Amazone Bedrock 的模型即可開始對話
+
+  <Image alt={' 選擇並使用 Amazon Bedrock 模型 '} inStep src={'/blog/assets34400653/164b34b5-671e-418d-b34a-3b70f1156d06.webp'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，請參考 Amazon Bedrock 的費用政策。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用 Amazone Bedrock 提供的模型進行對話了。

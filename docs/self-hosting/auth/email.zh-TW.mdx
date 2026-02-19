@@ -1,0 +1,70 @@
+---
+title: 郵件服務設定
+description: 設定 LobeHub 的郵件服務，用於信箱驗證、密碼重置和魔法連結登入。
+tags:
+  - 郵件服務
+  - SMTP
+  - Resend
+  - 信箱驗證
+  - 魔法連結
+---
+
+# 郵件服務設定
+
+郵件服務用於信箱驗證、密碼重置和魔法連結發送。LobeHub 支援兩種郵件服務提供商。
+
+## Nodemailer（SMTP）
+
+使用 SMTP 協議發送郵件，適合已有信箱服務的使用者。參考 [Nodemailer SMTP 文件](https://nodemailer.com/smtp/)。
+
+| 環境變數                     | 類型 | 描述                                             | 示例                    |
+| ------------------------ | -- | ---------------------------------------------- | --------------------- |
+| `EMAIL_SERVICE_PROVIDER` | 可選 | 設定為 `nodemailer`（預設值）                          | `nodemailer`          |
+| `SMTP_HOST`              | 必選 | SMTP 伺服器主機名                                    | `smtp.gmail.com`      |
+| `SMTP_PORT`              | 必選 | SMTP 伺服器連接埠（TLS 通常為 `587`，SSL 為 `465`）          | `587`                 |
+| `SMTP_SECURE`            | 可選 | SSL 設定為 `true`（連接埠 465），TLS 設定為 `false`（連接埠 587） | `false`               |
+| `SMTP_USER`              | 必選 | SMTP 認證使用者名稱                                     | `user@gmail.com`      |
+| `SMTP_PASS`              | 必選 | SMTP 認證密碼                                      | `your-app-password`   |
+| `SMTP_FROM`              | 可選 | 發件人位址（AWS SES 必填），預設為 `SMTP_USER`              | `noreply@example.com` |
+
+<Callout type={'warning'}>
+  使用 Gmail 時，需使用應用程式專用密碼而非帳號密碼。前往 [Google 應用程式專用密碼](https://myaccount.google.com/apppasswords) 生成。
+</Callout>
+
+## Resend
+
+[Resend](https://resend.com/) 是一個現代郵件 API 服務，設定簡單，推薦新使用者使用。
+
+| 環境變數                     | 類型 | 描述                        | 示例                          |
+| ------------------------ | -- | ------------------------- | --------------------------- |
+| `EMAIL_SERVICE_PROVIDER` | 必選 | 設定為 `resend`              | `resend`                    |
+| `RESEND_API_KEY`         | 必選 | Resend API Key            | `re_xxxxxxxxxxxxxxxxxxxxxx` |
+| `RESEND_FROM`            | 推薦 | 發件人位址，需為 Resend 已驗證域名下的信箱 | `noreply@your-domain.com`   |
+
+<Callout type={'info'}>
+  使用 Resend 前需先 [驗證發件域名](https://resend.com/docs/dashboard/domains/introduction)，否則只能發送到自己的信箱。
+</Callout>
+
+## 信箱驗證
+
+啟用信箱驗證以確保使用者擁有其註冊的信箱位址（預設關閉）：
+
+| 環境變數                      | 類型 | 描述                   |
+| ------------------------- | -- | -------------------- |
+| `AUTH_EMAIL_VERIFICATION` | 可選 | 設定為 `1` 以要求註冊後進行信箱驗證 |
+
+<Callout type={'info'}>
+  信箱驗證需要上方已設定好的郵件服務（SMTP 或 Resend）。啟用後，使用者必須驗證其信箱位址才能登入。
+</Callout>
+
+## 魔法連結（免密）登入
+
+啟用魔法連結登入（依賴上方已設定好的郵件服務，預設關閉）：
+
+| 環境變數                     | 類型 | 描述                      |
+| ------------------------ | -- | ----------------------- |
+| `AUTH_ENABLE_MAGIC_LINK` | 可選 | 設定為 `1` 以啟用魔法連結登入（預設關閉） |
+
+<Callout type={'tip'}>
+  前往 [環境變數](/zh/docs/self-hosting/environment-variables/auth#better-auth) 可查閱所有 Better Auth 相關變數詳情。
+</Callout>

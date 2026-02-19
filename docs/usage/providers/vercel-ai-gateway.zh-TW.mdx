@@ -1,0 +1,60 @@
+---
+title: 在 LobeHub 中使用 Vercel AI Gateway
+description: 瞭解如何在 LobeHub 中整合和使用 Vercel AI Gateway 的統一 API
+tags:
+  - LobeHub
+  - Vercel AI Gateway
+  - API 密鑰
+  - Web 界面
+---
+
+# 在 LobeHub 中使用 Vercel AI Gateway
+
+[Vercel AI Gateway](https://vercel.com/ai-gateway) 是一個統一的 API，通過單一端點提供對 100+ AI 模型的存取。它提供預算管理、使用監控、負載均衡和回退處理等功能。
+
+本文將指導您如何在 LobeHub 中使用 Vercel AI Gateway。
+
+<Steps>
+  ### 第一步：在 Vercel AI Gateway 中建立 API 密鑰
+
+  - 存取 [Vercel 控制檯](https://vercel.com/dashboard)
+  - 點擊左側的 **AI Gateway** 標籤
+  - 點擊左側邊欄的 **API 密鑰**
+  - 點擊 **建立密鑰**，然後在對話框中點擊 **建立密鑰** 完成建立
+
+  ### 第二步：在 LobeHub 中設定 Vercel AI Gateway
+
+  - 進入 LobeHub 的 `設定` 頁面
+  - 在 `AI 服務提供商` 下，找到 `Vercel AI Gateway` 設定
+  - 輸入您獲得的 API 密鑰
+  - 選擇 Vercel AI Gateway 的模型，開始與 AI 助手對話
+
+  <Callout type={'warning'}>
+    使用過程中可能需要向 API 服務提供商付費，請參考 Vercel AI Gateway 的
+    [定價政策](https://vercel.com/docs/ai-gateway/models)。
+  </Callout>
+</Steps>
+
+至此，您可以在 LobeHub 中使用 Vercel AI Gateway 提供的模型開始聊天了。
+
+## 模型選擇
+
+Vercel AI Gateway 支援多種模型提供商，包括：
+
+- **OpenAI**: `openai/gpt-4o`、`openai/gpt-4o-mini`、`openai/o1` 等
+- **Anthropic**: `anthropic/claude-3-5-sonnet`、`anthropic/claude-3-opus` 等
+- **Google**: `google/gemini-2.5-pro`、`google/gemini-2.0-flash` 等
+- **DeepSeek**: `deepseek/deepseek-chat`、`deepseek/deepseek-reasoner` 等
+- 以及更多...
+
+如需查看完整的支援模型列表，請存取 [Vercel AI Gateway 模型](https://vercel.com/ai-gateway/models)。
+
+## API 設定
+
+Vercel AI Gateway 使用 OpenAI 相容的 API 格式。基礎 URL 為：
+
+```
+https://ai-gateway.vercel.sh/v1
+```
+
+您可以使用任何 OpenAI 相容的客戶端與此端點和您的 API 密鑰一起使用。

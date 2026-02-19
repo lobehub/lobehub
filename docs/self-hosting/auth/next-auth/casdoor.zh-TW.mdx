@@ -1,0 +1,151 @@
+---
+title: 在 LobeHub 中設定 Casdoor 身分驗證服務
+description: 學習如何在 LobeHub 中設定 Casdoor 身分驗證服務，包括部署、建立、設定權限和環境變數。
+tags:
+  - Casdoor 身分驗證
+  - 環境變數設定
+  - 單點登入
+  - LobeHub
+---
+
+# 設定 Casdoor 身分驗證服務
+
+[Casdoor](https://github.com/casdoor/casdoor) 是一個開源的身分驗證服務，功能設定豐富且易於上手。
+
+<Callout type={'tip'}>
+  若你想要私有部署 Casdoor，我們建議你將之與 LobeHub 一同使用 Docker Compose 部署，此時
+  LobeHub 可以與之共用同一個 Postgres 實例。
+</Callout>
+
+## Casdoor 設定流程
+
+若你使用局域網 IP 部署，下文假設：
+
+- 你的 LobeHub IP / 連接埠為 `http://LobeHub_IP:3210`。
+- 你私有部署 Casdoor，其域名為 `http://CASDOOR_IP:8000`。
+
+若你使用公網部署，下文假設：
+
+- 你的 LobeHub 域名為 `https://lobe.example.com`。
+- 你私有部署 Casdoor，其域名為 `https://lobe-auth-api.example.com`。
+
+<Steps>
+  ### 建立 Casdoor 應用程式
+
+  存取你私有部署的 Casdoor WebUI（預設為 `http://localhost:8000/`） 進入控制檯，預設帳號為 `admin`，密碼為 `123`。
+
+  前往 `身分認證` -> `應用程式`，建立一個 `LobeHub` 應用程式或直接修改搭載的 `built-in` 應用程式，其他字段可以自行探索，但你至少需要設定以下字段：
+
+  - 名稱、顯示名稱：`LobeHub`
+  - 重新導向 URLs：
+    - 本地開發環境：`http://localhost:3210/api/auth/callback/casdoor`
+    - 局域網 IP 部署：`http://LobeHub_IP:3210/api/auth/callback/casdoor`
+    - 公網環境：`https://lobe.example.com/api/auth/callback/casdoor`
+
+  還有一些不必需但是可以提高使用者體驗的字段：
+
+  - Logo：`https://lobehub.com/icon-192x192.png`
+  - 表單 CSS、表單 CSS（行動端）：
+
+  ```html
+  <style>
+    .login-panel {
+      padding: 40px 70px 0 70px;
+      border-radius: 10px;
+      background-color: #ffffff;
+      box-shadow: rgba(17, 12, 46, 0.15) 0px 48px 100px 0px;
+    }
+    .panel-logo {
+      width: 64px;
+    }
+    .login-logo-box {
+      margin-top: 20px;
+    }
+
+    #parent-area
+      > main
+      > div
+      > div.login-content
+      > div.login-panel
+      > div.login-form
+      > div
+      > div
+      > button {
+      box-shadow: none !important;
+      border-radius: 10px !important;
+      transition-property: all;
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+      transition-duration: 150ms;
+      border: 1px solid #eee !important;
+    }
+
+    @media (max-width: 640px) {
+      .login-panel {
+        padding: 40px 0 0 0;
+        box-shadow: none;
+      }
+    }
+
+
+  </style>
+  ```
+
+  隨後，複製 `客戶端 ID` 和 `客戶端密鑰`，並儲存。
+
+  ### 設定 Webhook （可選）
+
+  > 在 Casdoor `>=1.843.0` 上可用。
+
+  設定 Casdoor 的 Webhook 以便在使用者資訊更新時同步到 LobeHub 。
+
+  前往 `管理工具` -> `Webhooks`，建立一個 Webhook，新增一個 Webhook，填寫以下字段：
+
+  - 連結：`http://lobe.example.com/api/webhooks/casdoor`
+  - 方法：`POST`
+  - 內容類型：`application/json`
+  - 協議頭：`casdoor-secret`: `你的Webhook密鑰`
+
+  > 密鑰由你自己生成，用於驗證 Casdoor 發送的請求是否合法。 可以前往 [https://generate-secret.vercel.app/10](https://generate-secret.vercel.app/10) 生成一個 10 位的密鑰。
+
+  - 事件：`update-user`
+
+  儲存，並退出。 將該密鑰填寫到環境變數中的 `CASDOOR_WEBHOOK_SECRET`。
+
+  ### 關閉註冊
+
+  為了保證你的應用程式安全，建議關閉 Casdoor 的註冊功能，改為由管理員手動新增使用者。
+
+  前往 `身分認證` -> `應用程式`，將 `啟用註冊` 設定為 `否`。
+
+  <Callout type={'warning'}>
+    Casdoor 的註冊功能預設是開啟的，若你不關閉註冊功能，任何人都可以註冊並登入你的應用程式。
+  </Callout>
+
+  ### 設定環境變數
+
+  將獲取到的 `客戶端 ID` 和 `客戶端`，設為 LobeHub 環境變數中的 `AUTH_CASDOOR_ID` 和 `AUTH_CASDOOR_SECRET`。
+
+  設定 LobeHub 環境變數中 `AUTH_CASDOOR_ISSUER` 為：
+
+  - `http://localhost:8000/`，若你是本地開發環境
+  - `http://CASDOOR_IP:8000/`，若你是局域網私有部署的 Casdoor
+  - `https://lobe-auth-api.example.com/`，若你是公網環境部署的 Casdoor
+
+  在部署 LobeHub 時，你需要設定以下環境變數：
+
+  | 環境變數                      | 類型 | 描述                                                                                               |
+  | ------------------------- | -- | ------------------------------------------------------------------------------------------------ |
+  | `AUTH_SECRET`             | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令生成秘鑰： `openssl rand -base64 32`                                    |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必選 | 選擇 LoboChat 的單點登入提供商。使用 Casdoor 請填寫 `casdoor`。                                                   |
+  | `AUTH_CASDOOR_ID`         | 必選 | Casdoor 應用程式詳情頁的客戶端 ID                                                                             |
+  | `AUTH_CASDOOR_SECRET`     | 必選 | Casdoor 應用程式詳情頁的客戶端密鑰                                                                              |
+  | `AUTH_CASDOOR_ISSUER`     | 必選 | Casdoor 提供程式的 OpenID Connect 頒發者。                                                                |
+  | `AUTH_URL`                | 必選 | 該 URL 用於指定 Auth.js 在執行 OAuth 驗證時的回調位址，當預設生成的重新導向位址發生不正確時才需要設定。`https://lobe.example.com/api/auth` |
+  | `CASDOOR_WEBHOOK_SECRET`  | 可選 | 用於驗證 Casdoor 發送的 Webhook 請求是否合法的密鑰。                                                              |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#casdoor) 可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功後，使用者將可以通過 Casdoor 身分認證並使用 LobeHub。</Callout>

@@ -1,0 +1,998 @@
+---
+title: ComfyUI 擴充功能開發指南
+description: 學習如何為 LobeHub ComfyUI 整合新增新模型、工作流和功能擴充功能
+tags:
+  - ComfyUI
+  - 開發指南
+  - 模型擴充功能
+  - 工作流開發
+---
+
+# ComfyUI 擴充功能開發指南
+
+本指南基於實際程式碼實現，幫助開發者擴充功能 LobeHub 的 ComfyUI 整合功能。
+
+## 架構概覽
+
+LobeHub ComfyUI 整合採用四層服務架構，圍繞 `LobeComfyUI` 主類構建：
+
+```plaintext
+packages/model-runtime/src/providers/comfyui/
+├── index.ts                      # LobeComfyUI 主類入口
+├── services/                     # 四大核心服務
+│   ├── comfyuiClient.ts         # ComfyUIClientService - 客戶端和認證
+│   ├── modelResolver.ts         # ModelResolverService - 模型解析
+│   ├── workflowBuilder.ts       # WorkflowBuilderService - 工作流構建
+│   └── imageService.ts          # ImageService - 圖像生成
+├── config/                       # 設定系統
+│   ├── modelRegistry.ts         # 主模型註冊表（222個模型）
+│   ├── fluxModelRegistry.ts     # 130個FLUX模型設定
+│   ├── sdModelRegistry.ts       # 92個SD系列模型設定
+│   ├── systemComponents.ts      # VAE/CLIP/T5/LoRA/ControlNet組件
+│   └── workflowRegistry.ts      # 工作流路由設定
+├── workflows/                    # 工作流實現
+│   ├── flux-dev.ts              # FLUX Dev 20步工作流
+│   ├── flux-schnell.ts          # FLUX Schnell 4步快速工作流
+│   ├── flux-kontext.ts          # FLUX Kontext 填充工作流
+│   ├── sd35.ts                  # SD3.5 外部編碼器工作流
+│   ├── simple-sd.ts             # 通用SD工作流
+│   └── index.ts                 # 工作流導出
+├── utils/                        # 工具層
+│   ├── staticModelLookup.ts     # 模型查找函數
+│   ├── workflowDetector.ts      # 模型架構檢測
+│   ├── promptSplitter.ts        # FLUX雙提示詞分割
+│   ├── seedGenerator.ts         # 隨機種子生成
+│   ├── cacheManager.ts          # TTL快取管理
+│   └── workflowUtils.ts         # 工作流工具函數
+└── errors/                       # 錯誤處理
+    ├── base.ts                  # 基礎錯誤類
+    ├── modelResolverError.ts    # 模型解析錯誤
+    ├── workflowError.ts         # 工作流錯誤
+    └── servicesError.ts         # 服務錯誤
+
+src/server/services/comfyui/     # 伺服端實現
+├── core/                         # 核心伺服器服務
+│   ├── comfyUIAuthService.ts    # 認證服務
+│   ├── comfyUIClientService.ts  # 客戶端服務
+│   ├── comfyUIConnectionService.ts # 連接服務
+│   ├── errorHandlerService.ts   # 錯誤處理服務
+│   ├── imageService.ts          # 圖像生成衣務
+│   ├── modelResolverService.ts  # 模型解析服務
+│   └── workflowBuilderService.ts # 工作流構建服務
+├── config/                       # 伺服器端設定
+│   ├── constants.ts             # 常數和預設值
+│   ├── modelRegistry.ts         # 模型註冊表
+│   ├── fluxModelRegistry.ts     # FLUX模型
+│   ├── sdModelRegistry.ts       # SD模型
+│   ├── systemComponents.ts      # 系統組件
+│   └── workflowRegistry.ts      # 工作流注冊表
+├── workflows/                    # 伺服端工作流實現
+│   ├── flux-dev.ts              # FLUX Dev 工作流
+│   ├── flux-schnell.ts          # FLUX Schnell 工作流
+│   ├── flux-kontext.ts          # FLUX Kontext 工作流
+│   ├── sd35.ts                  # SD3.5 工作流
+│   └── simple-sd.ts             # Simple SD 工作流
+├── utils/                        # 伺服器工具
+│   ├── cacheManager.ts          # 快取管理
+│   ├── componentInfo.ts         # 組件資訊
+│   ├── imageResizer.ts          # 圖像調整
+│   ├── promptSplitter.ts        # 提示詞分割
+│   ├── staticModelLookup.ts     # 模型查找
+│   ├── weightDType.ts           # 權重資料類型工具
+│   ├── workflowDetector.ts      # 工作流檢測
+│   └── workflowUtils.ts         # 工作流工具
+└── errors/                       # 伺服器錯誤處理
+    ├── base.ts                  # 基礎錯誤類
+    ├── configError.ts           # 設定錯誤
+    ├── modelResolverError.ts    # 模型解析器錯誤
+    ├── servicesError.ts         # 服務錯誤
+    ├── utilsError.ts            # 工具錯誤
+    └── workflowError.ts         # 工作流錯誤
+
+packages/model-runtime/src/utils/  # 共享工具
+└── comfyuiErrorParser.ts        # 客戶端/伺服器統一錯誤解析器
+```
+
+### 核心服務架構
+
+`LobeComfyUI` 主類初始化四個核心服務：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/index.ts
+export class LobeComfyUI implements LobeRuntimeAI, AuthenticatedImageRuntime {
+  constructor(options: ComfyUIKeyVault = {}) {
+    // 1. 客戶端服務 - 處理認證和API調用
+    this.clientService = new ComfyUIClientService(options);
+
+    // 2. 模型解析服務 - 模型查找和組件選擇
+    const modelResolverService = new ModelResolverService(this.clientService);
+
+    // 3. 工作流構建服務 - 路由和構建工作流
+    const workflowBuilderService = new WorkflowBuilderService({
+      clientService: this.clientService,
+      modelResolverService: modelResolverService,
+    });
+
+    // 4. 圖像服務 - 統一的圖像生成入口
+    this.imageService = new ImageService(
+      this.clientService,
+      modelResolverService,
+      workflowBuilderService,
+    );
+  }
+}
+```
+
+## 認證系統
+
+ComfyUI 整合支援四種認證方式，由 `ComfyUIClientService` 內的 `AuthManager` 處理：
+
+### 支援的認證類型
+
+```typescript
+interface ComfyUIKeyVault {
+  baseURL: string;
+  authType?: 'none' | 'basic' | 'bearer' | 'custom';
+  // Basic Auth
+  username?: string;
+  password?: string;
+  // Bearer Token
+  apiKey?: string;
+  // Custom Headers
+  customHeaders?: Record<string, string>;
+}
+```
+
+### 認證設定示例
+
+```typescript
+// 無認證
+const comfyUI = new LobeComfyUI({
+  baseURL: 'http://localhost:8000',
+  authType: 'none'
+});
+
+// 基礎認證
+const comfyUI = new LobeComfyUI({
+  baseURL: 'https://your-comfyui-server.com',
+  authType: 'basic',
+  username: 'your-username',
+  password: 'your-password'
+});
+
+// Bearer Token
+const comfyUI = new LobeComfyUI({
+  baseURL: 'https://your-comfyui-server.com',
+  authType: 'bearer',
+  apiKey: 'your-api-key'
+});
+
+// 自訂頭部
+const comfyUI = new LobeComfyUI({
+  baseURL: 'https://your-comfyui-server.com',
+  authType: 'custom',
+  customHeaders: {
+    'X-API-Key': 'your-custom-key',
+    'Authorization': 'Custom your-token'
+  }
+});
+```
+
+## WebAPI 路由
+
+ComfyUI 提供了用於圖像生成的 REST WebAPI 路由，支援常規認證和內部服務認證：
+
+### 路由詳情
+
+```typescript
+// src/app/(backend)/webapi/create-image/comfyui/route.ts
+export const runtime = 'nodejs';
+export const maxDuration = 300;  // 最長5分鐘
+
+// POST /api/create-image/comfyui
+{
+  model: string;           // 模型標識符
+  params: {                // 生成參數
+    prompt: string;
+    width?: number;
+    height?: number;
+    // ... 其他參數
+  };
+  options?: {              // 可選生成選項
+    // ... 額外選項
+  };
+}
+```
+
+### 認證中間件
+
+WebAPI 路由使用 `checkAuth` 中間件進行認證：
+
+```typescript
+import { checkAuth } from '@/app/(backend)/middleware/auth';
+
+// 路由自動驗證 JWT 令牌
+// 並將認證上下文傳遞給 tRPC 調用器
+```
+
+### 錯誤處理
+
+WebAPI 路由提供結構化的錯誤回應：
+
+```typescript
+// 從 TRPCError 的 cause 中提取 AgentRuntimeError
+if (agentError && 'errorType' in agentError) {
+  // 將 errorType 轉換為適當的 HTTP 狀態碼
+  // 401 對應 InvalidProviderAPIKey
+  // 403 對應 PermissionDenied
+  // 404 對應 NotFound
+  // 500+ 對應伺服器錯誤
+}
+```
+
+## 新增新模型
+
+### 1. 理解模型註冊表結構
+
+模型設定存儲在組態檔中：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/config/modelRegistry.ts
+export interface ModelConfig {
+  modelFamily: 'FLUX' | 'SD1' | 'SDXL' | 'SD3';
+  priority: number;        // 1=官方, 2=企業, 3=社群
+  recommendedDtype?: 'default' | 'fp8_e4m3fn' | 'fp8_e5m2';
+  variant: string;         // 模型變體標識符
+}
+```
+
+### 2. 新增 FLUX 模型
+
+在 `fluxModelRegistry.ts` 中新增新模型：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/config/fluxModelRegistry.ts
+export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
+  // 現有模型...
+
+  // 新增新的FLUX Dev模型
+  'your-custom-flux-dev.safetensors': {
+    modelFamily: 'FLUX',
+    priority: 2,  // 企業級模型
+    variant: 'dev',
+    recommendedDtype: 'default',
+  },
+
+  // 新增量化版本
+  'your-custom-flux-dev-fp8.safetensors': {
+    modelFamily: 'FLUX',
+    priority: 2,
+    variant: 'dev',
+    recommendedDtype: 'fp8_e4m3fn',
+  },
+};
+```
+
+### 3. 新增 SD 系列模型
+
+在 `sdModelRegistry.ts` 中新增：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/config/sdModelRegistry.ts
+export const SD_MODEL_REGISTRY: Record<string, ModelConfig> = {
+  // 現有模型...
+
+  // 新增新的SD3.5模型
+  'your-custom-sd35.safetensors': {
+    modelFamily: 'SD3',
+    priority: 2,
+    variant: 'sd35',
+    recommendedDtype: 'default',
+  },
+};
+```
+
+### 4. 更新模型 ID 映射（可選）
+
+如果需要為前端提供友好的模型 ID，在 `modelRegistry.ts` 中新增映射：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/config/modelRegistry.ts
+export const MODEL_ID_VARIANT_MAP: Record<string, string> = {
+  // 現有映射...
+
+  // 新增新模型的友好ID
+  'my-custom-flux': 'dev',  // 映射到dev變體
+  'my-custom-sd35': 'sd35', // 映射到sd35變體
+};
+```
+
+## 建立新工作流
+
+### 工作流建立原理
+
+**重要：工作流節點結構來自 ComfyUI 原生導出**
+
+1. 在 ComfyUI 界面中設計工作流
+2. 使用 "Export (API Format)" 導出 JSON
+3. 將 JSON 結構複製到 TypeScript 檔案
+4. 使用`PromptBuilder`包裝並參數位化
+
+### 1. 從 ComfyUI 導出工作流
+
+在 ComfyUI 界面中：
+
+1. 拖拽節點構建所需工作流
+2. 連接各節點的輸入輸出
+3. 右鍵點擊空白處 → "Export (API Format)"
+4. 複製生成的 JSON 結構
+
+### 2. 工作流檔案模板
+
+建立新檔案 `workflows/your-workflow.ts`：
+
+```typescript
+import { PromptBuilder } from '@saintno/comfyui-sdk';
+
+import type { WorkflowContext } from '../services/workflowBuilder';
+import { generateUniqueSeeds } from '../utils/seedGenerator';
+import { getWorkflowFilenamePrefix } from '../utils/workflowUtils';
+
+/**
+ * 構建自訂工作流
+ * @param modelFileName - 模型檔案名
+ * @param params - 生成參數
+ * @param context - 工作流上下文
+ */
+export async function buildYourCustomWorkflow(
+  modelFileName: string,
+  params: Record<string, any>,
+  context: WorkflowContext,
+): Promise<PromptBuilder<any, any, any>> {
+
+  // 從ComfyUI "Export (API Format)" 獲得的JSON結構
+  const workflow = {
+    '1': {
+      _meta: { title: 'Load Checkpoint' },
+      class_type: 'CheckpointLoaderSimple',
+      inputs: {
+        ckpt_name: modelFileName,
+      },
+    },
+    '2': {
+      _meta: { title: 'CLIP Text Encode' },
+      class_type: 'CLIPTextEncode',
+      inputs: {
+        clip: ['1', 1],  // 連接到節點1的CLIP輸出
+        text: params.prompt,
+      },
+    },
+    '3': {
+      _meta: { title: 'Empty Latent' },
+      class_type: 'EmptyLatentImage',
+      inputs: {
+        width: params.width,
+        height: params.height,
+        batch_size: 1,
+      },
+    },
+    '4': {
+      _meta: { title: 'KSampler' },
+      class_type: 'KSampler',
+      inputs: {
+        model: ['1', 0],      // 連接到節點1的MODEL輸出
+        positive: ['2', 0],    // 連接到節點2的CONDITIONING輸出
+        negative: ['2', 0],    // 可以設定負面提示詞
+        latent_image: ['3', 0],
+        seed: params.seed ?? generateUniqueSeeds(1)[0],
+        steps: params.steps,
+        cfg: params.cfg,
+        sampler_name: 'euler',
+        scheduler: 'normal',
+        denoise: 1.0,
+      },
+    },
+    '5': {
+      _meta: { title: 'VAE Decode' },
+      class_type: 'VAEDecode',
+      inputs: {
+        samples: ['4', 0],
+        vae: ['1', 2],        // 連接到節點1的VAE輸出
+      },
+    },
+    '6': {
+      _meta: { title: 'Save Image' },
+      class_type: 'SaveImage',
+      inputs: {
+        filename_prefix: getWorkflowFilenamePrefix('buildYourCustomWorkflow', context.variant),
+        images: ['5', 0],
+      },
+    },
+  };
+
+  // 使用PromptBuilder包裝靜態JSON
+  const builder = new PromptBuilder(
+    workflow,
+    ['width', 'height', 'steps', 'cfg', 'seed'],  // 輸入參數
+    ['images'],  // 輸出參數
+  );
+
+  // 設定輸出節點
+  builder.setOutputNode('images', '6');
+
+  // 設定輸入節點路徑
+  builder.setInputNode('width', '3.inputs.width');
+  builder.setInputNode('height', '3.inputs.height');
+  builder.setInputNode('steps', '4.inputs.steps');
+  builder.setInputNode('cfg', '4.inputs.cfg');
+  builder.setInputNode('seed', '4.inputs.seed');
+
+  // 設定參數值
+  builder
+    .input('width', params.width)
+    .input('height', params.height)
+    .input('steps', params.steps)
+    .input('cfg', params.cfg)
+    .input('seed', params.seed ?? generateUniqueSeeds(1)[0]);
+
+  return builder;
+}
+```
+
+### 3. 註冊新工作流
+
+在 `workflowRegistry.ts` 中新增工作流映射：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/config/workflowRegistry.ts
+import { buildYourCustomWorkflow } from '../workflows/your-workflow';
+
+export const VARIANT_WORKFLOW_MAP: Record<string, WorkflowBuilder> = {
+  // 現有映射...
+
+  // 新增新工作流
+  'your-variant': buildYourCustomWorkflow,
+};
+```
+
+### 4. 實際工作流示例
+
+參考 `flux-dev.ts` 的真實實現：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/workflows/flux-dev.ts (簡化版)
+export async function buildFluxDevWorkflow(
+  modelFileName: string,
+  params: Record<string, any>,
+  context: WorkflowContext,
+): Promise<PromptBuilder<any, any, any>> {
+  // 獲取所需組件
+  const selectedT5Model = await context.modelResolverService.getOptimalComponent('t5', 'FLUX');
+  const selectedVAE = await context.modelResolverService.getOptimalComponent('vae', 'FLUX');
+  const selectedCLIP = await context.modelResolverService.getOptimalComponent('clip', 'FLUX');
+
+  // 處理雙提示詞分割
+  const { t5xxlPrompt, clipLPrompt } = splitPromptForDualCLIP(params.prompt);
+
+  // 靜態工作流定義（來自ComfyUI導出）
+  const workflow = {
+    '1': {
+      class_type: 'DualCLIPLoader',
+      inputs: {
+        clip_name1: selectedT5Model,
+        clip_name2: selectedCLIP,
+        type: 'flux',
+      },
+    },
+    // ... 更多節點
+  };
+
+  // 參數注入（必須在workflow檔案內完成）
+  workflow['5'].inputs.clip_l = clipLPrompt;
+  workflow['5'].inputs.t5xxl = t5xxlPrompt;
+  workflow['4'].inputs.width = params.width;
+  workflow['4'].inputs.height = params.height;
+
+  // 建立並設定PromptBuilder
+  const builder = new PromptBuilder(workflow, inputs, outputs);
+  // 設定輸入輸出映射...
+
+  return builder;
+}
+```
+
+## 系統組件管理
+
+### 組件設定結構
+
+所有系統組件（VAE、CLIP、T5、LoRA、ControlNet）統一設定在 `systemComponents.ts`：
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/config/systemComponents.ts
+export interface ComponentConfig {
+  modelFamily: string;           // 模型家族
+  priority: number;             // 1=必需, 2=標準, 3=可選
+  type: string;                 // 組件類型
+  compatibleVariants?: string[]; // 相容變體（LoRA/ControlNet）
+  controlnetType?: string;      // ControlNet類型
+}
+
+export const SYSTEM_COMPONENTS: Record<string, ComponentConfig> = {
+  // VAE組件
+  'ae.safetensors': {
+    modelFamily: 'FLUX',
+    priority: 1,
+    type: 'vae',
+  },
+
+  // CLIP組件
+  'clip_l.safetensors': {
+    modelFamily: 'FLUX',
+    priority: 1,
+    type: 'clip',
+  },
+
+  // T5編碼器
+  't5xxl_fp16.safetensors': {
+    modelFamily: 'FLUX',
+    priority: 1,
+    type: 't5',
+  },
+
+  // LoRA相容器
+  'realism_lora.safetensors': {
+    compatibleVariants: ['dev'],
+    modelFamily: 'FLUX',
+    priority: 1,
+    type: 'lora',
+  },
+
+  // ControlNet模型
+  'flux-controlnet-canny-v3.safetensors': {
+    compatibleVariants: ['dev'],
+    controlnetType: 'canny',
+    modelFamily: 'FLUX',
+    priority: 1,
+    type: 'controlnet',
+  },
+};
+```
+
+### 新增新組件
+
+```typescript
+// 新增新的LoRA
+'your-custom-lora.safetensors': {
+  compatibleVariants: ['dev', 'schnell'],
+  modelFamily: 'FLUX',
+  priority: 2,
+  type: 'lora',
+},
+
+// 新增新的ControlNet
+'your-controlnet-pose.safetensors': {
+  compatibleVariants: ['dev'],
+  controlnetType: 'pose',
+  modelFamily: 'FLUX',
+  priority: 2,
+  type: 'controlnet',
+},
+```
+
+### 組件查詢 API
+
+```typescript
+import { getAllComponentsWithNames, getOptimalComponent } from '../config/systemComponents';
+
+// 獲取最優組件
+const bestVAE = getOptimalComponent('vae', 'FLUX');
+const bestT5 = getOptimalComponent('t5', 'FLUX');
+
+// 查詢特定類型的組件
+const availableLoras = getAllComponentsWithNames({
+  type: 'lora',
+  modelFamily: 'FLUX',
+  compatibleVariant: 'dev'
+});
+
+// 查詢ControlNet
+const cannyControlNets = getAllComponentsWithNames({
+  type: 'controlnet',
+  controlnetType: 'canny',
+  modelFamily: 'FLUX'
+});
+```
+
+## 模型解析和查找
+
+### ModelResolverService 工作原理
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/services/modelResolver.ts
+export class ModelResolverService {
+  async resolveModelFileName(modelId: string): Promise<string | undefined> {
+    // 1. 清理模型ID
+    const cleanId = modelId.replace(/^comfyui\//, '');
+
+    // 2. 檢查模型ID映射
+    const mappedVariant = MODEL_ID_VARIANT_MAP[cleanId];
+    if (mappedVariant) {
+      const prioritizedModels = getModelsByVariant(mappedVariant);
+      const serverModels = await this.getAvailableModelFiles();
+
+      // 按優先級查找第一個可用模型
+      for (const filename of prioritizedModels) {
+        if (serverModels.includes(filename)) {
+          return filename;
+        }
+      }
+    }
+
+    // 3. 直接註冊表查找
+    if (MODEL_REGISTRY[cleanId]) {
+      return cleanId;
+    }
+
+    // 4. 檢查伺服器檔案存在性
+    if (isModelFile(cleanId)) {
+      const serverModels = await this.getAvailableModelFiles();
+      if (serverModels.includes(cleanId)) {
+        return cleanId;
+      }
+    }
+
+    return undefined;
+  }
+}
+```
+
+### 模型查找示例
+
+```typescript
+// 實際使用示例
+const resolver = new ModelResolverService(clientService);
+
+// 友好ID查找
+const fluxDevFile = await resolver.resolveModelFileName('flux-dev');
+// 返回: 'flux1-dev.safetensors' (如果存在)
+
+// 直接檔案名查找
+const directFile = await resolver.resolveModelFileName('my-custom-model.safetensors');
+// 返回: 'my-custom-model.safetensors' (如果存在)
+
+// 變體查找
+const devModels = getModelsByVariant('dev');
+console.log(devModels.slice(0, 3));
+// 輸出: ['flux1-dev.safetensors', 'flux1-dev-fp8.safetensors', ...]
+```
+
+## 錯誤處理
+
+### 錯誤類型層次
+
+```plaintext
+// packages/model-runtime/src/providers/comfyui/errors/
+ComfyUIInternalError              // 基礎錯誤
+├── ModelResolverError           // 模型解析錯誤
+├── WorkflowError               // 工作流錯誤
+├── ServicesError               // 服務錯誤
+└── UtilsError                  // 工具錯誤
+```
+
+### 錯誤處理示例
+
+```typescript
+import { ModelResolverError, WorkflowError } from '../errors';
+
+try {
+  const result = await comfyUI.createImage({
+    model: 'nonexistent-model',
+    params: { prompt: '測試' }
+  });
+} catch (error) {
+  if (error instanceof ModelResolverError) {
+    console.log('模型解析失敗:', error.message);
+    console.log('錯誤原因:', error.reason);
+    console.log('錯誤詳情:', error.details);
+  } else if (error instanceof WorkflowError) {
+    console.log('工作流錯誤:', error.message);
+  }
+}
+```
+
+### 統一錯誤解析器
+
+客戶端和伺服器端錯誤處理可使用共享的錯誤解析器：
+
+```typescript
+// packages/model-runtime/src/utils/comfyuiErrorParser.ts
+import { parseComfyUIErrorMessage, cleanComfyUIErrorMessage } from '../utils/comfyuiErrorParser';
+
+// 解析錯誤訊息並確定錯誤類型
+const { error, errorType } = parseComfyUIErrorMessage(rawError);
+
+// 清理 ComfyUI 格式的錯誤訊息
+const cleanMessage = cleanComfyUIErrorMessage(errorMessage);
+```
+
+錯誤解析器處理：
+
+- HTTP 狀態碼映射到錯誤類型
+- 伺服器端錯誤增強
+- 模型檔案缺失檢測
+- 網路錯誤識別
+- 工作流驗證錯誤
+
+## 測試架構與開發
+
+### 測試架構概述
+
+ComfyUI 整合使用了統一的測試架構，確保測試的可維護性和定製友好性。該架構包括：
+
+- **統一 Mock 系統**：集中管理所有外部依賴的模擬
+- **參數位化測試**：自動適應新模型，無需修改現有測試
+- **夾具系統**：從組態檔中獲取測試資料，確保準確性
+- **覆蓋率目標**：ComfyUI 模組維持 97%+ 覆蓋率
+
+### 測試檔案結構
+
+```plaintext
+packages/model-runtime/src/providers/comfyui/__tests__/
+├── setup/
+│   └── unifiedMocks.ts              # 統一Mock設定
+├── fixtures/
+│   ├── parameters.fixture.ts        # 參數測試夾具
+│   └── workflow.fixture.ts          # 工作流測試夾具
+├── integration/
+│   ├── parameterMapping.test.ts     # 參數映射整合測試
+│   └── workflowBuilder.test.ts      # 工作流構建測試
+├── services/                        # 各服務單元測試
+└── workflows/                       # 工作流單元測試
+```
+
+### 新增新模型測試
+
+當新增新模型時，測試會自動識別並執行相應的參數映射測試。你只需要：
+
+#### 1. 在模型設定中新增參數架構
+
+```typescript
+// packages/model-bank/src/aiModels/comfyui.ts
+export const myNewModelParamsSchema = {
+  prompt: { type: 'string', required: true },
+  steps: { type: 'number', default: 20, min: 1, max: 150 },
+  cfg: { type: 'number', default: 7.0, min: 1.0, max: 30.0 }
+};
+```
+
+#### 2. 建立工作流構建器
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/workflows/myNewModel.ts
+export async function buildMyNewModelWorkflow(
+  modelName: string,
+  params: MyNewModelParams,
+  context: ComfyUIContext
+) {
+  const workflow = { /* 工作流定義 */ };
+
+  // 參數注入
+  workflow['1'].inputs.prompt = params.prompt;
+  workflow['2'].inputs.steps = params.steps;
+
+  return workflow;
+}
+```
+
+#### 3. 在夾具中註冊模型
+
+```typescript
+// packages/model-runtime/src/providers/comfyui/__tests__/fixtures/parameters.fixture.ts
+import {
+  myNewModelParamsSchema,
+  // ... 其他架構
+} from '../../../../../model-bank/src/aiModels/comfyui';
+
+export const parametersFixture = {
+  models: {
+    'my-new-model': {
+      schema: myNewModelParamsSchema,
+      defaults: {
+        steps: myNewModelParamsSchema.steps.default,
+        cfg: myNewModelParamsSchema.cfg.default,
+      },
+      boundaries: {
+        min: { steps: myNewModelParamsSchema.steps.min },
+        max: { steps: myNewModelParamsSchema.steps.max }
+      }
+    }
+  }
+};
+```
+
+### 測試最佳實踐
+
+#### 使用統一 Mock 系統
+
+```typescript
+import { setupAllMocks } from '../setup/unifiedMocks';
+
+describe('MyTest', () => {
+  const mocks = setupAllMocks();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+});
+```
+
+#### 編寫參數映射測試
+
+參數映射測試會自動執行，驗證前端參數正確注入到工作流中：
+
+```typescript
+// 測試會自動包含新註冊的模型
+describe.each(
+  Object.entries(models).filter(([name]) => workflowBuilders[name])
+)(
+  '%s parameter mapping',
+  (modelName, modelConfig) => {
+    it('should map schema parameters to workflow', async () => {
+      const params = {
+        prompt: 'test prompt',
+        ...modelConfig.defaults,
+      };
+
+      const workflow = await builder(`${modelName}.safetensors`, params, mockContext);
+      expect(workflow).toBeDefined();
+    });
+  }
+);
+```
+
+#### 定製友好的測試原則
+
+- **不測試工作流結構**：工作流是 ComfyUI 官方格式，只測試參數映射
+- **使用設定驅動的資料**：測試資料來自模型組態檔，確保一致性
+- **避免脆性斷言**：不檢查具體的節點 ID 或內部結構
+- **支援擴充功能**：新增模型應該隻影響覆蓋率，不破壞現有測試
+
+### 執行測試
+
+```bash
+# 執行 ComfyUI 相關測試
+cd packages/model-runtime
+bunx vitest run --silent='passed-only' 'src/comfyui'
+
+# 查看覆蓋率
+bunx vitest run --coverage 'src/comfyui'
+
+# 執行特定測試檔案
+bunx vitest run 'src/comfyui/__tests__/integration/parameterMapping.test.ts'
+```
+
+### 覆蓋率目標
+
+- **整體覆蓋率**：ComfyUI 模組維持 97%+ 覆蓋率
+- **核心功能**：100% 分支覆蓋率
+- **新增功能**：保持或提升現有覆蓋率水平
+
+## 開發和測試
+
+### 1. 本地開發設定
+
+```bash
+# 啟動ComfyUI除錯模式
+DEBUG=lobe-image:* pnpm dev
+```
+
+### 2. 測試新功能
+
+```typescript
+// 建立測試檔案
+import { buildYourCustomWorkflow } from './your-workflow';
+
+describe('Custom Workflow', () => {
+  test('should build workflow correctly', async () => {
+    const mockContext = {
+      clientService: mockClientService,
+      modelResolverService: mockModelResolver,
+    };
+
+    const workflow = await buildYourCustomWorkflow(
+      'test-model.safetensors',
+      { prompt: '測試', width: 512, height: 512 },
+      mockContext
+    );
+
+    expect(workflow).toBeDefined();
+    // 驗證工作流結構...
+  });
+});
+```
+
+### 3. 模型設定測試
+
+```typescript
+import { getModelConfig, getAllModelNames } from '../config/modelRegistry';
+
+describe('Model Registry', () => {
+  test('should find new model', () => {
+    const config = getModelConfig('your-new-model.safetensors');
+    expect(config).toBeDefined();
+    expect(config?.variant).toBe('dev');
+    expect(config?.modelFamily).toBe('FLUX');
+  });
+});
+```
+
+## 完整使用示例
+
+### 基礎圖像生成
+
+```typescript
+import { LobeComfyUI } from '@/libs/model-runtime/comfyui';
+
+const comfyUI = new LobeComfyUI({
+  baseURL: 'http://localhost:8000',
+  authType: 'none'
+});
+
+// FLUX Dev模型生成
+const result = await comfyUI.createImage({
+  model: 'flux-dev',
+  params: {
+    prompt: '美麗的風景畫，高品質，詳細',
+    width: 1024,
+    height: 1024,
+    steps: 20,
+    cfg: 3.5,
+    seed: -1
+  }
+});
+
+console.log('生成圖像URL:', result.imageUrl);
+```
+
+### SD3.5 模型使用
+
+```typescript
+// SD3.5會自動檢測可用編碼器
+const sd35Result = await comfyUI.createImage({
+  model: 'stable-diffusion-35',
+  params: {
+    prompt: '未來主義城市景觀',
+    width: 1344,
+    height: 768,
+    steps: 28,
+    cfg: 4.5
+  }
+});
+```
+
+### 企業優化模型
+
+```typescript
+// 系統會自動選擇最佳可用變體（如FP8量化版本）
+const optimizedResult = await comfyUI.createImage({
+  model: 'flux-dev',
+  params: {
+    prompt: '專業商務肖像',
+    width: 768,
+    height: 1024,
+    steps: 15  // FP8模型可以用更少步數
+  }
+});
+```
+
+## 注意事項
+
+- 確保 ComfyUI 服務正常執行並可存取
+- 檢查所有必需的模型檔案是否已正確安裝
+- 注意模型檔案的命名規範和路徑設定
+- 定期檢查和更新工作流設定以支援新功能
+- 注意不同模型系列的參數差異和相容性
+- 新增新模型時，請遵循測試架構指南確保測試完整性
+- 在提交程式碼前務必執行相關測試確保覆蓋率達標
+
+通過遵循這些指南，開發者可以有效地在 LobeHub 中使用和擴充功能 ComfyUI 功能，為使用者提供強大的圖像生成和處理能力。

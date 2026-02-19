@@ -1,0 +1,77 @@
+---
+title: 在 LobeHub 中設定 ZITADEL 身分驗證服務
+description: 學習如何在 LobeHub 中設定 ZITADEL 身分驗證服務，包括建立應用程式、設定環境變數等步驟。
+tags:
+  - ZITADEL
+  - 身分驗證服務
+  - 環境變數設定
+  - 單點登入
+  - LobeHub
+---
+
+# 設定 ZITADEL 身分驗證服務
+
+<Steps>
+  ### 建立 ZITADEL 應用程式
+
+  使用具有 [`Project Owner` 角色](https://zitadel.com/docs/guides/manage/console/managers#roles)的帳號登入到 ZITADEL 實例控制檯，進入（或[建立](https://zitadel.com/docs/guides/manage/console/projects#create-a-project)）該應用程式所屬的項目，點擊「建立」按鈕建立應用程式。
+
+  <Image alt="建立 ZITADEL 應用程式 1" inStep src="/blog/assets8692892/3564110d-bef9-47f3-b775-e5f28b4275b2.webp" />
+
+  填寫應用程式名稱，應用程式類型選擇「Web」，點擊「繼續」。
+
+  <Image alt="建立 ZITADEL 應用程式 2" inStep src="/blog/assets8692892/12451b47-8dcd-40a9-b18d-2806b07efecc.webp" />
+
+  選擇「Code」作為身分驗證方式。
+
+  <Image alt="建立 ZITADEL 應用程式 3" inStep src="/blog/assets8692892/9d5cb651-ad10-47c7-8c8b-2256163c5521.webp" />
+
+  在「重新導向 URLs」字段中填寫：
+
+  ```
+  http(s)://your-domain/api/auth/callback/zitadel
+  ```
+
+  <Image alt="建立 ZITADEL 應用程式 4" inStep src="/blog/assets8692892/1699bf46-0c8d-4238-9eb5-34282bfe529a.webp" />
+
+  <Callout type={'important'}>
+    - 可以建立應用程式後再填寫或修改重新導向 URL，但請確保填寫的 URL 與部署的 URL 一致。
+
+    - 請將 `http(s)://your-domain` 替換為 LobeHub 部署的實際 URL。
+  </Callout>
+
+  確認設定並點擊「建立」。
+
+  <Image alt="建立 ZITADEL 應用程式 5" inStep src="/blog/assets8692892/375b3d73-6796-465c-9063-f2762093f763.webp" />
+
+  記錄下「ClientId」和「ClientSecret」備用。
+
+  <Image alt="建立 ZITADEL 應用程式 6" inStep src="/blog/assets8692892/40bb6b4c-18e0-4ae5-abae-ae0cf202cf08.webp" />
+
+  在應用程式設定頁面中，切換到「令牌設定」索引標籤，勾選「在 ID Token 中包含使用者資訊」選項，點擊「儲存」。
+
+  <Image alt="建立 ZITADEL 應用程式 7" inStep src="/blog/assets8692892/20a257b5-d086-46f3-b5c2-f76394b11f55.webp" />
+
+  切換到「URLs」索引標籤，記錄下「issuer」URL。
+
+  <Image alt="建立 ZITADEL 應用程式 8" inStep src="/blog/assets8692892/79c55d44-8dcb-429c-a072-d3eb014bbceb.webp" />
+
+  ### 設定環境變數
+
+  部署 LobeHub 時，您需要設定以下環境變數：
+
+  | 環境變數                      | 類型 | 描述                                                                                  |
+  | ------------------------- | -- | ----------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | 必選 | 用於加密 Auth.js 會話令牌的密鑰。您可以使用以下命令生成密鑰：`openssl rand -base64 32`                        |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必選 | 為 LobeHub 選擇單點登入提供程式。對於 ZITADEL，請填寫 `zitadel`。                                      |
+  | `AUTH_ZITADEL_ID`         | 必選 | ZITADEL 應用程式的 Client ID（`ClientId`）。                                                  |
+  | `AUTH_ZITADEL_SECRET`     | 必選 | ZITADEL 應用程式的 Client Secret（`ClientSecret`）。                                          |
+  | `AUTH_ZITADEL_ISSUER`     | 必選 | ZITADEL 應用程式的 OpenID Connect 頒發者（issuer）URL。                                          |
+  | `AUTH_URL`                | 必選 | 該 URL 用於指定 Auth.js 中執行 OAuth 認證的回調位址。僅當預設位址不正確時才需要設定。`https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    您可以在 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#zitadel) 中查看相關變數的詳細資訊。
+  </Callout>
+</Steps>
+
+<Callout>部署成功後，使用者將能夠通過 ZITADEL 中設定的使用者進行身分驗證並使用 LobeHub。</Callout>

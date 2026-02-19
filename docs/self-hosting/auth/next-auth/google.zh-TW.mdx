@@ -1,0 +1,77 @@
+---
+title: 為 LobeHub 設定 Google SSO 認證服務
+description: 瞭解如何為 LobeHub 設定 Google SSO 認證服務，建立 OAuth 應用程式、新增使用者，並設定環境變數以實現無縫整合。
+tags:
+  - Google SSO
+  - OAuth 2.0
+  - 認證服務
+  - LobeHub
+---
+
+# 設定 Google SSO 認證服務
+
+<Steps>
+  ### 建立 Google Cloud OAuth 2.0 客戶端
+
+  在你的 [Google Cloud 控制檯][google-cloud-console] 中，導航至 **API 和服務 > 憑據**。
+
+  點擊 **建立憑據**，選擇 **OAuth 客戶端 ID**。
+
+  如果你尚未設定 OAuth 同意螢幕，系統會提示你進行設定。請完成 OAuth 同意螢幕的設定（填寫應用程式名稱、支援信箱，並根據需要新增授權使用者）。
+
+  選擇 **Web 應用程式** 作為應用程式類型。
+
+  在 **授權的重新導向 URI** 部分，輸入：
+
+  ```bash
+  https://your-domain/api/auth/callback/google
+  ```
+
+  <Callout type={'info'}>
+    \- 註冊後你可以新增或修改重新導向 URI，但請確保該 URL 與你部署的 LobeHub 實例一致。\
+    \- 請將 "your-domain" 替換為你的實際域名。
+  </Callout>
+
+  點擊 **建立**。
+
+  建立完成後，複製 **客戶端 ID（Client ID）** 和 **客戶端密鑰（Client Secret）**。
+
+  <Image alt="Google OAuth 設定界面" inStep src="https://developers.google.com/static/identity/images/gsi/web/gcs-signin-2.png" />
+
+  ### 新增使用者（僅限內部測試可選）
+
+  如果你的應用程式處於 **測試** 或 **內部** 發佈狀態，請在 OAuth 同意螢幕的 **測試使用者** 部分新增使用者信箱。\
+  未新增的使用者將無法進行身分驗證。
+
+  ### 設定環境變數
+
+  在部署 LobeHub 時，請設定以下環境變數：
+
+  | 環境變數名稱                    | 類型 | 描述                                                              |
+  | ------------------------- | -- | --------------------------------------------------------------- |
+  | `NEXT_AUTH_SECRET`        | 必填 | 用於加密 Auth.js 會話令牌的密鑰。可使用命令生成：`openssl rand -base64 32`          |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必填 | 指定 LobeHub 使用的單點登入提供商。使用 `google` 表示啟用 Google SSO。              |
+  | `AUTH_GOOGLE_ID`          | 必填 | 來自 Google Cloud OAuth 的客戶端 ID。                                  |
+  | `AUTH_GOOGLE_SECRET`      | 必填 | 來自 Google Cloud OAuth 的客戶端密鑰。                                   |
+  | `AUTH_URL`                | 必填 | 指定 Auth.js 在執行 OAuth 認證時的回調位址。例如：`https://your-domain/api/auth` |
+
+  <Callout type={'tip'}>
+    更多關於這些環境變數的說明，請參閱 [📘 環境變數文件](/docs/self-hosting/environment-variable#google)。
+  </Callout>
+</Steps>
+
+<Callout>
+  部署成功後，使用者即可使用其 Google 帳號登入 LobeHub（如果未處於生產環境，需先新增為測試使用者）。
+</Callout>
+
+## 進階設定
+
+如需瞭解更多高級選項、權限範圍（Scopes）及同意螢幕設定，請參閱 [Google 身分平臺文件][google-identity-docs]。
+
+## 相關資源
+
+- [快速開始：設定 Google OAuth 客戶端][google-oauth-quickstart]
+
+[google-cloud-console]: https://console.cloud.google.com/apis/credentials
+[google-identity-docs]: https://developers.google.com/identity
+[google-oauth-quickstart]: https://developers.google.com/identity/protocols/oauth2/web-server#creatingcred

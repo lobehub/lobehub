@@ -1,0 +1,28 @@
+---
+title: LobeHub 資料分析整合服務介紹
+description: 瞭解如何在 LobeHub 中整合免費/開源的資料統計服務，幫助分析使用者使用情況。包括 Vercel Analytics 的設定和使用教學。
+tags:
+  - LobeHub
+  - 資料分析
+  - Vercel Analytics
+  - 資料統計服務
+  - 使用者使用情況
+---
+
+# 資料分析
+
+為更好地幫助分析 LobeHub 的使用者使用情況，我們在 LobeHub 中整合了若干免費 / 開源的資料統計服務，用於收集使用者的使用情況，你可以按需開啟。
+
+<Callout type={'warning'}>
+  目前整合式資料分析平臺，均只支援 Vercel / Zeabur 平臺部署使用，不支援 Docker/Docker Compose 部署
+</Callout>
+
+## Vercel Analytics
+
+[Vercel Analytics](https://vercel.com/analytics) 是 Vercel 推出的一款資料分析服務，它可以幫助你收集網站的存取情況，包括瀏覽量、存取來源、存取設備等等。
+
+我們在程式碼中整合了 Vercel Analytics，你可以通過設定環境變數 `ENABLE_VERCEL_ANALYTICS=1` 來開啟它，並開啟 Vercel 部署項目中 Analytics tab 查看你的應用程式存取情況。
+
+Vercel Analytics 提供了 2500 次 / 月的免費 Web Analytics Events (可以理解為 PV)，對於個人部署自用的產品來說基本夠用。
+
+如果你需要了解 Vercel Analytics 的詳細使用教學，請查閱 [Vercel Web Analytics 快速開始](https://vercel.com/docs/analytics/quickstart)

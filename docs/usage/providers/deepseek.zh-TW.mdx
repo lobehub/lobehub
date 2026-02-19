@@ -1,0 +1,60 @@
+---
+title: 在 LobeHub 中使用 DeepSeek API Key
+description: 學習如何在 LobeHub 中設定和使用 DeepSeek 語言模型，獲取 API 密鑰並開始對話。
+tags:
+  - LobeHub
+  - DeepSeek
+  - DeepSeek R1
+  - API密鑰
+  - Web UI
+---
+
+# 在 LobeHub 中使用 DeepSeek
+
+<Image alt={'在 LobeHub 中使用 DeepSeek'} cover src={'/blog/assets34400653/b4d12904-9d5d-46de-bd66-901eeb9c8e52.webp'} />
+
+[DeepSeek](https://www.deepseek.com/) 是一款先進的開源大型語言模型（LLM）。最新的 DeepSeek-V3 和 DeepSeek-R1 在架構和性能上進行了顯著優化，特別是在推理能力方面表現出色。它通過創新性的訓練方法和強化學習技術，成功地提升了模型的推理能力，並且其性能已逼近 OpenAI 的頂尖水平。
+
+本文件將指導你如何在 LobeHub 中使用 DeepSeek：
+
+<Steps>
+  ### 步驟一：獲取 DeepSeek API 密鑰
+
+  - 首先，你需要註冊並登入 [DeepSeek](https://platform.deepseek.com/) 開放平臺
+
+  <Callout type={'info'}>當前新使用者將會獲贈 500M Tokens 的免費額度</Callout>
+
+  - 進入 `API keys` 選單，並點擊 `建立 API Key`
+
+  <Image alt={'建立 Deepseek API 密鑰'} inStep src={'/blog/assets34400653/5707b392-1ee6-4db6-95cb-9d6c902747d2.webp'} />
+
+  - 在彈出的對話框中輸入 API 密鑰名稱
+
+  <Image alt={'填寫 Deepseek API 名稱'} inStep src={'/blog/assets34400653/c1d1d816-6339-41a6-9bc9-e2c3b2762291.webp'} />
+
+  - 複製得到的 API 密鑰並妥善儲存
+
+  <Image alt={'儲存 Deepseek API 密鑰'} inStep src={'/blog/assets34400653/198217a6-84fa-441c-bcbe-8cded1106d6c.webp'} />
+
+  <Callout type={'warning'}>
+    請安全地存儲密鑰，因為它只會出現一次。如果你意外丟失它，您將需要建立一個新密鑰。
+  </Callout>
+
+  ### 步驟二：在 LobeHub 中設定 DeepSeek
+
+  - 存取 LobeHub 的 `應用程式設定`界面
+  - 在 `AI 服務商` 下找到 `DeepSeek` 的設定項
+
+  <Image alt={'填寫 Deepseek API 密鑰'} inStep src={'/blog/assets93da89c4892a80e2e5a6caa49d80af5f.webp'} />
+
+  - 開啟 DeepSeek 並填入獲取的 API 密鑰
+  - 為你的助手選擇一個 DeepSeek 模型即可開始對話
+
+  <Image alt={'選擇 Deepseek 模型'} inStep src={'/blog/assetsb09a1f1dc99b86343ae196fcfdcc3fe1.webp'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，請參考 DeepSeek 的相關費用政策。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用 Deepseek 提供的模型進行對話了。

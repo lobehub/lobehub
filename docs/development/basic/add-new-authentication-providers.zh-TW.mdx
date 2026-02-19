@@ -1,0 +1,203 @@
+---
+title: 新身分驗證方式開發指南
+description: 學習如何在 LobeHub 中使用 Auth.js v5 新增新的身分驗證提供者。
+tags:
+  - 身分驗證
+  - Auth.js
+  - Okta
+  - 開發指南
+---
+
+# 新身分驗證方式開發指南
+
+LobeHub 使用 [Auth.js v5](https://authjs.dev/) 作為外部身分驗證服務。Auth.js 是一個開源的身分驗證庫，它提供了一種簡單的方式來實現身分驗證和授權功能。本文件將介紹如何使用 Auth.js 來實現新的身分驗證方式。
+
+LobeHub 使用 [Better Auth](https://www.better-auth.com) 作為身分驗證服務。本文件介紹如何新增新的 SSO 身分驗證提供商。
+
+為了在 LobeHub 中新增新的身分驗證提供者（例如新增 Okta)，你需要完成以下步驟：
+
+Better Auth SSO 提供商分為兩類：
+
+| 類型        | 說明                         | 示例                            |
+| --------- | -------------------------- | ----------------------------- |
+| `builtin` | Better Auth 搭載支援的提供商       | Google、GitHub、Microsoft、Apple |
+| `generic` | 通過 Generic OIDC/OAuth 插件實現 | Okta、Auth0、Keycloak 等         |
+
+## 新增新的 SSO 提供商
+
+以新增 **Okta** 為例，介紹新增 `generic` 類型提供商的完整步驟。
+
+### 步驟 1: 建立提供商定義檔案
+
+在 `src/libs/better-auth/sso/providers/` 目錄下建立 `okta.ts`：
+
+```ts
+import { authEnv } from '@/envs/auth';
+
+import { buildOidcConfig } from '../helpers';
+import type { GenericProviderDefinition } from '../types';
+
+const provider: GenericProviderDefinition<{
+  AUTH_OKTA_ID: string;
+  AUTH_OKTA_ISSUER: string;
+  AUTH_OKTA_SECRET: string;
+}> = {
+  // 構建 OIDC 設定
+  build: (env) =>
+    buildOidcConfig({
+      clientId: env.AUTH_OKTA_ID,
+      clientSecret: env.AUTH_OKTA_SECRET,
+      issuer: env.AUTH_OKTA_ISSUER,
+      overrides: {
+        // 可選：自訂使用者資訊映射
+        mapProfileToUser: (profile) => ({
+          email: profile.email,
+          name: profile.name ?? profile.preferred_username ?? profile.email ?? profile.sub,
+        }),
+      },
+      providerId: 'okta',
+    }),
+
+  // 環境變數檢查
+  checkEnvs: () => {
+    return !!(authEnv.AUTH_OKTA_ID && authEnv.AUTH_OKTA_SECRET && authEnv.AUTH_OKTA_ISSUER)
+      ? {
+          AUTH_OKTA_ID: authEnv.AUTH_OKTA_ID,
+          AUTH_OKTA_ISSUER: authEnv.AUTH_OKTA_ISSUER,
+          AUTH_OKTA_SECRET: authEnv.AUTH_OKTA_SECRET,
+        }
+      : false;
+  },
+
+  // 提供商 ID（用於 AUTH_SSO_PROVIDERS 設定）
+  id: 'okta',
+  type: 'generic',
+};
+
+export default provider;
+```
+
+### 步驟 2: 註冊提供商
+
+在 `src/libs/better-auth/sso/index.ts` 中導入並註冊：
+
+```ts
+// 導入提供商
+import Okta from './providers/okta';
+
+// 新增到 providerDefinitions 陣列
+const providerDefinitions = [
+  // ... 其他提供商
+  Okta,
+] as const;
+```
+
+### 步驟 3: 新增環境變數類型聲明
+
+在 `src/envs/auth.ts` 中新增類型聲明：
+
+```ts
+// ProcessEnv 接口中新增
+AUTH_OKTA_ID?: string;
+AUTH_OKTA_SECRET?: string;
+AUTH_OKTA_ISSUER?: string;
+
+// getAuthConfig server schema 中新增
+AUTH_OKTA_ID: z.string().optional(),
+AUTH_OKTA_SECRET: z.string().optional(),
+AUTH_OKTA_ISSUER: z.string().optional(),
+
+// runtimeEnv 中新增
+AUTH_OKTA_ID: process.env.AUTH_OKTA_ID,
+AUTH_OKTA_SECRET: process.env.AUTH_OKTA_SECRET,
+AUTH_OKTA_ISSUER: process.env.AUTH_OKTA_ISSUER,
+```
+
+### 步驟 4: 更新文件（可選）
+
+在 `docs/self-hosting/auth.mdx` 和 `docs/self-hosting/auth.zh-TW.mdx` 中新增提供商文件。
+
+## 新增搭載提供商
+
+如果要新增 Better Auth 搭載支援的提供商（如 Discord），步驟略有不同：
+
+### 步驟 1: 建立提供商定義檔案
+
+```ts
+import { authEnv } from '@/envs/auth';
+
+import type { BuiltinProviderDefinition } from '../types';
+
+const provider: BuiltinProviderDefinition<{
+  AUTH_DISCORD_ID: string;
+  AUTH_DISCORD_SECRET: string;
+}> = {
+  build: (env) => ({
+    clientId: env.AUTH_DISCORD_ID,
+    clientSecret: env.AUTH_DISCORD_SECRET,
+  }),
+  checkEnvs: () => {
+    return !!(authEnv.AUTH_DISCORD_ID && authEnv.AUTH_DISCORD_SECRET)
+      ? {
+          AUTH_DISCORD_ID: authEnv.AUTH_DISCORD_ID,
+          AUTH_DISCORD_SECRET: authEnv.AUTH_DISCORD_SECRET,
+        }
+      : false;
+  },
+  id: 'discord',
+  type: 'builtin',
+};
+
+export default provider;
+```
+
+### 步驟 2: 更新常數檔案
+
+在 `src/libs/better-auth/constants.ts` 中新增：
+
+```ts
+export const BUILTIN_BETTER_AUTH_PROVIDERS = [
+  'apple',
+  'google',
+  'github',
+  'cognito',
+  'microsoft',
+  'discord', // 新增
+] as const;
+```
+
+## 回調 URL 格式
+
+設定 OAuth 應用程式時，回調 URL 格式為：
+
+- **搭載提供商**：`https://yourdomain.com/api/auth/callback/{providerId}`
+- **Generic OIDC**：`https://yourdomain.com/api/auth/callback/{providerId}`
+
+## 使用新提供商
+
+設定環境變數後，在 `AUTH_SSO_PROVIDERS` 中啟用：
+
+```bash
+AUTH_SSO_PROVIDERS=google,github,okta
+AUTH_OKTA_ID=your-client-id
+AUTH_OKTA_SECRET=your-client-secret
+AUTH_OKTA_ISSUER=https://your-domain.okta.com
+```
+
+## 除錯技巧
+
+1. **環境變數檢查失敗**：確保所有必需的環境變數都已設定
+2. **回調 URL 錯誤**：檢查 OAuth 應用程式設定的回調 URL 是否正確
+3. **使用者資訊映射**：通過 `mapProfileToUser` 自訂從 OAuth profile 到使用者資訊的映射
+
+## 相關檔案
+
+| 檔案                                        | 說明             |
+| ----------------------------------------- | -------------- |
+| `src/libs/better-auth/sso/providers/*.ts` | 提供商定義          |
+| `src/libs/better-auth/sso/index.ts`       | 提供商註冊          |
+| `src/libs/better-auth/sso/types.ts`       | 類型定義           |
+| `src/libs/better-auth/sso/helpers.ts`     | 輔助函數           |
+| `src/libs/better-auth/constants.ts`       | 搭載提供商常數        |
+| `src/envs/auth.ts`                        | 環境變數定義         |
+| `src/libs/better-auth/define-config.ts`   | Better Auth 設定 |

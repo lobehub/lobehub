@@ -1,0 +1,77 @@
+---
+title: 在 LobeHub 中設定 Google 身分驗證
+description: 學習如何在 LobeHub 中設定 Google SSO，包括在 Google Cloud Console 建立 OAuth 憑證和設定環境變數。
+tags:
+  - Google
+  - 身分驗證
+  - LobeHub
+  - 單點登入
+---
+
+# 設定 Google 身分驗證
+
+<Steps>
+  ### 建立 Google OAuth 憑證
+
+  1. 前往 [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+  2. 建立新項目或選擇現有項目
+  3. 點擊 **Create Credentials** > **OAuth client ID**
+  4. 如果是首次建立，需先設定 OAuth 同意螢幕（見下方步驟）
+  5. 選擇 **Web application** 作為應用程式類型
+  6. 新增授權重新導向 URI（見下方回調 URL 設定）
+  7. 點擊建立，儲存 **Client ID** 和 **Client Secret**
+
+  ### 設定 OAuth 同意螢幕
+
+  1. 前往 **APIs & Services** > **OAuth consent screen**
+  2. 選擇使用者類型：
+     - **External**：適用於任何 Google 帳號
+     - **Internal**：僅限 Google Workspace 組織使用者
+  3. 填寫應用程式名稱、使用者支援信箱等必填資訊
+  4. 新增授權範圍：`email` 和 `profile`
+  5. 如果處於測試模式，需新增測試使用者
+
+  ### 設定回調 URL
+
+  在授權重新導向 URI 中新增：
+
+  <Callout type={'info'}>
+    回調 URL 格式：
+
+    - 本地開發: `http://localhost:3210/api/auth/callback/google`
+    - 生產環境: `https://your-domain.com/api/auth/callback/google`
+  </Callout>
+
+  ### 設定環境變數
+
+  | 環境變數                 | 類型 | 描述                                     |
+  | -------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`        | 必選 | 會話加密密鑰，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS` | 必選 | 填寫 `google`                            |
+  | `AUTH_GOOGLE_ID`     | 必選 | Google Cloud Console 中的 Client ID      |
+  | `AUTH_GOOGLE_SECRET` | 必選 | Google Cloud Console 中的 Client Secret  |
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#google)
+    可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以通過 Google 身分認證並使用 LobeHub。
+</Callout>
+
+## 常見問題
+
+### redirect\_uri\_mismatch 錯誤
+
+確保 Google Cloud Console 中設定的回調 URL 與實際部署位址完全匹配，包括協議（http/https）和連接埠號。
+
+### 測試模式限制
+
+如果 OAuth 同意螢幕處於測試模式，只有新增為測試使用者的 Google 帳號才能登入。
+
+## 相關資源
+
+- [Google Cloud Console](https://console.cloud.google.com/)
+- [Google OAuth 2.0 文件](https://developers.google.com/identity/protocols/oauth2)

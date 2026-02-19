@@ -1,0 +1,137 @@
+---
+title: ModelScope 提供商設定
+description: 學習如何在 LobeHub 中設定和使用 ModelScope 提供商
+tags:
+  - ModelScope
+---
+
+# ModelScope 提供商設定
+
+ModelScope（魔塔社群）是阿里巴巴的開源模型社群，提供各種 AI 模型的存取服務。本指南將幫助您在 LobeHub 中設定 ModelScope 提供商。
+
+## 前置條件
+
+在使用 ModelScope API 之前，您需要：
+
+1. **建立 ModelScope 帳號**
+
+   - 存取 [ModelScope](https://www.modelscope.cn/)
+   - 註冊帳號
+
+2. **綁定阿里雲帳號**
+
+   - **重要**：ModelScope API 需要綁定阿里雲帳號
+   - 存取您的 [ModelScope 存取令牌頁面](https://www.modelscope.cn/my/myaccesstoken)
+   - 按照說明綁定您的阿里雲帳號
+   - 此步驟是 API 存取的必要條件
+
+3. **獲取 API 令牌**
+   - 綁定阿里雲帳號後，生成 API 令牌
+   - 複製令牌以在 LobeHub 中使用
+
+## 設定
+
+### 環境變數
+
+在您的 `.env` 檔案中新增以下環境變數：
+
+```bash
+# 啟用 ModelScope 提供商
+ENABLED_MODELSCOPE=1
+
+# ModelScope API 密鑰（必需）
+MODELSCOPE_API_KEY=your_modelscope_api_token
+
+# 可選：自訂模型列表（逗號分隔）
+MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3-0324,Qwen/Qwen3-235B-A22B
+
+# 可選：代理 URL（如需要）
+MODELSCOPE_PROXY_URL=https://your-proxy-url
+```
+
+### Docker 設定
+
+如果使用 Docker，請在您的 `docker-compose.yml` 中新增 ModelScope 環境變數：
+
+```yaml
+environment:
+  - ENABLED_MODELSCOPE=1
+  - MODELSCOPE_API_KEY=your_modelscope_api_token
+  - MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3-0324,Qwen/Qwen3-235B-A22B
+```
+
+## 可用模型
+
+ModelScope 提供各種模型的存取，包括：
+
+- **DeepSeek 模型**：DeepSeek-V3、DeepSeek-R1 系列
+- **Qwen 模型**：Qwen3 系列、Qwen2.5 系列
+- **Llama 模型**：Meta-Llama-3 系列
+- **其他模型**：各種開源模型
+
+## 故障排除
+
+### 常見問題
+
+1. **"請先綁定阿里雲帳號後使用" 錯誤**
+
+   - 這意味著您還沒有將阿里雲帳號綁定到 ModelScope
+   - 存取 [ModelScope 存取令牌頁面](https://www.modelscope.cn/my/myaccesstoken)
+   - 完成阿里雲帳號綁定流程
+
+2. **401 認證錯誤**
+
+   - 檢查您的 API 令牌是否正確
+   - 確保令牌沒有過期
+   - 驗證您的阿里雲帳號是否正確綁定
+
+3. **模型不可用**
+   - 某些模型可能需要額外權限
+   - 查看 ModelScope 上模型頁面的存取要求
+
+### 除錯模式
+
+啟用除錯模式以查看詳細日誌：
+
+```bash
+DEBUG_MODELSCOPE_CHAT_COMPLETION=1
+```
+
+## 注意事項
+
+- ModelScope API 與 OpenAI API 格式相容
+- 該服務主要面向中國使用者設計
+- 某些模型可能有使用限制或需要額外驗證
+- 某些模型的 API 回應預設為中文
+
+## 支援
+
+對於 ModelScope 特定問題：
+
+- 存取 [ModelScope 文件](https://www.modelscope.cn/docs)
+- 查看 [ModelScope 社群](https://www.modelscope.cn/community)
+
+對於 LobeHub 整合問題：
+
+- 查看我們的 [GitHub Issues](https://github.com/lobehub/lobe-chat/issues)
+- 加入我們的社群討論
+
+## 模型 ID 格式
+
+ModelScope 使用命名空間前綴格式的模型 ID，例如：
+
+```
+deepseek-ai/DeepSeek-V3-0324
+deepseek-ai/DeepSeek-R1-0528
+Qwen/Qwen3-235B-A22B
+Qwen/Qwen3-32B
+```
+
+在設定模型列表時，請使用完整的模型 ID 格式。
+
+## API 限制
+
+- ModelScope API 有速率限制
+- 某些模型可能需要特殊權限
+- 建議在生產環境中監控 API 使用情況
+- 部分高級模型可能需要付費使用

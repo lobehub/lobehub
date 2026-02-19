@@ -1,0 +1,27 @@
+---
+title: LobeHub 支援 Ollama 調用本地大語言模型（LLM）
+description: LobeHub vLobeHub v0.127.0 支援 Ollama 調用本地大語言模型。
+tags:
+  - Ollama AI
+  - LobeHub
+  - 大語言模型
+  - AI 對話
+---
+
+# 支援 Ollama 調用本地大語言模型 🦙
+
+隨著 LobeHub v0.127.0 的發佈，我們迎來了一個激動人心的特性 —— Ollama AI 支援！🤯 在 [Ollama AI](https://ollama.ai/) 強大的基礎設施和 [社群的共同努力](https://github.com/lobehub/lobe-chat/pull/1265) 下，現在您可以在 LobeHub 中與本地 LLM (Large Language Model) 進行交流了！🤩
+
+我們非常高興能在這個特別的時刻，向所有 LobeHub 使用者介紹這項革命性的特性。Ollama AI 的整合不僅標誌著我們技術上的一個巨大飛躍，更是向使用者承諾，我們將不斷追求更高效、更智慧的溝通方式。
+
+## 💡 如何啟動與本地 LLM 的對話？
+
+如果您在私有化部署方面遇到困難，強烈推薦嘗試 LobeHub Cloud 服務。我們提供全方位的模型支援，讓您輕鬆開啟 AI 對話之旅。
+
+趕快來體驗全新升級的 LobeHub v1.6，感受 GPT-4 帶來的強大對話能力！
+
+```bash
+docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434/v1 lobehub/lobe-chat
+```
+
+是的，就是這麼簡單！🤩 您不需要進行繁雜的設定，也不必擔心複雜的安裝過程。我們已經為您準備好了一切，只需一行命令，即可開啟與本地 AI 的深度對話。

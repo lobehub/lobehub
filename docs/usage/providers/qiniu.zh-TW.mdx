@@ -1,0 +1,56 @@
+---
+title: 在 LobeHub 中使用七牛雲大模型 API Key
+description: 學習如何在 LobeHub 中設定和使用七牛雲的大模型，提供強大的自然語言理解和生成能力。
+tags:
+  - API key
+  - Web UI
+  - 七牛
+  - 七牛雲
+  - 七牛智慧
+  - Qiniu
+  - DeepSeek
+---
+
+# 在 LobeHub 中使用七牛雲大模型
+
+<Image alt={'在 LobeHub 中使用七牛雲大模型'} cover src={'/blog/assets48b5c19e20fb870c7bdd34bd3aefbb21.webp'} />
+
+[七牛雲](https://www.qiniu.com)作為老牌雲服務廠商，提供高性價比穩定的即時、批量 AI 推理服務，簡單易用。
+
+本文件將指導你如何在 LobeHub 中使用七牛雲大模型:
+
+<Steps>
+  ### 步驟一：[獲取 AI 大模型 API 密鑰](https://developer.qiniu.com/aitokenapi/12884/how-to-get-api-key)
+
+  - 方法一：使用控制檯獲取
+
+    1. [註冊七牛帳號](https://s.qiniu.com/umqq6n?ref=developer.qiniu.com\&s_path=%2Faitokenapi%2F12884%2Fhow-to-get-api-key)
+    2. [前往控制檯獲取 API Key](https://portal.qiniu.com/ai-inference/api-key)
+       <Image alt={'獲取 API Key'} inStep src={'https://static.sufy.com/lobehub/438758098-119239c1-8552-420a-9906-de2eab739fc6.png'} />
+
+  - 方法二：使用小程式獲取
+    1. 開啟七牛小程式
+    2. 快速登入帳號
+    3. 點擊【我的】底部導航欄
+    4. 點擊【我的控制檯】
+    5. 進入【AI 推理】
+    6. 查看和複製你的 API 密鑰
+
+  ### 步驟二：在 LobeHub 中設定七牛雲大模型服務
+
+  - 存取 LobeHub 的`設定`界面
+  - 在`AI 服務商`下找到`七牛雲`的設定項
+
+  <Image alt={'填寫 API 密鑰'} inStep src={'https://static.sufy.com/lobehub/439049319-6ae44f36-bf48-492a-a6aa-7be72f4a29d8.png'} />
+
+  - 開啟七牛雲並填入獲得的 API 密鑰
+  - 為你的 AI 助手選擇一個七牛雲的大模型即可開始對話
+
+  <Image alt={'選擇七牛雲大模型並開始對話'} inStep src={'https://static.sufy.com/lobehub/439048945-c608eb9e-6ee1-4611-9df7-2075e95d069b.png'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，請參考[七牛雲的相關費用政策](https://developer.qiniu.com/aitokenapi/12898/ai-token-api-pricing)。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用七牛雲提供的大模型進行對話了。

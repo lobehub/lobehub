@@ -1,0 +1,72 @@
+---
+title: LobeHub 知識庫 / 檔案上傳
+description: 瞭解 LobeHub 的檔案上傳和知識庫管理核心組件，助力成功部署。
+tags:
+  - LobeHub
+  - 檔案上傳
+  - 知識庫管理
+  - PostgreSQL
+  - OpenAI
+---
+
+# 知識庫 / 檔案上傳
+
+LobeHub 支援檔案上傳 / 知識庫管理。該功能依賴於以下核心技術組件，瞭解這些組件將有助於你成功部署和維護知識庫系統。
+
+## 核心組件
+
+### 1. PostgreSQL 與 PGVector
+
+PostgreSQL 是一個強大的開源關係型資料庫系統，而 PGVector 是其擴充功能，為向量操作提供支援。
+
+- **用途**：存儲結構化資料和向量索引
+- **部署建議**：使用 ParadeDB Docker 鏡像可以快速部署包含 pgvector 和 pg\_search 插件的 PostgreSQL
+
+示例部署腳本：
+
+```
+docker run -p 5432:5432 -d --name pg -e POSTGRES_PASSWORD=mysecretpassword paradedb/paradedb:latest-pg17
+```
+
+- **注意事項**：確保分配足夠的資源以處理向量操作
+
+### 2. S3 相容的對象存儲
+
+S3（或相容 S3 協議的存儲服務）用於存儲上傳的檔案。
+
+- **用途**：存儲原始檔案
+- **選項**：可以使用 AWS S3、RustFS、ceph 或其他相容 S3 協議的存儲服務
+- **注意事項**：設定適當的存取權限和安全策略
+
+### 3. OpenAI Embedding
+
+OpenAI 的嵌入（Embedding）服務用於將文字轉化為向量表示。
+
+<Callout type={'info'}>
+  LobeHub 當前預設使用 OpenAI `text-embedding-3-small` 模型，請確保你的 API Key 可以存取該模型。
+</Callout>
+
+- **用途**：生成文字的向量表示，用於語義搜尋
+- **注意事項**：
+  - 需要有效的 OpenAI API 密鑰
+  - 實施適當的 API 調用限制和錯誤處理機制
+
+### 4. Unstructured.io（可選）
+
+Unstructured.io 是一個強大的文件處理工具。
+
+- **用途**：處理複雜的文件格式，提取結構化資訊
+- **應用場景**：處理 PDF、Word 等非純文字格式的文件
+- **注意事項**：評估處理需求，根據文件複雜度決定是否部署
+
+通過正確設定和整合這些核心組件，您可以為 LobeHub 構建一個強大、高效的知識庫系統。每個組件都在整體架構中扮演著關鍵角色，共同支援高級的文件管理和智慧檢索功能。
+
+### 5. 自訂 Embedding（可選）
+
+- **用途**: 使用不同的嵌入模型（Embedding）生成文字的向量表示，用於語義搜尋
+- **選項**: 支援的模型提供商:zhipu/github/openai/bedrock/ollama
+- **部署建議**: 使用環境變數設定預設嵌入模型
+
+```
+environment: DEFAULT_FILES_CONFIG=embedding_model=openai/embedding-text-3-small
+```

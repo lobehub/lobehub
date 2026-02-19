@@ -1,0 +1,137 @@
+---
+title: 在 Dokploy 上部署 LobeHub
+description: 本文詳細介紹如何在 Dokploy 中部署 LobeHub，包括資料庫設定、身分驗證服務設定的設定步驟。
+tags:
+  - 伺服端資料庫
+  - Postgres
+  - Better Auth
+  - Dokploy部署
+  - 資料庫設定
+  - 身分驗證服務
+  - 環境變數設定
+---
+
+# 在 Dokploy 上部署 LobeHub
+
+本文將詳細介紹如何在 Dokploy 中部署 LobeHub。
+
+## 一、準備工作
+
+### 部署 Dokploy 並進行相關設定
+
+```shell
+curl -sSL https://dokploy.com/install.sh | sh
+```
+
+1. 在 Dokploy 的 Settings / Git 處根據提示將 Github 綁定到 Dokploy
+
+![](/blog/assets0f97d1dfccd5ba07172aff71ff9acd7b.webp)
+
+2. 進入 Projects 界面建立一個 Project
+
+![](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
+
+### 設定 S3 存儲服務
+
+在伺服端資料庫中我們需要設定 S3 存儲服務來存儲檔案，詳細設定教學請參考 使用 Vercel 部署中 [設定 S3 儲存服務](https://lobehub.com/zh/docs/self-hosting/platform/vercel#%E4%B8%89%E3%80%81-%E9%85%8D%E7%BD%AE-s-3-%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1)。設定完成後你將獲得以下環境變數：
+
+```shell
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
+S3_ENDPOINT=
+S3_BUCKET=
+S3_ENABLE_PATH_STYLE=
+```
+
+### 設定 KEY\_VAULTS\_SECRET 環境變數
+
+`KEY_VAULTS_SECRET` 用於加密使用者存儲的 API Key 等敏感資訊。點擊下方按鈕一鍵生成：
+
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+### 設定身分驗證環境變數
+
+準備以下身分驗證環境變數（基於 [Better Auth](https://www.better-auth.com)）：
+
+點擊下方按鈕一鍵生成 `AUTH_SECRET`（會話加密密鑰）：
+
+<GenerateSecret envName="AUTH_SECRET" />
+
+同時需要設定 `JWKS_KEY` 環境變數，用於簽名和驗證 JWT。點擊下方按鈕一鍵生成：
+
+<GenerateJWKSKey />
+
+<Callout type={'info'}>
+  如需 SSO 登入、魔法連結登入、信箱驗證等高級功能，請參閱 [身分驗證服務](/zh/docs/self-hosting/auth)。
+</Callout>
+
+## 二、在 Dokploy 上部署資料庫
+
+進入前面建立的 Project，點擊 Create Service 選擇 Database，在 Database 界面選擇 PostgreSQL ，然後設定資料庫名、使用者、密碼，在 Docker image 中填入 `paradedb/paradedb:latest-pg17` 最後點擊 Create 建立資料庫。
+
+![](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
+
+進入建立的資料庫，在 External Credentials 設定一個未被佔用的連接埠，使其能能通過外部存取，否則 LobeHub 將無法連接到該資料庫。你可以在 External Host 查看 Postgres 資料庫連接 URL ，如下：
+
+```shell
+postgresql://postgres:wAbLxfXSwkxxxxxx@45.577.281.48:5432/postgres
+```
+
+最後點擊 Deploy 部署資料庫
+
+![](/blog/assets1b9283f9cc5fc5073ff9cffc24880e96.webp)
+
+## 在 Dokploy 上部署 LobeHub
+
+點擊 Create Service 選擇 Application，建立 LobeHub 應用程式
+
+![](/blog/assetsb33085e7553d2b7194005b102184553e.webp)
+
+進入建立的 LobeHub 應用程式，選擇你 fork 的 lobe-chat 項目及分支，點擊 Save 儲存
+
+![](/blog/assetsf0ebf396dbe9559eb3478f48f648a6e2.webp)
+
+切換到 Environment ，在其中填入環境變數，點擊儲存。
+
+![](/blog/assets6b67dabe7b9226cdff1bace5a3b8ab18.webp)
+
+```shell
+# 構建所必需的環境變數
+NIXPACKS_PKGS="bun"
+NIXPACKS_INSTALL_CMD="pnpm install"
+NIXPACKS_BUILD_CMD="NODE_OPTIONS='--max-old-space-size=8192' pnpm run build"
+NIXPACKS_START_CMD="pnpm start"
+
+APP_URL=
+
+# Postgres 資料庫相關設定
+DATABASE_DRIVER=node
+DATABASE_URL=
+
+# 使用上方生成的值
+KEY_VAULTS_SECRET=
+AUTH_SECRET=
+JWKS_KEY=
+
+# S3 相關設定
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
+S3_ENDPOINT=
+S3_BUCKET=
+S3_ENABLE_PATH_STYLE=
+
+```
+
+新增完環境變數並儲存後，點擊 Deploy 進行部署，你可以在 Deployments 處查看部署製程及日誌資訊
+
+![](/blog/assets7c3eab218c0823fa353b1cd23afe21c3.webp)
+
+部署成功後在 Domains 頁面，為你的 LobeHub 應用程式綁定自己的域名並申請證書。
+
+![](/blog/assetseebf66254337ce88357629c34e78c08d.webp)
+
+## 驗證 LobeHub 是否正常工作
+
+進入你的 LobeHub 網址，如果你點擊左上角登入，可以正常顯示登入彈窗，那麼說明你已經設定成功了，盡情享用吧～
+
+![](/blog/assets11a8089b511aaa61e8982dea0a3665c5.webp)

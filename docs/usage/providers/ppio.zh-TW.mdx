@@ -1,0 +1,55 @@
+---
+title: 在 LobeHub 中使用 PPIO 派歐雲 API Key
+description: >-
+  學習如何將 PPIO 派歐雲的 LLM API 整合到 LobeHub 中。跟隨以下步驟註冊 PPIO 帳號、建立 API Key、並在 LobeHub
+  中進行設定。
+tags:
+  - PPIO
+  - PPInfra
+  - DeepSeek
+  - Qwen
+  - Llama3
+  - API key
+  - Web UI
+---
+
+# 在 LobeHub 中使用 PPIO 派歐雲
+
+<Image alt={'在 LobeHub 中使用 PPIO'} cover src={'/blog/assets06d4e543cbaca9a2762923a23b2cae67.webp'} />
+
+[PPIO 派歐雲](https://ppinfra.com/user/register?invited_by=RQIMOC\&utm_source=github_LobeHub)提供穩定、高性價比的開源模型 API 服務，支援 DeepSeek 全系列、Llama、Qwen 等行業領先大模型。
+
+本文件將指導你如何在 LobeHub 中使用 PPIO:
+
+<Steps>
+  ### 步驟一：註冊 PPIO 派歐雲帳號並登入
+
+  - 存取 [PPIO 派歐雲](https://ppinfra.com/user/register?invited_by=RQIMOC\&utm_source=github_LobeHub) 並註冊帳號
+  - 註冊後，PPIO 會贈送 5 元（約 500 萬 tokens）的使用額度
+
+  <Image alt={'註冊 PPIO'} height={457} inStep src={'/blog/assets3ca963d92475f34b0789cfa50071bc52.webp'} />
+
+  ### 步驟二：建立 API 密鑰
+
+  - 存取 PPIO 派歐雲的 [密鑰管理頁面](https://ppinfra.com/settings/key-management) ，建立並且複製一個 API 密鑰.
+
+  <Image alt={'建立 PPIO API 密鑰'} inStep src={'/blog/assetsbd39adddc9a1cdb85ce4a0e37fa595c1.webp'} />
+
+  ### 步驟三：在 LobeHub 中設定 PPIO 派歐雲
+
+  - 存取 LobeHub 的 `設定` 界面
+  - 在 `AI 服務商` 下找到 `PPIO` 的設定項
+  - 開啟 PPIO 並填入獲得的 API 密鑰
+
+  <Image alt={'在 LobeHub 中輸入 PPIO API 密鑰'} inStep src={'/blog/assetsbfe7d519c29884b6699e89866e1db7e2.webp'} />
+
+  - 為你的助手選擇一個 PPIO 模型即可開始對話
+
+  <Image alt={'選擇並使用 PPIO 模型'} inStep src={'/blog/assets89d0dcbf5ffccd21086845cea3a514cc.webp'} />
+
+  <Callout type={'warning'}>
+    在使用過程中你可能需要向 API 服務提供商付費，PPIO 的 API 費用參考[這裡](https://ppinfra.com/llm-api?utm_source=github_lobe-chat\&utm_medium=github_readme\&utm_campaign=link)。
+  </Callout>
+</Steps>
+
+至此你已經可以在 LobeHub 中使用 PPIO 派歐雲提供的模型進行對話了。

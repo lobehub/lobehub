@@ -1,0 +1,283 @@
+---
+title: 在 Vercel 上部署 LobeHub
+description: 本文詳細介紹如何在 Vercel 中部署 LobeHub，包括資料庫設定、身分驗證服務設定和 S3 存儲服務的設定步驟。
+tags:
+  - 伺服端資料庫
+  - Postgres
+  - Better Auth
+  - S3存儲服務
+  - Vercel部署
+  - 資料庫設定
+  - 身分驗證服務
+  - 環境變數設定
+---
+
+# 在 Vercel 上部署 LobeHub
+
+本文將詳細介紹如何在 Vercel 中部署 LobeHub，包括： 1）資料庫設定；2）身分驗證服務設定；3） S3 存儲服務的設定步驟。
+
+<Callout type={'warning'}>
+  進行後續操作前，請務必確認以下事項：
+
+  - 導出所有資料，部署伺服端資料庫後，原有使用者資料無法自動遷移，只能提前備份後進行手動導入！
+  - 設定伺服端資料庫所需要的環境變數時，需全部填入後再進行部署，否則可能遭遇資料庫遷移問題！
+</Callout>
+
+## 一、 設定資料庫
+
+<Steps>
+  ### 準備伺服端資料庫實例，獲取連接 URL
+
+  在部署之前，請確保你已經準備好 Postgres 資料庫實例，你可以選擇以下任一方式：
+
+  - `A.` 使用 Vercel / Neon 等 Serverless Postgres 實例；
+  - `B.` 使用 Docker 等自部署 Postgres 實例。
+
+  兩者的設定方式略有不同，在下一步會有所區分。
+
+  ### 在 Vercel 中新增環境變數
+
+  在 Vercel 的部署環境變數中，新增 `DATABASE_URL` 等環境變數，將上一步準備好的 Postgres 資料庫連接 URL 填入其中。資料庫連接 URL 的通常格式為 `postgres://username:password@host:port/database`。
+
+  <Tabs items={['Serverless Postgres', 'Node Postgres']}>
+    <Tab>
+      <Callout type={'warning'}>
+        請確認您的供應商所提供的 `Postgres` 類型，若為 `Node Postgres`，請切換到 `Node Postgres` Tab 。
+      </Callout>
+
+      Serverless Postgres 需要填寫的變數如下：
+
+      ```shell
+      # Serverless Postgres DB Url
+      DATABASE_URL=
+      ```
+
+      在 Vercel 中填寫的示例如下：
+
+      <Image alt={'新增 Serverless Postgres DATABASE_URL'} src={'/blog/assets28616219/d4a710cd-6404-4196-90d0-cd08ca385074.webp'} />
+    </Tab>
+
+    <Tab>
+      Node Postgres 需要填寫的變數如下：
+
+      ```shell
+      # Node Postgres DB Url
+      DATABASE_URL=
+
+      # 指定 Postgres database driver 為 node
+      DATABASE_DRIVER=node
+      ```
+
+      在 Vercel 中填寫的示例如下：
+
+      <Image alt={'新增 Node Postgres DATABASE_URL'} src={'/blog/assets28616219/1c689738-809b-4199-b305-ba5770d39da7.webp'} />
+    </Tab>
+  </Tabs>
+
+  <Callout type={'info'}>
+    如果希望連接資料庫時啟用 SSL
+    ，請自行參考[連結](https://stackoverflow.com/questions/14021998/using-psql-to-connect-to-postgresql-in-ssl-mode)進行設定
+  </Callout>
+
+  ### 新增 `KEY_VAULTS_SECRET` 環境變數
+
+  在完成資料庫 `DATABASE_URL` 環境變數新增後，需要新增一個 `KEY_VAULTS_SECRET` 環境變數。該變數用於加密使用者存儲的 apikey 等敏感資訊。點擊下方按鈕一鍵生成：
+
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+  同樣需要將其新增到 Vercel 環境變數中。
+
+  ### 新增 `APP_URL` 環境變數
+
+  該部分最後需要新增 `APP_URL` 環境變數，用於指定 LobeHub 應用程式的 URL 位址。
+</Steps>
+
+## 二、 設定身分驗證服務
+
+伺服端資料庫需要搭配使用者身分驗證服務才可以正常使用。因此需要設定對應的身分驗證服務。
+
+<Steps>
+  ### 新增身分驗證環境變數
+
+  在 Vercel 的部署環境變數中，新增以下環境變數以啟用身分驗證（基於 [Better Auth](https://www.better-auth.com)）：
+
+  點擊下方按鈕一鍵生成 `AUTH_SECRET`（會話加密密鑰）：
+
+  <GenerateSecret envName="AUTH_SECRET" />
+
+  同時需要設定 `JWKS_KEY` 環境變數，用於簽名和驗證 JWT。點擊下方按鈕一鍵生成：
+
+  <GenerateJWKSKey />
+
+  設定這些變數後，使用者即可使用信箱和密碼註冊登入。
+
+  <Callout type={'info'}>
+    如需 SSO 登入、魔法連結登入、信箱驗證等高級功能，請參閱 [身分驗證服務](/zh/docs/self-hosting/auth)。
+  </Callout>
+</Steps>
+
+這樣，你已經成功設定了身分驗證服務。接下來我們將設定 S3 存儲服務。
+
+## 三、 設定 S3 存儲服務
+
+在伺服端資料庫中我們需要設定 S3 存儲服務來存儲檔案。
+
+<Callout type={'info'}>
+  在本文，S3 所指代的是指相容 S3 存儲方案，即支援 Amazon S3 API 的對象存儲系統，常見例如 Cloudflare
+  R2 、阿里雲 OSS 等均支援 S3 相容 API。
+</Callout>
+
+<Steps>
+  ### 設定並獲取 S3 存儲桶
+
+  你需要前往你的 S3 服務提供商（如 AWS S3、Cloudflare R2 等）並建立一個新的存儲桶（Bucket）。接下來以 Cloudflare R2 為例，介紹建立流程。
+
+  下圖是 Cloudflare R2 的界面：
+
+  <Image alt={'Cloudflare R2 存儲界面'} src={'/blog/assets28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee.webp'} />
+
+  建立存儲桶時將指定其名稱，然後點擊建立。
+
+  <Image alt={'R2 建立存儲桶'} src={'/blog/assets28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7.webp'} />
+
+  ### 獲取存儲桶相關環境變數
+
+  在 R2 存儲桶的設定中，可以看到桶設定的資訊：
+
+  <Image alt={'查看存儲桶的相關資訊'} src={'/blog/assets28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee.webp'} />
+
+  其對應的環境變數為：
+
+  ```shell
+  # 存儲桶的名稱
+  S3_BUCKET=LobeHub
+  # 存儲桶的請求端點(注意此處連結的路徑帶存儲桶名稱，必須刪除該路徑，或使用申請 S3 API token 頁面所提供的連結)
+  S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
+  ```
+
+  <Callout type={'warning'}>`S3_ENDPOINT`必須刪除其路徑，否則會無法存取所上傳檔案</Callout>
+
+  ### 獲取 S3 密鑰環境變數
+
+  你需要獲取 S3 的存取密鑰，以便 LobeHub 的伺服端有權限存取 S3 存儲服務。在 R2 中，你可以在帳號詳情中設定存取密鑰：
+
+  <Image alt={'查看存儲桶的存取秘鑰'} src={'/blog/assets28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d.webp'} />
+
+  點擊右上角按鈕建立 API token，進入建立 API Token 頁面
+
+  <Image alt={'建立對應 API token'} src={'/blog/assets28616219/7b0ea46c-5157-40a8-888f-f47664a4884f.webp'} />
+
+  鑑於我們的伺服端資料庫需要讀寫 S3 存儲服務，因此權限需要選擇`對象讀與寫`，然後點擊建立。
+
+  <Image alt={'設定 API token 權限'} src={'/blog/assets28616219/d6f5a918-7b50-4d6e-83a6-3894ab930ddf.webp'} />
+
+  建立完成後，就可以看到對應的 S3 API token
+
+  <Image alt={'複製 API token'} src={'/blog/assets28616219/763b18f9-2b5f-44bb-a479-9b56d46f7397.webp'} />
+
+  其對應的環境變數為：
+
+  ```shell
+  S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
+  S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
+  ```
+
+  ### 在 Vercel 中新增對應的環境變數
+
+  不同 S3 服務商獲取所需環境變數的步驟可能有所不同，但最終獲得到的環境變數應該都是一致的：
+
+  <Callout type={'warning'}>URL 的`https://`不可缺失，須保持 URL 的完整性</Callout>
+
+  ```shell
+  # S3 秘鑰
+  S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
+  S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
+
+  # 存儲桶的名稱
+  S3_BUCKET=LobeHub
+  # 存儲桶的請求端點
+  S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
+  # 桶的區域，如 us-west-1，一般來說不需要新增，但某些服務商則需要設定
+  # S3_REGION=us-west-1
+  ```
+
+  然後將上述環境變數填入 Vercel 的環境變數中：
+
+  <Image alt={'在  Vercel 中新增 S3 的環境變數'} src={'/blog/assets28616219/cd74152d-0ae8-44fd-b815-3307c56a3c18.webp'} />
+
+  ### 設定跨域
+
+  由於 S3 存儲服務往往是一個獨立的網址，因此需要設定跨域存取。
+
+  在 R2 中，你可以在存儲桶的設定中找到跨域設定：
+
+  <Image alt={'Cloudflare R2 的跨域設定'} src={'/blog/assets28616219/ab008be7-26b2-4b78-8bd9-24301bf34d23.webp'} />
+
+  新增跨域規則，允許你的域名（在上文是 `https://your-project.vercel.app`）來源的請求：
+
+  <Image alt={'設定允許你的站點域名'} src={'/blog/assets28616219/dfcc2cb3-2958-4498-a8a4-51bec584fe7d.webp'} />
+
+  示例設定如下：
+
+  ```json
+  [
+    {
+      "AllowedOrigins": ["https://your-project.vercel.app"],
+      "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
+      "AllowedHeaders": ["*"]
+    }
+  ]
+  ```
+
+  設定後點擊儲存即可。
+</Steps>
+
+## 四、部署並驗證
+
+通過上述步驟之後，我們應該就完成了伺服端資料庫的設定。接下來我們可以將 LobeHub 部署到 Vercel 上，然後存取你的 Vercel 連結，驗證伺服端資料庫是否正常工作。
+
+<Steps>
+  ### 重新部署最新的 commit
+
+  設定好環境變數後，你需要重新部署最新的 commit，並等待部署完成。
+
+  <Image alt={'重新部署最新的 commit'} src={'/blog/assets28616219/b3a78112-adc8-4837-b4e3-48f67058f16e.webp'} />
+
+  ### 檢查功能是否正常
+
+  如果你點擊左上角登入，可以正常顯示登入彈窗，那麼說明你已經設定成功了，盡情享用吧～
+
+  <Image alt={'使用者登入彈窗'} src={'/blog/assets28616219/da84edc3-46f7-4e2b-a0cd-dc33a98bf5cb.webp'} />
+
+  <Image alt={'登入成功狀態'} src={'/blog/assets28616219/9cb5150d-6e1e-4c59-9a18-4e418dce1a5d.webp'} />
+</Steps>
+
+## 附錄
+
+### 伺服端資料庫環境變數一覽
+
+為方便一鍵複製，在此彙總設定伺服端資料庫所需要的環境變數：
+
+```shell
+APP_URL=https://your-project.com
+
+# Postgres 資料庫 URL
+DATABASE_URL=
+KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+
+# 身分驗證
+AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+JWKS_KEY='{"keys":[...]}'
+
+# S3 相關設定
+# S3 秘鑰
+S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
+S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
+
+# 存儲桶的名稱
+S3_BUCKET=LobeHub
+# 存儲桶的請求端點
+S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
+# 桶的區域，如 us-west-1，一般來說不需要新增，但某些服務商則需要設定
+# S3_REGION=us-west-1
+```

@@ -1,0 +1,107 @@
+---
+title: 在 LobeHub 中設定 Microsoft 身分驗證
+description: >-
+  學習如何在 LobeHub 中設定 Microsoft (Entra ID / Azure AD) SSO，包括在 Azure Portal
+  建立應用程式和設定環境變數。
+tags:
+  - Microsoft
+  - 身分驗證
+  - Azure AD
+  - LobeHub
+  - 單點登入
+---
+
+# 設定 Microsoft 身分驗證
+
+<Steps>
+  ### 建立 Microsoft Entra ID 應用程式
+
+  1. 前往 [Microsoft Entra 管理中心](https://entra.microsoft.com/)
+  2. 導航到 **Identity** > **Applications** > **App registrations** > **New registration**
+  3. 填寫應用程式名稱
+  4. 選擇支援的帳戶類型：
+     - **Single tenant**：僅限組織內使用者
+     - **Multitenant**：任何 Azure AD 組織的使用者
+     - **Multitenant + personal**：也包括個人 Microsoft 帳戶
+
+  <Image alt="應用程式註冊" inStep src="https://github.com/lobehub/lobe-chat/assets/13883964/4f9d83bd-b3fc-4abc-bcf4-ccbad65c219d" />
+
+  ### 設定重新導向 URI
+
+  在 **Redirect URI** 部分：
+
+  1. 選擇 **Web** 作為平臺
+  2. 輸入回調 URL
+
+  <Callout type={'info'}>
+    回調 URL 格式：
+
+    - 本地開發: `http://localhost:3210/api/auth/callback/microsoft`
+    - 生產環境: `https://your-domain.com/api/auth/callback/microsoft`
+  </Callout>
+
+  點擊 **Register**。
+
+  ### 獲取應用程式憑證
+
+  建立後，查看 **Overview** 標籤頁：
+
+  <Image alt="應用程式概覽" inStep src="https://github.com/lobehub/lobe-chat/assets/13883964/48a0b702-05bd-4ce4-a007-a8ad00a36e5a" />
+
+  記錄：
+
+  - **Application (client) ID** - 即 `AUTH_MICROSOFT_ID`
+  - **Directory (tenant) ID** - 單租戶應用程式需要
+
+  ### 建立客戶端密鑰
+
+  1. 前往 **Certificates & secrets** > **Client secrets**
+  2. 點擊 **New client secret**
+  3. 填寫描述並選擇過期時間
+  4. 點擊 **Add**
+
+  <Image alt="建立客戶端密鑰" inStep src="https://github.com/lobehub/lobe-chat/assets/13883964/c9d66fa0-158c-4bd3-a1fa-969e638259d2" />
+
+  <Callout type={'warning'}>
+    立即複製客戶端密鑰的 **Value** - 之後將無法再次查看。
+  </Callout>
+
+  ### 設定環境變數
+
+  | 環境變數                           | 類型 | 描述                                     |
+  | ------------------------------ | -- | -------------------------------------- |
+  | `AUTH_SECRET`                  | 必選 | 會話加密密鑰，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS`           | 必選 | 填寫 `microsoft`                         |
+  | `AUTH_MICROSOFT_ID`            | 必選 | Application (client) ID                |
+  | `AUTH_MICROSOFT_SECRET`        | 必選 | 客戶端密鑰值                                 |
+  | `AUTH_MICROSOFT_AUTHORITY_URL` | 可選 | Microsoft Entra ID 的 Authority URL     |
+  | `AUTH_MICROSOFT_TENANT_ID`     | 可選 | 單租戶應用程式的 Directory (tenant) ID           |
+
+  <Callout type={'info'}>
+    **相容的環境變數**：為了向後相容，以下別名也支援：
+
+    - `AUTH_MICROSOFT_ENTRA_ID_ID` / `AUTH_MICROSOFT_ENTRA_ID_SECRET`
+    - `AUTH_AZURE_AD_ID` / `AUTH_AZURE_AD_SECRET`
+    - `AZURE_AD_CLIENT_ID` / `AZURE_AD_CLIENT_SECRET`
+  </Callout>
+
+  <Callout type={'tip'}>
+    前往 [📘 環境變數](/zh/docs/self-hosting/environment-variables/auth#microsoft)
+    可查閱相關變數詳情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功後，使用者將可以通過 Microsoft 身分認證並使用 LobeHub。
+</Callout>
+
+## 常見問題
+
+### 客戶端密鑰過期
+
+Microsoft 客戶端密鑰最長有效期為 24 個月。請記得在過期前輪換密鑰。
+
+## 相關資源
+
+- [Microsoft Entra 管理中心](https://entra.microsoft.com/)
+- [快速入門：註冊應用程式](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)

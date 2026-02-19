@@ -1,0 +1,50 @@
+---
+title: 在 LobeHub 中使用 Groq API Key
+description: 瞭解如何獲取 GroqCloud API Key，並在 LobeHub 中設定 Groq，體驗 Groq 強大的性能。
+tags:
+  - LLAMA3
+  - Qwen2
+  - API keys
+  - Web UI
+  - API Key
+---
+
+# 在 LobeHub 中使用 Groq
+
+<Image alt={'在 LobeHub 中使用 Groq'} cover src={'/blog/assets17870709/1d840e27-fa74-4e71-b777-330bf41d6dff.webp'} />
+
+Groq 的 [LPU 推理引擎](https://wow.groq.com/news_press/groq-lpu-inference-engine-leads-in-first-independent-llm-benchmark/) 在最新的獨立大語言模型（LLM）基準測試中表現卓越，以其驚人的速度和效率重新定義了 AI 解決方案的標準。通過 LobeHub 與 Groq Cloud 的整合，你現在可以輕鬆地利用 Groq 的技術，在 LobeHub 中加速大語言模型的執行。
+
+<Callout type={'info'}>
+  Groq LPU 推理引擎在內部基準測試中連續達到每秒 300 個令牌的速度，據 ArtificialAnalysis.ai
+  的基準測試確認，Groq 在吞吐量（每秒 241 個令牌）和接收 100 個輸出令牌的總時間（0.8
+  秒）方面優於其他提供商。
+</Callout>
+
+本文件將指導你如何在 LobeHub 中使用 Groq：
+
+<Steps>
+  ### 獲取 GroqCloud API Key
+
+  首先，你需要到 [GroqCloud Console](https://console.groq.com/) 中獲取一個 API Key。
+
+  <Image alt={'獲取 GroqCloud API Key'} height={274} inStep src={'/blog/assets34400653/6942287e-fbb1-4a10-a1ce-caaa6663da1e.webp'} />
+
+  在控制檯的 `API Keys` 選單中建立一個 API Key。
+
+  <Image alt={'儲存 GroqCloud API Key'} height={274} inStep src={'/blog/assets34400653/eb57ca57-4f45-4409-91ce-9fa9c7c626d6.webp'} />
+
+  <Callout type={'warning'}>
+    妥善儲存彈窗中的 key，它只會出現一次，如果不小心丟失了，你需要重新建立一個 key。
+  </Callout>
+
+  ### 在 LobeHub 中設定 Groq
+
+  你可以在 `設定` -> `AI 服務商` 中找到 Groq 的設定選項，將剛才獲取的 API Key 填入。
+
+  <Image alt={'Groq 服務商設定'} height={274} inStep src={'/blog/assets34400653/88948a3a-6681-4a8d-9734-a464e09e4957.webp'} />
+</Steps>
+
+接下來，在助手的模型選項中，選中一個 Groq 支援的模型，就可以在 LobeHub 中體驗 Groq 強大的性能了。
+
+<Video alt={'選擇 Groq 模型'} src="/blog/assets28616219/b6b8226b-183f-4249-8255-663a5e9f5af4.mp4" />

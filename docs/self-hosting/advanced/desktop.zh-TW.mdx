@@ -1,0 +1,120 @@
+---
+title: 與 LobeHub 桌面端自動同步
+description: 設定 LobeHub 桌面端，獲取端同步體驗
+tags:
+  - LobeHub
+  - 桌面端
+  - 自託管
+  - OIDC
+  - 設定指南
+---
+
+# 與 LobeHub 桌面端自動同步
+
+LobeHub 桌面端為使用者提供了更好的使用體驗，同時也擴充功能了 LobeHub 的能力邊界，允許使用者在離線環境下使用 LobeHub。本文件將指導您如何設定 LobeHub 桌面端以及如何將其與自託管實例連接。
+
+## 系統要求
+
+LobeHub 桌面端使用 Electron 構建，支援以下作業系統：
+
+- Windows
+- macOS
+- Linux（部分發行版）
+
+## 桌面端版本說明
+
+LobeHub 桌面端的版本發佈遵循以下邏輯：
+
+- **Beta 版本**：所有合併到 main 分支並自動發佈版本，都會自動建立為 LobeHub 桌面端的 Beta 版本
+- **Stable 版本**：開發團隊會通過手動打標來定期發佈穩定版本
+
+如果您希望獲得最新功能，可以使用 Beta 版本；如果您注重穩定性，請使用 Stable 版本。
+
+## 與自託管實例連接
+
+LobeHub 桌面端可以與您自託管的 LobeHub 實例連接，以便您可以在桌面端使用您的自託管設定。
+
+### 準備工作
+
+在將桌面端與自託管實例連接前，您需要確保您的自託管實例已正確設定 OIDC 相關環境變數。
+
+<Callout>請確保您的自託管實例版本為 1.83.6 或更高，以支援桌面端連接功能。</Callout>
+
+#### OIDC 環境變數設定
+
+您需要在自託管實例中新增以下`ENABLE_OIDC` 和 `JWKS_KEY` 這兩個環境變數：
+
+```bash
+ENABLE_OIDC=1
+```
+
+點擊下方按鈕一鍵生成 `JWKS_KEY`：
+
+<GenerateJWKSKey />
+
+將生成的環境變數新增到您的部署設定中。
+
+<Callout>如果您之前已設定 `OIDC_JWKS_KEY`，無需修改。系統會自動回退使用 `OIDC_JWKS_KEY`（向後相容）。</Callout>
+
+如果您使用一鍵部署方式（如 Vercel、Railway 等平臺）部署 LobeHub，您需要：
+
+1. 將上述環境變數新增到部署平臺的環境變數設定中
+2. 對於 Vercel 部署，請確保 `APP_URL` 環境變數設定為你的域名 URL，這對於正確處理認證回調至關重要
+
+### 連接步驟
+
+1. 開啟 LobeHub 桌面端
+2. 點擊右上角 wifi 圖示
+3. 輸入您的自託管實例位址（例如：`https://your-LobeHub-instance.com`）
+4. 點擊 "連接" 按鈕
+5. 您將被重新導向到登入頁面，完成授權後即可使用您的自託管設定
+
+## 常見問題
+
+### 502 Bad Gateway
+
+**問題：** 點擊授權按鈕後，跳轉到 `/oidc/consent` 路徑時出現 502 Bad Gateway 錯誤。
+
+**解決方案：**
+
+- 確認您已經正確設定了 `ENABLE_OIDC=1` 和 `JWKS_KEY` 環境變數
+- 確保 `JWKS_KEY` 是有效的 JSON 格式，沒有額外的單引號
+- 檢查您的伺服端日誌，查看具體錯誤訊息
+
+如果您使用 Nginx 作為反向代理，可能是請求頭太大導致的問題。可以嘗試在 Nginx 設定中新增以下設定：
+
+```nginx
+proxy_buffer_size   16k;
+proxy_buffers       8 16k;
+proxy_busy_buffers_size 32k;
+```
+
+### invalid\_redirect\_uri 錯誤
+
+**問題：** 授權過程中遇到 "redirect\_uri did not match any of the client's registered redirect\_uris" 錯誤。
+
+**解決方案：**
+
+檢查 `APP_URL` 環境變數是否與您存取的 URL 一致
+
+### macOS 啟動卡住或閃退
+
+**問題：** 在 macOS 上，應用程式啟動後長時間卡住或閃退。
+
+**解決方案：**
+
+- 檢查您是否下載了正確的 macOS 架構版本：
+  - 對於 Apple Silicon (M3/M4 等) Mac，應使用 `arm64` 版本
+  - 對於 Intel Mac，應使用 `x64` 版本
+- 檔案名示例：
+  - Apple Silicon: `LobeHub-Beta-1.83.6-arm64.dmg` 或 `LobeHub-Beta-1.83.6-arm64-mac.zip`
+  - Intel: `LobeHub-Beta-1.83.6-x64.dmg` 或 `LobeHub-Beta-1.83.6-mac.zip`
+
+### 圖片載入問題
+
+**問題：** 使用 Docker 部署的伺服端，桌面端連接後無法載入頭像或其他圖片資源。
+
+**解決方案：**
+
+- 如果您使用 Minio 作為存儲，需要在 Minio 設定中允許跨域請求
+- 在您的 Minio 服務中新增適當的 CORS 設定
