@@ -35,7 +35,7 @@ tags:
 
 ### Accounts 表
 
-`accounts` 表存儲認證提供商連接。不同的 SSO 提供商和信箱密碼認證都被視為獨立的「帳號」，關聯到同一個使用者。
+`accounts` 表儲存認證提供商連接。不同的 SSO 提供商和信箱密碼認證都被視為獨立的「帳號」，關聯到同一個使用者。
 
 帳號示例：
 
@@ -92,7 +92,7 @@ tags:
 **示例場景：**
 
 - 遷移前：使用者將 Google（`a@gmail.com`）和 Microsoft（`b@outlook.com`）關聯到同一個使用者
-- `users` 表存儲主信箱：`a@gmail.com`
+- `users` 表儲存主信箱：`a@gmail.com`
 - 簡單遷移後：
   - 使用 `a@gmail.com` 登入 → ✅ 關聯到現有使用者
   - 使用 `b@outlook.com` 登入 → ❌ 建立**新使用者**（沒有帳號記錄將 `b@outlook.com` 關聯到原使用者）
@@ -159,7 +159,7 @@ tags:
    DELETE FROM users WHERE id = 'new-user-id';
    ```
 
-3. 使用你的**主信箱**（存儲在 `users` 表中的信箱）登入
+3. 使用你的**主信箱**（儲存在 `users` 表中的信箱）登入
 
 4. 登入後，進入 **設定 → 個人資料 → 關聯帳號** 重新關聯你的副帳號
 

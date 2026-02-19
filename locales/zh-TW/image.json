@@ -31,7 +31,7 @@
   "generation.actions.delete": "刪除",
   "generation.actions.deleteBatch": "刪除批次",
   "generation.actions.download": "下載",
-  "generation.actions.downloadFailed": "下載遇到了問題。你可以檢查網路或存儲服務設定後重試",
+  "generation.actions.downloadFailed": "下載遇到了問題。你可以檢查網路或儲存服務設定後重試",
   "generation.actions.errorCopied": "錯誤訊息已複製到剪貼簿",
   "generation.actions.errorCopyFailed": "複製遇到了問題。你可以再試一次",
   "generation.actions.generate": "生成",

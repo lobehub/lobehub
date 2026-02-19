@@ -1,44 +1,44 @@
 ---
-title: 設定 Cloudflare R2 存儲服務
-description: 詳細步驟設定 Cloudflare R2 存儲服務，確保檔案存儲順利進行。
+title: 設定 Cloudflare R2 儲存服務
+description: 詳細步驟設定 Cloudflare R2 儲存服務，確保檔案儲存順利進行。
 tags:
   - Cloudflare R2
-  - S3 存儲
-  - 檔案存儲
+  - S3 儲存
+  - 檔案儲存
   - 環境變數
 ---
 
-# 設定 Cloudflare R2 存儲服務
+# 設定 Cloudflare R2 儲存服務
 
-在伺服端資料庫中我們需要設定 S3 存儲服務來存儲檔案。
+在伺服端資料庫中我們需要設定 S3 儲存服務來儲存檔案。
 
 ## 設定步驟
 
 <Steps>
-  ### 設定並獲取 S3 存儲桶
+  ### 設定並獲取 S3 儲存桶
 
-  你需要前往你的 S3 服務提供商（如 AWS S3、Cloudflare R2 等）並建立一個新的存儲桶（Bucket）。接下來以 Cloudflare R2 為例，介紹建立流程。
+  你需要前往你的 S3 服務提供商（如 AWS S3、Cloudflare R2 等）並建立一個新的儲存桶（Bucket）。接下來以 Cloudflare R2 為例，介紹建立流程。
 
   下圖是 Cloudflare R2 的界面：
 
-  <Image alt={'Cloudflare R2 存儲界面'} src={'/blog/assets28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee.webp'} />
+  <Image alt={'Cloudflare R2 儲存界面'} src={'/blog/assets28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee.webp'} />
 
-  建立存儲桶時將指定其名稱，然後點擊建立。
+  建立儲存桶時將指定其名稱，然後點擊建立。
 
-  <Image alt={'R2 建立存儲桶'} src={'/blog/assets28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7.webp'} />
+  <Image alt={'R2 建立儲存桶'} src={'/blog/assets28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7.webp'} />
 
-  ### 獲取存儲桶相關環境變數
+  ### 獲取儲存桶相關環境變數
 
-  在 R2 存儲桶的設定中，可以看到桶設定的資訊：
+  在 R2 儲存桶的設定中，可以看到桶設定的資訊：
 
-  <Image alt={'查看存儲桶的相關資訊'} src={'/blog/assets28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee.webp'} />
+  <Image alt={'查看儲存桶的相關資訊'} src={'/blog/assets28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee.webp'} />
 
   其對應的環境變數為：
 
   ```shell
-  # 存儲桶的名稱
+  # 儲存桶的名稱
   S3_BUCKET=LobeHub
-  # 存儲桶的請求端點(注意此處連結的路徑帶存儲桶名稱，必須刪除該路徑，或使用申請 S3 API token 頁面所提供的連結)
+  # 儲存桶的請求端點(注意此處連結的路徑帶儲存桶名稱，必須刪除該路徑，或使用申請 S3 API token 頁面所提供的連結)
   S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
   ```
 
@@ -46,15 +46,15 @@ tags:
 
   ### 獲取 S3 密鑰環境變數
 
-  你需要獲取 S3 的存取密鑰，以便 LobeHub 的伺服端有權限存取 S3 存儲服務。在 R2 中，你可以在帳號詳情中設定存取密鑰：
+  你需要獲取 S3 的存取密鑰，以便 LobeHub 的伺服端有權限存取 S3 儲存服務。在 R2 中，你可以在帳號詳情中設定存取密鑰：
 
-  <Image alt={'查看存儲桶的存取秘鑰'} src={'/blog/assets28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d.webp'} />
+  <Image alt={'查看儲存桶的存取秘鑰'} src={'/blog/assets28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d.webp'} />
 
   點擊右上角按鈕建立 API token，進入建立 API Token 頁面
 
   <Image alt={'建立對應 API token'} src={'/blog/assets28616219/7b0ea46c-5157-40a8-888f-f47664a4884f.webp'} />
 
-  鑑於我們的伺服端資料庫需要讀寫 S3 存儲服務，因此權限需要選擇`對象讀與寫`，然後點擊建立。
+  鑑於我們的伺服端資料庫需要讀寫 S3 儲存服務，因此權限需要選擇`對象讀與寫`，然後點擊建立。
 
   <Image alt={'設定 API token 權限'} src={'/blog/assets28616219/d6f5a918-7b50-4d6e-83a6-3894ab930ddf.webp'} />
 
@@ -71,9 +71,9 @@ tags:
 
   ### 設定跨域
 
-  由於 S3 存儲服務往往是一個獨立的網址，因此需要設定跨域存取。
+  由於 S3 儲存服務往往是一個獨立的網址，因此需要設定跨域存取。
 
-  在 R2 中，你可以在存儲桶的設定中找到跨域設定：
+  在 R2 中，你可以在儲存桶的設定中找到跨域設定：
 
   <Image alt={'Cloudflare R2 的跨域設定'} src={'/blog/assets28616219/ab008be7-26b2-4b78-8bd9-24301bf34d23.webp'} />
 
@@ -109,9 +109,9 @@ tags:
 S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
 S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
 
-# 存儲桶的名稱
+# 儲存桶的名稱
 S3_BUCKET=LobeHub
-# 存儲桶的請求端點
+# 儲存桶的請求端點
 S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
 # 桶的區域，如 us-west-1，一般來說不需要新增，但某些服務商則需要設定
 # S3_REGION=us-west-1

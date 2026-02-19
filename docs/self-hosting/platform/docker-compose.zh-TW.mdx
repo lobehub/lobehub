@@ -258,11 +258,11 @@ mv .env.zh-TW.example .env
 
 - LobeHub 自身
 - 帶有 PGVector 插件的 PostgreSQL 資料庫
-- 支援 S3 協議的對象存儲服務
+- 支援 S3 協議的對象儲存服務
 
 這些服務可以通過自建或者線上雲服務組合搭配，以滿足不同層次的部署需求。本文中，我們提供了完全基於開源自建服務的 Docker Compose 設定，你可以直接使用這份組態檔來啟動 LobeHub，也可以對之進行修改以適應你的需求。
 
-我們預設使用 [RustFS](https://github.com/rustfs/rustfs) 作為本地 S3 對象存儲服務。如需設定 SSO 登入認證服務，請參考 [身分驗證服務](/zh/docs/self-hosting/auth) 文件。
+我們預設使用 [RustFS](https://github.com/rustfs/rustfs) 作為本地 S3 對象儲存服務。如需設定 SSO 登入認證服務，請參考 [身分驗證服務](/zh/docs/self-hosting/auth) 文件。
 
 <Callout type="warning">
   如果你的網路拓撲較為複雜，請先確保在你的網路環境中這些服務能夠正常通訊。
@@ -272,7 +272,7 @@ mv .env.zh-TW.example .env
 
 以下我們將介紹執行這些服務的必要設定：
 
-1. S3 對象存儲
+1. S3 對象儲存
 
 LobeHub 需要為 LLM 服務提供商提供檔案對象的公網存取位址，因此你需要設定 S3 的 Endpoint：
 

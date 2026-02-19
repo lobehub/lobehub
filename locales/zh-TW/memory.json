@@ -34,7 +34,7 @@
   "context.description": "描述",
   "context.empty": "暫無情境記憶",
   "context.source": "來源",
-  "empty.description": "記憶的提取是漸進式的。積累更多對話，助理會更懂你。試著聊得更深入，讓助理捕捉和存儲有價值的資訊",
+  "empty.description": "記憶的提取是漸進式的。積累更多對話，助理會更懂你。試著聊得更深入，讓助理捕捉和儲存有價值的資訊",
   "empty.search": "未找到匹配的記憶",
   "empty.title": "暫無記憶",
   "experience.actions.delete": "刪除",

@@ -113,17 +113,17 @@ LobeHub 支援使用 Better Auth 設定外部身分驗證服務，供企業 / �
   前往 [環境變數](/zh/docs/self-hosting/environment-variables/auth#better-auth) 可查閱所有 Better Auth 相關變數詳情。
 </Callout>
 
-## 會話存儲設定（可選）
+## 會話儲存設定（可選）
 
-預設情況下，Better Auth 使用資料庫存儲會話資料。你可以設定 Redis 作為二級存儲，以獲得更好的性能和跨實例會話共享能力。
+預設情況下，Better Auth 使用資料庫儲存會話資料。你可以設定 Redis 作為二級儲存，以獲得更好的性能和跨實例會話共享能力。
 
 | 環境變數           | 類型 | 描述                              |
 | -------------- | -- | ------------------------------- |
-| `REDIS_URL`    | 可選 | Redis 連接 URL，設定後自動啟用 Redis 會話存儲 |
+| `REDIS_URL`    | 可選 | Redis 連接 URL，設定後自動啟用 Redis 會話儲存 |
 | `REDIS_PREFIX` | 可選 | Redis 鍵前綴，預設為 `lobechat`        |
 
 <Callout type={'info'}>
-  設定 Redis 後，認證會話資料將存儲在 Redis 中，可以實現跨多個服務實例的會話共享，並提升會話驗證速度。詳細設定請參閱 [Redis 快取服務](/zh/docs/self-hosting/advanced/redis)。
+  設定 Redis 後，認證會話資料將儲存在 Redis 中，可以實現跨多個服務實例的會話共享，並提升會話驗證速度。詳細設定請參閱 [Redis 快取服務](/zh/docs/self-hosting/advanced/redis)。
 </Callout>
 
 ## 常見問題

@@ -4,13 +4,13 @@ description: 瞭解如何設定 Redis 快取服務以優化 LobeHub 的性能和
 tags:
   - Redis
   - 快取
-  - 會話存儲
+  - 會話儲存
   - 性能優化
 ---
 
 # 設定 Redis 快取服務
 
-LobeHub 使用 Redis 作為高性能快取和會話存儲服務，用於優化系統性能和管理使用者認證狀態。
+LobeHub 使用 Redis 作為高性能快取和會話儲存服務，用於優化系統性能和管理使用者認證狀態。
 
 <Callout type={'info'}>
   LobeHub 使用標準 Redis 協議（通過 ioredis 庫），支援任何相容 Redis 協議的服務，包括 Redis
@@ -22,9 +22,9 @@ LobeHub 使用 Redis 作為高性能快取和會話存儲服務，用於優化�
 
 Redis 在 LobeHub 中主要用於以下場景：
 
-### 認證會話存儲
+### 認證會話儲存
 
-作為 Better Auth 的二級存儲，用於存儲使用者認證 session 和 token 資料。這可以實現：
+作為 Better Auth 的二級儲存，用於儲存使用者認證 session 和 token 資料。這可以實現：
 
 - 跨多個服務實例共享會話狀態
 - 更快的會話驗證速度

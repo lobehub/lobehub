@@ -589,7 +589,7 @@ LobeHub 提供了 Vercel 的 自託管版本 和 [Docker 鏡像][docker-release-
 
 我們提供了一個用於在您自己的私有設備上部署 LobeHub 服務的 Docker 鏡像。請使用以下命令啟動 LobeHub 服務：
 
-1. 建立一個用於存儲檔案的資料夾
+1. 建立一個用於儲存檔案的資料夾
 
 ```fish
 $ mkdir lobe-chat-db && cd lobe-chat-db

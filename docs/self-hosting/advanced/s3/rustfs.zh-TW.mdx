@@ -1,18 +1,18 @@
 ---
-title: 設定 RustFS 存儲服務
-description: 詳細步驟設定 RustFS 存儲服務，確保檔案存儲順利進行。
+title: 設定 RustFS 儲存服務
+description: 詳細步驟設定 RustFS 儲存服務，確保檔案儲存順利進行。
 tags:
   - RustFS
-  - S3 存儲
-  - 檔案存儲
+  - S3 儲存
+  - 檔案儲存
 ---
 
-# 設定 RustFS 存儲服務
+# 設定 RustFS 儲存服務
 
-在伺服端資料庫中我們需要設定 S3 存儲服務來存儲檔案。
+在伺服端資料庫中我們需要設定 S3 儲存服務來儲存檔案。
 
 <Callout type={'info'}>
-  由於近期 MinIO 的商業化策略調整，我們不再推薦使用 MinIO 作為 S3 存儲服務，建議所有仍在使用 MinIO 的使用者遷移至 [RustFS](https://rustfs.com/) 或者 [ceph](https://ceph.io/) 等開源的 S3 存儲服務或者騰訊雲對象存儲、Cloudflare R2 等雲服務商的 S3 存儲服務。
+  由於近期 MinIO 的商業化策略調整，我們不再推薦使用 MinIO 作為 S3 儲存服務，建議所有仍在使用 MinIO 的使用者遷移至 [RustFS](https://rustfs.com/) 或者 [ceph](https://ceph.io/) 等開源的 S3 儲存服務或者騰訊雲對象儲存、Cloudflare R2 等雲服務商的 S3 儲存服務。
 </Callout>
 
 ## 設定步驟
@@ -59,15 +59,15 @@ tags:
   docker compose up -d
   ```
 
-  ### 建立存儲桶
+  ### 建立儲存桶
 
   存取 RustFS 的 WebUI（`http://localhost:9001/`），即可自動跳轉到登入頁。輸入帳號（上述 `docker-compose.yml` 檔案中的 `RUSTFS_ACCESS_KEY`）、密碼（上述 `docker-compose.yml` 檔案中的 `RUSTFS_SECRET_KEY`），即可登入。
 
-  點擊左側邊欄的 `對象存儲` 選單，右上角 `建立存儲桶` 按鈕，建立一個新的存儲桶（Bucket）。建立存儲桶時將指定其名稱，下文以 `lobe` 為例。版本、對象鎖依照預設設定不開啟。
+  點擊左側邊欄的 `對象儲存` 選單，右上角 `建立儲存桶` 按鈕，建立一個新的儲存桶（Bucket）。建立儲存桶時將指定其名稱，下文以 `lobe` 為例。版本、對象鎖依照預設設定不開啟。
 
   <Image alt={"Create Bucket"} src={'https://github.com/user-attachments/assets/27c37617-a813-4de5-b0bf-c7167999c856'} />
 
-  點擊存儲桶 - `設定` 按鈕，選擇策略為 `自訂`，然後填入如下 JSON，設定存儲桶的權限為 `公有讀私有寫`：
+  點擊儲存桶 - `設定` 按鈕，選擇策略為 `自訂`，然後填入如下 JSON，設定儲存桶的權限為 `公有讀私有寫`：
 
   ```json
   {
@@ -125,7 +125,7 @@ tags:
 
   ### 設定環境變數
 
-  修改 LobeHub 的 `.env` 檔案，新增如下環境變數，即可完成設定，使用 RustFS 作為 S3 存儲服務：
+  修改 LobeHub 的 `.env` 檔案，新增如下環境變數，即可完成設定，使用 RustFS 作為 S3 儲存服務：
 
   ```shell
   # RustFS 的認證 Access Key / Secret Key
@@ -133,7 +133,7 @@ tags:
   S3_SECRET_ACCESS_KEY=<YOUR_SECRET_KEY>
   # RustFS API 的請求端點
   S3_ENDPOINT=https://lobe-s3-api.example.com
-  # 存儲桶的名稱
+  # 儲存桶的名稱
   S3_BUCKET=lobe
   S3_ENABLE_PATH_STYLE=1
   ```

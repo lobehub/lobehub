@@ -31,9 +31,9 @@ curl -sSL https://dokploy.com/install.sh | sh
 
 ![](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
 
-### 設定 S3 存儲服務
+### 設定 S3 儲存服務
 
-在伺服端資料庫中我們需要設定 S3 存儲服務來存儲檔案，詳細設定教學請參考 使用 Vercel 部署中 [設定 S3 儲存服務](https://lobehub.com/zh/docs/self-hosting/platform/vercel#%E4%B8%89%E3%80%81-%E9%85%8D%E7%BD%AE-s-3-%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1)。設定完成後你將獲得以下環境變數：
+在伺服端資料庫中我們需要設定 S3 儲存服務來儲存檔案，詳細設定教學請參考 使用 Vercel 部署中 [設定 S3 儲存服務](https://lobehub.com/zh/docs/self-hosting/platform/vercel#%E4%B8%89%E3%80%81-%E9%85%8D%E7%BD%AE-s-3-%E5%AD%98%E5%82%A8%E6%9C%8D%E5%8A%A1)。設定完成後你將獲得以下環境變數：
 
 ```shell
 S3_ACCESS_KEY_ID=
@@ -45,7 +45,7 @@ S3_ENABLE_PATH_STYLE=
 
 ### 設定 KEY\_VAULTS\_SECRET 環境變數
 
-`KEY_VAULTS_SECRET` 用於加密使用者存儲的 API Key 等敏感資訊。點擊下方按鈕一鍵生成：
+`KEY_VAULTS_SECRET` 用於加密使用者儲存的 API Key 等敏感資訊。點擊下方按鈕一鍵生成：
 
 <GenerateSecret envName="KEY_VAULTS_SECRET" />
 

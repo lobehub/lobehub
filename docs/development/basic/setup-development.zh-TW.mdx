@@ -76,7 +76,7 @@ cp .env.example.development .env
 根據需要編輯這些檔案：
 
 - `docker-compose/dev/.env` - Docker 服務設定（PostgreSQL、Redis、RustFS、SearXNG）
-- `.env` - Next.js 開發伺服器設定（資料庫連接、S3 存儲、認證等）
+- `.env` - Next.js 開發伺服器設定（資料庫連接、S3 儲存、認證等）
 
 #### 4. 啟動 Docker 服務
 
@@ -90,7 +90,7 @@ bun run dev:docker
 
 - PostgreSQL 資料庫（連接埠 5432）
 - Redis 快取（連接埠 6379）
-- RustFS 存儲（API 連接埠 9000，控制檯連接埠 9001）
+- RustFS 儲存（API 連接埠 9000，控制檯連接埠 9001）
 - SearXNG 搜尋（連接埠 8180）
 
 可以通過執行以下命令檢查所有 Docker 服務執行狀態：

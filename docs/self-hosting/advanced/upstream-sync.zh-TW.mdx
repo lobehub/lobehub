@@ -75,7 +75,7 @@ Docker 部署版本的升級非常簡單，只需要重新部署 LobeHub 的最�
 <Callout type={'tip'}>
   **重新部署的話，我本地的聊天記錄會丟失嗎？**
 
-  放心，不會的。LobeHub 的聊天記錄全部都存儲在你的本地瀏覽器中。因此使用 Docker 重新部署 LobeHub 時，你的聊天記錄並不會丟失。
+  放心，不會的。LobeHub 的聊天記錄全部都儲存在你的本地瀏覽器中。因此使用 Docker 重新部署 LobeHub 時，你的聊天記錄並不會丟失。
 </Callout>
 
 如果你希望自動化執行以上步驟，你可以參照下面的方法，利用 Crontab 定時來完成。具體步驟如下。
@@ -100,7 +100,7 @@ Docker 部署版本的升級非常簡單，只需要重新部署 LobeHub 的最�
   # 設定代理（可選）
   # export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 
-  # 拉取最新的鏡像並將輸出存儲在變數中
+  # 拉取最新的鏡像並將輸出儲存在變數中
   output=$(docker pull lobehub/lobehub:latest 2>&1)
 
   # 檢查拉取命令是否成功執行

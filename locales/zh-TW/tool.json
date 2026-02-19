@@ -147,7 +147,7 @@
   "search.summaryTooltip": "總結當前內容",
   "search.viewMoreResults": "查看更多 {{results}} 個結果",
   "securityBlacklist.awsCredentials": "存取 AWS 憑證可能洩露雲存取密鑰",
-  "securityBlacklist.browserCredentials": "存取瀏覽器憑證存儲可能洩露密碼",
+  "securityBlacklist.browserCredentials": "存取瀏覽器憑證儲存可能洩露密碼",
   "securityBlacklist.chownSystemDirs": "更改系統目錄的檔案所有權是危險操作",
   "securityBlacklist.ddDiskWrite": "向磁碟設備寫入隨機資料可能導致資料丟失",
   "securityBlacklist.directMemoryAccess": "直接記憶體存取極其危險",

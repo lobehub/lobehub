@@ -5,7 +5,7 @@
   "dbV1.action.start": "開始使用",
   "dbV1.action.upgrade": "一鍵升級",
   "dbV1.clear.confirm": "將清空本地資料（全域設定不受影響），且不可撤銷。建議先下載資料備份，再確認繼續",
-  "dbV1.description": "在新版本中，{{appName}} 的資料存儲有了巨大的飛躍。因此我們要對舊版資料進行升級，進而為你帶來更好的使用體驗。",
+  "dbV1.description": "在新版本中，{{appName}} 的資料儲存有了巨大的飛躍。因此我們要對舊版資料進行升級，進而為你帶來更好的使用體驗。",
   "dbV1.features.capability.desc": "基於 IndexedDB 技術，足以裝下你一生的會話訊息",
   "dbV1.features.capability.title": "大容量",
   "dbV1.features.performance.desc": "百萬條訊息自動索引，檢索查詢毫秒級回應",

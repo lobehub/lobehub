@@ -1,6 +1,6 @@
 ---
 title: 設定 Upstash Redis 服務
-description: 詳細指南：如何設定 Upstash Redis 用於 LobeHub 的快取和會話存儲。
+description: 詳細指南：如何設定 Upstash Redis 用於 LobeHub 的快取和會話儲存。
 tags:
   - Upstash
   - Redis
@@ -64,6 +64,6 @@ REDIS_PREFIX=lobechat
   請確保全全保管你的 Redis URL，切勿在客戶端程式碼或公開倉庫中暴露。
 </Callout>
 
-- **免費額度限制**：每天 10,000 次命令，256MB 存儲
+- **免費額度限制**：每天 10,000 次命令，256MB 儲存
 - **TLS 必需**：Upstash 要求 TLS 連接，確保設定 `REDIS_TLS=1`
 - **Regional vs Global**：如果使用者分佈全球，選擇 Global 可獲得更低延遲
