@@ -1,5 +1,5 @@
-import type { ModelParamsSchema } from '../standard-parameters';
-import type { AIChatModelCard, AIImageModelCard } from '../types';
+import { type ModelParamsSchema } from '../standard-parameters';
+import { type AIChatModelCard, type AIImageModelCard } from '../types';
 
 /**
  * gemini implicit caching not extra cost
@@ -186,7 +186,6 @@ const googleChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3 Pro is Google’s most powerful agent and vibe-coding model, delivering richer visuals and deeper interaction on top of state-of-the-art reasoning.',
     displayName: 'Gemini 3 Pro Preview',
-    enabled: true,
     id: 'gemini-3-pro-preview',
     maxOutput: 65_536,
     pricing: {
@@ -945,7 +944,6 @@ export const nanoBananaProParameters: ModelParamsSchema = {
   },
 };
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana Pro',
@@ -1047,8 +1045,6 @@ const googleImageModels: AIImageModelCard[] = [
     },
   },
 ];
-/* eslint-enable sort-keys-fix/sort-keys-fix */
-
 export const allModels = [...googleChatModels, ...googleImageModels];
 
 export default allModels;
