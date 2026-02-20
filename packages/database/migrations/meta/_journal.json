@@ -609,6 +609,13 @@
       "when": 1770955654188,
       "tag": "0086_video_generation_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1771386090928,
+      "tag": "0087_add_eval_benchmark",
+      "breakpoints": true
     }
   ],
   "version": "6"
