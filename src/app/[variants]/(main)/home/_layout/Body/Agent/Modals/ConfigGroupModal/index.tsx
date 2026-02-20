@@ -8,9 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import type { SessionGroupItemBase } from '@/types/session';
 
 import GroupItem from './GroupItem';
-import { SessionGroupItemBase } from '@/types/session';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -44,29 +44,29 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
     <Modal
       allowFullscreen
       footer={null}
-      onCancel={onCancel}
       open={open}
       title={t('sessionGroup.config')}
       width={400}
+      onCancel={onCancel}
     >
       <Flexbox>
         <SortableList
           items={sessionGroupItems}
-          onChange={(items: SessionGroupItemBase[]) => {
-            updateGroupSort(items);
-          }}
           renderItem={(item: SessionGroupItemBase) => (
             <SortableList.Item
+              horizontal
               align={'center'}
               className={styles.container}
               gap={4}
-              horizontal
               id={item.id}
               justify={'space-between'}
             >
               <GroupItem {...item} />
             </SortableList.Item>
           )}
+          onChange={(items: SessionGroupItemBase[]) => {
+            updateGroupSort(items);
+          }}
         />
         <Button
           block

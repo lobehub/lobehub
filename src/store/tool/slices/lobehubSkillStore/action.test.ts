@@ -1,3 +1,4 @@
+import type * as LobechatConstModule from '@lobechat/const';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +14,7 @@ beforeEach(() => {
 });
 
 vi.mock('@lobechat/const', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@lobechat/const')>();
+  const actual = await importOriginal<typeof LobechatConstModule>();
   return {
     ...actual,
     getLobehubSkillProviderById: vi.fn((id: string) => ({

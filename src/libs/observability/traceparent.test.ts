@@ -1,7 +1,7 @@
+import type * as OtelApiModule from '@lobechat/observability-otel/api';
 import { type Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// eslint-disable-next-line import/first
 import { getActiveTraceId, injectSpanTraceHeaders } from './traceparent';
 
 vi.mock('@lobechat/observability-otel/api', () => {
@@ -30,9 +30,7 @@ const mockSpan = (traceId: string, spanId: string) =>
 const headersWith = (...args: ConstructorParameters<typeof Headers>) => new Headers(...args);
 
 describe('injectSpanTraceHeaders', () => {
-  const api = vi.importMock<typeof import('@lobechat/observability-otel/api')>(
-    '@lobechat/observability-otel/api',
-  );
+  const api = vi.importMock<typeof OtelApiModule>('@lobechat/observability-otel/api');
 
   afterEach(() => {
     vi.resetAllMocks();
@@ -76,9 +74,7 @@ describe('injectSpanTraceHeaders', () => {
 });
 
 describe('getActiveTraceId', () => {
-  const api = vi.importMock<typeof import('@lobechat/observability-otel/api')>(
-    '@lobechat/observability-otel/api',
-  );
+  const api = vi.importMock<typeof OtelApiModule>('@lobechat/observability-otel/api');
 
   afterEach(() => {
     vi.resetAllMocks();

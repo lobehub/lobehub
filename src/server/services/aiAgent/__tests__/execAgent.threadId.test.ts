@@ -1,3 +1,4 @@
+import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
@@ -114,7 +115,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 
 // Mock model-bank
 vi.mock('model-bank', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('model-bank')>();
+  const actual = await importOriginal<typeof ModelBankModule>();
   return {
     ...actual,
     LOBE_DEFAULT_MODEL_LIST: [

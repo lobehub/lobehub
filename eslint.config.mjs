@@ -61,6 +61,12 @@ export default eslint(
       'react/no-unknown-property': 0,
       'regexp/match-any': 0,
       'unicorn/better-regex': 0,
+      '@typescript-eslint/consistent-type-imports': [
+        2,
+        {
+          fixStyle: 'separate-type-imports',
+        },
+      ],
     },
   },
   // MDX files

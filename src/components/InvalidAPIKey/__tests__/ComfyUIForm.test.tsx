@@ -1,3 +1,4 @@
+import type * as AntdStyleModule from 'antd-style';
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +20,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('antd-style', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('antd-style')>();
+  const actual = await importOriginal<typeof AntdStyleModule>();
 
   return {
     ...actual,

@@ -3,6 +3,7 @@ import { LayersEnum, TypesEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import type * as UserMemoryModule from '@/database/models/userMemory';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -23,7 +24,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 }));
 
 vi.mock('@/database/models/userMemory', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/database/models/userMemory')>();
+  const actual = await importOriginal<typeof UserMemoryModule>();
   const mockUserMemoryModel: any = vi.fn();
   mockUserMemoryModel.parseDateFromString = actual.UserMemoryModel.parseDateFromString;
   mockUserMemoryModel.parseAssociatedLocations = actual.UserMemoryModel.parseAssociatedLocations;
@@ -32,7 +33,7 @@ vi.mock('@/database/models/userMemory', async (importOriginal) => {
   return {
     ...actual,
     UserMemoryModel: mockUserMemoryModel,
-  } satisfies typeof import('@/database/models/userMemory');
+  } satisfies typeof UserMemoryModule;
 });
 
 const embeddingsMock = vi.fn();

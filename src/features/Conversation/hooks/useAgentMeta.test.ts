@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
 
+import type * as ConversationStoreModule from '../store';
 import { useConversationStore } from '../store';
 import { useAgentMeta, useIsBuiltinAgent } from './useAgentMeta';
 
@@ -10,7 +11,7 @@ vi.mock('zustand/traditional');
 
 // Mock the ConversationStore
 vi.mock('../store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../store')>();
+  const actual = await importOriginal<typeof ConversationStoreModule>();
   return {
     ...actual,
     useConversationStore: vi.fn(),
