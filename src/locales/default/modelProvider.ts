@@ -279,6 +279,8 @@ export default {
     'For Gemini 3 Flash Preview models; controls thinking depth.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint':
     'For Gemini 3 Pro Preview models; controls thinking depth.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint':
+    'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':

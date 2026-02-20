@@ -19,7 +19,7 @@ export type GoogleThinkingModelCategory = 'pro' | 'flash' | 'flashLite' | 'robot
 /**
  * Thinking level for Gemini 3.0+ models
  */
-export type GoogleThinkingLevel = 'low' | 'high';
+export type GoogleThinkingLevel = 'low' | 'medium' | 'high';
 
 /**
  * Options for resolving Google thinking configuration

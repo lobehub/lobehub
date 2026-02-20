@@ -255,6 +255,7 @@ export type ExtendParamsType =
   | 'thinkingBudget'
   | 'thinkingLevel'
   | 'thinkingLevel2'
+  | 'thinkingLevel3'
   | 'imageAspectRatio'
   | 'imageResolution'
   | 'urlContext';
@@ -284,6 +285,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'thinkingBudget',
   'thinkingLevel',
   'thinkingLevel2',
+  'thinkingLevel3',
   'imageAspectRatio',
   'imageResolution',
   'urlContext',

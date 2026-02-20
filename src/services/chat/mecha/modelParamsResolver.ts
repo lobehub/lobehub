@@ -136,6 +136,14 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingLevel = chatConfig.thinkingLevel;
   }
 
+  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
+  }
+
   // URL context
   if (modelExtendParams.includes('urlContext') && chatConfig.urlContext) {
     extendParams.urlContext = chatConfig.urlContext;

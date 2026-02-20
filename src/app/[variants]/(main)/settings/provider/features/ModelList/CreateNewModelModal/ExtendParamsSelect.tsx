@@ -17,6 +17,7 @@ import ReasoningTokenSlider from '@/features/ChatInput/ActionBar/Model/Reasoning
 import TextVerbositySlider from '@/features/ChatInput/ActionBar/Model/TextVerbositySlider';
 import ThinkingBudgetSlider from '@/features/ChatInput/ActionBar/Model/ThinkingBudgetSlider';
 import ThinkingLevel2Slider from '@/features/ChatInput/ActionBar/Model/ThinkingLevel2Slider';
+import ThinkingLevel3Slider from '@/features/ChatInput/ActionBar/Model/ThinkingLevel3Slider';
 import ThinkingLevelSlider from '@/features/ChatInput/ActionBar/Model/ThinkingLevelSlider';
 import ThinkingSlider from '@/features/ChatInput/ActionBar/Model/ThinkingSlider';
 
@@ -87,6 +88,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'thinkingLevel2',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint',
+    key: 'thinkingLevel3',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.urlContext.hint',
     key: 'urlContext',
   },
@@ -108,6 +113,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_2ProReasoningEffort: 'reasoningEffort',
   gpt5_2ReasoningEffort: 'reasoningEffort',
   thinkingLevel2: 'thinkingLevel',
+  thinkingLevel3: 'thinkingLevel',
 };
 
 type PreviewMeta = {
@@ -143,6 +149,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 500, tag: 'thinkingBudget' },
   thinkingLevel: { labelSuffix: ' (Gemini 3)', previewWidth: 280, tag: 'thinkingLevel' },
   thinkingLevel2: { labelSuffix: ' (Gemini 3)', previewWidth: 200, tag: 'thinkingLevel' },
+  thinkingLevel3: { labelSuffix: ' (Gemini 3.1)', previewWidth: 230, tag: 'thinkingLevel' },
   urlContext: { labelSuffix: ' (Gemini)', previewWidth: 400, tag: 'urlContext' },
 };
 
@@ -243,6 +250,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       thinkingBudget: <ThinkingBudgetSlider defaultValue={2 * 1024} />,
       thinkingLevel: <ThinkingLevelSlider value="high" />,
       thinkingLevel2: <ThinkingLevel2Slider value="high" />,
+      thinkingLevel3: <ThinkingLevel3Slider value="high" />,
       urlContext: <Switch checked disabled />,
     }),
     [],
