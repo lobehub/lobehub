@@ -34,6 +34,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrl,
+              revised_prompt: 'A beautiful sunset over the mountains',
             },
           ],
         }),
@@ -74,6 +75,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrl,
+              revised_prompt: 'Abstract digital art',
             },
           ],
         }),
@@ -105,7 +107,7 @@ describe('createXAIImage', () => {
       });
     });
 
-    it('should not include aspect_ratio when value is auto', async () => {
+    it('should include aspect_ratio when value is auto', async () => {
       const mockImageUrl = 'https://xai-cdn.com/images/generated/auto-ratio.jpg';
 
       global.fetch = vi.fn().mockResolvedValueOnce({
@@ -114,6 +116,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrl,
+              revised_prompt: 'Abstract digital art',
             },
           ],
         }),
@@ -135,6 +138,7 @@ describe('createXAIImage', () => {
           body: JSON.stringify({
             model: 'grok-imagine-image',
             prompt: 'Abstract digital art',
+            aspect_ratio: 'auto',
           }),
         }),
       );
@@ -153,6 +157,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrl,
+              revised_prompt: 'An astronaut performing EVA in LEO',
             },
           ],
         }),
@@ -184,7 +189,7 @@ describe('createXAIImage', () => {
       });
     });
 
-    it('should not include resolution when value is 1k', async () => {
+    it('should include resolution when value is 1k', async () => {
       const mockImageUrl = 'https://xai-cdn.com/images/generated/1k-res.jpg';
 
       global.fetch = vi.fn().mockResolvedValueOnce({
@@ -193,6 +198,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrl,
+              revised_prompt: 'Test image',
             },
           ],
         }),
@@ -214,6 +220,7 @@ describe('createXAIImage', () => {
           body: JSON.stringify({
             model: 'grok-imagine-image',
             prompt: 'Test image',
+            resolution: '1k',
           }),
         }),
       );
@@ -232,6 +239,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrl,
+              revised_prompt: 'Change the landmarks to be New York City landmarks',
             },
           ],
         }),
@@ -275,6 +283,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrl,
+              revised_prompt: 'Change the landmarks to be New York City landmarks',
             },
           ],
         }),
@@ -322,9 +331,11 @@ describe('createXAIImage', () => {
           data: [
             {
               url: mockImageUrls[0],
+              revised_prompt: 'Multiple images test',
             },
             {
               url: mockImageUrls[1],
+              revised_prompt: 'Multiple images test',
             },
           ],
         }),
@@ -340,7 +351,57 @@ describe('createXAIImage', () => {
       const result = await createXAIImage(payload, mockOptions);
 
       expect(result).toEqual({
-        imageUrl: mockImageUrls[0], // Should return the first image
+        imageUrl: mockImageUrls[0], // Should return first image
+      });
+    });
+
+    it('should handle image editing mode with imageUrls', async () => {
+      const mockImageUrl = 'https://xai-cdn.com/images/generated/edited-multi-image.jpg';
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              url: mockImageUrl,
+              revised_prompt: 'Edit multiple images',
+            },
+          ],
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'grok-imagine-image',
+        params: {
+          prompt: 'Edit multiple images',
+          imageUrls: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
+        },
+      };
+
+      const result = await createXAIImage(payload, mockOptions);
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://api.x.ai/v1/images/edits',
+        expect.objectContaining({
+          body: JSON.stringify({
+            model: 'grok-imagine-image',
+            prompt: 'Edit multiple images',
+            images: [
+              {
+                type: 'image_url',
+                url: 'https://example.com/image1.jpg',
+              },
+              {
+                type: 'image_url',
+                url: 'https://example.com/image2.jpg',
+              },
+            ],
+          }),
+        }),
+      );
+
+      expect(result).toEqual({
+        imageUrl: mockImageUrl,
       });
     });
   });
@@ -449,6 +510,7 @@ describe('createXAIImage', () => {
           data: [
             {
               url: '',
+              revised_prompt: 'A beautiful sunset over the mountains',
             },
           ],
         }),
