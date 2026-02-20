@@ -435,6 +435,53 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     config: {
+      deploymentName: 'qwen3-coder-next',
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Next‑gen Qwen coder optimized for complex multi-file code generation, debugging, and high‑throughput agent workflows. Designed for strong tool integration and improved reasoning performance.',
+    displayName: 'Qwen3 Coder Next',
+    id: 'qwen3-coder-next',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1,
+              '[0.032, 0.128]': 1.5,
+              '[0.128, infinity]': 2.5,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 4,
+              '[0.032, 0.128]': 6,
+              '[0.128, infinity]': 10,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    config: {
       deploymentName: 'qwen3-coder-plus', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
