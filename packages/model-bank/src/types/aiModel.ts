@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
-<<<<<<< HEAD
 import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
-=======
-import { type ModelParamsSchema } from '../standard-parameters';
->>>>>>> origin/main
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
