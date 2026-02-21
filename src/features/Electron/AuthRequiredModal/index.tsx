@@ -1,12 +1,13 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Button, Flexbox, Icon, type ModalInstance, createModal } from '@lobehub/ui';
+import { type ModalInstance } from '@lobehub/ui';
+import { Button, createModal, Flexbox, Icon } from '@lobehub/ui';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
 
+import { getDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
 import { useElectronStore } from '@/store/electron';
 
 interface AuthRequiredModalContentProps {
@@ -65,15 +66,15 @@ const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
     return (
       <Flexbox gap={16} style={{ padding: 16 }}>
         <p style={{ margin: 0 }}>{t('authModal.description')}</p>
-        <Flexbox gap={8} horizontal justify="flex-end">
+        <Flexbox horizontal gap={8} justify="flex-end">
           <Button disabled={isSigningIn} onClick={handleLater}>
             {t('authModal.later')}
           </Button>
           <Button
             icon={<Icon icon={LogIn} />}
             loading={isSigningIn}
-            onClick={handleSignIn}
             type="primary"
+            onClick={handleSignIn}
           >
             {isSigningIn ? t('authModal.signingIn') : t('authModal.signIn')}
           </Button>
@@ -117,7 +118,7 @@ export const useAuthRequiredModal = () => {
       keyboard: false,
       maskClosable: false,
       title: (
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Icon icon={AlertCircle} />
           {t('authModal.title')}
         </Flexbox>
@@ -134,11 +135,9 @@ export const useAuthRequiredModal = () => {
 const AuthRequiredModal = memo(() => {
   const { open } = useAuthRequiredModal();
 
-  const pathname = useLocation().pathname;
   useWatchBroadcast('authorizationRequired', () => {
     if (useElectronStore.getState().isConnectionDrawerOpen) return;
-
-    if (pathname.includes('/desktop-onboarding')) return;
+    if (!getDesktopOnboardingCompleted()) return;
 
     open();
   });

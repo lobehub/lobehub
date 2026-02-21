@@ -5,12 +5,10 @@ import {
   TEST_COMPONENTS,
   TEST_MODELS,
 } from '@/server/services/comfyui/__tests__/helpers/realConfigData';
-import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
-import { ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
-import {
-  WorkflowBuilderService,
-  WorkflowContext,
-} from '@/server/services/comfyui/core/workflowBuilderService';
+import { type ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
+import { type ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
+import { type WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
+import { WorkflowBuilderService } from '@/server/services/comfyui/core/workflowBuilderService';
 import { WorkflowError } from '@/server/services/comfyui/errors';
 
 // Mock dependencies (must be before other imports)

@@ -31,6 +31,10 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ open, setOpen }) => {
   return (
     <Modal
       destroyOnHidden
+      maskClosable
+      open={open}
+      title={t('providerModels.createNew.title')}
+      zIndex={1251} // Select is 1150
       footer={[
         <Button key="cancel" onClick={closeModal}>
           {t('cancel', { ns: 'common' })}
@@ -39,6 +43,8 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ open, setOpen }) => {
         <Button
           key="ok"
           loading={loading}
+          style={{ marginInlineStart: '16px' }}
+          type="primary"
           onClick={async () => {
             if (!editingProvider || !formInstance) return;
             const data = formInstance.getFieldsValue();
@@ -54,15 +60,10 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ open, setOpen }) => {
               setLoading(false);
             }
           }}
-          style={{ marginInlineStart: '16px' }}
-          type="primary"
         >
           {t('ok', { ns: 'common' })}
         </Button>,
       ]}
-      maskClosable
-      onCancel={closeModal}
-      open={open}
       styles={{
         body: {
           display: 'flex',
@@ -70,10 +71,9 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ open, setOpen }) => {
           maxHeight: 'calc(100vh - 150px)',
         },
       }}
-      title={t('providerModels.createNew.title')}
-      zIndex={1251} // Select is 1150
+      onCancel={closeModal}
     >
-      <ModelConfigForm onFormInstanceReady={setFormInstance} showDeployName={showDeployName} />
+      <ModelConfigForm showDeployName={showDeployName} onFormInstanceReady={setFormInstance} />
     </Modal>
   );
 });

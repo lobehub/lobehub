@@ -2,34 +2,34 @@ import { produce } from 'immer';
 
 import { type Generation, type GenerationBatch } from '@/types/generation';
 
-interface UpdateGenerationInBatchAction {
+type UpdateGenerationInBatchAction = {
   batchId: string;
   generationId: string;
   type: 'updateGenerationInBatch';
   value: Partial<Generation>;
-}
+};
 
-interface UpdateGenerationBatchAction {
+type UpdateGenerationBatchAction = {
   id: string;
   type: 'updateBatch';
   value: Partial<GenerationBatch>;
-}
+};
 
-interface DeleteGenerationBatchAction {
+type DeleteGenerationBatchAction = {
   id: string;
   type: 'deleteBatch';
-}
+};
 
-interface DeleteGenerationInBatchAction {
+type DeleteGenerationInBatchAction = {
   batchId: string;
   generationId: string;
   type: 'deleteGenerationInBatch';
-}
+};
 
-interface AddGenerationBatchAction {
+type AddGenerationBatchAction = {
   type: 'addBatch';
   value: GenerationBatch;
-}
+};
 
 export type GenerationBatchDispatch =
   | UpdateGenerationInBatchAction

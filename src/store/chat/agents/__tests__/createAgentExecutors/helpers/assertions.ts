@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 
-import type { OperationType } from '@/store/chat/slices/operation/types';
-import type { ChatStore } from '@/store/chat/store';
+import { type OperationType } from '@/store/chat/slices/operation/types';
+import { type ChatStore } from '@/store/chat/store';
 
 /**
  * Assert that an operation was created with specific type

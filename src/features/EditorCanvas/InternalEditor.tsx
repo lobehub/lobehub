@@ -1,9 +1,10 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
+import { type IEditor } from '@lobehub/editor';
 import {
-  type IEditor,
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactImagePlugin,
   ReactLinkPlugin,
@@ -14,16 +15,21 @@ import {
   ReactToolbarPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { EditorCanvasProps } from './EditorCanvas';
+import { type EditorCanvasProps } from './EditorCanvas';
 import InlineToolbar from './InlineToolbar';
+import { useImageUpload } from './useImageUpload';
+
+const IMAGE_FILTERS = [
+  { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'], name: 'Images' },
+];
 
 /**
- * Base plugins for the editor (without toolbar)
+ * Base plugins for the editor (without image and toolbar, which need dynamic config)
  */
-const BASE_PLUGINS = [
+const STATIC_PLUGINS = [
   ReactLiteXmlPlugin,
   ReactListPlugin,
   ReactCodePlugin,
@@ -32,9 +38,6 @@ const BASE_PLUGINS = [
   ReactLinkPlugin,
   ReactTablePlugin,
   ReactMathPlugin,
-  Editor.withProps(ReactImagePlugin, {
-    defaultBlockImage: true,
-  }),
 ];
 
 export interface InternalEditorProps extends EditorCanvasProps {
@@ -62,6 +65,19 @@ const InternalEditor = memo<InternalEditorProps>(
   }) => {
     const { t } = useTranslation('file');
     const editorState = useEditorState(editor);
+    const handleImageUpload = useImageUpload();
+
+    const handlePickFile = useCallback(async (): Promise<File | null> => {
+      if (!isDesktop) return null;
+      const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+      const ipc = ensureElectronIpc();
+      const result = await (ipc as any).localSystem.handlePickFile({
+        filters: IMAGE_FILTERS,
+      });
+      if (result.canceled || !result.file) return null;
+      const { data, mimeType, name } = result.file;
+      return new File([data], name, { type: mimeType });
+    }, []);
 
     const finalPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
 
@@ -70,8 +86,16 @@ const InternalEditor = memo<InternalEditorProps>(
       // If custom plugins provided, use them directly
       if (customPlugins) return customPlugins;
 
+      const imagePlugin = Editor.withProps(ReactImagePlugin, {
+        defaultBlockImage: true,
+        handleUpload: handleImageUpload,
+        onPickFile: isDesktop ? handlePickFile : undefined,
+      });
+
       // Build base plugins with optional extra plugins prepended
-      const basePlugins = extraPlugins ? [...extraPlugins, ...BASE_PLUGINS] : BASE_PLUGINS;
+      const basePlugins = extraPlugins
+        ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin]
+        : [...STATIC_PLUGINS, imagePlugin];
 
       // Add toolbar if enabled
       if (floatingToolbar) {
@@ -80,10 +104,10 @@ const InternalEditor = memo<InternalEditorProps>(
           Editor.withProps(ReactToolbarPlugin, {
             children: (
               <InlineToolbar
+                floating
                 editor={editor}
                 editorState={editorState}
                 extraItems={toolbarExtraItems}
-                floating
               />
             ),
           }),
@@ -91,7 +115,16 @@ const InternalEditor = memo<InternalEditorProps>(
       }
 
       return basePlugins;
-    }, [customPlugins, editor, editorState, extraPlugins, floatingToolbar, toolbarExtraItems]);
+    }, [
+      customPlugins,
+      editor,
+      editorState,
+      extraPlugins,
+      floatingToolbar,
+      handleImageUpload,
+      handlePickFile,
+      toolbarExtraItems,
+    ]);
 
     useEffect(() => {
       // for easier debug, mount editor instance to window
@@ -147,15 +180,15 @@ const InternalEditor = memo<InternalEditorProps>(
           content={''}
           editor={editor}
           lineEmptyPlaceholder={finalPlaceholder}
-          onInit={onInit}
           placeholder={finalPlaceholder}
           plugins={plugins}
           slashOption={slashItems ? { items: slashItems } : undefined}
+          type={'text'}
           style={{
             paddingBottom: 64,
             ...style,
           }}
-          type={'text'}
+          onInit={onInit}
         />
       </div>
     );

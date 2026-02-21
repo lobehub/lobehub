@@ -7,7 +7,8 @@ import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type Locales, localeOptions, normalizeLocale } from '@/locales/resources';
+import { type Locales } from '@/locales/resources';
+import { localeOptions, normalizeLocale } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 
@@ -58,14 +59,12 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
   return (
     <Flexbox gap={16}>
       <Message />
-      <Flexbox align={'center'} gap={12} horizontal>
+      <Flexbox horizontal align={'center'} gap={12}>
         <Select
-          onChange={(v) => {
-            if (v) {
-              switchLocale(v);
-              setValue(v);
-            }
-          }}
+          showSearch
+          options={localeOptions}
+          size="large"
+          value={value}
           optionRender={(item) => (
             <Flexbox key={item.value}>
               <Text>{item.label}</Text>
@@ -74,23 +73,25 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
               </Text>
             </Flexbox>
           )}
-          options={localeOptions}
-          showSearch
-          size="large"
           style={{
             fontSize: 20,
             fontWeight: 'bold',
             width: '100%',
           }}
-          value={value}
+          onChange={(v) => {
+            if (v) {
+              switchLocale(v);
+              setValue(v);
+            }
+          }}
         />
         <SendButton
           disabled={isNavigating}
-          onClick={handleNext}
+          type="primary"
           style={{
             zoom: 1.5,
           }}
-          type="primary"
+          onClick={handleNext}
         />
       </Flexbox>
       <Text style={{ fontSize: 12 }} type="secondary">
@@ -100,11 +101,11 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
         <Button
           disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={handleBack}
+          type={'text'}
           style={{
             color: cssVar.colorTextDescription,
           }}
-          type={'text'}
+          onClick={handleBack}
         >
           {t('back')}
         </Button>

@@ -1,8 +1,8 @@
 import { Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Form as AForm, App } from 'antd';
+import { App,Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import KeyValueEditor from '@/components/KeyValueEditor';
@@ -158,7 +158,7 @@ interface SettingsProps {
   identifier: string;
 }
 
-const Settings = forwardRef<SettingsRef, SettingsProps>(({ identifier, hideFooter }, ref) => {
+const Settings = ({ ref, identifier, hideFooter }: SettingsProps & { ref?: React.RefObject<SettingsRef | null> }) => {
   const { t } = useTranslation(['plugin', 'common']);
   const [connectionForm] = AForm.useForm();
   const [envForm] = AForm.useForm();
@@ -241,9 +241,9 @@ const Settings = forwardRef<SettingsRef, SettingsProps>(({ identifier, hideFoote
               <Button
                 className={styles.editButton}
                 icon={<EditIcon size={12} />}
-                onClick={() => setIsEditingConnection(true)}
                 size="small"
                 type="text"
+                onClick={() => setIsEditingConnection(true)}
               >
                 {t('settings.edit')}
               </Button>
@@ -329,7 +329,7 @@ const Settings = forwardRef<SettingsRef, SettingsProps>(({ identifier, hideFoote
                     </AForm.Item>
                   </>
                 )}
-                <Flexbox className={styles.footer} gap={8} horizontal>
+                <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={connectionLoading} type="primary">
                     {t('common:save')}
                   </Button>
@@ -363,7 +363,7 @@ const Settings = forwardRef<SettingsRef, SettingsProps>(({ identifier, hideFoote
                 />
               </AForm.Item>
               {!hideFooter && (
-                <Flexbox className={styles.footer} gap={8} horizontal>
+                <Flexbox horizontal className={styles.footer} gap={8}>
                   <Button htmlType="submit" loading={loading} type="primary">
                     {t('common:save')}
                   </Button>
@@ -389,6 +389,6 @@ const Settings = forwardRef<SettingsRef, SettingsProps>(({ identifier, hideFoote
       </Flexbox>
     </Flexbox>
   );
-});
+};
 
 export default Settings;

@@ -3,13 +3,14 @@
 import {
   Flexbox,
   FormGroup,
+  highlighterThemes,
   Icon,
+  LobeSwitch as Switch,
+  mermaidThemes,
   Segmented,
   Select,
   Skeleton,
   SliderWithInput,
-  highlighterThemes,
-  mermaidThemes,
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -43,13 +44,17 @@ const ChatAppearance = memo(() => {
       <FormGroup
         collapsible={false}
         desc={t('settingChatAppearance.transitionMode.desc')}
+        gap={16}
+        title={t('settingChatAppearance.transitionMode.title')}
+        variant={'filled'}
         extra={
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             {loadingStates.transitionMode && (
-              <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />
+              <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
             )}
             <Segmented
-              onChange={(value) => handleChange('transitionMode', value)}
+              value={general.transitionMode}
+              variant={'outlined'}
               options={[
                 {
                   label: t('settingChatAppearance.transitionMode.options.none.value'),
@@ -64,27 +69,51 @@ const ChatAppearance = memo(() => {
                   value: 'smooth',
                 },
               ]}
-              value={general.transitionMode}
-              variant={'outlined'}
+              onChange={(value) => handleChange('transitionMode', value)}
             />
           </Flexbox>
         }
-        gap={16}
-        title={t('settingChatAppearance.transitionMode.title')}
-        variant={'filled'}
       >
         <ChatTransitionPreview key={general.transitionMode} mode={general.transitionMode} />
       </FormGroup>
 
       <FormGroup
+        active={false}
+        collapsible={false}
+        desc={t('settingChatAppearance.autoScrollOnStreaming.desc')}
+        title={t('settingChatAppearance.autoScrollOnStreaming.title')}
+        variant={'filled'}
+        extra={
+          <Flexbox horizontal align={'center'} gap={8}>
+            {loadingStates.enableAutoScrollOnStreaming && (
+              <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
+            )}
+            <Switch
+              checked={general.enableAutoScrollOnStreaming ?? true}
+              onChange={(checked) => handleChange('enableAutoScrollOnStreaming', checked)}
+            />
+          </Flexbox>
+        }
+      >
+        {null}
+      </FormGroup>
+
+      <FormGroup
         collapsible={false}
         desc={t('settingChatAppearance.fontSize.desc')}
+        gap={16}
+        title={t('settingChatAppearance.fontSize.title')}
+        variant={'filled'}
         extra={
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             {loadingStates.fontSize && (
-              <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />
+              <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
             )}
             <SliderWithInput
+              max={18}
+              min={12}
+              step={1}
+              value={general.fontSize}
               marks={{
                 12: {
                   label: 'A',
@@ -108,33 +137,29 @@ const ChatAppearance = memo(() => {
                   },
                 },
               }}
-              max={18}
-              min={12}
-              onChange={(value) => handleChange('fontSize', value)}
-              step={1}
               style={{
                 width: 240,
               }}
-              value={general.fontSize}
+              onChange={(value) => handleChange('fontSize', value)}
             />
           </Flexbox>
         }
-        gap={16}
-        title={t('settingChatAppearance.fontSize.title')}
-        variant={'filled'}
       >
         <ChatPreview fontSize={general.fontSize} />
       </FormGroup>
 
       <FormGroup
         collapsible={false}
+        gap={16}
+        title={t('settingChatAppearance.highlighterTheme.title')}
+        variant={'filled'}
         extra={
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             {loadingStates.highlighterTheme && (
-              <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />
+              <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
             )}
             <Select
-              onChange={(value) => handleChange('highlighterTheme', value)}
+              value={general.highlighterTheme}
               options={highlighterThemes.map((item) => ({
                 label: item.displayName,
                 value: item.id,
@@ -142,25 +167,25 @@ const ChatAppearance = memo(() => {
               style={{
                 width: 240,
               }}
-              value={general.highlighterTheme}
+              onChange={(value) => handleChange('highlighterTheme', value)}
             />
           </Flexbox>
         }
-        gap={16}
-        title={t('settingChatAppearance.highlighterTheme.title')}
-        variant={'filled'}
       >
-        <HighlighterPreview theme={general.highlighterTheme} />
+        <HighlighterPreview key={general.highlighterTheme} theme={general.highlighterTheme} />
       </FormGroup>
 
       <FormGroup
+        gap={16}
+        title={t('settingChatAppearance.mermaidTheme.title')}
+        variant={'filled'}
         extra={
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             {loadingStates.mermaidTheme && (
-              <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />
+              <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
             )}
             <Select
-              onChange={(value) => handleChange('mermaidTheme', value)}
+              value={general.mermaidTheme}
               options={mermaidThemes.map((item) => ({
                 label: item.displayName,
                 value: item.id,
@@ -168,15 +193,12 @@ const ChatAppearance = memo(() => {
               style={{
                 width: 240,
               }}
-              value={general.mermaidTheme}
+              onChange={(value) => handleChange('mermaidTheme', value)}
             />
           </Flexbox>
         }
-        gap={16}
-        title={t('settingChatAppearance.mermaidTheme.title')}
-        variant={'filled'}
       >
-        <MermaidPreview theme={general.mermaidTheme} />
+        <MermaidPreview key={general.mermaidTheme} theme={general.mermaidTheme} />
       </FormGroup>
     </>
   );

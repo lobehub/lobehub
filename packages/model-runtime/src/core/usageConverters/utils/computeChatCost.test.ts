@@ -1,8 +1,7 @@
-import { ModelTokensUsage } from '@lobechat/types';
-import { Pricing } from 'model-bank';
+import type { ModelTokensUsage } from '@lobechat/types';
+import type { Pricing } from 'model-bank';
 import anthropicChatModels from 'model-bank/anthropic';
 import googleChatModels from 'model-bank/google';
-import lobehubChatModels from 'model-bank/lobehub';
 import openaiChatModels from 'model-bank/openai';
 import { describe, expect, it } from 'vitest';
 
@@ -179,7 +178,7 @@ describe('computeChatPricing', () => {
 
     it('supports multi-modal fixed units for Gemini 2.5 Flash Image Preview', () => {
       const pricing = googleChatModels.find(
-        (model: { id: string }) => model.id === 'gemini-2.5-flash-image-preview',
+        (model: { id: string }) => model.id === 'gemini-2.5-flash-image',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -207,7 +206,7 @@ describe('computeChatPricing', () => {
 
     it('handles multi-modal image generation for Nano Banana', () => {
       const pricing = googleChatModels.find(
-        (model: { id: string }) => model.id === 'gemini-2.5-flash-image-preview',
+        (model: { id: string }) => model.id === 'gemini-2.5-flash-image',
       )?.pricing;
       expect(pricing).toBeDefined();
 

@@ -1,9 +1,9 @@
 import { debounce } from 'es-toolkit';
-import type { DebouncedFunc } from 'es-toolkit/compat';
+import { type DebouncedFunc } from 'es-toolkit/compat';
 import pMap from 'p-map';
 
 import { resourceService } from '@/services/resource';
-import type { ResourceItem, SyncOperation } from '@/types/resource';
+import { type ResourceItem, type SyncOperation } from '@/types/resource';
 
 /**
  * Sync configuration

@@ -1,10 +1,10 @@
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { useChatStore } from '@/store/chat';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
-import type { Store as ConversationStore } from '../../action';
+import { type Store as ConversationStore } from '../../action';
 
 /**
  * Generation Actions
@@ -23,16 +23,16 @@ export interface GenerationAction {
   clearOperations: () => void;
 
   /**
-   * Clear TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  clearTTS: (messageId: string) => Promise<void>;
-
-  /**
    * Clear translate for a message
    * @deprecated Temporary bridge to ChatStore
    */
   clearTranslate: (messageId: string) => Promise<void>;
+
+  /**
+   * Clear TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  clearTTS: (messageId: string) => Promise<void>;
 
   /**
    * Continue generation from a message
@@ -61,12 +61,6 @@ export interface GenerationAction {
   openThreadCreator: (messageId: string) => void;
 
   /**
-   * Re-invoke a tool message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  reInvokeToolMessage: (messageId: string) => Promise<void>;
-
-  /**
    * Regenerate an assistant message
    */
   regenerateAssistantMessage: (messageId: string) => Promise<void>;
@@ -75,6 +69,12 @@ export interface GenerationAction {
    * Regenerate a user message
    */
   regenerateUserMessage: (messageId: string) => Promise<void>;
+
+  /**
+   * Re-invoke a tool message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  reInvokeToolMessage: (messageId: string) => Promise<void>;
 
   /**
    * Resend a thread message

@@ -15,6 +15,7 @@ export interface ModelParamsContext {
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
+  effort?: string;
   enabledContextCaching?: boolean;
   imageAspectRatio?: string;
   imageResolution?: string;
@@ -77,6 +78,21 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     };
   }
 
+  // Adaptive thinking (Claude Opus/Sonnet 4.6)
+  if (modelExtendParams.includes('enableAdaptiveThinking')) {
+    if (chatConfig.enableAdaptiveThinking) {
+      extendParams.thinking = {
+        type: 'adaptive',
+      };
+    } else if (!modelExtendParams.includes('enableReasoning')) {
+      // Only disable when the model has no enableReasoning fallback
+      extendParams.thinking = {
+        type: 'disabled',
+      };
+    }
+    // When adaptive is off and model also has enableReasoning, let enableReasoning result stand
+  }
+
   // Context caching
   if (modelExtendParams.includes('disableContextCaching') && chatConfig.disableContextCaching) {
     extendParams.enabledContextCaching = false;
@@ -106,6 +122,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.gpt5_2ProReasoningEffort;
   }
 
+  if (modelExtendParams.includes('effort') && chatConfig.effort) {
+    extendParams.effort = chatConfig.effort;
+  }
+
   // Text verbosity
   if (modelExtendParams.includes('textVerbosity') && chatConfig.textVerbosity) {
     extendParams.verbosity = chatConfig.textVerbosity;
@@ -122,6 +142,14 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
 
   if (modelExtendParams.includes('thinkingLevel') && chatConfig.thinkingLevel) {
     extendParams.thinkingLevel = chatConfig.thinkingLevel;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
   }
 
   // URL context

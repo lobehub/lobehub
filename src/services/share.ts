@@ -1,4 +1,4 @@
-import type { PartialDeep } from 'type-fest';
+import { type PartialDeep } from 'type-fest';
 
 import { LOBE_URL_IMPORT_NAME } from '@/const/url';
 import { type UserSettings } from '@/types/user/settings';

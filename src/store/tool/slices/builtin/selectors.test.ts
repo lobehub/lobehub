@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ToolStoreState, initialState } from '../../initialState';
+import { type ToolStoreState } from '../../initialState';
+import { initialState } from '../../initialState';
 import { builtinToolSelectors } from './selectors';
 
 describe('builtinToolSelectors', () => {
@@ -8,7 +9,14 @@ describe('builtinToolSelectors', () => {
     it('should return meta list excluding Dalle when showDalle is false', () => {
       const state = {
         ...initialState,
-        builtinTools: [{ identifier: 'tool-1', manifest: { meta: { title: 'Tool 1' } } }],
+        builtinTools: [
+          {
+            identifier: 'tool-1',
+            type: 'builtin',
+            manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
+          },
+        ],
+        uninstalledBuiltinTools: [],
       } as ToolStoreState;
       const result = builtinToolSelectors.metaList(state);
       expect(result).toEqual([
@@ -20,7 +28,12 @@ describe('builtinToolSelectors', () => {
       const state = {
         ...initialState,
         builtinTools: [
-          { identifier: 'tool-1', hidden: true, manifest: { meta: { title: 'Tool 1' } } },
+          {
+            identifier: 'tool-1',
+            type: 'builtin',
+            hidden: true,
+            manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
+          },
         ],
       } as ToolStoreState;
       const result = builtinToolSelectors.metaList(state);

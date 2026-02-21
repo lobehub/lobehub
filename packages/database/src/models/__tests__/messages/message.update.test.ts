@@ -3,27 +3,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { uuid } from '@/utils/uuid';
 
+import { getTestDB } from '../../../core/getTestDB';
 import {
-  agents,
-  chatGroups,
-  chunks,
   embeddings,
-  fileChunks,
   files,
   messagePlugins,
-  messageQueries,
-  messageQueryChunks,
-  messageTTS,
-  messageTranslates,
   messages,
   messagesFiles,
+  messageTranslates,
+  messageTTS,
   sessions,
-  topics,
   users,
 } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../../../core/getTestDB';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();

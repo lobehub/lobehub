@@ -1,4 +1,4 @@
-import { Parent } from 'unist';
+import { type Parent } from 'unist';
 import { expect } from 'vitest';
 
 import { treeNodeToString } from './getNodeContent';

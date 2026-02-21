@@ -1,5 +1,5 @@
 import { Command } from 'cmdk';
-import type { ComponentProps, ReactNode } from 'react';
+import { type ComponentProps, type ReactNode } from 'react';
 import { cloneElement, isValidElement, memo } from 'react';
 
 import { useCommandMenuContext } from '../CommandMenuContext';
@@ -44,7 +44,6 @@ const CommandItem = memo<CommandItemProps>((props) => {
   }
 
   if (props.variant === 'detailed') {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { icon, title, description, trailingLabel, unpinned: _unpinned, ...itemProps } = props;
     return (
       <Command.Item {...itemProps}>
@@ -61,7 +60,7 @@ const CommandItem = memo<CommandItemProps>((props) => {
   }
 
   // Simple variant (default)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   const { icon, children, unpinned: _unpinned, ...itemProps } = props;
 
   // Clone the icon element and add the icon className if it's a valid React element

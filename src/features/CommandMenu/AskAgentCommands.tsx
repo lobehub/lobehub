@@ -1,5 +1,5 @@
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { Avatar } from '@lobehub/ui';
+import { Avatar, preventDefault } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -62,10 +62,11 @@ const AskAgentCommands = memo(() => {
       {/* @Lobe AI option */}
       {showLobeAI && (
         <Command.Item
-          onSelect={() => handleAgentSelect(inboxAgentId, 'Lobe AI', DEFAULT_INBOX_AVATAR)}
           value="@lobe-ai"
+          onMouseDown={preventDefault}
+          onSelect={() => handleAgentSelect(inboxAgentId, 'Lobe AI', DEFAULT_INBOX_AVATAR)}
         >
-          <Avatar avatar={DEFAULT_INBOX_AVATAR} emojiScaleWithBackground shape="square" size={18} />
+          <Avatar emojiScaleWithBackground avatar={DEFAULT_INBOX_AVATAR} shape="square" size={18} />
           <div className={styles.itemContent}>
             <div className={styles.itemLabel}>@Lobe AI</div>
           </div>
@@ -76,6 +77,8 @@ const AskAgentCommands = memo(() => {
       {filteredAgents.map((agent) => (
         <Command.Item
           key={agent.id}
+          value={`@${agent.title || 'agent'}-${agent.id}`}
+          onMouseDown={preventDefault}
           onSelect={() =>
             handleAgentSelect(
               agent.id,
@@ -83,11 +86,10 @@ const AskAgentCommands = memo(() => {
               typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR,
             )
           }
-          value={`@${agent.title || 'agent'}-${agent.id}`}
         >
           <Avatar
-            avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
             emojiScaleWithBackground
+            avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
             shape="square"
             size={18}
           />

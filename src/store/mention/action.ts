@@ -1,24 +1,23 @@
-import { type StateCreator } from 'zustand/vanilla';
+import { type StoreSetter } from '@/store/types';
 
-import { type MentionState, initialMentionState } from './initialState';
+import { type MentionStore } from './store';
 
-export interface MentionAction {
-  addMentionedUser: (userId: string) => void;
-  clearMentionedUsers: () => void;
-  removeMentionedUser: (userId: string) => void;
-  setMentionedUsers: (users: string[]) => void;
-}
+type Setter = StoreSetter<MentionStore>;
+export const createMentionSlice = (set: Setter, get: () => MentionStore, _api?: unknown) =>
+  new MentionActionImpl(set, get, _api);
 
-export const createMentionSlice: StateCreator<
-  MentionState,
-  [['zustand/devtools', never]],
-  [],
-  MentionAction
-> = (set) => ({
-  ...initialMentionState,
+export class MentionActionImpl {
+  readonly #get: () => MentionStore;
+  readonly #set: Setter;
 
-  addMentionedUser: (userId: string) => {
-    set(
+  constructor(set: Setter, get: () => MentionStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  addMentionedUser = (userId: string): void => {
+    this.#set(
       (state) => ({
         mentionedUsers: state.mentionedUsers.includes(userId)
           ? state.mentionedUsers
@@ -27,23 +26,25 @@ export const createMentionSlice: StateCreator<
       false,
       'addMentionedUser',
     );
-  },
+  };
 
-  clearMentionedUsers: () => {
-    set({ mentionedUsers: [] }, false, 'clearMentionedUsers');
-  },
+  clearMentionedUsers = (): void => {
+    this.#set({ mentionedUsers: [] }, false, 'clearMentionedUsers');
+  };
 
-  removeMentionedUser: (userId: string) => {
-    set(
+  removeMentionedUser = (userId: string): void => {
+    this.#set(
       (state) => ({
         mentionedUsers: state.mentionedUsers.filter((id) => id !== userId),
       }),
       false,
       'removeMentionedUser',
     );
-  },
+  };
 
-  setMentionedUsers: (users: string[]) => {
-    set({ mentionedUsers: users }, false, 'setMentionedUsers');
-  },
-});
+  setMentionedUsers = (users: string[]): void => {
+    this.#set({ mentionedUsers: users }, false, 'setMentionedUsers');
+  };
+}
+
+export type MentionAction = Pick<MentionActionImpl, keyof MentionActionImpl>;

@@ -4,15 +4,8 @@ import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { FileText, FolderIcon } from 'lucide-react';
-import {
-  type PropsWithChildren,
-  createContext,
-  memo,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type PropsWithChildren } from 'react';
+import { createContext, memo, use, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -28,7 +21,7 @@ import { useResourceManagerStore } from './store';
  */
 let transparentDragImage: HTMLImageElement | null = null;
 
-if (typeof window !== 'undefined') {
+if (typeof globalThis.window !== 'undefined') {
   transparentDragImage = new Image();
   transparentDragImage.src =
     'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -50,7 +43,7 @@ const DragActiveContext = createContext<boolean>(false);
  * Hook to check if drag is currently active
  * Use this to conditionally enable droppable zones for performance optimization
  */
-export const useDragActive = () => useContext(DragActiveContext);
+export const useDragActive = () => use(DragActiveContext);
 
 interface DragState {
   data: any;
@@ -60,14 +53,14 @@ interface DragState {
 
 const DragStateContext = createContext<{
   currentDrag: DragState | null;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   setCurrentDrag: (_state: DragState | null) => void;
 }>({
   currentDrag: null,
   setCurrentDrag: () => {},
 });
 
-export const useDragState = () => useContext(DragStateContext);
+export const useDragState = () => use(DragStateContext);
 
 /**
  * Pragmatic DnD wrapper for resource drag-and-drop
@@ -243,8 +236,8 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
   }, [currentDrag]);
 
   return (
-    <DragActiveContext.Provider value={currentDrag !== null}>
-      <DragStateContext.Provider value={{ currentDrag, setCurrentDrag }}>
+    <DragActiveContext value={currentDrag !== null}>
+      <DragStateContext value={{ currentDrag, setCurrentDrag }}>
         {children}
         {typeof document !== 'undefined' &&
           createPortal(
@@ -330,8 +323,8 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
             ) : null,
             document.body,
           )}
-      </DragStateContext.Provider>
-    </DragActiveContext.Provider>
+      </DragStateContext>
+    </DragActiveContext>
   );
 });
 

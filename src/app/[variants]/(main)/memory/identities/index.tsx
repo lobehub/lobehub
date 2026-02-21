@@ -1,6 +1,7 @@
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
-import { type FC, memo, useCallback, useEffect, useState } from 'react';
+import { type FC } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
 import CommonFilterBar from '@/app/[variants]/(main)/memory/features/FilterBar';
 import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
@@ -14,9 +15,11 @@ import { type TypesEnum } from '@/types/userMemory';
 import EditableModal from '../features/EditableModal';
 import Loading from '../features/Loading';
 import { SCROLL_PARENT_ID } from '../features/TimeLineView/useScrollParent';
-import ViewModeSwitcher, { type ViewMode } from '../features/ViewModeSwitcher';
+import { type ViewMode } from '../features/ViewModeSwitcher';
+import ViewModeSwitcher from '../features/ViewModeSwitcher';
 import IdentityRightPanel from './features/IdentityRightPanel';
-import List, { type IdentityType } from './features/List';
+import { type IdentityType } from './features/List';
+import List from './features/List';
 import SegmentedBar from './features/SegmentedBar';
 
 const IdentitiesArea = memo(() => {
@@ -77,7 +80,7 @@ const IdentitiesArea = memo(() => {
         right={
           <>
             <MemoryAnalysis iconOnly />
-            <ViewModeSwitcher onChange={setViewMode} value={viewMode} />
+            <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
             <WideScreenButton />
           </>
         }
@@ -89,9 +92,9 @@ const IdentitiesArea = memo(() => {
         width={'100%'}
       >
         <WideScreenContainer gap={32} paddingBlock={48}>
-          <Flexbox align={'center'} gap={12} horizontal justify={'space-between'}>
-            <SegmentedBar onTypeChange={handleTypeChange} typeValue={typeFilter} />
-            <CommonFilterBar onSearch={handleSearch} searchValue={searchValue} />
+          <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+            <SegmentedBar typeValue={typeFilter} onTypeChange={handleTypeChange} />
+            <CommonFilterBar searchValue={searchValue} onSearch={handleSearch} />
           </Flexbox>
           {showLoading ? (
             <Loading viewMode={viewMode} />
@@ -107,7 +110,7 @@ const IdentitiesArea = memo(() => {
 const Identities: FC = () => {
   return (
     <>
-      <Flexbox height={'100%'} horizontal width={'100%'}>
+      <Flexbox horizontal height={'100%'} width={'100%'}>
         <IdentitiesArea />
         <IdentityRightPanel />
       </Flexbox>

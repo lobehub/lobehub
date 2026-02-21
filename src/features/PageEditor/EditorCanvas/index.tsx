@@ -1,6 +1,7 @@
 'use client';
 
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
@@ -20,7 +21,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
 
-  const slashItems = useSlashItems(editor);
+  const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor);
 
   return (

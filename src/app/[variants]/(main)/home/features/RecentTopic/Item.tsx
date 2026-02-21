@@ -32,12 +32,12 @@ const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type
       clickable
       flex={'none'}
       height={RECENT_BLOCK_SIZE.TOPIC.HEIGHT}
+      variant={'outlined'}
+      width={RECENT_BLOCK_SIZE.TOPIC.WIDTH}
       style={{
         borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
       }}
-      variant={'outlined'}
-      width={RECENT_BLOCK_SIZE.TOPIC.WIDTH}
     >
       <Center
         flex={'none'}
@@ -48,15 +48,15 @@ const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type
         }}
       >
         <Avatar
+          emojiScaleWithBackground
+          background={blurBackground || undefined}
+          shape={'square'}
+          size={200}
           avatar={
             isGroup
               ? group?.members?.[0]?.avatar || DEFAULT_AVATAR
               : agent?.avatar || DEFAULT_AVATAR
           }
-          background={blurBackground || undefined}
-          emojiScaleWithBackground
-          shape={'square'}
-          size={200}
           style={{
             filter: 'blur(100px)',
           }}
@@ -79,9 +79,9 @@ const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type
             />
           ) : (
             <Avatar
+              emojiScaleWithBackground
               avatar={agent?.avatar || DEFAULT_AVATAR}
               background={agent?.backgroundColor || undefined}
-              emojiScaleWithBackground
               shape={'square'}
               size={30}
               title={agent?.title || undefined}
@@ -91,7 +91,7 @@ const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type
             {title}
           </Text>
         </Flexbox>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Time date={updatedAt} />
           <Text ellipsis fontSize={12} type={'secondary'}>
             {displayTitle}

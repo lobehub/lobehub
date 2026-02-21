@@ -1,6 +1,6 @@
-import { FewShots } from '../llm';
-import { MetaData } from '../meta';
-import { LobeAgentSettings } from '../session';
+import type { FewShots } from '../llm';
+import type { MetaData } from '../meta';
+import type { LobeAgentSettings } from '../session';
 
 export enum AssistantCategory {
   Academic = 'academic',
@@ -62,6 +62,7 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   status?: AgentStatus;
   tokenUsage: number;
   type?: AgentType;
+  updatedAt?: string;
   userName?: string;
 }
 

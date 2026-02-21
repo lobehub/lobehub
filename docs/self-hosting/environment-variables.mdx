@@ -44,7 +44,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/lobe-chat-database # Name of your image
+  IMAGE_NAME: ${{ github.repository_owner }}/lobehub # Name of your image
 
 jobs:
   build-and-push:
@@ -57,7 +57,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          repository: lobehub/lobe-chat
+          repository: lobehub/lobehub
 
       - name: Log in to the Container registry
         uses: docker/login-action@v2

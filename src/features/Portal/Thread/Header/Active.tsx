@@ -15,7 +15,7 @@ const Active = memo(() => {
 
   return (
     currentThread && (
-      <Flexbox align={'center'} gap={8} horizontal style={{ marginInlineStart: 4 }}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ marginInlineStart: 4 }}>
         <Icon color={cssVar.colorTextSecondary} icon={ListTree} size={18} />
         <Text
           className={oneLineEllipsis}

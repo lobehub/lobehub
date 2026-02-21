@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import { type Transporter } from 'nodemailer';
 import nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
 
 import { emailEnv } from '@/envs/email';
 

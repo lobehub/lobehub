@@ -1,4 +1,4 @@
-import { Mock, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { chainSummaryTags } from '../summaryTags';
 

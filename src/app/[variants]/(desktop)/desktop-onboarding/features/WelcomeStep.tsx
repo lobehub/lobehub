@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Button, Flexbox, Icon, type IconProps, Text } from '@lobehub/ui';
+import { type IconProps } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { LoadingDots } from '@lobehub/ui/chat';
 import { Steps } from 'antd';
@@ -30,11 +31,11 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
   const IconAvatar = useCallback(({ icon }: { icon: IconProps['icon'] }) => {
     return (
       <Block
+        shadow
         align="center"
         height={32}
         justify="center"
         padding={4}
-        shadow
         variant="outlined"
         width={32}
       >
@@ -56,12 +57,12 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
             hideCursorWhileTyping={'afterTyping'}
             key={locale}
             pauseDuration={16_000}
+            typingSpeed={64}
             sentences={[
               t('telemetry.title', { name: 'Lobe AI' }),
               t('telemetry.title2'),
               t('telemetry.title3'),
             ]}
-            typingSpeed={64}
           />
         </Text>
         <Text as={'p'}>{t('telemetry.desc')}</Text>
@@ -112,13 +113,13 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
         ]}
       />
       <Button
-        onClick={handleNext}
         size={'large'}
+        type="primary"
         style={{
           marginBlock: 8,
           maxWidth: 240,
         }}
-        type="primary"
+        onClick={handleNext}
       >
         {t('telemetry.next')}
       </Button>

@@ -1,6 +1,7 @@
 'use client';
 
-import { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo } from 'react';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 

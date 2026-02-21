@@ -1,24 +1,26 @@
 'use client';
 
 import {
-  DropdownMenuPopup,
   type DropdownMenuPopupProps,
-  DropdownMenuPortal,
-  DropdownMenuPositioner,
   type DropdownMenuProps,
-  DropdownMenuRoot,
-  DropdownMenuTrigger,
   type MenuItemType,
   type MenuProps,
   type PopoverTrigger,
+} from '@lobehub/ui';
+import {
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
   renderDropdownMenuItems,
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
+import { type CSSProperties, type ReactNode } from 'react';
 import {
-  type CSSProperties,
-  type ReactNode,
   isValidElement,
   memo,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -26,6 +28,7 @@ import {
   useState,
 } from 'react';
 
+import DebugNode from '@/components/DebugNode';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -260,9 +263,9 @@ const ActionDropdown = memo<ActionDropdownProps>(
       <DropdownMenuRoot
         {...rest}
         defaultOpen={defaultOpen}
+        open={open}
         onOpenChange={handleOpenChange}
         onOpenChangeComplete={handleOpenChangeComplete}
-        open={open}
       >
         <DropdownMenuTrigger {...resolvedTriggerProps}>{children}</DropdownMenuTrigger>
         <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
@@ -271,7 +274,11 @@ const ActionDropdown = memo<ActionDropdownProps>(
             hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
             placement={isMobile ? 'top' : placement}
           >
-            <DropdownMenuPopup {...resolvedPopupProps}>{menuContent}</DropdownMenuPopup>
+            <DropdownMenuPopup {...resolvedPopupProps}>
+              <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
+                {menuContent}
+              </Suspense>
+            </DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>
       </DropdownMenuRoot>

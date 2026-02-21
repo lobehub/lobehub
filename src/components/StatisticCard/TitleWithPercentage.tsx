@@ -1,6 +1,7 @@
 import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import { calcGrowthPercentage } from './growthPercentage';
 
@@ -25,9 +26,9 @@ const TitleWithPercentage = memo<TitleWithPercentageProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={4}
-        horizontal
         justify={'flex-start'}
         style={{
           overflow: 'hidden',
@@ -49,6 +50,7 @@ const TitleWithPercentage = memo<TitleWithPercentageProps>(
         </Text>
         {count && prvCount && percentage && percentage !== 0 ? (
           <Tag
+            variant={'borderless'}
             style={{
               ...(inverseColor
                 ? percentage > 0
@@ -58,7 +60,6 @@ const TitleWithPercentage = memo<TitleWithPercentageProps>(
                   ? upStyle
                   : downStyle),
             }}
-            variant={'borderless'}
           >
             {percentage > 0 ? '+' : ''}
             {percentage.toFixed(1)}%

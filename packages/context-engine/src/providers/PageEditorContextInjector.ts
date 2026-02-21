@@ -1,4 +1,5 @@
-import { type PageContentContext, formatPageContentContext } from '@lobechat/prompts';
+import type { PageContentContext } from '@lobechat/prompts';
+import { formatPageContentContext } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';

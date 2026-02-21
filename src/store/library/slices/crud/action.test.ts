@@ -1,9 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
+import { type CreateKnowledgeBaseParams, type KnowledgeBaseItem } from '@/types/knowledgeBase';
+import { withSWR } from '~test-utils';
 
 import { useKnowledgeBaseStore } from '../../store';
 
@@ -226,9 +226,12 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(mockItem);
 
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-1'), {
-        wrapper: withSWR,
-      });
+      const { result } = renderHook(
+        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-1'),
+        {
+          wrapper: withSWR,
+        },
+      );
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mockItem);
@@ -253,9 +256,12 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(mockItem);
 
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-2'), {
-        wrapper: withSWR,
-      });
+      const { result } = renderHook(
+        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-2'),
+        {
+          wrapper: withSWR,
+        },
+      );
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mockItem);
@@ -276,9 +282,12 @@ describe('KnowledgeBaseCrudAction', () => {
         });
       });
 
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-3'), {
-        wrapper: withSWR,
-      });
+      const { result } = renderHook(
+        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-3'),
+        {
+          wrapper: withSWR,
+        },
+      );
 
       await waitFor(() => {
         expect(result.current.data).toBeUndefined();
@@ -326,9 +335,12 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(newItem);
 
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-new'), {
-        wrapper: withSWR,
-      });
+      const { result } = renderHook(
+        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-new'),
+        {
+          wrapper: withSWR,
+        },
+      );
 
       await waitFor(() => {
         expect(result.current.data).toEqual(newItem);

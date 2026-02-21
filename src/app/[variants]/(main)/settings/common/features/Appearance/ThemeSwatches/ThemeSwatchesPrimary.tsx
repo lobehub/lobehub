@@ -1,4 +1,5 @@
-import { ColorSwatches, type PrimaryColors, findCustomThemeName, primaryColors } from '@lobehub/ui';
+import { type PrimaryColors } from '@lobehub/ui';
+import { ColorSwatches, findCustomThemeName, primaryColors } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +18,7 @@ const ThemeSwatchesPrimary = memo<IProps>(({ onChange, value }) => {
 
   return (
     <ColorSwatches
+      value={value ? primaryColors[value] : undefined}
       colors={[
         {
           color: 'rgba(0, 0, 0, 0)',
@@ -72,7 +74,6 @@ const ThemeSwatchesPrimary = memo<IProps>(({ onChange, value }) => {
         },
       ]}
       onChange={handleSelect}
-      value={value ? primaryColors[value] : undefined}
     />
   );
 });

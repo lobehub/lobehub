@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as desensitizeTool from '../../utils/desensitizeUrl';
 import { CloudflareStreamTransformer, desensitizeCloudflareUrl, fillUrl } from './cloudflare';

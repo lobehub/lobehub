@@ -7,7 +7,7 @@ import { Calendar, Clock, Edit, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AgentCronJob } from '@/database/schemas/agentCronJob';
+import { type AgentCronJob } from '@/database/schemas/agentCronJob';
 
 import { useAgentCronJobs } from './hooks/useAgentCronJobs';
 
@@ -63,33 +63,33 @@ const CronJobCards = memo<CronJobCardsProps>(({ cronJobs, loading, onDelete, onE
         return (
           <Col key={job.id} lg={8} md={12} xs={24}>
             <Card
+              loading={loading}
+              size="small"
+              style={{ height: '100%' }}
               extra={
-                <Flexbox align="center" gap={4} horizontal>
+                <Flexbox horizontal align="center" gap={4}>
                   <ActionIcon
                     icon={Edit}
-                    onClick={() => onEdit(job.id)}
                     size="small"
                     title={t('agentCronJobs.editJob')}
+                    onClick={() => onEdit(job.id)}
                   />
                   <Popconfirm
-                    onConfirm={() => onDelete(job.id)}
                     title={t('agentCronJobs.confirmDelete')}
+                    onConfirm={() => onDelete(job.id)}
                   >
                     <ActionIcon icon={Trash2} size="small" title={t('agentCronJobs.deleteJob')} />
                   </Popconfirm>
                 </Flexbox>
               }
-              loading={loading}
-              size="small"
-              style={{ height: '100%' }}
               styles={{
                 actions: { marginTop: 0 },
                 body: { paddingBottom: 12, paddingTop: 8 },
                 header: { borderBottom: 'none', marginTop: '8px', minHeight: 0, paddingBottom: 0 },
               }}
               title={
-                <Flexbox align="center" horizontal justify="space-between">
-                  <Flexbox align="center" gap={8} horizontal style={{ flex: 1 }}>
+                <Flexbox horizontal align="center" justify="space-between">
+                  <Flexbox horizontal align="center" gap={8} style={{ flex: 1 }}>
                     <span
                       style={{
                         fontSize: '13px',
@@ -105,8 +105,8 @@ const CronJobCards = memo<CronJobCardsProps>(({ cronJobs, loading, onDelete, onE
                   </Flexbox>
                   <Switch
                     checked={job.enabled || false}
-                    onChange={() => handleToggleEnabled(job)}
                     size="small"
+                    onChange={() => handleToggleEnabled(job)}
                   />
                 </Flexbox>
               }
@@ -127,13 +127,13 @@ const CronJobCards = memo<CronJobCardsProps>(({ cronJobs, loading, onDelete, onE
                 </Text>
 
                 <Flexbox gap={8}>
-                  <Flexbox align="center" gap={6} horizontal>
+                  <Flexbox horizontal align="center" gap={6}>
                     <Icon icon={Clock} size={12} />
                     <Text style={{ fontSize: '11px' }}>{t(intervalText as any)}</Text>
                   </Flexbox>
 
                   {job.remainingExecutions !== null && (
-                    <Flexbox align="center" gap={6} horizontal>
+                    <Flexbox horizontal align="center" gap={6}>
                       <Text style={{ fontSize: '11px' }}>
                         {t('agentCronJobs.remainingExecutions', { count: job.remainingExecutions })}
                       </Text>
@@ -141,7 +141,7 @@ const CronJobCards = memo<CronJobCardsProps>(({ cronJobs, loading, onDelete, onE
                   )}
 
                   {job.lastExecutedAt && (
-                    <Flexbox align="center" gap={6} horizontal>
+                    <Flexbox horizontal align="center" gap={6}>
                       <Icon icon={Calendar} size={12} />
                       <Text style={{ fontSize: '11px' }}>
                         {dayjs(job.lastExecutedAt).format('MM/DD HH:mm')}

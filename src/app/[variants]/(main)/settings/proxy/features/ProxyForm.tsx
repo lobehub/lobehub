@@ -1,8 +1,9 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Alert, Flexbox, Form, type FormGroupItemType, Icon, Skeleton } from '@lobehub/ui';
-import { Form as AntdForm, Button, Input, Radio, Space, Switch } from 'antd';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Alert, Flexbox, Form, Icon, Skeleton } from '@lobehub/ui';
+import { Button, Form as AntdForm, Input, Radio, Space, Switch } from 'antd';
 import { Loader2Icon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -117,7 +118,7 @@ const ProxyForm = () => {
         valuePropName: 'checked',
       },
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.enable'),
   };
 
@@ -148,7 +149,7 @@ const ProxyForm = () => {
         name: 'proxyPort',
       },
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.basicSettings'),
   };
 
@@ -178,7 +179,7 @@ const ProxyForm = () => {
           ]
         : []),
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.authSettings'),
   };
 
@@ -189,12 +190,12 @@ const ProxyForm = () => {
           <Flexbox gap={8}>
             <Space.Compact style={{ width: '100%' }}>
               <Input
-                onChange={(e) => setTestUrl(e.target.value)}
                 placeholder={t('proxy.testUrlPlaceholder')}
                 style={{ flex: 1 }}
                 value={testUrl}
+                onChange={(e) => setTestUrl(e.target.value)}
               />
-              <Button loading={isTesting} onClick={handleTest} type="default">
+              <Button loading={isTesting} type="default" onClick={handleTest}>
                 {t('proxy.testButton')}
               </Button>
             </Space.Compact>
@@ -202,23 +203,23 @@ const ProxyForm = () => {
             {!testResult ? null : testResult.success ? (
               <Alert
                 closable
+                type={'success'}
                 title={
-                  <Flexbox align="center" gap={8} horizontal>
+                  <Flexbox horizontal align="center" gap={8}>
                     {t('proxy.testSuccessWithTime', { time: testResult.responseTime })}
                   </Flexbox>
                 }
-                type={'success'}
               />
             ) : (
               <Alert
                 closable
+                type={'error'}
+                variant={'outlined'}
                 title={
-                  <Flexbox align="center" gap={8} horizontal>
+                  <Flexbox horizontal align="center" gap={8}>
                     {t('proxy.testFailed')}: {testResult.message}
                   </Flexbox>
                 }
-                type={'error'}
-                variant={'outlined'}
               />
             )}
           </Flexbox>
@@ -228,7 +229,7 @@ const ProxyForm = () => {
         minWidth: undefined,
       },
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.connectionTest'),
   };
 
@@ -240,8 +241,8 @@ const ProxyForm = () => {
         initialValues={proxySettings}
         items={[enableProxyGroup, basicSettingsGroup, authGroup, testGroup]}
         itemsType={'group'}
-        onValuesChange={handleValuesChange}
         variant={'filled'}
+        onValuesChange={handleValuesChange}
         {...FORM_STYLE}
       />
       <Flexbox align="end" justify="flex-end">
@@ -250,12 +251,12 @@ const ProxyForm = () => {
             {t('proxy.unsavedChanges')}
           </span>
         )}
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           <Button
             disabled={!hasUnsavedChanges}
             loading={isSaving}
-            onClick={handleSave}
             type="primary"
+            onClick={handleSave}
           >
             {t('proxy.saveButton')}
           </Button>

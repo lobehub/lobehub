@@ -130,12 +130,11 @@ export const promptUserMemory = ({ memories }: PromptUserMemoryOptions): string 
     return '';
   }
 
-  const contentParts: string[] = [];
+  const contentParts: string[] = [
+    '<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>',
+  ];
 
   // Add instruction
-  contentParts.push(
-    '<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>',
-  );
 
   // Add identities section (user's identity information)
   if (hasIdentities) {

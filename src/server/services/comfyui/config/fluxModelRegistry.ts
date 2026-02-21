@@ -2,7 +2,7 @@
  * FLUX Model Registry - Separated for maintainability
  * Contains all FLUX model family registrations
  */
-import type { ModelConfig } from './modelRegistry';
+import { type ModelConfig } from './modelRegistry';
 
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {

@@ -62,14 +62,14 @@ export const ErrorState = memo<ErrorStateProps>(
         align={'center'}
         className={styles.placeholderContainer}
         justify={'center'}
-        onClick={onCopyError}
         padding={16}
+        variant={'filled'}
         style={{
           aspectRatio,
           cursor: 'pointer',
           maxWidth: getThumbnailMaxWidth(generation, generationBatch),
         }}
-        variant={'filled'}
+        onClick={onCopyError}
       >
         <Center gap={8}>
           <Icon color={cssVar.colorTextDescription} icon={ImageOffIcon} size={24} />
@@ -81,11 +81,11 @@ export const ErrorState = memo<ErrorStateProps>(
               code
               ellipsis={{ rows: 2 }}
               fontSize={10}
+              title={t('generation.actions.copyError')}
+              type={'secondary'}
               style={{
                 wordBreak: 'break-all',
               }}
-              title={t('generation.actions.copyError')}
-              type={'secondary'}
             >
               {errorMessage}
             </Text>

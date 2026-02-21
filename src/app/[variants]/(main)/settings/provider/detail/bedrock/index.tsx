@@ -102,11 +102,11 @@ const useBedrockCard = (): ProviderItem => {
         ) : (
           <Select
             allowClear
+            placeholder={AWS_REGIONS[0]}
             options={AWS_REGIONS.map((i) => ({
               label: i,
               value: i,
             }))}
-            placeholder={AWS_REGIONS[0]}
           />
         ),
         desc: t(`${providerKey}.region.desc`),

@@ -1,9 +1,10 @@
-import { DBMessageItem } from '@lobechat/types';
+import type { DBMessageItem } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { uuid } from '@/utils/uuid';
 
+import { getTestDB } from '../../../core/getTestDB';
 import {
   chatGroups,
   chunks,
@@ -17,9 +18,8 @@ import {
   sessions,
   users,
 } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../../../core/getTestDB';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();

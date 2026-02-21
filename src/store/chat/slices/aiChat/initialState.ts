@@ -1,4 +1,4 @@
-import type { ChatInputEditor } from '@/features/ChatInput';
+import { type ChatInputEditor } from '@/features/ChatInput';
 
 export interface ChatAIChatState {
   inputFiles: File[];

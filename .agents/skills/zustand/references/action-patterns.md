@@ -77,9 +77,9 @@ toggleMessageEditing: (id, editing) => {
   set(
     { messageEditingIds: toggleBooleanList(get().messageEditingIds, id, editing) },
     false,
-    'toggleMessageEditing'
+    'toggleMessageEditing',
   );
-}
+};
 ```
 
 ## SWR Integration

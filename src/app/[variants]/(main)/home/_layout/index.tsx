@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { useTheme } from 'antd-style';
-import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type FC, type ReactNode } from 'react';
+import { Activity, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useIsDark } from '@/hooks/useIsDark';

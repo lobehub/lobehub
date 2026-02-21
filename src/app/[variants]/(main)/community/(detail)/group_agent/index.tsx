@@ -9,8 +9,8 @@ import { useDiscoverStore } from '@/store/discover';
 
 import NotFound from '../components/NotFound';
 import { TocProvider } from '../features/Toc/useToc';
-import Details from './features/Details';
 import { DetailProvider } from './features/DetailProvider';
+import Details from './features/Details';
 import Header from './features/Header';
 import StatusPage from './features/StatusPage';
 import Loading from './loading';

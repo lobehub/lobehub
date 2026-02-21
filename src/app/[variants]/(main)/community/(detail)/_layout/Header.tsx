@@ -46,14 +46,14 @@ const Header = memo(() => {
   return (
     <NavHeader
       className={styles.headerContainer}
+      right={<UserAvatar />}
+      style={cssVariables}
       left={
-        <Flexbox align={'center'} flex={1} gap={8} horizontal>
-          <ActionIcon icon={ArrowLeft} onClick={handleGoBack} size={'small'} />
+        <Flexbox horizontal align={'center'} flex={1} gap={8}>
+          <ActionIcon icon={ArrowLeft} size={'small'} onClick={handleGoBack} />
           <StoreSearchBar />
         </Flexbox>
       }
-      right={<UserAvatar />}
-      style={cssVariables}
       styles={{
         left: { flex: 1 },
       }}

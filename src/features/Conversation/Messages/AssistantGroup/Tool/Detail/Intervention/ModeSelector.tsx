@@ -1,4 +1,5 @@
-import { Button, Center, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { Button, Center, DropdownMenu, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';

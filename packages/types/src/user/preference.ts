@@ -1,10 +1,10 @@
 import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
-import { Plans } from '../subscription';
+import type { Plans } from '../subscription';
 import { TopicDisplayMode } from '../topic';
-import { UserOnboarding } from './onboarding';
-import { UserSettings } from './settings';
+import type { UserOnboarding } from './onboarding';
+import type { UserSettings } from './settings';
 
 export interface LobeUser {
   avatar?: string;
@@ -100,7 +100,7 @@ export interface UserInitializationState {
   username?: string;
 }
 
-export const NextAuthAccountSchame = z.object({
+export const OAuthAccountSchema = z.object({
   provider: z.string(),
   providerAccountId: z.string(),
 });
@@ -110,7 +110,7 @@ export const NextAuthAccountSchame = z.object({
  */
 export interface SSOProvider {
   email?: string;
-  /** Expiration time - Date for better-auth, number (Unix timestamp) for next-auth */
+  /** Expiration time - Date for better-auth */
   expiresAt?: Date | number | null;
   provider: string;
   providerAccountId: string;

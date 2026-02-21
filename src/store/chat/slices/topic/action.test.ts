@@ -1,6 +1,7 @@
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate } from '@/libs/swr';
@@ -10,7 +11,7 @@ import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useSessionStore } from '@/store/session';
-import { ChatTopic } from '@/types/topic';
+import { type ChatTopic } from '@/types/topic';
 
 import { useChatStore } from '../../store';
 
@@ -261,6 +262,196 @@ describe('topic action', () => {
 
       expect(updateFavoriteSpy).toHaveBeenCalledWith(topicId, { favorite: favState });
       expect(refreshTopicSpy).toHaveBeenCalled();
+    });
+
+    // Regression tests for issue #12072
+    it('should handle non-array groups in SWR cache without throwing TypeError', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'topic-id';
+      const favState = true;
+      const activeAgentId = 'test-agent';
+
+      await act(async () => {
+        useChatStore.setState({ activeAgentId });
+      });
+
+      const updateFavoriteSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+
+      // Mock mutate to receive a non-array value (malformed cache)
+      (mutate as Mock).mockImplementation(async (_key, updateFn) => {
+        if (typeof updateFn === 'function') {
+          // Pass non-array values to test defensive checks
+          const testCases = [
+            null,
+            undefined,
+            'string-instead-of-array',
+            { wrongStructure: true },
+            42,
+          ];
+
+          for (const malformedData of testCases) {
+            const result = updateFn(malformedData);
+            // Should return the malformed data as-is without throwing
+            expect(result).toBe(malformedData);
+          }
+        }
+      });
+
+      // Should not throw TypeError when cache has malformed data
+      await act(async () => {
+        await expect(result.current.favoriteTopic(topicId, favState)).resolves.not.toThrow();
+      });
+
+      expect(updateFavoriteSpy).toHaveBeenCalledWith(topicId, { favorite: favState });
+    });
+
+    it('should handle groups with non-array topics field without throwing TypeError', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'topic-id';
+      const favState = true;
+      const activeAgentId = 'test-agent';
+
+      await act(async () => {
+        useChatStore.setState({ activeAgentId });
+      });
+
+      const updateFavoriteSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+
+      // Mock mutate to test groups with malformed topics field
+      (mutate as Mock).mockImplementation(async (_key, updateFn) => {
+        if (typeof updateFn === 'function') {
+          // Test groups where topics is not an array
+          const malformedGroups = [
+            {
+              cronJob: {},
+              cronJobId: 'job-1',
+              topics: null, // topics is null
+            },
+            {
+              cronJob: {},
+              cronJobId: 'job-2',
+              topics: undefined, // topics is undefined
+            },
+            {
+              cronJob: {},
+              cronJobId: 'job-3',
+              topics: 'not-an-array', // topics is a string
+            },
+            {
+              cronJob: {},
+              cronJobId: 'job-4',
+              topics: { id: 'malformed' }, // topics is an object
+            },
+          ];
+
+          const result = updateFn(malformedGroups);
+
+          // When no topic matches, the function returns original groups unchanged
+          // The important thing is it doesn't throw a TypeError on .map()
+          expect(result).toBe(malformedGroups);
+        }
+      });
+
+      // Should not throw TypeError when groups have malformed topics
+      await act(async () => {
+        await expect(result.current.favoriteTopic(topicId, favState)).resolves.not.toThrow();
+      });
+
+      expect(updateFavoriteSpy).toHaveBeenCalledWith(topicId, { favorite: favState });
+    });
+
+    it('should correctly update favorite state in well-formed cache data', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'topic-to-favorite';
+      const favState = true;
+      const activeAgentId = 'test-agent';
+
+      await act(async () => {
+        useChatStore.setState({ activeAgentId });
+      });
+
+      const updateFavoriteSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+
+      // Mock mutate to test correct behavior with well-formed data
+      (mutate as Mock).mockImplementation(async (_key, updateFn) => {
+        if (typeof updateFn === 'function') {
+          const wellFormedGroups = [
+            {
+              cronJob: {},
+              cronJobId: 'job-1',
+              topics: [
+                { id: 'other-topic', favorite: false, title: 'Other' },
+                { id: topicId, favorite: false, title: 'Target' },
+              ],
+            },
+          ];
+
+          const result = updateFn(wellFormedGroups);
+
+          // Should return updated array with favorite state changed
+          expect(Array.isArray(result)).toBe(true);
+          const updatedTopic = result[0].topics.find((t: any) => t.id === topicId);
+          expect(updatedTopic).toBeDefined();
+          expect(updatedTopic.favorite).toBe(favState);
+
+          // Other topics should remain unchanged
+          const otherTopic = result[0].topics.find((t: any) => t.id === 'other-topic');
+          expect(otherTopic.favorite).toBe(false);
+        }
+      });
+
+      await act(async () => {
+        await result.current.favoriteTopic(topicId, favState);
+      });
+
+      expect(updateFavoriteSpy).toHaveBeenCalledWith(topicId, { favorite: favState });
+    });
+
+    it('should return original groups when no updates are needed', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'topic-already-favorited';
+      const favState = true;
+      const activeAgentId = 'test-agent';
+
+      await act(async () => {
+        useChatStore.setState({ activeAgentId });
+      });
+
+      const updateFavoriteSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+
+      // Mock mutate to test no-op scenario
+      (mutate as Mock).mockImplementation(async (_key, updateFn) => {
+        if (typeof updateFn === 'function') {
+          const originalGroups = [
+            {
+              cronJob: {},
+              cronJobId: 'job-1',
+              topics: [
+                { id: topicId, favorite: true, title: 'Already Favorited' }, // Already has the target state
+              ],
+            },
+          ];
+
+          const result = updateFn(originalGroups);
+
+          // Should return the same reference when no updates are made
+          expect(result).toBe(originalGroups);
+        }
+      });
+
+      await act(async () => {
+        await result.current.favoriteTopic(topicId, favState);
+      });
+
+      expect(updateFavoriteSpy).toHaveBeenCalledWith(topicId, { favorite: favState });
     });
   });
   describe('useFetchTopics', () => {

@@ -1,10 +1,5 @@
-import {
-  ActionIcon,
-  DropdownMenu,
-  type DropdownMenuProps,
-  Icon,
-  type MenuProps,
-} from '@lobehub/ui';
+import { type DropdownMenuProps, type MenuProps } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { MoreVertical, PencilLine, Plus, Settings2, Trash, UsersRound } from 'lucide-react';
@@ -181,19 +176,19 @@ const Actions = memo<ActionsProps>(
             active={isMobile ? true : false}
             icon={MoreVertical}
             loading={isCreatingGroup}
+            size={{ blockSize: 22, size: 16 }}
+            style={{ background: isMobile ? 'transparent' : '', marginRight: -8 }}
             onClick={(e) => {
               e.stopPropagation();
             }}
-            size={{ blockSize: 22, size: 16 }}
-            style={{ background: isMobile ? 'transparent' : '', marginRight: -8 }}
           />
         </DropdownMenu>
 
         <MemberSelectionModal
           mode="create"
+          open={isGroupModalOpen}
           onCancel={handleGroupModalCancel}
           onConfirm={handleCreateGroupWithMembers}
-          open={isGroupModalOpen}
         />
       </>
     );

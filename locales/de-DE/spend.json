@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "Token-Nutzung",
   "table.columns.type.enums.chat": "Textgenerierung",
   "table.columns.type.enums.imageGeneration": "Bildgenerierung",
+  "table.columns.type.enums.videoGeneration": "Videoerstellung",
   "table.columns.type.title": "Typ",
   "table.desc": "Details zur Nutzung von Rechen-Credits für Textgenerierung, Einbettung, Bildgenerierung usw.",
   "table.more": "Details anzeigen",

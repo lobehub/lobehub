@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/prefer-top-level-await */
 import { sql } from 'drizzle-orm';
 
 import { getBatchSize, getMigrationMode, isDryRun } from './_internal/config';
@@ -213,10 +212,15 @@ async function main() {
   try {
     await migrateFromNextAuth();
     console.log('');
-    console.log(`${GREEN_BOLD}✅ Migration success!${RESET} (${formatDuration(Date.now() - startedAt)})`);
+    console.log(
+      `${GREEN_BOLD}✅ Migration success!${RESET} (${formatDuration(Date.now() - startedAt)})`,
+    );
   } catch (error) {
     console.log('');
-    console.error(`${RED_BOLD}❌ Migration failed${RESET} (${formatDuration(Date.now() - startedAt)}):`, error);
+    console.error(
+      `${RED_BOLD}❌ Migration failed${RESET} (${formatDuration(Date.now() - startedAt)}):`,
+      error,
+    );
     process.exitCode = 1;
   } finally {
     await pool.end();

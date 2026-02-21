@@ -14,12 +14,12 @@ const FollowStats = memo(() => {
   const followersCount = user.followersCount ?? 0;
 
   return (
-    <Flexbox align={'center'} gap={16} horizontal>
-      <Flexbox align={'center'} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} gap={16}>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Text style={{ fontWeight: 600 }}>{followingCount}</Text>
         <Text type={'secondary'}>{t('user.following')}</Text>
       </Flexbox>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Text style={{ fontWeight: 600 }}>{followersCount}</Text>
         <Text type={'secondary'}>{t('user.followers')}</Text>
       </Flexbox>

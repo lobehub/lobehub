@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type WriteLocalFileState } from '../../../types';
+import type { WriteLocalFileState } from '../../../types';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 interface WriteLocalFileParams {
@@ -44,7 +44,7 @@ export const WriteLocalFileInspector = memo<
       <span>{t('builtins.lobe-cloud-sandbox.apiName.writeLocalFile')}: </span>
       <FilePathDisplay filePath={filePath} />
       {lines > 0 && (
-        <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12}>
+        <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12}>
           {' '}
           <Icon icon={Plus} size={12} />
           {lines}

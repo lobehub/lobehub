@@ -36,9 +36,9 @@ const MentionedUsers = memo(() => {
 
   return (
     <Flexbox
+      horizontal
       className={styles.container}
       gap={6}
-      horizontal
       padding={hasMentionedUsers ? '16px 16px 12px' : 0}
     >
       {mentionedAgents?.map((agent) => (

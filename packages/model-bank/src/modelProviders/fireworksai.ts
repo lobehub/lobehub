@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref: https://fireworks.ai/models?show=Serverless
 // ref: https://fireworks.ai/pricing

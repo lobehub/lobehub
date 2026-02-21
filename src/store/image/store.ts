@@ -4,30 +4,43 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { type ImageStoreState, initialState } from './initialState';
-import { type CreateImageAction, createCreateImageSlice } from './slices/createImage/action';
-import { type GenerationBatchAction, createGenerationBatchSlice } from './slices/generationBatch/action';
-import {
-  type GenerationConfigAction,
-  createGenerationConfigSlice,
-} from './slices/generationConfig/action';
-import { type GenerationTopicAction, createGenerationTopicSlice } from './slices/generationTopic/action';
+import { flattenActions } from '../utils/flattenActions';
+import { type ImageStoreState } from './initialState';
+import { initialState } from './initialState';
+import { type CreateImageAction } from './slices/createImage/action';
+import { createCreateImageSlice } from './slices/createImage/action';
+import { type GenerationBatchAction } from './slices/generationBatch/action';
+import { createGenerationBatchSlice } from './slices/generationBatch/action';
+import { type GenerationConfigAction } from './slices/generationConfig/action';
+import { createGenerationConfigSlice } from './slices/generationConfig/action';
+import { type GenerationTopicAction } from './slices/generationTopic/action';
+import { createGenerationTopicSlice } from './slices/generationTopic/action';
 
 //  ===============  aggregate createStoreFn ============ //
 
 export interface ImageStore
-  extends GenerationConfigAction,
+  extends
+    GenerationConfigAction,
     GenerationTopicAction,
     GenerationBatchAction,
     CreateImageAction,
     ImageStoreState {}
 
-const createStore: StateCreator<ImageStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type ImageStoreAction = GenerationConfigAction &
+  GenerationTopicAction &
+  GenerationBatchAction &
+  CreateImageAction;
+
+const createStore: StateCreator<ImageStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<ImageStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createGenerationConfigSlice(...parameters),
-  ...createGenerationTopicSlice(...parameters),
-  ...createGenerationBatchSlice(...parameters),
-  ...createCreateImageSlice(...parameters),
+  ...flattenActions<ImageStoreAction>([
+    createGenerationConfigSlice(...parameters),
+    createGenerationTopicSlice(...parameters),
+    createGenerationBatchSlice(...parameters),
+    createCreateImageSlice(...parameters),
+  ]),
 });
 
 //  ===============  implement useStore ============ //

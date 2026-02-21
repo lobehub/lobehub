@@ -183,9 +183,9 @@ const ConfigDisplay = memo<ConfigDisplayProps>(({ schema, onConfigUpdate }) => {
           {schema.config.type === 'http' && (
             <KeyValueEditor
               addButtonText={t('protocolInstall.config.addHeaders')}
-              onChange={handleHeadersUpdate}
               style={{ border: 'none' }}
               value={currentHeaders}
+              onChange={handleHeadersUpdate}
             />
           )}
 
@@ -193,9 +193,9 @@ const ConfigDisplay = memo<ConfigDisplayProps>(({ schema, onConfigUpdate }) => {
           {schema.config.type === 'stdio' && (
             <KeyValueEditor
               addButtonText={t('protocolInstall.config.addEnv')}
-              onChange={handleEnvUpdate}
               style={{ border: 'none' }}
               value={currentEnv}
+              onChange={handleEnvUpdate}
             />
           )}
         </div>

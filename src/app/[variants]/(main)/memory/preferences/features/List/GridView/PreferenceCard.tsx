@@ -22,16 +22,16 @@ const PreferenceCard = memo<PreferenceCardProps>(({ preference, onClick }) => {
   return (
     <GridCard
       actions={<PreferenceDropdown id={preference.id} />}
+      capturedAt={preference.capturedAt || preference.updatedAt || preference.createdAt}
+      cate={preference.type}
+      title={preference.title}
       badges={
         <ProgressIcon
           format={(percent) => `${t('filter.sort.scorePriority')}: ${percent}%`}
           percent={(preference.scorePriority ?? 0) * 100}
         />
       }
-      capturedAt={preference.capturedAt || preference.updatedAt || preference.createdAt}
-      cate={preference.type}
       onClick={onClick}
-      title={preference.title}
     >
       {preference.conclusionDirectives}
     </GridCard>

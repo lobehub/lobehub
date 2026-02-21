@@ -194,6 +194,29 @@ export default {
     'Client request mode will initiate session requests directly from the browser, which can improve response speed',
   'providerModels.config.fetchOnClient.title': 'Use Client Request Mode',
   'providerModels.config.helpDoc': 'Configuration Guide',
+  'providerModels.config.oauth.authError': 'Authorization failed. Please try again.',
+  'providerModels.config.oauth.authorized': 'Authorized',
+  'providerModels.config.oauth.authorizedDesc':
+    'You have connected to {{name}}. Click to disconnect.',
+  'providerModels.config.oauth.cancel': 'Cancel',
+  'providerModels.config.oauth.codeExpired': 'Authorization code has expired. Please try again.',
+  'providerModels.config.oauth.connect': 'Connect with {{name}}',
+  'providerModels.config.oauth.connectDesc': 'Click to authorize via browser. No API key required.',
+  'providerModels.config.oauth.connected': 'Connected',
+  'providerModels.config.oauth.connecting': 'Connecting...',
+  'providerModels.config.oauth.copyCode': 'Copy code',
+  'providerModels.config.oauth.denied': 'Authorization was denied. Please try again.',
+  'providerModels.config.oauth.desc':
+    'Authorize with your {{name}} account to access models through your subscription.',
+  'providerModels.config.oauth.disconnect': 'Disconnect',
+  'providerModels.config.oauth.disconnectConfirm':
+    'Are you sure you want to disconnect? You will need to re-authorize to use this provider.',
+  'providerModels.config.oauth.enterCode': 'Enter the code on the opened page:',
+  'providerModels.config.oauth.openBrowser': 'Open browser to authorize',
+  'providerModels.config.oauth.polling': 'Waiting for authorization...',
+  'providerModels.config.oauth.retry': 'Retry',
+  'providerModels.config.oauth.serviceNote': 'Service provided by {{name}}',
+  'providerModels.config.oauth.title': 'OAuth Authorization',
   'providerModels.config.responsesApi.desc':
     "Uses OpenAI's next-generation request format specification to unlock advanced features like chain-of-thought (supported by OpenAI models only)",
   'providerModels.config.responsesApi.title': 'Use Responses API Specification',
@@ -224,6 +247,10 @@ export default {
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
+  'providerModels.item.modelConfig.extendParams.options.effort.hint':
+    'For Claude Opus 4.6; controls effort level (low/medium/high/max).',
+  'providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint':
+    'For Claude Opus 4.6; toggles adaptive thinking on or off.',
   'providerModels.item.modelConfig.extendParams.options.enableReasoning.hint':
     'For Claude, DeepSeek and other reasoning models; unlock deeper thinking.',
   'providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint':
@@ -252,6 +279,8 @@ export default {
     'For Gemini 3 Flash Preview models; controls thinking depth.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint':
     'For Gemini 3 Pro Preview models; controls thinking depth.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint':
+    'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':
@@ -291,8 +320,8 @@ export default {
   'providerModels.item.modelConfig.type.options.realtime': 'Real-time Chat',
   'providerModels.item.modelConfig.type.options.stt': 'Speech-to-Text',
   'providerModels.item.modelConfig.type.options.text2music': 'Text-to-Music',
-  'providerModels.item.modelConfig.type.options.text2video': 'Text-to-Video',
   'providerModels.item.modelConfig.type.options.tts': 'Text-to-Speech',
+  'providerModels.item.modelConfig.type.options.video': 'Video Generation',
   'providerModels.item.modelConfig.type.placeholder': 'Please select a model type',
   'providerModels.item.modelConfig.type.title': 'Model Type',
   'providerModels.item.modelConfig.video.extra':

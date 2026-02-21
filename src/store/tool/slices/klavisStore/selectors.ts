@@ -1,5 +1,6 @@
 import { type ToolStore } from '../../store';
-import { type KlavisServer, KlavisServerStatus } from './types';
+import { type KlavisServer } from './types';
+import { KlavisServerStatus } from './types';
 
 /**
  * Klavis Store Selectors

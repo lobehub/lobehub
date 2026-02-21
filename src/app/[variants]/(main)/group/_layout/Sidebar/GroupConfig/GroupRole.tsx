@@ -2,7 +2,8 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { EditableMessage } from '@lobehub/ui/chat';
-import { type MouseEvent, memo } from 'react';
+import { type MouseEvent } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GroupInfo from '@/features/GroupInfo';
@@ -47,19 +48,17 @@ const GroupRole = memo<GroupRoleProps>(
     };
 
     return (
-      <Flexbox height={200} onClick={handleOpen} paddingInline={8}>
+      <Flexbox height={200} paddingInline={8} onClick={handleOpen}>
         <EditableMessage
           classNames={{ markdown: styles.prompt }}
           editing={editing}
           markdownProps={{ enableLatex: false, enableMermaid: false }}
+          openModal={editorModalOpen}
+          placeholder={`${t('settingGroup.systemPrompt.placeholder', { ns: 'setting' })}...`}
+          value={groupConfig?.systemPrompt || ''}
           model={{
             extra: <GroupInfo meta={currentSession?.meta} style={{ marginBottom: 16 }} />,
           }}
-          onChange={handleSystemPromptChange}
-          onEditingChange={setEditing}
-          onOpenChange={setEditorModalOpen}
-          openModal={editorModalOpen}
-          placeholder={`${t('settingGroup.systemPrompt.placeholder', { ns: 'setting' })}...`}
           styles={{
             markdown: {
               opacity: groupConfig?.systemPrompt ? undefined : 0.5,
@@ -72,7 +71,9 @@ const GroupRole = memo<GroupRoleProps>(
             edit: t('edit', { ns: 'common' }),
             title: t('settingGroup.systemPrompt.title', { ns: 'setting' }),
           }}
-          value={groupConfig?.systemPrompt || ''}
+          onChange={handleSystemPromptChange}
+          onEditingChange={setEditing}
+          onOpenChange={setEditorModalOpen}
         />
       </Flexbox>
     );

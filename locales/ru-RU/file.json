@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "В процессе",
   "detail.data.embedding.success": "Завершено",
   "detail.data.embeddingStatus": "встраивание",
+  "detail.data.noChunk": "Нет фрагмента",
   "empty": "Файлы или папки ещё не загружены.",
   "header.actions.builtInBlockList.filtered": "Отфильтровано {{ignored}} файлов (из {{total}} всего)",
   "header.actions.connect": "Подключиться...",

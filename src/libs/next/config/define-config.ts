@@ -1,14 +1,15 @@
 import analyzer from '@next/bundle-analyzer';
 import withSerwistInit from '@serwist/next';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
-import type { NextConfig } from 'next';
-import type { Header, Redirect } from 'next/dist/lib/load-custom-routes';
+import { type NextConfig } from 'next';
+import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 import ReactComponentName from 'react-scan/react-component-name/webpack';
 
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
   outputFileTracingExcludes?: NextConfig['outputFileTracingExcludes'];
+  outputFileTracingIncludes?: NextConfig['outputFileTracingIncludes'];
   redirects?: Redirect[];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
@@ -29,7 +30,26 @@ export function defineConfig(config: CustomNextConfig) {
 
   const standaloneConfig: NextConfig = {
     output: 'standalone',
-    outputFileTracingIncludes: { '*': ['public/**/*', '.next/static/**/*'] },
+    outputFileTracingIncludes: {
+      '*': [
+        'public/**/*',
+        '.next/static/**/*',
+        // Only needed for Docker standalone builds.
+        // On Vercel (serverless), including native bindings can easily exceed function size limits.
+        ...(buildWithDocker
+          ? [
+              // Ensure native bindings are included in standalone output.
+              // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
+              // which may not be picked up by Next.js output tracing.
+              'node_modules/@napi-rs/canvas/**/*',
+              'node_modules/@napi-rs/canvas-*/**/*',
+              // pnpm real package locations (including platform-specific bindings with `.node`)
+              'node_modules/.pnpm/@napi-rs+canvas*/**/*',
+              'node_modules/.pnpm/@napi-rs+canvas-*/**/*',
+            ]
+          : []),
+      ],
+    },
   };
 
   const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
@@ -242,6 +262,9 @@ export function defineConfig(config: CustomNextConfig) {
     ...(config.outputFileTracingExcludes && {
       outputFileTracingExcludes: config.outputFileTracingExcludes,
     }),
+    ...(config.outputFileTracingIncludes && {
+      outputFileTracingIncludes: config.outputFileTracingIncludes,
+    }),
     reactStrictMode: true,
     redirects: async () => [
       {
@@ -327,9 +350,11 @@ export function defineConfig(config: CustomNextConfig) {
     // when external packages in dev mode with turbopack, this config will lead to bundle error
     // @napi-rs/canvas is a native module that can't be bundled by Turbopack
     // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
-    serverExternalPackages: config.serverExternalPackages
-      ? config.serverExternalPackages
-      : ['pdfkit', '@napi-rs/canvas', 'pdfjs-dist'],
+    serverExternalPackages: config.serverExternalPackages ?? [
+      'pdfkit',
+      '@napi-rs/canvas',
+      'pdfjs-dist',
+    ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
     turbopack: {

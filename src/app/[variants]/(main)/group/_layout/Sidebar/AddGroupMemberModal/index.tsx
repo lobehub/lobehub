@@ -9,7 +9,7 @@ import useSWR from 'swr';
 
 import { agentService } from '@/services/agent';
 
-import type { AgentItemData } from './AgentItem';
+import { type AgentItemData } from './AgentItem';
 import AvailableAgentList from './AvailableAgentList';
 import SelectedAgentList from './SelectedAgentList';
 import { useAgentSelectionStore } from './store';
@@ -88,25 +88,25 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
     return (
       <Modal
         allowFullscreen
+        open={open}
+        title={t('memberSelection.addMember')}
+        width={800}
         footer={
-          <Flexbox gap={8} horizontal justify="end">
+          <Flexbox horizontal gap={8} justify="end">
             <Button onClick={handleCancel}>{t('cancel', { ns: 'common' })}</Button>
             <Button
               disabled={isConfirmDisabled}
               loading={isAdding}
-              onClick={handleConfirm}
               type="primary"
+              onClick={handleConfirm}
             >
               {t('memberSelection.addMember')} ({selectedAgentIds.length})
             </Button>
           </Flexbox>
         }
         onCancel={handleCancel}
-        open={open}
-        title={t('memberSelection.addMember')}
-        width={800}
       >
-        <Flexbox className={styles.container} gap={8} horizontal>
+        <Flexbox horizontal className={styles.container} gap={8}>
           {/* Left Column - Available Agents */}
           <AvailableAgentList agents={availableAgents} isLoading={isLoadingAgents} />
 

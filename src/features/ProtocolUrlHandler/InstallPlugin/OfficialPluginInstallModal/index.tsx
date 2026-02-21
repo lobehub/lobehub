@@ -80,7 +80,10 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
 
     return (
       <Modal
+        open
         confirmLoading={loading}
+        title={t('protocolInstall.official.title')}
+        width={800}
         okButtonProps={{
           disabled: installed || isLoading,
           type: installed ? 'default' : 'primary',
@@ -90,9 +93,6 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         }
         onCancel={onComplete}
         onOk={handleConfirm}
-        open
-        title={t('protocolInstall.official.title')}
-        width={800}
       >
         {renderContent()}
       </Modal>

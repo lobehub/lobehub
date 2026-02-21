@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSearchResults } from './formatSearchResults';
 import type { FileSearchResult } from './formatSearchResults';
+import { formatSearchResults } from './formatSearchResults';
 
 describe('formatSearchResults', () => {
   it('should format single file with multiple chunks', () => {

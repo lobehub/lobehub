@@ -1,22 +1,25 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 import { z } from 'zod';
 
-import { GroundingSearch, GroundingSearchSchema } from '../../search';
-import {
+import type { GroundingSearch } from '../../search';
+import { GroundingSearchSchema } from '../../search';
+import type {
   ChatImageItem,
-  ChatImageItemSchema,
   ChatMessageError,
-  ChatMessageErrorSchema,
   ChatToolPayload,
-  ChatToolPayloadSchema,
   MessageMetadata,
-  MessageMetadataSchema,
   MessageToolCall,
-  MessageToolCallSchema,
   ModelReasoning,
+} from '../common';
+import {
+  ChatImageItemSchema,
+  ChatMessageErrorSchema,
+  ChatToolPayloadSchema,
+  MessageMetadataSchema,
+  MessageToolCallSchema,
   ModelReasoningSchema,
 } from '../common';
-import { UIChatMessage } from '../ui';
+import type { UIChatMessage } from '../ui';
 
 export interface QueryMessageParams {
   agentId?: string | null;

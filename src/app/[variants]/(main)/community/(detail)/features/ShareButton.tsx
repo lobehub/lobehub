@@ -1,8 +1,8 @@
+import { type ButtonProps } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   Button,
-  type ButtonProps,
   Center,
   CopyButton,
   Flexbox,
@@ -15,7 +15,8 @@ import {
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import { LinkIcon, Share2Icon } from 'lucide-react';
-import { type ReactNode, memo, useState } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useShare } from '@/hooks/useShare';
@@ -91,13 +92,13 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
           <Center
             flex={'none'}
             height={72}
+            width={72}
             style={{
               backgroundColor: cssVar.colorBgContainer,
               borderRadius: '50%',
               overflow: 'hidden',
               zIndex: 2,
             }}
-            width={72}
           >
             <Avatar animation avatar={meta.avatar} shape={'square'} size={64} />
           </Center>
@@ -107,7 +108,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
               {meta.desc}
             </Text>
             {meta.hashtags && (
-              <Flexbox align={'center'} gap={4} horizontal justify={'center'} wrap={'wrap'}>
+              <Flexbox horizontal align={'center'} gap={4} justify={'center'} wrap={'wrap'}>
                 {meta.hashtags.map((tag, index) => (
                   <Tag key={index}>{startCase(tag).trim()}</Tag>
                 ))}
@@ -116,7 +117,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
             {meta.tags}
           </Center>
         </Flexbox>
-        <Flexbox align={'center'} gap={8} horizontal justify={'center'} wrap={'wrap'}>
+        <Flexbox horizontal align={'center'} gap={8} justify={'center'} wrap={'wrap'}>
           {[x, reddit, telegram, whatsapp, mastodon, weibo].map(
             (item) =>
               item.icon && (
@@ -131,7 +132,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
               ),
           )}
         </Flexbox>
-        <Flexbox align={'center'} gap={8} horizontal width={'100%'}>
+        <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
           <Input value={meta.url} variant={'filled'} />
           <CopyButton
             className={styles.copy}
@@ -149,13 +150,13 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
 
   return (
     <>
-      <Button icon={Share2Icon} onClick={() => setOpen(true)} size={'large'} {...rest} />
+      <Button icon={Share2Icon} size={'large'} onClick={() => setOpen(true)} {...rest} />
       <Modal
         footer={null}
-        onCancel={() => setOpen(false)}
         open={open}
         title={t('share')}
         width={360}
+        onCancel={() => setOpen(false)}
       >
         {content}
       </Modal>

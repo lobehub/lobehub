@@ -11,7 +11,7 @@ import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selector
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
-import type { MarketPublishAction } from './types';
+import { type MarketPublishAction } from './types';
 import { generateDefaultChangelog } from './utils';
 
 export interface OriginalAgentInfo {

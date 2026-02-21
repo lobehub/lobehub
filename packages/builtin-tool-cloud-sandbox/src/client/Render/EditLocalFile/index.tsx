@@ -1,13 +1,13 @@
 'use client';
 
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useState } from 'react';
 
-import { type EditLocalFileState } from '../../../types';
+import type { EditLocalFileState } from '../../../types';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -51,8 +51,8 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
     return (
       <Flexbox className={styles.container} gap={8}>
         {/* Header */}
-        <Flexbox align={'center'} className={styles.header} horizontal justify={'space-between'}>
-          <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.header} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} gap={8}>
             {pluginState === undefined ? null : isSuccess ? (
               <CheckCircleFilled
                 className={styles.statusIcon}
@@ -64,11 +64,11 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
                 style={{ color: cssVar.colorError }}
               />
             )}
-            <Text as={'span'} code fontSize={12}>
+            <Text code as={'span'} fontSize={12}>
               {pluginState?.replacements || 0} replacement(s) in {args.path}
             </Text>
             {statsText && (
-              <Text as={'span'} code fontSize={11} type={'secondary'}>
+              <Text code as={'span'} fontSize={11} type={'secondary'}>
                 ({statsText})
               </Text>
             )}
@@ -77,10 +77,10 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
             <ActionIcon
               className={`action-icon`}
               icon={expanded ? ChevronUp : ChevronDown}
-              onClick={() => setExpanded(!expanded)}
               size={'small'}
               style={{ opacity: expanded ? 1 : undefined }}
               title={expanded ? 'Hide diff' : 'Show diff'}
+              onClick={() => setExpanded(!expanded)}
             />
           )}
         </Flexbox>
@@ -89,11 +89,11 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
         {expanded && pluginState?.diffText && (
           <Block padding={0} variant={'outlined'}>
             <Highlighter
+              wrap
               language={'diff'}
               showLanguage={false}
               style={{ maxHeight: 300, overflow: 'auto' }}
               variant={'borderless'}
-              wrap
             >
               {pluginState.diffText}
             </Highlighter>

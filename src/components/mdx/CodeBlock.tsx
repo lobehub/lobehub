@@ -37,7 +37,7 @@ const CodeBlock: FC<PropsWithChildren> = ({ children }) => {
   if (code.isSingleLine) return <PreSingleLine language={code.lang}>{code.content}</PreSingleLine>;
 
   return (
-    <Pre allowChangeLanguage={false} fullFeatured language={code.lang}>
+    <Pre fullFeatured allowChangeLanguage={false} language={code.lang}>
       {code.content}
     </Pre>
   );

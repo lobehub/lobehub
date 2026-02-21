@@ -1,7 +1,8 @@
-import { type DeploymentOption, type SystemDependency } from '@lobehub/market-sdk';
-import debug from 'debug';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
+
+import { type DeploymentOption, type SystemDependency } from '@lobehub/market-sdk';
+import debug from 'debug';
 
 import { type SystemDependencyCheckResult } from '@/types/plugins';
 
@@ -83,7 +84,7 @@ class MCPSystemDepsCheckService {
       // Process version parsing
       if (dependency.versionParsingRequired) {
         // Extract version number - usually in format vX.Y.Z or X.Y.Z
-        const versionMatch = output.match(/[Vv]?(\d+(\.\d+)*)/);
+        const versionMatch = output.match(/v?(\d+(\.\d+)*)/i);
         if (versionMatch) {
           version = versionMatch[0];
         }
@@ -93,7 +94,7 @@ class MCPSystemDepsCheckService {
 
       if (dependency.requiredVersion) {
         // Extract numeric part
-        const currentVersion = version.replace(/^[Vv]/, ''); // Remove possible v prefix
+        const currentVersion = version.replace(/^v/i, ''); // Remove possible v prefix
         const currentVersionNum = parseFloat(currentVersion);
 
         // Extract condition and number from required version
@@ -199,11 +200,11 @@ class MCPSystemDepsCheckService {
     const configSchema = option.connection?.configSchema;
     const needsConfig = Boolean(
       configSchema &&
-        // Check if there's a non-empty required array
-        ((Array.isArray(configSchema.required) && configSchema.required.length > 0) ||
-          // Check if any field in properties is marked as required
-          (configSchema.properties &&
-            Object.values(configSchema.properties).some((prop: any) => prop.required === true))),
+      // Check if there's a non-empty required array
+      ((Array.isArray(configSchema.required) && configSchema.required.length > 0) ||
+        // Check if any field in properties is marked as required
+        (configSchema.properties &&
+          Object.values(configSchema.properties).some((prop: any) => prop.required === true))),
     );
 
     log(

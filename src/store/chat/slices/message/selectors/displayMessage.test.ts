@@ -1,12 +1,10 @@
-import { UIChatMessage } from '@lobechat/types';
-import { LobeAgentConfig } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { useAgentStore } from '@/store/agent';
-import { ChatStore } from '@/store/chat';
+import { type ChatStore } from '@/store/chat';
 import { initialState } from '@/store/chat/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { createServerConfigStore } from '@/store/serverConfig/store';
@@ -832,6 +830,27 @@ describe('displayMessageSelectors', () => {
 
       const result = displayMessageSelectors.findLastMessageId('msg-1')(state as ChatStore);
       expect(result).toBe('tool-result-id');
+    });
+
+    it('should return lastMessageId for compressedGroup instead of group id', () => {
+      const compressedGroupMessage = {
+        id: 'mg_123456',
+        role: 'compressedGroup',
+        content: 'Compressed summary',
+        lastMessageId: 'msg-999',
+        compressedMessages: [],
+        pinnedMessages: [],
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [compressedGroupMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId('mg_123456')(state as ChatStore);
+      expect(result).toBe('msg-999');
     });
   });
 });

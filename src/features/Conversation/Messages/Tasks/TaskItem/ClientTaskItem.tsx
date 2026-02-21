@@ -6,13 +6,12 @@ import { memo, useMemo, useState } from 'react';
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { type UIChatMessage } from '@/types/index';
 import { ThreadStatus } from '@/types/index';
-import type { UIChatMessage } from '@/types/index';
 
-import ClientTaskDetailCompletedState from '../../Task/ClientTaskDetail/CompletedState';
-import ClientTaskDetailProcessingState from '../../Task/ClientTaskDetail/ProcessingState';
-import { ErrorState, InitializingState, isProcessingStatus } from '../shared';
-import TaskTitle, { type TaskMetrics } from './TaskTitle';
+import { ErrorState, InitializingState, isProcessingStatus, TaskMessages } from '../shared';
+import { type TaskMetrics } from './TaskTitle';
+import TaskTitle from './TaskTitle';
 
 interface ClientTaskItemProps {
   item: UIChatMessage;
@@ -43,8 +42,7 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
 
   // Use task message's agentId (skip 'supervisor' as it's not a valid agent ID for queries)
   // Fall back to activeAgentId if not available
-  const agentId =
-    itemAgentId && itemAgentId !== 'supervisor' ? itemAgentId : activeAgentId;
+  const agentId = itemAgentId && itemAgentId !== 'supervisor' ? itemAgentId : activeAgentId;
 
   const threadContext = useMemo(
     () => ({
@@ -118,10 +116,10 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
     <AccordionItem
       expand={expanded}
       itemKey={id}
-      onExpandChange={setExpanded}
       paddingBlock={4}
       paddingInline={4}
       title={<TaskTitle metrics={metrics} status={status} title={title} />}
+      onExpandChange={setExpanded}
     >
       <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
         {instruction && (
@@ -135,33 +133,21 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
         {/* Initializing State - no taskDetail yet or no blocks */}
         {(isInitializing || (isProcessing && !hasBlocks)) && <InitializingState />}
 
-        {/* Processing State - show streaming blocks */}
-        {!isInitializing && isProcessing && hasBlocks && (
-          <ClientTaskDetailProcessingState
-            assistantId={assistantGroupMessage!.id}
-            blocks={blocks!}
+        {/* Processing or Completed State - show blocks via TaskMessages */}
+        {!isInitializing && (isProcessing || isCompleted) && hasBlocks && threadMessages && (
+          <TaskMessages
+            duration={taskDetail?.duration}
+            isProcessing={isProcessing}
+            messages={threadMessages}
             model={model ?? undefined}
             provider={provider ?? undefined}
             startTime={assistantGroupMessage?.createdAt}
+            totalCost={taskDetail?.totalCost}
           />
         )}
 
         {/* Error State */}
         {!isInitializing && isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
-
-        {/* Completed State - show blocks with final result */}
-        {!isInitializing && isCompleted && taskDetail && hasBlocks && (
-          <ClientTaskDetailCompletedState
-            assistantId={assistantGroupMessage!.id}
-            blocks={blocks!}
-            duration={taskDetail.duration}
-            model={model ?? undefined}
-            provider={provider ?? undefined}
-            totalCost={taskDetail.totalCost}
-            totalTokens={taskDetail.totalTokens}
-            totalToolCalls={taskDetail.totalToolCalls}
-          />
-        )}
       </Block>
     </AccordionItem>
   );

@@ -193,6 +193,62 @@ describe('ShellCommandCtr', () => {
         expect(result.stderr).toBe('error message\n');
       });
 
+      it('should strip ANSI escape codes from output', async () => {
+        let exitCallback: (code: number) => void;
+        let stdoutCallback: (data: Buffer) => void;
+        let stderrCallback: (data: Buffer) => void;
+
+        mockChildProcess.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'exit') {
+            exitCallback = callback;
+            setTimeout(() => exitCallback(0), 10);
+          }
+          return mockChildProcess;
+        });
+
+        mockChildProcess.stdout.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'data') {
+            stdoutCallback = callback;
+            // Simulate output with ANSI color codes
+            setTimeout(
+              () =>
+                stdoutCallback(
+                  Buffer.from(
+                    '\x1b[38;5;250m███████╗\x1b[0m\n\x1b[1;32mSuccess\x1b[0m\n\x1b[31mError\x1b[0m',
+                  ),
+                ),
+              5,
+            );
+          }
+          return mockChildProcess.stdout;
+        });
+
+        mockChildProcess.stderr.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'data') {
+            stderrCallback = callback;
+            setTimeout(
+              () => stderrCallback(Buffer.from('\x1b[33mwarning:\x1b[0m something happened')),
+              5,
+            );
+          }
+          return mockChildProcess.stderr;
+        });
+
+        const result = await shellCommandCtr.handleRunCommand({
+          command: 'npx skills find react',
+          description: 'search skills',
+        });
+
+        expect(result.success).toBe(true);
+        // ANSI codes should be stripped
+        expect(result.stdout).not.toContain('\x1b[');
+        expect(result.stdout).toContain('███████╗');
+        expect(result.stdout).toContain('Success');
+        expect(result.stdout).toContain('Error');
+        expect(result.stderr).not.toContain('\x1b[');
+        expect(result.stderr).toContain('warning: something happened');
+      });
+
       it('should truncate long output to prevent context explosion', async () => {
         let exitCallback: (code: number) => void;
         let stdoutCallback: (data: Buffer) => void;
@@ -208,8 +264,8 @@ describe('ShellCommandCtr', () => {
         mockChildProcess.stdout.on.mockImplementation((event: string, callback: any) => {
           if (event === 'data') {
             stdoutCallback = callback;
-            // Simulate very long output (15k characters)
-            const longOutput = 'x'.repeat(15_000);
+            // Simulate very long output (100k characters, exceeding 80k MAX_OUTPUT_LENGTH)
+            const longOutput = 'x'.repeat(100_000);
             setTimeout(() => stdoutCallback(Buffer.from(longOutput)), 5);
           }
           return mockChildProcess.stdout;
@@ -223,8 +279,8 @@ describe('ShellCommandCtr', () => {
         });
 
         expect(result.success).toBe(true);
-        // Output should be truncated to ~10k + truncation message
-        expect(result.stdout!.length).toBeLessThan(15_000);
+        // Output should be truncated to 80k + truncation message
+        expect(result.stdout!.length).toBeLessThan(100_000);
         expect(result.stdout).toContain('truncated');
         expect(result.stdout).toContain('more characters');
       });

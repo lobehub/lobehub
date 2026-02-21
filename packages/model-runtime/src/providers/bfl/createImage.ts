@@ -1,20 +1,15 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
 import createDebug from 'debug';
-import { RuntimeImageGenParamsValue } from 'model-bank';
+import type { RuntimeImageGenParamsValue } from 'model-bank';
 
 import { AgentRuntimeErrorType } from '../../types/error';
-import { CreateImagePayload, CreateImageResponse } from '../../types/image';
-import { type TaskResult, asyncifyPolling } from '../../utils/asyncifyPolling';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { TaskResult } from '../../utils/asyncifyPolling';
+import { asyncifyPolling } from '../../utils/asyncifyPolling';
 import { AgentRuntimeError } from '../../utils/createError';
 import { parseDataUri } from '../../utils/uriParser';
-import {
-  BFL_ENDPOINTS,
-  BflAsyncResponse,
-  BflModelId,
-  BflRequest,
-  BflResultResponse,
-  BflStatusResponse,
-} from './types';
+import type { BflAsyncResponse, BflModelId, BflRequest, BflResultResponse } from './types';
+import { BFL_ENDPOINTS, BflStatusResponse } from './types';
 
 const log = createDebug('lobe-image:bfl');
 

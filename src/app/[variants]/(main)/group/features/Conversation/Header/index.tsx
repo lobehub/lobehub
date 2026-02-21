@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';

@@ -10,7 +10,7 @@ import {
   text,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { AiModelSettings } from 'model-bank';
+import type { AiModelSettings } from 'model-bank';
 
 import { timestamps } from './_helpers';
 import { users } from './user';

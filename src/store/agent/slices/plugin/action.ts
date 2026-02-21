@@ -1,30 +1,35 @@
 import { produce } from 'immer';
-import { type StateCreator } from 'zustand/vanilla';
+
+import { type StoreSetter } from '@/store/types';
 
 import { agentSelectors } from '../../selectors';
-import type { AgentStore } from '../../store';
+import { type AgentStore } from '../../store';
 
 /**
  * Plugin Slice Actions
  * Handles plugin toggle operations
  */
-export interface PluginSliceAction {
-  removePlugin: (id: string) => Promise<void>;
-  togglePlugin: (id: string, open?: boolean) => Promise<void>;
-}
 
-export const createPluginSlice: StateCreator<
-  AgentStore,
-  [['zustand/devtools', never]],
-  [],
-  PluginSliceAction
-> = (set, get) => ({
-  removePlugin: async (id) => {
-    await get().togglePlugin(id, false);
-  },
+type Setter = StoreSetter<AgentStore>;
+export const createPluginSlice = (set: Setter, get: () => AgentStore, _api?: unknown) =>
+  new PluginSliceActionImpl(set, get, _api);
 
-  togglePlugin: async (id, open) => {
-    const originConfig = agentSelectors.currentAgentConfig(get());
+export class PluginSliceActionImpl {
+  readonly #get: () => AgentStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  removePlugin = async (id: string): Promise<void> => {
+    await this.#get().togglePlugin(id, false);
+  };
+
+  togglePlugin = async (id: string, open?: boolean): Promise<void> => {
+    const originConfig = agentSelectors.currentAgentConfig(this.#get());
 
     const config = produce(originConfig, (draft) => {
       draft.plugins = produce(draft.plugins || [], (plugins) => {
@@ -45,6 +50,8 @@ export const createPluginSlice: StateCreator<
       });
     });
 
-    await get().updateAgentConfig(config);
-  },
-});
+    await this.#get().updateAgentConfig(config);
+  };
+}
+
+export type PluginSliceAction = Pick<PluginSliceActionImpl, keyof PluginSliceActionImpl>;

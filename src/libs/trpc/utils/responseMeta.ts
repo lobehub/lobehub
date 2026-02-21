@@ -1,5 +1,5 @@
 import { AUTH_REQUIRED_HEADER, TRPC_ERROR_CODE_UNAUTHORIZED } from '@lobechat/desktop-bridge';
-import type { TRPCError } from '@trpc/server';
+import { type TRPCError } from '@trpc/server';
 
 interface ResponseMetaParams {
   ctx?: unknown;
@@ -22,8 +22,7 @@ export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
 } {
   const resHeaders =
     ctx && typeof ctx === 'object' && 'resHeaders' in ctx
-      ? // eslint-disable-next-line no-undef
-        (ctx as { resHeaders?: HeadersInit }).resHeaders
+      ? (ctx as { resHeaders?: HeadersInit }).resHeaders
       : undefined;
   const headers = resHeaders ? new Headers(resHeaders) : new Headers();
 

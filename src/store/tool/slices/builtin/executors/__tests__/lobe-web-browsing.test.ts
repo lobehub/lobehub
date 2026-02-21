@@ -5,7 +5,7 @@ import { WebBrowsingApiName } from '@lobechat/builtin-tool-web-browsing';
 import { SEARCH_SEARXNG_NOT_CONFIG } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { BuiltinToolContext } from '../../types';
+import { type BuiltinToolContext } from '../../types';
 import { webBrowsing } from '../lobe-web-browsing';
 
 // Mock searchService

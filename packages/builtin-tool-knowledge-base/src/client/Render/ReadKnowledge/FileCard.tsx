@@ -5,7 +5,7 @@ import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import { FileContentDetail } from '../../../types';
+import type { FileContentDetail } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   cardBody: css`
@@ -71,7 +71,7 @@ const FileCard = memo<FileCardProps>(({ file }) => {
     return (
       <Flexbox className={styles.container} gap={8}>
         <Flexbox className={styles.cardBody} gap={8}>
-          <Flexbox align={'center'} className={styles.titleRow} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} className={styles.titleRow} gap={8}>
             <MaterialFileTypeIcon
               filename={file.filename}
               size={16}
@@ -91,15 +91,15 @@ const FileCard = memo<FileCardProps>(({ file }) => {
   return (
     <Flexbox className={styles.container} justify={'space-between'}>
       <Flexbox className={styles.cardBody} gap={8}>
-        <Flexbox align={'center'} className={styles.titleRow} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.titleRow} gap={8}>
           <MaterialFileTypeIcon filename={file.filename} size={16} type={'file'} variant={'raw'} />
           <div className={styles.title}>{file.filename}</div>
         </Flexbox>
         {file.preview && (
           <Text
+            code
             as={'span'}
             className={styles.preview}
-            code
             ellipsis={{ rows: 4 }}
             fontSize={12}
             type={'secondary'}
@@ -110,11 +110,12 @@ const FileCard = memo<FileCardProps>(({ file }) => {
       </Flexbox>
       <div className={styles.footer}>
         <Descriptions
+          column={2}
+          size="small"
           classNames={{
             content: styles.footerText,
             label: styles.footerText,
           }}
-          column={2}
           items={[
             {
               children: file.totalCharCount?.toLocaleString(),
@@ -125,7 +126,6 @@ const FileCard = memo<FileCardProps>(({ file }) => {
               label: 'Lines',
             },
           ]}
-          size="small"
         />
       </div>
     </Flexbox>

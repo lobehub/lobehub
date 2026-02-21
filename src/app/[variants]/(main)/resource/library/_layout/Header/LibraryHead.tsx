@@ -1,17 +1,19 @@
 'use client';
 
+import { type DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
   Block,
   Center,
-  type DropdownItem,
   DropdownMenu,
   Skeleton,
   Text,
+  stopPropagation,
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import { type DragEvent, memo, useCallback, useMemo, useState } from 'react';
+import { type DragEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
@@ -100,21 +102,21 @@ const Head = memo<{ id: string }>(({ id }) => {
 
   return (
     <Block
+      clickable
+      horizontal
       align={'center'}
       className={cx(isDropZoneActive && styles.dropZoneActive)}
-      clickable
       data-drop-target-id="root"
       data-is-folder="true"
       data-root-drop="true"
       gap={8}
-      horizontal
+      padding={2}
+      style={{ minWidth: 32, overflow: 'hidden' }}
+      variant={'borderless'}
       onClick={handleClick}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      padding={2}
-      style={{ minWidth: 32, overflow: 'hidden' }}
-      variant={'borderless'}
     >
       <Center style={{ minWidth: 32 }} width={32}>
         <RepoIcon size={18} />
@@ -124,21 +126,21 @@ const Head = memo<{ id: string }>(({ id }) => {
       ) : (
         <DropdownMenu items={menuItems} placement="bottomRight">
           <Center
-            gap={4}
             horizontal
-            onClick={(e) => e.stopPropagation()}
+            gap={4}
             style={{ cursor: 'pointer', flex: 1, overflow: 'hidden' }}
+            onClick={stopPropagation}
           >
             <Text ellipsis style={{ flex: 1 }} weight={500}>
               {name}
             </Text>
             <ActionIcon
               icon={ChevronsUpDownIcon}
+              style={{ width: 24 }}
               size={{
                 blockSize: 28,
                 size: 16,
               }}
-              style={{ width: 24 }}
             />
           </Center>
         </DropdownMenu>

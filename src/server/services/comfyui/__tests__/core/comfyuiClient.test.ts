@@ -5,8 +5,7 @@ import { ComfyUIAuthService } from '@/server/services/comfyui/core/comfyUIAuthSe
 import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
 import { ComfyUIConnectionService } from '@/server/services/comfyui/core/comfyUIConnectionService';
 import { ServicesError } from '@/server/services/comfyui/errors';
-import { ModelResolverError } from '@/server/services/comfyui/errors/modelResolverError';
-import { ComfyUIKeyVault } from '@/types/user/settings/keyVaults';
+import { type ComfyUIKeyVault } from '@/types/user/settings/keyVaults';
 
 // Mock the SDK
 vi.mock('@saintno/comfyui-sdk', () => ({

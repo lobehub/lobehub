@@ -13,6 +13,7 @@ declare global {
       AUTH_SSO_PROVIDERS?: string;
       AUTH_TRUSTED_ORIGINS?: string;
       AUTH_ALLOWED_EMAILS?: string;
+      AUTH_DISABLE_EMAIL_PASSWORD?: string;
 
       // ===== Auth Provider Credentials ===== //
       AUTH_GOOGLE_ID?: string;
@@ -32,8 +33,10 @@ declare global {
       AUTH_COGNITO_REGION?: string;
       AUTH_COGNITO_USERPOOL_ID?: string;
 
+      AUTH_MICROSOFT_AUTHORITY_URL?: string;
       AUTH_MICROSOFT_ID?: string;
       AUTH_MICROSOFT_SECRET?: string;
+      AUTH_MICROSOFT_TENANT_ID?: string;
 
       AUTH_AUTH0_ID?: string;
       AUTH_AUTH0_SECRET?: string;
@@ -112,6 +115,7 @@ export const getAuthConfig = () => {
       AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
       AUTH_ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
       AUTH_ALLOWED_EMAILS: z.string().optional(),
+      AUTH_DISABLE_EMAIL_PASSWORD: z.boolean().optional().default(false),
 
       AUTH_GOOGLE_ID: z.string().optional(),
       AUTH_GOOGLE_SECRET: z.string().optional(),
@@ -130,8 +134,10 @@ export const getAuthConfig = () => {
       AUTH_COGNITO_REGION: z.string().optional(),
       AUTH_COGNITO_USERPOOL_ID: z.string().optional(),
 
+      AUTH_MICROSOFT_AUTHORITY_URL: z.string().optional(),
       AUTH_MICROSOFT_ID: z.string().optional(),
       AUTH_MICROSOFT_SECRET: z.string().optional(),
+      AUTH_MICROSOFT_TENANT_ID: z.string().optional(),
 
       AUTH_AUTH0_ID: z.string().optional(),
       AUTH_AUTH0_SECRET: z.string().optional(),
@@ -199,6 +205,7 @@ export const getAuthConfig = () => {
       AUTH_SSO_PROVIDERS: process.env.AUTH_SSO_PROVIDERS,
       AUTH_TRUSTED_ORIGINS: process.env.AUTH_TRUSTED_ORIGINS,
       AUTH_ALLOWED_EMAILS: process.env.AUTH_ALLOWED_EMAILS,
+      AUTH_DISABLE_EMAIL_PASSWORD: process.env.AUTH_DISABLE_EMAIL_PASSWORD === '1',
 
       // Cognito provider specific env vars
       AUTH_COGNITO_DOMAIN: process.env.AUTH_COGNITO_DOMAIN,
@@ -216,8 +223,10 @@ export const getAuthConfig = () => {
       AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
       AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
 
+      AUTH_MICROSOFT_AUTHORITY_URL: process.env.AUTH_MICROSOFT_AUTHORITY_URL,
       AUTH_MICROSOFT_ID: process.env.AUTH_MICROSOFT_ID,
       AUTH_MICROSOFT_SECRET: process.env.AUTH_MICROSOFT_SECRET,
+      AUTH_MICROSOFT_TENANT_ID: process.env.AUTH_MICROSOFT_TENANT_ID,
 
       AUTH_COGNITO_ID: process.env.AUTH_COGNITO_ID,
       AUTH_COGNITO_SECRET: process.env.AUTH_COGNITO_SECRET,

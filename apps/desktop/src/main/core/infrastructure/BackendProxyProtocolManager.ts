@@ -2,6 +2,7 @@ import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
 import { BrowserWindow, type Session } from 'electron';
 
 import { isDev } from '@/const/env';
+import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
 interface BackendProxyProtocolManagerOptions {
@@ -116,6 +117,7 @@ export class BackendProxyProtocolManager {
         if (token) {
           headers.set('Oidc-Auth', token);
         }
+        appendVercelCookie(headers);
 
         // eslint-disable-next-line no-undef
         const requestInit: RequestInit & { duplex?: 'half' } = {

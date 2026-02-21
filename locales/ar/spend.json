@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "استخدام الرموز",
   "table.columns.type.enums.chat": "توليد نصوص",
   "table.columns.type.enums.imageGeneration": "توليد صور",
+  "table.columns.type.enums.videoGeneration": "توليد الفيديو",
   "table.columns.type.title": "النوع",
   "table.desc": "تفاصيل استخدام الاعتمادات الحاسوبية لتوليد النصوص، التضمين، توليد الصور، وغيرها.",
   "table.more": "عرض التفاصيل",

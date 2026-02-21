@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const azureChatModels: AIChatModelCard[] = [
   {
@@ -81,7 +81,8 @@ const azureChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 is our flagship model for complex tasks, ideal for cross-domain problem solving.',
+    description:
+      'GPT-4.1 is our flagship model for complex tasks, ideal for cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
     id: 'gpt-4.1',

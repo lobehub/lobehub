@@ -31,8 +31,8 @@ const AnalysisAction = memo<Props>(({ iconOnly }) => {
     <AnalysisTrigger
       footerNote={footerNote}
       iconOnly={iconOnly}
-      onRangeChange={setRange}
       range={range}
+      onRangeChange={setRange}
     />
   );
 });

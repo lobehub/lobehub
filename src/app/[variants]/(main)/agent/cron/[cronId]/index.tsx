@@ -4,7 +4,8 @@ import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { App, Empty, message } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
+import { type Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +14,7 @@ import useSWR from 'swr';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
-import type { UpdateAgentCronJobData } from '@/database/schemas/agentCronJob';
+import { type UpdateAgentCronJobData } from '@/database/schemas/agentCronJob';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
@@ -27,7 +28,8 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import { type ScheduleType, buildCronPattern, parseCronPattern } from './CronConfig';
+import { type ScheduleType } from './CronConfig';
+import { buildCronPattern, parseCronPattern } from './CronConfig';
 import CronJobContentEditor from './features/CronJobContentEditor';
 import CronJobHeader from './features/CronJobHeader';
 import CronJobSaveButton from './features/CronJobSaveButton';
@@ -465,8 +467,8 @@ const CronJobDetailPage = memo(() => {
           !isNewJob ? (
             <ActionIcon
               icon={Trash2}
-              onClick={handleDeleteCronJob}
               title={t('delete', { ns: 'common' })}
+              onClick={handleDeleteCronJob}
             />
           ) : undefined
         }
@@ -494,11 +496,11 @@ const CronJobDetailPage = memo(() => {
               <CronJobScheduleConfig
                 hourlyInterval={draft.hourlyInterval}
                 maxExecutions={draft.maxExecutions}
-                onScheduleChange={(updates) => updateDraft(updates)}
                 scheduleType={draft.scheduleType}
                 timezone={draft.timezone}
                 triggerTime={draft.triggerTime}
                 weekdays={draft.weekdays}
+                onScheduleChange={(updates) => updateDraft(updates)}
               />
 
               <CronJobContentEditor

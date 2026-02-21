@@ -1,6 +1,6 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Users } from 'lucide-react';
@@ -70,7 +70,7 @@ const AgentItem = memo<AgentItemProps>(({ agent, definition }) => {
   const tools = definition?.tools;
 
   return (
-    <Flexbox align="flex-start" className={styles.item} gap={12} horizontal>
+    <Flexbox horizontal align="flex-start" className={styles.item} gap={12}>
       <Avatar
         avatar={avatar}
         size={24}
@@ -81,7 +81,7 @@ const AgentItem = memo<AgentItemProps>(({ agent, definition }) => {
         <span className={styles.title}>{agent.title}</span>
         {description && <span className={styles.description}>{description}</span>}
         {tools && tools.length > 0 && (
-          <Flexbox gap={4} horizontal style={{ marginTop: 8 }} wrap={'wrap'}>
+          <Flexbox horizontal gap={4} style={{ marginTop: 8 }} wrap={'wrap'}>
             {tools.map((tool) => (
               <ToolTag identifier={tool} key={tool} variant={'compact'} />
             ))}

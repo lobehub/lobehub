@@ -1,7 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import { NewSessionGroup, SessionGroupItem, sessionGroups } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { NewSessionGroup, SessionGroupItem } from '../schemas';
+import { sessionGroups } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class TemplateModel {
   private userId: string;

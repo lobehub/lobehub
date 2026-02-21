@@ -1,7 +1,9 @@
-import { ActionIcon, Center, Flexbox, type FlexboxProps } from '@lobehub/ui';
-import { createStaticStyles , responsive } from 'antd-style';
+import { type FlexboxProps } from '@lobehub/ui';
+import { ActionIcon, Center, Flexbox } from '@lobehub/ui';
+import { createStaticStyles, responsive } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -92,29 +94,29 @@ const IndexCard = memo<IndexCardProps>(
         >
           {title && (
             <Flexbox
+              horizontal
               align={'center'}
               className={styles.header}
               gap={16}
-              horizontal
               justify={'space-between'}
               padding={16}
             >
-              <Flexbox align={'center'} gap={12} horizontal>
+              <Flexbox horizontal align={'center'} gap={12}>
                 {icon}
                 <Flexbox>
                   <div className={styles.title}>{title}</div>
                   {desc && <div className={styles.desc}>{desc}</div>}
                 </Flexbox>
               </Flexbox>
-              <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} gap={8}>
                 {extra}
                 {onMoreClick && (
                   <ActionIcon
                     className={styles.more}
                     icon={ChevronRight}
-                    onClick={onMoreClick}
                     size={{ blockSize: 32, borderRadius: '50%', size: 16 }}
                     title={moreTooltip}
+                    onClick={onMoreClick}
                   />
                 )}
               </Flexbox>
@@ -128,8 +130,8 @@ const IndexCard = memo<IndexCardProps>(
           <Center className={styles.expend} height={24} width={24}>
             <ActionIcon
               icon={ChevronDown}
-              onClick={onExpand}
               size={{ blockSize: 24, borderRadius: '50%', size: 16 }}
+              onClick={onExpand}
             />
           </Center>
         )}

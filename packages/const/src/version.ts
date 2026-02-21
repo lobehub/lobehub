@@ -1,6 +1,6 @@
 import { BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
 
-import pkg from '@/../package.json';
+import pkg from '../../../package.json';
 
 export const CURRENT_VERSION = pkg.version;
 

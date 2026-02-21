@@ -1,10 +1,10 @@
-import type { AgentInstruction, AgentState } from '@lobechat/agent-runtime';
+import { type AgentInstruction, type AgentState } from '@lobechat/agent-runtime';
 
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import type { ResolvedAgentConfig } from '@/services/chat/mecha';
+import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
-import type { OperationType } from '@/store/chat/slices/operation/types';
-import type { ChatStore } from '@/store/chat/store';
+import { type OperationType } from '@/store/chat/slices/operation/types';
+import { type ChatStore } from '@/store/chat/store';
 
 /**
  * Create a mock ResolvedAgentConfig for testing

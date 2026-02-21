@@ -150,6 +150,7 @@
   "upload.desc": "詳情: {{detail}}",
   "upload.fileOnlySupportInServerMode": "當前部署模式不支持上傳非圖片文件，如需上傳 {{ext}} 格式，請切換到伺服器數據庫部署或使用 {{cloud}} 服務",
   "upload.networkError": "請確認你的網路是否正常，並檢查檔案儲存服務的跨域配置是否正確",
+  "upload.storageLimitExceeded": "您的檔案儲存空間已達到方案上限。請升級您的方案或刪除未使用的檔案以釋放空間。",
   "upload.title": "檔案上傳失敗，請檢查網路連線或稍後再試",
   "upload.unknownError": "錯誤原因: {{reason}}",
   "upload.uploadFailed": "檔案上傳失敗"

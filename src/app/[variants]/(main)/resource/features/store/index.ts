@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect } from 'react';
-import type { SWRResponse } from 'swr';
+import { type SWRResponse } from 'swr';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
 import { useFileStore } from '@/store/file';
-import type { FileListItem, QueryFileListParams } from '@/types/files';
+import { type FileListItem, type QueryFileListParams } from '@/types/files';
 
-import type { FolderCrumb } from './action';
+import { type FolderCrumb } from './action';
 import { store } from './action';
 
 export type { State } from './initialState';

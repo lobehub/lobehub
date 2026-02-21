@@ -1,10 +1,11 @@
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
-import { userMemoryService } from '@/services/userMemory';
-import { memoryCRUDService } from '@/services/userMemory/index';
+import { type DisplayContextMemory } from '@/database/repositories/userMemory';
+import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
+import { type StoreSetter } from '@/store/types';
 import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -19,29 +20,30 @@ export interface ContextQueryParams {
   sort?: 'capturedAt' | 'scoreImpact' | 'scoreUrgency';
 }
 
-export interface ContextAction {
-  deleteContext: (id: string) => Promise<void>;
-  loadMoreContexts: () => void;
-  resetContextsList: (params?: Omit<ContextQueryParams, 'page' | 'pageSize'>) => void;
-  useFetchContexts: (params: ContextQueryParams) => SWRResponse<any>;
-}
+type Setter = StoreSetter<UserMemoryStore>;
+export const createContextSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
+  new ContextActionImpl(set, get, _api);
 
-export const createContextSlice: StateCreator<
-  UserMemoryStore,
-  [['zustand/devtools', never]],
-  [],
-  ContextAction
-> = (set, get) => ({
-  deleteContext: async (id) => {
+export class ContextActionImpl {
+  readonly #get: () => UserMemoryStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  deleteContext = async (id: string): Promise<void> => {
     await memoryCRUDService.deleteContext(id);
     // Reset list to refresh
-    get().resetContextsList({ q: get().contextsQuery, sort: get().contextsSort });
-  },
+    this.#get().resetContextsList({ q: this.#get().contextsQuery, sort: this.#get().contextsSort });
+  };
 
-  loadMoreContexts: () => {
-    const { contextsPage, contextsTotal, contexts } = get();
+  loadMoreContexts = (): void => {
+    const { contextsPage, contextsTotal, contexts } = this.#get();
     if (contexts.length < (contextsTotal || 0)) {
-      set(
+      this.#set(
         produce((draft) => {
           draft.contextsPage = contextsPage + 1;
         }),
@@ -49,10 +51,10 @@ export const createContextSlice: StateCreator<
         n('loadMoreContexts'),
       );
     }
-  },
+  };
 
-  resetContextsList: (params) => {
-    set(
+  resetContextsList = (params?: Omit<ContextQueryParams, 'page' | 'pageSize'>): void => {
+    this.#set(
       produce((draft) => {
         draft.contexts = [];
         draft.contextsPage = 1;
@@ -63,9 +65,9 @@ export const createContextSlice: StateCreator<
       false,
       n('resetContextsList'),
     );
-  },
+  };
 
-  useFetchContexts: (params) => {
+  useFetchContexts = (params: ContextQueryParams): SWRResponse<any> => {
     const swrKeyParts = ['useFetchContexts', params.page, params.pageSize, params.q, params.sort];
     const swrKey = swrKeyParts
       .filter((part) => part !== undefined && part !== null && part !== '')
@@ -86,8 +88,8 @@ export const createContextSlice: StateCreator<
         return result;
       },
       {
-        onSuccess(data: any) {
-          set(
+        onSuccess: (data: any) => {
+          this.#set(
             produce((draft) => {
               draft.contextsSearchLoading = false;
 
@@ -98,7 +100,7 @@ export const createContextSlice: StateCreator<
               }
 
               // Transform data structure
-              const transformedItems = data.items.map((item: any) => ({
+              const transformedItems: DisplayContextMemory[] = data.items.map((item: any) => ({
                 ...item.memory,
                 ...item.context,
                 source: null,
@@ -123,5 +125,7 @@ export const createContextSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type ContextAction = Pick<ContextActionImpl, keyof ContextActionImpl>;

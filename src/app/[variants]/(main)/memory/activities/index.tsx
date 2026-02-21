@@ -1,6 +1,7 @@
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { CalendarClockIcon } from 'lucide-react';
-import { type FC, memo, useCallback, useEffect, useState } from 'react';
+import { type FC } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/memory/features/TimeLineView/useScrollParent';
@@ -13,7 +14,8 @@ import { useUserMemoryStore } from '@/store/userMemory';
 import EditableModal from '../features/EditableModal';
 import FilterBar from '../features/FilterBar';
 import Loading from '../features/Loading';
-import ViewModeSwitcher, { type ViewMode } from '../features/ViewModeSwitcher';
+import { type ViewMode } from '../features/ViewModeSwitcher';
+import ViewModeSwitcher from '../features/ViewModeSwitcher';
 import ActivityRightPanel from './features/ActivityRightPanel';
 import List from './features/List';
 
@@ -80,7 +82,7 @@ const ActivitiesArea = memo(() => {
         }
         right={
           <>
-            <ViewModeSwitcher onChange={setViewMode} value={viewMode} />
+            <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
             <WideScreenButton />
           </>
         }
@@ -93,11 +95,11 @@ const ActivitiesArea = memo(() => {
       >
         <WideScreenContainer gap={32} paddingBlock={48}>
           <FilterBar
-            onSearch={handleSearch}
-            onSortChange={viewMode === 'grid' ? handleSortChange : undefined}
             searchValue={searchValue}
             sortOptions={viewMode === 'grid' ? sortOptions : undefined}
             sortValue={sortValue}
+            onSearch={handleSearch}
+            onSortChange={viewMode === 'grid' ? handleSortChange : undefined}
           />
           {showLoading ? (
             <Loading viewMode={viewMode} />
@@ -113,7 +115,7 @@ const ActivitiesArea = memo(() => {
 const Activities: FC = () => {
   return (
     <>
-      <Flexbox height={'100%'} horizontal width={'100%'}>
+      <Flexbox horizontal height={'100%'} width={'100%'}>
         <ActivitiesArea />
         <ActivityRightPanel />
       </Flexbox>

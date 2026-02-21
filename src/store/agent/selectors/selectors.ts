@@ -9,18 +9,18 @@ import {
 import {
   type AgentMode,
   type KnowledgeItem,
-  KnowledgeType,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
   type LocalSystemConfig,
   type MetaData,
 } from '@lobechat/types';
+import { KnowledgeType } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
 import { filterToolIds } from '@/helpers/toolFilters';
 
-import type { AgentStoreState } from '../initialState';
+import { type AgentStoreState } from '../initialState';
 import { builtinAgentSelectors } from './builtinAgentSelectors';
 
 // ==========   Meta   ============== //

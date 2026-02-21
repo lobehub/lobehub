@@ -7,3 +7,4 @@ export {
 } from './EditorCanvas';
 export { EditorErrorBoundary } from './ErrorBoundary';
 export { default as InlineToolbar, type InlineToolbarProps } from './InlineToolbar';
+export { useImageUpload } from './useImageUpload';

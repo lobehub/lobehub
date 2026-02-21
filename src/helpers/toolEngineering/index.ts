@@ -3,10 +3,11 @@
  */
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { isDesktop } from '@lobechat/const';
+import { type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import type { PluginEnableChecker } from '@lobechat/context-engine';
 import { type ChatCompletionTool, type WorkingModel } from '@lobechat/types';
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -88,6 +89,16 @@ export const createAgentToolsEngine = (workingModel: WorkingModel) =>
       if (!shouldEnableTool(pluginId)) {
         return false;
       }
+
+      // Filter stdio MCP tools in non-desktop environments
+      // stdio transport requires Electron IPC and cannot work on web
+      if (!isDesktop) {
+        const plugin = pluginSelectors.getInstalledPluginById(pluginId)(getToolStoreState());
+        if (plugin?.customParams?.mcp?.type === 'stdio') {
+          return false;
+        }
+      }
+
       // For WebBrowsingManifest, apply search logic
       if (pluginId === WebBrowsingManifest.identifier) {
         const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);

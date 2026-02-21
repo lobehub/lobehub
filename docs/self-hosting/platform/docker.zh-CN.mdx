@@ -1,16 +1,14 @@
 ---
-title: 通过 Docker 部署 LobeHub
-description: 学习如何使用 Docker 部署 LobeHub 服务，包括安装 Docker 容器环境和使用指令一键启动服务。详细说明如何配置环境变量和使用代理地址。
+title: 使用 Docker 部署 LobeHub 数据库
+description: 详细步骤教你如何在 Docker 中部署 LobeHub 服务端数据库。
 tags:
   - Docker
   - LobeHub
-  - 部署指引
-  - 环境变量
-  - 代理地址
-  - 自动更新脚本
+  - 数据库部署
+  - Postgres
 ---
 
-# Docker 部署指引
+# 使用 Docker 部署 LobeHub
 
 <div style={{display:"flex", gap: 4}}>
   [![][docker-release-shield]][docker-release-link]
@@ -20,182 +18,143 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
-我们提供了 [Docker 镜像][docker-release-link]，供你在自己的私有设备上部署 LobeHub 服务。
+<Callout type="info">
+  本文已经假定你了解了 LobeHub
+  的部署基本原理和流程，因此只包含核心环境变量配置的内容。如果你还不了解 LobeHub
+  的部署原理，请先查阅 [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
+  此外，针对国内的腾讯云储存桶用户，可查询[配置腾讯云 COS
+  存储服务](/zh/docs/self-hosting/advanced/s3/tencent-cloud)。
+</Callout>
 
-## 部署指南
+## 在 Linux 服务器上部署
+
+以下是在 Linux 服务器上部署 LobeHub 的流程：
 
 <Steps>
-  ### 安装 Docker 容器环境
+  ### 创建 Postgres 数据库实例
 
-  （如果已安装，请跳过此步）
+  请按照你自己的诉求创建一个 Postgres 数据库实例，例如：
 
-  <Tabs items={['Ubuntu', 'CentOS']}>
-    <Tab>
-      ```fish
-      $ apt install docker.io
-      ```
-    </Tab>
+  ```sh
+  docker network create pg
 
-    <Tab>
-      ```fish
-      $ yum install docker
-      ```
-    </Tab>
-  </Tabs>
-
-  ### Docker 指令部署
-
-  使用以下命令即可使用一键启动 LobeHub 服务：
-
-  ```fish
-  $ docker run -d -p 3210:3210 \
-    -e OPENAI_API_KEY=sk-xxxx \
-    --name lobe-chat \
-    lobehub/lobe-chat
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17
   ```
 
-  指令说明：
+  上述指令会创建一个名为 `my-postgres`，并且网络为 `pg` 的 PG 实例，其中 `paradedb/paradedb:latest-pg17` 是一个 Postgres 17 的镜像，且默认安装了 pgvector 和 pg\_search 插件。
 
-  - 默认映射端口为 `3210`, 请确保未被占用或手动更改端口映射
-  - 使用你的 OpenAI API Key 替换上述命令中的 `sk-xxxx` ，获取 API Key 的方式详见最后一节。
-
-  <Callout type={'tip'}>
-    LobeHub 支持的完整环境变量列表请参考 [📘 环境变量](/zh/docs/self-hosting/environment-variables)
-    部分
+  <Callout type="info">
+    ParadeDB 镜像包含了 pgvector（向量搜索）和 pg\_search（全文搜索）插件，是 LobeHub 实现 RAG 和知识库搜索的重要构件。
   </Callout>
 
-  <Callout>
-    由于官方的 Docker
-    镜像构建大约需要半小时左右，如果在更新部署后会出现「存在更新」的提示，可以等待镜像构建完成后再次部署。
+  <Callout type="warning">
+    以上指令得到的 pg 实例并没有指定持久化存储位置，因此仅用于测试 /
+    演示，生产环境请自行配置持久化存储。
   </Callout>
 
-  <Callout type="important">
-    注意，当**部署架构与镜像的不一致时**，需要对 **Sharp** 进行交叉编译，详见 [Sharp
-    交叉编译](https://sharp.pixelplumbing.com/install#cross-platform)
-  </Callout>
+  ### 创建名为 `lobe-chat.env` 文件用于存放环境变量：
 
-  #### 使用代理地址
+  点击下方按钮生成所需密钥：
 
-  如果你需要通过代理使用 OpenAI 服务，你可以使用 `OPENAI_PROXY_URL` 环境变量来配置代理地址：
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
 
-  ```fish
-  $ docker run -d -p 3210:3210 \
-    -e OPENAI_API_KEY=sk-xxxx \
-    -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
-    --name lobe-chat \
-    lobehub/lobe-chat
+  <GenerateSecret envName="AUTH_SECRET" />
+
+  点击下方按钮一键生成 `JWKS_KEY`（用于签名和验证 JWT）：
+
+  <GenerateJWKSKey />
+
+  ```shell
+  # 网站域名
+  APP_URL=https://your-prod-domain.com
+
+  # DB 必须的环境变量
+  # 用于加密敏感信息的密钥，可以使用 openssl rand -base64 32 生成
+  KEY_VAULTS_SECRET='jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk='
+  # Postgres 数据库连接字符串
+  # 格式：postgres://username:password@host:port/dbname，如果你的 pg 实例为 Docker 容器，请使用容器名
+  DATABASE_URL=postgres://postgres:mysecretpassword@my-postgres:5432/postgres
+
+  # 身份验证（Better Auth）
+  # 会话加密密钥（使用以下命令生成：openssl rand -base64 32）
+  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  # JWKS 密钥，用于签名和验证 JWT
+  JWKS_KEY='{"keys":[...]}'
+
+  # S3 相关
+  S3_ACCESS_KEY_ID=xxxxxxxxxx
+  S3_SECRET_ACCESS_KEY=xxxxxxxxxx
+  # 用于 S3 API 访问的域名
+  S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
+  S3_BUCKET=LobeHub
+  # S3_REGION=ap-chengdu # 如果需要指定地域
+
   ```
 
-  ### Crontab 自动更新脚本（可选）
+  ### 启动 lobehub docker 镜像
 
-  如果你想自动获得最新的镜像，你可以如下操作。
-
-  首先，新建一个 `lobe.env` 配置文件，内容为各种环境变量，例如：
-
-  ```env
-  OPENAI_API_KEY=sk-xxxx
-  OPENAI_PROXY_URL=https://api-proxy.com/v1
-  OPENAI_MODEL_LIST=-gpt-4,-gpt-4-32k,-gpt-3.5-turbo-16k,gpt-3.5-turbo-1106=gpt-3.5-turbo-16k,gpt-4-0125-preview=gpt-4-turbo,gpt-4-vision-preview=gpt-4-vision
+  ```sh
+  docker run -it -d -p 3210:3210 --network pg --env-file lobe-chat.env --name lobehub lobehub/lobehub
   ```
 
-  然后，你可以使用以下脚本来自动更新：
+  你可以使用下述指令检查日志：
 
-  ```bash
-  #!/bin/bash
-  # auto-update-lobe-chat.sh
-
-  # 设置代理（可选）
-  export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
-
-  # 拉取最新的镜像并将输出存储在变量中
-  output=$(docker pull lobehub/lobe-chat:latest 2>&1)
-
-  # 检查拉取命令是否成功执行
-  if [ $? -ne 0 ]; then
-    exit 1
-  fi
-
-  # 检查输出中是否包含特定的字符串
-  echo "$output" | grep -q "Image is up to date for lobehub/lobe-chat:latest"
-
-  # 如果镜像已经是最新的，则不执行任何操作
-  if [ $? -eq 0 ]; then
-    exit 0
-  fi
-
-  echo "Detected Lobe-Chat update"
-
-  # 删除旧的容器
-  echo "Removed: $(docker rm -f Lobe-Chat)"
-
-  # 运行新的容器
-  echo "Started: $(docker run -d --network=host --env-file /path/to/lobe.env --name=Lobe-Chat --restart=always lobehub/lobe-chat)"
-
-  # 打印更新的时间和版本
-  echo "Update time: $(date)"
-  echo "Version: $(docker inspect lobehub/lobe-chat:latest | grep 'org.opencontainers.image.version' | awk -F'"' '{print $4}')"
-
-  # 清理不再使用的镜像
-  docker images | grep 'lobehub/lobe-chat' | grep -v 'lobehub/lobe-chat-database' | grep -v 'latest' | awk '{print $3}' | xargs -r docker rmi > /dev/null 2>&1
-  echo "Removed old images."
+  ```sh
+  docker logs -f lobehub
   ```
 
-  此脚本可以在 Crontab 中使用，但请确认你的 Crontab 可以找到正确的 Docker 命令。建议使用绝对路径。
+  如果你在容器中看到了以下日志，则说明已经启动成功：
 
-  配置 Crontab，每 5 分钟执行一次脚本：
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 14.x.x
+    - Local:        http://localhost:3210
+    - Network:      http://0.0.0.0:3210
 
-  ```bash
-  */5 * * * * /path/to/auto-update-lobe-chat.sh >> /path/to/auto-update-lobe-chat.log 2>&1
+   ✓ Starting...
+   ✓ Ready in 95ms
   ```
 </Steps>
 
-## 获取 OpenAI API Key
-
-API Key 是使用 LobeHub 进行大语言模型会话的必要信息，本节以 OpenAI 模型服务商为例，简要介绍获取 API Key 的方式。
-
-### `A` 通过 OpenAI 官方渠道
-
-- 注册一个 [OpenAI 账户](https://platform.openai.com/signup)，你需要使用国际手机号、非大陆邮箱进行注册；
-- 注册完毕后，前往 [API Keys](https://platform.openai.com/api-keys) 页面，点击 `Create new secret key` 创建新的 API Key:
-
-<Steps>
-  #### 步骤 1：打开创建窗口
-
-  <Image alt={'打开创建窗口'} height={600} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/296253192-ff2193dd-f125-4e58-82e8-91bc376c0d68.png" />
-
-  #### 步骤 2：创建 API Key
-
-  <Image alt={'创建 API Key'} height={600} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/296254170-803bacf0-4471-4171-ae79-0eab08d621d1.png" />
-
-  #### 步骤 3：获取 API Key
-
-  <Image alt={'获取 API Key'} height={600} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/296255167-f2745f2b-f083-4ba8-bc78-9b558e0002de.png" />
-</Steps>
-
-将此 API Key 填写到 LobeHub 的 API Key 配置中，即可开始使用。
-
-<Callout type={'tip'}>
-  账户注册后，一般有 5 美元的免费额度，但有效期只有三个月。如果你希望长期使用你的 API
-  Key，你需要完成支付的信用卡绑定。由于 OpenAI
-  只支持外币信用卡，因此你需要找到合适的支付渠道，此处不再详细展开。
+<Callout type="tip">
+  在我们官方的 Docker 镜像中，会在启动镜像前自动执行数据库 schema 的 migration
+  ，我们的官方镜像承诺「空数据库 ->
+  完整表」这一段自动建表的稳定性。因此我们建议你的数据库实例使用一个空表实例，进而省去手动维护表结构或者
+  migration 的麻烦。
 </Callout>
 
-### `B` 通过 OpenAI 第三方代理商
+## 在本地（Mac / Windows） 上使用
 
-如果你发现注册 OpenAI 账户或者绑定外币信用卡比较麻烦，可以考虑借助一些知名的 OpenAI 第三方代理商来获取 API Key，这可以有效降低获取 OpenAI API Key 的门槛。但与此同时，一旦使用三方服务，你可能也需要承担潜在的风险，请根据你自己的实际情况自行决策。以下是常见的第三方模型代理商列表，供你参考：
+LobeHub 也支持直接在本地的 Mac/Windows 本地使用。
 
-| Logo                                                                                                                                              | 服务商          | 特性说明                                                     | Proxy 代理地址                | 链接                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------- | ------------------------- | ----------------------------- |
-| <img src="https://github-production-user-asset-6210df.s3.amazonaws.com/17870709/296272721-c3ac0bf3-e433-4496-89c4-ebdc20689c17.jpg" width="40" /> | **AiHubMix** | 使用 OpenAI 企业接口，全站模型价格为官方 **86 折**（含 GPT-4 、Cluade 3.5 等） | `https://aihubmix.com/v1` | [获取](https://lobe.li/CnsM6fH) |
+在此我们已假设你的本地有一个 5432 端口可用，账号为 `postgres` ，密码是 `mysecretpassword` 的 pg 实例，它在 `localhost:5432` 可用。
 
-<Callout type={'warning'}>
-  **免责申明**: 在此推荐的 OpenAI API Key 由第三方代理商提供，所以我们不对 API Key 的 **有效性** 和
-  **安全性** 负责，请你自行承担购买和使用 API Key 的风险。
+那么你需要执行的脚本指令为：
+
+```shell
+$ docker run -it -d --name lobehub -p 3210:3210 \
+  -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
+  -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e JWKS_KEY='{"keys":[...]}' \
+  -e APP_URL=http://localhost:3210 \
+  -e S3_ACCESS_KEY_ID=xxxxxxxxxx \
+  -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
+  -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
+  -e S3_BUCKET=LobeHub \
+  lobehub/lobehub
+```
+
+<Callout type="tip">
+  `Docker` 在 `Windows` 和 `macOS` 上走的是虚拟机方案，如果使用 `localhost` / `127.0.0.1`
+  ，将会走到自身容器的 `localhost`，此时请尝试用 `host.docker.internal` 替代 `localhost`
 </Callout>
 
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat?color=45cc11&labelColor=black&style=flat-square
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat?color=369eff&labelColor=black&style=flat-square&sort=semver
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver

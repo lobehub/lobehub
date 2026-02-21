@@ -1,8 +1,8 @@
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
 import { useChatStore } from '@/store/chat';
 
-import type { State } from '../../initialState';
+import { type State } from '../../initialState';
 
 export interface InputAction {
   /**

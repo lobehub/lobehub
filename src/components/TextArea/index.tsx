@@ -1,4 +1,5 @@
-import { TextArea as LobeTextArea, type TextAreaProps as Props } from '@lobehub/ui';
+import { type TextAreaProps as Props } from '@lobehub/ui';
+import { TextArea as LobeTextArea } from '@lobehub/ui';
 import { type TextAreaRef } from 'antd/es/input/TextArea';
 import { memo, useRef, useState } from 'react';
 
@@ -14,6 +15,7 @@ const TextArea = memo<TextAreaProps>(({ onChange, value: defaultValue, ...props 
 
   return (
     <LobeTextArea
+      ref={ref}
       onBlur={() => {
         onChange?.(value);
       }}
@@ -30,7 +32,6 @@ const TextArea = memo<TextAreaProps>(({ onChange, value: defaultValue, ...props 
         if (isChineseInput.current) return;
         onChange?.(value);
       }}
-      ref={ref}
       {...props}
       value={value}
     />

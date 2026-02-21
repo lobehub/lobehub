@@ -1,7 +1,7 @@
 import { Billboard, Html, OrbitControls, Text } from '@react-three/drei';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useTheme } from 'antd-style';
-import { Suspense, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 import { type QueryTagsResult } from '@/database/models/userMemory';
@@ -63,12 +63,12 @@ const Word = memo<WordProps>(
     return (
       <Billboard position={position}>
         <Text
+          ref={ref}
           onPointerOut={() => setHovered(false)}
           onPointerOver={(e) => {
             e.stopPropagation();
             setHovered(true);
           }}
-          ref={ref}
           {...fontProps}
         >
           {text}
@@ -123,7 +123,7 @@ const FlowingParticle = memo<ParticleProps>(
     return (
       <mesh ref={ref}>
         <sphereGeometry args={[0.15, 8, 8]} />
-        <meshBasicMaterial color={theme.colorInfo} opacity={0.8} transparent />
+        <meshBasicMaterial transparent color={theme.colorInfo} opacity={0.8} />
       </mesh>
     );
   },
@@ -477,9 +477,9 @@ const TagCloudCanvas = memo<TagCloudCanvasProps>(({ tags }) => {
         <Cloud radius={20} tags={tags} />
       </Suspense>
       <OrbitControls
+        enableDamping
         autoRotate={false}
         dampingFactor={0.05}
-        enableDamping
         enablePan={false}
         maxDistance={50}
         minDistance={20}

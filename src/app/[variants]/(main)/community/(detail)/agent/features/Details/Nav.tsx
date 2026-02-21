@@ -6,10 +6,7 @@ import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, HistoryIcon, LayersIcon, ListIcon, SquareUserIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import urlJoin from 'url-join';
 
-import { AGENTS_INDEX_GITHUB, AGENTS_OFFICIAL_URL } from '@/const/url';
-import { useQuery } from '@/hooks/useQuery';
 import { AssistantNavKey } from '@/types/discover';
 
 import { useDetailContext } from '../DetailProvider';
@@ -46,14 +43,7 @@ interface NavProps {
 
 const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.Overview }) => {
   const { t } = useTranslation('discover');
-  const { pluginCount, knowledgeCount, identifier } = useDetailContext();
-  const { source } = useQuery() as { source?: string };
-  const isLegacy = source === 'legacy';
-  const marketplaceLink = identifier
-    ? isLegacy
-      ? urlJoin(AGENTS_INDEX_GITHUB, 'tree/main/locales', identifier)
-      : urlJoin(AGENTS_OFFICIAL_URL, identifier)
-    : undefined;
+  const { pluginCount, knowledgeCount } = useDetailContext();
 
   const capabilitiesCount = Number(pluginCount) + Number(knowledgeCount);
 
@@ -78,9 +68,9 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
           label:
             capabilitiesCount > 1 ? (
               <Flexbox
+                horizontal
                 align={'center'}
                 gap={6}
-                horizontal
                 style={{
                   display: 'inline-flex',
                 }}
@@ -110,24 +100,11 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
   return mobile ? (
     nav
   ) : (
-    <Flexbox align={'center'} className={styles.nav} horizontal justify={'space-between'}>
+    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
       <div className={styles.tabsWrapper}>{nav}</div>
-      <Flexbox flex="none" gap={12} horizontal style={{ marginInlineStart: 12 }}>
+      <Flexbox horizontal flex="none" gap={12} style={{ marginInlineStart: 12 }}>
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.needHelp')}
-        </a>
-        {identifier && marketplaceLink && (
-          <a className={styles.link} href={marketplaceLink} rel="noreferrer" target="_blank">
-            {t('mcp.details.nav.viewSourceCode')}
-          </a>
-        )}
-        <a
-          className={styles.link}
-          href="https://github.com/lobehub/lobe-chat-agents/issues/new/choose"
-          rel="noreferrer"
-          target="_blank"
-        >
-          {t('mcp.details.nav.reportIssue')}
         </a>
       </Flexbox>
     </Flexbox>

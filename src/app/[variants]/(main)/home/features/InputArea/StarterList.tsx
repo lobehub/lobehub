@@ -1,14 +1,15 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { Button, type ButtonProps, Center, Tooltip } from '@lobehub/ui';
+import { type ButtonProps } from '@lobehub/ui';
+import { Button, Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, FilePenIcon, ImageIcon } from 'lucide-react';
+import { BotIcon, PenLineIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
-import { type StarterMode, useHomeStore } from '@/store/home';
+import { type StarterMode } from '@/store/home';
+import { useHomeStore } from '@/store/home';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
@@ -32,26 +33,28 @@ type StarterTitleKey =
   | 'starter.createAgent'
   | 'starter.createGroup'
   | 'starter.write'
-  | 'starter.image'
+  | 'starter.seedance'
   | 'starter.deepResearch';
 
 interface StarterItem {
   disabled?: boolean;
+  hot?: boolean;
   icon?: ButtonProps['icon'];
   key: StarterMode;
   titleKey: StarterTitleKey;
 }
 
 const StarterList = memo(() => {
-  const navigate = useNavigate();
   const { t } = useTranslation('home');
 
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.agentBuilder);
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.groupAgentBuilder);
+  useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
-  const [inputActiveMode, setInputActiveMode] = useHomeStore((s) => [
+  const [inputActiveMode, setInputActiveMode, navigate] = useHomeStore((s) => [
     s.inputActiveMode,
     s.setInputActiveMode,
+    s.navigate,
   ]);
 
   const items: StarterItem[] = useMemo(
@@ -67,15 +70,16 @@ const StarterList = memo(() => {
         titleKey: 'starter.createGroup',
       },
       {
-        icon: FilePenIcon,
+        icon: PenLineIcon,
         key: 'write',
         titleKey: 'starter.write',
       },
-      {
-        icon: ImageIcon,
-        key: 'image',
-        titleKey: 'starter.image',
-      },
+      // {
+      //   hot: true,
+      //   icon: VideoIcon,
+      //   key: 'video',
+      //   titleKey: 'starter.seedance',
+      // },
       // {
       //   disabled: true,
       //   icon: MicroscopeIcon,
@@ -88,15 +92,8 @@ const StarterList = memo(() => {
 
   const handleClick = useCallback(
     (key: StarterMode) => {
-      // Special case: image mode navigates to /image page
-      if (key === 'image') {
-        navigate('/image');
-        return;
-      }
-
-      // Special case: write mode navigates to /page
-      if (key === 'write') {
-        navigate('/page');
+      if (key === 'video') {
+        navigate?.('/video');
         return;
       }
 
@@ -107,27 +104,28 @@ const StarterList = memo(() => {
         setInputActiveMode(key);
       }
     },
-    [inputActiveMode, setInputActiveMode, navigate],
+    [inputActiveMode, setInputActiveMode],
   );
 
   return (
-    <Center gap={8} horizontal>
+    <Center horizontal gap={8}>
       {items.map((item) => {
         const button = (
           <Button
             className={cx(styles.button, inputActiveMode === item.key && styles.active)}
             disabled={item.disabled}
             icon={item.icon}
+            key={item.key}
+            shape={'round'}
+            variant={'outlined'}
             iconProps={{
               color: inputActiveMode === item.key ? cssVar.colorText : cssVar.colorTextSecondary,
               size: 18,
             }}
-            key={item.key}
             onClick={() => handleClick(item.key)}
-            shape={'round'}
-            variant={'outlined'}
           >
             {t(item.titleKey)}
+            {item.hot && ' 🔥'}
           </Button>
         );
 

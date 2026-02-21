@@ -41,6 +41,9 @@ export default {
   'chatList.longMessageDetail': 'View Details',
   'clearCurrentMessages': 'Clear current session messages',
   'compressedHistory': 'Compressed History',
+  'compression.cancel': 'Uncompress',
+  'compression.cancelConfirm':
+    'Are you sure you want to uncompress? This will restore the original messages.',
   'compression.history': 'History',
   'compression.summary': 'Summary',
   'confirmClearCurrentMessages':
@@ -70,10 +73,16 @@ export default {
   'emptyAgent': 'No Agents yet. Start with your first Agent—build your system over time.',
   'emptyAgentAction': 'Create Agent',
   'extendParams.disableContextCaching.desc':
-    'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. Enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',
+    'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. <1>Learn more</1>',
   'extendParams.disableContextCaching.title': 'Enable Context Caching',
+  'extendParams.effort.desc':
+    'Control how many tokens Claude uses when responding with the effort parameter.',
+  'extendParams.effort.title': 'Effort',
+  'extendParams.enableAdaptiveThinking.desc':
+    'Let Claude dynamically decide when and how much to think with adaptive thinking mode.',
+  'extendParams.enableAdaptiveThinking.title': 'Enable Adaptive Thinking',
   'extendParams.enableReasoning.desc':
-    'Based on the Claude Thinking mechanism limit, enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',
+    'Based on the Claude Thinking mechanism limit. <1>Learn more</1>',
   'extendParams.enableReasoning.title': 'Enable Deep Thinking',
   'extendParams.imageAspectRatio.title': 'Image Aspect Ratio',
   'extendParams.imageResolution.title': 'Image Resolution',
@@ -181,6 +190,7 @@ export default {
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
   'messageAction.deleteDisabledByThreads': 'This message has a subtopic and can’t be deleted',
   'messageAction.expand': 'Expand Message',
+  'messageAction.reaction': 'Add Reaction',
   'messageAction.regenerate': 'Regenerate',
   'messages.dm.sentTo': 'Visible only to {{name}}',
   'messages.dm.title': 'DM',
@@ -369,6 +379,9 @@ export default {
   'task.activity.toolCalling': 'Calling {{toolName}}...',
   'task.activity.toolResult': '{{toolName}} result received',
   'task.batchTasks': '{{count}} Batch Subtasks',
+  'task.groupTasks': '{{count}} Parallel Tasks',
+  'task.groupTasksTitle': '{{agents}} and {{count}} agents tasks',
+  'task.groupTasksTitleSimple': '{{agents}} {{count}} tasks',
   'task.instruction': 'Task Instruction',
   'task.intermediateSteps': '{{count}} intermediate steps',
   'task.metrics.duration': '(took {{duration}})',
@@ -376,6 +389,7 @@ export default {
   'task.metrics.toolCallsShort': 'skill uses',
   'task.status.cancelled': 'Task Cancelled',
   'task.status.failed': 'Task Failed',
+  'task.status.fetchingDetails': 'Fetching details...',
   'task.status.initializing': 'Initializing task...',
   'task.subtask': 'Subtask',
   'thread.divider': 'Subtopic',

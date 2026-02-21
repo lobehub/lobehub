@@ -1,13 +1,15 @@
 /**
  * @vitest-environment happy-dom
  */
-import { type IEditor, moment } from '@lobehub/editor';
+import { type IEditor } from '@lobehub/editor';
+import { moment } from '@lobehub/editor';
 import { useEditor } from '@lobehub/editor/react';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { memo, useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import InternalEditor, { type InternalEditorProps } from './InternalEditor';
+import { type InternalEditorProps } from './InternalEditor';
+import InternalEditor from './InternalEditor';
 
 // Suppress console.warn for expected errors in tests
 const originalWarn = console.warn;
@@ -147,10 +149,10 @@ describe('InternalEditor', () => {
       // When editor initializes with empty/undefined content, it should not throw
       const { container } = render(
         <MinimalTestWrapper
+          onInit={onInit}
           onEditorReady={(e) => {
             editorInstance = e;
           }}
-          onInit={onInit}
         />,
       );
 

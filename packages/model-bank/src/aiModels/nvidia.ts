@@ -1,6 +1,18 @@
-import { AIChatModelCard } from '../types/aiModel';
+import { type AIChatModelCard } from '../types/aiModel';
 
 const nvidiaChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
+    displayName: 'GLM-5',
+    id: 'z-ai/glm5',
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -10,7 +22,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2 is a compact, fast, cost-effective MoE model (230B total, 10B active) built for top-tier coding and agent performance while retaining strong general intelligence. It excels at multi-file edits, code-run-fix loops, test validation, and complex toolchains.',
     displayName: 'MiniMax-M2',
-    enabled: true,
     id: 'minimaxai/minimax-m2',
     maxOutput: 16_384,
     type: 'chat',
@@ -24,7 +35,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek V3.1 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought for deep analysis tasks.',
     displayName: 'DeepSeek V3.1 Terminus',
-    enabled: true,
     id: 'deepseek-ai/deepseek-v3.1-terminus',
     maxOutput: 16_384,
     settings: {
@@ -79,7 +89,8 @@ const nvidiaChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'A frontier vision-language model that excels at high-quality reasoning from images.',
+    description:
+      'A frontier vision-language model that excels at high-quality reasoning from images.',
     displayName: 'Llama 3.2 11B Vision Instruct',
     id: 'meta/llama-3.2-11b-vision-instruct',
     type: 'chat',
@@ -89,7 +100,8 @@ const nvidiaChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'A frontier vision-language model that excels at high-quality reasoning from images.',
+    description:
+      'A frontier vision-language model that excels at high-quality reasoning from images.',
     displayName: 'Llama 3.2 90B Vision Instruct',
     id: 'meta/llama-3.2-90b-vision-instruct',
     type: 'chat',
@@ -151,26 +163,18 @@ const nvidiaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'A frontier text generation model strong in understanding, transformation, and code generation.',
+    description:
+      'A frontier text generation model strong in understanding, transformation, and code generation.',
     displayName: 'Gemma 2 9B Instruct',
     id: 'google/gemma-2-9b-it',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'A frontier text generation model strong in understanding, transformation, and code generation.',
+    description:
+      'A frontier text generation model strong in understanding, transformation, and code generation.',
     displayName: 'Gemma 2 27B Instruct',
     id: 'google/gemma-2-27b-it',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'A state-of-the-art efficient LLM strong in reasoning, math, and programming.',
-    displayName: 'DeepSeek R1',
-    id: 'deepseek-ai/deepseek-r1',
     type: 'chat',
   },
   {
@@ -178,14 +182,16 @@ const nvidiaChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'A bilingual LLM for Chinese and English across language, coding, math, and reasoning.',
+    description:
+      'A bilingual LLM for Chinese and English across language, coding, math, and reasoning.',
     displayName: 'Qwen2.5 7B Instruct',
     id: 'qwen/qwen2.5-7b-instruct',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'A strong mid-sized code model with 32K context, excelling at multilingual programming.',
+    description:
+      'A strong mid-sized code model with 32K context, excelling at multilingual programming.',
     displayName: 'Qwen2.5 Coder 7B Instruct',
     id: 'qwen/qwen2.5-coder-7b-instruct',
     type: 'chat',

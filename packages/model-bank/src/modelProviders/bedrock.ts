@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref :https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html
 // ref :https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/models

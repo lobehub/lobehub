@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "Sử dụng token",
   "table.columns.type.enums.chat": "Tạo văn bản",
   "table.columns.type.enums.imageGeneration": "Tạo hình ảnh",
+  "table.columns.type.enums.videoGeneration": "Tạo Video",
   "table.columns.type.title": "Loại",
   "table.desc": "Chi tiết sử dụng tín dụng tính toán cho tạo văn bản, nhúng, tạo hình ảnh, v.v.",
   "table.more": "Xem chi tiết",

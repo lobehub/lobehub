@@ -1,5 +1,6 @@
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
-import { type KnowledgeItem, KnowledgeType } from '@lobechat/types';
+import { type KnowledgeItem } from '@lobechat/types';
+import { KnowledgeType } from '@lobechat/types';
 import { z } from 'zod';
 
 import { AgentModel } from '@/database/models/agent';

@@ -4,7 +4,8 @@ import { Button, Flexbox, Modal } from '@lobehub/ui';
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Settings, { type SettingsRef } from './index';
+import { type SettingsRef } from './index';
+import Settings from './index';
 
 interface McpSettingsModalProps {
   identifier: string;
@@ -25,13 +26,13 @@ const McpSettingsModal = memo<McpSettingsModalProps>(({ identifier, open, onClos
       >
         {t('common:reset')}
       </Button>
-      <Flexbox gap={8} horizontal>
+      <Flexbox horizontal gap={8}>
         <Button onClick={onClose}>{t('common:cancel')}</Button>
         <Button
+          type="primary"
           onClick={() => {
             settingsRef.current?.save();
           }}
-          type="primary"
         >
           {t('common:save')}
         </Button>
@@ -43,10 +44,10 @@ const McpSettingsModal = memo<McpSettingsModalProps>(({ identifier, open, onClos
     <Modal
       destroyOnHidden
       footer={footer}
-      onCancel={onClose}
       open={open}
       title={t('plugin:dev.title.skillSettings')}
       width={600}
+      onCancel={onClose}
     >
       <Settings hideFooter identifier={identifier} ref={settingsRef} />
     </Modal>

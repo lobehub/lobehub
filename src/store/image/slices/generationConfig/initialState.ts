@@ -1,10 +1,6 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import {
-  type ModelParamsSchema,
-  ModelProvider,
-  type RuntimeImageGenParams,
-  extractDefaultValues,
-} from 'model-bank';
+import { type ModelParamsSchema, type RuntimeImageGenParams } from 'model-bank';
+import { extractDefaultValues, ModelProvider } from 'model-bank';
 import { nanoBananaProParameters } from 'model-bank/google';
 
 import { DEFAULT_IMAGE_CONFIG } from '@/const/settings';
@@ -21,10 +17,10 @@ export interface GenerationConfigState {
   imageNum: number;
 
   isAspectRatioLocked: boolean;
-  activeAspectRatio: string | null; // string - 虚拟比例; null - 原生比例
+  activeAspectRatio: string | null; // string - virtual ratio; null - native ratio
 
   /**
-   * 标记配置是否已初始化（包括从记忆中恢复）
+   * Marks whether the configuration has been initialized (including restoration from memory)
    */
   isInit: boolean;
 }

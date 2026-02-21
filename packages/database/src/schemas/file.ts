@@ -1,7 +1,7 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { isNotNull } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
-  AnyPgColumn,
   boolean,
   index,
   integer,
@@ -15,8 +15,8 @@ import {
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
-import { LobeDocumentPage } from '@/types/document';
-import { FileSource } from '@/types/files';
+import type { LobeDocumentPage } from '@/types/document';
+import type { FileSource } from '@/types/files';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { accessedAt, createdAt, timestamps } from './_helpers';
@@ -78,9 +78,9 @@ export const documents = pgTable(
 
     // Associated file (optional)
     // forward reference needs AnyPgColumn to avoid circular type inference
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
     fileId: text('file_id').references((): AnyPgColumn => files.id, { onDelete: 'set null' }),
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
     knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, {
       onDelete: 'set null',
     }),

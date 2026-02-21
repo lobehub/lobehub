@@ -12,7 +12,7 @@ import { useGroupProfileStore } from '@/store/groupProfile';
  */
 const AgentTool = () => {
   const agentId = useGroupProfileStore((s) => s.activeTabId);
-  return <SharedAgentTool agentId={agentId} filterAvailableInWeb showWebBrowsing useAllMetaList />;
+  return <SharedAgentTool filterAvailableInWeb showWebBrowsing useAllMetaList agentId={agentId} />;
 };
 
 export default AgentTool;

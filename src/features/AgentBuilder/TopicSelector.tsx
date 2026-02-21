@@ -1,4 +1,5 @@
-import { ActionIcon, DropdownMenu, type DropdownMenuCheckboxItem, Flexbox } from '@lobehub/ui';
+import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -66,7 +67,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
           closeOnClick: true,
           key: topic.id,
           label: (
-            <Flexbox align="center" gap={4} horizontal justify="space-between" width="100%">
+            <Flexbox horizontal align="center" gap={4} justify="space-between" width="100%">
               <span className={styles.title}>{topic.title}</span>
               <span className={styles.time}>{displayTime}</span>
             </Flexbox>
@@ -85,6 +86,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
 
   return (
     <NavHeader
+      showTogglePanelButton={false}
       left={
         activeTopic?.title ? <span className={styles.title}>{activeTopic.title}</span> : undefined
       }
@@ -92,9 +94,9 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
         <>
           <ActionIcon
             icon={PlusIcon}
-            onClick={() => switchTopic()}
             size={DESKTOP_HEADER_ICON_SIZE}
             title={t('actions.addNewTopic')}
+            onClick={() => switchTopic()}
           />
           <DropdownMenu
             items={items}
@@ -106,7 +108,6 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
           </DropdownMenu>
         </>
       }
-      showTogglePanelButton={false}
     />
   );
 });

@@ -1,11 +1,12 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notification } from '@/components/AntdStaticMethods';
 import { pluginService } from '@/services/plugin';
 import { toolService } from '@/services/tool';
-import { DiscoverPluginItem } from '@/types/discover';
+import { type DiscoverPluginItem } from '@/types/discover';
 
 import { useToolStore } from '../../store';
 

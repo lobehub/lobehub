@@ -1,7 +1,7 @@
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_SEARCH_FC_MODEL } from '@lobechat/const';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AgentStoreState } from '@/store/agent/initialState';
+import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin/initialState';
 
@@ -182,12 +182,12 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getSearchModeById('agent-1')(state)).toBe('auto');
     });
 
-    it('should return "off" as default', () => {
+    it('should return "auto" as default', () => {
       const state = createState({
         agentMap: { 'agent-1': {} },
       });
 
-      expect(chatConfigByIdSelectors.getSearchModeById('agent-1')(state)).toBe('off');
+      expect(chatConfigByIdSelectors.getSearchModeById('agent-1')(state)).toBe('auto');
     });
   });
 
@@ -216,12 +216,12 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.isEnableSearchById('agent-1')(state)).toBe(false);
     });
 
-    it('should return false when searchMode is not set', () => {
+    it('should return true when searchMode is not set (defaults to auto)', () => {
       const state = createState({
         agentMap: { 'agent-1': {} },
       });
 
-      expect(chatConfigByIdSelectors.isEnableSearchById('agent-1')(state)).toBe(false);
+      expect(chatConfigByIdSelectors.isEnableSearchById('agent-1')(state)).toBe(true);
     });
   });
 

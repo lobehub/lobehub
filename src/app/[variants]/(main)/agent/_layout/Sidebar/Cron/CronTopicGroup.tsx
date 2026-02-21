@@ -6,7 +6,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 
-import type { AgentCronJob } from '@/database/schemas/agentCronJob';
+import { type AgentCronJob } from '@/database/schemas/agentCronJob';
 import { useRouter } from '@/libs/router/navigation';
 
 import Actions from './Actions';
@@ -43,22 +43,23 @@ const CronTopicGroup = memo<CronTopicGroupProps>(({ cronJob, cronJobId, topics }
 
   return (
     <AccordionItem
+      itemKey={cronJobId}
+      paddingBlock={4}
+      paddingInline={'8px 4px'}
+      variant={isActive ? 'filled' : 'borderless'}
       action={
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <ActionIcon
             icon={Settings2Icon}
-            onClick={handleOpenCronJob}
             size="small"
             title={t('agentCronJobs.editJob')}
+            onClick={handleOpenCronJob}
           />
           <Actions cronJobId={cronJobId} topics={topics} />
         </Flexbox>
       }
-      itemKey={cronJobId}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
       title={
-        <Flexbox align="center" gap={6} height={24} horizontal style={{ overflow: 'hidden' }}>
+        <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
           <Icon icon={isEnabled ? TimerIcon : TimerOffIcon} style={{ opacity: 0.5 }} />
           <Text ellipsis style={{ flex: 1 }} type={isActive ? undefined : 'secondary'}>
             {cronJobName}
@@ -70,7 +71,6 @@ const CronTopicGroup = memo<CronTopicGroupProps>(({ cronJob, cronJobId, topics }
           )}
         </Flexbox>
       }
-      variant={isActive ? 'filled' : 'borderless'}
     >
       <Flexbox gap={1} paddingBlock={1}>
         {topics.length > 0 ? (

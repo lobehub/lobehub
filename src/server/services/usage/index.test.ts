@@ -1,8 +1,8 @@
 import dayjs from 'dayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeChatDatabase } from '@/database/type';
-import { MessageMetadata } from '@/types/message';
+import { type LobeChatDatabase } from '@/database/type';
+import { type MessageMetadata } from '@/types/message';
 
 import { UsageRecordService } from './index';
 

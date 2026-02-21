@@ -34,10 +34,12 @@ const updateTopicCoverSchema = z.object({
 });
 
 export const generationTopicRouter = router({
-  createTopic: generationTopicProcedure.input(z.void()).mutation(async ({ ctx }) => {
-    const data = await ctx.generationTopicModel.create('');
-    return data.id;
-  }),
+  createTopic: generationTopicProcedure
+    .input(z.object({ type: z.enum(['image', 'video']).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const data = await ctx.generationTopicModel.create('', input?.type);
+      return data.id;
+    }),
   deleteTopic: generationTopicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -66,9 +68,11 @@ export const generationTopicRouter = router({
 
       return deletedTopic;
     }),
-  getAllGenerationTopics: generationTopicProcedure.query(async ({ ctx }) => {
-    return ctx.generationTopicModel.queryAll();
-  }),
+  getAllGenerationTopics: generationTopicProcedure
+    .input(z.object({ type: z.enum(['image', 'video']).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      return ctx.generationTopicModel.queryAll(input?.type);
+    }),
   updateTopic: generationTopicProcedure
     .input(updateTopicSchema)
     .mutation(async ({ ctx, input }) => {

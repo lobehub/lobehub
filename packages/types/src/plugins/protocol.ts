@@ -136,9 +136,9 @@ export interface ProtocolHandler {
   /**
    * Handle protocol URL
    */
-  handle(
+  handle: (
     parsed: ProtocolUrlParsed,
-  ): Promise<{ error?: string; success: boolean; targetWindow?: string }>;
+  ) => Promise<{ error?: string; success: boolean; targetWindow?: string }>;
 
   /**
    * Supported actions

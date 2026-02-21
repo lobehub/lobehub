@@ -2,7 +2,8 @@ import urlJoin from 'url-join';
 
 import { DEFAULT_LANG, isLocaleNotSupport } from '@/const/locale';
 import { appEnv } from '@/envs/app';
-import { type Locales, normalizeLocale } from '@/locales/resources';
+import { type Locales } from '@/locales/resources';
+import { normalizeLocale } from '@/locales/resources';
 
 export class PluginStore {
   private readonly baseUrl: string;

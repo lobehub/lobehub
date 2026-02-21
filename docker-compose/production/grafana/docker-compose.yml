@@ -1,4 +1,4 @@
-name: lobe-chat-database
+name: lobehub
 services:
   network-service:
     image: alpine
@@ -60,6 +60,7 @@ services:
         mc mb myminio/${MINIO_LOBE_BUCKET}
         wait \$MINIO_PID
       "
+
 
   # version lock ref: https://github.com/lobehub/lobe-chat/pull/7331
   casdoor:
@@ -157,8 +158,8 @@ services:
       - ENDPOINT=127.0.0.1:4317
 
   lobe:
-    image: lobehub/lobe-chat-database
-    container_name: lobe-chat
+    image: lobehub/lobehub
+    container_name: lobehub
     network_mode: 'service:network-service'
     depends_on:
       postgresql:
@@ -231,6 +232,7 @@ services:
         wait \$LOBE_PID
       "
 
+
 volumes:
   data:
     driver: local
@@ -242,7 +244,6 @@ volumes:
     driver: local
   prometheus_data:
     driver: local
-
 
 networks:
   lobe-network:

@@ -18,10 +18,10 @@ const Switch = ({ id, Component, enabled }: SwitchProps) => {
   return (
     <InstantSwitch
       enabled={enabled}
+      size={'small'}
       onChange={async (checked) => {
         await toggleProviderEnabled(id, checked);
       }}
-      size={'small'}
     />
   );
 };

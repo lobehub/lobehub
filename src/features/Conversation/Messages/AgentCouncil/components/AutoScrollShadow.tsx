@@ -1,5 +1,6 @@
 import { ScrollShadow } from '@lobehub/ui';
-import { type PropsWithChildren, type RefObject, memo, useEffect } from 'react';
+import { type PropsWithChildren, type RefObject } from 'react';
+import { memo, useEffect } from 'react';
 
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 
@@ -29,11 +30,11 @@ const AutoScrollShadow = memo<AutoScrollShadowProps>(({ children, content, strea
 
   return (
     <ScrollShadow
-      height={'max(33vh, 480px)'}
       hideScrollBar
-      onScroll={handleScroll}
+      height={'max(33vh, 480px)'}
       ref={ref as RefObject<HTMLDivElement>}
       size={16}
+      onScroll={handleScroll}
     >
       {children}
     </ScrollShadow>

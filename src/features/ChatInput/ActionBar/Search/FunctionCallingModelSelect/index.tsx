@@ -1,6 +1,8 @@
-import { LobeSelect, type LobeSelectProps, TooltipGroup } from '@lobehub/ui';
+import { type LobeSelectProps } from '@lobehub/ui';
+import { LobeSelect, TooltipGroup } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type ReactNode, memo, useMemo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -70,15 +72,15 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
   return (
     <TooltipGroup>
       <LobeSelect
-        onChange={(value, option) => {
-          const model = value.split('/').slice(1).join('/');
-          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
-        }}
         options={options}
         popupClassName={styles.select}
         popupMatchSelectWidth={false}
         value={`${value?.provider}/${value?.model}`}
         variant={'filled'}
+        onChange={(value, option) => {
+          const model = value.split('/').slice(1).join('/');
+          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
+        }}
         {...rest}
       />
     </TooltipGroup>

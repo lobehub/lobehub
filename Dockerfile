@@ -8,24 +8,23 @@ ARG USE_CN_MIRROR
 
 ENV DEBIAN_FRONTEND="noninteractive"
 
-RUN <<'EOF'
-set -e
-if [ "${USE_CN_MIRROR:-false}" = "true" ]; then
-    sed -i "s/deb.debian.org/mirrors.ustc.edu.cn/g" "/etc/apt/sources.list.d/debian.sources"
-fi
-apt update
-apt install ca-certificates proxychains-ng -qy
-mkdir -p /distroless/bin /distroless/etc /distroless/etc/ssl/certs /distroless/lib
-cp /usr/lib/$(arch)-linux-gnu/libproxychains.so.4 /distroless/lib/libproxychains.so.4
-cp /usr/lib/$(arch)-linux-gnu/libdl.so.2 /distroless/lib/libdl.so.2
-cp /usr/bin/proxychains4 /distroless/bin/proxychains
-cp /etc/proxychains4.conf /distroless/etc/proxychains4.conf
-cp /usr/lib/$(arch)-linux-gnu/libstdc++.so.6 /distroless/lib/libstdc++.so.6
-cp /usr/lib/$(arch)-linux-gnu/libgcc_s.so.1 /distroless/lib/libgcc_s.so.1
-cp /usr/local/bin/node /distroless/bin/node
-cp /etc/ssl/certs/ca-certificates.crt /distroless/etc/ssl/certs/ca-certificates.crt
-rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
-EOF
+RUN set -e && \
+    if [ "${USE_CN_MIRROR:-false}" = "true" ]; then \
+        sed -i "s/deb.debian.org/mirrors.ustc.edu.cn/g" "/etc/apt/sources.list.d/debian.sources"; \
+    fi && \
+    apt update && \
+    apt install ca-certificates proxychains-ng -qy && \
+    mkdir -p /distroless/bin /distroless/etc /distroless/etc/ssl/certs /distroless/lib && \
+    cp /usr/lib/$(arch)-linux-gnu/libproxychains.so.4 /distroless/lib/libproxychains.so.4 && \
+    cp /usr/lib/$(arch)-linux-gnu/libdl.so.2 /distroless/lib/libdl.so.2 && \
+    cp /usr/bin/proxychains4 /distroless/bin/proxychains && \
+    cp /etc/proxychains4.conf /distroless/etc/proxychains4.conf && \
+    cp /usr/lib/$(arch)-linux-gnu/libstdc++.so.6 /distroless/lib/libstdc++.so.6 && \
+    cp /usr/lib/$(arch)-linux-gnu/libgcc_s.so.1 /distroless/lib/libgcc_s.so.1 && \
+    cp /usr/lib/$(arch)-linux-gnu/librt.so.1 /distroless/lib/librt.so.1 && \
+    cp /usr/local/bin/node /distroless/bin/node && \
+    cp /etc/ssl/certs/ca-certificates.crt /distroless/etc/ssl/certs/ca-certificates.crt && \
+    rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
 
 ## Builder image, install all the dependencies and build the app
 FROM base AS builder
@@ -77,23 +76,21 @@ COPY patches ./patches
 # bring in desktop workspace manifest so pnpm can resolve it
 COPY apps/desktop/src/main/package.json ./apps/desktop/src/main/package.json
 
-RUN <<'EOF'
-set -e
-if [ "${USE_CN_MIRROR:-false}" = "true" ]; then
-    export SENTRYCLI_CDNURL="https://npmmirror.com/mirrors/sentry-cli"
-    npm config set registry "https://registry.npmmirror.com/"
-    echo 'canvas_binary_host_mirror=https://npmmirror.com/mirrors/canvas' >> .npmrc
-fi
-export COREPACK_NPM_REGISTRY=$(npm config get registry | sed 's/\/$//')
-npm i -g corepack@latest
-corepack enable
-corepack use $(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json)
-pnpm i
-mkdir -p /deps
-cd /deps
-pnpm init
-pnpm add pg drizzle-orm
-EOF
+RUN set -e && \
+    if [ "${USE_CN_MIRROR:-false}" = "true" ]; then \
+        export SENTRYCLI_CDNURL="https://npmmirror.com/mirrors/sentry-cli"; \
+        npm config set registry "https://registry.npmmirror.com/"; \
+        echo 'canvas_binary_host_mirror=https://npmmirror.com/mirrors/canvas' >> .npmrc; \
+    fi && \
+    export COREPACK_NPM_REGISTRY=$(npm config get registry | sed 's/\/$//') && \
+    npm i -g corepack@latest && \
+    corepack enable && \
+    corepack use $(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json) && \
+    pnpm i && \
+    mkdir -p /deps && \
+    cd /deps && \
+    pnpm init && \
+    pnpm add pg drizzle-orm
 
 COPY . .
 
@@ -101,17 +98,15 @@ COPY . .
 RUN npm run build:docker
 
 # Prepare desktop export assets for Electron packaging (if generated)
-RUN <<'EOF'
-set -e
-if [ -d "/app/out" ]; then
-    mkdir -p /app/apps/desktop/dist/next
-    cp -a /app/out/. /app/apps/desktop/dist/next/
-    echo "✅ Copied Next export output into /app/apps/desktop/dist/next"
-else
-    echo "ℹ️ No Next export output found at /app/out, creating empty directory"
-    mkdir -p /app/apps/desktop/dist/next
-fi
-EOF
+RUN set -e && \
+    if [ -d "/app/out" ]; then \
+        mkdir -p /app/apps/desktop/dist/next && \
+        cp -a /app/out/. /app/apps/desktop/dist/next/ && \
+        echo "Copied Next export output into /app/apps/desktop/dist/next"; \
+    else \
+        echo "No Next export output found at /app/out, creating empty directory" && \
+        mkdir -p /app/apps/desktop/dist/next; \
+    fi
 
 ## Application image, copy all the files for production
 FROM busybox:latest AS app
@@ -138,12 +133,10 @@ COPY --from=builder /deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm
 COPY --from=builder /app/scripts/serverLauncher/startServer.js /app/startServer.js
 COPY --from=builder /app/scripts/_shared /app/scripts/_shared
 
-RUN <<'EOF'
-set -e
-addgroup -S -g 1001 nodejs
-adduser -D -G nodejs -H -S -h /app -u 1001 nextjs
-chown -R nextjs:nodejs /app /etc/proxychains4.conf
-EOF
+RUN set -e && \
+    addgroup -S -g 1001 nodejs && \
+    adduser -D -G nodejs -H -S -h /app -u 1001 nextjs && \
+    chown -R nextjs:nodejs /app /etc/proxychains4.conf
 
 ## Production image, copy all the files and run next
 FROM scratch
@@ -166,14 +159,12 @@ ENV HOSTNAME="0.0.0.0" \
     PORT="3210"
 
 # General Variables
-ENV ACCESS_CODE="" \
-    APP_URL="" \
+ENV APP_URL="" \
     API_KEY_SELECT_MODE="" \
     DEFAULT_AGENT_CONFIG="" \
     SYSTEM_AGENT="" \
     FEATURE_FLAGS="" \
-    PROXY_URL="" \
-    ENABLE_AUTH_PROTECTION=""
+    PROXY_URL=""
 
 # Database
 ENV KEY_VAULTS_SECRET="" \
@@ -184,6 +175,10 @@ ENV KEY_VAULTS_SECRET="" \
 ENV AUTH_SECRET="" \
     AUTH_SSO_PROVIDERS="" \
     AUTH_ALLOWED_EMAILS="" \
+    AUTH_TRUSTED_ORIGINS="" \
+    AUTH_DISABLE_EMAIL_PASSWORD="" \
+    AUTH_EMAIL_VERIFICATION="" \
+    AUTH_ENABLE_MAGIC_LINK="" \
     # Google
     AUTH_GOOGLE_ID="" \
     AUTH_GOOGLE_SECRET="" \
@@ -192,7 +187,9 @@ ENV AUTH_SECRET="" \
     AUTH_GITHUB_SECRET="" \
     # Microsoft
     AUTH_MICROSOFT_ID="" \
-    AUTH_MICROSOFT_SECRET=""
+    AUTH_MICROSOFT_SECRET="" \
+    AUTH_MICROSOFT_AUTHORITY_URL="" \
+    AUTH_MICROSOFT_TENANT_ID=""
 
 # Redis
 ENV REDIS_URL="" \

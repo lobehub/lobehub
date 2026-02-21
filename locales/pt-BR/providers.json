@@ -20,6 +20,7 @@
   "fireworksai.description": "A Fireworks AI oferece serviços avançados de modelos de linguagem com chamadas de função e processamento multimodal. O Firefunction V2 (baseado no Llama-3) é otimizado para chamadas de função, chat e execução de instruções, enquanto o FireLLaVA-13B suporta entradas mistas de imagem e texto. Outros modelos notáveis incluem as famílias Llama e Mixtral.",
   "giteeai.description": "As APIs serverless do Gitee AI oferecem serviços de inferência LLM plug-and-play para desenvolvedores.",
   "github.description": "Com os Modelos do GitHub, os desenvolvedores podem atuar como engenheiros de IA usando modelos líderes do setor.",
+  "githubcopilot.description": "Acesse os modelos Claude, GPT e Gemini com sua assinatura do GitHub Copilot.",
   "google.description": "A família Gemini do Google é sua IA mais avançada de uso geral, desenvolvida pelo Google DeepMind para uso multimodal em texto, código, imagens, áudio e vídeo. Escala de data centers a dispositivos móveis com alta eficiência e alcance.",
   "groq.description": "O motor de inferência LPU da Groq oferece desempenho de benchmark excepcional com velocidade e eficiência notáveis, estabelecendo um novo padrão para inferência LLM de baixa latência na nuvem.",
   "higress.description": "O Higress é um gateway de API nativo da nuvem criado dentro da Alibaba para resolver o impacto do recarregamento do Tengine em conexões de longa duração e lacunas no balanceamento de carga gRPC/Dubbo.",

@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "토큰 사용량",
   "table.columns.type.enums.chat": "텍스트 생성",
   "table.columns.type.enums.imageGeneration": "이미지 생성",
+  "table.columns.type.enums.videoGeneration": "비디오 생성",
   "table.columns.type.title": "유형",
   "table.desc": "텍스트 생성, 임베딩, 이미지 생성 등에서의 컴퓨팅 크레딧 사용 내역",
   "table.more": "자세히 보기",

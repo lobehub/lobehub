@@ -1,6 +1,6 @@
+import { type AiProviderModelListItem } from 'model-bank';
 import {
   AiModelTypeSchema,
-  type AiProviderModelListItem,
   CreateAiModelSchema,
   ToggleAiModelEnableSchema,
   UpdateAiModelSchema,

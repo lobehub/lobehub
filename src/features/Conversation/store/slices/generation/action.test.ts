@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
-import type { ConversationContext, ConversationHooks } from '../../../types';
+import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
 
 // Mock useChatStore

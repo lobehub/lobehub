@@ -21,10 +21,10 @@ const PreferenceGridView = memo<GridViewProps>(({ preferences, isLoading, onClic
       hasMore={preferencesHasMore}
       isLoading={isLoading}
       items={preferences}
-      onLoadMore={loadMorePreferences}
       renderItem={(preference) => (
-        <PreferenceCard onClick={() => onClick(preference)} preference={preference} />
+        <PreferenceCard preference={preference} onClick={() => onClick(preference)} />
       )}
+      onLoadMore={loadMorePreferences}
     />
   );
 });

@@ -1,7 +1,9 @@
-import { Flexbox, Icon, type IconProps } from '@lobehub/ui';
+import { type IconProps } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import Divider from './Divider';
 
@@ -30,15 +32,15 @@ const Cell = memo<CellProps>(({ label, icon, onClick, type }) => {
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={cx(styles.container)}
       gap={12}
-      horizontal
       justify={'space-between'}
-      onClick={onClick}
       padding={16}
+      onClick={onClick}
     >
-      <Flexbox align={'center'} gap={12} horizontal>
+      <Flexbox horizontal align={'center'} gap={12}>
         {icon && <Icon color={cssVar.colorPrimaryBorder} icon={icon} size={{ size: 20 }} />}
         {label}
       </Flexbox>

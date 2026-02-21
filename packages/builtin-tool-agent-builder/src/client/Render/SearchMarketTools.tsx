@@ -1,7 +1,7 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
-import { Avatar, Button, Tag , Flexbox } from '@lobehub/ui';
+import type { BuiltinRenderProps } from '@lobechat/types';
+import { Avatar, Button, Flexbox, Tag } from '@lobehub/ui';
 import { CheckCircle, Download, Package, Search } from 'lucide-react';
 import { memo, useState } from 'react';
 
@@ -59,8 +59,8 @@ const ToolItem = memo<ToolItemProps>(({ tool }) => {
 
   return (
     <Flexbox
-      gap={12}
       horizontal
+      gap={12}
       style={{
         background: 'var(--lobe-fill-tertiary)',
         borderRadius: 8,
@@ -69,7 +69,7 @@ const ToolItem = memo<ToolItemProps>(({ tool }) => {
     >
       <Avatar avatar={tool.icon || '🔧'} size={40} style={{ borderRadius: 8, flexShrink: 0 }} />
       <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <span style={{ fontWeight: 600 }}>{tool.name}</span>
           {tool.author && (
             <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>
@@ -92,7 +92,7 @@ const ToolItem = memo<ToolItemProps>(({ tool }) => {
           </div>
         )}
         {tool.tags && tool.tags.length > 0 && (
-          <Flexbox gap={4} horizontal style={{ flexWrap: 'wrap', marginTop: 4 }}>
+          <Flexbox horizontal gap={4} style={{ flexWrap: 'wrap', marginTop: 4 }}>
             {tool.tags.slice(0, 3).map((tag) => (
               <Tag key={tag} style={{ fontSize: 10 }}>
                 {tag}
@@ -103,16 +103,16 @@ const ToolItem = memo<ToolItemProps>(({ tool }) => {
       </Flexbox>
       <Flexbox align="center" justify="center" style={{ flexShrink: 0 }}>
         {installed || tool.installed ? (
-          <Flexbox align="center" gap={4} horizontal style={{ color: 'var(--lobe-success-6)' }}>
+          <Flexbox horizontal align="center" gap={4} style={{ color: 'var(--lobe-success-6)' }}>
             <CheckCircle size={14} />
             <span style={{ fontSize: 12 }}>Installed</span>
           </Flexbox>
         ) : isInstalling ? (
-          <Button onClick={handleCancel} size="small" variant="filled">
+          <Button size="small" variant="filled" onClick={handleCancel}>
             Cancel
           </Button>
         ) : (
-          <Button icon={<Download size={14} />} onClick={handleInstall} size="small" type="primary">
+          <Button icon={<Download size={14} />} size="small" type="primary" onClick={handleInstall}>
             Install
           </Button>
         )}
@@ -138,7 +138,7 @@ const SearchMarketTools = memo<BuiltinRenderProps<SearchMarketToolsParams, Searc
 
     return (
       <Flexbox gap={12}>
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Package size={16} style={{ color: 'var(--lobe-primary-6)' }} />
           <span style={{ fontWeight: 500 }}>
             {query ? `Search results for "${query}"` : 'Available Tools'}

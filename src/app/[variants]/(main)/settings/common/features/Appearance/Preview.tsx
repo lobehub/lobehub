@@ -61,10 +61,10 @@ const AgentItem = memo<{
 }>(({ active, color }) => {
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={cx(styles.agent, active && styles.agentActive)}
       gap={4}
-      horizontal
       width={'100%'}
     >
       <Flexbox
@@ -77,18 +77,18 @@ const AgentItem = memo<{
         <Flexbox
           className={styles.icon}
           height={2}
+          width={'66%'}
           style={{
             background: cssVar.colorTextTertiary,
           }}
-          width={'66%'}
         />
         <Flexbox
           className={styles.icon}
           height={2}
+          width={'100%'}
           style={{
             background: cssVar.colorTextQuaternary,
           }}
-          width={'100%'}
         />
       </Flexbox>
     </Flexbox>
@@ -123,10 +123,10 @@ const Preview = memo(() => {
         <Flexbox
           className={styles.icon}
           height={8}
+          width={'100%'}
           style={{
             background: cssVar.colorFillTertiary,
           }}
-          width={'100%'}
         />
       </Flexbox>
       <AgentItem />
@@ -138,17 +138,17 @@ const Preview = memo(() => {
 
   const header = (
     <Flexbox
+      horizontal
       align={'center'}
       className={styles.header}
-      horizontal
       justify={'space-between'}
       padding={4}
     >
-      <Flexbox align={'center'} gap={4} horizontal>
+      <Flexbox horizontal align={'center'} gap={4}>
         <Flexbox className={styles.icon} height={12} style={{ borderRadius: '50%' }} width={12} />
         <Flexbox className={styles.icon} height={8} width={32} />
       </Flexbox>
-      <Flexbox gap={2} horizontal>
+      <Flexbox horizontal gap={2}>
         <Flexbox className={styles.icon} height={10} width={10} />
         <Flexbox className={styles.icon} height={10} width={10} />
       </Flexbox>
@@ -166,38 +166,38 @@ const Preview = memo(() => {
       <Flexbox
         className={styles.icon}
         height={12}
+        width={32}
         style={{
           background: cssVar.colorPrimary,
         }}
-        width={32}
       />
     </Flexbox>
   );
 
   return (
-    <Block className={styles.container} horizontal shadow variant={'outlined'}>
+    <Block horizontal shadow className={styles.container} variant={'outlined'}>
       {nav}
       {sidebar}
       <Flexbox className={styles.conversation} flex={1}>
         {header}
         <Flexbox align={'flex-start'} flex={1} gap={8} padding={6}>
-          <Flexbox align={'center'} gap={4} horizontal justify={'flex-end'} width={'100%'}>
+          <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'} width={'100%'}>
             <Flexbox className={styles.bubble} gap={4} width={64}>
               <Flexbox
                 className={styles.icon}
                 height={2}
+                width={'100%'}
                 style={{
                   background: cssVar.colorTextQuaternary,
                 }}
-                width={'100%'}
               />
               <Flexbox
                 className={styles.icon}
                 height={2}
+                width={'66%'}
                 style={{
                   background: cssVar.colorTextQuaternary,
                 }}
-                width={'66%'}
               />
             </Flexbox>
             <Flexbox
@@ -207,7 +207,7 @@ const Preview = memo(() => {
               width={14}
             />
           </Flexbox>
-          <Flexbox gap={4} horizontal>
+          <Flexbox horizontal gap={4}>
             <Flexbox
               className={styles.icon}
               height={14}
@@ -218,62 +218,62 @@ const Preview = memo(() => {
               <Flexbox
                 className={styles.icon}
                 height={2}
+                width={'100%'}
                 style={{
                   background: cssVar.colorTextQuaternary,
                 }}
-                width={'100%'}
               />
               <Flexbox
                 className={styles.icon}
                 height={2}
-                style={{
-                  background: cssVar.colorTextQuaternary,
-                }}
                 width={'66%'}
+                style={{
+                  background: cssVar.colorTextQuaternary,
+                }}
               />
               <Flexbox
                 className={styles.icon}
                 height={2}
-                style={{
-                  background: cssVar.colorTextQuaternary,
-                }}
                 width={'100%'}
+                style={{
+                  background: cssVar.colorTextQuaternary,
+                }}
               />
               <Flexbox
                 className={styles.icon}
                 height={2}
-                style={{
-                  background: cssVar.colorTextQuaternary,
-                }}
                 width={'100%'}
+                style={{
+                  background: cssVar.colorTextQuaternary,
+                }}
               />
               <Flexbox
                 className={styles.icon}
                 height={2}
-                style={{
-                  background: cssVar.colorTextQuaternary,
-                }}
                 width={'33%'}
+                style={{
+                  background: cssVar.colorTextQuaternary,
+                }}
               />
             </Flexbox>
           </Flexbox>
-          <Flexbox align={'center'} gap={4} horizontal justify={'flex-end'} width={'100%'}>
+          <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'} width={'100%'}>
             <Flexbox className={styles.bubble} gap={4} width={100}>
               <Flexbox
                 className={styles.icon}
                 height={2}
+                width={'100%'}
                 style={{
                   background: cssVar.colorTextQuaternary,
                 }}
-                width={'100%'}
               />
               <Flexbox
                 className={styles.icon}
                 height={2}
+                width={'66%'}
                 style={{
                   background: cssVar.colorTextQuaternary,
                 }}
-                width={'66%'}
               />
             </Flexbox>
             <Flexbox

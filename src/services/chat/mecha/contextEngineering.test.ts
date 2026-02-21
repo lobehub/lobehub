@@ -1,4 +1,4 @@
-import { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as isCanUseFCModule from '@/helpers/isCanUseFC';

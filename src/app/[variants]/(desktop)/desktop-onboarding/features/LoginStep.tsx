@@ -1,10 +1,7 @@
 'use client';
 
-import {
-  AuthorizationPhase,
-  AuthorizationProgress,
-  useWatchBroadcast,
-} from '@lobechat/electron-client-ipc';
+import { type AuthorizationPhase, type AuthorizationProgress } from '@lobechat/electron-client-ipc';
+import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Alert, Button, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
@@ -281,9 +278,9 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             block
             disabled={isSigningOut || isConnectingServer}
             icon={Cloud}
-            onClick={handleSignOut}
             size={'large'}
             type={'default'}
+            onClick={handleSignOut}
           >
             {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
           </Button>
@@ -306,9 +303,9 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           <Button
             block
             icon={Cloud}
-            onClick={() => setCloudLoginStatus('idle')}
             size={'large'}
             type={'primary'}
+            onClick={() => setCloudLoginStatus('idle')}
           >
             {t('screen5.actions.tryAgain')}
           </Button>
@@ -329,7 +326,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
             {phaseText}
           </Text>
-          <Flexbox align={'center'} horizontal justify={'space-between'}>
+          <Flexbox horizontal align={'center'} justify={'space-between'}>
             {localRemainingSeconds !== null ? (
               <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
                 {t('screen5.auth.remaining', {
@@ -339,7 +336,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             ) : (
               <div />
             )}
-            <Button onClick={handleCancelAuth} size={'small'} type={'text'}>
+            <Button size={'small'} type={'text'} onClick={handleCancelAuth}>
               {t('screen5.actions.cancel')}
             </Button>
           </Flexbox>
@@ -353,9 +350,9 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
         disabled={isConnectingServer}
         icon={Cloud}
         loading={false}
-        onClick={handleCloudLogin}
         size={'large'}
         type={'primary'}
+        onClick={handleCloudLogin}
       >
         {t('screen5.actions.signInCloud')}
       </Button>
@@ -383,9 +380,9 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             block
             disabled={isSigningOut || isConnectingServer}
             icon={Server}
-            onClick={handleSignOut}
             size={'large'}
             type={'default'}
+            onClick={handleSignOut}
           >
             {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
           </Button>
@@ -405,7 +402,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             title={t('authResult.failed.title')}
             type={'secondary'}
           />
-          <Button icon={Server} onClick={() => setSelfhostLoginStatus('idle')} type={'primary'}>
+          <Button icon={Server} type={'primary'} onClick={() => setSelfhostLoginStatus('idle')}>
             {t('screen5.actions.tryAgain')}
           </Button>
         </Flexbox>
@@ -432,7 +429,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
             {phaseText}
           </Text>
-          <Flexbox align={'center'} horizontal justify={'space-between'}>
+          <Flexbox horizontal align={'center'} justify={'space-between'}>
             {localRemainingSeconds !== null ? (
               <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
                 {t('screen5.auth.remaining', {
@@ -442,7 +439,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             ) : (
               <div />
             )}
-            <Button onClick={handleCancelAuth} size={'small'} type={'text'}>
+            <Button size={'small'} type={'text'} onClick={handleCancelAuth}>
               {t('screen5.actions.cancel')}
             </Button>
           </Flexbox>
@@ -454,6 +451,11 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
       <Flexbox gap={16} style={{ width: '100%' }}>
         <Text color={cssVar.colorTextSecondary}>{t(loginMethodMetas.selfhost.descriptionKey)}</Text>
         <Input
+          placeholder={t('screen5.selfhost.endpointPlaceholder')}
+          prefix={<Icon icon={Server} style={{ marginRight: 4 }} />}
+          size={'large'}
+          style={{ width: '100%' }}
+          value={endpoint}
           onChange={(e) => setEndpoint(e.target.value)}
           onContextMenu={async (e) => {
             if (!isDesktop) return;
@@ -473,19 +475,14 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
               handleSelfhostConnect();
             }
           }}
-          placeholder={t('screen5.selfhost.endpointPlaceholder')}
-          prefix={<Icon icon={Server} style={{ marginRight: 4 }} />}
-          size={'large'}
-          style={{ width: '100%' }}
-          value={endpoint}
         />
         <Button
           disabled={!endpoint.trim() || isConnectingServer}
           loading={false}
-          onClick={handleSelfhostConnect}
           size={'large'}
           style={{ width: '100%' }}
           type={'primary'}
+          onClick={handleSelfhostConnect}
         >
           {t('screen5.actions.connectToServer')}
         </Button>
@@ -505,11 +502,11 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
         <Flexbox horizontal justify={'center'} style={{ width: '100%' }}>
           {hasLegacyLocalDb && (
             <Button
+              style={{ padding: 0 }}
+              type={'link'}
               onClick={() =>
                 electronSystemService.openExternalLink(LEGACY_LOCAL_DB_MIGRATION_GUIDE_URL)
               }
-              style={{ padding: 0 }}
-              type={'link'}
             >
               {t('screen5.legacyLocalDb.link', 'Migrate legacy local database')}
             </Button>
@@ -518,11 +515,11 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
         {!showEndpoint ? (
           <Center width={'100%'}>
             <Button
-              onClick={() => setShowEndpoint(true)}
+              type={'text'}
               style={{
                 color: cssVar.colorTextSecondary,
               }}
-              type={'text'}
+              onClick={() => setShowEndpoint(true)}
             >
               {t(loginMethodMetas.selfhost.descriptionKey)}
             </Button>
@@ -544,13 +541,13 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
         <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
           <Button
             icon={Undo2Icon}
-            onClick={onBack}
             style={{ color: cssVar.colorTextDescription }}
             type={'text'}
+            onClick={onBack}
           >
             {t('back')}
           </Button>
-          <Button onClick={onNext} type={'primary'}>
+          <Button type={'primary'} onClick={onNext}>
             {t('screen5.navigation.next')}
           </Button>
         </Flexbox>

@@ -1,6 +1,6 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { memo } from 'react';
 
 import type { CreatePlanParams, CreatePlanState } from '../../../types';

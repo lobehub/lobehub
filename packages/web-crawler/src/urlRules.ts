@@ -1,4 +1,4 @@
-import { CrawlUrlRule } from './type';
+import type { CrawlUrlRule } from './type';
 
 export const crawUrlRules: CrawlUrlRule[] = [
   // Sogou WeChat links, use search1api

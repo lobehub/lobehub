@@ -60,11 +60,11 @@ LobeHub 2.0 only supports Better Auth authentication system. NextAuth and Clerk 
 
 ### Migrating from NextAuth
 
-See the [NextAuth Migration Guide](/docs/self-hosting/advanced/auth/nextauth-to-betterauth).
+See the [NextAuth Migration Guide](/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth).
 
 ### Migrating from Clerk
 
-See the [Clerk Migration Guide](/docs/self-hosting/advanced/auth/clerk-to-betterauth).
+See the [Clerk Migration Guide](/docs/self-hosting/migration/v2/auth/clerk-to-betterauth).
 
 ## Database Mode Changes
 
@@ -78,4 +78,4 @@ LobeHub 2.0 recommends using **PostgreSQL 17** or higher.
 
 This is because LobeHub 2.0 uses the [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search) extension for full-text search capabilities. If you use Serverless Postgres services like Neon, the pg\_search extension is only available on PostgreSQL 17.
 
-If you self-host your database with Docker, we recommend using the `pgvector/pgvector:pg17` image.
+If you self-host your database with Docker, we recommend using the `paradedb/paradedb:latest-pg17` image.

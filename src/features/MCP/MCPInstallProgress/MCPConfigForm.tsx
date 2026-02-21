@@ -98,6 +98,9 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
         <Form
           form={form}
           gap={12}
+          itemsType={'flat'}
+          layout={'vertical'}
+          variant={'borderless'}
           items={items
             .filter((item) => configSchema.required?.includes(item.name))
             .map((item) => ({
@@ -122,10 +125,7 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
               tag: item.tag,
               valuePropName: item.type === 'boolean' ? 'checked' : undefined,
             }))}
-          itemsType={'flat'}
-          layout={'vertical'}
           onFinish={handleSubmit}
-          variant={'borderless'}
         />
       </motion.div>
 
@@ -135,10 +135,10 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
         initial={{ opacity: 0, y: 4 }}
         transition={{ delay: 0.25, duration: 0.2 }}
       >
-        <Button onClick={handleCancel} size="small">
+        <Button size="small" onClick={handleCancel}>
           {t('common:cancel')}
         </Button>
-        <Button loading={loading} onClick={() => form.submit()} size="small" type="primary">
+        <Button loading={loading} size="small" type="primary" onClick={() => form.submit()}>
           {t('mcpInstall.continueInstall')}
         </Button>
       </motion.div>

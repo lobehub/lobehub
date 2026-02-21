@@ -5,7 +5,7 @@ import {
   SearchMarketToolsInspector,
   UpdateConfigInspector,
 } from '@lobechat/builtin-tool-agent-builder/client';
-import { type BuiltinInspector } from '@lobechat/types';
+import type { BuiltinInspector } from '@lobechat/types';
 
 import { GroupAgentBuilderApiName } from '../../types';
 import { BatchCreateAgentsInspector } from './BatchCreateAgents';

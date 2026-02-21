@@ -1,9 +1,10 @@
-import { type EdgeConfigClient, createClient } from '@vercel/edge-config';
+import type { EdgeConfigClient } from '@vercel/edge-config';
+import { createClient } from '@vercel/edge-config';
 import createDebug from 'debug';
 
 import { appEnv } from '@/envs/app';
 
-import { type EdgeConfigData, type EdgeConfigKeys } from './types';
+import type { EdgeConfigData, EdgeConfigKeys } from './types';
 
 const debug = createDebug('lobe-server:edge-config');
 

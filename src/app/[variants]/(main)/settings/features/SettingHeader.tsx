@@ -1,6 +1,6 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { FC, ReactNode } from 'react';
+import { type FC, type ReactNode } from 'react';
 
 interface SettingHeaderProps {
   extra?: ReactNode;
@@ -10,8 +10,8 @@ interface SettingHeaderProps {
 const SettingHeader: FC<SettingHeaderProps> = ({ title, extra }) => {
   return (
     <Flexbox gap={24} style={{ paddingTop: 12 }}>
-      <Flexbox align={'center'} horizontal justify={'space-between'}>
-        <Text fontSize={24} strong>
+      <Flexbox horizontal align={'center'} justify={'space-between'}>
+        <Text strong fontSize={24}>
           {title}
         </Text>
         {extra}

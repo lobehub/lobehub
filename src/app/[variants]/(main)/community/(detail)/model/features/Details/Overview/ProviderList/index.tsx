@@ -25,6 +25,9 @@ const ProviderList = memo(() => {
     <TooltipGroup>
       <Block variant={'outlined'}>
         <InlineTable
+          dataSource={providers}
+          rowKey="id"
+          scroll={{ x: 1000 }}
           columns={[
             {
               dataIndex: 'id',
@@ -32,7 +35,7 @@ const ProviderList = memo(() => {
               render: (_, record) => {
                 return (
                   <Link style={{ color: 'inherit' }} to={urlJoin('/community/provider', record.id)}>
-                    <Flexbox align="center" gap={8} horizontal>
+                    <Flexbox horizontal align="center" gap={8}>
                       <ProviderIcon provider={record.id} size={24} type={'avatar'} />
                       <div style={{ fontWeight: 500 }}>{record.name}</div>
                     </Flexbox>
@@ -138,7 +141,7 @@ const ProviderList = memo(() => {
               render: (_, record) => {
                 const isLobeHub = record.id === 'lobehub';
                 return (
-                  <Flexbox align="center" gap={4} horizontal justify={'flex-end'}>
+                  <Flexbox horizontal align="center" gap={4} justify={'flex-end'}>
                     {isLobeHub && (
                       <Tooltip title={t('models.providerInfo.officialTooltip')}>
                         <ActionIcon
@@ -185,9 +188,6 @@ const ProviderList = memo(() => {
               width: 120,
             },
           ]}
-          dataSource={providers}
-          rowKey="id"
-          scroll={{ x: 1000 }}
         />
       </Block>
     </TooltipGroup>

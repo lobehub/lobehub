@@ -1,4 +1,4 @@
-import { AsyncTaskError, AsyncTaskStatus } from '../asyncTask';
+import type { AsyncTaskError, AsyncTaskStatus } from '../asyncTask';
 
 export interface ImageGenerationTopic {
   coverUrl?: string | null;
@@ -35,15 +35,27 @@ export interface ImageGenerationAsset extends BaseGenerationAsset {
   width?: number;
 }
 
-export type GenerationAsset = ImageGenerationAsset;
+export interface VideoGenerationAsset extends BaseGenerationAsset {
+  coverUrl?: string;
+  duration?: number;
+  height?: number;
+  originalUrl?: string;
+  thumbnailUrl?: string;
+  url?: string;
+  width?: number;
+}
+
+export type GenerationAsset = ImageGenerationAsset | VideoGenerationAsset;
 
 export interface GenerationConfig {
   aspectRatio?: string;
   cfg?: number;
+  endImageUrl?: string | null;
   height?: number;
   imageUrl?: string | null;
   imageUrls?: string[];
   prompt: string;
+  resolution?: string;
   size?: string;
   steps?: number;
   width?: number;

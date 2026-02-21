@@ -2,7 +2,8 @@ import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
-import { type State, initialState } from './initialState';
+import { type State } from './initialState';
+import { initialState } from './initialState';
 
 type SaveConfigPayload = {
   editorData: Record<string, any>;

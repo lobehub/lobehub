@@ -26,10 +26,10 @@ const All = memo((props: { onClick: (activeTab: string) => void }) => {
     <NavItem
       active={activeKey === PROVIDER_ALL_PATH}
       icon={WalletCards}
+      title={t('menu.all')}
       onClick={() => {
         onClick(PROVIDER_ALL_PATH);
       }}
-      title={t('menu.all')}
     />
   );
 });

@@ -1,4 +1,4 @@
-import net from 'node:net';
+import type net from 'node:net';
 
 export type IPCEventMethod = (
   params: any,

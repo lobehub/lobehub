@@ -1,7 +1,7 @@
 import { Alert, Skeleton } from '@lobehub/ui';
 import { Button } from 'antd';
 import { RotateCcw } from 'lucide-react';
-import { Suspense, memo } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
@@ -29,25 +29,26 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
 
   return (
     <Alert
+      closable
+      extraDefaultExpand
+      showIcon
+      extraIsolate={false}
+      type={'secondary'}
       action={
         onRegenerate && (
           <Button
             color="default"
             icon={<RotateCcw size={14} />}
-            onClick={onRegenerate}
             size="small"
             variant="filled"
+            onClick={onRegenerate}
           >
             {t('regenerate')}
           </Button>
         )
       }
-      closable
-      extraDefaultExpand
-      extraIsolate={false}
-      showIcon
-      type={'secondary'}
       {...error}
+      title={error.message}
       afterClose={() => {
         error?.afterClose?.();
         if (id) {
@@ -60,7 +61,6 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
         width: '100%',
         ...error.style,
       }}
-      title={error.message}
     />
   );
 });

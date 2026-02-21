@@ -1,9 +1,11 @@
 'use client';
 
-import { Flexbox, type FlexboxProps, Icon } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -75,19 +77,19 @@ const Title = memo<TitleProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={16}
-        horizontal
         justify={'space-between'}
         width={'100%'}
         {...rest}
       >
         {tag || icon ? (
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             {icon}
             {title}
             {tag && (
-              <Flexbox align={'center'} gap={4} horizontal>
+              <Flexbox horizontal align={'center'} gap={4}>
                 {tag}
               </Flexbox>
             )}

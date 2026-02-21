@@ -1,5 +1,9 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { ChatToolPayload, SecurityBlacklistConfig, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ChatToolPayload,
+  SecurityBlacklistConfig,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import type { Cost, CostLimit, Usage } from './usage';
 
@@ -8,17 +12,47 @@ import type { Cost, CostLimit, Usage } from './usage';
  * This is the "passport" that can be persisted and transferred.
  */
 export interface AgentState {
-  operationId: string;
-  // --- State Machine ---
-  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+  /**
+   * Current calculated cost for this session.
+   * Updated after each billable operation.
+   */
+  cost: Cost;
+  /**
+   * Optional cost limits configuration.
+   * If set, execution will stop when limits are exceeded.
+   */
+  costLimit?: CostLimit;
+
+  // --- Metadata ---
+  createdAt: string;
+  error?: any;
+  // --- Interruption Handling ---
+  /**
+   * When status is 'interrupted', this stores the interruption context
+   * for potential resumption or cleanup.
+   */
+  interruption?: {
+    /** Reason for interruption */
+    reason: string;
+    /** Timestamp when interruption occurred */
+    interruptedAt: string;
+    /** The instruction that was being executed when interrupted */
+    interruptedInstruction?: any;
+    /** Whether the interruption can be resumed */
+    canResume: boolean;
+  };
+  lastModified: string;
+  /**
+   * Optional maximum number of steps allowed.
+   * If set, execution will stop with error when exceeded.
+   */
+  maxSteps?: number;
 
   // --- Core Context ---
   messages: any[];
-  tools?: any[];
-  systemRole?: string;
-  toolManifestMap: Record<string, any>;
-  /** Tool source map for routing tool execution to correct handler */
-  toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
+
+  // --- Extensible metadata ---
+  metadata?: Record<string, any>;
 
   /**
    * Model runtime configuration
@@ -37,12 +71,21 @@ export interface AgentState {
     };
   };
 
-  /**
-   * User's global intervention configuration
-   * Controls how tools requiring approval are handled
-   */
-  userInterventionConfig?: UserInterventionConfig;
+  operationId: string;
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
 
+  pendingHumanSelect?: {
+    metadata?: Record<string, unknown>;
+    multi?: boolean;
+    options: Array<{ label: string; value: string }>;
+    prompt?: string;
+  };
+  // --- HIL ---
+  /**
+   * When status is 'waiting_for_human', this stores pending requests
+   * for human-in-the-loop operations.
+   */
+  pendingToolsCalling?: ChatToolPayload[];
   /**
    * Security blacklist configuration
    * These rules will ALWAYS block execution and require human intervention,
@@ -51,72 +94,33 @@ export interface AgentState {
    */
   securityBlacklist?: SecurityBlacklistConfig;
 
+  // --- State Machine ---
+  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
   // --- Execution Tracking ---
   /**
    * Number of execution steps in this session.
    * Incremented on each runtime.step() call.
    */
   stepCount: number;
-  /**
-   * Optional maximum number of steps allowed.
-   * If set, execution will stop with error when exceeded.
-   */
-  maxSteps?: number;
+  systemRole?: string;
 
+  toolManifestMap: Record<string, any>;
+
+  tools?: any[];
+  /** Tool source map for routing tool execution to correct handler */
+  toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
   // --- Usage and Cost Tracking ---
   /**
    * Accumulated usage statistics for this session.
    * Tracks tokens, API calls, tool usage, etc.
    */
   usage: Usage;
-  /**
-   * Current calculated cost for this session.
-   * Updated after each billable operation.
-   */
-  cost: Cost;
-  /**
-   * Optional cost limits configuration.
-   * If set, execution will stop when limits are exceeded.
-   */
-  costLimit?: CostLimit;
 
-  // --- HIL ---
   /**
-   * When status is 'waiting_for_human', this stores pending requests
-   * for human-in-the-loop operations.
+   * User's global intervention configuration
+   * Controls how tools requiring approval are handled
    */
-  pendingToolsCalling?: ChatToolPayload[];
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
-  pendingHumanSelect?: {
-    metadata?: Record<string, unknown>;
-    multi?: boolean;
-    options: Array<{ label: string; value: string }>;
-    prompt?: string;
-  };
-
-  // --- Interruption Handling ---
-  /**
-   * When status is 'interrupted', this stores the interruption context
-   * for potential resumption or cleanup.
-   */
-  interruption?: {
-    /** Reason for interruption */
-    reason: string;
-    /** Timestamp when interruption occurred */
-    interruptedAt: string;
-    /** The instruction that was being executed when interrupted */
-    interruptedInstruction?: any;
-    /** Whether the interruption can be resumed */
-    canResume: boolean;
-  };
-
-  // --- Metadata ---
-  createdAt: string;
-  error?: any;
-  lastModified: string;
-
-  // --- Extensible metadata ---
-  metadata?: Record<string, any>;
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**

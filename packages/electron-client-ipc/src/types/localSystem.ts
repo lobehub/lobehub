@@ -1,8 +1,9 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Define types for local file operations
 export interface LocalFileItem {
   contentType?: string;
   createdTime: Date;
+  /** Search engine used to find this file (e.g., 'mdfind', 'fd', 'find', 'fast-glob') */
+  engine?: string;
   isDirectory: boolean;
   lastAccessTime: Date;
   // Spotlight specific metadata
@@ -16,8 +17,40 @@ export interface LocalFileItem {
   type: string;
 }
 
+export type ListLocalFileSortBy = 'name' | 'modifiedTime' | 'createdTime' | 'size';
+export type ListLocalFileSortOrder = 'asc' | 'desc';
+
 export interface ListLocalFileParams {
+  /**
+   * Maximum number of files to return
+   * @default 100
+   */
+  limit?: number;
+  /**
+   * Directory path to list
+   */
   path: string;
+  /**
+   * Field to sort by
+   * @default 'modifiedTime'
+   */
+  sortBy?: ListLocalFileSortBy;
+  /**
+   * Sort order
+   * @default 'desc'
+   */
+  sortOrder?: ListLocalFileSortOrder;
+}
+
+export interface ListLocalFilesResult {
+  /**
+   * List of files (truncated to limit)
+   */
+  files: LocalFileItem[];
+  /**
+   * Total count of files before truncation
+   */
+  totalCount: number;
 }
 
 export interface MoveLocalFileParams {
@@ -59,12 +92,12 @@ export interface LocalReadFilesParams {
 
 export interface WriteLocalFileParams {
   /**
-   * 要写入的内容
+   * Content to write
    */
   content: string;
 
   /**
-   * 要写入的文件路径
+   * File path to write to
    */
   path: string;
 }
@@ -79,8 +112,8 @@ export interface LocalReadFileResult {
    */
   content: string;
   createdTime: Date;
-  fileType: string;
   filename: string;
+  fileType: string;
   /**
    * Line count of the content within the specified `loc` range.
    */
@@ -98,29 +131,32 @@ export interface LocalReadFileResult {
 }
 
 export interface LocalSearchFilesParams {
-  // Basic search
-  keywords: string;
-
-  // Path options
-  directory?: string; // Limit search to specific directory
-  exclude?: string[]; // Paths to exclude from search
-
-  // File type options
-  fileTypes?: string[]; // File extensions to filter (e.g., ['pdf', 'docx'])
-
   // Content options
   contentContains?: string; // Search for files containing specific text
 
   // Time options (ISO 8601 date strings)
   createdAfter?: string;
   createdBefore?: string;
-  modifiedAfter?: string;
-  modifiedBefore?: string;
 
   // Result options
   detailed?: boolean;
+
+  // Path options
+  directory?: string; // Limit search to specific directory
+
+  exclude?: string[]; // Paths to exclude from search
+  // File type options
+  fileTypes?: string[]; // File extensions to filter (e.g., ['pdf', 'docx'])
+  // Basic search
+  keywords: string;
   limit?: number;
+
   liveUpdate?: boolean;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
+
+  /** Working directory scope. When `directory` is not specified, used as the default search location. */
+  scope?: string;
   sortBy?: 'name' | 'date' | 'size';
   sortDirection?: 'asc' | 'desc';
 }
@@ -188,10 +224,17 @@ export interface GrepContentParams {
   'output_mode'?: 'content' | 'files_with_matches' | 'count';
   'path'?: string;
   'pattern': string;
+  /** Working directory scope. When `path` is not specified, used as the default search location. */
+  'scope'?: string;
+  /** Preferred search tool: 'rg' | 'ag' | 'grep' */
+  'tool'?: 'rg' | 'ag' | 'grep';
   'type'?: string;
 }
 
 export interface GrepContentResult {
+  /** Search engine used: 'rg' | 'ag' | 'grep' | 'nodejs' */
+  engine?: string;
+  error?: string;
   matches: string[];
   success: boolean;
   total_matches: number;
@@ -199,11 +242,15 @@ export interface GrepContentResult {
 
 // Glob types
 export interface GlobFilesParams {
-  path?: string;
   pattern: string;
+  /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
+  scope?: string;
 }
 
 export interface GlobFilesResult {
+  /** Search engine used: 'fd' | 'find' | 'fast-glob' */
+  engine?: string;
+  error?: string;
   files: string[];
   success: boolean;
   total_files: number;
@@ -224,6 +271,48 @@ export interface EditLocalFileResult {
   linesDeleted?: number;
   replacements: number;
   success: boolean;
+}
+
+// Open Dialog types
+export interface ShowOpenDialogParams {
+  /**
+   * File type filters
+   */
+  filters?: { extensions: string[]; name: string }[];
+  /**
+   * Allow selecting multiple files
+   */
+  multiple?: boolean;
+  /**
+   * Dialog title
+   */
+  title?: string;
+}
+
+export interface ShowOpenDialogResult {
+  /**
+   * Whether the dialog was cancelled
+   */
+  canceled: boolean;
+  /**
+   * The selected file paths (empty if cancelled)
+   */
+  filePaths: string[];
+}
+
+// Pick File (dialog + read in one IPC call)
+export interface PickFileParams {
+  filters?: { extensions: string[]; name: string }[];
+  title?: string;
+}
+
+export interface PickFileResult {
+  canceled: boolean;
+  file?: {
+    data: Uint8Array;
+    mimeType: string;
+    name: string;
+  };
 }
 
 // Save Dialog types

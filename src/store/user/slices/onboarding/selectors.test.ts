@@ -2,7 +2,7 @@ import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import type { UserStore } from '@/store/user';
+import { type UserStore } from '@/store/user';
 
 import { initialOnboardingState } from './initialState';
 import { onboardingSelectors } from './selectors';

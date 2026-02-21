@@ -1,10 +1,15 @@
 /**
  * @vitest-environment node
  */
+import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeService } from './AgentRuntimeService';
-import type { AgentExecutionParams, OperationCreationParams, StartExecutionParams } from './types';
+import {
+  type AgentExecutionParams,
+  type OperationCreationParams,
+  type StartExecutionParams,
+} from './types';
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -116,7 +121,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 
 // Mock model-bank
 vi.mock('model-bank', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('model-bank')>();
+  const actual = await importOriginal<typeof ModelBankModule>();
   return {
     ...actual,
     LOBE_DEFAULT_MODEL_LIST: [
@@ -907,7 +912,7 @@ describe('AgentRuntimeService', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           {
             status: 'running',
-            cost: { total: 1.0 },
+            cost: { total: 1 },
             costLimit: { maxTotalCost: 0.5, onExceeded: 'stop' },
           },
           { phase: 'user_input' },
@@ -919,7 +924,7 @@ describe('AgentRuntimeService', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           {
             status: 'running',
-            cost: { total: 1.0 },
+            cost: { total: 1 },
             costLimit: { maxTotalCost: 0.5, onExceeded: 'continue' },
           },
           { phase: 'user_input' },

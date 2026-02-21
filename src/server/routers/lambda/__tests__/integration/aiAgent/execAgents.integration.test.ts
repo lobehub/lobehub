@@ -5,7 +5,7 @@
  * Note: AgentStateManager and StreamEventManager will automatically use
  * InMemory implementations when Redis is not available (test environment).
  */
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
@@ -35,7 +35,6 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockResponsesCreate: any;
 
 let serverDB: LobeChatDatabase;
@@ -120,12 +119,16 @@ describe('Batch Execution (execAgents)', () => {
     expect(result.results[0]).toMatchObject({
       success: true,
       taskIndex: 0,
-      operationId: expect.stringMatching(/^op_\d+_agt_.+_tpc_.+_\w+$/),
+      operationId: expect.stringMatching(
+        /^op_\d+_agt_.+_tpc_.(?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+(?:[^\w\n\r\u2028\u2029](?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+)*$/,
+      ),
     });
     expect(result.results[1]).toMatchObject({
       success: true,
       taskIndex: 1,
-      operationId: expect.stringMatching(/^op_\d+_agt_.+_tpc_.+_\w+$/),
+      operationId: expect.stringMatching(
+        /^op_\d+_agt_.+_tpc_.(?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+(?:[^\w\n\r\u2028\u2029](?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+)*$/,
+      ),
     });
 
     expect(result.results[0].operationId).not.toBe(result.results[1].operationId);

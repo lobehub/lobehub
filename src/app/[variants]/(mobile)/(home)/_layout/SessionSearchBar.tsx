@@ -1,7 +1,8 @@
 'use client';
 
 import { SearchBar } from '@lobehub/ui';
-import { type ChangeEvent, memo, useCallback } from 'react';
+import { type ChangeEvent } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '@/store/session';
@@ -34,12 +35,12 @@ const SessionSearchBar = memo<{ mobile?: boolean }>(({ mobile }) => {
       allowClear
       enableShortKey={!mobile}
       loading={!isLoaded || isValidating}
-      onChange={handleChange}
       placeholder={t('searchAgentPlaceholder')}
       shortKey={hotkey}
       spotlight={!mobile}
       value={keywords}
       variant={'filled'}
+      onChange={handleChange}
     />
   );
 });

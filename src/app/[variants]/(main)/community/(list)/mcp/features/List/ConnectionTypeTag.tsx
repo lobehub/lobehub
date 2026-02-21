@@ -31,9 +31,9 @@ const ConnectionTypeTag = memo<ConnectionTypeTagProps>(({ type }) => {
   return (
     <Tooltip title={t(`mcp.details.connectionType.${type}.desc`)}>
       <Flexbox
+        horizontal
         align={'center'}
         gap={6}
-        horizontal
         style={{
           color: cssVar.colorTextSecondary,
           fontSize: 12,

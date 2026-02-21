@@ -52,8 +52,8 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id }) => {
         contextMenuItems={dropdownMenu}
         disabled={editing}
         icon={<Icon color={cssVar.colorTextDescription} icon={TreeDownRightIcon} size={'small'} />}
-        onClick={handleClick}
         title={title}
+        onClick={handleClick}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
     </>

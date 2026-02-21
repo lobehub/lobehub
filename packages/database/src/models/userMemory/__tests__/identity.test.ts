@@ -3,13 +3,9 @@ import { RelationshipEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import {
-  NewUserMemoryIdentity,
-  userMemories,
-  userMemoriesIdentities,
-  users,
-} from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { NewUserMemoryIdentity } from '../../../schemas';
+import { userMemories, userMemoriesIdentities, users } from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryIdentityModel } from '../identity';
 
 const userId = 'identity-test-user';

@@ -1,11 +1,11 @@
 import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import { and, eq, inArray } from 'drizzle-orm';
-import { LLMParams } from 'model-bank';
+import type { LLMParams } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getTestDB } from '../../core/getTestDB';
+import type { NewSession, SessionItem } from '../../schemas';
 import {
-  NewSession,
-  SessionItem,
   agents,
   agentsToSessions,
   messages,
@@ -14,10 +14,9 @@ import {
   topics,
   users,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 import { SessionModel } from '../session';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

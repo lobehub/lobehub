@@ -1,8 +1,11 @@
-import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import { type KlavisServerType } from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import { type API, apiPrompt, toolPrompt } from '@lobechat/prompts';
+import { type API } from '@lobechat/prompts';
+import { apiPrompt, toolPrompt } from '@lobechat/prompts';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { type IEditor, INSERT_MENTION_COMMAND } from '@lobehub/editor';
+import { type IEditor } from '@lobehub/editor';
+import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { Icon, Image } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';

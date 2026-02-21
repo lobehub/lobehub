@@ -53,10 +53,10 @@ export const ExecuteAgentTaskInspector = memo<BuiltinInspectorProps<ExecuteTaskP
       if (agent) {
         return (
           <Flexbox
+            horizontal
             align={'center'}
             className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
             gap={8}
-            horizontal
           >
             <span className={styles.title}>
               {t('builtins.lobe-group-management.inspector.executeAgentTask.assignTo')}
@@ -90,10 +90,10 @@ export const ExecuteAgentTaskInspector = memo<BuiltinInspectorProps<ExecuteTaskP
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
         gap={8}
-        horizontal
       >
         <span className={styles.title}>
           {t('builtins.lobe-group-management.inspector.executeAgentTask.assignTo')}

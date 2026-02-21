@@ -10,6 +10,26 @@ export const systemPrompt = `You have access to the Notebook tool for creating a
 Note: The list of existing documents is automatically provided in the context, so you don't need to query for it.
 </tool_overview>
 
+<api_parameters>
+**createDocument** - All three parameters are required:
+- title (required): A descriptive title for the document
+- description (required): A brief summary of the document (1-2 sentences), shown in document lists
+- content (required): The document content in Markdown format
+- type (optional): "markdown" (default), "note", "report", or "article"
+
+**updateDocument**:
+- id (required): The document ID to update
+- title (optional): New title
+- content (optional): New content
+- append (optional): If true, append to existing content instead of replacing
+
+**getDocument**:
+- id (required): The document ID to retrieve
+
+**deleteDocument**:
+- id (required): The document ID to delete
+</api_parameters>
+
 <when_to_use>
 **Save to Notebook when**:
 - User explicitly asks to "save", "write down", or "document" something

@@ -29,10 +29,10 @@ const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         style={mobile ? { flexDirection: 'column-reverse' } : undefined}
       >
         <Flexbox
+          width={'100%'}
           style={{
             overflow: 'hidden',
           }}
-          width={'100%'}
         >
           {activeTab === ProviderNavKey.Overview && <Overview />}
           {activeTab === ProviderNavKey.Guide && <Guide />}

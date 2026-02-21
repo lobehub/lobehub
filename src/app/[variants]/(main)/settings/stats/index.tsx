@@ -2,7 +2,8 @@
 
 import { FormGroup, Grid, Icon, Segmented } from '@lobehub/ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
-import { DatePicker, type DatePickerProps, Divider } from 'antd';
+import { type DatePickerProps } from 'antd';
+import { DatePicker, Divider } from 'antd';
 import dayjs from 'dayjs';
 import { Brain } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -82,11 +83,16 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
       </FormGroup>
       <FormGroup
         collapsible={false}
+        gap={16}
+        title={t('tab.usage')}
+        variant={'filled'}
         extra={
           <>
-            <DatePicker onChange={handleDateChange} picker="month" value={dateRange} />
+            <DatePicker picker="month" value={dateRange} onChange={handleDateChange} />
             <Segmented
-              onChange={(v) => setGroupBy(v as GroupBy)}
+              style={{ marginLeft: 8 }}
+              value={groupBy}
+              variant={'outlined'}
               options={[
                 {
                   icon: <Icon icon={Brain} />,
@@ -99,18 +105,13 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
                   value: GroupBy.Provider,
                 },
               ]}
-              style={{ marginLeft: 8 }}
-              value={groupBy}
-              variant={'outlined'}
+              onChange={(v) => setGroupBy(v as GroupBy)}
             />
           </>
         }
-        gap={16}
         styles={{
           title: { lineHeight: '35px' },
         }}
-        title={t('tab.usage')}
-        variant={'filled'}
       >
         <UsageCards data={data} groupBy={groupBy} isLoading={isLoading} />
         <Divider />

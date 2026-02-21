@@ -1,5 +1,11 @@
-import { FileSearchImpl, createFileSearchModule } from '@/modules/fileSearch';
-import { FileResult, SearchOptions } from '@/types/fileSearch';
+import { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
+
+import {
+  BaseFileSearch,
+  FileResult,
+  SearchOptions,
+  createFileSearchModule,
+} from '@/modules/fileSearch';
 
 import { ServiceModule } from './index';
 
@@ -8,12 +14,15 @@ import { ServiceModule } from './index';
  * Main service class that uses platform-specific implementations internally
  */
 export default class FileSearchService extends ServiceModule {
-  private impl: FileSearchImpl = createFileSearchModule();
+  private impl: BaseFileSearch = createFileSearchModule();
 
   /**
    * Perform file search
    */
-  async search(query: string, options: Omit<SearchOptions, 'keywords'> = {}): Promise<FileResult[]> {
+  async search(
+    query: string,
+    options: Omit<SearchOptions, 'keywords'> = {},
+  ): Promise<FileResult[]> {
     return this.impl.search({ ...options, keywords: query });
   }
 
@@ -31,5 +40,14 @@ export default class FileSearchService extends ServiceModule {
    */
   async updateSearchIndex(path?: string): Promise<boolean> {
     return this.impl.updateSearchIndex(path);
+  }
+
+  /**
+   * Perform glob pattern matching
+   * @param params Glob parameters
+   * @returns Promise of glob result
+   */
+  async glob(params: GlobFilesParams): Promise<GlobFilesResult> {
+    return this.impl.glob(params);
   }
 }

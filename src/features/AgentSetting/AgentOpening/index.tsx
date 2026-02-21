@@ -19,6 +19,8 @@ const AgentOpening = memo(() => {
 
   return (
     <Form
+      itemsType={'group'}
+      variant={'borderless'}
       items={[
         {
           children: [
@@ -40,8 +42,6 @@ const AgentOpening = memo(() => {
           title: t('settingOpening.title'),
         },
       ]}
-      itemsType={'group'}
-      variant={'borderless'}
     />
   );
 });

@@ -2,7 +2,7 @@ import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import urlJoin from 'url-join';
 
 import { createRouterRuntime } from '../../core/RouterRuntime';
-import { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
+import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface ZenMuxModelCard {

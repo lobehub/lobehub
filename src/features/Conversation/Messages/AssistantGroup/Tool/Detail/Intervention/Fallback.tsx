@@ -1,7 +1,7 @@
 import { safeParseJSON } from '@lobechat/utils';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Edit3Icon } from 'lucide-react';
-import { Suspense, memo, useCallback, useState } from 'react';
+import { memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
@@ -64,17 +64,17 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
     return (
       <Flexbox gap={12}>
         <Arguments
+          arguments={requestArgs}
           actions={
             <ActionIcon
               icon={Edit3Icon}
+              size={'small'}
+              title={t('edit', { ns: 'common' })}
               onClick={() => {
                 setIsEditing(true);
               }}
-              size={'small'}
-              title={t('edit', { ns: 'common' })}
             />
           }
-          arguments={requestArgs}
         />
 
         <Flexbox horizontal justify={'space-between'}>

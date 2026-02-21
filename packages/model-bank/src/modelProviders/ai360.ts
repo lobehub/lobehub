@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref: https://ai.360.cn/platform/docs/overview
 const Ai360: ModelProviderCard = {

@@ -1,9 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface WenxinModelCard {
@@ -27,7 +25,7 @@ export const params = {
           },
         }),
         ...(thinking && {
-          enable_thinking: { disabled: false, enabled: true }[thinking.type],
+          enable_thinking: thinking.type !== 'disabled',
           ...(thinking?.budget_tokens !== 0 && {
             thinking_budget: Math.min(Math.max(thinking?.budget_tokens, 100), 16_384),
           }),

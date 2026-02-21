@@ -1,9 +1,9 @@
 // @vitest-environment node
-import { GoogleGenAI } from '@google/genai';
+import type { GoogleGenAI } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImagePayload } from '../../types/image';
 import { createGoogleImage } from './createImage';
 
 const provider = 'google';
@@ -361,7 +361,7 @@ describe('createGoogleImage', () => {
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
-        model: 'gemini-2.5-flash-image-preview:image',
+        model: 'gemini-2.5-flash-image:image',
         params: {
           prompt: 'Create a beautiful sunset landscape',
         },
@@ -378,7 +378,7 @@ describe('createGoogleImage', () => {
             parts: [{ text: 'Create a beautiful sunset landscape' }],
           },
         ],
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         config: {
           responseModalities: ['Image'],
         },
@@ -414,7 +414,7 @@ describe('createGoogleImage', () => {
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
-        model: 'gemini-2.5-flash-image-preview:image',
+        model: 'gemini-2.5-flash-image:image',
         params: {
           prompt: 'Add a red rose to this image',
           imageUrl: `data:image/png;base64,${inputImageBase64}`,
@@ -440,7 +440,7 @@ describe('createGoogleImage', () => {
             ],
           },
         ],
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         config: {
           responseModalities: ['Image'],
         },
@@ -482,7 +482,7 @@ describe('createGoogleImage', () => {
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
-        model: 'gemini-2.5-flash-image-preview:image',
+        model: 'gemini-2.5-flash-image:image',
         params: {
           prompt: 'Change the background to blue sky',
           imageUrl: 'https://example.com/image.jpg',
@@ -511,7 +511,7 @@ describe('createGoogleImage', () => {
             ],
           },
         ],
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         config: {
           responseModalities: ['Image'],
         },
@@ -545,7 +545,7 @@ describe('createGoogleImage', () => {
       vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
 
       const payload: CreateImagePayload = {
-        model: 'gemini-2.5-flash-image-preview:image',
+        model: 'gemini-2.5-flash-image:image',
         params: {
           prompt: 'Generate a colorful abstract pattern',
           imageUrl: null,
@@ -563,7 +563,7 @@ describe('createGoogleImage', () => {
             parts: [{ text: 'Generate a colorful abstract pattern' }],
           },
         ],
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         config: {
           responseModalities: ['Image'],
         },
@@ -594,7 +594,7 @@ describe('createGoogleImage', () => {
         );
 
         const payload: CreateImagePayload = {
-          model: 'gemini-2.5-flash-image-preview:image',
+          model: 'gemini-2.5-flash-image:image',
           params: {
             prompt: 'Create inappropriate content',
           },
@@ -619,7 +619,7 @@ describe('createGoogleImage', () => {
         );
 
         const payload: CreateImagePayload = {
-          model: 'gemini-2.5-flash-image-preview:image',
+          model: 'gemini-2.5-flash-image:image',
           params: {
             prompt: 'Generate an image',
           },
@@ -637,7 +637,7 @@ describe('createGoogleImage', () => {
       it('should throw error for unsupported image URL format', async () => {
         // Arrange
         const payload: CreateImagePayload = {
-          model: 'gemini-2.5-flash-image-preview:image',
+          model: 'gemini-2.5-flash-image:image',
           params: {
             prompt: 'Edit this image',
             imageUrl: 'ftp://example.com/image.jpg',

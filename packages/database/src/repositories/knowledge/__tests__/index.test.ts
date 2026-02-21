@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { documents, files, knowledgeBaseFiles, knowledgeBases, users } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { KnowledgeRepo } from '../index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -196,9 +196,9 @@ describe('KnowledgeRepo', () => {
       ]);
 
       // Add file to knowledge base
-      await serverDB.insert(knowledgeBaseFiles).values([
-        { fileId: 'file-in-kb', knowledgeBaseId: 'kb-1', userId },
-      ]);
+      await serverDB
+        .insert(knowledgeBaseFiles)
+        .values([{ fileId: 'file-in-kb', knowledgeBaseId: 'kb-1', userId }]);
     });
 
     it('should return files and documents for current user', async () => {

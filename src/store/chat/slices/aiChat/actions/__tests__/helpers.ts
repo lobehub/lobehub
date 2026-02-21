@@ -6,7 +6,7 @@ import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selector
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
-import { TEST_IDS, createMockAgentConfig, createMockChatConfig } from './fixtures';
+import { createMockAgentConfig, createMockChatConfig,TEST_IDS } from './fixtures';
 
 /**
  * Setup mock selectors with default or custom values
@@ -40,7 +40,7 @@ export const setupMockSelectors = (
  */
 export const setupStoreWithMessages = (
   messages: any[],
-  sessionId = TEST_IDS.SESSION_ID,
+  sessionId: any = TEST_IDS.SESSION_ID,
   topicId: string | null | undefined = TEST_IDS.TOPIC_ID,
 ) => {
   useChatStore.setState({

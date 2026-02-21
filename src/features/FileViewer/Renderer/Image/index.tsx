@@ -18,10 +18,9 @@ const ImageViewer = memo<ImageViewerProps>(({ url }) => {
   return (
     <Center height={'100%'} width={'100%'}>
       {!isLoaded && <NeuralNetworkLoading size={36} />}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      { }
       <img
         alt="Image preview"
-        onLoad={() => setIsLoaded(true)}
         src={url}
         style={{
           display: isLoaded ? 'block' : 'none',
@@ -30,6 +29,7 @@ const ImageViewer = memo<ImageViewerProps>(({ url }) => {
           overflow: 'hidden',
           width: '100%',
         }}
+        onLoad={() => setIsLoaded(true)}
       />
     </Center>
   );

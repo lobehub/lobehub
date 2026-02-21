@@ -2,7 +2,8 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import Footer from '@/features/Setting/Footer';
 
@@ -38,7 +39,7 @@ const DetailLayout = memo<DetailLayoutProps>(
     return (
       <>
         {header}
-        <Flexbox gap={32} horizontal width={'100%'}>
+        <Flexbox horizontal gap={32} width={'100%'}>
           <Flexbox flex={1} gap={48} style={{ overflow: 'hidden', position: 'relative' }}>
             {children}
           </Flexbox>

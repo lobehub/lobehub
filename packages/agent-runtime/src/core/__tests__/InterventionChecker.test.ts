@@ -1,8 +1,8 @@
-import type { HumanInterventionConfig, SecurityBlacklistConfig } from '@lobechat/types';
+import { type HumanInterventionConfig, type SecurityBlacklistConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_SECURITY_BLACKLIST } from '../../audit/defaultSecurityBlacklist';
 import { InterventionChecker } from '../InterventionChecker';
-import { DEFAULT_SECURITY_BLACKLIST } from '../defaultSecurityBlacklist';
 
 describe('InterventionChecker', () => {
   describe('shouldIntervene', () => {
@@ -262,7 +262,7 @@ describe('InterventionChecker', () => {
           command: 'rm -rf ~/',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Recursive deletion of home directory is extremely dangerous');
+        expect(result.reason).toBe('securityBlacklist.rmHomeDir');
       });
 
       it('should block rm -rf on macOS home directory', () => {
@@ -270,7 +270,7 @@ describe('InterventionChecker', () => {
           command: 'rm -rf /Users/alice',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Recursive deletion of home directory is extremely dangerous');
+        expect(result.reason).toBe('securityBlacklist.rmHomeDir');
       });
 
       it('should block rm -rf on Linux home directory', () => {
@@ -278,7 +278,7 @@ describe('InterventionChecker', () => {
           command: 'rm -rf /home/alice',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Recursive deletion of home directory is extremely dangerous');
+        expect(result.reason).toBe('securityBlacklist.rmHomeDir');
       });
 
       it('should block rm -rf with $HOME variable', () => {
@@ -286,7 +286,7 @@ describe('InterventionChecker', () => {
           command: 'rm -rf $HOME',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Recursive deletion of home directory is extremely dangerous');
+        expect(result.reason).toBe('securityBlacklist.rmHomeDir');
       });
 
       it('should block rm -rf / command', () => {
@@ -294,7 +294,7 @@ describe('InterventionChecker', () => {
           command: 'rm -rf /',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Recursive deletion of root directory will destroy the system');
+        expect(result.reason).toBe('securityBlacklist.rmRootDir');
       });
 
       it('should allow safe rm commands', () => {
@@ -309,7 +309,7 @@ describe('InterventionChecker', () => {
           command: ':(){ :|:& };:',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Fork bomb can crash the system');
+        expect(result.reason).toBe('securityBlacklist.forkBomb');
       });
 
       it('should block dangerous dd commands to disk devices', () => {
@@ -317,7 +317,7 @@ describe('InterventionChecker', () => {
           command: 'dd if=/dev/zero of=/dev/sda',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Writing random data to disk devices can destroy data');
+        expect(result.reason).toBe('securityBlacklist.ddDiskWrite');
       });
 
       it('should block reading .env files via command', () => {
@@ -325,9 +325,7 @@ describe('InterventionChecker', () => {
           command: 'cat .env',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe(
-          'Reading .env files may leak sensitive credentials and API keys',
-        );
+        expect(result.reason).toBe('securityBlacklist.envFiles');
       });
 
       it('should block reading .env files via path', () => {
@@ -335,9 +333,7 @@ describe('InterventionChecker', () => {
           path: '/project/.env.local',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe(
-          'Reading .env files may leak sensitive credentials and API keys',
-        );
+        expect(result.reason).toBe('securityBlacklist.envFiles');
       });
 
       it('should block reading SSH private keys via command', () => {
@@ -345,7 +341,7 @@ describe('InterventionChecker', () => {
           command: 'cat ~/.ssh/id_rsa',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Reading SSH private keys can compromise system security');
+        expect(result.reason).toBe('securityBlacklist.sshPrivateKeys');
       });
 
       it('should block reading SSH private keys via path', () => {
@@ -353,7 +349,7 @@ describe('InterventionChecker', () => {
           path: '/home/user/.ssh/id_ed25519',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Reading SSH private keys can compromise system security');
+        expect(result.reason).toBe('securityBlacklist.sshPrivateKeys');
       });
 
       it('should allow reading SSH public keys', () => {
@@ -368,7 +364,7 @@ describe('InterventionChecker', () => {
           command: 'cat ~/.aws/credentials',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Accessing AWS credentials can leak cloud access keys');
+        expect(result.reason).toBe('securityBlacklist.awsCredentials');
       });
 
       it('should block reading AWS credentials via path', () => {
@@ -376,7 +372,7 @@ describe('InterventionChecker', () => {
           path: '/home/user/.aws/credentials',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Accessing AWS credentials can leak cloud access keys');
+        expect(result.reason).toBe('securityBlacklist.awsCredentials');
       });
 
       it('should block reading Docker config', () => {
@@ -384,7 +380,7 @@ describe('InterventionChecker', () => {
           command: 'less ~/.docker/config.json',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Reading Docker config may expose registry credentials');
+        expect(result.reason).toBe('securityBlacklist.dockerConfig');
       });
 
       it('should block reading Kubernetes config', () => {
@@ -392,7 +388,7 @@ describe('InterventionChecker', () => {
           path: '/home/user/.kube/config',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Reading Kubernetes config may expose cluster credentials');
+        expect(result.reason).toBe('securityBlacklist.kubeConfig');
       });
 
       it('should block reading Git credentials', () => {
@@ -400,7 +396,7 @@ describe('InterventionChecker', () => {
           command: 'cat ~/.git-credentials',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Reading Git credentials file may leak access tokens');
+        expect(result.reason).toBe('securityBlacklist.gitCredentials');
       });
 
       it('should block reading npm token file', () => {
@@ -408,9 +404,7 @@ describe('InterventionChecker', () => {
           path: '/home/user/.npmrc',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe(
-          'Reading npm token file may expose package registry credentials',
-        );
+        expect(result.reason).toBe('securityBlacklist.npmrc');
       });
 
       it('should block reading shell history files', () => {
@@ -418,9 +412,7 @@ describe('InterventionChecker', () => {
           command: 'cat ~/.bash_history',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe(
-          'Reading history files may expose sensitive commands and credentials',
-        );
+        expect(result.reason).toBe('securityBlacklist.historyFiles');
       });
 
       it('should block reading GCP credentials', () => {
@@ -428,7 +420,7 @@ describe('InterventionChecker', () => {
           path: '/home/user/.config/gcloud/application_default_credentials.json',
         });
         expect(result.blocked).toBe(true);
-        expect(result.reason).toBe('Reading GCP credentials may leak cloud service account keys');
+        expect(result.reason).toBe('securityBlacklist.gcpCredentials');
       });
     });
 

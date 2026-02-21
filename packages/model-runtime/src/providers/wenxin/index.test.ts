@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeWenxinAI, params } from './index';
 

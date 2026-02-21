@@ -50,12 +50,12 @@ const RecentPageItem = memo<RecentPageItemProps>(({ document }) => {
       clickable
       flex={'none'}
       height={RECENT_BLOCK_SIZE.PAGE.HEIGHT}
+      variant={'outlined'}
+      width={RECENT_BLOCK_SIZE.PAGE.WIDTH}
       style={{
         borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
       }}
-      variant={'outlined'}
-      width={RECENT_BLOCK_SIZE.PAGE.WIDTH}
     >
       <Center
         flex={'none'}

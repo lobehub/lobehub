@@ -2,7 +2,8 @@
 
 import { ActionIcon, Avatar, Block, Text } from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import React, { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
@@ -30,16 +31,16 @@ const Agent = memo<PropsWithChildren>(() => {
   return (
     <SwitchPanel>
       <Block
-        align={'center'}
         clickable
-        gap={8}
         horizontal
+        align={'center'}
+        gap={8}
         padding={2}
+        variant={'borderless'}
         style={{
           minWidth: 32,
           overflow: 'hidden',
         }}
-        variant={'borderless'}
       >
         <Avatar
           avatar={isInbox ? DEFAULT_INBOX_AVATAR : avatar || DEFAULT_AVATAR}

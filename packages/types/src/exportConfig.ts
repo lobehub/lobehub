@@ -1,7 +1,7 @@
-import { UIChatMessage } from './message';
-import { LobeSessions, SessionGroupItem } from './session';
-import { ChatTopic } from './topic';
-import { UserSettings } from './user/settings';
+import type { UIChatMessage } from './message';
+import type { LobeSessions, SessionGroupItem } from './session';
+import type { ChatTopic } from './topic';
+import type { UserSettings } from './user/settings';
 
 // ---------- TODO: this file need to be deleted in V2 ---------- //
 

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { userPersonaDocumentHistories, userPersonaDocuments, users } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { UserPersonaModel } from '../persona';
 
 const userId = 'persona-user';

@@ -25,7 +25,6 @@ const GroupAgentCard = memo<DiscoverGroupAgentItem>((item) => {
   return (
     <Flexbox
       gap={12}
-      onClick={handleClick}
       padding={16}
       style={{
         border: '1px solid var(--lobe-border-color)',
@@ -33,8 +32,9 @@ const GroupAgentCard = memo<DiscoverGroupAgentItem>((item) => {
         cursor: 'pointer',
         transition: 'all 0.2s',
       }}
+      onClick={handleClick}
     >
-      <Flexbox align="center" gap={12} horizontal>
+      <Flexbox horizontal align="center" gap={12}>
         <Avatar avatar={item.avatar || item.title[0]} shape="square" size={48} />
         <Flexbox flex={1} gap={4}>
           <Text ellipsis style={{ fontWeight: 500 }}>

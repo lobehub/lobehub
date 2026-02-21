@@ -24,6 +24,17 @@ runs:
       shell: bash
       run: pnpm install --node-linker=hoisted
 
+    # 移除国内 electron 镜像配置，GitHub Actions 使用官方源更快
+    - name: Remove China electron mirror from .npmrc
+      shell: bash
+      run: |
+        NPMRC_FILE="./apps/desktop/.npmrc"
+        if [ -f "$NPMRC_FILE" ]; then
+          sed -i.bak '/^electron_mirror=/d; /^electron_builder_binaries_mirror=/d' "$NPMRC_FILE"
+          rm -f "${NPMRC_FILE}.bak"
+          echo "✅ Removed electron mirror config from .npmrc"
+        fi
+
     - name: Install deps on Desktop
       shell: bash
       run: npm run install-isolated --prefix=./apps/desktop

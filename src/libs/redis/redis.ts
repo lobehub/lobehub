@@ -1,5 +1,5 @@
 import debug from 'debug';
-import type { Redis } from 'ioredis';
+import { type Redis } from 'ioredis';
 
 import {
   type BaseRedisProvider,
@@ -112,4 +112,9 @@ export class IoRedisRedisProvider implements BaseRedisProvider {
   async hgetall(key: RedisKey): Promise<Record<string, string>> {
     return this.ensureClient().hgetall(key);
   }
+
+  async eval<T = unknown>(script: string, numkeys: number, ...args: RedisValue[]): Promise<T> {
+    return this.ensureClient().eval(script, numkeys, ...args) as Promise<T>;
+  }
+
 }

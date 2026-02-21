@@ -6,7 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { messageGroups, messages } from '../../schemas/message';
 import { topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { CompressionRepository } from './index';
 
 const userId = 'compression-test-user';
@@ -267,7 +267,7 @@ describe('CompressionRepository', () => {
       });
 
       // Verify messages are compressed
-      let compressedMessages = await compressionRepo.getCompressedMessages(groupId);
+      const compressedMessages = await compressionRepo.getCompressedMessages(groupId);
       expect(compressedMessages).toHaveLength(2);
 
       // Delete the group
@@ -315,7 +315,7 @@ describe('CompressionRepository', () => {
    * 2. Compression groups should appear as aggregated nodes
    * 3. Pinned (favorite) messages within compression groups should be extracted
    */
-  describe('MessageGroup aggregation query scenarios (LOBE-2066)', () => {
+  describe('MessageGroup aggregation query scenarios', () => {
     describe('compressed messages filtering', () => {
       it('should exclude compressed messages from uncompressed query', async () => {
         // Setup: Create 5 messages, compress 3 of them

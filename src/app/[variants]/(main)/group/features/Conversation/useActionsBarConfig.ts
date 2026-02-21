@@ -5,10 +5,10 @@ import { Split } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type {
-  ActionsBarConfig,
-  MessageActionFactory,
-  MessageActionItem,
+import {
+  type ActionsBarConfig,
+  type MessageActionFactory,
+  type MessageActionItem,
 } from '@/features/Conversation/types';
 import { useChatStore } from '@/store/chat';
 

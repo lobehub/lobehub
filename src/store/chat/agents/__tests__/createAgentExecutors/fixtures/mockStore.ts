@@ -1,7 +1,7 @@
 import { nanoid } from '@lobechat/utils';
 import { vi } from 'vitest';
 
-import type { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
 /**
  * Create a mock ChatStore for testing executors

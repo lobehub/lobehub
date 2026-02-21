@@ -1,5 +1,6 @@
 import { ActionIcon, Flexbox, Popover } from '@lobehub/ui';
-import { ConfigProvider, type TooltipProps } from 'antd';
+import { type TooltipProps } from 'antd';
+import { ConfigProvider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { type CSSProperties, type FC, type ReactNode } from 'react';
@@ -32,39 +33,39 @@ const styles = createStaticStyles(({ css }) => {
 
 export interface TipGuideProps {
   /**
-   * 引导内容
+   * Guide content
    */
   children?: ReactNode;
   /**
-   * 类名
+   * Class name
    */
   className?: string;
   /**
-   * 默认时候的打开状态
+   * Default open state
    */
   defaultOpen?: boolean;
   /**
-   * 用于自定义 footer 部分的 render api
+   * Render function for customizing the footer section
    */
   footerRender?: (dom: ReactNode) => ReactNode;
   /**
-   * 最大宽度
+   * Maximum width
    */
   maxWidth?: number;
   /**
-   * 纵向偏移值
+   * Vertical offset value
    */
   offsetY?: number;
   /**
-   * 当 open 属性变化时候的触发
+   * Callback triggered when the open property changes
    */
   onOpenChange: (open: boolean) => void;
   /**
-   * 受控的 open 属性
+   * Controlled open property
    */
   open?: boolean;
   /**
-   * Tooltip 位置，默认为 bottom
+   * Tooltip placement, defaults to bottom
    */
   placement?: TooltipProps['placement'];
   /**
@@ -73,7 +74,7 @@ export interface TipGuideProps {
   style?: CSSProperties;
   tip?: boolean;
   /**
-   * 引导标题
+   * Guide title
    */
   title: string;
 }
@@ -112,28 +113,28 @@ const TipGuide: FC<TipGuideProps> = ({
           >
             <Popover
               arrow={true}
+              open={open}
+              placement={placement}
+              trigger="hover"
               classNames={{
                 root: cx(className, styles.overlay),
               }}
               content={
-                <Flexbox gap={24} horizontal style={{ userSelect: 'none' }}>
+                <Flexbox horizontal gap={24} style={{ userSelect: 'none' }}>
                   <div>{title}</div>
                   <ActionIcon
                     className={styles.close}
                     icon={XIcon}
+                    size={'small'}
                     onClick={() => {
                       setOpen(false);
                     }}
-                    size={'small'}
                   />
                 </Flexbox>
               }
-              open={open}
-              placement={placement}
               styles={{
                 root: { maxWidth, zIndex: 1000, ...style },
               }}
-              trigger="hover"
             >
               {children}
             </Popover>

@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import type { SWRConfiguration, SWRResponse } from 'swr';
+import { type SWRConfiguration, type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from './index';
 

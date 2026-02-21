@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { idGenerator } from '@/database/utils/idGenerator';
 
-import { userMemoriesIdentities, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
-import { UserMemoryIdentityModel } from '../userMemory/identity';
 import { getTestDB } from '../../core/getTestDB';
+import { userMemoriesIdentities, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { UserMemoryIdentityModel } from '../userMemory/identity';
 
 // Helper to generate unique identity IDs
 const genIdentityId = () => `mem_${nanoid(12)}`;

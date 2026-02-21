@@ -3,7 +3,8 @@
 import { Alert, Center, Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import NextLink from 'next/link';
-import { PropsWithChildren, Suspense, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router-dom';
 
@@ -14,8 +15,8 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import SharePortal from '../features/Portal';
-import Title from './Title';
 import { styles } from './style';
+import Title from './Title';
 
 const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   const { t } = useTranslation('chat');
@@ -30,14 +31,14 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
         width={'100%'}
       >
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'space-between'}
           padding={8}
           width={'100%'}
         >
-          <Flexbox align="center" flex={1} gap={12} horizontal>
+          <Flexbox horizontal align="center" flex={1} gap={12}>
             {isLogin ? (
               <Link style={{ color: 'inherit' }} to="/">
                 <ProductLogo size={32} />
@@ -48,14 +49,14 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
               </NextLink>
             )}
           </Flexbox>
-          <Center flex={2} gap={12} horizontal>
+          <Center horizontal flex={2} gap={12}>
             <Suspense>
               <Title />
             </Suspense>
           </Center>
-          <Flexbox align="center" flex={1} gap={12} horizontal justify={'flex-end'} />
+          <Flexbox horizontal align="center" flex={1} gap={12} justify={'flex-end'} />
         </Flexbox>
-        <Flexbox className={styles.content} horizontal style={{ overflow: 'hidden' }}>
+        <Flexbox horizontal className={styles.content} style={{ overflow: 'hidden' }}>
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <Suspense fallback={<Loading debugId="share layout" />}>
               {children ?? <Outlet />}

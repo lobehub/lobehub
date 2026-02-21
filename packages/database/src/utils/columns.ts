@@ -1,5 +1,5 @@
 import { getTableColumns } from 'drizzle-orm';
-import { PgTable } from 'drizzle-orm/pg-core';
+import type { PgTable } from 'drizzle-orm/pg-core';
 
 export const selectNonVectorColumns = <T extends PgTable>(
   table: T,

@@ -14,6 +14,7 @@ import RemoteServerSyncCtr from './RemoteServerSyncCtr';
 import ShellCommandCtr from './ShellCommandCtr';
 import ShortcutController from './ShortcutCtr';
 import SystemController from './SystemCtr';
+import ToolDetectorCtr from './ToolDetectorCtr';
 import TrayMenuCtr from './TrayMenuCtr';
 import UpdaterCtr from './UpdaterCtr';
 import UploadFileCtr from './UploadFileCtr';
@@ -33,6 +34,7 @@ export const controllerIpcConstructors = [
   ShellCommandCtr,
   ShortcutController,
   SystemController,
+  ToolDetectorCtr,
   TrayMenuCtr,
   UpdaterCtr,
   UploadFileCtr,

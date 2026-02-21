@@ -1,4 +1,4 @@
-import type { ExperienceListItem } from '@lobechat/types';
+import { type ExperienceListItem } from '@lobechat/types';
 import { memo } from 'react';
 
 import { useUserMemoryStore } from '@/store/userMemory';
@@ -21,10 +21,10 @@ const ExperiencesGridView = memo<GridViewProps>(({ experiences, isLoading, onCli
       hasMore={experiencesHasMore}
       isLoading={isLoading}
       items={experiences}
-      onLoadMore={loadMoreExperiences}
       renderItem={(experience) => (
         <ExperienceCard experience={experience} onClick={() => onClick(experience)} />
       )}
+      onLoadMore={loadMoreExperiences}
     />
   );
 });

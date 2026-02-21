@@ -28,30 +28,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const PluginItem = memo<KnowledgeItem>(({ id, fileType, name, type, description, enabled }) => {
   return (
     <Flexbox
+      horizontal
       align={'center'}
       gap={8}
-      horizontal
       justify={'space-between'}
       paddingBlock={12}
       paddingInline={16}
       style={{ position: 'relative' }}
     >
       <Flexbox
+        horizontal
         align={'center'}
         flex={1}
         gap={8}
-        horizontal
         style={{ overflow: 'hidden', position: 'relative' }}
       >
         <KnowledgeIcon fileType={fileType} name={name} size={{ file: 40, repo: 40 }} type={type} />
         <Flexbox flex={1} gap={4} style={{ overflow: 'hidden', position: 'relative' }}>
-          <Flexbox align={'center'} gap={8} horizontal>
-            <Text className={styles.title} ellipsis>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Text ellipsis className={styles.title}>
               {name}
             </Text>
           </Flexbox>
           {description && (
-            <Text className={styles.desc} ellipsis>
+            <Text ellipsis className={styles.desc}>
               {description}
             </Text>
           )}

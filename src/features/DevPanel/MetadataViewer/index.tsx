@@ -41,8 +41,9 @@ const MetadataViewer = memo(() => {
         style={{ paddingInlineStart: 0 }}
         title={
           <Tabs
-            activeKey={active}
             compact
+            activeKey={active}
+            style={{ margin: 16 }}
             items={[
               {
                 key: Tab.Og,
@@ -58,7 +59,6 @@ const MetadataViewer = memo(() => {
               },
             ]}
             onChange={(v) => setActive(v as Tab)}
-            style={{ margin: 16 }}
           />
         }
       />

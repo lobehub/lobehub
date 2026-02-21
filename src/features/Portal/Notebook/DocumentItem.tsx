@@ -3,7 +3,8 @@ import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Trash2Icon } from 'lucide-react';
-import { type MouseEvent, memo, useState } from 'react';
+import { type MouseEvent } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -66,19 +67,19 @@ const DocumentItem = memo<DocumentItemProps>(({ document, topicId }) => {
   };
 
   return (
-    <Flexbox className={styles.container} gap={8} horizontal onClick={handleClick}>
+    <Flexbox horizontal className={styles.container} gap={8} onClick={handleClick}>
       <FileTextIcon size={16} />
       <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
-        <Flexbox align={'center'} distribution={'space-between'} horizontal>
-          <Text className={styles.title} ellipsis>
+        <Flexbox horizontal align={'center'} distribution={'space-between'}>
+          <Text ellipsis className={styles.title}>
             {document.title}
           </Text>
           <ActionIcon
             icon={Trash2Icon}
             loading={deleting}
-            onClick={handleDelete}
             size={'small'}
             title={t('notebook.delete')}
+            onClick={handleDelete}
           />
         </Flexbox>
         {document.description && (

@@ -64,6 +64,7 @@ const Overview = memo(() => {
       <Collapse
         defaultActiveKey={['summary']}
         expandIconPlacement={'end'}
+        variant={'outlined'}
         items={[
           {
             children: summary || description,
@@ -71,21 +72,20 @@ const Overview = memo(() => {
             label: t('assistants.details.summary.title'),
           },
         ]}
-        variant={'outlined'}
       />
       <Title>{t('assistants.details.overview.example')}</Title>
       <Block
+        variant={'outlined'}
         style={{
           background: theme.colorBgContainerSecondary,
         }}
-        variant={'outlined'}
       >
         <ChatList
           data={data}
+          style={{ width: '100%' }}
           renderMessages={{
             default: ({ id, editableContent }) => <div id={id}>{editableContent}</div>,
           }}
-          style={{ width: '100%' }}
         />
       </Block>
     </Flexbox>

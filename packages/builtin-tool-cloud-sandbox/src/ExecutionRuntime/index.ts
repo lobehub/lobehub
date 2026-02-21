@@ -8,38 +8,38 @@ import {
   formatRenameResult,
   formatWriteResult,
 } from '@lobechat/prompts';
-import { type BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
-import {
-  type EditLocalFileParams,
-  type EditLocalFileState,
-  type ExecuteCodeParams,
-  type ExecuteCodeState,
-  type ExportFileParams,
-  type ExportFileState,
-  type GetCommandOutputParams,
-  type GetCommandOutputState,
-  type GlobFilesState,
-  type GlobLocalFilesParams,
-  type GrepContentParams,
-  type GrepContentState,
-  type ISandboxService,
-  type KillCommandParams,
-  type KillCommandState,
-  type ListLocalFilesParams,
-  type ListLocalFilesState,
-  type MoveLocalFilesParams,
-  type MoveLocalFilesState,
-  type ReadLocalFileParams,
-  type ReadLocalFileState,
-  type RenameLocalFileParams,
-  type RenameLocalFileState,
-  type RunCommandParams,
-  type RunCommandState,
-  type SearchLocalFilesParams,
-  type SearchLocalFilesState,
-  type WriteLocalFileParams,
-  type WriteLocalFileState,
+import type {
+  EditLocalFileParams,
+  EditLocalFileState,
+  ExecuteCodeParams,
+  ExecuteCodeState,
+  ExportFileParams,
+  ExportFileState,
+  GetCommandOutputParams,
+  GetCommandOutputState,
+  GlobFilesState,
+  GlobLocalFilesParams,
+  GrepContentParams,
+  GrepContentState,
+  ISandboxService,
+  KillCommandParams,
+  KillCommandState,
+  ListLocalFilesParams,
+  ListLocalFilesState,
+  MoveLocalFilesParams,
+  MoveLocalFilesState,
+  ReadLocalFileParams,
+  ReadLocalFileState,
+  RenameLocalFileParams,
+  RenameLocalFileState,
+  RunCommandParams,
+  RunCommandState,
+  SearchLocalFilesParams,
+  SearchLocalFilesState,
+  WriteLocalFileParams,
+  WriteLocalFileState,
 } from '../types';
 
 /**
@@ -76,13 +76,13 @@ export class CloudSandboxExecutionRuntime {
       const files = result.result?.files || [];
       const state: ListLocalFilesState = { files };
 
-      const content = formatFileList(
-        files.map((f: { isDirectory: boolean; name: string }) => ({
+      const content = formatFileList({
+        directory: args.directoryPath,
+        files: files.map((f: { isDirectory: boolean; name: string }) => ({
           isDirectory: f.isDirectory,
           name: f.name,
         })),
-        args.directoryPath,
-      );
+      });
 
       return {
         content,

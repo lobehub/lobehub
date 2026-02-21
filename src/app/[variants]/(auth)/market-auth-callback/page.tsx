@@ -146,7 +146,7 @@ const MarketAuthCallbackPage = () => {
   const getExtra = () => {
     if (status === 'error') {
       return (
-        <Button block onClick={() => window.close()} size={'large'} style={{ minWidth: 240 }}>
+        <Button block size={'large'} style={{ minWidth: 240 }} onClick={() => window.close()}>
           {t('callback.buttons.close')}
         </Button>
       );

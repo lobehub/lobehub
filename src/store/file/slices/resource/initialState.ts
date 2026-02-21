@@ -1,4 +1,4 @@
-import type { ResourceItem, ResourceQueryParams, SyncOperation } from '@/types/resource';
+import { type ResourceItem, type ResourceQueryParams, type SyncOperation } from '@/types/resource';
 
 /**
  * Resource slice state
@@ -39,15 +39,15 @@ export interface ResourceState {
 
   syncError?: Error;
   /**
+   * Track which resources are currently syncing
+   */
+  syncingIds: Set<string>;
+
+  /**
    * Sync queue (FIFO)
    * Contains pending operations to be synced to server
    */
   syncQueue: SyncOperation[];
-
-  /**
-   * Track which resources are currently syncing
-   */
-  syncingIds: Set<string>;
   total: number;
 }
 

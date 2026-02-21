@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "処理中",
   "detail.data.embedding.success": "完了",
   "detail.data.embeddingStatus": "ベクトル化",
+  "detail.data.noChunk": "チャンクがありません",
   "empty": "アップロードされたファイル/フォルダーはありません",
   "header.actions.builtInBlockList.filtered": "{{total}} 件のファイルのうち {{ignored}} 件がフィルターされました",
   "header.actions.connect": "接続中...",

@@ -16,9 +16,9 @@ const NotebookButton = memo(() => {
     <ActionIcon
       active={showNotebook}
       icon={FilePenIcon}
-      onClick={() => toggleNotebook()}
       size={DESKTOP_HEADER_ICON_SIZE}
       title={t('notebook.title')}
+      onClick={() => toggleNotebook()}
     />
   );
 });

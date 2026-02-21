@@ -5,13 +5,14 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { createNanoId, idGenerator, serverDB } from '@lobechat/database';
 import * as schema from '@lobechat/database/schemas';
 import bcrypt from 'bcryptjs';
-import { emailHarmony } from 'better-auth-harmony';
-import { validateEmail } from 'better-auth-harmony/email';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { verifyPassword as defaultVerifyPassword } from 'better-auth/crypto';
-import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
+import { type BetterAuthOptions } from 'better-auth/minimal';
+import { betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
+import { emailHarmony } from 'better-auth-harmony';
+import { validateEmail } from 'better-auth-harmony/email';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
 import { businessEmailValidator } from '@/business/server/better-auth';
@@ -107,7 +108,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
 
     emailAndPassword: {
       autoSignIn: true,
-      enabled: true,
+      disableSignUp: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
+      enabled: !authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
       maxPasswordLength: 64,
       minPasswordLength: 8,
       requireEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,

@@ -1,6 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
-import { type ChatModelCard, type ModelProviderCard } from '@/types/llm';
+import type { ChatModelCard, ModelProviderCard } from '@/types/llm';
 
 import Ai21Provider from './ai21';
 import Ai302Provider from './ai302';
@@ -23,6 +23,7 @@ import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
 import GiteeAIProvider from './giteeai';
 import GithubProvider from './github';
+import GithubCopilotProvider from './githubCopilot';
 import GoogleProvider from './google';
 import GroqProvider from './groq';
 import HigressProvider from './higress';
@@ -56,6 +57,7 @@ import SenseNovaProvider from './sensenova';
 import SiliconCloudProvider from './siliconcloud';
 import SparkProvider from './spark';
 import StepfunProvider from './stepfun';
+import StraicoProvider from './straico';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
@@ -151,6 +153,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   HuggingFaceProvider,
   CloudflareProvider,
   GithubProvider,
+  GithubCopilotProvider,
   NewAPIProvider,
   BflProvider,
   NovitaProvider,
@@ -199,6 +202,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
+  StraicoProvider,
   XiaomiMiMoProvider,
 ];
 
@@ -232,6 +236,7 @@ export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';
+export { default as GithubCopilotProviderCard } from './githubCopilot';
 export { default as GoogleProviderCard } from './google';
 export { default as GroqProviderCard } from './groq';
 export { default as HigressProviderCard } from './higress';
@@ -265,6 +270,7 @@ export { default as SenseNovaProviderCard } from './sensenova';
 export { default as SiliconCloudProviderCard } from './siliconcloud';
 export { default as SparkProviderCard } from './spark';
 export { default as StepfunProviderCard } from './stepfun';
+export { default as StraicoProviderCard } from './straico';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';

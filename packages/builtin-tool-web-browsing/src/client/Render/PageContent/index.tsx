@@ -1,5 +1,5 @@
-import { type CrawlPluginState } from '@lobechat/types';
-import { type CrawlErrorResult } from '@lobechat/web-crawler';
+import type { CrawlPluginState } from '@lobechat/types';
+import type { CrawlErrorResult } from '@lobechat/web-crawler';
 import { Flexbox, ScrollShadow } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -15,7 +15,7 @@ interface PagesContentProps {
 const PagesContent = memo<PagesContentProps>(({ results, messageId, urls = [] }) => {
   if (!results || results.length === 0) {
     return (
-      <Flexbox gap={8} horizontal>
+      <Flexbox horizontal gap={8}>
         {urls &&
           urls.length > 0 &&
           urls.map((url, index) => <Loading key={`${url}_${index}`} url={url} />)}
@@ -24,7 +24,7 @@ const PagesContent = memo<PagesContentProps>(({ results, messageId, urls = [] })
   }
 
   return (
-    <ScrollShadow gap={8} horizontal offset={8} orientation={'horizontal'} size={4}>
+    <ScrollShadow horizontal gap={8} offset={8} orientation={'horizontal'} size={4}>
       {results.map((result) => (
         <Result
           crawler={result.crawler}

@@ -23,7 +23,7 @@ describe('genOG utilities', () => {
       const result = formatTitleLength(longTitle);
 
       expect(result).toHaveLength(60);
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
       expect(result).toBe(longTitle.slice(0, 57) + '...');
     });
 
@@ -32,7 +32,7 @@ describe('genOG utilities', () => {
       const result = formatTitleLength(title, 10);
 
       expect(result).toHaveLength(50);
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
       expect(result).toBe(title.slice(0, 47) + '...');
     });
 
@@ -60,7 +60,7 @@ describe('genOG utilities', () => {
       const result = formatTitleLength(unicodeTitle);
 
       expect(result).toHaveLength(60);
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
     });
 
     it('should handle addOnLength of 0', () => {
@@ -75,7 +75,7 @@ describe('genOG utilities', () => {
       const result = formatTitleLength(title, 50);
 
       expect(result).toHaveLength(10);
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
       expect(result).toBe(title.slice(0, 7) + '...');
     });
   });
@@ -118,7 +118,7 @@ describe('genOG utilities', () => {
       const result = formatDescLength(longDesc);
 
       expect(result).toHaveLength(160);
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
       expect(result).toBe(longDesc.slice(0, 157) + '...');
     });
 
@@ -149,7 +149,7 @@ describe('genOG utilities', () => {
       // tagLength = 160 - 100 - 3 = 57
       // tagStr will be truncated to 57 chars and '...' added
       // newDesc = 100 + 57 + 3 = 160, which is > 157, so another '...' is added
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
       expect(result.length).toBeGreaterThan(160); // Will be 163 due to double ellipsis
     });
 
@@ -196,7 +196,7 @@ describe('genOG utilities', () => {
       // tagLength = 160 - 150 - 3 = 7
       // tagStr will be truncated to 7 chars and '...' added
       // newDesc = 150 + 7 + 3 = 160, which is > 157, so another '...' is added
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
       expect(result.length).toBeGreaterThan(160); // Will be 163 due to double ellipsis
     });
 
@@ -223,7 +223,7 @@ describe('genOG utilities', () => {
 
       // This should trigger the final condition: newDesc.length <= 157 ? newDesc : newDesc + '...'
       if (result.length > 157) {
-        expect(result).toMatch(/\.\.\.$/);
+        expect(result).toMatch(/\.{3}$/);
       }
     });
 
@@ -241,7 +241,7 @@ describe('genOG utilities', () => {
 
       // desc + tags might exceed 157, so should add '...'
       if (result.length > 160) {
-        expect(result).toMatch(/\.\.\.$/);
+        expect(result).toMatch(/\.{3}$/);
       }
     });
   });
@@ -252,7 +252,7 @@ describe('genOG utilities', () => {
       const result = formatTitleLength(title, 100);
 
       // 60 - 100 = -40, so it should use negative limit
-      expect(result).toMatch(/\.\.\.$/);
+      expect(result).toMatch(/\.{3}$/);
     });
 
     it('formatDescLength should handle description with only spaces', () => {

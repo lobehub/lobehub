@@ -1,5 +1,5 @@
-import { Center, Flexbox, type MermaidProps } from '@lobehub/ui';
-import { Mermaid } from '@lobehub/ui';
+import { type MermaidProps } from '@lobehub/ui';
+import { Center, Flexbox, Mermaid } from '@lobehub/ui';
 
 const code = `sequenceDiagram
     Alice->>John: Hello John, how are you?

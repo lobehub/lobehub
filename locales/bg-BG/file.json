@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "Обработка",
   "detail.data.embedding.success": "Завършено",
   "detail.data.embeddingStatus": "вграждане",
+  "detail.data.noChunk": "Няма наличен фрагмент",
   "empty": "Все още няма качени файлове или папки.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} файла филтрирани (от общо {{total}})",
   "header.actions.connect": "Свържи се...",

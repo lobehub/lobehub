@@ -1,6 +1,7 @@
 import { Flexbox, Form, Input, TextArea } from '@lobehub/ui';
-import Image from '@/libs/next/Image';
 import { memo } from 'react';
+
+import Image from '@/libs/next/Image';
 
 import { useHead } from './useHead';
 
@@ -12,6 +13,8 @@ const MetaData = memo(() => {
   return (
     <Form
       itemMinWidth={'max(75%,240px)'}
+      itemsType={'flat'}
+      variant={'borderless'}
       items={[
         {
           children: <Input value={ogTitle} variant={'filled'} />,
@@ -25,13 +28,13 @@ const MetaData = memo(() => {
           children: (
             <Flexbox
               height={186}
+              width={358}
               style={{
                 background: 'rgba(0, 0, 0, .5)',
                 borderRadius: 14,
                 overflow: 'hidden',
                 position: 'relative',
               }}
-              width={358}
             >
               <div
                 style={{
@@ -48,8 +51,8 @@ const MetaData = memo(() => {
                 lobehub.com
               </div>
               <Image
-                alt={'og'}
                 fill
+                alt={'og'}
                 src={ogImage}
                 style={{ objectFit: 'cover' }}
                 unoptimized={true}
@@ -64,8 +67,6 @@ const MetaData = memo(() => {
           label: 'Og Image Url',
         },
       ]}
-      itemsType={'flat'}
-      variant={'borderless'}
     />
   );
 });

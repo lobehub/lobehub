@@ -15,7 +15,8 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import AgentBuilderToggle from './AgentBuilderToggle';
-import ChromeTabs, { type ChromeTabItem } from './ChromeTabs';
+import { type ChromeTabItem } from './ChromeTabs';
+import ChromeTabs from './ChromeTabs';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
@@ -89,7 +90,7 @@ const Header = memo(() => {
 
   return (
     <>
-      <Flexbox align="center" className={styles.header} gap={4} horizontal justify="space-between">
+      <Flexbox horizontal align="center" className={styles.header} gap={4} justify="space-between">
         {!showLeftPanel && <ToggleLeftPanelButton />}
         <div className={styles.tabsWrapper}>
           <ChromeTabs
@@ -99,7 +100,7 @@ const Header = memo(() => {
             onChange={setSelectedTabId}
           />
         </div>
-        <Flexbox align="center" flex="none" gap={8} horizontal style={{ marginInlineStart: 12 }}>
+        <Flexbox horizontal align="center" flex="none" gap={8} style={{ marginInlineStart: 12 }}>
           <AgentBuilderToggle />
         </Flexbox>
       </Flexbox>
@@ -107,9 +108,9 @@ const Header = memo(() => {
         <AddGroupMemberModal
           existingMembers={existingMemberIds}
           groupId={activeGroupId}
+          open={showAddModal}
           onCancel={() => setShowAddModal(false)}
           onConfirm={handleAddMembers}
-          open={showAddModal}
         />
       )}
     </>

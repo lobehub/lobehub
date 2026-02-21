@@ -3,7 +3,8 @@
 import { Center } from '@lobehub/ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { cssVar } from 'antd-style';
-import { type UIEvent, memo, useCallback, useMemo, useState } from 'react';
+import { type UIEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
@@ -13,7 +14,7 @@ import { useFetchResources } from '@/store/file/slices/resource/hooks';
 import { type FileListItem } from '@/types/files';
 
 import { useMasonryColumnCount } from '../useMasonryColumnCount';
-import MasonryItemWrapper from './MasonryFileItem/MasonryItemWrapper';
+import MasonryItemWrapper from './MasonryItem/MasonryItemWrapper';
 import MasonryViewSkeleton from './Skeleton';
 
 const MasonryView = memo(function MasonryView() {
@@ -21,7 +22,6 @@ const MasonryView = memo(function MasonryView() {
   const [
     libraryId,
     category,
-    searchQuery,
     selectedFileIds,
     setSelectedFileIds,
     storeIsMasonryReady,
@@ -31,7 +31,6 @@ const MasonryView = memo(function MasonryView() {
   ] = useResourceManagerStore((s) => [
     s.libraryId,
     s.category,
-    s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.isMasonryReady,
@@ -52,12 +51,11 @@ const MasonryView = memo(function MasonryView() {
       category: libraryId ? undefined : category,
       libraryId,
       parentId: null,
-      q: searchQuery ?? undefined,
       showFilesInKnowledgeBase: false,
       sortType,
       sorter,
     }),
-    [category, libraryId, searchQuery, sorter, sortType],
+    [category, libraryId, sorter, sortType],
   );
 
   const { isLoading, isValidating } = useFetchResources(queryParams);
@@ -69,8 +67,7 @@ const MasonryView = memo(function MasonryView() {
     return (
       currentQueryParams.libraryId !== queryParams.libraryId ||
       currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category ||
-      currentQueryParams.q !== queryParams.q
+      currentQueryParams.category !== queryParams.category
     );
   }, [currentQueryParams, queryParams]);
 
@@ -156,7 +153,6 @@ const MasonryView = memo(function MasonryView() {
     <MasonryViewSkeleton columnCount={columnCount} />
   ) : (
     <div
-      onScroll={handleScroll}
       style={{
         flex: 1,
         height: '100%',
@@ -164,6 +160,7 @@ const MasonryView = memo(function MasonryView() {
         overflowY: 'auto',
         transition: 'opacity 0.2s ease-in-out',
       }}
+      onScroll={handleScroll}
     >
       <div style={{ paddingBlockEnd: 24, paddingBlockStart: 12, paddingInline: 24 }}>
         <VirtuosoMasonry

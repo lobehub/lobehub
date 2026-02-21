@@ -15,10 +15,10 @@ const ShareButton = memo<{ mobile?: boolean }>(({ mobile }) => {
     <>
       <ActionIcon
         icon={Share2Icon}
-        onClick={() => setOpen(true)}
         size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
+        onClick={() => setOpen(true)}
       />
-      <ShareModal mobile={mobile} onCancel={() => setOpen(false)} open={open} />
+      <ShareModal mobile={mobile} open={open} onCancel={() => setOpen(false)} />
     </>
   );
 });

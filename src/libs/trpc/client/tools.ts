@@ -2,7 +2,7 @@ import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import superjson from 'superjson';
 
 import { withElectronProtocolIfElectron } from '@/const/protocol';
-import type { ToolsRouter } from '@/server/routers/tools';
+import { type ToolsRouter } from '@/server/routers/tools';
 
 export const toolsClient = createTRPCClient<ToolsRouter>({
   links: [

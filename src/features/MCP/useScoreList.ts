@@ -2,7 +2,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useDetailContext } from '@/features/MCPPluginDetail/DetailProvider';
 
-import { DEFAULT_WEIGHTS, type ScoreListItem, calculateScoreFlags } from './calculateScore';
+import { type ScoreListItem } from './calculateScore';
+import { calculateScoreFlags, DEFAULT_WEIGHTS } from './calculateScore';
 
 /**
  * Hook for creating score list items with translations

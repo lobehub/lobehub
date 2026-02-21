@@ -1,7 +1,7 @@
 import { type LobeUser, type SSOProvider } from '@lobechat/types';
 import { t } from 'i18next';
 
-import type { UserStore } from '@/store/user';
+import { type UserStore } from '@/store/user';
 
 const nickName = (s: UserStore) => {
   const defaultNickName = s.user?.fullName || s.user?.username;

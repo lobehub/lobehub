@@ -1,12 +1,13 @@
 name: Release Desktop Beta
 
 # ============================================
-# Beta/Nightly 频道发版工作流
+# Beta 频道发版工作流
 # ============================================
 # 触发条件: 发布包含 pre-release 标识的 release
-# 如: v2.0.0-beta.1, v2.0.0-alpha.1, v2.0.0-rc.1, v2.0.0-nightly.xxx, v2.0.0-next.292
+# 如: v2.0.0-beta.1, v2.0.0-alpha.1, v2.0.0-rc.1
 #
 # 注意: Stable 版本 (如 v2.0.0) 由 release-desktop-stable.yml 处理
+# 注意: Nightly 版本 (如 v2.1.0-nightly.xxx) 由 release-desktop-nightly.yml 处理
 # ============================================
 
 on:
@@ -24,10 +25,10 @@ env:
 
 jobs:
   # ============================================
-  # 检查是否为 Beta/Nightly/Next 版本 (排除 Stable)
+  # 检查是否为 Beta 版本 (排除 Stable 和 Nightly)
   # ============================================
   check-beta:
-    name: Check if Beta/Nightly/Next Release
+    name: Check if Beta Release
     runs-on: ubuntu-latest
     outputs:
       is_beta: ${{ steps.check.outputs.is_beta }}
@@ -40,10 +41,13 @@ jobs:
           version="${version#v}"
           echo "version=${version}" >> $GITHUB_OUTPUT
 
-          # Beta/Nightly/Next 版本包含 beta/alpha/rc/nightly/next
-          if [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]] || [[ "$version" == *"nightly"* ]] || [[ "$version" == *"next"* ]]; then
+          # Beta 版本包含 beta/alpha/rc (nightly 由 release-desktop-nightly.yml 处理)
+          if [[ "$version" == *"nightly"* ]]; then
+            echo "is_beta=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping: $version is a nightly release (handled by release-desktop-nightly.yml)"
+          elif [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]]; then
             echo "is_beta=true" >> $GITHUB_OUTPUT
-            echo "✅ Beta/Nightly/Next release detected: $version"
+            echo "✅ Beta release detected: $version"
           else
             echo "is_beta=false" >> $GITHUB_OUTPUT
             echo "⏭️ Skipping: $version is a stable release (handled by release-desktop-stable.yml)"
@@ -101,7 +105,7 @@ jobs:
       # macOS 构建
       - name: Build artifact on macOS
         if: runner.os == 'macOS'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: beta
           APP_URL: http://localhost:3015
@@ -119,7 +123,7 @@ jobs:
       # Windows 构建
       - name: Build artifact on Windows
         if: runner.os == 'Windows'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: beta
           APP_URL: http://localhost:3015
@@ -133,7 +137,7 @@ jobs:
       # Linux 构建
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: beta
           APP_URL: http://localhost:3015

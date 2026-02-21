@@ -1,7 +1,8 @@
 'use client';
 
 import { Alert, Highlighter } from '@lobehub/ui';
-import { type ErrorInfo, memo } from 'react';
+import { type ErrorInfo } from 'react';
+import { memo } from 'react';
 
 interface ErrorDisplayProps {
   apiName?: string;
@@ -18,6 +19,11 @@ export const ErrorDisplay = memo<ErrorDisplayProps>(({ error, identifier, apiNam
 
   return (
     <Alert
+      showIcon
+      extraIsolate={false}
+      message={error?.message || 'An unknown error occurred'}
+      title={title}
+      type="secondary"
       extra={
         error?.stack ? (
           <Highlighter actionIconSize="small" language="plaintext" padding={8} variant="borderless">
@@ -25,16 +31,11 @@ export const ErrorDisplay = memo<ErrorDisplayProps>(({ error, identifier, apiNam
           </Highlighter>
         ) : undefined
       }
-      extraIsolate={false}
-      message={error?.message || 'An unknown error occurred'}
-      showIcon
       style={{
         overflow: 'hidden',
         position: 'relative',
         width: '100%',
       }}
-      title={title}
-      type="secondary"
     />
   );
 });

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatService } from '@/services/aiChat';
 
-import { GroupChatSupervisor, type SupervisorContext } from './supervisor';
+import { type SupervisorContext } from './supervisor';
+import { GroupChatSupervisor } from './supervisor';
 
 vi.mock('@lobechat/prompts', () => ({
   contextSupervisorMakeDecision: vi.fn(() => ({

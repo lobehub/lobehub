@@ -1,6 +1,7 @@
 'use client';
 
-import { type ReactNode, createContext, use } from 'react';
+import { type ReactNode } from 'react';
+import { createContext, use } from 'react';
 
 interface SettingsContextType {
   showOpenAIApiKey?: boolean;
@@ -26,7 +27,7 @@ export const SettingsContextProvider = ({
   children: ReactNode;
   value: SettingsContextType;
 }) => {
-  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+  return <SettingsContext value={value}>{children}</SettingsContext>;
 };
 
 export default SettingsContextProvider;

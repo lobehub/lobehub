@@ -62,38 +62,38 @@ const MaxTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defaultValu
   }, [isMobile]);
 
   return (
-    <Flexbox align={'center'} gap={12} horizontal>
+    <Flexbox horizontal align={'center'} gap={12}>
       <Flexbox flex={1}>
         <Slider
           marks={marks}
           max={exponent(2 * Kibi)}
           min={exponent(2)}
-          onChange={updateWithPowValue}
           step={null}
+          value={powValue}
           tooltip={{
             formatter: (x) => {
               if (typeof x === 'undefined') return;
               if (x <= exponent(2)) return t('MaxTokenSlider.unlimited');
 
-              let value = getRealValue(x);
+              const value = getRealValue(x);
               if (value < 125) return value.toFixed(0) + 'K';
               else if (value < Kibi) return ((value * Kibi) / 1000).toFixed(0) + 'k';
               return (value / Kibi).toFixed(0) + 'M';
             },
           }}
-          value={powValue}
+          onChange={updateWithPowValue}
         />
       </Flexbox>
       <div>
         <InputNumber
           changeOnWheel
           min={0}
+          step={4 * Kibi}
+          value={token}
           onChange={(e) => {
             if (!e && e !== 0) return;
             updateWithRealValue(e as number);
           }}
-          step={4 * Kibi}
-          value={token}
         />
       </div>
     </Flexbox>

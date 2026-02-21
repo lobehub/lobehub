@@ -1,7 +1,129 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import  { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
 
 // https://siliconflow.cn/zh-cn/models
 const siliconcloudChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 198_000,
+    description:
+      'GLM-5 是智谱推出的新一代大语言模型，专注于复杂系统工程和长周期 Agent 任务。模型参数扩展至 744B 参数（40B 激活），并集成了 DeepSeek Sparse Attention。',
+    displayName: 'GLM-5 (Pro)',
+    id: 'Pro/zai-org/glm-5',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1,
+              '[0.032, infinity]': 1.5,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 4,
+              '[0.032, infinity]': 6,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 18,
+              '[0.032, infinity]': 22,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-12',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.5 is an open-source native multimodal agent model, built on Kimi-K2-Base, trained on approximately 1.5 trillion mixed vision and text tokens. The model adopts an MoE architecture with 1T total parameters and 32B active parameters, supporting a 256K context window, seamlessly integrating vision and language understanding capabilities.',
+    displayName: 'Kimi-K2.5 (Pro)',
+    id: 'Pro/moonshotai/Kimi-K2.5',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 21, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-01-27',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      vision: true,
+    },
+    description:
+      'PaddleOCR-VL-1.5 is an upgraded version of the PaddleOCR-VL series, achieving 94.5% accuracy on the OmniDocBench v1.5 document parsing benchmark, surpassing leading general large models and specialized document parsing models. It innovatively supports irregular bounding box localization for document elements, handling scanned, tilted, and screen-captured images effectively.',
+    displayName: 'PaddleOCR-VL 1.5',
+    id: 'PaddlePaddle/PaddleOCR-VL-1.5',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-01-29',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 192_000,
+    description:
+      'MiniMax-M2.1 is an open-source large language model optimized for agent capabilities, excelling in programming, tool usage, instruction following, and long-term planning. The model supports multilingual software development and complex multi-step workflow execution, achieving a score of 74.0 on SWE-bench Verified and surpassing Claude Sonnet 4.5 in multilingual scenarios.',
+    displayName: 'MiniMax-M2.1 (Pro)',
+    id: 'Pro/MiniMaxAI/MiniMax-M2.1',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-23',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,

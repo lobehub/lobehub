@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_OPERATION_STATE } from '../types/operation';
-import type { State } from './initialState';
+import { type State } from './initialState';
 import { conversationSelectors } from './selectors';
 
 // Helper to create a mock state

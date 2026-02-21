@@ -28,16 +28,16 @@ const GroupPublishButton = memo(() => {
 
   // Determine action based on whether we have an existing marketIdentifier
   // Backend will verify ownership and decide to create new or update
-  // marketIdentifier is stored in editorData
-  const action = currentGroup?.editorData?.marketIdentifier ? 'upload' : 'submit';
+  // marketIdentifier is stored at top-level (same as agents)
+  const action = currentGroup?.marketIdentifier ? 'upload' : 'submit';
 
   return (
     <>
       <PublishButton action={action} onPublishSuccess={handlePublishSuccess} />
       <GroupPublishResultModal
         identifier={publishedIdentifier}
-        onCancel={() => setShowResultModal(false)}
         open={showResultModal}
+        onCancel={() => setShowResultModal(false)}
       />
     </>
   );

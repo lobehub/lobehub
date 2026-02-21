@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import { describe, expect, it } from 'vitest';
 
-import { SessionGroupItem } from '@/types/session';
+import { type SessionGroupItem } from '@/types/session';
 
 import { sessionGroupsReducer } from './reducer';
 

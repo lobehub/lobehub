@@ -76,7 +76,7 @@ const AvatarRow = ({ mobile }: AvatarRowProps) => {
   if (mobile) {
     return (
       <Flexbox gap={12} style={rowStyle}>
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Text strong>{t('profile.avatar')}</Text>
           {updateAction}
         </Flexbox>
@@ -86,8 +86,8 @@ const AvatarRow = ({ mobile }: AvatarRowProps) => {
   }
 
   return (
-    <Flexbox align="center" gap={24} horizontal justify="space-between" style={rowStyle}>
-      <Flexbox align="center" gap={24} horizontal style={{ flex: 1 }}>
+    <Flexbox horizontal align="center" gap={24} justify="space-between" style={rowStyle}>
+      <Flexbox horizontal align="center" gap={24} style={{ flex: 1 }}>
         <Text style={labelStyle}>{t('profile.avatar')}</Text>
         <Flexbox style={{ flex: 1 }}>{avatarContent}</Flexbox>
       </Flexbox>

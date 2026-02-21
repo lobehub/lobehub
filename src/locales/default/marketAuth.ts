@@ -82,6 +82,11 @@ export default {
   'profileSetup.getStarted': 'Get Started',
   'profileSetup.save': 'Save',
   'profileSetup.socialLinks.title': 'Social Links',
+  'profileSetup.confirmChangeUserId.cancel': 'Cancel',
+  'profileSetup.confirmChangeUserId.confirm': 'Change User ID',
+  'profileSetup.confirmChangeUserId.description':
+    "Once you switch to @{{newId}}, anyone can claim your old ID @{{oldId}} and all existing links to your profile will break. This can't be undone. Are you sure you want to continue?",
+  'profileSetup.confirmChangeUserId.title': 'Change User ID?',
   'profileSetup.success': 'Profile updated successfully',
   'profileSetup.titleEdit': 'Edit Profile',
   'profileSetup.titleFirstTime': 'Complete Your Profile',

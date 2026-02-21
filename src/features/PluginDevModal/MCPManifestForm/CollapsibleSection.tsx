@@ -1,6 +1,7 @@
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode } from 'react';
+import { useState } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

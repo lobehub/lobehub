@@ -150,6 +150,7 @@
   "upload.desc": "Detalles: {{detail}}",
   "upload.fileOnlySupportInServerMode": "El modo de despliegue actual no admite la carga de archivos que no sean imágenes. Para subir archivos {{ext}}, cambia al modo de base de datos en servidor o usa el servicio {{cloud}}.",
   "upload.networkError": "Verifica tu conexión de red y la configuración CORS del servicio de almacenamiento.",
+  "upload.storageLimitExceeded": "Has alcanzado el límite de almacenamiento de tu plan. Por favor, actualiza tu plan o elimina archivos que no uses para liberar espacio.",
   "upload.title": "Error al subir el archivo. Verifica tu conexión o inténtalo más tarde.",
   "upload.unknownError": "Motivo del error: {{reason}}",
   "upload.uploadFailed": "Error al subir el archivo."

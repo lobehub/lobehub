@@ -29,7 +29,7 @@ LobeHub Desktop is a cross-platform desktop application for [LobeChat](https://g
 pnpm install-isolated
 
 # Start development server
-pnpm electron:dev
+pnpm dev
 
 # Type checking
 pnpm type-check
@@ -51,19 +51,20 @@ cp .env.desktop .env
 
 ### Build Commands
 
-| Command            | Description                             |
-| ------------------ | --------------------------------------- |
-| `pnpm build`       | Build for all platforms                 |
-| `pnpm build:mac`   | Build for macOS (Intel + Apple Silicon) |
-| `pnpm build:win`   | Build for Windows                       |
-| `pnpm build:linux` | Build for Linux                         |
-| `pnpm build-local` | Local development build                 |
+| Command                    | Description                                 |
+| -------------------------- | ------------------------------------------- |
+| `pnpm build:main`          | Build main/preload (dist output only)       |
+| `pnpm package:mac`         | Package for macOS (Intel + Apple Silicon)   |
+| `pnpm package:win`         | Package for Windows                         |
+| `pnpm package:linux`       | Package for Linux                           |
+| `pnpm package:local`       | Local packaging build (no ASAR)             |
+| `pnpm package:local:reuse` | Local packaging build reusing existing dist |
 
 ### Development Workflow
 
 ```bash
 # 1. Development
-pnpm electron:dev # Start with hot reload
+pnpm dev # Start with hot reload
 
 # 2. Code Quality
 pnpm lint       # ESLint checking
@@ -74,8 +75,8 @@ pnpm type-check # TypeScript validation
 pnpm test # Run Vitest tests
 
 # 4. Build & Package
-pnpm build       # Production build
-pnpm build-local # Local testing build
+pnpm build:main    # Production build (dist only)
+pnpm package:local # Local testing package
 ```
 
 ## 🎯 Release Channels

@@ -1,8 +1,9 @@
 'use client';
 
 import { BRANDING_EMAIL, SOCIAL_URL } from '@lobechat/business-const';
-import { ActionIcon, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { useAnalytics } from '@lobehub/analytics/react';
+import { type MenuProps } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
 import {
   Book,
@@ -14,7 +15,6 @@ import {
   Mail,
   Rocket,
 } from 'lucide-react';
-import { useAnalytics } from '@lobehub/analytics/react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -192,8 +192,8 @@ const Footer = memo(() => {
 
   return (
     <>
-      <Flexbox align={'center'} gap={2} horizontal justify={'space-between'} padding={8}>
-        <Flexbox align={'center'} flex={1} gap={2} horizontal>
+      <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
+        <Flexbox horizontal align={'center'} flex={1} gap={2}>
           <DropdownMenu items={helpMenuItems} placement="topLeft">
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
@@ -205,21 +205,21 @@ const Footer = memo(() => {
         </Flexbox>
         <ThemeButton placement={'topCenter'} size={16} />
       </Flexbox>
-      <LabsModal onClose={handleCloseLabsModal} open={isLabsModalOpen} />
+      <LabsModal open={isLabsModalOpen} onClose={handleCloseLabsModal} />
       <ChangelogModal
-        onClose={handleCloseChangelogModal}
         open={isChangelogModalOpen}
         shouldLoad={shouldLoadChangelog}
+        onClose={handleCloseChangelogModal}
       />
       <HighlightNotification
         actionHref={PRODUCT_HUNT_NOTIFICATION.actionHref}
         actionLabel={t('productHunt.actionLabel')}
         description={t('productHunt.description')}
         image={PRODUCT_HUNT_NOTIFICATION.image}
-        onActionClick={handleProductHuntActionClick}
-        onClose={handleCloseProductHuntCard}
         open={isProductHuntCardOpen}
         title={t('productHunt.title')}
+        onActionClick={handleProductHuntActionClick}
+        onClose={handleCloseProductHuntCard}
       />
     </>
   );

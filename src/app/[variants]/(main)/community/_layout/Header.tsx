@@ -23,13 +23,13 @@ const Header = memo(() => {
   return (
     <NavHeader
       className={styles.headerContainer}
+      style={cssVariables}
       right={
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           {!isCustomBranding && <CreateButton />}
           <UserAvatar />
         </Flexbox>
       }
-      style={cssVariables}
       styles={{
         center: { flex: 1, maxWidth: 720 },
         left: { flex: 1, maxWidth: 120 },

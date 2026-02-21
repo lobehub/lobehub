@@ -2,7 +2,8 @@
 
 import { ActionIcon } from '@lobehub/ui';
 import { Edit } from 'lucide-react';
-import { type MouseEvent, memo, useState } from 'react';
+import { type MouseEvent } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
 
@@ -52,13 +53,13 @@ const AgentConfig = memo(() => {
 
   return (
     <ConfigLayout
-      actions={
-        <ActionIcon icon={Edit} onClick={handleOpenWithEdit} size={'small'} title={t('edit')} />
-      }
       expandedHeight={200}
       headerStyle={{ cursor: 'pointer' }}
       sessionId={sessionId}
       title={<Header />}
+      actions={
+        <ActionIcon icon={Edit} size={'small'} title={t('edit')} onClick={handleOpenWithEdit} />
+      }
     >
       <SystemRole
         editing={editing}

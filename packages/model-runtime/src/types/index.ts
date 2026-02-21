@@ -7,3 +7,4 @@ export * from './structureOutput';
 export * from './toolsCalling';
 export * from './tts';
 export * from './type';
+export * from './video';

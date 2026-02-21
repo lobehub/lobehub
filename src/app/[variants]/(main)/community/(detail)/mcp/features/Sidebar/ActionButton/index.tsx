@@ -60,7 +60,7 @@ const ActionButton = memo(() => {
   const buttonLoading = isLoading || isAuthLoading;
 
   return installed ? (
-    <Flexbox gap={8} horizontal>
+    <Flexbox horizontal gap={8}>
       <Button
         block
         className={styles.button}
@@ -74,15 +74,15 @@ const ActionButton = memo(() => {
       <Button
         icon={<Icon icon={Trash2Icon} size={20} />}
         loading={buttonLoading}
-        onClick={async () => {
-          setIsLoading(true);
-          await uninstallMCPPlugin(identifier!);
-          setIsLoading(false);
-        }}
         size={'large'}
         style={{ minWidth: 45 }}
         styles={{
           icon: { height: 20 },
+        }}
+        onClick={async () => {
+          setIsLoading(true);
+          await uninstallMCPPlugin(identifier!);
+          setIsLoading(false);
         }}
       />
     </Flexbox>
@@ -92,9 +92,9 @@ const ActionButton = memo(() => {
         block
         className={styles.button}
         loading={buttonLoading}
-        onClick={installPlugin}
         size={'large'}
         type={'primary'}
+        onClick={installPlugin}
       >
         {t('plugins.install')}
       </Button>

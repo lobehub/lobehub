@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "In corso",
   "detail.data.embedding.success": "Completato",
   "detail.data.embeddingStatus": "incorporamento",
+  "detail.data.noChunk": "Nessun frammento",
   "empty": "Nessun file o cartella è stato ancora caricato.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} file filtrati (su un totale di {{total}})",
   "header.actions.connect": "Connetti...",

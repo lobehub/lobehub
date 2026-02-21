@@ -150,6 +150,7 @@
   "upload.desc": "Dettagli: {{detail}}",
   "upload.fileOnlySupportInServerMode": "La modalità di distribuzione attuale non supporta il caricamento di file non immagine. Per caricare file in formato {{ext}}, passa alla modalità server o usa il servizio {{cloud}}.",
   "upload.networkError": "Controlla la connessione di rete e assicurati che la configurazione CORS del servizio di archiviazione sia corretta.",
+  "upload.storageLimitExceeded": "Lo spazio di archiviazione dei tuoi file ha raggiunto il limite previsto dal piano. Aggiorna il tuo piano oppure elimina i file non utilizzati per liberare spazio.",
   "upload.title": "Caricamento file fallito. Controlla la connessione o riprova più tardi.",
   "upload.unknownError": "Motivo dell'errore: {{reason}}",
   "upload.uploadFailed": "Caricamento file fallito."

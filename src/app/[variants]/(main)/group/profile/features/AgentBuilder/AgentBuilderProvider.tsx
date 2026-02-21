@@ -1,9 +1,11 @@
-import { type ReactNode, memo, useMemo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
-import { type MessageMapKeyInput, messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface AgentBuilderProviderProps {
   agentId: string;
@@ -47,10 +49,10 @@ const AgentBuilderProvider = memo<AgentBuilderProviderProps>(({ agentId, childre
       context={context}
       hasInitMessages={!!messages}
       messages={messages}
+      operationState={operationState}
       onMessagesChange={(msgs, ctx) => {
         replaceMessages(msgs, { context: ctx });
       }}
-      operationState={operationState}
     >
       {children}
     </ConversationProvider>

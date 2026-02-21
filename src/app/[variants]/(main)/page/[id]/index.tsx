@@ -1,7 +1,7 @@
 'use client';
 
 import { useUnmount } from 'ahooks';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
 

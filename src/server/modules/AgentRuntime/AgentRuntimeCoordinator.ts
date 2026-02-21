@@ -3,7 +3,7 @@ import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { createAgentStateManager, createStreamEventManager } from './factory';
-import type { IAgentStateManager, IStreamEventManager } from './types';
+import { type IAgentStateManager, type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:coordinator');
 

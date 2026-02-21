@@ -1,13 +1,14 @@
 import { type StateCreator } from 'zustand/vanilla';
 
 import { type ResourceManagerMode } from '@/features/ResourceManager';
-import { type FilesTabs, SortType } from '@/types/files';
+import { type FilesTabs, type SortType } from '@/types/files';
 
-import { type State, type ViewMode, initialState } from './initialState';
+import { type State, type ViewMode } from './initialState';
+import { initialState } from './initialState';
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
-  | 'addToOtherKnowledgeBase'
+  | 'moveToOtherKnowledgeBase'
   | 'batchChunking'
   | 'delete'
   | 'deleteLibrary'
@@ -81,13 +82,13 @@ export interface Action {
    */
   setSelectedFileIds: (ids: string[]) => void;
   /**
-   * Set the sort direction
-   */
-  setSortType: (sortType: SortType) => void;
-  /**
    * Set the field to sort files by
    */
   setSorter: (sorter: 'name' | 'createdAt' | 'size') => void;
+  /**
+   * Set the sort direction
+   */
+  setSortType: (sortType: SortType) => void;
   /**
    * Set the file explorer view mode
    */
@@ -138,9 +139,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
 
     switch (type) {
       case 'delete': {
-        // Use optimistic deleteResource for instant batch delete
-        // All items disappear immediately, sync happens in background
-        await Promise.all(selectedFileIds.map((id) => fileStore.deleteResource(id)));
+        await fileStore.deleteResources(selectedFileIds);
 
         set({ selectedFileIds: [] });
         return;
@@ -160,7 +159,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
         return;
       }
 
-      case 'addToOtherKnowledgeBase': {
+      case 'moveToOtherKnowledgeBase': {
         // Modal operations need to be handled in component layer
         // Store just marks that action was requested
         // Component will handle opening modal via useAddFilesToKnowledgeBaseModal hook

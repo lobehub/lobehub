@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type DocumentItem, documents, files } from '@lobechat/database/schemas';
+import { type DocumentItem } from '@lobechat/database/schemas';
+import { documents, files } from '@lobechat/database/schemas';
 import { loadFile } from '@lobechat/file-loaders';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';

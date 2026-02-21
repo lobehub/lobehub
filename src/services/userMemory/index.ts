@@ -1,11 +1,11 @@
-import type {
-  ActivityMemoryItemSchema,
-  AddIdentityActionSchema,
-  ContextMemoryItemSchema,
-  ExperienceMemoryItemSchema,
-  PreferenceMemoryItemSchema,
-  RemoveIdentityActionSchema,
-  UpdateIdentityActionSchema,
+import {
+  type ActivityMemoryItemSchema,
+  type AddIdentityActionSchema,
+  type ContextMemoryItemSchema,
+  type ExperienceMemoryItemSchema,
+  type PreferenceMemoryItemSchema,
+  type RemoveIdentityActionSchema,
+  type UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory/schemas';
 import {
   type ActivityListParams,

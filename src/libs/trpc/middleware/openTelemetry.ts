@@ -1,27 +1,28 @@
-import type { Attributes, Span } from '@lobechat/observability-otel/api';
-import { SpanKind, SpanStatusCode, context, diag, trace } from '@lobechat/observability-otel/api';
+import { env } from 'node:process';
+
+import { type Attributes, type Span } from '@lobechat/observability-otel/api';
+import { context, diag, SpanKind, SpanStatusCode, trace } from '@lobechat/observability-otel/api';
 import {
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_MESSAGE,
   ATTR_EXCEPTION_STACKTRACE,
+  createAttributesForMetrics,
   DEFAULT_ERROR_CODE,
   DEFAULT_SUCCESS_STATUS,
-  TRPCAttribute,
-  createAttributesForMetrics,
   getPayloadSize,
   serverDurationHistogram,
   serverRequestSizeHistogram,
   serverRequestsPerRpcHistogram,
   serverResponseSizeHistogram,
   serverResponsesPerRpcHistogram,
+  TRPCAttribute,
   tRPCConventionFromPathAndType,
 } from '@lobechat/observability-otel/trpc';
 import { TRPCError } from '@trpc/server';
-import { env } from 'node:process';
 
-import { name } from '../../../../package.json';
 import { injectSpanTraceHeaders } from '@/libs/observability/traceparent';
 
+import { name } from '../../../../package.json';
 import { trpc } from '../lambda/init';
 
 const tracer = trace.getTracer('trpc-server');

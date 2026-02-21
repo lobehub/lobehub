@@ -2,7 +2,7 @@ import { memo } from 'react';
 
 import { ModelItemRender } from '@/components/ModelSelect';
 
-import type { ModelWithProviders } from '../../types';
+import { type ModelWithProviders } from '../../types';
 
 interface SingleProviderModelItemProps {
   data: ModelWithProviders;

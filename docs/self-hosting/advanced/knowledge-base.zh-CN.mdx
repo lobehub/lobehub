@@ -20,12 +20,12 @@ LobeHub 支持文件上传 / 知识库管理。该功能依赖于以下核心技
 PostgreSQL 是一个强大的开源关系型数据库系统，而 PGVector 是其扩展，为向量操作提供支持。
 
 - **用途**：存储结构化数据和向量索引
-- **部署建议**：使用官方 Docker 镜像可以快速部署 PostgreSQL 和 PGVector
+- **部署建议**：使用 ParadeDB Docker 镜像可以快速部署包含 pgvector 和 pg\_search 插件的 PostgreSQL
 
 示例部署脚本：
 
 ```
-docker run -p 5432:5432 -d --name pg -e POSTGRES_PASSWORD=mysecretpassword pgvector/pgvector:pg17
+docker run -p 5432:5432 -d --name pg -e POSTGRES_PASSWORD=mysecretpassword paradedb/paradedb:latest-pg17
 ```
 
 - **注意事项**：确保分配足够的资源以处理向量操作

@@ -9,6 +9,11 @@ export type ContextMenuMode = 'disabled' | 'default';
 export interface UserGeneralConfig {
   animationMode?: AnimationMode;
   contextMenuMode?: ContextMenuMode;
+  /**
+   * Whether to auto-scroll during AI streaming output
+   * @default true
+   */
+  enableAutoScrollOnStreaming?: boolean;
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
   isDevMode: boolean;

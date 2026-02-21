@@ -1,9 +1,12 @@
-import { Flexbox, type FlexboxProps, Icon, type IconProps, Text } from '@lobehub/ui';
+import { type FlexboxProps, type IconProps } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode, Suspense, memo, useState } from 'react';
+import { type ReactNode } from 'react';
+import { memo, Suspense, useState } from 'react';
 
 interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   action?: ReactNode;
+  actionAlwaysVisible?: boolean;
   icon?: IconProps['icon'];
   title?: ReactNode;
 }
@@ -18,44 +21,49 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const GroupBlock = memo<GroupBlockProps>(({ title, action, children, icon, ...rest }) => {
-  const [isHovered, setIsHovered] = useState(false);
+const GroupBlock = memo<GroupBlockProps>(
+  ({ title, action, actionAlwaysVisible, children, icon, ...rest }) => {
+    const [isHovered, setIsHovered] = useState(false);
 
-  return (
-    <Flexbox
-      gap={16}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      {...rest}
-    >
-      <Flexbox align={'center'} horizontal justify={'space-between'}>
-        <Flexbox
-          align={'center'}
-          flex={1}
-          gap={8}
-          horizontal
-          justify={'flex-start'}
-          style={{ overflow: 'hidden' }}
-        >
-          <Icon color={cssVar.colorTextDescription} icon={icon} size={18} />
-          <Text color={cssVar.colorTextSecondary} ellipsis>
-            {title}
-          </Text>
+    return (
+      <Flexbox
+        gap={16}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        {...rest}
+      >
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            flex={1}
+            gap={8}
+            justify={'flex-start'}
+            style={{ overflow: 'hidden' }}
+          >
+            <Icon color={cssVar.colorTextDescription} icon={icon} size={18} />
+            <Text ellipsis color={cssVar.colorTextSecondary}>
+              {title}
+            </Text>
+          </Flexbox>
+          <Flexbox
+            horizontal
+            align={'center'}
+            flex={'none'}
+            gap={2}
+            justify={'flex-end'}
+            className={cx(
+              styles.action,
+              (isHovered || actionAlwaysVisible) && styles.actionVisible,
+            )}
+          >
+            {action}
+          </Flexbox>
         </Flexbox>
-        <Flexbox
-          align={'center'}
-          className={cx(styles.action, isHovered && styles.actionVisible)}
-          flex={'none'}
-          gap={2}
-          horizontal
-          justify={'flex-end'}
-        >
-          {action}
-        </Flexbox>
+        <Suspense fallback={'loading'}>{children}</Suspense>
       </Flexbox>
-      <Suspense fallback={'loading'}>{children}</Suspense>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 export default GroupBlock;

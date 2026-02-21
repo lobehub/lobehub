@@ -1,7 +1,7 @@
-import type { AgentState } from '@lobechat/agent-runtime';
+import { type AgentState } from '@lobechat/agent-runtime';
 
-import type { AgentOperationMetadata, StepResult } from './AgentStateManager';
-import type { StreamChunkData, StreamEvent } from './StreamEventManager';
+import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
+import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
 
 /**
  * Agent State Manager Interface
@@ -11,49 +11,49 @@ export interface IAgentStateManager {
   /**
    * Clean up expired operation data
    */
-  cleanupExpiredOperations(): Promise<number>;
+  cleanupExpiredOperations: () => Promise<number>;
 
   /**
    * Create new operation metadata
    */
-  createOperationMetadata(
+  createOperationMetadata: (
     operationId: string,
     data: {
       agentConfig?: any;
       modelRuntimeConfig?: any;
       userId?: string;
     },
-  ): Promise<void>;
+  ) => Promise<void>;
 
   /**
    * Delete all data for Agent operation
    */
-  deleteAgentOperation(operationId: string): Promise<void>;
+  deleteAgentOperation: (operationId: string) => Promise<void>;
 
   /**
    * Close connections
    */
-  disconnect(): Promise<void>;
+  disconnect: () => Promise<void>;
 
   /**
    * Get all active operations
    */
-  getActiveOperations(): Promise<string[]>;
+  getActiveOperations: () => Promise<string[]>;
 
   /**
    * Get execution history
    */
-  getExecutionHistory(operationId: string, limit?: number): Promise<any[]>;
+  getExecutionHistory: (operationId: string, limit?: number) => Promise<any[]>;
 
   /**
    * Get operation metadata
    */
-  getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null>;
+  getOperationMetadata: (operationId: string) => Promise<AgentOperationMetadata | null>;
 
   /**
    * Get statistics
    */
-  getStats(): Promise<{
+  getStats: () => Promise<{
     activeOperations: number;
     completedOperations: number;
     errorOperations: number;
@@ -63,17 +63,17 @@ export interface IAgentStateManager {
   /**
    * Load Agent state
    */
-  loadAgentState(operationId: string): Promise<AgentState | null>;
+  loadAgentState: (operationId: string) => Promise<AgentState | null>;
 
   /**
    * Save Agent state
    */
-  saveAgentState(operationId: string, state: AgentState): Promise<void>;
+  saveAgentState: (operationId: string, state: AgentState) => Promise<void>;
 
   /**
    * Save step execution result
    */
-  saveStepResult(operationId: string, stepResult: StepResult): Promise<void>;
+  saveStepResult: (operationId: string, stepResult: StepResult) => Promise<void>;
 }
 
 /**
@@ -84,53 +84,53 @@ export interface IStreamEventManager {
   /**
    * Clean up stream data for operation
    */
-  cleanupOperation(operationId: string): Promise<void>;
+  cleanupOperation: (operationId: string) => Promise<void>;
 
   /**
    * Close connections
    */
-  disconnect(): Promise<void>;
+  disconnect: () => Promise<void>;
 
   /**
    * Get count of active operations
    */
-  getActiveOperationsCount(): Promise<number>;
+  getActiveOperationsCount: () => Promise<number>;
 
   /**
    * Get stream event history
    */
-  getStreamHistory(operationId: string, count?: number): Promise<StreamEvent[]>;
+  getStreamHistory: (operationId: string, count?: number) => Promise<StreamEvent[]>;
 
   /**
    * Publish Agent runtime end event
    */
-  publishAgentRuntimeEnd(
+  publishAgentRuntimeEnd: (
     operationId: string,
     stepIndex: number,
     finalState: any,
     reason?: string,
     reasonDetail?: string,
-  ): Promise<string>;
+  ) => Promise<string>;
 
   /**
    * Publish Agent runtime initialization event
    */
-  publishAgentRuntimeInit(operationId: string, initialState: any): Promise<string>;
+  publishAgentRuntimeInit: (operationId: string, initialState: any) => Promise<string>;
 
   /**
    * Publish stream content chunk
    */
-  publishStreamChunk(
+  publishStreamChunk: (
     operationId: string,
     stepIndex: number,
     chunkData: StreamChunkData,
-  ): Promise<string>;
+  ) => Promise<string>;
 
   /**
    * Publish stream event
    */
-  publishStreamEvent(
+  publishStreamEvent: (
     operationId: string,
     event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
-  ): Promise<string>;
+  ) => Promise<string>;
 }

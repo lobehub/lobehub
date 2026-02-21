@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "In Bearbeitung",
   "detail.data.embedding.success": "Abgeschlossen",
   "detail.data.embeddingStatus": "Einbettung",
+  "detail.data.noChunk": "Kein Abschnitt",
   "empty": "Es wurden noch keine Dateien oder Ordner hochgeladen.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} Dateien gefiltert (von insgesamt {{total}})",
   "header.actions.connect": "Verbinden...",

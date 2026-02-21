@@ -31,12 +31,12 @@ const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
       clickable
       flex={'none'}
       height={RECENT_BLOCK_SIZE.RESOURCE.HEIGHT}
+      variant={'outlined'}
+      width={RECENT_BLOCK_SIZE.RESOURCE.WIDTH}
       style={{
         borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
       }}
-      variant={'outlined'}
-      width={RECENT_BLOCK_SIZE.RESOURCE.WIDTH}
     >
       <Center
         flex={'none'}
@@ -50,11 +50,11 @@ const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
             objectFit={'cover'}
             preview={false}
             src={file.url}
+            width={'100%'}
             style={{
               borderRadius: 0,
               width: '100%',
             }}
-            width={'100%'}
           />
         ) : (
           <FileIcon fileName={file.name} fileType={file.fileType} size={48} />
@@ -66,7 +66,7 @@ const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
         <Text ellipsis fontSize={13} style={{ lineHeight: 1.4 }} weight={500}>
           {file.name}
         </Text>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Time date={file.updatedAt} />
           <Text ellipsis fontSize={12} type={'secondary'}>
             {formatSize(file.size)}

@@ -11,17 +11,17 @@ const GuideVideo = memo<GuideVideoProps>(({ height, width, src }) => {
   return (
     <video
       autoPlay
-      controls={false}
-      height={height}
       loop
       muted
+      controls={false}
+      height={height}
       src={src}
+      width={width}
       style={{
         background: cssVar.colorFillSecondary,
         height: 'auto',
         width: '100%',
       }}
-      width={width}
     />
   );
 });

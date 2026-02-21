@@ -1,6 +1,6 @@
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
-import { Suspense, memo, useCallback, useRef, useState } from 'react';
+import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
@@ -12,6 +12,7 @@ import ApprovalActions from './ApprovalActions';
 import Fallback from './Fallback';
 import KeyValueEditor from './KeyValueEditor';
 import ModeSelector from './ModeSelector';
+import SecurityBlacklistWarning from './SecurityBlacklistWarning';
 
 export type ApprovalMode = 'auto-run' | 'allow-list' | 'manual';
 
@@ -82,6 +83,8 @@ const Intervention = memo<InterventionProps>(
       [toolCallId, updatePluginArguments],
     );
 
+    const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
+
     const BuiltinToolInterventionRender = getBuiltinIntervention(identifier, apiName);
 
     if (BuiltinToolInterventionRender) {
@@ -89,7 +92,7 @@ const Intervention = memo<InterventionProps>(
         return (
           <Suspense fallback={<Arguments arguments={requestArgs} />}>
             <KeyValueEditor
-              initialValue={safeParseJSON(requestArgs || '')}
+              initialValue={parsedArgs}
               onCancel={handleCancel}
               onFinish={handleFinish}
             />
@@ -98,13 +101,14 @@ const Intervention = memo<InterventionProps>(
 
       return (
         <Flexbox gap={12}>
+          <SecurityBlacklistWarning args={parsedArgs} />
           <BuiltinToolInterventionRender
             apiName={apiName}
-            args={safeParseJSON(requestArgs || '')}
+            args={parsedArgs}
             identifier={identifier}
             messageId={id}
-            onArgsChange={handleArgsChange}
             registerBeforeApprove={registerBeforeApprove}
+            onArgsChange={handleArgsChange}
           />
           <Flexbox horizontal justify={'space-between'}>
             <ModeSelector />
@@ -113,8 +117,8 @@ const Intervention = memo<InterventionProps>(
               approvalMode={approvalMode}
               identifier={identifier}
               messageId={id}
-              onBeforeApprove={handleBeforeApprove}
               toolCallId={toolCallId}
+              onBeforeApprove={handleBeforeApprove}
             />
           </Flexbox>
         </Flexbox>
@@ -122,13 +126,16 @@ const Intervention = memo<InterventionProps>(
     }
 
     return (
-      <Fallback
-        apiName={apiName}
-        id={id}
-        identifier={identifier}
-        requestArgs={requestArgs}
-        toolCallId={toolCallId}
-      />
+      <Flexbox gap={12}>
+        <SecurityBlacklistWarning args={parsedArgs} />
+        <Fallback
+          apiName={apiName}
+          id={id}
+          identifier={identifier}
+          requestArgs={requestArgs}
+          toolCallId={toolCallId}
+        />
+      </Flexbox>
     );
   },
 );

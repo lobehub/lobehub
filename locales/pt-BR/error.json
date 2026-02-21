@@ -150,6 +150,7 @@
   "upload.desc": "Detalhes: {{detail}}",
   "upload.fileOnlySupportInServerMode": "O modo de implantação atual não suporta upload de arquivos que não sejam imagens. Para enviar arquivos no formato {{ext}}, mude para implantação com banco de dados ou use o serviço {{cloud}}.",
   "upload.networkError": "Verifique sua conexão de rede e a configuração de CORS do serviço de armazenamento de arquivos.",
+  "upload.storageLimitExceeded": "O armazenamento de arquivos atingiu o limite do seu plano. Faça upgrade do plano ou exclua arquivos não utilizados para liberar espaço.",
   "upload.title": "Falha no upload do arquivo. Verifique sua conexão ou tente novamente mais tarde.",
   "upload.unknownError": "Motivo do erro: {{reason}}",
   "upload.uploadFailed": "Falha no upload do arquivo."

@@ -1,10 +1,11 @@
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
-import { userMemoryService } from '@/services/userMemory';
-import { memoryCRUDService } from '@/services/userMemory/index';
+import { type DisplayPreferenceMemory } from '@/database/repositories/userMemory';
+import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
+import { type StoreSetter } from '@/store/types';
 import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -19,29 +20,33 @@ export interface PreferenceQueryParams {
   sort?: 'capturedAt' | 'scorePriority';
 }
 
-export interface PreferenceAction {
-  deletePreference: (id: string) => Promise<void>;
-  loadMorePreferences: () => void;
-  resetPreferencesList: (params?: Omit<PreferenceQueryParams, 'page' | 'pageSize'>) => void;
-  useFetchPreferences: (params: PreferenceQueryParams) => SWRResponse<any>;
-}
+type Setter = StoreSetter<UserMemoryStore>;
+export const createPreferenceSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
+  new PreferenceActionImpl(set, get, _api);
 
-export const createPreferenceSlice: StateCreator<
-  UserMemoryStore,
-  [['zustand/devtools', never]],
-  [],
-  PreferenceAction
-> = (set, get) => ({
-  deletePreference: async (id) => {
+export class PreferenceActionImpl {
+  readonly #get: () => UserMemoryStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  deletePreference = async (id: string): Promise<void> => {
     await memoryCRUDService.deletePreference(id);
     // Reset list to refresh
-    get().resetPreferencesList({ q: get().preferencesQuery, sort: get().preferencesSort });
-  },
+    this.#get().resetPreferencesList({
+      q: this.#get().preferencesQuery,
+      sort: this.#get().preferencesSort,
+    });
+  };
 
-  loadMorePreferences: () => {
-    const { preferencesPage, preferencesTotal, preferences } = get();
+  loadMorePreferences = (): void => {
+    const { preferencesPage, preferencesTotal, preferences } = this.#get();
     if (preferences.length < (preferencesTotal || 0)) {
-      set(
+      this.#set(
         produce((draft) => {
           draft.preferencesPage = preferencesPage + 1;
         }),
@@ -49,10 +54,10 @@ export const createPreferenceSlice: StateCreator<
         n('loadMorePreferences'),
       );
     }
-  },
+  };
 
-  resetPreferencesList: (params) => {
-    set(
+  resetPreferencesList = (params?: Omit<PreferenceQueryParams, 'page' | 'pageSize'>): void => {
+    this.#set(
       produce((draft) => {
         draft.preferences = [];
         draft.preferencesPage = 1;
@@ -63,9 +68,9 @@ export const createPreferenceSlice: StateCreator<
       false,
       n('resetPreferencesList'),
     );
-  },
+  };
 
-  useFetchPreferences: (params) => {
+  useFetchPreferences = (params: PreferenceQueryParams): SWRResponse<any> => {
     const swrKeyParts = [
       'useFetchPreferences',
       params.page,
@@ -92,33 +97,33 @@ export const createPreferenceSlice: StateCreator<
         return result;
       },
       {
-        onSuccess(data: any) {
-          set(
+        onSuccess: (data: any) => {
+          this.#set(
             produce((draft) => {
               draft.preferencesSearchLoading = false;
 
-              // 设置基础信息
+              // Set basic information
               if (!draft.preferencesInit) {
                 draft.preferencesInit = true;
                 draft.preferencesTotal = data.total;
               }
 
-              // 转换数据结构
-              const transformedItems = data.items.map((item: any) => ({
+              // Transform data structure
+              const transformedItems: DisplayPreferenceMemory[] = data.items.map((item: any) => ({
                 ...item.memory,
                 ...item.preference,
               }));
 
-              // 累积数据逻辑
+              // Accumulate data logic
               if (page === 1) {
-                // 第一页，直接设置
+                // First page, set directly
                 draft.preferences = uniqBy(transformedItems, 'id');
               } else {
-                // 后续页面，累积数据
+                // Subsequent pages, accumulate data
                 draft.preferences = uniqBy([...draft.preferences, ...transformedItems], 'id');
               }
 
-              // 更新 hasMore
+              // Update hasMore
               draft.preferencesHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,
@@ -128,5 +133,7 @@ export const createPreferenceSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type PreferenceAction = Pick<PreferenceActionImpl, keyof PreferenceActionImpl>;

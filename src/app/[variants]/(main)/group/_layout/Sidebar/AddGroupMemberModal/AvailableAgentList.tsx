@@ -2,13 +2,15 @@
 
 import { Flexbox, SearchBar, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type ChangeEvent, memo, useCallback, useMemo, useState } from 'react';
+import { type ChangeEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 
-import AgentItem, { type AgentItemData } from './AgentItem';
+import { type AgentItemData } from './AgentItem';
+import AgentItem from './AgentItem';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -57,10 +59,10 @@ const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading })
     <Flexbox className={styles.container} gap={12}>
       <SearchBar
         allowClear
-        onChange={handleSearchChange}
         placeholder={t('memberSelection.searchAgents')}
         value={searchTerm}
         variant="filled"
+        onChange={handleSearchChange}
       />
 
       <Flexbox flex={1} style={{ minHeight: 0 }}>
@@ -77,14 +79,14 @@ const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading })
           />
         ) : (
           <Virtuoso
+            style={{ flex: 1 }}
+            totalCount={filteredAgents.length}
             itemContent={(index) => {
               const agent = filteredAgents[index];
               return (
-                <AgentItem agent={agent} defaultTitle={defaultTitle} key={agent.id} showCheckbox />
+                <AgentItem showCheckbox agent={agent} defaultTitle={defaultTitle} key={agent.id} />
               );
             }}
-            style={{ flex: 1 }}
-            totalCount={filteredAgents.length}
           />
         )}
       </Flexbox>

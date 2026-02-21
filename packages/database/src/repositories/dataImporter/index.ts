@@ -1,10 +1,10 @@
-import type { ImportPgDataStructure, ImportResultData, ImporterEntryData } from '@lobechat/types';
+import type { ImporterEntryData, ImportPgDataStructure, ImportResultData } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { uuid } from '@/utils/uuid';
 
 import * as EXPORT_TABLES from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { DeprecatedDataImporterRepos } from './deprecated';
 
 interface ImportResult {
@@ -350,7 +350,7 @@ export class DataImporterRepos {
     trx: any,
     config: TableImportConfig,
     tableData: any[],
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userConflictStrategy: ConflictStrategy,
   ): Promise<ImportResult> {
     const {
@@ -458,7 +458,7 @@ export class DataImporterRepos {
         // Decide how to process based on whether it's composite key and whether to preserve ID
         if (isCompositeKey) {
           // For composite key tables, don't include id field
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
           const { id: _, ...rest } = item;
           newRecord = {
             ...rest,

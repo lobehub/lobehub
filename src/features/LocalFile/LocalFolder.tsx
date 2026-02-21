@@ -48,15 +48,15 @@ export const LocalFolder = ({ path: pathname, size = 22 }: LocalFolderProps) => 
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={styles.container}
       gap={4}
-      horizontal
-      onClick={handleClick}
       style={{ display: 'inline-flex', verticalAlign: 'middle' }}
+      onClick={handleClick}
     >
-      <FileIcon fileName={base} isDirectory size={size} variant={'raw'} />
-      <Flexbox align={'baseline'} gap={4} horizontal style={{ overflow: 'hidden', width: '100%' }}>
+      <FileIcon isDirectory fileName={base} size={size} variant={'raw'} />
+      <Flexbox horizontal align={'baseline'} gap={4} style={{ overflow: 'hidden', width: '100%' }}>
         <div className={styles.title}>{base}</div>
       </Flexbox>
     </Flexbox>

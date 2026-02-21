@@ -3,7 +3,8 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { EditableMessage } from '@lobehub/ui/chat';
 import { createStaticStyles } from 'antd-style';
-import { type MouseEvent, memo } from 'react';
+import { type MouseEvent } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentInfo from '@/features/AgentInfo';
@@ -62,39 +63,39 @@ const SystemRole = memo(({ editing, setEditing, open, setOpen, isLoading }: Syst
     );
 
   return (
-    <Flexbox height={200} onClick={handleOpen} paddingInline={8}>
+    <Flexbox height={200} paddingInline={8} onClick={handleOpen}>
       <EditableMessage
         classNames={{ markdown: styles.prompt }}
         editing={editing}
         markdownProps={{ enableLatex: false, enableMermaid: false }}
+        openModal={open}
+        placeholder={`${t('settingAgent.prompt.placeholder', { ns: 'setting' })}...`}
+        styles={{ markdown: { opacity: systemRole ? undefined : 0.5, overflow: 'visible' } }}
+        value={systemRole}
         model={{
           extra: (
             <AgentInfo
               meta={meta}
+              style={{ marginBottom: 16 }}
               onAvatarClick={() => {
                 setOpen(false);
                 setEditing(false);
                 openChatSettings();
               }}
-              style={{ marginBottom: 16 }}
             />
           ),
         }}
-        onChange={(e) => {
-          updateAgentConfig({ systemRole: e });
-        }}
-        onEditingChange={setEditing}
-        onOpenChange={setOpen}
-        openModal={open}
-        placeholder={`${t('settingAgent.prompt.placeholder', { ns: 'setting' })}...`}
-        styles={{ markdown: { opacity: systemRole ? undefined : 0.5, overflow: 'visible' } }}
         text={{
           cancel: t('cancel'),
           confirm: t('ok'),
           edit: t('edit'),
           title: t('settingAgent.prompt.title', { ns: 'setting' }),
         }}
-        value={systemRole}
+        onEditingChange={setEditing}
+        onOpenChange={setOpen}
+        onChange={(e) => {
+          updateAgentConfig({ systemRole: e });
+        }}
       />
     </Flexbox>
   );

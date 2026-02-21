@@ -12,8 +12,12 @@ import { LobeVertexAI } from '../../providers/vertexai';
 import {
   CreateImagePayload,
   CreateImageResponse,
+  CreateVideoPayload,
+  CreateVideoResponse,
   GenerateObjectOptions,
   GenerateObjectPayload,
+  HandleCreateVideoWebhookPayload,
+  HandleCreateVideoWebhookResult,
   ILobeAgentRuntimeErrorType,
 } from '../../types';
 import {
@@ -28,8 +32,12 @@ import {
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { LobeRuntimeAI } from '../BaseAI';
-import { CreateImageOptions, CustomClientOptions } from '../openaiCompatibleFactory';
-import { baseRuntimeMap } from './baseRuntimeMap';
+import {
+  CreateImageOptions,
+  CreateVideoOptions,
+  CustomClientOptions,
+} from '../openaiCompatibleFactory';
+import type { ApiType, RuntimeClass } from './apiTypes';
 
 const log = debug('lobe-model-runtime:router-runtime');
 
@@ -51,17 +59,17 @@ interface ProviderIniOptions extends Record<string, any> {
  * `apiType` allows switching provider when falling back.
  */
 interface RouterOptionItem extends ProviderIniOptions {
-  apiType?: keyof typeof baseRuntimeMap;
+  apiType?: ApiType;
   id?: string;
   remark?: string;
 }
 
 type RouterOptions = RouterOptionItem | RouterOptionItem[];
 
-export type RuntimeClass = typeof LobeOpenAI;
-
 interface RouterInstance {
-  apiType: keyof typeof baseRuntimeMap;
+  apiType: ApiType;
+  baseURLPattern?: RegExp;
+  id?: string;
   models?: string[];
   options: RouterOptions;
   runtime?: RuntimeClass;
@@ -77,6 +85,18 @@ type Routers =
         model?: string;
       },
     ) => RouterInstance[] | Promise<RouterInstance[]>);
+
+export interface RouteAttemptResult {
+  apiType: string;
+  channelId?: string;
+  durationMs: number;
+  error?: unknown;
+  model: string;
+  providerId: string;
+  remark?: string;
+  routerId?: string;
+  success: boolean;
+}
 
 export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any> {
   apiKey?: string;
@@ -108,6 +128,10 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     payload: CreateImagePayload,
     options: CreateImageOptions,
   ) => Promise<CreateImageResponse>;
+  createVideo?: (
+    payload: CreateVideoPayload,
+    options: CreateVideoOptions,
+  ) => Promise<CreateVideoResponse>;
   customClient?: CustomClientOptions<T>;
   debug?: {
     chatCompletion: () => boolean;
@@ -118,12 +142,17 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     bizError: ILobeAgentRuntimeErrorType;
     invalidAPIKey: ILobeAgentRuntimeErrorType;
   };
+  handleCreateVideoWebhook?: (
+    payload: HandleCreateVideoWebhookPayload,
+    options: CreateVideoOptions,
+  ) => Promise<HandleCreateVideoWebhookResult>;
   id: string;
   models?:
     | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
+  onRouteAttempt?: (result: RouteAttemptResult) => Promise<void>;
   responses?: {
     handlePayload?: (
       payload: ChatStreamPayload,
@@ -177,14 +206,25 @@ export const createRouterRuntime = ({
 
     private async resolveMatchedRouter(model: string): Promise<RouterInstance> {
       const resolvedRouters = await this.resolveRouters(model);
-      return (
-        resolvedRouters.find((router) => {
-          if (router.models && router.models.length > 0) {
-            return router.models.includes(model);
-          }
-          return false;
-        }) ?? resolvedRouters.at(-1)!
-      );
+      const baseURL = this._options.baseURL;
+
+      // Priority 1: Match by baseURLPattern (RegExp only)
+      if (baseURL) {
+        const baseURLMatch = resolvedRouters.find((router) => router.baseURLPattern?.test(baseURL));
+        if (baseURLMatch) return baseURLMatch;
+      }
+
+      // Priority 2: Match by models
+      const modelMatch = resolvedRouters.find((router) => {
+        if (router.models && router.models.length > 0) {
+          return router.models.includes(model);
+        }
+        return false;
+      });
+      if (modelMatch) return modelMatch;
+
+      // Fallback: Use the last router
+      return resolvedRouters.at(-1)!;
     }
 
     private normalizeRouterOptions(router: RouterInstance): RouterOptionItem[] {
@@ -201,15 +241,15 @@ export const createRouterRuntime = ({
      * Build a runtime instance for a specific option item.
      * Option items can override apiType to switch providers for fallback.
      */
-    private createRuntimeFromOption(
+    private async createRuntimeFromOption(
       router: RouterInstance,
       optionItem: RouterOptionItem,
-    ): {
+    ): Promise<{
       channelId?: string;
-      id: keyof typeof baseRuntimeMap;
+      id: ApiType;
       remark?: string;
       runtime: LobeRuntimeAI;
-    } {
+    }> {
       const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
       const resolvedApiType = optionApiType ?? router.apiType;
       const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
@@ -243,6 +283,7 @@ export const createRouterRuntime = ({
         };
       }
 
+      const { baseRuntimeMap } = await import('./baseRuntimeMap');
       const providerAI =
         resolvedApiType === router.apiType
           ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
@@ -276,12 +317,13 @@ export const createRouterRuntime = ({
 
       for (const [index, optionItem] of routerOptions.entries()) {
         const attempt = index + 1;
+        const startTime = Date.now();
         const {
           channelId,
           id: resolvedApiType,
           remark,
           runtime,
-        } = this.createRuntimeFromOption(matchedRouter, optionItem);
+        } = await this.createRuntimeFromOption(matchedRouter, optionItem);
 
         try {
           const result = await requestHandler(runtime);
@@ -298,9 +340,40 @@ export const createRouterRuntime = ({
             );
           }
 
+          params
+            .onRouteAttempt?.({
+              apiType: resolvedApiType,
+              channelId,
+              durationMs: Date.now() - startTime,
+              model,
+              providerId: id,
+              remark,
+              routerId: matchedRouter.id,
+              success: true,
+            })
+            .catch((e) => {
+              log('onRouteAttempt callback error: %O', e);
+            });
+
           return result;
         } catch (error) {
           lastError = error;
+
+          params
+            .onRouteAttempt?.({
+              apiType: resolvedApiType,
+              channelId,
+              durationMs: Date.now() - startTime,
+              error,
+              model,
+              providerId: id,
+              remark,
+              routerId: matchedRouter.id,
+              success: false,
+            })
+            .catch((e) => {
+              log('onRouteAttempt callback error: %O', e);
+            });
 
           if (attempt < totalOptions) {
             log(
@@ -332,19 +405,21 @@ export const createRouterRuntime = ({
 
     async models() {
       const resolvedRouters = await this.resolveRouters();
-      const runtimes = resolvedRouters.map((router) => {
-        const routerOptions = this.normalizeRouterOptions(router);
-        const { id: resolvedApiType, runtime } = this.createRuntimeFromOption(
-          router,
-          routerOptions[0],
-        );
+      const runtimes = await Promise.all(
+        resolvedRouters.map(async (router) => {
+          const routerOptions = this.normalizeRouterOptions(router);
+          const { id: resolvedApiType, runtime } = await this.createRuntimeFromOption(
+            router,
+            routerOptions[0],
+          );
 
-        return {
-          id: resolvedApiType,
-          models: router.models,
-          runtime,
-        };
-      });
+          return {
+            id: resolvedApiType,
+            models: router.models,
+            runtime,
+          };
+        }),
+      );
 
       if (modelsOption && typeof modelsOption === 'function') {
         // If it's a functional configuration, use the last runtime's client to call the function
@@ -382,6 +457,18 @@ export const createRouterRuntime = ({
 
     async createImage(payload: CreateImagePayload) {
       return this.runWithFallback(payload.model, (runtime) => runtime.createImage!(payload));
+    }
+
+    async createVideo(payload: CreateVideoPayload) {
+      return this.runWithFallback(payload.model, (runtime) => runtime.createVideo!(payload));
+    }
+
+    async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
+      const model = (payload.body as any)?.model;
+      const resolvedRouters = await this.resolveRouters(model);
+      const routerOptions = this.normalizeRouterOptions(resolvedRouters[0]);
+      const { runtime } = await this.createRuntimeFromOption(resolvedRouters[0], routerOptions[0]);
+      return runtime.handleCreateVideoWebhook!(payload);
     }
 
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {

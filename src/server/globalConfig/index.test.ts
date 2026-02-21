@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { getAppConfig } from '@/envs/app';
-import { SystemEmbeddingConfig } from '@/types/knowledgeBase';
-import { FilesConfigItem } from '@/types/user/settings/filesConfig';
+import { type SystemEmbeddingConfig } from '@/types/knowledgeBase';
+import { type FilesConfigItem } from '@/types/user/settings/filesConfig';
 
 import { getServerDefaultAgentConfig, getServerDefaultFilesConfig } from './index';
 import { parseAgentConfig } from './parseDefaultAgent';

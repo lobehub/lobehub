@@ -6,10 +6,10 @@ import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
 import { isCustomBranding } from '@/const/version';
 
-import Footer from './(list)/Footer';
-import ProviderMenu from './ProviderMenu';
 import DesktopLayoutContainer from './_layout/Desktop/Container';
+import Footer from './(list)/Footer';
 import ProviderDetailPageComponent from './detail';
+import ProviderMenu from './ProviderMenu';
 
 // Layout component that wraps provider pages with navigation
 export const ProviderLayout = memo(() => {
@@ -22,10 +22,10 @@ export const ProviderLayout = memo(() => {
   return (
     <Flexbox
       horizontal
+      width={'100%'}
       style={{
         maxHeight: '100%',
       }}
-      width={'100%'}
     >
       <ProviderMenu mobile={false} onProviderSelect={handleProviderSelect} />
       <DesktopLayoutContainer>

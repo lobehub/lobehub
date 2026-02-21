@@ -43,22 +43,22 @@ const DevModal = memo<DevModalProps>(
     const buttonStyle = mobile ? { flex: 1 } : { margin: 0 };
 
     const footer = (
-      <Flexbox flex={1} gap={12} horizontal justify={'space-between'}>
+      <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
         {isEditMode ? (
           <Popconfirm
             arrow={false}
             cancelText={t('cancel', { ns: 'common' })}
+            okText={t('ok', { ns: 'common' })}
+            placement={'topLeft'}
+            title={t('dev.confirmDeleteDevPlugin')}
             okButtonProps={{
               danger: true,
               type: 'primary',
             }}
-            okText={t('ok', { ns: 'common' })}
             onConfirm={() => {
               onDelete?.();
               message.success(t('dev.deleteSuccess'));
             }}
-            placement={'topLeft'}
-            title={t('dev.confirmDeleteDevPlugin')}
           >
             <Button danger style={buttonStyle}>
               {t('delete', { ns: 'common' })}
@@ -67,22 +67,22 @@ const DevModal = memo<DevModalProps>(
         ) : (
           <div />
         )}
-        <Flexbox gap={12} horizontal>
+        <Flexbox horizontal gap={12}>
           <Button
+            style={buttonStyle}
             onClick={() => {
               onOpenChange(false);
             }}
-            style={buttonStyle}
           >
             {t('cancel', { ns: 'common' })}
           </Button>
           <Button
             loading={submitting}
+            style={buttonStyle}
+            type={'primary'}
             onClick={() => {
               form.submit();
             }}
-            style={buttonStyle}
-            type={'primary'}
           >
             {t(isEditMode ? 'dev.update' : 'dev.save')}
           </Button>
@@ -107,17 +107,15 @@ const DevModal = memo<DevModalProps>(
         }}
       >
         <Drawer
-          containerMaxWidth={'auto'}
           destroyOnHidden
+          containerMaxWidth={'auto'}
           footer={footer}
           height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
-          onClose={(e) => {
-            e.stopPropagation();
-            onOpenChange(false);
-          }}
           open={open}
           placement={'bottom'}
           push={false}
+          title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
+          width={mobile ? '100%' : 800}
           styles={{
             body: {
               padding: 0,
@@ -126,13 +124,15 @@ const DevModal = memo<DevModalProps>(
               height: '100%',
             },
           }}
-          title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
-          width={mobile ? '100%' : 800}
+          onClose={(e) => {
+            e.stopPropagation();
+            onOpenChange(false);
+          }}
         >
           <Flexbox
+            horizontal
             gap={0}
             height={'100%'}
-            horizontal
             onClick={(e) => {
               e.stopPropagation();
             }}
@@ -140,10 +140,8 @@ const DevModal = memo<DevModalProps>(
             <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
               <Segmented
                 block
-                onChange={(e) => {
-                  if (e === 'claude') return; // Claude Skill is disabled
-                  setConfigMode(e as 'mcp' | 'claude');
-                }}
+                value={configMode}
+                variant={'filled'}
                 options={[
                   {
                     label: t('dev.manifest.mode.mcp'),
@@ -152,20 +150,20 @@ const DevModal = memo<DevModalProps>(
                   {
                     disabled: true,
                     label: (
-                      <Flexbox align={'center'} gap={4} horizontal justify={'center'}>
+                      <Flexbox horizontal align={'center'} gap={4} justify={'center'}>
                         {t('dev.manifest.mode.claude')}
                         <div>
-                          <Tag variant={'filled'}>
-                            {t('dev.manifest.mode.claudeWip')}
-                          </Tag>
+                          <Tag variant={'filled'}>{t('dev.manifest.mode.claudeWip')}</Tag>
                         </div>
                       </Flexbox>
                     ),
                     value: 'claude',
                   },
                 ]}
-                value={configMode}
-                variant={'filled'}
+                onChange={(e) => {
+                  if (e === 'claude') return; // Claude Skill is disabled
+                  setConfigMode(e as 'mcp' | 'claude');
+                }}
               />
 
               <MCPManifestForm form={form} isEditMode={isEditMode} />

@@ -3,11 +3,11 @@
 import { ProDescriptions } from '@ant-design/pro-components';
 import { type AgentItemDetail } from '@lobehub/market-sdk';
 import { Flexbox, Tag } from '@lobehub/ui';
-import Image from '@/libs/next/Image';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Tokens from '@/features/AgentSetting/AgentPrompt/TokenTag';
+import Image from '@/libs/next/Image';
 
 interface AgentConfig {
   params?: {
@@ -159,6 +159,8 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
           <ProDescriptions
             bordered
             column={2}
+            size="small"
+            title={t('agentInfoDescription.basic.title')}
             columns={[
               {
                 dataIndex: 'title',
@@ -199,14 +201,13 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
               tags: processedMeta?.tags?.length ? processedMeta.tags : undefined,
               title: processedMeta?.title || processedMeta?.name || unnamedText,
             }}
-            size="small"
-            title={t('agentInfoDescription.basic.title')}
           />
 
           {/* 角色设定 */}
           <ProDescriptions
             bordered
             column={1}
+            size="small"
             columns={[
               {
                 dataIndex: 'systemRole',
@@ -222,9 +223,8 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
             dataSource={{
               systemRole: processedSystemRole || unsetText,
             }}
-            size="small"
             title={
-              <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} gap={8}>
                 <span>{t('agentInfoDescription.role.title')}</span>
                 <Tokens style={{ marginTop: 0 }} value={processedSystemRole || ''} />
               </Flexbox>
@@ -235,6 +235,8 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
           <ProDescriptions
             bordered
             column={2}
+            size="small"
+            title={t('agentInfoDescription.model.title')}
             columns={[
               {
                 dataIndex: 'model',
@@ -270,14 +272,14 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
               temperature: processedAgentConfig?.params?.temperature ?? unsetText,
               topP: processedAgentConfig?.params?.top_p ?? unsetText,
             }}
-            size="small"
-            title={t('agentInfoDescription.model.title')}
           />
 
           {/* 聊天偏好 */}
           <ProDescriptions
             bordered
             column={2}
+            size="small"
+            title={t('agentInfoDescription.chat.title')}
             columns={[
               {
                 dataIndex: 'historyCount',
@@ -302,13 +304,12 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
               historyCount: processedChatConfig?.historyCount ?? unsetText,
               searchMode: processedChatConfig?.searchMode || unsetText,
             }}
-            size="small"
-            title={t('agentInfoDescription.chat.title')}
           />
 
           <ProDescriptions
             bordered
             column={1}
+            size="small"
             columns={[
               {
                 dataIndex: 'plugins',
@@ -328,7 +329,6 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
             dataSource={{
               plugins: processedPlugins?.length ? processedPlugins : [],
             }}
-            size="small"
             title={t('agentInfoDescription.plugins.count', {
               count: processedPlugins?.length || 0,
             })}

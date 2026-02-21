@@ -10,10 +10,10 @@ Use `createModal` from `@lobehub/ui` for imperative modal dialogs.
 
 ## Why Imperative?
 
-| Mode | Characteristics | Recommended |
-|------|-----------------|-------------|
-| Declarative | Need `open` state, render `<Modal />` | ❌ |
-| Imperative | Call function directly, no state | ✅ |
+| Mode        | Characteristics                       | Recommended |
+| ----------- | ------------------------------------- | ----------- |
+| Declarative | Need `open` state, render `<Modal />` | ❌          |
+| Imperative  | Call function directly, no state      | ✅          |
 
 ## File Structure
 
@@ -89,12 +89,12 @@ const { close, setCanDismissByClickOutside } = useModalContext();
 
 ## Common Config
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `allowFullscreen` | `boolean` | Allow fullscreen mode |
-| `destroyOnHidden` | `boolean` | Destroy content on close |
-| `footer` | `ReactNode \| null` | Footer content |
-| `width` | `string \| number` | Modal width |
+| Property          | Type                | Description              |
+| ----------------- | ------------------- | ------------------------ |
+| `allowFullscreen` | `boolean`           | Allow fullscreen mode    |
+| `destroyOnHidden` | `boolean`           | Destroy content on close |
+| `footer`          | `ReactNode \| null` | Footer content           |
+| `width`           | `string \| number`  | Modal width              |
 
 ## Examples
 

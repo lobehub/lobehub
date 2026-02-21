@@ -7,6 +7,7 @@ import {
   ContextMenuTrigger,
   Flexbox,
   Text,
+  stopPropagation,
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon } from 'lucide-react';
@@ -98,10 +99,10 @@ const ProviderList = (props: {
       {open && (
         <SortProviderModal
           defaultItems={enabledModelProviderList}
+          open={open}
           onCancel={() => {
             setOpen(false);
           }}
-          open={open}
         />
       )}
       <Accordion
@@ -110,20 +111,20 @@ const ProviderList = (props: {
       >
         {/* Enabled Providers */}
         <AccordionItem
-          action={
-            <div onClick={(e) => e.stopPropagation()}>
-              <ActionIcon
-                icon={ArrowDownUpIcon}
-                onClick={() => setOpen(true)}
-                size={'small'}
-                title={t('menu.sort')}
-              />
-            </div>
-          }
           headerWrapper={(header) => <ContextMenuTrigger items={[]}>{header}</ContextMenuTrigger>}
           itemKey="enabled"
           paddingBlock={4}
           paddingInline={'8px 4px'}
+          action={
+            <div onClick={stopPropagation}>
+              <ActionIcon
+                icon={ArrowDownUpIcon}
+                size={'small'}
+                title={t('menu.sort')}
+                onClick={() => setOpen(true)}
+              />
+            </div>
+          }
           title={
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {t('menu.list.enabled')}
@@ -160,6 +161,9 @@ const ProviderList = (props: {
 
         {/* Disabled Providers */}
         <AccordionItem
+          itemKey="disabled"
+          paddingBlock={4}
+          paddingInline={'8px 4px'}
           action={
             disabledModelProviderList.length > 1 ? (
               <Actions dropdownMenu={dropdownMenu} />
@@ -170,9 +174,6 @@ const ProviderList = (props: {
               {header}
             </ContextMenuTrigger>
           )}
-          itemKey="disabled"
-          paddingBlock={4}
-          paddingInline={'8px 4px'}
           title={
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {t('menu.list.disabled')}

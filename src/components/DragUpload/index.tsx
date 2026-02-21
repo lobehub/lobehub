@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+ 
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
@@ -89,18 +89,18 @@ const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }
     <Center className={styles.wrapper}>
       <div className={styles.container}>
         <Center className={styles.content} gap={12}>
-          <Flexbox className={styles.iconGroup} horizontal>
+          <Flexbox horizontal className={styles.iconGroup}>
             <Center className={styles.iconLeft} height={BLOCK_SIZE * 1.25} width={BLOCK_SIZE}>
               <Icon icon={FileImage} size={ICON_SIZE} />
             </Center>
             <Center
               className={styles.icon}
               height={BLOCK_SIZE * 1.25}
+              width={BLOCK_SIZE}
               style={{
                 transform: 'translateY(-12px)',
                 zIndex: 1,
               }}
-              width={BLOCK_SIZE}
             >
               <Icon icon={FileUpIcon} size={ICON_SIZE} />
             </Center>

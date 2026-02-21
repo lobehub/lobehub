@@ -1,8 +1,9 @@
 'use client';
 
 import { ActionIcon, Flexbox, Popover, Tooltip } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
@@ -12,6 +13,7 @@ import { isMacOS } from '@/utils/platform';
 
 import { useNavigationHistory } from '../navigation/useNavigationHistory';
 import RecentlyViewed from './RecentlyViewed';
+import { loadAllRecentlyViewedPlugins } from './RecentlyViewed/plugins';
 
 const isMac = isMacOS();
 
@@ -19,7 +21,26 @@ const useNavPanelWidth = () => {
   return useGlobalStore(systemStatusSelectors.leftPanelWidth);
 };
 
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  clock: css`
+    &[data-popup-open] {
+      border-radius: ${cssVar.borderRadiusSM};
+      background-color: ${cssVar.colorFillTertiary};
+    }
+  `,
+}));
+
+const useLoadAllRecentlyViewedPlugins = () => {
+  const registerRef = useRef(false);
+
+  if (!registerRef.current) {
+    loadAllRecentlyViewedPlugins();
+    registerRef.current = true;
+  }
+};
 const NavigationBar = memo(() => {
+  useLoadAllRecentlyViewedPlugins();
+
   const { t } = useTranslation('electron');
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -52,24 +73,24 @@ const NavigationBar = memo(() => {
 
   return (
     <Flexbox
+      horizontal
       align="center"
       data-width={leftPanelWidth}
-      horizontal
       justify="end"
       style={{ width: `${leftPanelWidth - 12}px` }}
     >
-      <Flexbox align="center" className={electronStylish.nodrag} gap={2} horizontal>
-        <ActionIcon disabled={!canGoBack} icon={ArrowLeft} onClick={goBack} size="small" />
-        <ActionIcon disabled={!canGoForward} icon={ArrowRight} onClick={goForward} size="small" />
+      <Flexbox horizontal align="center" className={electronStylish.nodrag} gap={2}>
+        <ActionIcon disabled={!canGoBack} icon={ArrowLeft} size="small" onClick={goBack} />
+        <ActionIcon disabled={!canGoForward} icon={ArrowRight} size="small" onClick={goForward} />
         <Popover
           content={<RecentlyViewed onClose={() => setHistoryOpen(false)} />}
-          onOpenChange={setHistoryOpen}
           open={historyOpen}
           placement="bottomLeft"
           styles={{ content: { padding: 0 } }}
           trigger="click"
+          onOpenChange={setHistoryOpen}
         >
-          <div>
+          <div className={styles.clock}>
             <Tooltip open={historyOpen ? false : undefined} title={tooltipContent}>
               <ActionIcon icon={Clock} size="small" />
             </Tooltip>

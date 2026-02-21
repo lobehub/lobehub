@@ -1,9 +1,9 @@
-import type { AgentState } from '@lobechat/agent-runtime';
-import type { UIChatMessage } from '@lobechat/types';
+import { type AgentState } from '@lobechat/agent-runtime';
+import { type UIChatMessage } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
 import { createGroupOrchestrationExecutors } from '../createGroupOrchestrationExecutors';
 

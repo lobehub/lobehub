@@ -2,7 +2,7 @@ import { App } from 'antd';
 import { t } from 'i18next';
 import { useState } from 'react';
 
-import { ImageType, getImageUrl } from './useScreenshot';
+import { getImageUrl,ImageType } from './useScreenshot';
 
 export const useImgToClipboard = ({
   id = '#preview',

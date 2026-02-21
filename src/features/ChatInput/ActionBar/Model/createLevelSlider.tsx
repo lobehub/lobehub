@@ -2,7 +2,8 @@
 
 import { type LobeAgentChatConfig } from '@lobechat/types';
 import { type SliderSingleProps } from 'antd/es/slider';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -58,9 +59,9 @@ export function createLevelSliderComponent<T extends string>(config: LevelSlider
       defaultValue={dv}
       levels={levels}
       marks={marks}
-      onChange={onChange}
       style={style}
       value={value}
+      onChange={onChange}
     />
   ));
 
@@ -76,7 +77,7 @@ export function createLevelSliderComponent<T extends string>(config: LevelSlider
       updateAgentChatConfig({ [configKey]: newValue });
     };
 
-    return <LevelSliderInner defaultValue={dv} onChange={handleChange} value={storeValue} />;
+    return <LevelSliderInner defaultValue={dv} value={storeValue} onChange={handleChange} />;
   });
 
   // Main exported component - chooses between controlled and store mode
@@ -90,8 +91,8 @@ export function createLevelSliderComponent<T extends string>(config: LevelSlider
         return (
           <LevelSliderInner
             defaultValue={dv}
-            onChange={controlledOnChange ?? (() => {})}
             value={controlledValue ?? dv}
+            onChange={controlledOnChange ?? (() => {})}
           />
         );
       }

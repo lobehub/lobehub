@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { type ExecutionConditions } from '@lobechat/types';
+import type { ExecutionConditions } from '@lobechat/types';
 import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';

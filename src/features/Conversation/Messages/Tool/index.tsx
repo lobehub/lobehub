@@ -32,13 +32,13 @@ const ToolMessage = memo<ToolMessageProps>(({ disableEditing, id, index }) => {
     <Flexbox gap={4} paddingBlock={12}>
       {!disableEditing && (
         <Alert
+          title={t('inspector.orphanedToolCall')}
+          type={'secondary'}
           action={
-            <Button loading={loading} onClick={handleDelete} size={'small'} type={'primary'}>
+            <Button loading={loading} size={'small'} type={'primary'} onClick={handleDelete}>
               {t('inspector.delete')}
             </Button>
           }
-          title={t('inspector.orphanedToolCall')}
-          type={'secondary'}
         />
       )}
       {item.plugin && (

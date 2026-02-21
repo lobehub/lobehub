@@ -57,19 +57,19 @@ const FileChunks = memo<FileChunksProps>(({ data }) => {
     <Flexbox
       className={cx(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)}
       gap={16}
+      width={'100%'}
       onClick={() => {
         setShowDetail(!showDetail);
       }}
-      width={'100%'}
     >
-      <Flexbox distribution={'space-between'} flex={1} horizontal>
-        <Flexbox gap={8} horizontal>
+      <Flexbox horizontal distribution={'space-between'} flex={1}>
+        <Flexbox horizontal gap={8}>
           <Icon color={cssVar.geekblue} icon={BookOpenTextIcon} /> {t('rag.referenceChunks')}
         </Flexbox>
         <Icon icon={showDetail ? ChevronDown : ChevronRight} />
       </Flexbox>
       {showDetail && (
-        <Flexbox gap={8} horizontal wrap={'wrap'}>
+        <Flexbox horizontal gap={8} wrap={'wrap'}>
           {data.map((item, index) => {
             return <ChunkItem index={index} key={item.id} {...item} />;
           })}

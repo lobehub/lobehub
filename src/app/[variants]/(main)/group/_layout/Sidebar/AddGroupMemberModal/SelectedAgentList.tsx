@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 
-import AgentItem, { type AgentItemData } from './AgentItem';
+import { type AgentItemData } from './AgentItem';
+import AgentItem from './AgentItem';
 import { useAgentSelectionStore } from './store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -56,7 +57,7 @@ const SelectedAgentList = memo<SelectedAgentListProps>(({ agents }) => {
       </div>
       <Flexbox>
         {selectedAgents.map((agent) => (
-          <AgentItem agent={agent} defaultTitle={defaultTitle} key={agent.id} showRemove />
+          <AgentItem showRemove agent={agent} defaultTitle={defaultTitle} key={agent.id} />
         ))}
       </Flexbox>
     </Flexbox>

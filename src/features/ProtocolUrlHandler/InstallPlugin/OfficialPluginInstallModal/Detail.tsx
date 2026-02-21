@@ -5,10 +5,8 @@ import { memo, useState } from 'react';
 
 import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import Deployment from '@/features/MCPPluginDetail/Deployment';
-import {
-  type DetailContextConfig,
-  DetailProvider,
-} from '@/features/MCPPluginDetail/DetailProvider';
+import { type DetailContextConfig } from '@/features/MCPPluginDetail/DetailProvider';
+import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
 import Header from '@/features/MCPPluginDetail/Header';
 import Nav from '@/features/MCPPluginDetail/Nav';
 import Overview from '@/features/MCPPluginDetail/Overview';
@@ -30,7 +28,7 @@ const OfficialDetail = memo<OfficialDetailProps>(({ data, identifier }) => {
         <Header inModal />
         <MCPInstallProgress identifier={identifier} />
 
-        <Nav activeTab={activeTab as McpNavKey} inModal noSettings setActiveTab={setActiveTab} />
+        <Nav inModal noSettings activeTab={activeTab as McpNavKey} setActiveTab={setActiveTab} />
         <Flexbox gap={24}>
           {activeTab === McpNavKey.Overview && <Overview inModal />}
           {activeTab === McpNavKey.Deployment && <Deployment />}

@@ -1,7 +1,7 @@
 'use client';
 
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
-import { ActionIcon, Block, Flexbox, Icon, showContextMenu } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, showContextMenu, stopPropagation } from '@lobehub/ui';
 import { App, Input } from 'antd';
 import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
@@ -14,15 +14,16 @@ import {
   useDragActive,
   useDragState,
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
-import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import FileIcon from '@/components/FileIcon';
+import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { useFileStore } from '@/store/file';
 
+import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import { styles } from './styles';
 import { clearTreeFolderCache } from './treeState';
-import type { TreeItem } from './types';
+import { type TreeItem } from './types';
 
 interface HierarchyNodeProps {
   expandedFolders: Set<string>;
@@ -49,14 +50,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     folderChildrenCache,
   }) => {
     const navigate = useNavigate();
-    const { currentFolderSlug } = useFolderPath();
     const { message } = App.useApp();
 
-    const [setMode, setCurrentViewItemId, libraryId] = useResourceManagerStore((s) => [
-      s.setMode,
-      s.setCurrentViewItemId,
-      s.libraryId,
-    ]);
+    const [setMode, libraryId] = useResourceManagerStore((s) => [s.setMode, s.libraryId]);
 
     const renameFolder = useFileStore((s) => s.renameFolder);
 
@@ -65,12 +61,29 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     const inputRef = useRef<any>(null);
 
     // Memoize computed values that don't change frequently
-    const { itemKey } = useMemo(
-      () => ({
+    const { itemKey, isPage, emoji } = useMemo(() => {
+      const lowerFileType = item.fileType?.toLowerCase();
+      const lowerName = item.name?.toLowerCase();
+      const isPDF = lowerFileType === 'pdf' || lowerName?.endsWith('.pdf');
+      const isOfficeFile =
+        lowerName?.endsWith('.xls') ||
+        lowerName?.endsWith('.xlsx') ||
+        lowerName?.endsWith('.doc') ||
+        lowerName?.endsWith('.docx') ||
+        lowerName?.endsWith('.ppt') ||
+        lowerName?.endsWith('.pptx') ||
+        lowerName?.endsWith('.odt');
+      const pageMatch =
+        !isPDF &&
+        !isOfficeFile &&
+        (item.sourceType === 'document' || item.fileType === PAGE_FILE_TYPE);
+
+      return {
+        emoji: pageMatch ? item.metadata?.emoji : null,
+        isPage: pageMatch,
         itemKey: item.slug || item.id,
-      }),
-      [item.slug, item.id],
-    );
+      };
+    }, [item.slug, item.id, item.fileType, item.sourceType, item.name, item.metadata?.emoji]);
 
     const handleRenameStart = useCallback(() => {
       setIsRenaming(true);
@@ -183,22 +196,13 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       setIsOver(false);
     }, []);
 
-    const handleItemClick = useCallback(() => {
-      // Open file modal using slug-based routing
-      const currentPath = currentFolderSlug
-        ? `/resource/library/${libraryId}/${currentFolderSlug}`
-        : `/resource/library/${libraryId}`;
-
-      setCurrentViewItemId(itemKey);
-      navigate(`${currentPath}?file=${itemKey}`);
-
-      if (itemKey.startsWith('doc')) {
-        setMode('page');
-      } else {
-        // Set mode to 'file' immediately to prevent flickering to list view
-        setMode('editor');
-      }
-    }, [itemKey, currentFolderSlug, libraryId, navigate, setMode, setCurrentViewItemId]);
+    const handleItemClick = useFileItemClick({
+      id: item.id,
+      isFolder: item.isFolder,
+      isPage,
+      libraryId,
+      slug: item.slug,
+    });
 
     const handleFolderClick = useCallback(
       (folderId: string, folderSlug?: string | null) => {
@@ -228,37 +232,37 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       return (
         <Flexbox gap={2}>
           <Block
+            clickable
+            draggable
+            horizontal
             align={'center'}
+            data-drop-target-id={item.id}
+            data-is-folder={String(item.isFolder)}
+            gap={8}
+            height={36}
+            paddingInline={4}
+            variant={isActive ? 'filled' : 'borderless'}
             className={cx(
               styles.treeItem,
               isOver && styles.fileItemDragOver,
               isDragging && styles.dragging,
             )}
-            clickable
-            data-drop-target-id={item.id}
-            data-is-folder={String(item.isFolder)}
-            draggable
-            gap={8}
-            height={36}
-            horizontal
-            onClick={() => handleFolderClick(item.id, item.slug)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              showContextMenu(menuItems());
+            style={{
+              paddingInlineStart: level * 12 + 4,
             }}
+            onClick={() => handleFolderClick(item.id, item.slug)}
             onDragEnd={handleDragEnd}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
-            paddingInline={4}
-            style={{
-              paddingInlineStart: level * 12 + 4,
+            onContextMenu={(e) => {
+              e.preventDefault();
+              showContextMenu(menuItems());
             }}
-            variant={isActive ? 'filled' : 'borderless'}
           >
             {isLoading ? (
-              <ActionIcon icon={LoadingOutlined as any} size={'small'} spin style={{ width: 20 }} />
+              <ActionIcon spin icon={LoadingOutlined as any} size={'small'} style={{ width: 20 }} />
             ) : (
               <motion.div
                 animate={{ rotate: isExpanded ? 0 : -90 }}
@@ -267,28 +271,33 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
               >
                 <ActionIcon
                   icon={CaretDownFilled as any}
+                  size={'small'}
+                  style={{ width: 20 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleToggle();
                   }}
-                  size={'small'}
-                  style={{ width: 20 }}
                 />
               </motion.div>
             )}
             <Flexbox
+              horizontal
               align={'center'}
               flex={1}
               gap={8}
-              horizontal
               style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
             >
               <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={18} />
               {isRenaming ? (
                 <Input
+                  ref={inputRef}
+                  size="small"
+                  style={{ flex: 1 }}
+                  value={renamingValue}
                   onBlur={handleRenameConfirm}
                   onChange={(e) => setRenamingValue(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={stopPropagation}
+                  onPointerDown={stopPropagation}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -298,11 +307,6 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
                       handleRenameCancel();
                     }
                   }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  ref={inputRef}
-                  size="small"
-                  style={{ flex: 1 }}
-                  value={renamingValue}
                 />
               ) : (
                 <span
@@ -327,38 +331,42 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     return (
       <Flexbox gap={2}>
         <Block
+          clickable
+          draggable
+          horizontal
           align={'center'}
           className={cx(styles.treeItem, isDragging && styles.dragging)}
-          clickable
           data-drop-target-id={item.id}
           data-is-folder={false}
-          draggable
           gap={8}
           height={36}
-          horizontal
+          paddingInline={4}
+          variant={isActive ? 'filled' : 'borderless'}
+          style={{
+            paddingInlineStart: level * 12 + 4,
+          }}
           onClick={handleItemClick}
+          onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
           onContextMenu={(e) => {
             e.preventDefault();
             showContextMenu(menuItems());
           }}
-          onDragEnd={handleDragEnd}
-          onDragStart={handleDragStart}
-          paddingInline={4}
-          style={{
-            paddingInlineStart: level * 12 + 4,
-          }}
-          variant={isActive ? 'filled' : 'borderless'}
         >
           <div style={{ width: 20 }} />
           <Flexbox
+            horizontal
             align={'center'}
             flex={1}
             gap={8}
-            horizontal
             style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
           >
-            {item.sourceType === 'document' ? (
-              <Icon icon={FileText} size={18} />
+            {isPage ? (
+              emoji ? (
+                <span style={{ fontSize: 18 }}>{emoji}</span>
+              ) : (
+                <Icon icon={FileText} size={18} />
+              )
             ) : (
               <FileIcon fileName={item.name} fileType={item.fileType} size={18} />
             )}

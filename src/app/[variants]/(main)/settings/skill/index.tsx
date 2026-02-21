@@ -20,12 +20,12 @@ const Page = () => {
   return (
     <>
       <SettingHeader
+        title={t('tab.skill')}
         extra={
-          <Button icon={<Icon icon={Store} />} onClick={handleOpenStore}>
+          <Button icon={<Icon icon={Store} />} size="large" onClick={handleOpenStore}>
             {t('skillStore.button')}
           </Button>
         }
-        title={t('tab.skill')}
       />
       <SkillList />
     </>

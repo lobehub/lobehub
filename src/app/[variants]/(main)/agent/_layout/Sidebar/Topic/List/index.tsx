@@ -43,14 +43,14 @@ const TopicList = memo(() => {
     <>
       {topicLength === 0 && (
         <EmptyNavItem
+          title={t('actions.addNewTopic')}
           onClick={() => {
             router.push(urlJoin('/agent', agentId));
           }}
-          title={t('actions.addNewTopic')}
         />
       )}
       {topicDisplayMode === TopicDisplayMode.ByTime ? <ByTimeMode /> : <FlatMode />}
-      <AllTopicsDrawer onClose={closeAllTopicsDrawer} open={allTopicsDrawerOpen} />
+      <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
     </>
   );
 });

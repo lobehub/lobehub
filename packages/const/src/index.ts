@@ -2,6 +2,7 @@ export * from './currency';
 export * from './desktop';
 export * from './discover';
 export * from './editor';
+export * from './file';
 export * from './klavis';
 export * from './layoutTokens';
 export * from './lobehubSkill';

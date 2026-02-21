@@ -1,54 +1,51 @@
 import { type ElectronAppState } from '@lobechat/electron-client-ipc';
 import { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 // Import for type usage
 import { electronSystemService } from '@/services/electron/system';
+import { type StoreSetter } from '@/store/types';
 import { type LocaleMode } from '@/types/locale';
 import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 
-import type { ElectronStore } from '../store';
+import { type ElectronStore } from '../store';
 
 // ======== Action Interface ======== //
 
-export interface ElectronAppAction {
-  setConnectionDrawerOpen: (isOpen: boolean) => void;
-  updateElectronAppState: (state: ElectronAppState) => void;
-
-  /**
-   * Initializes the basic Electron application state, including system info and special paths.
-   * Should be called once when the application starts.
-   */
-  useInitElectronAppState: () => SWRResponse<ElectronAppState>;
-}
-
 // ======== Action Implementation ======== //
 
-export const createElectronAppSlice: StateCreator<
-  ElectronStore,
-  [['zustand/devtools', never]],
-  [],
-  ElectronAppAction
-> = (set, get) => ({
-  setConnectionDrawerOpen: (isOpen: boolean) => {
-    set({ isConnectionDrawerOpen: isOpen }, false, 'setConnectionDrawerOpen');
-  },
+type Setter = StoreSetter<ElectronStore>;
+export const createElectronAppSlice = (set: Setter, get: () => ElectronStore, _api?: unknown) =>
+  new ElectronAppActionImpl(set, get, _api);
 
-  updateElectronAppState: (state: ElectronAppState) => {
-    const prevState = get().appState;
-    set({ appState: merge(prevState, state) });
-  },
+export class ElectronAppActionImpl {
+  readonly #get: () => ElectronStore;
+  readonly #set: Setter;
 
-  useInitElectronAppState: () =>
-    useOnlyFetchOnceSWR<ElectronAppState>(
+  constructor(set: Setter, get: () => ElectronStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  setConnectionDrawerOpen = (isOpen: boolean): void => {
+    this.#set({ isConnectionDrawerOpen: isOpen }, false, 'setConnectionDrawerOpen');
+  };
+
+  updateElectronAppState = (state: ElectronAppState): void => {
+    const prevState = this.#get().appState;
+    this.#set({ appState: merge(prevState, state) });
+  };
+
+  useInitElectronAppState = (): SWRResponse<ElectronAppState> => {
+    return useOnlyFetchOnceSWR<ElectronAppState>(
       'initElectronAppState',
       async () => electronSystemService.getAppState(),
       {
         onSuccess: (result) => {
-          set({ appState: result, isAppStateInit: true }, false, 'initElectronAppState');
+          this.#set({ appState: result, isAppStateInit: true }, false, 'initElectronAppState');
 
           // Update the global agent context manager with relevant paths
           // We typically only need paths in the agent context for now.
@@ -68,5 +65,8 @@ export const createElectronAppSlice: StateCreator<
           switchLang(locale);
         },
       },
-    ),
-});
+    );
+  };
+}
+
+export type ElectronAppAction = Pick<ElectronAppActionImpl, keyof ElectronAppActionImpl>;

@@ -1,7 +1,7 @@
 import { t } from 'i18next';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { UserStore } from '@/store/user';
+import { type UserStore } from '@/store/user';
 
 import { authSelectors, userProfileSelectors } from './selectors';
 

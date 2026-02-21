@@ -1,7 +1,8 @@
 import { type MenuRenderProps } from '@lobehub/editor/es/plugins/slash/react/type';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { type ReactNode, memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { type MentionListOption } from './types';
 
@@ -83,17 +84,17 @@ const MentionDropdown = memo<MenuRenderProps>(
               direction="horizontal"
               gap={8}
               key={String(item.key)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelect?.(item);
-              }}
-              onMouseEnter={() => setActiveKey?.(String(item.key))}
               paddingBlock={8}
               paddingInline={12}
               ref={isActive ? activeItemRef : null}
               style={{
                 background: isActive ? cssVar.colorFillSecondary : undefined,
                 cursor: 'pointer',
+              }}
+              onMouseEnter={() => setActiveKey?.(String(item.key))}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSelect?.(item);
               }}
             >
               {item.icon && <Flexbox style={{ flex: 'none' }}>{item?.icon as ReactNode}</Flexbox>}

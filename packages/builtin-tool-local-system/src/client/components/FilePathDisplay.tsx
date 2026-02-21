@@ -1,6 +1,6 @@
 'use client';
 
-import { MaterialFileTypeIcon } from '@lobehub/ui';
+import { MaterialFileTypeIcon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
@@ -11,7 +11,10 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline-end: 4px;
   `,
   text: css`
+    overflow: hidden;
     color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -42,13 +45,23 @@ export const FilePathDisplay = memo<FilePathDisplayProps>(({ filePath, isDirecto
       {name && (
         <MaterialFileTypeIcon
           className={styles.icon}
+          fallbackUnknownType={false}
           filename={name}
           size={16}
           type={isDirectory ? 'folder' : 'file'}
           variant={'raw'}
         />
       )}
-      {displayPath && <span className={styles.text}>{displayPath}</span>}
+      {displayPath && (
+        <Text
+          className={styles.text}
+          ellipsis={{
+            tooltipWhenOverflow: true,
+          }}
+        >
+          {displayPath}
+        </Text>
+      )}
     </>
   );
 });

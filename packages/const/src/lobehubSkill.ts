@@ -1,4 +1,5 @@
-import { type IconType, SiLinear, SiX } from '@icons-pack/react-simple-icons';
+import type { IconType } from '@icons-pack/react-simple-icons';
+import { SiLinear, SiX } from '@icons-pack/react-simple-icons';
 
 export interface LobehubSkillProviderType {
   /**
@@ -26,13 +27,13 @@ export interface LobehubSkillProviderType {
    */
   id: string;
   /**
-   * Detailed introduction of the skill
-   */
-  introduction: string;
-  /**
    * Display label for the provider
    */
   label: string;
+  /**
+   * Detailed readme of the skill
+   */
+  readme: string;
 }
 
 /**
@@ -52,7 +53,7 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
       'Linear is a modern issue tracking and project management tool designed for high-performance teams to build better software faster',
     icon: SiLinear,
     id: 'linear',
-    introduction:
+    readme:
       'Bring the power of Linear directly into your AI assistant. Create and update issues, manage sprints, track project progress, and streamline your development workflow—all through natural conversation.',
     label: 'Linear',
   },
@@ -64,7 +65,7 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
       'Outlook Calendar is an integrated scheduling tool within Microsoft Outlook that enables users to create appointments, organize meetings with others, and manage their time and events effectively.',
     icon: 'https://hub-apac-1.lobeobjects.space/assets/logos/outlook.svg',
     id: 'microsoft',
-    introduction:
+    readme:
       'Integrate with Outlook Calendar to view, create, and manage your events seamlessly. Schedule meetings, check availability, set reminders, and coordinate your time—all through natural language commands.',
     label: 'Outlook Calendar',
   },
@@ -76,7 +77,7 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
       'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
     icon: SiX,
     id: 'twitter',
-    introduction:
+    readme:
       'Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.',
     label: 'X (Twitter)',
   },

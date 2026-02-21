@@ -120,7 +120,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         };
         // Filter out null/undefined values
         supervisorConfig = Object.fromEntries(
-          // eslint-disable-next-line eqeqeq, @typescript-eslint/no-unused-vars
+           
           Object.entries(rawConfig).filter(([_, v]) => v != null),
         );
       }
@@ -134,7 +134,8 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         // Group content is the supervisor's systemRole (for backward compatibility)
         content: config.systemRole || supervisorConfig?.systemRole,
         ...meta,
-        marketIdentifier: forkResult.group.identifier, // Store the new market identifier
+        // Store marketIdentifier at top-level (same as agents)
+        marketIdentifier: forkResult.group.identifier,
       };
 
       // Step 5: Prepare member agents from market data
@@ -200,9 +201,9 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
       block
       className={styles.buttonGroup}
       loading={isLoading}
-      onClick={handleForkAndChat}
       size={'large'}
       type={'primary'}
+      onClick={handleForkAndChat}
     >
       {t('fork.forkAndChat')}
     </Button>

@@ -1,9 +1,7 @@
 // @vitest-environment node
-import { CallWrapper } from '@saintno/comfyui-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parametersFixture } from '@/server/services/comfyui/__tests__/fixtures/parameters.fixture';
-import { mockContext } from '@/server/services/comfyui/__tests__/helpers/mockContext';
 import { setupAllMocks } from '@/server/services/comfyui/__tests__/setup/unifiedMocks';
 import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
 // Import services for testing

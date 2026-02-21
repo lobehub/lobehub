@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeXAI, XAIModelCard, isGrokReasoningModel } from './index';
+import type { XAIModelCard } from './index';
+import { isGrokReasoningModel, LobeXAI } from './index';
 
 testProvider({
   Runtime: LobeXAI,

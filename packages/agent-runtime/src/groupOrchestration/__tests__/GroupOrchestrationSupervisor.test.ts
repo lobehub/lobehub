@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AgentState } from '../../types/state';
-import {
-  GroupOrchestrationSupervisor,
-  type GroupOrchestrationSupervisorConfig,
-} from '../GroupOrchestrationSupervisor';
+import type { GroupOrchestrationSupervisorConfig } from '../GroupOrchestrationSupervisor';
+import { GroupOrchestrationSupervisor } from '../GroupOrchestrationSupervisor';
 import type { ExecutorResult } from '../types';
 
 // Helper to create mock AgentState
@@ -161,7 +159,7 @@ describe('GroupOrchestrationSupervisor', () => {
           decision: 'execute_task',
           params: {
             agentId: 'agent-1',
-            task: 'Analyze data',
+            instruction: 'Analyze data',
             timeout: 30000,
             toolMessageId: 'tool-msg-1',
           },
@@ -175,7 +173,7 @@ describe('GroupOrchestrationSupervisor', () => {
         type: 'exec_async_task',
         payload: {
           agentId: 'agent-1',
-          task: 'Analyze data',
+          instruction: 'Analyze data',
           timeout: 30000,
           title: undefined,
           toolMessageId: 'tool-msg-1',
@@ -193,7 +191,7 @@ describe('GroupOrchestrationSupervisor', () => {
           decision: 'execute_task',
           params: {
             agentId: 'agent-1',
-            task: 'Analyze data',
+            instruction: 'Analyze data',
             timeout: 30000,
             title: 'Data Analysis Task',
             toolMessageId: 'tool-msg-1',
@@ -208,7 +206,7 @@ describe('GroupOrchestrationSupervisor', () => {
         type: 'exec_async_task',
         payload: {
           agentId: 'agent-1',
-          task: 'Analyze data',
+          instruction: 'Analyze data',
           timeout: 30000,
           title: 'Data Analysis Task',
           toolMessageId: 'tool-msg-1',
@@ -409,7 +407,7 @@ describe('GroupOrchestrationSupervisor', () => {
           type: 'supervisor_decided',
           payload: {
             decision: 'execute_task',
-            params: { agentId: 'agent-1', task: 'Do something', toolMessageId: 'tool-1' },
+            params: { agentId: 'agent-1', instruction: 'Do something', toolMessageId: 'tool-1' },
             skipCallSupervisor: false,
           },
         },
@@ -424,6 +422,77 @@ describe('GroupOrchestrationSupervisor', () => {
       const instruction = await supervisor.decide(result, state);
 
       expect(instruction.type).toBe('call_supervisor');
+    });
+  });
+
+  describe('decide - execute_tasks decision', () => {
+    it('should return batch_exec_async_tasks instruction for execute_tasks decision', async () => {
+      // Regression test: execute_tasks decision should return batch_exec_async_tasks instruction
+      // Previously, execute_tasks was not implemented and would fall through to default case,
+      // returning { type: 'finish', reason: 'unknown_decision: execute_tasks' }
+      const supervisor = new GroupOrchestrationSupervisor(defaultConfig);
+      const state = createMockState();
+
+      const result: ExecutorResult = {
+        type: 'supervisor_decided',
+        payload: {
+          decision: 'execute_tasks',
+          params: {
+            tasks: [
+              { agentId: 'agent-1', title: 'Task 1', instruction: 'Do task 1' },
+              { agentId: 'agent-2', title: 'Task 2', instruction: 'Do task 2' },
+            ],
+            toolMessageId: 'tool-msg-1',
+          },
+          skipCallSupervisor: false,
+        },
+      };
+
+      const instruction = await supervisor.decide(result, state);
+
+      // Should return batch_exec_async_tasks, NOT finish with unknown_decision
+      expect(instruction.type).toBe('batch_exec_async_tasks');
+      expect((instruction as any).payload).toEqual({
+        tasks: [
+          { agentId: 'agent-1', title: 'Task 1', instruction: 'Do task 1' },
+          { agentId: 'agent-2', title: 'Task 2', instruction: 'Do task 2' },
+        ],
+        toolMessageId: 'tool-msg-1',
+      });
+    });
+
+    it('should handle execute_tasks with skipCallSupervisor flag', async () => {
+      const supervisor = new GroupOrchestrationSupervisor(defaultConfig);
+      const state = createMockState();
+
+      // First, trigger execute_tasks with skipCallSupervisor: true
+      await supervisor.decide(
+        {
+          type: 'supervisor_decided',
+          payload: {
+            decision: 'execute_tasks',
+            params: {
+              tasks: [{ agentId: 'agent-1', title: 'Task 1', instruction: 'Do task 1' }],
+              toolMessageId: 'tool-msg-1',
+            },
+            skipCallSupervisor: true,
+          },
+        },
+        state,
+      );
+
+      // When tasks_completed, should finish (not call supervisor again)
+      const result: ExecutorResult = {
+        type: 'tasks_completed',
+        payload: { results: [{ agentId: 'agent-1', success: true }] },
+      };
+
+      const instruction = await supervisor.decide(result, state);
+
+      expect(instruction).toEqual({
+        type: 'finish',
+        reason: 'skip_call_supervisor',
+      });
     });
   });
 

@@ -38,17 +38,17 @@ const Layout = () => {
   return (
     <Modal
       allowFullscreen
-      className={cx(isPortalThread && styles.container)}
       destroyOnHidden
+      className={cx(isPortalThread && styles.container)}
       footer={null}
       height={'95%'}
-      onCancel={() => clearPortalStack()}
       open={showMobilePortal}
+      title={t('title')}
       styles={{
         body: { padding: 0 },
         header: { display: 'none' },
       }}
-      title={t('title')}
+      onCancel={() => clearPortalStack()}
     >
       <PortalContent renderBody={renderBody} />
     </Modal>

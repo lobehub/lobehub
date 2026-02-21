@@ -66,8 +66,8 @@ const ContextCommands = memo(() => {
               <CommandItem
                 icon={<Icon />}
                 key={cmd.path}
-                onSelect={() => handleNavigate(cmd.path)}
                 value={searchValue}
+                onSelect={() => handleNavigate(cmd.path)}
               >
                 <span style={{ opacity: 0.5 }}>{contextName}</span>
                 <ChevronRight
@@ -112,9 +112,9 @@ const ContextCommands = memo(() => {
               <CommandItem
                 icon={<Icon />}
                 key={cmd.path}
-                onSelect={() => handleNavigate(cmd.path)}
                 unpinned={true}
                 value={searchValue}
+                onSelect={() => handleNavigate(cmd.path)}
               >
                 <span style={{ opacity: 0.5 }}>{settingsContextName}</span>
                 <ChevronRight

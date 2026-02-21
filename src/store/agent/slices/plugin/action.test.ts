@@ -2,7 +2,6 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
-import { useSessionStore } from '@/store/session';
 
 import { useAgentStore } from '../../store';
 

@@ -1,13 +1,14 @@
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
-import type { SWRResponse } from 'swr';
-import type { PartialDeep } from 'type-fest';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import { type PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { type CreateAgentParams, type CreateAgentResult, agentService } from '@/services/agent';
+import { type CreateAgentParams, type CreateAgentResult } from '@/services/agent';
+import { agentService } from '@/services/agent';
+import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import {
@@ -18,7 +19,7 @@ import {
 import { type MetaData } from '@/types/meta';
 import { merge } from '@/utils/merge';
 
-import type { AgentStore } from '../../store';
+import { type AgentStore } from '../../store';
 import { type AgentSliceState, type LoadingState, type SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
@@ -27,90 +28,27 @@ const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
  * Agent Slice Actions
  * Handles agent CRUD operations (config/meta updates)
  */
-export interface AgentSliceAction {
-  /**
-   * Append content chunk to streaming system role
-   */
-  appendStreamingSystemRole: (chunk: string) => void;
-  /**
-   * Create a new agent with session
-   * @returns Created agent result with agentId and sessionId
-   */
-  createAgent: (params: CreateAgentParams) => Promise<CreateAgentResult>;
-  /**
-   * Finish streaming and save final content to agent config
-   */
-  finishStreamingSystemRole: (agentId: string) => Promise<void>;
-  internal_createAbortController: (key: keyof AgentSliceState) => AbortController;
-  internal_dispatchAgentMap: (id: string, config: PartialDeep<LobeAgentConfig>) => void;
-  internal_refreshAgentConfig: (id: string) => Promise<void>;
-  optimisticUpdateAgentConfig: (
-    id: string,
-    data: PartialDeep<LobeAgentConfig>,
-    signal?: AbortSignal,
-  ) => Promise<void>;
-  optimisticUpdateAgentMeta: (
-    id: string,
-    meta: Partial<MetaData>,
-    signal?: AbortSignal,
-  ) => Promise<void>;
-  /**
-   * Update current active agent id
-   */
-  setActiveAgentId: (agentId?: string) => void;
-  /**
-   * Set the agent panel pinned state
-   */
-  setAgentPinned: (pinned: boolean | ((prev: boolean) => boolean)) => void;
-  /**
-   * Start streaming system role update
-   */
-  startStreamingSystemRole: () => void;
-  /**
-   * Toggle the agent panel pinned state
-   */
-  toggleAgentPinned: () => void;
-  /**
-   * Toggle a plugin for the current agent
-   * @param pluginId - The plugin identifier
-   * @param state - Optional explicit state (true = enable, false = disable). If not provided, toggles.
-   */
-  toggleAgentPlugin: (pluginId: string, state?: boolean) => Promise<void>;
-  updateAgentChatConfig: (config: Partial<LobeAgentChatConfig>) => Promise<void>;
-  updateAgentChatConfigById: (
-    agentId: string,
-    config: Partial<LobeAgentChatConfig>,
-  ) => Promise<void>;
-  updateAgentConfig: (config: PartialDeep<LobeAgentConfig>) => Promise<void>;
-  updateAgentConfigById: (agentId: string, config: PartialDeep<LobeAgentConfig>) => Promise<void>;
-  updateAgentLocalSystemConfigById: (
-    agentId: string,
-    config: Partial<LocalSystemConfig>,
-  ) => Promise<void>;
-  updateAgentMeta: (meta: Partial<MetaData>) => Promise<void>;
-  /**
-   * Update loading state for meta fields (used during autocomplete)
-   */
-  updateLoadingState: (key: keyof LoadingState, value: boolean) => void;
-  /**
-   * Update save status for showing auto-save hint
-   */
-  updateSaveStatus: (status: SaveStatus) => void;
-  useFetchAgentConfig: (isLogin: boolean | undefined, id: string) => SWRResponse<LobeAgentConfig>;
-}
 
-export const createAgentSlice: StateCreator<
-  AgentStore,
-  [['zustand/devtools', never]],
-  [],
-  AgentSliceAction
-> = (set, get) => ({
-  appendStreamingSystemRole: (chunk) => {
-    const currentContent = get().streamingSystemRole || '';
-    set({ streamingSystemRole: currentContent + chunk }, false, 'appendStreamingSystemRole');
-  },
+type Setter = StoreSetter<AgentStore>;
+export const createAgentSlice = (set: Setter, get: () => AgentStore, _api?: unknown) =>
+  new AgentSliceActionImpl(set, get, _api);
 
-  createAgent: async (params) => {
+export class AgentSliceActionImpl {
+  readonly #get: () => AgentStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  appendStreamingSystemRole = (chunk: string): void => {
+    const currentContent = this.#get().streamingSystemRole || '';
+    this.#set({ streamingSystemRole: currentContent + chunk }, false, 'appendStreamingSystemRole');
+  };
+
+  createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
     const result = await agentService.createAgent(params);
 
     // Track new agent creation analytics
@@ -132,23 +70,23 @@ export const createAgentSlice: StateCreator<
     }
 
     return result;
-  },
+  };
 
-  finishStreamingSystemRole: async (agentId) => {
-    const { streamingSystemRole } = get();
+  finishStreamingSystemRole = async (agentId: string): Promise<void> => {
+    const { streamingSystemRole } = this.#get();
 
     if (!streamingSystemRole) {
-      set({ streamingSystemRoleInProgress: false }, false, 'finishStreamingSystemRole');
+      this.#set({ streamingSystemRoleInProgress: false }, false, 'finishStreamingSystemRole');
       return;
     }
 
     // Save the final content to agent config
-    await get().optimisticUpdateAgentConfig(agentId, {
+    await this.#get().optimisticUpdateAgentConfig(agentId, {
       systemRole: streamingSystemRole,
     });
 
     // Reset streaming state
-    set(
+    this.#set(
       {
         streamingSystemRole: undefined,
         streamingSystemRoleInProgress: false,
@@ -156,28 +94,28 @@ export const createAgentSlice: StateCreator<
       false,
       'finishStreamingSystemRole',
     );
-  },
+  };
 
-  setActiveAgentId: (agentId) => {
-    set(
+  setActiveAgentId = (agentId?: string): void => {
+    this.#set(
       (state) => (state.activeAgentId === agentId ? state : { activeAgentId: agentId }),
       false,
       'setActiveAgentId',
     );
-  },
+  };
 
-  setAgentPinned: (value) => {
-    set(
+  setAgentPinned = (value: boolean | ((prev: boolean) => boolean)): void => {
+    this.#set(
       (state) => ({
         isAgentPinned: typeof value === 'function' ? value(state.isAgentPinned) : value,
       }),
       false,
       'setAgentPinned',
     );
-  },
+  };
 
-  startStreamingSystemRole: () => {
-    set(
+  startStreamingSystemRole = (): void => {
+    this.#set(
       {
         streamingSystemRole: '',
         streamingSystemRoleInProgress: true,
@@ -185,14 +123,14 @@ export const createAgentSlice: StateCreator<
       false,
       'startStreamingSystemRole',
     );
-  },
+  };
 
-  toggleAgentPinned: () => {
-    set((state) => ({ isAgentPinned: !state.isAgentPinned }), false, 'toggleAgentPinned');
-  },
+  toggleAgentPinned = (): void => {
+    this.#set((state) => ({ isAgentPinned: !state.isAgentPinned }), false, 'toggleAgentPinned');
+  };
 
-  toggleAgentPlugin: async (pluginId, state) => {
-    const { activeAgentId, agentMap, updateAgentConfig } = get();
+  toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {
+    const { activeAgentId, agentMap, updateAgentConfig } = this.#get();
     if (!activeAgentId) return;
 
     const currentPlugins = (agentMap[activeAgentId]?.plugins as string[]) || [];
@@ -212,73 +150,89 @@ export const createAgentSlice: StateCreator<
     }
 
     await updateAgentConfig({ plugins: newPlugins });
-  },
+  };
 
-  updateAgentChatConfig: async (config) => {
-    const { activeAgentId } = get();
-
-    if (!activeAgentId) return;
-
-    await get().updateAgentConfig({ chatConfig: config });
-  },
-
-  updateAgentChatConfigById: async (agentId, config) => {
-    if (!agentId) return;
-
-    await get().updateAgentConfigById(agentId, { chatConfig: config });
-  },
-
-  updateAgentConfig: async (config) => {
-    const { activeAgentId } = get();
+  updateAgentChatConfig = async (config: Partial<LobeAgentChatConfig>): Promise<void> => {
+    const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    const controller = get().internal_createAbortController('updateAgentConfigSignal');
+    await this.#get().updateAgentConfig({ chatConfig: config });
+  };
 
-    await get().optimisticUpdateAgentConfig(activeAgentId, config, controller.signal);
-  },
-
-  updateAgentConfigById: async (agentId, config) => {
+  updateAgentChatConfigById = async (
+    agentId: string,
+    config: Partial<LobeAgentChatConfig>,
+  ): Promise<void> => {
     if (!agentId) return;
 
-    const controller = get().internal_createAbortController('updateAgentConfigSignal');
+    await this.#get().updateAgentConfigById(agentId, { chatConfig: config });
+  };
 
-    await get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
-  },
-
-  updateAgentLocalSystemConfigById: async (agentId, config) => {
-    if (!agentId) return;
-
-    await get().updateAgentChatConfigById(agentId, { localSystem: config });
-  },
-
-  updateAgentMeta: async (meta) => {
-    const { activeAgentId } = get();
+  updateAgentConfig = async (config: PartialDeep<LobeAgentConfig>): Promise<void> => {
+    const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
 
-    const controller = get().internal_createAbortController('updateAgentMetaSignal');
+    const controller = this.#get().internal_createAbortController('updateAgentConfigSignal');
 
-    await get().optimisticUpdateAgentMeta(activeAgentId, meta, controller.signal);
-  },
+    await this.#get().optimisticUpdateAgentConfig(activeAgentId, config, controller.signal);
+  };
 
-  updateLoadingState: (key, value) => {
-    set({ loadingState: { ...get().loadingState, [key]: value } }, false, 'updateLoadingState');
-  },
+  updateAgentConfigById = async (
+    agentId: string,
+    config: PartialDeep<LobeAgentConfig>,
+  ): Promise<void> => {
+    if (!agentId) return;
 
-  updateSaveStatus: (status) => {
-    set(
+    const controller = this.#get().internal_createAbortController('updateAgentConfigSignal');
+
+    await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
+  };
+
+  updateAgentLocalSystemConfigById = async (
+    agentId: string,
+    config: Partial<LocalSystemConfig>,
+  ): Promise<void> => {
+    if (!agentId) return;
+
+    await this.#get().updateAgentChatConfigById(agentId, { localSystem: config });
+  };
+
+  updateAgentMeta = async (meta: Partial<MetaData>): Promise<void> => {
+    const { activeAgentId } = this.#get();
+
+    if (!activeAgentId) return;
+
+    const controller = this.#get().internal_createAbortController('updateAgentMetaSignal');
+
+    await this.#get().optimisticUpdateAgentMeta(activeAgentId, meta, controller.signal);
+  };
+
+  updateLoadingState = (key: keyof LoadingState, value: boolean): void => {
+    this.#set(
+      { loadingState: { ...this.#get().loadingState, [key]: value } },
+      false,
+      'updateLoadingState',
+    );
+  };
+
+  updateSaveStatus = (status: SaveStatus): void => {
+    this.#set(
       {
-        lastUpdatedTime: status === 'saved' ? new Date() : get().lastUpdatedTime,
+        lastUpdatedTime: status === 'saved' ? new Date() : this.#get().lastUpdatedTime,
         saveStatus: status,
       },
       false,
       'updateSaveStatus',
     );
-  },
+  };
 
-  useFetchAgentConfig: (isLogin, agentId) =>
-    useClientDataSWR<LobeAgentConfig>(
+  useFetchAgentConfig = (
+    isLogin: boolean | undefined,
+    agentId: string,
+  ): SWRResponse<LobeAgentConfig> => {
+    return useClientDataSWR<LobeAgentConfig>(
       // Only fetch when login status is explicitly true (not null/undefined)
       isLogin === true && agentId && !agentId.startsWith('cg_')
         ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
@@ -289,17 +243,16 @@ export const createAgentSlice: StateCreator<
       },
       {
         onSuccess: (data) => {
-          get().internal_dispatchAgentMap(agentId, data);
+          this.#get().internal_dispatchAgentMap(agentId, data);
 
-          set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
+          this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
         },
       },
-    ),
+    );
+  };
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
-
-  internal_dispatchAgentMap: (id, config) => {
-    const agentMap = produce(get().agentMap, (draft) => {
+  internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {
+    const agentMap = produce(this.#get().agentMap, (draft) => {
       if (!draft[id]) {
         draft[id] = config;
       } else {
@@ -307,13 +260,17 @@ export const createAgentSlice: StateCreator<
       }
     });
 
-    if (isEqual(get().agentMap, agentMap)) return;
+    if (isEqual(this.#get().agentMap, agentMap)) return;
 
-    set({ agentMap }, false, 'dispatchAgentMap');
-  },
+    this.#set({ agentMap }, false, 'dispatchAgentMap');
+  };
 
-  optimisticUpdateAgentConfig: async (id, data, signal) => {
-    const { internal_dispatchAgentMap, updateSaveStatus } = get();
+  optimisticUpdateAgentConfig = async (
+    id: string,
+    data: PartialDeep<LobeAgentConfig>,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
 
     // 1. Optimistic update (instant UI feedback)
     internal_dispatchAgentMap(id, data);
@@ -336,10 +293,14 @@ export const createAgentSlice: StateCreator<
         updateSaveStatus('idle');
       }
     }
-  },
+  };
 
-  optimisticUpdateAgentMeta: async (id, meta, signal) => {
-    const { internal_dispatchAgentMap, updateSaveStatus } = get();
+  optimisticUpdateAgentMeta = async (
+    id: string,
+    meta: Partial<MetaData>,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
 
     // 1. Optimistic update - meta fields are at the top level of agent config
     internal_dispatchAgentMap(id, meta as PartialDeep<LobeAgentConfig>);
@@ -362,18 +323,20 @@ export const createAgentSlice: StateCreator<
         updateSaveStatus('idle');
       }
     }
-  },
+  };
 
-  internal_refreshAgentConfig: async (id) => {
+  internal_refreshAgentConfig = async (id: string): Promise<void> => {
     await mutate([FETCH_AGENT_CONFIG_KEY, id]);
-  },
+  };
 
-  internal_createAbortController: (key) => {
-    const abortController = get()[key] as AbortController;
+  internal_createAbortController = (key: keyof AgentSliceState): AbortController => {
+    const abortController = this.#get()[key] as AbortController;
     if (abortController) abortController.abort(MESSAGE_CANCEL_FLAT);
     const controller = new AbortController();
-    set({ [key]: controller }, false, 'internal_createAbortController');
+    this.#set({ [key]: controller }, false, 'internal_createAbortController');
 
     return controller;
-  },
-});
+  };
+}
+
+export type AgentSliceAction = Pick<AgentSliceActionImpl, keyof AgentSliceActionImpl>;

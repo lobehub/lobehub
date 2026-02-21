@@ -2,7 +2,7 @@
 
 import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { Clock, MoreHorizontal } from 'lucide-react';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,6 +34,8 @@ const RecentResource = memo(() => {
 
   return (
     <GroupBlock
+      icon={Clock}
+      title={t('home.recentFiles')}
       action={
         <>
           {isRevalidating && <NeuralNetworkLoading size={14} />}
@@ -53,8 +55,6 @@ const RecentResource = memo(() => {
           </DropdownMenu>
         </>
       }
-      icon={Clock}
-      title={t('home.recentFiles')}
     >
       <ScrollShadowWithButton>
         <Suspense

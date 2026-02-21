@@ -2,7 +2,7 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStore } from './store';
-import type { ConversationContext, ConversationHooks } from './types';
+import { type ConversationContext, type ConversationHooks } from './types';
 
 // Mock dependencies
 vi.mock('@/store/chat', () => ({

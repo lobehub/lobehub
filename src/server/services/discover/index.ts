@@ -3,18 +3,14 @@ import {
   DEFAULT_DISCOVER_ASSISTANT_ITEM,
   DEFAULT_DISCOVER_PLUGIN_ITEM,
   DEFAULT_DISCOVER_PROVIDER_ITEM,
-  KLAVIS_SERVER_TYPES,
   isDesktop,
+  KLAVIS_SERVER_TYPES,
 } from '@lobechat/const';
 import {
   type AgentStatus,
-  AssistantCategory,
   type AssistantListResponse,
   type AssistantMarketSource,
   type AssistantQueryParams,
-  AssistantSorts,
-  CacheRevalidate,
-  CacheTag,
   type DiscoverAssistantDetail,
   type DiscoverAssistantItem,
   type DiscoverMcpDetail,
@@ -26,18 +22,24 @@ import {
   type DiscoverProviderItem,
   type DiscoverUserProfile,
   type IdentifiersResponse,
-  McpCategory,
   type McpListResponse,
   type McpQueryParams,
-  McpSorts,
   type ModelListResponse,
   type ModelQueryParams,
-  ModelSorts,
   type PluginListResponse,
   type PluginQueryParams,
-  PluginSorts,
   type ProviderListResponse,
   type ProviderQueryParams,
+} from '@lobechat/types';
+import {
+  AssistantCategory,
+  AssistantSorts,
+  CacheRevalidate,
+  CacheTag,
+  McpCategory,
+  McpSorts,
+  ModelSorts,
+  PluginSorts,
   ProviderSorts,
 } from '@lobechat/types';
 import {
@@ -48,11 +50,11 @@ import {
 import {
   type CategoryItem,
   type CategoryListQuery,
-  MarketSDK,
+  type MarketSDK,
   type UserInfoResponse,
 } from '@lobehub/market-sdk';
 import {
-  AgentEventRequest,
+  type AgentEventRequest,
   type CallReportRequest,
   type InstallReportRequest,
   type PluginEventRequest,
@@ -367,7 +369,7 @@ export class DiscoverService {
     log('legacyGetAssistantDetail: params=%O', params);
     const { locale, identifier } = params;
     const normalizedLocale = normalizeLocale(locale);
-    let data = await this.assistantStore.getAgent(identifier, normalizedLocale);
+    const data = await this.assistantStore.getAgent(identifier, normalizedLocale);
     if (!data) {
       log('legacyGetAssistantDetail: assistant not found for identifier=%s', identifier);
       return;
@@ -574,9 +576,9 @@ export class DiscoverService {
 
         examples: Array.isArray((data as any).examples)
           ? (data as any).examples.map((example: any) => ({
-            content: typeof example === 'string' ? example : example.content || '',
-            role: example.role || 'user',
-          }))
+              content: typeof example === 'string' ? example : example.content || '',
+              role: example.role || 'user',
+            }))
           : [],
         forkCount: (data as any).forkCount,
         forkedFromAgentId: (data as any).forkedFromAgentId,
@@ -680,8 +682,7 @@ export class DiscoverService {
     try {
       const normalizedLocale = normalizeLocale(locale);
 
-      let apiSort: 'createdAt' | 'updatedAt' | 'name' | 'mostUsage' | 'recommended' =
-        'recommended';
+      let apiSort: 'createdAt' | 'updatedAt' | 'name' | 'mostUsage' | 'recommended' = 'recommended';
       let haveSkills: boolean | undefined = rest.haveSkills;
 
       switch (sort) {
@@ -745,6 +746,7 @@ export class DiscoverService {
           title: item.name || item.identifier,
           tokenUsage: item.tokenUsage || 0,
           type: item.type,
+          updatedAt: item.updatedAt,
           userName: normalizedAuthor.userName,
         };
       });
@@ -813,12 +815,15 @@ export class DiscoverService {
         },
       },
     );
+
+    // Fetch related MCPs
     const list = await this.getMcpList({
       category: mcp.category,
       locale,
       page: 1,
       pageSize: 7,
     });
+
     const result = {
       ...mcp,
       related: list.items.filter((item) => item.identifier !== mcp.identifier).slice(0, 6),
@@ -831,7 +836,9 @@ export class DiscoverService {
     log('getMcpList: params=%O', params);
     const { category, locale, sort } = params;
     const normalizedLocale = normalizeLocale(locale);
-    const shouldOmitCategory = [McpCategory.All, McpCategory.Discover].includes(category as McpCategory)
+    const shouldOmitCategory = [McpCategory.All, McpCategory.Discover].includes(
+      category as McpCategory,
+    );
 
     const result = await this.market.plugins.getPluginList(
       {
@@ -908,6 +915,78 @@ export class DiscoverService {
    */
   increaseAgentInstallCount = async (identifier: string) => {
     await this.market.agents.increaseInstallCount(identifier);
+  };
+
+  /**
+   * Get agents that use a specific plugin
+   */
+  getAgentsByPlugin = async (params: {
+    locale?: string;
+    page?: number;
+    pageSize?: number;
+    pluginId: string;
+  }): Promise<AssistantListResponse> => {
+    log('getAgentsByPlugin: params=%O', params);
+    const { locale, pluginId, page = 1, pageSize = 20 } = params;
+    const normalizedLocale = normalizeLocale(locale);
+
+    try {
+      const data = await this.market.agents.getAgentsByPlugin({
+        locale: normalizedLocale,
+        page,
+        pageSize,
+        pluginId,
+      });
+
+      // Transform to DiscoverAssistantItem format
+      const items: DiscoverAssistantItem[] = (data.items || []).map((item: any) => {
+        const normalizedAuthor = this.normalizeAuthorField(item.author);
+        return {
+          author:
+            normalizedAuthor.name || (item.ownerId !== null ? `User${item.ownerId}` : 'Unknown'),
+          avatar: item.avatar || '',
+          category: item.category,
+          config: {} as any,
+          createdAt: item.createdAt || item.updatedAt || new Date().toISOString(),
+          description: item.description || '',
+          homepage: `https://lobehub.com/discover/assistant/${item.identifier}`,
+          identifier: item.identifier,
+          installCount: item.installCount,
+          knowledgeCount: item.knowledgeCount || 0,
+          pluginCount: item.pluginCount || 0,
+          schemaVersion: 1,
+          tags: item.tags || [],
+          title: item.name || item.identifier,
+          tokenUsage: item.tokenUsage || 0,
+          userName: normalizedAuthor.userName,
+        };
+      });
+
+      const result: AssistantListResponse = {
+        currentPage: data.currentPage || page,
+        items,
+        pageSize: data.pageSize || pageSize,
+        totalCount: data.totalCount || 0,
+        totalPages: data.totalPages || 0,
+      };
+
+      log(
+        'getAgentsByPlugin: returning page %d/%d with %d items',
+        result.currentPage,
+        result.totalPages,
+        result.items.length,
+      );
+      return result;
+    } catch (error) {
+      log('getAgentsByPlugin: error fetching from market SDK: %O', error);
+      return {
+        currentPage: page,
+        items: [],
+        pageSize,
+        totalCount: 0,
+        totalPages: 0,
+      };
+    }
   };
 
   // ============================== Plugin Market ==============================
@@ -1240,7 +1319,7 @@ export class DiscoverService {
     const { identifier, locale, withReadme } = params;
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
     const all = await this._getProviderList();
-    let provider = all.find((item) => item.identifier === identifier);
+    const provider = all.find((item) => item.identifier === identifier);
     if (!provider) {
       log('getProviderDetail: provider not found for identifier=%s', identifier);
       return;
@@ -1435,7 +1514,7 @@ export class DiscoverService {
     );
 
     // 2. Select the model with most complete abilities from each identifier group
-    let deduplicatedByIdentifier = Array.from(identifierGroups.values()).map((models) =>
+    const deduplicatedByIdentifier = Array.from(identifierGroups.values()).map((models) =>
       this.selectModelWithBestAbilities(models),
     );
 
@@ -1710,6 +1789,8 @@ export class DiscoverService {
         locale,
       })) as UserInfoResponse & {
         agentGroups?: any[];
+        favoriteAgentGroups?: any[];
+        favoriteAgents?: any[];
         forkedAgentGroups?: any[];
         forkedAgents?: any[];
       };
@@ -1719,7 +1800,7 @@ export class DiscoverService {
         return undefined;
       }
 
-      const { user, agents, agentGroups, forkedAgents, forkedAgentGroups } = response;
+      const { user, agents, agentGroups, forkedAgents, forkedAgentGroups, favoriteAgents, favoriteAgentGroups } = response;
 
       // Transform agents to DiscoverAssistantItem format
       const transformedAgents: DiscoverAssistantItem[] = (agents || []).map((agent: any) => ({
@@ -1729,6 +1810,7 @@ export class DiscoverService {
         config: {} as any,
         createdAt: agent.createdAt,
         description: agent.description || '',
+        forkCount: agent.forkCount,
         homepage: `https://lobehub.com/discover/assistant/${agent.identifier}`,
         identifier: agent.identifier,
         installCount: agent.installCount,
@@ -1749,6 +1831,7 @@ export class DiscoverService {
         category: group.category as any,
         createdAt: group.createdAt,
         description: group.description || '',
+        forkCount: group.forkCount,
         homepage: `https://lobehub.com/discover/group_agent/${group.identifier}`,
         identifier: group.identifier,
         installCount: group.installCount || 0,
@@ -1811,9 +1894,59 @@ export class DiscoverService {
         updatedAt: group.updatedAt,
       }));
 
+      // Transform favoriteAgents to DiscoverAssistantItem format
+      const transformedFavoriteAgents: DiscoverAssistantItem[] = (favoriteAgents || []).map(
+        (agent: any) => ({
+          author: agent.author || '',
+          avatar: agent.avatar || '',
+          category: agent.category as any,
+          config: {} as any,
+          createdAt: agent.createdAt,
+          description: agent.description || '',
+          forkCount: agent.forkCount || 0,
+          forkedFromAgentId: agent.forkedFromAgentId || null,
+          homepage: `https://lobehub.com/discover/assistant/${agent.identifier}`,
+          identifier: agent.identifier,
+          installCount: agent.installCount,
+          isValidated: agent.isValidated,
+          knowledgeCount: agent.knowledgeCount || 0,
+          pluginCount: agent.pluginCount || 0,
+          schemaVersion: 1,
+          status: agent.status,
+          tags: agent.tags || [],
+          title: agent.name || agent.identifier,
+          tokenUsage: agent.tokenUsage || 0,
+        }),
+      );
+
+      // Transform favoriteAgentGroups to DiscoverGroupAgentItem format
+      const transformedFavoriteAgentGroups = (favoriteAgentGroups || []).map((group: any) => ({
+        author: group.author || '',
+        avatar: group.avatar || '👥',
+        category: group.category as any,
+        createdAt: group.createdAt,
+        description: group.description || '',
+        forkCount: group.forkCount || 0,
+        forkedFromGroupId: group.forkedFromGroupId || null,
+        homepage: `https://lobehub.com/discover/group_agent/${group.identifier}`,
+        identifier: group.identifier,
+        installCount: group.installCount || 0,
+        isFeatured: group.isFeatured || false,
+        isOfficial: group.isOfficial || false,
+        isValidated: group.isValidated,
+        memberCount: 0, // Will be populated from memberAgents in detail view
+        schemaVersion: 1,
+        status: group.status,
+        tags: group.tags || [],
+        title: group.name || group.identifier,
+        updatedAt: group.updatedAt,
+      }));
+
       const result: DiscoverUserProfile = {
         agentGroups: transformedAgentGroups,
         agents: transformedAgents,
+        favoriteAgentGroups: transformedFavoriteAgentGroups,
+        favoriteAgents: transformedFavoriteAgents,
         forkedAgentGroups: transformedForkedAgentGroups,
         forkedAgents: transformedForkedAgents,
         user: {
@@ -1833,11 +1966,13 @@ export class DiscoverService {
       };
 
       log(
-        'getUserInfo: returning user profile with %d agents, %d groups, %d forked agents, %d forked groups',
+        'getUserInfo: returning user profile with %d agents, %d groups, %d forked agents, %d forked groups, %d favorite agents, %d favorite groups',
         result.agents.length,
         result.agentGroups?.length || 0,
         result.forkedAgents?.length || 0,
         result.forkedAgentGroups?.length || 0,
+        result.favoriteAgents?.length || 0,
+        result.favoriteAgentGroups?.length || 0,
       );
       return result;
     } catch (error) {

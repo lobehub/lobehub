@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { pluginPrompts } from './index';
-import { Tool } from './tools';
+import type { Tool } from './tools';
 
 describe('pluginPrompts', () => {
   it('should generate plugin prompts with tools', () => {

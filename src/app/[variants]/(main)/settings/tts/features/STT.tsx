@@ -1,7 +1,7 @@
 'use client';
 
-import { Form, type FormGroupItemType, Icon, Select } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Form, Icon, Select, Skeleton } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -41,7 +41,7 @@ const STT = memo(() => {
         valuePropName: 'checked',
       },
     ],
-    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('settingTTS.stt'),
   };
 
@@ -52,6 +52,7 @@ const STT = memo(() => {
       initialValues={tts}
       items={[stt]}
       itemsType={'group'}
+      variant={'filled'}
       onValuesChange={async (values) => {
         setLoading(true);
         await setSettings({
@@ -59,7 +60,6 @@ const STT = memo(() => {
         });
         setLoading(false);
       }}
-      variant={'filled'}
       {...FORM_STYLE}
     />
   );

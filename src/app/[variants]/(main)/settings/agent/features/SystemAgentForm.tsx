@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Form, type FormGroupItemType, type FormItemProps, Icon } from '@lobehub/ui';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
+import { Button, Flexbox, Form, Icon, Skeleton } from '@lobehub/ui';
 import { Form as AntForm, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
@@ -58,14 +58,14 @@ const SystemAgentForm = memo(
         (!!allowCustomPrompt && {
           children: !!value.customPrompt ? (
             <TextArea
+              placeholder={t('systemAgent.customPrompt.placeholder')}
+              style={{ minHeight: 160 }}
+              value={value.customPrompt}
               onBlur={async (e) => {
                 setLoading(true);
                 await updateSystemAgent(systemAgentKey, { customPrompt: e.target.value });
                 setLoading(false);
               }}
-              placeholder={t('systemAgent.customPrompt.placeholder')}
-              style={{ minHeight: 160 }}
-              value={value.customPrompt}
             />
           ) : (
             <Button
@@ -87,15 +87,15 @@ const SystemAgentForm = memo(
       ].filter(Boolean),
       extra: (
         <Flexbox direction="horizontal" gap={8}>
-          {loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />}
+          {loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
           {allowDisable && (
             <Switch
+              value={value.enabled}
               onChange={async (enabled) => {
                 setLoading(true);
                 await updateSystemAgent(systemAgentKey, { enabled });
                 setLoading(false);
               }}
-              value={value.enabled}
             />
           )}
         </Flexbox>

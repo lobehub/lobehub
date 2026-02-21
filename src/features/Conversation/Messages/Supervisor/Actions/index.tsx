@@ -1,8 +1,9 @@
-import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
-import { ActionIconGroup, createRawModal } from '@lobehub/ui';
+import type {AssistantContentBlock, UIChatMessage} from '@lobechat/types';
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
+import { ActionIconGroup, createRawModal , Flexbox} from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
+import { ReactionPicker } from '../../../components/Reaction';
 import ShareMessageModal, { type ShareModalProps } from '../../../components/ShareMessageModal';
 import {
   Provider,
@@ -154,7 +155,12 @@ const WithContentId = memo<GroupActionsProps>(({ actionsConfig, id, data, conten
     [allActions],
   );
 
-  return <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />;
+  return (
+    <Flexbox align={'center'} gap={8} horizontal>
+      <ReactionPicker messageId={id} />
+      <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />
+    </Flexbox>
+  );
 });
 
 WithContentId.displayName = 'GroupActionsWithContentId';

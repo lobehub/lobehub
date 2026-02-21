@@ -1,6 +1,6 @@
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
-import type { Redis } from 'ioredis';
+import { type Redis } from 'ioredis';
 
 import { getAgentRuntimeRedisClient } from './redis';
 

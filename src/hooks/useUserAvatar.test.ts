@@ -1,3 +1,4 @@
+import type * as LobechatConstModule from '@lobechat/const';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +13,7 @@ vi.mock('zustand/traditional');
 let mockIsDesktop = false;
 
 vi.mock('@lobechat/const', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@lobechat/const')>();
+  const actual = await importOriginal<typeof LobechatConstModule>();
   return {
     ...actual,
     get isDesktop() {

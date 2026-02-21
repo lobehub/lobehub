@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "İşleniyor",
   "detail.data.embedding.success": "Tamamlandı",
   "detail.data.embeddingStatus": "gömme",
+  "detail.data.noChunk": "Parça yok",
   "empty": "Henüz dosya veya klasör yüklenmedi.",
   "header.actions.builtInBlockList.filtered": "{{total}} dosyadan {{ignored}} tanesi filtrelendi",
   "header.actions.connect": "Bağlan...",

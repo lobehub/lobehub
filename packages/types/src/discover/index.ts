@@ -1,5 +1,5 @@
-import { DiscoverAssistantItem } from './assistants';
-import { DiscoverGroupAgentItem } from './groupAgents';
+import type { DiscoverAssistantItem } from './assistants';
+import type { DiscoverGroupAgentItem } from './groupAgents';
 
 export * from './assistants';
 export * from './fork';
@@ -67,6 +67,14 @@ export interface DiscoverUserInfo {
 export interface DiscoverUserProfile {
   agentGroups?: DiscoverGroupAgentItem[];
   agents: DiscoverAssistantItem[];
+  /**
+   * Agent groups favorited by the user
+   */
+  favoriteAgentGroups?: DiscoverGroupAgentItem[];
+  /**
+   * Agents favorited by the user
+   */
+  favoriteAgents?: DiscoverAssistantItem[];
   /**
    * Agent groups forked by the user
    */

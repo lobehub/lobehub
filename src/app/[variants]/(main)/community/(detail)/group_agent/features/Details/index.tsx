@@ -30,10 +30,10 @@ const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         style={mobile ? { flexDirection: 'column-reverse' } : undefined}
       >
         <Flexbox
+          width={'100%'}
           style={{
             overflow: 'hidden',
           }}
-          width={'100%'}
         >
           {activeTab === GroupAgentNavKey.Overview && <Overview />}
           {activeTab === GroupAgentNavKey.SystemRole && <SystemRole />}

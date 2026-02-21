@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { LobeSiliconCloudAI, SiliconCloudModelCard } from './index';
+import type { SiliconCloudModelCard } from './index';
+import { LobeSiliconCloudAI } from './index';
 
 testProvider({
   Runtime: LobeSiliconCloudAI,
@@ -170,7 +171,7 @@ describe('LobeSiliconCloudAI - custom features', () => {
         });
       } catch (e: any) {
         expect(e.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
-        expect(e.message).toContain('请检查 API Key 余额是否充足');
+        expect(e.message).toContain('Please check if the API Key balance is sufficient');
       }
     });
   });

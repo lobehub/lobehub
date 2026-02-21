@@ -1,5 +1,9 @@
 import { DEFAULT_MINI_PROVIDER, DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { QueryRewriteSystemAgent, SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
+import type {
+  QueryRewriteSystemAgent,
+  SystemAgentItem,
+  UserSystemAgentConfig,
+} from '@lobechat/types';
 
 import { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from './llm';
 

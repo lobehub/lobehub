@@ -4,7 +4,7 @@ import { type IEditor } from '@lobehub/editor';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { EditorCanvasProps } from './EditorCanvas';
+import { type EditorCanvasProps } from './EditorCanvas';
 import InternalEditor from './InternalEditor';
 
 export interface EditorDataModeProps extends EditorCanvasProps {
@@ -98,9 +98,9 @@ const EditorDataMode = memo<EditorDataModeProps>(
       <div style={{ position: 'relative', ...style }}>
         <InternalEditor
           editor={editor}
+          placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
           onContentChange={onContentChange}
           onInit={handleInit}
-          placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
           {...editorProps}
         />
       </div>

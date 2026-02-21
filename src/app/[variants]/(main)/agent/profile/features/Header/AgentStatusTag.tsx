@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import type { AgentStatus } from '@/types/discover';
+import { type AgentStatus } from '@/types/discover';
 
 /**
  * Agent Status Tag Component

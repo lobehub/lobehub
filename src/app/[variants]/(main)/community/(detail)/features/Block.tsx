@@ -1,4 +1,5 @@
-import { Button, Flexbox, type FlexboxProps, Icon } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
@@ -27,7 +28,7 @@ interface BlockProps extends FlexboxProps {
 const Block = memo<BlockProps>(({ title, more, moreLink, children, ...rest }) => {
   return (
     <Flexbox gap={16} style={{ position: 'relative' }} width={'100%'}>
-      <Flexbox align={'center'} gap={16} horizontal justify={'space-between'} width={'100%'}>
+      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} width={'100%'}>
         <h2 className={styles.title}>{title}</h2>
         {moreLink && (
           <Link target={moreLink.startsWith('http') ? '_blank' : undefined} to={moreLink}>

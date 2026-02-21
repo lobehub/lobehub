@@ -32,10 +32,7 @@ const IdentitiesList = memo<IdentitiesListProps>(({ isLoading, searchValue, view
 
   if (!identities || identities.length === 0)
     return (
-      <MemoryEmpty
-        search={Boolean(searchValue)}
-        title={t('identity.empty')}
-      >
+      <MemoryEmpty search={Boolean(searchValue)} title={t('identity.empty')}>
         <MemoryAnalysis />
       </MemoryEmpty>
     );

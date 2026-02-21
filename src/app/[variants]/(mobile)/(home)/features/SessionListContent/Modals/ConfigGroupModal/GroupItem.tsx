@@ -38,9 +38,10 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
       {!editing ? (
         <>
           <span className={styles.title}>{name}</span>
-          <ActionIcon icon={PencilLine} onClick={() => setEditing(true)} size={'small'} />
+          <ActionIcon icon={PencilLine} size={'small'} onClick={() => setEditing(true)} />
           <ActionIcon
             icon={Trash}
+            size={'small'}
             onClick={() => {
               modal.confirm({
                 centered: true,
@@ -54,12 +55,15 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
                 title: t('sessionGroup.confirmRemoveGroupAlert'),
               });
             }}
-            size={'small'}
           />
         </>
       ) : (
         <EditableText
           editing={editing}
+          showEditIcon={false}
+          style={{ height: 28 }}
+          value={name}
+          onEditingChange={(e) => setEditing(e)}
           onChangeEnd={async (input) => {
             if (name !== input) {
               if (!input) return;
@@ -71,10 +75,6 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
             }
             setEditing(false);
           }}
-          onEditingChange={(e) => setEditing(e)}
-          showEditIcon={false}
-          style={{ height: 28 }}
-          value={name}
         />
       )}
     </>

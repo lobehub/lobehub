@@ -63,7 +63,10 @@ Gitmoji commit messages 使用特定的 emoji 来表示提交的类型或意图�
 
 ### Semantic Release
 
-我们使用 semantic release 来自动化版本控制和发布流程。请确保您的提交信息遵循 semantic release 的规范，这样当代码合并到主分支后，系统就可以自动创建新的版本并发布。
+我们使用 semantic release 来自动化版本控制和发布流程。当 PR 合并到主分支后，系统会根据提交信息中的 gitmoji 前缀自动判断是否需要发布新版本：
+
+- `✨ feat` 和 `🐛 fix` 前缀的提交会**触发新版本发布**
+- 如果只是小修改不想发新版本，可以使用 `💄 style` 或 `🔨 chore` 等前缀
 
 ### Commitlint
 
@@ -71,13 +74,27 @@ Gitmoji commit messages 使用特定的 emoji 来表示提交的类型或意图�
 
 在您提交代码之前，请确保您的提交信息遵循我们的规范。
 
+### 测试
+
+LobeHub 配置了完善的单元测试（Vitest）和 E2E 测试（Cucumber + Playwright），并通过 GitHub Actions CI 在每次 PR 提交时自动运行。提交 PR 或请求合并前，请务必确保所有测试通过。
+
+你可以在本地运行指定测试文件来验证：
+
+```bash
+# 运行指定测试（不要运行 bun run test，全量测试耗时很长）
+bunx vitest run --silent='passed-only' '[file-path]'
+```
+
+更多测试相关信息请参阅 [测试指南](/zh/docs/development/basic/test)。
+
 ### 如何贡献
 
 1. Fork 项目到您的账户。
 2. 创建一个新的分支进行开发。
-3. 开发完成后，确保您的代码通过了上述的代码风格检查。
+3. 开发完成后，确保您的代码通过了代码风格检查和测试。
 4. 提交您的更改，并使用合适的 gitmoji 标注您的提交信息。
 5. 创建一个 Pull Request 到原项目的主分支。
-6. 等待代码审查，并根据反馈进行必要的修改。
+6. 确保 GitHub Actions CI 全部通过。
+7. 等待代码审查，并根据反馈进行必要的修改。
 
 感谢您遵循这些指导原则，它们有助于我们维护项目的质量和一致性。我们期待您的贡献！

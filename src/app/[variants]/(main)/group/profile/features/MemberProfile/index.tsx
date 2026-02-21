@@ -112,45 +112,45 @@ const MemberProfile = memo(() => {
         </Flexbox>
       </Flexbox>
       <Flexbox
+        style={{ cursor: 'default', marginBottom: 12 }}
         onClick={(e) => {
           e.stopPropagation();
         }}
-        style={{ cursor: 'default', marginBottom: 12 }}
       >
         {/* Header: Avatar + Name */}
         <AgentHeader readOnly={isSupervisor} />
         {/* Config Bar: Model Selector */}
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'flex-start'}
           style={{ marginBottom: 12 }}
         >
           <ModelSelect
             initialWidth
-            onChange={updateAgentConfig}
             value={{
               model: config?.model,
               provider: config?.provider,
             }}
+            onChange={updateAgentConfig}
           />
         </Flexbox>
         <AgentTool />
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'flex-start'}
           style={{ marginTop: 16 }}
         >
           <Button
             icon={PlayIcon}
+            type={'primary'}
             onClick={() => {
               if (!groupId) return;
               router.push(urlJoin('/group', groupId));
             }}
-            type={'primary'}
           >
             {t('startConversation')}
           </Button>
@@ -162,12 +162,12 @@ const MemberProfile = memo(() => {
         editor={editor}
         editorData={editorData}
         entityId={agentId}
-        onContentChange={onContentChange}
         placeholder={
           isSupervisor
             ? t('group.profile.supervisorPlaceholder', { ns: 'chat' })
             : t('settingAgent.prompt.placeholder')
         }
+        onContentChange={onContentChange}
       />
     </>
   );

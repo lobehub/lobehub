@@ -1,6 +1,6 @@
-import type { AiModelForSelect } from 'model-bank';
+import { type AiModelForSelect } from 'model-bank';
 
-import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 /**
  * Mock data for testing ModelSwitchPanel

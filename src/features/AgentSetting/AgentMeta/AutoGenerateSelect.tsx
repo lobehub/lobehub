@@ -1,4 +1,5 @@
-import { ActionIcon, Select, type SelectProps } from '@lobehub/ui';
+import { type SelectProps } from '@lobehub/ui';
+import { ActionIcon, Select } from '@lobehub/ui';
 import { isString } from 'es-toolkit/compat';
 import { Wand2 } from 'lucide-react';
 import { memo } from 'react';
@@ -17,28 +18,28 @@ const AutoGenerateSelect = memo<AutoGenerateInputProps>(
     return (
       <Select
         mode="tags"
-        onChange={(v) => {
-          onChange?.(isString(v) ? v.split(',') : v);
-        }}
         open={false}
         style={{ width: '100%' }}
+        tokenSeparators={[',', '，', ' ']}
+        value={isString(value) ? value.split(',') : value}
         suffixIcon={
           onGenerate && (
             <ActionIcon
               disabled={!canAutoGenerate}
               icon={Wand2}
               loading={loading}
-              onClick={onGenerate}
               size={'small'}
+              title={!canAutoGenerate ? t('autoGenerateTooltipDisabled') : t('autoGenerate')}
               style={{
                 marginRight: -4,
               }}
-              title={!canAutoGenerate ? t('autoGenerateTooltipDisabled') : t('autoGenerate')}
+              onClick={onGenerate}
             />
           )
         }
-        tokenSeparators={[',', '，', ' ']}
-        value={isString(value) ? value.split(',') : value}
+        onChange={(v) => {
+          onChange?.(isString(v) ? v.split(',') : v);
+        }}
         {...props}
       />
     );

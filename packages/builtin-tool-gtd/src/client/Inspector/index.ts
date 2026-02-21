@@ -1,4 +1,4 @@
-import { type BuiltinInspector } from '@lobechat/types';
+import type { BuiltinInspector } from '@lobechat/types';
 
 import { GTDApiName } from '../../types';
 import { ClearTodosInspector } from './ClearTodos';

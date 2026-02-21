@@ -133,9 +133,11 @@ export const agentGroupRouter = router({
           .object({
             avatar: z.string().nullish(),
             backgroundColor: z.string().nullish(),
+            chatConfig: z.any().nullish(),
             description: z.string().nullish(),
             model: z.string().nullish(),
             params: z.any().nullish(),
+            plugins: z.array(z.string()).nullish(),
             provider: z.string().nullish(),
             systemRole: z.string().nullish(),
             tags: z.array(z.string()).nullish(),
@@ -159,10 +161,7 @@ export const agentGroupRouter = router({
       // 2. Create group with supervisor and member agents
       // Filter out null/undefined values from supervisorConfig
       const supervisorConfig = input.supervisorConfig
-        ? Object.fromEntries(
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars, eqeqeq
-            Object.entries(input.supervisorConfig).filter(([_, v]) => v != null),
-          )
+        ? Object.fromEntries(Object.entries(input.supervisorConfig).filter(([_, v]) => v != null))
         : undefined;
 
       const normalizedConfig = ctx.agentGroupService.normalizeGroupConfig(

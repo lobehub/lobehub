@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type ExtractedFile, extractFiles, parseString } from './parser-utils';
+import type { ExtractedFile } from './parser-utils';
+import { extractFiles, parseString } from './parser-utils';
 
 describe('parser-utils', () => {
   describe('parseString', () => {

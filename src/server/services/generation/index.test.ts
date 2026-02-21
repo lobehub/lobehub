@@ -1,4 +1,3 @@
-import debug from 'debug';
 import { sha256 } from 'js-sha256';
 import mime from 'mime';
 import { nanoid } from 'nanoid';
@@ -10,7 +9,7 @@ import { calculateThumbnailDimensions } from '@/utils/number';
 import { getYYYYmmddHHMMss } from '@/utils/time';
 import { inferFileExtensionFromImageUrl } from '@/utils/url';
 
-import { GenerationService, fetchImageFromUrl } from './index';
+import { fetchImageFromUrl,GenerationService } from './index';
 
 // Mock fetch globally
 const mockFetch = vi.fn();

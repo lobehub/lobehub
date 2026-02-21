@@ -32,19 +32,16 @@ const PreferencesList = memo<PreferencesListProps>(({ isLoading, searchValue, vi
 
   if (isEmpty) {
     return (
-      <MemoryEmpty
-        search={Boolean(searchValue)}
-        title={t('preference.empty')}
-      >
+      <MemoryEmpty search={Boolean(searchValue)} title={t('preference.empty')}>
         <MemoryAnalysis />
       </MemoryEmpty>
     );
   }
 
   return viewMode === 'timeline' ? (
-    <TimelineView isLoading={isLoading} onClick={handleCardClick} preferences={preferences} />
+    <TimelineView isLoading={isLoading} preferences={preferences} onClick={handleCardClick} />
   ) : (
-    <GridView isLoading={isLoading} onClick={handleCardClick} preferences={preferences} />
+    <GridView isLoading={isLoading} preferences={preferences} onClick={handleCardClick} />
   );
 });
 

@@ -1,5 +1,5 @@
 import { Skeleton } from '@lobehub/ui';
-import { Suspense, memo } from 'react';
+import { memo, Suspense } from 'react';
 
 import { ChatSettingsTabs } from '@/store/global/initialState';
 import { useServerConfigStore } from '@/store/serverConfig';

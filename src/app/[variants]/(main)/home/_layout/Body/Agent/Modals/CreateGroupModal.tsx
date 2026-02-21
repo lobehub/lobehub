@@ -1,7 +1,8 @@
-import { Input, Modal, type ModalProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type ModalProps } from '@lobehub/ui';
+import { Flexbox, Input, Modal, stopPropagation } from '@lobehub/ui';
 import { App } from 'antd';
-import { type MouseEvent, memo, useState } from 'react';
+import { type MouseEvent } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
@@ -22,11 +23,14 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
     const [loading, setLoading] = useState(false);
 
     return (
-      <div onClick={(e) => e.stopPropagation()}>
+      <div onClick={stopPropagation}>
         <Modal
           allowFullscreen
           destroyOnHidden
           okButtonProps={{ loading }}
+          open={open}
+          title={t('sessionGroup.createGroup')}
+          width={400}
           onCancel={(e) => {
             setInput('');
             onCancel?.(e);
@@ -44,16 +48,13 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
             message.success(t('sessionGroup.createSuccess'));
             onCancel?.(e);
           }}
-          open={open}
-          title={t('sessionGroup.createGroup')}
-          width={400}
         >
           <Flexbox paddingBlock={16}>
             <Input
               autoFocus
-              onChange={(e) => setInput(e.target.value)}
               placeholder={t('sessionGroup.inputPlaceholder')}
               value={input}
+              onChange={(e) => setInput(e.target.value)}
             />
           </Flexbox>
         </Modal>

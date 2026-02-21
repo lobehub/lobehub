@@ -24,10 +24,10 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
 
   return (
     <InlineRename
-      onOpenChange={(open) => toggleEditing(open)}
-      onSave={handleSave}
       open={editing}
       title={title}
+      onOpenChange={(open) => toggleEditing(open)}
+      onSave={handleSave}
     />
   );
 });

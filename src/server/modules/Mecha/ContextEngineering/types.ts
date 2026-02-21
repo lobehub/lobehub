@@ -1,12 +1,12 @@
-import type {
-  AgentBuilderContext,
-  FileContent,
-  KnowledgeBaseInfo,
-  LobeToolManifest,
-  UserMemoryData,
+import {
+  type AgentBuilderContext,
+  type FileContent,
+  type KnowledgeBaseInfo,
+  type LobeToolManifest,
+  type UserMemoryData,
 } from '@lobechat/context-engine';
-import type { PageContentContext } from '@lobechat/prompts';
-import type { UIChatMessage } from '@lobechat/types';
+import { type PageContentContext } from '@lobechat/prompts';
+import { type UIChatMessage } from '@lobechat/types';
 
 /**
  * Model capability checker functions for server-side

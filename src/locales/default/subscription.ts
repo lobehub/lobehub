@@ -128,6 +128,14 @@ export default {
   'limitation.image.topupSuccess.desc':
     'Your top-up credits are now active. Enjoy AI image generation. Your current plan includes:',
   'limitation.image.topupSuccess.title': 'Top-up Successful',
+  'limitation.video.success.action': 'Continue Generating',
+  'limitation.video.success.desc':
+    'Your {{plan}} subscription has been upgraded successfully. Enjoy AI video generation. Your current plan includes:',
+  'limitation.video.success.title': 'Upgrade Successful',
+  'limitation.video.topupSuccess.action': 'Continue Generating',
+  'limitation.video.topupSuccess.desc':
+    'Your top-up credits are now active. Enjoy AI video generation. Your current plan includes:',
+  'limitation.video.topupSuccess.title': 'Top-up Successful',
   'limitation.limited.action': 'Upgrade Now',
   'limitation.limited.advanceFeature': 'Upgrade to enjoy premium features:',
   'limitation.limited.desc':
@@ -160,6 +168,8 @@ export default {
   'models.output': 'Output',
   'models.title': 'Models',
   'payDiffPrice': 'Pay Difference',
+  'payDiffPriceApprox': 'Approx.',
+  'payDiffPriceTip': 'Actual amount subject to payment page',
   'payment.error.actions.billing': 'Billing Management',
   'payment.error.actions.home': 'Back to Home',
   'payment.error.desc':
@@ -220,6 +230,7 @@ export default {
   'plans.fileStorage.tooltip': 'File storage for storing files, images, and other data',
   'plans.free': 'Free',
   'plans.freeTrail': 'Register to get free trial of {{name}}, no credit card required',
+  'plans.image.count': 'Approximately {{number}} images',
   'plans.includes': 'Benefits include:',
   'plans.includesExtra': 'All benefits in {{name}}, plus:',
   'plans.knowledgeBase.desc': 'Use files and knowledge base in conversations',

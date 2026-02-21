@@ -1,8 +1,9 @@
-import { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
+import process from 'node:process';
+
+import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
 import { macOS } from 'electron-is';
 import { pathExists, readdir } from 'fs-extra';
-import process from 'node:process';
 
 import { legacyLocalDbDir } from '@/const/dir';
 import { createLogger } from '@/utils/logger';
@@ -205,7 +206,6 @@ export default class SystemController extends ControllerModule {
     this.app.browserManager.broadcastToAllWindows('themeChanged', { themeMode });
     this.setSystemThemeMode(themeMode);
     this.app.browserManager.handleAppThemeChange();
-
   }
 
   @IpcMethod()

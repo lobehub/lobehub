@@ -66,6 +66,6 @@ export const CHANGELOG_URL = urlJoin(OFFICIAL_SITE, 'changelog/versions');
 
 export const DOWNLOAD_URL = {
   android: 'https://play.google.com/store/apps/details?id=com.lobehub.app',
-  default: urlJoin(OFFICIAL_SITE, '/download'),
+  default: urlJoin(OFFICIAL_SITE, '/downloads'),
   ios: 'https://testflight.apple.com/join/2ZbjX4Qp',
 } as const;

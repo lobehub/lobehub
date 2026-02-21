@@ -1,22 +1,30 @@
-import { Icon, type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 interface UseGroupDropdownMenuParams {
+  anchor: HTMLElement | null;
+  avatar?: string;
   id: string;
+  memberAvatars?: { avatar?: string; background?: string }[];
   pinned: boolean;
-  toggleEditing: (visible?: boolean) => void;
+  title: string;
 }
 
 export const useGroupDropdownMenu = ({
+  anchor,
+  avatar,
   id,
+  memberAvatars,
   pinned,
-  toggleEditing,
+  title,
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation('chat');
   const { modal, message } = App.useApp();
@@ -43,7 +51,9 @@ export const useGroupDropdownMenu = ({
           label: t('rename', { ns: 'common' }),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
-            toggleEditing(true);
+            if (anchor) {
+              openEditingPopover({ anchor, avatar, id, memberAvatars, title, type: 'agentGroup' });
+            }
           },
         },
         {
@@ -85,11 +95,14 @@ export const useGroupDropdownMenu = ({
         },
       ] as MenuProps['items'],
     [
+      anchor,
+      avatar,
+      memberAvatars,
       t,
       pinned,
       pinAgentGroup,
       id,
-      toggleEditing,
+      title,
       duplicateAgentGroup,
       openAgentInNewWindow,
       modal,

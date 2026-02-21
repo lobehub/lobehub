@@ -1,8 +1,7 @@
 'use client';
 
-import dynamic from '@/libs/next/dynamic';
-
 import Loading from '@/components/Loading/BrandTextLoading';
+import dynamic from '@/libs/next/dynamic';
 
 const MobileRouterClient = dynamic(() => import('./MobileClientRouter'), {
   loading: () => <Loading debugId="MobileRouter" />,

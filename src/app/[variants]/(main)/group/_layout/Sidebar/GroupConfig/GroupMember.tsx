@@ -123,23 +123,23 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
                 onDoubleClick={() => handleMemberDoubleClick(item.id)}
               >
                 <GroupMemberItem
+                  avatar={item.avatar || DEFAULT_AVATAR}
+                  background={item.backgroundColor ?? undefined}
+                  isExternal={!item.virtual}
+                  title={item.title || t('defaultSession', { ns: 'common' })}
                   actions={
                     <ActionIcon
                       danger
                       icon={UserMinus}
                       loading={removingMemberIds.includes(item.id)}
+                      size={'small'}
+                      title={t('groupSidebar.members.removeMember')}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleRemoveMember(item.id);
                       }}
-                      size={'small'}
-                      title={t('groupSidebar.members.removeMember')}
                     />
                   }
-                  avatar={item.avatar || DEFAULT_AVATAR}
-                  background={item.backgroundColor ?? undefined}
-                  isExternal={!item.virtual}
-                  title={item.title || t('defaultSession', { ns: 'common' })}
                 />
               </div>
             </AgentProfilePopup>
@@ -150,9 +150,9 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
         <AddGroupMemberModal
           existingMembers={groupMembers.map((member) => member.id)}
           groupId={groupId}
+          open={addModalOpen}
           onCancel={() => onAddModalOpenChange(false)}
           onConfirm={handleAddMembers}
-          open={addModalOpen}
         />
       )}
     </>

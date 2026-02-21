@@ -6,21 +6,19 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
-import { useSessionStore } from '@/store/session';
-import { sessionSelectors } from '@/store/session/selectors';
 
 const ChatHeaderTitle = memo(() => {
   const { t } = useTranslation(['chat', 'topic']);
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
-  const [topicLength, topic] = useChatStore((s) => [
-    topicSelectors.currentTopicLength(s),
+  const [topicCount, topic] = useChatStore((s) => [
+    topicSelectors.currentTopicCount(s),
     topicSelectors.currentActiveTopic(s),
   ]);
-  const isInbox = useSessionStore(sessionSelectors.isInboxSession);
+  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const title = useAgentStore(agentSelectors.currentAgentTitle);
 
   const displayTitle = isInbox ? 'Lobe AI' : title;
@@ -28,7 +26,7 @@ const ChatHeaderTitle = memo(() => {
   return (
     <ChatHeader.Title
       desc={
-        <Flexbox align={'center'} gap={4} horizontal onClick={() => toggleConfig()}>
+        <Flexbox horizontal align={'center'} gap={4} onClick={() => toggleConfig()}>
           <span
             style={{
               maxWidth: '60vw',
@@ -52,7 +50,6 @@ const ChatHeaderTitle = memo(() => {
       }
       title={
         <div
-          onClick={() => toggleConfig()}
           style={{
             marginRight: '8px',
             maxWidth: '64vw',
@@ -60,9 +57,10 @@ const ChatHeaderTitle = memo(() => {
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
+          onClick={() => toggleConfig()}
         >
           {displayTitle}
-          {topicLength > 1 ? `(${topicLength + 1})` : ''}
+          {topicCount > 0 ? ` (${topicCount})` : ''}
         </div>
       }
     />

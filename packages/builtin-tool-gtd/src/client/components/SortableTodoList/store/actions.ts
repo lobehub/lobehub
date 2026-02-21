@@ -1,6 +1,7 @@
 import { debounce } from 'es-toolkit/compat';
 
-import { getNextTodoStatus, type TodoItem } from '../../../../types';
+import type { TodoItem } from '../../../../types';
+import { getNextTodoStatus } from '../../../../types';
 import { AUTO_SAVE_DELAY, AUTO_SAVE_MAX_WAIT, initialState } from './initialState';
 import type { StoreInternals, TodoListItem, TodoListStore } from './types';
 import { ADD_ITEM_ID } from './types';

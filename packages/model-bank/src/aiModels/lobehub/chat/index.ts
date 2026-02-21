@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../../../types/aiModel';
+import type { AIChatModelCard } from '../../../types/aiModel';
 import { anthropicChatModels } from './anthropic';
 import { deepseekChatModels } from './deepseek';
 import { googleChatModels } from './google';

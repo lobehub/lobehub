@@ -20,6 +20,7 @@
   "fireworksai.description": "Fireworks AI는 함수 호출 및 멀티모달 처리를 지원하는 고급 언어 모델 서비스를 제공하며, Llama-3 기반의 Firefunction V2는 함수 호출, 대화, 지시 따르기에 최적화되어 있고, FireLLaVA-13B는 이미지-텍스트 혼합 입력을 지원합니다.",
   "giteeai.description": "Gitee AI 서버리스 API는 개발자를 위한 플러그 앤 플레이 LLM 추론 서비스를 제공합니다.",
   "github.description": "GitHub Models를 통해 개발자는 업계 최고 수준의 모델을 활용하여 AI 엔지니어로서 개발할 수 있습니다.",
+  "githubcopilot.description": "GitHub Copilot 구독을 통해 Claude, GPT, Gemini 모델에 액세스할 수 있습니다.",
   "google.description": "Google의 Gemini 시리즈는 Google DeepMind가 개발한 가장 진보된 범용 AI로, 텍스트, 코드, 이미지, 오디오, 비디오 등 멀티모달 작업을 지원하며, 데이터 센터부터 모바일 기기까지 확장성과 효율성을 갖추고 있습니다.",
   "groq.description": "Groq의 LPU 추론 엔진은 탁월한 속도와 효율성으로 뛰어난 벤치마크 성능을 제공하며, 저지연 클라우드 기반 LLM 추론의 기준을 제시합니다.",
   "higress.description": "Higress는 Alibaba 내부에서 개발된 클라우드 네이티브 API 게이트웨이로, Tengine 재시작 시 장기 연결에 미치는 영향을 줄이고 gRPC/Dubbo 로드 밸런싱의 한계를 해결합니다.",

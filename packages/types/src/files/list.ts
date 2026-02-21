@@ -60,8 +60,8 @@ export interface QueryFileListParams {
   parentId?: string | null;
   q?: string | null;
   showFilesInKnowledgeBase?: boolean;
-  sortType?: string;
   sorter?: string;
+  sortType?: string;
 }
 
 export interface PaginatedFileList {

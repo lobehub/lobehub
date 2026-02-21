@@ -1,4 +1,4 @@
-import type { Dayjs } from 'dayjs';
+import { type Dayjs } from 'dayjs';
 
 export type ScheduleType = 'daily' | 'hourly' | 'weekly';
 
@@ -99,7 +99,6 @@ export const parseCronPattern = (
     return { scheduleType: 'daily', triggerHour: 0, triggerMinute: 0 };
   }
 
-  // eslint-disable-next-line unicorn/no-unreadable-array-destructuring
   const [minute, hour, , , weekday] = parts;
   const rawMinute = minute === '*' ? 0 : Number.parseInt(minute);
   // Normalize to nearest 30-minute interval (0 or 30)

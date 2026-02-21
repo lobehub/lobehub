@@ -1,8 +1,10 @@
 'use client';
 
-import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
+import { type ActionIconProps } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
@@ -36,13 +38,13 @@ const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
         active={showActive ? expand : undefined}
         icon={icon || (expand ? PanelLeftClose : PanelLeftOpen)}
         id={TOGGLE_BUTTON_ID}
-        onClick={() => togglePanel()}
         size={size || DESKTOP_HEADER_ICON_SIZE}
         title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
         tooltipProps={{
           hotkey,
           placement: 'bottom',
         }}
+        onClick={() => togglePanel()}
       />
     );
   },

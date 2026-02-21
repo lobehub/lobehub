@@ -1,4 +1,5 @@
-import { Input, Modal, type ModalProps } from '@lobehub/ui';
+import { type ModalProps } from '@lobehub/ui';
+import { Input, Modal } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
@@ -31,6 +32,9 @@ const RenameGroupModal = memo<RenameGroupModalProps>(({ id, open, onCancel }) =>
       allowFullscreen
       destroyOnHidden
       okButtonProps={{ loading }}
+      open={open}
+      title={t('sessionGroup.rename')}
+      width={400}
       onCancel={(e) => {
         setInput(group?.name ?? '');
         onCancel?.(e);
@@ -45,16 +49,13 @@ const RenameGroupModal = memo<RenameGroupModalProps>(({ id, open, onCancel }) =>
 
         onCancel?.(e);
       }}
-      open={open}
-      title={t('sessionGroup.rename')}
-      width={400}
     >
       <Input
         autoFocus
         defaultValue={group?.name}
-        onChange={(e) => setInput(e.target.value)}
         placeholder={t('sessionGroup.inputPlaceholder')}
         value={input}
+        onChange={(e) => setInput(e.target.value)}
       />
     </Modal>
   );

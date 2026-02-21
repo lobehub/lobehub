@@ -1,4 +1,5 @@
-import { Markdown, type MarkdownProps } from '@lobehub/ui';
+import { type MarkdownProps } from '@lobehub/ui';
+import { Markdown } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useUserStore } from '@/store/user';
@@ -11,6 +12,8 @@ const MarkdownMessage = memo<MarkdownProps>(({ children, componentProps, ...rest
 
   return (
     <Markdown
+      fontSize={fontSize}
+      variant={'chat'}
       componentProps={{
         ...componentProps,
         highlight: {
@@ -20,8 +23,6 @@ const MarkdownMessage = memo<MarkdownProps>(({ children, componentProps, ...rest
         },
         mermaid: { fullFeatured: false, theme: mermaidTheme, ...componentProps?.mermaid },
       }}
-      fontSize={fontSize}
-      variant={'chat'}
       {...rest}
     >
       {children}

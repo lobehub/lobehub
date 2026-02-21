@@ -4,6 +4,7 @@ import path from 'node:path';
 import { modifyAppCode } from './appCode.mjs';
 import { cleanUpCode } from './cleanUp.mjs';
 import { convertDynamicToStatic } from './dynamicToStatic.mjs';
+import { convertI18nDynamicToStatic } from './i18nDynamicToStatic.mjs';
 import { convertNextDynamicToStatic } from './nextDynamicToStatic.mjs';
 import { modifyNextConfig } from './nextConfig.mjs';
 import { removeSuspenseFromConversation } from './removeSuspense.mjs';
@@ -19,6 +20,7 @@ export const modifySourceForElectron = async (TEMP_DIR: string) => {
   await wrapChildrenWithClientOnly(TEMP_DIR);
   await convertDynamicToStatic(TEMP_DIR);
   await convertNextDynamicToStatic(TEMP_DIR);
+  await convertI18nDynamicToStatic(TEMP_DIR);
   await convertSettingsContentToStatic(TEMP_DIR);
   await removeSuspenseFromConversation(TEMP_DIR);
   await modifyRoutes(TEMP_DIR);

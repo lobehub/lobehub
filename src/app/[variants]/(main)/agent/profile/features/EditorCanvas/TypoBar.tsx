@@ -1,6 +1,6 @@
-import { HotkeyEnum, getHotkeyById } from '@lobehub/editor';
-import { FloatActions } from '@lobehub/editor/react';
+import { getHotkeyById, HotkeyEnum } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
+import { FloatActions } from '@lobehub/editor/react';
 import {
   BoldIcon,
   CodeXmlIcon,

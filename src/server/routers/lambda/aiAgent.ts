@@ -1,11 +1,7 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
-import {
-  type TaskCurrentActivity,
-  type TaskStatusResult,
-  ThreadStatus,
-  ThreadType,
-} from '@lobechat/types';
+import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
+import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -1025,7 +1021,7 @@ export const aiAgentRouter = router({
       log(`Processing ${action} for operation ${operationId}`);
 
       // Build intervention parameters
-      let interventionParams: any = {
+      const interventionParams: any = {
         action,
         operationId,
         stepIndex,

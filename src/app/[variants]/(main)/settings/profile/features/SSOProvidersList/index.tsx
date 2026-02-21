@@ -1,11 +1,14 @@
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon, DropdownMenu, Flexbox, type MenuProps, Text } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
 import { ArrowRight, Plus, Unlink } from 'lucide-react';
-import { type CSSProperties, memo, useMemo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { modal, notification } from '@/components/AntdStaticMethods';
 import AuthIcons from '@/components/AuthIcons';
+import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -33,8 +36,11 @@ export const SSOProvidersList = memo(() => {
   }, [providers]);
 
   // Get available providers for linking (filter out already linked)
+  // Normalize provider IDs when comparing to handle aliases (e.g. microsoft-entra-id → microsoft)
   const availableProviders = useMemo(() => {
-    return (oAuthSSOProviders || []).filter((provider) => !linkedProviderIds.has(provider));
+    return (oAuthSSOProviders || []).filter(
+      (provider) => !linkedProviderIds.has(normalizeProviderId(provider)),
+    );
   }, [oAuthSSOProviders, linkedProviderIds]);
 
   const handleUnlinkSSO = async (provider: string) => {
@@ -63,14 +69,24 @@ export const SSOProvidersList = memo(() => {
   };
 
   const handleLinkSSO = async (provider: string) => {
-    if (enableAuthActions) {
-      // Use better-auth native linkSocial API
-      const { linkSocial } = await import('@/libs/better-auth/auth-client');
+    if (!enableAuthActions) return;
+
+    const normalizedProvider = normalizeProviderId(provider);
+    const { linkSocial, oauth2 } = await import('@/libs/better-auth/auth-client');
+
+    if (isBuiltinProvider(normalizedProvider)) {
+      // Use better-auth native linkSocial API for built-in providers
       await linkSocial({
         callbackURL: '/profile',
-        provider: provider as any,
+        provider: normalizedProvider as any,
       });
+      return;
     }
+
+    await oauth2.link({
+      callbackURL: '/profile',
+      providerId: normalizedProvider,
+    });
   };
 
   // Dropdown menu items for linking new providers
@@ -85,13 +101,13 @@ export const SSOProvidersList = memo(() => {
     <Flexbox gap={8}>
       {providers.map((item) => (
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'space-between'}
           key={[item.provider, item.providerAccountId].join('-')}
         >
-          <Flexbox align={'center'} gap={6} horizontal style={{ fontSize: 12 }}>
+          <Flexbox horizontal align={'center'} gap={6} style={{ fontSize: 12 }}>
             {AuthIcons(item.provider, 16)}
             <span style={providerNameStyle}>{item.provider}</span>
             {item.email && (
@@ -104,8 +120,8 @@ export const SSOProvidersList = memo(() => {
             <ActionIcon
               disabled={!allowUnlink}
               icon={Unlink}
-              onClick={() => handleUnlinkSSO(item.provider)}
               size={'small'}
+              onClick={() => handleUnlinkSSO(item.provider)}
             />
           )}
         </Flexbox>
@@ -114,7 +130,7 @@ export const SSOProvidersList = memo(() => {
       {/* Link Account Button - Only show for logged in users with available providers */}
       {enableAuthActions && availableProviders.length > 0 && (
         <DropdownMenu items={linkMenuItems} popupProps={{ style: { maxWidth: '200px' } }}>
-          <Flexbox align={'center'} gap={6} horizontal style={{ cursor: 'pointer', fontSize: 12 }}>
+          <Flexbox horizontal align={'center'} gap={6} style={{ cursor: 'pointer', fontSize: 12 }}>
             <Plus size={14} />
             <span>{t('profile.sso.link.button')}</span>
             <ArrowRight size={14} />

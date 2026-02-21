@@ -1,9 +1,9 @@
 import { ModelProvider } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
-import { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload } from '../../types';
 
 export const LobePerplexityAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.perplexity.ai',

@@ -1,13 +1,13 @@
 'use client';
 
-import { type FormItemProps, FormModal, type FormModalProps, Segmented } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { type FormItemProps, type FormModalProps } from '@lobehub/ui';
+import { FormModal, Segmented, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import dynamic from '@/libs/next/dynamic';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreenshot';
+import dynamic from '@/libs/next/dynamic';
 
 const Preview = dynamic(() => import('./Preview'), {
   loading: () => (
@@ -73,14 +73,14 @@ const ShareModal = memo<FormModalProps & { mobile?: boolean }>(({ open, onCancel
       initialValues={DEFAULT_FIELD_VALUE}
       items={items}
       itemsType={'flat'}
-      onCancel={onCancel}
-      onFinish={onDownload}
-      onValuesChange={(_, v) => setFieldValue(v)}
       open={open}
       submitLoading={loading}
       submitText={t('shareModal.download')}
       title={t('share', { ns: 'common' })}
       width={480}
+      onCancel={onCancel}
+      onFinish={onDownload}
+      onValuesChange={(_, v) => setFieldValue(v)}
     />
   );
 });

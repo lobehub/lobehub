@@ -8,7 +8,7 @@ import { PreferenceMemoryCard } from '../../components';
 
 export const AddPreferenceMemoryStreaming = memo<BuiltinStreamingProps<AddPreferenceMemoryParams>>(
   ({ args }) => {
-    return <PreferenceMemoryCard data={args} loading />;
+    return <PreferenceMemoryCard loading data={args} />;
   },
 );
 

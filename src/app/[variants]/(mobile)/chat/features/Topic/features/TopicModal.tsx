@@ -1,7 +1,8 @@
 'use client';
 
 import { Modal } from '@lobehub/ui';
-import { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFetchTopics } from '@/hooks/useFetchTopics';
@@ -23,12 +24,12 @@ const Topics = memo(({ children }: PropsWithChildren) => {
     <Modal
       allowFullscreen
       footer={null}
-      onCancel={() => setOpen(false)}
       open={open}
+      title={t('title')}
       styles={{
         body: { padding: 0 },
       }}
-      title={t('title')}
+      onCancel={() => setOpen(false)}
     >
       {children}
     </Modal>

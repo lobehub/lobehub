@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { FireworksAIModelCard, LobeFireworksAI, params } from './index';
+import type { FireworksAIModelCard } from './index';
+import { LobeFireworksAI, params } from './index';
 
 const provider = ModelProvider.FireworksAI;
 const defaultBaseURL = 'https://api.fireworks.ai/inference/v1';

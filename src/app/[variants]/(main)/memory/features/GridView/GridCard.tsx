@@ -1,6 +1,7 @@
 import { Block, Center, Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import HashTags from '../HashTags';
 import Time from '../Time';
@@ -61,28 +62,28 @@ const GridCard = memo<GridCardProps>(
         className={styles.masonryCard}
         gap={4}
         height={'100%'}
-        onClick={onClick}
         padding={4}
+        variant={'filled'}
         style={{
           background: cateColor?.backgroundColor,
         }}
-        variant={'filled'}
+        onClick={onClick}
       >
         <Block
           flex={1}
           gap={12}
           paddingBlock={16}
           paddingInline={12}
+          variant={'outlined'}
           style={{
             boxShadow: `0 4px 16px -4px ${cateColor?.shadowColor || 'rgba(0, 0, 0, 0.2)'}`,
             overflow: 'hidden',
             position: 'relative',
           }}
-          variant={'outlined'}
         >
           {(title || titleAddon) && (
             <>
-              <Flexbox align={'center'} gap={8} horizontal wrap={'wrap'}>
+              <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
                 {title && typeof title === 'string' ? (
                   <Text
                     as={'h2'}
@@ -113,9 +114,9 @@ const GridCard = memo<GridCardProps>(
           )}
           <HashTags hashTags={hashTags} />
           <Flexbox
+            horizontal
             align={'center'}
             gap={12}
-            horizontal
             justify={'space-between'}
             style={{
               overflow: 'hidden',
@@ -127,8 +128,8 @@ const GridCard = memo<GridCardProps>(
           </Flexbox>
         </Block>
         <Flexbox
-          align={'center'}
           horizontal
+          align={'center'}
           justify={'space-between'}
           paddingBlock={8}
           paddingInline={8}
@@ -136,16 +137,16 @@ const GridCard = memo<GridCardProps>(
           width={'100%'}
         >
           <Flexbox
+            horizontal
             align={'center'}
             flex={1}
             gap={8}
-            horizontal
+            style={{
+              overflow: 'hidden',
+            }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-            }}
-            style={{
-              overflow: 'hidden',
             }}
           >
             {badges}
@@ -154,27 +155,27 @@ const GridCard = memo<GridCardProps>(
             <Text
               align={'center'}
               color={cateColor?.backgroundTextColor || cssVar.colorTextSecondary}
+              weight={'bold'}
               style={{
                 opacity: 0.5,
               }}
-              weight={'bold'}
             >
               {cate?.toUpperCase() || 'CHORE'}
             </Text>
           </Center>
           <Flexbox
+            horizontal
             align={'center'}
             className={cx(ACTION_CLASSNAME, styles.actions)}
             flex={1}
             gap={4}
-            horizontal
             justify={'flex-end'}
+            style={{
+              overflow: 'hidden',
+            }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-            }}
-            style={{
-              overflow: 'hidden',
             }}
           >
             {actions}

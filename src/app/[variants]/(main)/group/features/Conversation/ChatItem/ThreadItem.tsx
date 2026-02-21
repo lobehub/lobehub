@@ -42,10 +42,10 @@ const Item = memo<ThreadItem>(({ id, title, lastActiveAt, sourceMessageId }) => 
   const mobile = useIsMobile();
   return (
     <Flexbox
+      horizontal
       align={'baseline'}
       className={cx(styles.container, isActive && styles.active)}
       gap={8}
-      horizontal
       onClick={() => {
         if (isActive) return;
 
@@ -53,7 +53,7 @@ const Item = memo<ThreadItem>(({ id, title, lastActiveAt, sourceMessageId }) => 
       }}
     >
       {title}
-      <Flexbox className={styles.extra} horizontal>
+      <Flexbox horizontal className={styles.extra}>
         {!!messageCount && t('thread.threadMessageCount', { messageCount })}
         {!mobile && ` · ${dayjs(lastActiveAt).format('YYYY-MM-DD')}`}
         <Icon icon={ChevronRight} />

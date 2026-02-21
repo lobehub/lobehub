@@ -29,7 +29,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export const ExecuteTaskStreaming = memo<BuiltinStreamingProps<ExecuteTaskParams>>(({ args }) => {
-  const { agentId, task } = args || {};
+  const { agentId, instruction } = args || {};
   const theme = useTheme();
 
   // Get active group ID and agent from store
@@ -40,12 +40,12 @@ export const ExecuteTaskStreaming = memo<BuiltinStreamingProps<ExecuteTaskParams
       : undefined,
   );
 
-  if (!task) return null;
+  if (!instruction) return null;
 
   return (
     <div className={styles.container}>
       <Flexbox gap={8}>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Avatar
             avatar={agent?.avatar || DEFAULT_AVATAR}
             background={agent?.backgroundColor || theme.colorBgContainer}
@@ -56,7 +56,7 @@ export const ExecuteTaskStreaming = memo<BuiltinStreamingProps<ExecuteTaskParams
         </Flexbox>
         <div className={styles.task}>
           <Markdown animated variant={'chat'}>
-            {task}
+            {instruction}
           </Markdown>
         </div>
       </Flexbox>

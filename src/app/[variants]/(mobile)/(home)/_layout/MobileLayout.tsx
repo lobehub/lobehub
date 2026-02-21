@@ -8,7 +8,7 @@ import SessionSearchBar from './SessionSearchBar';
 
 const MobileLayout = ({ children }: PropsWithChildren) => {
   return (
-    <MobileContentLayout header={<SessionHeader />} withNav>
+    <MobileContentLayout withNav header={<SessionHeader />}>
       <div className={styles.searchBarContainer}>
         <SessionSearchBar mobile />
       </div>

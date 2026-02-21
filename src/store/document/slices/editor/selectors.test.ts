@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DocumentStore } from '../../store';
+import { type DocumentStore } from '../../store';
 import { editorSelectors } from './selectors';
 
 describe('DocumentStore - Editor Selectors', () => {

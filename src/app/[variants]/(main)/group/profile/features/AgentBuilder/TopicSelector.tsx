@@ -1,4 +1,5 @@
-import { ActionIcon, DropdownMenu, type DropdownMenuCheckboxItem, Tag } from '@lobehub/ui';
+import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Tag } from '@lobehub/ui';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,13 +61,14 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
   return (
     <NavHeader
       left={activeTopic?.title ? <Tag>{activeTopic.title}</Tag> : undefined}
+      showTogglePanelButton={false}
       right={
         <>
           <ActionIcon
             icon={PlusIcon}
-            onClick={() => handleSwitchTopic(undefined)}
             size={DESKTOP_HEADER_ICON_SIZE}
             title={t('actions.addNewTopic')}
+            onClick={() => handleSwitchTopic(undefined)}
           />
           <DropdownMenu
             items={items}
@@ -78,7 +80,6 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
           </DropdownMenu>
         </>
       }
-      showTogglePanelButton={false}
     />
   );
 });

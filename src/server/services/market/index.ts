@@ -1,13 +1,10 @@
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import { type LobeToolManifest } from '@lobechat/context-engine';
 import { MarketSDK } from '@lobehub/market-sdk';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
-import {
-  type TrustedClientUserInfo,
-  generateTrustedClientToken,
-  getTrustedClientTokenForSession,
-} from '@/libs/trusted-client';
+import { type TrustedClientUserInfo } from '@/libs/trusted-client';
+import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 
 const log = debug('lobe-server:market-service');
 

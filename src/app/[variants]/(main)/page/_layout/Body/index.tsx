@@ -1,7 +1,7 @@
 'use client';
 
 import { Accordion, AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { Suspense, memo } from 'react';
+import React, { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -43,12 +43,12 @@ const Body = memo(() => {
       <Accordion defaultExpandedKeys={[GroupKey.AllPages]} gap={2}>
         <AccordionItem
           action={<Actions />}
-          headerWrapper={(header) => (
-            <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
-          )}
           itemKey={GroupKey.AllPages}
           paddingBlock={4}
           paddingInline={'8px 4px'}
+          headerWrapper={(header) => (
+            <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
+          )}
           title={
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {t('pageList.title')}
@@ -71,7 +71,7 @@ const Body = memo(() => {
           </Suspense>
         </AccordionItem>
       </Accordion>
-      <AllPagesDrawer onClose={closeAllPagesDrawer} open={allPagesDrawerOpen} />
+      <AllPagesDrawer open={allPagesDrawerOpen} onClose={closeAllPagesDrawer} />
     </Flexbox>
   );
 });

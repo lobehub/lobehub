@@ -1,17 +1,16 @@
 ---
-title: Deploy LobeHub with Docker
+title: Deploying LobeHub Database with Docker
 description: >-
-  Learn how to deploy the LobeHub service using Docker, including installation
-  steps, command deployment, proxy configuration, and automatic update scripts.
+  Learn how to deploy the LobeHub server database version using Docker on Linux
+  and local machines.
 tags:
-  - Docker Deployment
-  - LobeHub Service
-  - Docker Command
-  - Proxy Configuration
-  - Automatic Update Script
+  - LobeHub
+  - Docker
+  - Database Deployment
+  - Postgres
 ---
 
-# Docker Deployment Guide
+# Deploying Server Database Version Using Docker
 
 <div style={{display:"flex", gap: 4}}>
   [![][docker-release-shield]][docker-release-link]
@@ -21,135 +20,143 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
-We provide a [Docker image][docker-release-link] for you to deploy the LobeHub service on your private device.
+<Callout type="info">
+  This article assumes that you are familiar with the basic principles and processes of deploying
+  the LobeHub server database version, so it only includes content related to core environment
+  variable configuration. If you are not familiar with the deployment principles of the LobeHub
+  server database version, please refer to [Deploying Server
+  Database](/docs/self-hosting/server-database) first.
+</Callout>
+
+## Deploying on a Linux Server
+
+Here is the process for deploying the LobeHub server database version on a Linux server:
 
 <Steps>
-  ### Install Docker Container Environment
+  ### Create a Postgres Database Instance
 
-  (If already installed, skip this step)
+  Please create a Postgres database instance according to your needs, for example:
 
-  <Tabs items={['Ubuntu', 'CentOS']}>
-    <Tab>
-      ```fish
-      $ apt install docker.io
-      ```
-    </Tab>
+  ```sh
+  docker network create pg
 
-    <Tab>
-      ```fish
-      $ yum install docker
-      ```
-    </Tab>
-  </Tabs>
-
-  ### Docker Command Deployment
-
-  Use the following command to start the LobeHub service with one click:
-
-  ```fish
-  $ docker run -d -p 3210:3210 \
-    -e OPENAI_API_KEY=sk-xxxx \
-    --name lobe-chat \
-    lobehub/lobe-chat
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17
   ```
 
-  Command explanation:
+  The above command will create a PG instance named `my-postgres` on the network `pg`, where `paradedb/paradedb:latest-pg17` is a Postgres 17 image with pgvector and pg\_search plugins installed by default.
 
-  - The default port mapping is `3210`, please ensure it is not occupied or manually change the port mapping.
-
-  - Replace `sk-xxxx` in the above command with your OpenAI API Key.
-
-  - For the complete list of environment variables supported by LobeHub, please refer to the [Environment Variables](/docs/self-hosting/environment-variables) section.
-
-  <Callout type="tip">
-    Since the official Docker image build takes about half an hour, if you see the "update available"
-    prompt after deployment, you can wait for the image to finish building before deploying again.
+  <Callout type="info">
+    The ParadeDB image includes pgvector (vector search) and pg\_search (full-text search) plugins, which are important
+    components for LobeHub to implement RAG and knowledge base search.
   </Callout>
 
-  <Callout type="important">
-    Note that when the **deployment architecture is inconsistent with the image**, you need to
-    cross-compile **Sharp**, see [Sharp
-    Cross-Compilation](https://sharp.pixelplumbing.com/install#cross-platform) for details.
+  <Callout type="warning">
+    The above command does not specify a persistent storage location for the pg instance, so it is
+    only for testing/demonstration purposes. Please configure persistent storage for production
+    environments.
   </Callout>
 
-  #### Using a Proxy Address
+  ### Create a file named `lobe-chat.env` to store environment variables:
 
-  If you need to use the OpenAI service through a proxy, you can configure the proxy address using the `OPENAI_PROXY_URL` environment variable:
+  Click the buttons below to generate required secrets:
 
-  ```fish
-  $ docker run -d -p 3210:3210 \
-    -e OPENAI_API_KEY=sk-xxxx \
-    -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
-    --name lobe-chat \
-    lobehub/lobe-chat
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+  <GenerateSecret envName="AUTH_SECRET" />
+
+  Click the button below to generate `JWKS_KEY` (for signing and verifying JWTs):
+
+  <GenerateJWKSKey />
+
+  ```shell
+  # Website domain
+  APP_URL=https://your-prod-domain.com
+
+  # DB required environment variables
+  KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  # Postgres database connection string
+  # Format: postgres://username:password@host:port/dbname; if your pg instance is a Docker container, use the container name
+  DATABASE_URL=postgres://postgres:mysecretpassword@my-postgres:5432/postgres
+
+  # Authentication (Better Auth)
+  # Session encryption key (generate with: openssl rand -base64 32)
+  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  # JWKS key for signing and verifying JWTs
+  JWKS_KEY='{"keys":[...]}'
+
+  # S3 related
+  S3_ACCESS_KEY_ID=xxxxxxxxxx
+  S3_SECRET_ACCESS_KEY=xxxxxxxxxx
+  S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
+  S3_BUCKET=LobeHub
+
   ```
 
-  ### Crontab Automatic Update Script (Optional)
+  ### Start the lobehub Docker image
 
-  If you want to automatically obtain the latest image, you can follow these steps.
-
-  First, create a `lobe.env` configuration file with various environment variables, for example:
-
-  ```env
-  OPENAI_API_KEY=sk-xxxx
-  OPENAI_PROXY_URL=https://api-proxy.com/v1
-  OPENAI_MODEL_LIST=-gpt-4,-gpt-4-32k,-gpt-3.5-turbo-16k,gpt-3.5-turbo-1106=gpt-3.5-turbo-16k,gpt-4-0125-preview=gpt-4-turbo,gpt-4-vision-preview=gpt-4-vision
+  ```sh
+  docker run -it -d -p 3210:3210 --network pg --env-file lobe-chat.env --name lobehub lobehub/lobehub
   ```
 
-  Then, you can use the following script to automate the update:
+  You can use the following command to check the logs:
 
-  ```bash
-  #!/bin/bash
-  # auto-update-lobe-chat.sh
-
-  # Set up proxy (optional)
-  export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
-
-  # Pull the latest image and store the output in a variable
-  output=$(docker pull lobehub/lobe-chat:latest 2>&1)
-
-  # Check if the pull command was executed successfully
-  if [ $? -ne 0 ]; then
-    exit 1
-  fi
-
-  # Check if the output contains a specific string
-  echo "$output" | grep -q "Image is up to date for lobehub/lobe-chat:latest"
-
-  # If the image is already up to date, do nothing
-  if [ $? -eq 0 ]; then
-    exit 0
-  fi
-
-  echo "Detected Lobe-Chat update"
-
-  # Remove the old container
-  echo "Removed: $(docker rm -f Lobe-Chat)"
-
-  # Run the new container
-  echo "Started: $(docker run -d --network=host --env-file /path/to/lobe.env --name=Lobe-Chat --restart=always lobehub/lobe-chat)"
-
-  # Print the update time and version
-  echo "Update time: $(date)"
-  echo "Version: $(docker inspect lobehub/lobe-chat:latest | grep 'org.opencontainers.image.version' | awk -F'"' '{print $4}')"
-
-  # Clean up unused images
-  docker images | grep 'lobehub/lobe-chat' | grep -v 'lobehub/lobe-chat-database' | grep -v 'latest' | awk '{print $3}' | xargs -r docker rmi > /dev/null 2>&1
-  echo "Removed old images."
+  ```sh
+  docker logs -f lobehub
   ```
 
-  This script can be used in Crontab, but please ensure that your Crontab can find the correct Docker command. It is recommended to use absolute paths.
+  If you see the following logs in the container, it means it has started successfully:
 
-  Configure Crontab to execute the script every 5 minutes:
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 14.x.x
+    - Local:        http://localhost:3210
+    - Network:      http://0.0.0.0:3210
 
-  ```bash
-  */5 * * * * /path/to/auto-update-lobe-chat.sh >> /path/to/auto-update-lobe-chat.log 2>&1
+   ✓ Starting...
+   ✓ Ready in 95ms
   ```
 </Steps>
 
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat?color=45cc11&labelColor=black&style=flat-square
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat?color=369eff&labelColor=black&style=flat-square&sort=semver
+<Callout type="tip">
+  In our official Docker image, the database schema migration is automatically executed before
+  starting the image. We ensure stability from an empty database to all tables being formally
+  available. Therefore, we recommend using an empty table instance for your database to avoid the
+  cost of manually maintaining table structure migration.
+</Callout>
+
+## Using Locally (Mac / Windows)
+
+The data version of LobeHub also supports direct use on a local Mac/Windows machine.
+
+Here, we assume that you have a pg instance available on port 5432 locally on your Mac/Windows, with the account `postgres` and password `mysecretpassword`, accessible at `localhost:5432`.
+
+The script command you need to execute is:
+
+```shell
+$ docker run -it -d --name lobehub -p 3210:3210 \
+  -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
+  -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e JWKS_KEY='{"keys":[...]}' \
+  -e APP_URL=http://localhost:3210 \
+  -e S3_ACCESS_KEY_ID=xxxxxxxxxx \
+  -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
+  -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
+  -e S3_BUCKET=LobeHub \
+  lobehub/lobehub
+```
+
+<Callout type="tip">
+  `Docker` uses a virtual machine solution on `Windows` and `macOS`. If you use `localhost` /
+  `127.0.0.1`, it will refer to the container's `localhost`. In this case, try using
+  `host.docker.internal` instead of `localhost`.
+</Callout>
+
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver

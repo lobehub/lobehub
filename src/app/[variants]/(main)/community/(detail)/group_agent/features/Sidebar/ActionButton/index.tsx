@@ -14,7 +14,7 @@ const ActionButton = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { avatar, title, description, tags, identifier } = useDetailContext();
 
   return (
-    <Flexbox align={'center'} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} gap={8}>
       <ForkGroupAndChat mobile={mobile} />
       {identifier && (
         <ShareButton

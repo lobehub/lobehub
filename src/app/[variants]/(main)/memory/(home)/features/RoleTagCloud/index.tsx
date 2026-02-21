@@ -68,20 +68,20 @@ const RoleTagCloud = memo<RoleTagCloudProps>(({ tags }) => {
   if (!tags.length) return null;
   return (
     <Block
+      variant={fullscreen ? 'borderless' : 'outlined'}
       className={cx(
         styles.root,
         fullscreen && styles.fullscreen,
         fullscreenAnimation && styles.fullscreenAnimation,
       )}
-      variant={fullscreen ? 'borderless' : 'outlined'}
     >
       <ActionIcon
         className={cx('fullscreen-icon', styles.icon)}
         icon={fullscreen ? MinimizeIcon : MaximizeIcon}
+        size={DESKTOP_HEADER_ICON_SIZE}
         onClick={() => {
           setFullscreen(!fullscreen);
         }}
-        size={DESKTOP_HEADER_ICON_SIZE}
       />
       <TagCloudCanvas tags={tags} />
     </Block>

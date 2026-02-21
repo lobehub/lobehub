@@ -1,15 +1,14 @@
 ---
 title: 通过 Docker Compose 部署 LobeHub
-description: 学习如何使用 Docker Compose 部署 LobeHub 服务，包括安装 Docker 容器环境和自动更新脚本设置。
+description: 学习如何使用 Docker Compose 部署 LobeHub 服务，包括各种服务的配置教程。
 tags:
   - Docker Compose
   - LobeHub
   - Docker 容器
-  - 自动更新脚本
   - 部署指引
 ---
 
-# Docker Compose 部署指引
+# 使用 Docker Compose 部署 LobeHub
 
 <div style={{display:"flex", gap: 4}}>
   [![][docker-release-shield]][docker-release-link]
@@ -19,111 +18,339 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
-我们提供了 [Docker 镜像](https://hub.docker.com/r/lobehub/lobe-chat) ，供你在自己的私有设备上部署 LobeHub 服务。
+## 快速启动
+
+<Callout type="info">
+  **系统兼容性说明**
+
+  - 支持 Unix 环境（Linux/macOS）的一键部署
+
+  - Windows 用户需通过 [WSL 2](https://aka.ms/wsl) 运行
+
+  - 一键启动脚本为首次部署专用，非首次部署请参考 [自定义部署](#自定义部署) 章节
+
+  - 端口占用检查：确保 `3210`、`9000`、`9001` 端口可用
+</Callout>
+
+执行以下命令初始化部署环境，目录 `lobehub` 将用于存放你的配置文件和后续的数据库文件。
+
+```sh
+mkdir lobehub && cd lobehub
+```
+
+获取并执行部署脚本：
+
+```sh
+bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
+```
+
+脚本支持以下部署模式，请根据你的需求选择相应的模式，并继续阅读文档的剩余部分。
+
+- [本地模式（默认）](#本地模式)：仅能在本地访问，不支持局域网 / 公网访问，适用于初次体验；
+- [端口模式](#端口模式)：支持局域网 / 公网的 `http` 访问，适用于无域名或内部办公场景使用；
+- [域名模式](#域名模式)：支持局域网 / 公网在使用反向代理下的 `http/https` 访问，适用于个人或团队日常使用；
+
+<Callout type="info">
+  在脚本的选项提示 `(选项1/选项2)[选项1]` 中：`(选项1 / 选项2)`
+  代表可以选择的选项，`[选项1]`代表默认选项，直接回车即可选择默认选项。
+</Callout>
+
+### 本地模式
 
 <Steps>
-  ### 安装 Docker 容器环境
+  ### 在交互式脚本中完成剩余配置
 
-  （如果已安装，请跳过此步）
+  持续回车采用默认配置。
 
-  <Tabs items={['Ubuntu', 'CentOS']}>
-    <Tab>
-      ```fish
-      $ apt install docker.io
-      ```
-    </Tab>
+  ### 查看配置生成报告
 
-    <Tab>
-      ```fish
-      $ yum install docker
-      ```
-    </Tab>
-  </Tabs>
+  你需要在脚本运行结束后查看配置生成报告，包括各服务的访问地址和密码。
 
-  ### 运行 Docker Compose 部署指令
-
-  使用 `docker-compose` 时配置文件如下:
-
-  ```yml
-  version: '3.8'
-
-  services:
-    lobe-chat:
-      image: lobehub/lobe-chat
-      container_name: lobe-chat
-      restart: always
-      ports:
-        - '3210:3210'
-      environment:
-        OPENAI_API_KEY: sk-xxxx
-        OPENAI_PROXY_URL: https://api-proxy.com/v1
+  ```log
+  安全密钥生成结果如下：
+  LobeHub:
+    - URL: http://localhost:3210
+  RustFS:
+    - URL: http://localhost:9000
+    - Username: admin
+    - Password: 8c82ea41
   ```
 
-  运行以下命令启动 Lobe Chat 服务：
+  ### 启动 Docker
 
-  ```bash
-  $ docker-compose up -d
+  ```sh
+  docker compose up -d
   ```
 
-  ### Crontab 自动更新脚本（可选）
+  ### 检查日志
 
-  类似地，你可以使用以下脚本来自动更新 Lobe Chat，使用 `Docker Compose` 时，环境变量无需额外配置。
-
-  ```bash
-  #!/bin/bash
-  # auto-update-lobe-chat.sh
-
-  # Set proxy (optional)
-  export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
-
-  # Pull the latest image and store the output in a variable
-  output=$(docker pull lobehub/lobe-chat:latest 2>&1)
-
-  # Check if the pull command was executed successfully
-  if [ $? -ne 0 ]; then
-    exit 1
-  fi
-
-  # Check if the output contains a specific string
-  echo "$output" | grep -q "Image is up to date for lobehub/lobe-chat:latest"
-
-  # If the image is already up to date, do nothing
-  if [ $? -eq 0 ]; then
-    exit 0
-  fi
-
-  echo "Detected Lobe-Chat update"
-
-  # Remove the old container
-  echo "Removed: $(docker rm -f Lobe-Chat)"
-
-  # You may need to navigate to the directory where `docker-compose.yml` is located first
-  # cd /path/to/docker-compose-folder
-
-  # Run the new container
-  echo "Started: $(docker-compose up)"
-
-  # Print the update time and version
-  echo "Update time: $(date)"
-  echo "Version: $(docker inspect lobehub/lobe-chat:latest | grep 'org.opencontainers.image.version' | awk -F'"' '{print $4}')"
-
-  # Clean up unused images
-  docker images | grep 'lobehub/lobe-chat' | grep -v 'lobehub/lobe-chat-database' | grep -v 'latest' | awk '{print $3}' | xargs -r docker rmi > /dev/null 2>&1
-  echo "Removed old images."
+  ```sh
+  docker logs -f lobehub
   ```
 
-  This script can also be used in Crontab, but ensure that your Crontab can find the correct Docker command. It is recommended to use absolute paths.
+  如果你在容器中看到了以下日志，则说明已经启动成功：
 
-  Configure Crontab to execute the script every 5 minutes:
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        http://localhost:3210
+    - Network:      http://0.0.0.0:3210
 
-  ```bash
-  */5 * * * * /path/to/auto-update-lobe-chat.sh >> /path/to/auto-update-lobe-chat.log 2>&1
+   ✓ Starting...
+   ✓ Ready in 95ms
   ```
+
+  ### 访问应用
+
+  通过 [http://localhost:3210](http://localhost:3210) 访问你的 LobeHub 服务。
 </Steps>
 
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat?color=45cc11&labelColor=black&style=flat-square
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat?color=369eff&labelColor=black&style=flat-square&sort=semver
+### 端口模式
+
+<Steps>
+  ### 在交互式脚本中完成剩余配置
+
+  在端口模式中，你需要根据脚本提示完成：
+
+  - 服务器 IP 地址设置：以便局域网 / 公网访问。
+  - 安全密钥重新生成：我们强烈建议你重新生成安全密钥，如果你缺少脚本所需的密钥生成库，我们建议你参考 [自定义部署](#自定义部署) 章节对密钥进行修改。
+
+  ### 查看配置生成报告
+
+  你需要在脚本运行结束后查看配置生成报告，包括各服务的访问地址和密码。
+
+  ```log
+  安全密钥生成结果如下：
+  LobeHub:
+    - URL: http://your_server_ip:3210
+  RustFS:
+    - URL: http://your_server_ip:9000
+    - Username: admin
+    - Password: dbac8440
+  ```
+
+  ### 启动 Docker
+
+  ```sh
+  docker compose up -d
+  ```
+
+  ### 检查日志
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  如果你在容器中看到了以下日志，则说明已经启动成功：
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        http://your_server_ip:3210
+    - Network:      http://0.0.0.0:3210
+   ✓ Starting...
+   ✓ Ready in 95ms
+  ```
+
+  ### 访问应用
+
+  你可以通过 `http://your_server_ip:3210` 访问你的 LobeHub 服务。
+</Steps>
+
+### 域名模式
+
+<Steps>
+  ### 完成反向代理配置
+
+  在域名模式中，你需要完成反向代理配置，并确保局域网 / 公网能访问到以下服务。请使用反向代理将以下服务端口映射到域名：
+
+  | 域名                  | 反代端口   | 是否必选 |
+  | ------------------- | ------ | ---- |
+  | `lobe.example.com`  | `3210` | 必选   |
+  | `s3.example.com`    | `9000` | 必选   |
+  | `s3-ui.example.com` | `9001` |      |
+
+  ### 在交互式脚本中完成剩余配置
+
+  在域名模式中，你需要根据脚本提示完成：
+
+  - LobeHub 服务的域名设置：`lobe.example.com`
+  - S3 服务的域名设置：`s3.example.com`
+  - 选择访问协议：`http` 或 `https`
+  - 安全密钥重新生成：我们强烈建议你重新生成安全密钥，如果你缺少脚本所需的密钥生成库，我们建议你参考 [自定义部署](#自定义部署) 章节对密钥进行修改。
+
+  <Callout type="warning">
+    以下问题可能导致你的服务无法正常访问：
+
+    - 此处的域名配置需要与步骤`1`中的反向代理配置保持一致。
+
+    - 如果你使用 Cloudflare 的域名解析服务并开启了 `全程代理`，请使用 `https` 协议。
+
+    - 如果你使用了 HTTPS 协议，请确保你的域名证书已经正确配置，一键部署默认不支持自签发证书。
+  </Callout>
+
+  ### 查看配置生成报告
+
+  你需要在脚本运行结束后查看配置生成报告，包括各服务的访问地址和密码。
+
+  ```log
+  安全密钥生成结果如下：
+  LobeHub:
+    - URL: https://lobe.example.com
+  RustFS:
+    - URL: https://s3.example.com
+    - Username: admin
+    - Password: dbac8440
+  ```
+
+  ### 启动 Docker
+
+  ```sh
+  docker compose up -d
+  ```
+
+  ### 检查日志
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  如果你在容器中看到了以下日志，则说明已经启动成功：
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        https://localhost:3210
+    - Network:      http://0.0.0.0:3210
+    ✓ Starting...
+    ✓ Ready in 95ms
+  ```
+
+  ### 访问应用
+
+  你可以通过 `https://lobe.example.com` 访问你的 LobeHub 服务。
+</Steps>
+
+## 自定义部署
+
+该章节主要为你介绍在不同的网络环境下自定义部署 LobeHub 服务必须要修改的配置。在开始前，你可以先下载 [Docker Compose 配置文件](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml) 以及 [环境变量配置文件](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-CN.example)。
+
+```sh
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-CN.example
+mv .env.zh-CN.example .env
+```
+
+<Callout type="info">
+  本章节并不包含所有完整变量，剩余的变量可以查阅
+  [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
+</Callout>
+
+### 预备知识
+
+一般来讲，想要完整的运行 LobeHub，你需要至少拥有如下三个服务：
+
+- LobeHub 自身
+- 带有 PGVector 插件的 PostgreSQL 数据库
+- 支持 S3 协议的对象存储服务
+
+这些服务可以通过自建或者在线云服务组合搭配，以满足不同层次的部署需求。本文中，我们提供了完全基于开源自建服务的 Docker Compose 配置，你可以直接使用这份配置文件来启动 LobeHub，也可以对之进行修改以适应你的需求。
+
+我们默认使用 [RustFS](https://github.com/rustfs/rustfs) 作为本地 S3 对象存储服务。如需配置 SSO 登录鉴权服务，请参考 [身份验证服务](/zh/docs/self-hosting/auth) 文档。
+
+<Callout type="warning">
+  如果你的网络拓扑较为复杂，请先确保在你的网络环境中这些服务能够正常通讯。
+</Callout>
+
+### 必要配置
+
+以下我们将介绍运行这些服务的必要配置：
+
+1. S3 对象存储
+
+LobeHub 需要为 LLM 服务提供商提供文件对象的公网访问地址，因此你需要配置 S3 的 Endpoint：
+
+```env
+S3_ENDPOINT=https://s3.example.com
+```
+
+2. PostgreSQL
+
+该配置位于 `docker-compose.yml` 文件中，你需要配置数据库的名称和密码：
+
+```yaml
+services:
+  lobe:
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+```
+
+## 常见问题
+
+#### 数据库迁移问题
+
+你可以使用下述指令检查日志：
+
+```sh
+docker logs -f lobehub
+```
+
+<Callout type="tip">
+  在我们官方的 Docker 镜像中，会在启动镜像前自动执行数据库 schema 的 migration，我们的官方镜像承诺「空数据库 -> 完整表」这一段自动建表的稳定性。因此我们建议你的数据库实例使用一个空表实例，进而省去手动维护表结构或者 migration 的麻烦。
+</Callout>
+
+如果你在建表的时候出现了问题，你可以尝试使用如下命令强制移除数据库容器并重新启动：
+
+```sh
+docker compose down  # 停止服务
+sudo rm -rf ./data   # 移除挂载的数据库数据
+docker compose up -d # 重新启动
+```
+
+#### 使用 `INTERNAL_APP_URL` 配置内部服务器通信
+
+<Callout type="info">
+  如果你在 CDN（如 Cloudflare）或反向代理后部署 LobeHub，你可以配置内部服务器到服务器通信以绕过 CDN / 代理层，以获得更好的性能。
+</Callout>
+
+你可以配置 `INTERNAL_APP_URL` 环境变量：
+
+```yaml
+environment:
+  - 'APP_URL=https://lobe.example.com'  # 浏览器访问的公开 URL
+  - 'INTERNAL_APP_URL=http://localhost:3210'  # 服务器到服务器调用的内部 URL
+```
+
+**工作原理：**
+
+- `APP_URL`：用于浏览器 / 客户端访问、OAuth 回调、webhook 等（通过 CDN / 代理）
+- `INTERNAL_APP_URL`：用于内部服务器到服务器通信（绕过 CDN / 代理）
+
+如果未设置 `INTERNAL_APP_URL`，它将默认为 `APP_URL`。
+
+**配置选项：**
+
+- `http://localhost:3210` - 如果使用 Docker 主机网络模式
+- `http://lobe:3210` - 如果使用 Docker 网络与服务名称
+- `http://127.0.0.1:3210` - 备用本地主机地址
+
+<Callout type="tip">
+  对于使用 `network_mode: 'service:network-service'` 的 Docker Compose 部署，请使用 `http://localhost:3210` 作为 `INTERNAL_APP_URL`。
+</Callout>
+
+## 配置身份验证
+
+如需配置 SSO 登录鉴权服务（如 Casdoor、Logto 等），请参考 [身份验证服务](/zh/docs/self-hosting/auth) 文档。
+
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver

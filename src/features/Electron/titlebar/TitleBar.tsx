@@ -51,18 +51,18 @@ const TitleBar = memo(() => {
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={electronStylish.draggable}
       height={TITLE_BAR_HEIGHT}
-      horizontal
       justify={'space-between'}
       style={{ minHeight: TITLE_BAR_HEIGHT, padding }}
       width={'100%'}
     >
       <NavigationBar />
 
-      <Flexbox align={'center'} gap={4} horizontal>
-        <Flexbox className={electronStylish.nodrag} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={4}>
+        <Flexbox horizontal className={electronStylish.nodrag} gap={8}>
           <UpdateNotification />
           <Connection />
         </Flexbox>

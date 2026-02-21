@@ -3,9 +3,11 @@ import { ChatErrorType } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as EnvsAuthModule from '@/envs/auth';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-import { RequestHandler, checkAuth } from './index';
+import { type RequestHandler } from './index';
+import { checkAuth } from './index';
 import { checkAuthMethod } from './utils';
 
 vi.mock('@/utils/errorResponse', () => ({
@@ -21,7 +23,7 @@ vi.mock('@lobechat/utils/server', () => ({
 }));
 
 vi.mock('@/envs/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/envs/auth')>();
+  const actual = await importOriginal<typeof EnvsAuthModule>();
   return {
     ...actual,
   };

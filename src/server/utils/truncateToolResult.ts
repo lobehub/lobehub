@@ -6,9 +6,8 @@
 /**
  * Default maximum length for tool execution result content (in characters)
  * This prevents context overflow when sending results back to LLM
- * @default 6000 characters (~1,500 tokens for English, ~3,000 tokens for Chinese)
  */
-export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 6000;
+export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 25_000;
 
 /**
  * Truncate tool result content if it exceeds the maximum length
@@ -20,8 +19,6 @@ export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 6000;
  */
 export function truncateToolResult(content: string, maxLength?: number): string {
   const limit = maxLength ?? DEFAULT_TOOL_RESULT_MAX_LENGTH;
-
-  console.log('content-limit', content, limit);
 
   if (!content || content.length <= limit) {
     return content;

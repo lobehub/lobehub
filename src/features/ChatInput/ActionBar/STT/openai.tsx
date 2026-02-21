@@ -1,7 +1,8 @@
 import { getMessageError } from '@lobechat/fetch-sse';
 import { type ChatMessageError } from '@lobechat/types';
 import { getRecordMineType } from '@lobehub/tts';
-import { type OpenAISTTOptions, useOpenAISTT } from '@lobehub/tts/react';
+import { type OpenAISTTOptions } from '@lobehub/tts/react';
+import { useOpenAISTT } from '@lobehub/tts/react';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

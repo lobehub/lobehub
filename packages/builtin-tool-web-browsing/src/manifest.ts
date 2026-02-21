@@ -1,4 +1,4 @@
-import { type BuiltinToolManifest } from '@lobechat/types';
+import type { BuiltinToolManifest } from '@lobechat/types';
 import dayjs from 'dayjs';
 
 import { systemPrompt } from './systemRole';
@@ -98,6 +98,8 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
   identifier: 'lobe-web-browsing',
   meta: {
     avatar: '🌐',
+    readme:
+      'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges for comprehensive research.',
     title: 'Web Browsing',
   },
   systemRole: systemPrompt(dayjs(new Date()).format('YYYY-MM-DD')),

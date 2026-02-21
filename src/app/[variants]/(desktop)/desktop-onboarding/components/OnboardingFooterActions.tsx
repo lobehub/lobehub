@@ -1,6 +1,8 @@
-import { Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 interface OnboardingFooterActionsProps extends Omit<FlexboxProps, 'children'> {
   left?: ReactNode;
@@ -11,8 +13,8 @@ const OnboardingFooterActions = memo<OnboardingFooterActionsProps>(
   ({ left, right, style, ...rest }) => {
     return (
       <Flexbox
-        align={'center'}
         horizontal
+        align={'center'}
         justify={'space-between'}
         style={{
           background: cssVar.colorBgContainer,

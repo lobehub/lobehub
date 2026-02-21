@@ -1,10 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { agentService } from '@/services/agent';
-import { useSessionStore } from '@/store/session';
-import { LobeAgentConfig } from '@/types/agent';
+import { type LobeAgentConfig } from '@/types/agent';
+import { withSWR } from '~test-utils';
 
 import { useAgentStore } from '../../store';
 

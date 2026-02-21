@@ -1,8 +1,8 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
-import { OpenAI } from 'openai';
+import type { OpenAI } from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OpenAIChatMessage, UserMessageContentPart } from '../../types/chat';
+import type { OpenAIChatMessage, UserMessageContentPart } from '../../types/chat';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   buildAnthropicBlock,

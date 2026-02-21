@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "该邮箱已关联至已删除的账户，无法用于注册",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "当前邮箱无法修改，如需更换，请联系支持",
   "codes.EMAIL_NOT_ALLOWED": "该邮箱不允许用于注册",
+  "codes.EMAIL_NOT_FOUND": "登录账号未关联邮箱，请检查账号是否已绑定邮箱",
   "codes.EMAIL_NOT_VERIFIED": "邮箱还未验证，请先查收验证邮件完成验证",
   "codes.FAILED_TO_CREATE_SESSION": "会话创建遇到了问题。你可以先重试；如仍失败，请检查网络或稍后再试",
   "codes.FAILED_TO_CREATE_USER": "创建用户遇到了问题。你可以稍后再试",

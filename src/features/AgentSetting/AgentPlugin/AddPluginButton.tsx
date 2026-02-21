@@ -1,13 +1,15 @@
+import { type ButtonProps } from '@lobehub/ui';
 import { Button } from '@lobehub/ui';
 import { Grid2x2Plus } from 'lucide-react';
-import { forwardRef, useState } from 'react';
+import { type Ref } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DevModal from '@/features/PluginDevModal';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 
-const AddPluginButton = forwardRef<HTMLButtonElement>((props, ref) => {
+const AddPluginButton = ({ ref, ...props }: ButtonProps & { ref?: Ref<HTMLButtonElement> }) => {
   const { t } = useTranslation('setting');
   const [showModal, setModal] = useState(false);
   const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
@@ -23,26 +25,26 @@ const AddPluginButton = forwardRef<HTMLButtonElement>((props, ref) => {
       }}
     >
       <DevModal
+        open={showModal}
         onOpenChange={setModal}
+        onValueChange={updateNewDevPlugin}
         onSave={async (devPlugin) => {
           await installCustomPlugin(devPlugin);
           toggleAgentPlugin(devPlugin.identifier);
         }}
-        onValueChange={updateNewDevPlugin}
-        open={showModal}
       />
       <Button
         icon={Grid2x2Plus}
+        ref={ref}
+        size={'small'}
         onClick={() => {
           setModal(true);
         }}
-        ref={ref}
-        size={'small'}
       >
         {t('plugin.addTooltip')}
       </Button>
     </div>
   );
-});
+};
 
 export default AddPluginButton;

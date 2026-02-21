@@ -5,6 +5,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
     padding: 0 !important;
   `,
+  detailPopup: css`
+    width: 400px;
+  `,
   dropdownMenu: css`
     [role='menuitem'] {
       margin-block: 1px;

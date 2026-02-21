@@ -1,4 +1,4 @@
-import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
+import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type KlavisServer } from '@/store/tool/slices/klavisStore';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -15,6 +16,11 @@ const POLL_INTERVAL_MS = 1000; // 每秒轮询一次
 const POLL_TIMEOUT_MS = 15_000; // 15 秒超时
 
 interface KlavisServerItemProps {
+  /**
+   * Optional agent ID to use instead of currentAgentConfig
+   * Used in group profile to specify which member's plugins to toggle
+   */
+  agentId?: string;
   /**
    * Identifier used for storage (e.g., 'google-calendar')
    */
@@ -28,7 +34,7 @@ interface KlavisServerItemProps {
 }
 
 const KlavisServerItem = memo<KlavisServerItemProps>(
-  ({ identifier, label, server, serverName }) => {
+  ({ identifier, label, server, serverName, agentId }) => {
     const { t } = useTranslation('setting');
     const [isConnecting, setIsConnecting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
@@ -42,6 +48,10 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     const userId = useUserStore(userProfileSelectors.userId);
     const createKlavisServer = useToolStore((s) => s.createKlavisServer);
     const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+
+    // Get effective agent ID (agentId prop or current active agent)
+    const activeAgentId = useAgentStore((s) => s.activeAgentId);
+    const effectiveAgentId = agentId || activeAgentId || '';
 
     // 清理所有定时器
     const cleanup = useCallback(() => {
@@ -88,7 +98,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           try {
             await refreshKlavisServerTools(serverName);
           } catch (error) {
-            console.error('[Klavis] Failed to check auth status:', error);
+            console.debug('[Klavis] Polling check (expected during auth):', error);
           }
         }, POLL_INTERVAL_MS);
 
@@ -121,8 +131,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
               }
               oauthWindowRef.current = null;
 
-              // 窗口关闭后立即检查一次认证状态
-              refreshKlavisServerTools(serverName);
+              // 窗口关闭后开始轮询检查认证状态
+              startFallbackPolling(serverName);
             }
           } catch {
             // COOP 阻止了访问，降级到轮询方案
@@ -162,10 +172,24 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
     // Get plugin ID for this server (使用 identifier 作为 pluginId)
     const pluginId = server ? server.identifier : '';
-    const [checked, togglePlugin] = useAgentStore((s) => [
-      agentSelectors.currentAgentPlugins(s).includes(pluginId),
-      s.togglePlugin,
-    ]);
+    const plugins =
+      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
+    const checked = plugins.includes(pluginId);
+    const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+
+    // Toggle plugin for the effective agent
+    const togglePlugin = useCallback(
+      async (pluginIdToToggle: string) => {
+        if (!effectiveAgentId) return;
+        const currentPlugins = plugins;
+        const hasPlugin = currentPlugins.includes(pluginIdToToggle);
+        const newPlugins = hasPlugin
+          ? currentPlugins.filter((id) => id !== pluginIdToToggle)
+          : [...currentPlugins, pluginIdToToggle];
+        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+      },
+      [effectiveAgentId, plugins, updateAgentConfigById],
+    );
 
     const handleConnect = async () => {
       if (!userId) {
@@ -216,8 +240,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
       // 正在连接中
       if (isConnecting) {
         return (
-          <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-            <Icon icon={Loader2} spin />
+          <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+            <Icon spin icon={Loader2} />
           </Flexbox>
         );
       }
@@ -226,14 +250,14 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
       if (!server) {
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={(e) => {
               e.stopPropagation();
               handleConnect();
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.klavis.connect', { defaultValue: 'Connect' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -246,7 +270,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         case KlavisServerStatus.CONNECTED: {
           // 正在切换状态
           if (isToggling) {
-            return <Icon icon={Loader2} spin />;
+            return <Icon spin icon={Loader2} />;
           }
           return (
             <Checkbox
@@ -262,16 +286,17 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           // 正在等待认证
           if (isWaitingAuth) {
             return (
-              <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-                <Icon icon={Loader2} spin />
+              <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+                <Icon spin icon={Loader2} />
               </Flexbox>
             );
           }
           return (
             <Flexbox
+              horizontal
               align="center"
               gap={4}
-              horizontal
+              style={{ cursor: 'pointer', opacity: 0.65 }}
               onClick={(e) => {
                 e.stopPropagation();
                 // 点击重新打开 OAuth 窗口
@@ -279,7 +304,6 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
                   openOAuthWindow(server.oauthUrl, server.identifier);
                 }
               }}
-              style={{ cursor: 'pointer', opacity: 0.65 }}
             >
               {t('tools.klavis.pendingAuth', { defaultValue: 'Authorize' })}
               <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -301,9 +325,9 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={24}
-        horizontal
         justify={'space-between'}
         onClick={(e) => {
           e.stopPropagation();
@@ -313,7 +337,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           }
         }}
       >
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {label}
         </Flexbox>
         {renderRightControl()}

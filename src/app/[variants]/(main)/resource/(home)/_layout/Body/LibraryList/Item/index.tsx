@@ -1,7 +1,8 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
-import React, { type CSSProperties, memo, useCallback, useMemo } from 'react';
+import { type CSSProperties } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
@@ -16,12 +17,13 @@ import { useDropdownMenu } from './useDropdownMenu';
 interface KnowledgeBaseItemProps {
   active?: boolean;
   className?: string;
+  description?: string | null;
   id: string;
   name: string;
   style?: CSSProperties;
 }
 
-const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(({ id, name, active, style, className }) => {
+const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(({ id, name, description, active, style, className }) => {
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
   const navigate = useNavigate();
 
@@ -60,13 +62,15 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(({ id, name, active, styl
   // Icon (show loader when updating)
   const icon = useMemo(() => {
     if (isLoading) {
-      return <Icon color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} spin />;
+      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
     }
     return <RepoIcon size={18} />;
   }, [isLoading]);
 
   const dropdownMenu = useDropdownMenu({
+    description,
     id,
+    name,
     toggleEditing,
   });
 
@@ -81,10 +85,10 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(({ id, name, active, styl
         icon={icon}
         key={id}
         loading={isLoading}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
         style={style}
         title={name}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
       />
       <Editing id={id} name={name} toggleEditing={toggleEditing} />
     </>

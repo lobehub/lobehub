@@ -1,8 +1,6 @@
-import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { globalService } from '@/services/global';
-import { GlobalRuntimeConfig } from '@/types/serverConfig';
+import { type GlobalRuntimeConfig } from '@/types/serverConfig';
 
 import { createServerConfigStore } from './store';
 

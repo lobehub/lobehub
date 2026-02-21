@@ -1,4 +1,4 @@
-import { ModelParamsSchema } from 'model-bank';
+import { type ModelParamsSchema } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
 import { calculateInitialAspectRatio, supportsVirtualAspectRatio } from './aspectRatio';

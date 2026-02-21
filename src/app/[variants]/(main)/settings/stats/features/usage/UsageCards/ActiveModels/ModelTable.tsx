@@ -9,7 +9,8 @@ import InlineTable from '@/components/InlineTable';
 import { type UsageLog } from '@/types/usage/usageRecord';
 import { formatPrice } from '@/utils/format';
 
-import { GroupBy, type UsageChartProps } from '../../../../types';
+import { type UsageChartProps } from '../../../../types';
+import { GroupBy } from '../../../../types';
 
 interface WeightGroup {
   id: string;
@@ -96,13 +97,17 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
                 values={item.childrens.map((item) => item.weight)}
               />
               <InlineTable
+                dataSource={item.childrens}
+                hoverToActive={false}
+                loading={isLoading}
+                rowKey={(record) => record.id}
                 columns={[
                   {
                     dataIndex: 'id',
                     key: 'id',
                     render: (value, record, index) => {
                       return (
-                        <Flexbox align={'center'} gap={12} horizontal key={value}>
+                        <Flexbox horizontal align={'center'} gap={12} key={value}>
                           {groupBy === GroupBy.Provider ? (
                             <ProviderIcon
                               provider={record.id}
@@ -139,17 +144,13 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
                     title: t('usage.activeModels.table.spend'),
                   },
                 ]}
-                dataSource={item.childrens}
-                hoverToActive={false}
-                loading={isLoading}
-                rowKey={(record) => record.id}
               />
             </Flexbox>
           ),
           extra: <Tag>{item?.childrens?.length ?? 0}</Tag>,
           key,
           label: (
-            <Flexbox align={'center'} gap={8} horizontal>
+            <Flexbox horizontal align={'center'} gap={8}>
               {groupBy === GroupBy.Model ? (
                 <ModelIcon model={key} size={24} />
               ) : (

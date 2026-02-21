@@ -1,4 +1,5 @@
-import { Center, Empty, type EmptyProps } from '@lobehub/ui';
+import { type EmptyProps } from '@lobehub/ui';
+import { Center, Empty } from '@lobehub/ui';
 import { FileText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,10 +15,10 @@ const PageEmpty = memo<PageEmptyProps>(({ search, ...rest }) => {
     <Center height="100%" style={{ minHeight: '50vh' }} width="100%">
       <Empty
         description={search ? t('pageList.noResults') : t('pageList.empty')}
+        icon={FileText}
         descriptionProps={{
           fontSize: 14,
         }}
-        icon={FileText}
         style={{
           maxWidth: 400,
         }}

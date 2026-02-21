@@ -62,10 +62,10 @@ export const UpdateGroupPromptInspector = memo<
 
   return (
     <Flexbox
+      horizontal
       align="center"
       className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
       gap={6}
-      horizontal
     >
       <span className={styles.label}>
         {t('builtins.lobe-group-agent-builder.apiName.updateGroupPrompt')}
@@ -73,8 +73,8 @@ export const UpdateGroupPromptInspector = memo<
       {/* Show length diff when completed */}
       {!isLoading && !isArgumentsStreaming && lengthDiff !== null && (
         <Text
-          as="span"
           code
+          as="span"
           color={lengthDiff >= 0 ? cssVar.colorSuccess : cssVar.colorError}
           fontSize={12}
         >
@@ -85,7 +85,7 @@ export const UpdateGroupPromptInspector = memo<
       )}
       {/* Show streaming length */}
       {(isArgumentsStreaming || isLoading) && streamingLength > 0 && (
-        <Text as="span" code color={cssVar.colorTextDescription} fontSize={12}>
+        <Text code as="span" color={cssVar.colorTextDescription} fontSize={12}>
           ({streamingLength}
           {t('builtins.lobe-agent-builder.inspector.chars')})
         </Text>

@@ -1,5 +1,5 @@
-import type { LobeToolManifest, PluginEnableChecker } from '@lobechat/context-engine';
-import type { LobeTool } from '@lobechat/types';
+import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
+import { type LobeTool } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest

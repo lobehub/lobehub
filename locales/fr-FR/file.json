@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "En cours",
   "detail.data.embedding.success": "Terminé",
   "detail.data.embeddingStatus": "vectorisation",
+  "detail.data.noChunk": "Aucun fragment",
   "empty": "Aucun fichier ou dossier n’a encore été importé.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} fichiers filtrés (sur {{total}} au total)",
   "header.actions.connect": "Se connecter...",

@@ -1,13 +1,13 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import { userPersonaDocumentHistories, userPersonaDocuments } from '../../schemas';
 import type {
   NewUserPersonaDocument,
   NewUserPersonaDocumentHistoriesItem,
   UserPersonaDocument,
   UserPersonaDocumentHistoriesItem,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import { userPersonaDocumentHistories, userPersonaDocuments } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
 
 export interface UpsertUserPersonaParams {
   capturedAt?: Date;

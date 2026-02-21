@@ -32,6 +32,8 @@ const SearchResult = memo(() => {
             <ActionIcon
               icon={ToggleRightIcon}
               loading={batchLoading}
+              size={'small'}
+              title={t('providerModels.list.enabledActions.enableAll')}
               onClick={async () => {
                 setBatchLoading(true);
                 await batchToggleAiModels(
@@ -40,8 +42,6 @@ const SearchResult = memo(() => {
                 );
                 setBatchLoading(false);
               }}
-              size={'small'}
-              title={t('providerModels.list.enabledActions.enableAll')}
             />
           </Flexbox>
         )}

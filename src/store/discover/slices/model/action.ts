@@ -1,10 +1,11 @@
 import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
-import useSWR, { type SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
+import { type StoreSetter } from '@/store/types';
 import {
   type DiscoverModelDetail,
   type IdentifiersResponse,
@@ -12,20 +13,21 @@ import {
   type ModelQueryParams,
 } from '@/types/discover';
 
-export interface ModelAction {
-  useModelCategories: (params: CategoryListQuery) => SWRResponse<CategoryItem[]>;
-  useModelDetail: (params: { identifier: string }) => SWRResponse<DiscoverModelDetail | undefined>;
-  useModelIdentifiers: () => SWRResponse<IdentifiersResponse>;
-  useModelList: (params?: ModelQueryParams) => SWRResponse<ModelListResponse>;
-}
+type Setter = StoreSetter<DiscoverStore>;
+export const createModelSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>
+  new ModelActionImpl(set, get, _api);
 
-export const createModelSlice: StateCreator<
-  DiscoverStore,
-  [['zustand/devtools', never]],
-  [],
-  ModelAction
-> = () => ({
-  useModelCategories: (params) => {
+export class ModelActionImpl {
+  readonly #get: () => DiscoverStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => DiscoverStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  useModelCategories = (params: CategoryListQuery): SWRResponse<CategoryItem[]> => {
     return useSWR(
       ['model-categories', ...Object.values(params)].filter(Boolean).join('-'),
       async () => discoverService.getModelCategories(params),
@@ -33,9 +35,11 @@ export const createModelSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
+  };
 
-  useModelDetail: (params) => {
+  useModelDetail = (params: {
+    identifier: string;
+  }): SWRResponse<DiscoverModelDetail | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
       ['model-details', locale, params.identifier].filter(Boolean).join('-'),
@@ -44,15 +48,15 @@ export const createModelSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
+  };
 
-  useModelIdentifiers: () => {
+  useModelIdentifiers = (): SWRResponse<IdentifiersResponse> => {
     return useSWR('model-identifiers', async () => discoverService.getModelIdentifiers(), {
       revalidateOnFocus: false,
     });
-  },
+  };
 
-  useModelList: (params = {}) => {
+  useModelList = (params: ModelQueryParams = {}): SWRResponse<ModelListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
       ['model-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
@@ -66,5 +70,7 @@ export const createModelSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type ModelAction = Pick<ModelActionImpl, keyof ModelActionImpl>;

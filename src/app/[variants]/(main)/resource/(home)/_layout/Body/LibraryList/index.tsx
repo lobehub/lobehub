@@ -34,12 +34,12 @@ const LibraryList = memo(() => {
 
   if (isLoading) return <SkeletonList paddingInline={4} rows={3} />;
 
-  if (data?.length === 0) return <EmptyNavItem onClick={handleCreate} title={t('library.new')} />;
+  if (data?.length === 0) return <EmptyNavItem title={t('library.new')} onClick={handleCreate} />;
 
   return (
     <Flexbox gap={1} paddingInline={4}>
       {data?.map((item) => (
-        <Item id={item.id} key={item.id} name={item.name} />
+        <Item description={item.description} id={item.id} key={item.id} name={item.name} />
       ))}
     </Flexbox>
   );

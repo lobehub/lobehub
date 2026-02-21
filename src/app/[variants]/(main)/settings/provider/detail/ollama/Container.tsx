@@ -1,7 +1,8 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { createStaticStyles , responsive } from 'antd-style';
+import { createStaticStyles, responsive } from 'antd-style';
 import { XIcon } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode } from 'react';
+import { useState } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   close: css`

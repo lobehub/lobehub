@@ -1,21 +1,17 @@
-import { APP_WINDOW_MIN_SIZE, TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
-import {
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-  session as electronSession,
-  ipcMain,
-  screen,
-} from 'electron';
 import console from 'node:console';
 import { join } from 'node:path';
+
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
+import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type { BrowserWindowConstructorOptions } from 'electron';
+import { BrowserWindow, ipcMain, screen, session as electronSession, shell } from 'electron';
 
 import { preloadDir, resourcesDir } from '@/const/dir';
 import { isMac } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
-import { setResponseHeader } from '@/utils/http-headers';
+import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
@@ -114,13 +110,22 @@ export default class Browser {
   // ==================== Window Creation ====================
 
   private createBrowserWindow(): BrowserWindow {
-    const { title, width, height, ...rest } = this.options;
+    const {
+      title,
+      width,
+      height,
+      // Strip platform visual effect props — these are managed exclusively
+      // by WindowThemeManager.getPlatformConfig() to prevent config leaking
+      // from appBrowsers/windowTemplates into the BrowserWindow constructor.
+      vibrancy: _vibrancy,
+      visualEffectState: _visualEffectState,
+      transparent: _transparent,
+      ...rest
+    } = this.options;
 
     const resolvedState = this.stateManager.resolveState({ height, width });
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
-
-
 
     return new BrowserWindow({
       ...rest,
@@ -131,18 +136,17 @@ export default class Browser {
       height: resolvedState.height,
       show: false,
       title,
-
-      vibrancy: 'sidebar',
-      visualEffectState: 'active',
       webPreferences: {
         backgroundThrottling: false,
         contextIsolation: true,
         preload: join(preloadDir, 'index.js'),
         sandbox: false,
+        webviewTag: true,
       },
       width: resolvedState.width,
       x: resolvedState.x,
       y: resolvedState.y,
+      // Platform visual config is the SOLE source of vibrancy / transparency / titleBarOverlay.
       ...this.themeManager.getPlatformConfig(),
     });
   }
@@ -150,7 +154,7 @@ export default class Browser {
   private setupWindow(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] BrowserWindow instance created.`);
 
-    // Setup theme management
+    // Setup theme management (includes liquid glass lifecycle on macOS Tahoe)
     this.themeManager.attach(browserWindow);
 
     // Setup network interceptors
@@ -168,6 +172,9 @@ export default class Browser {
 
     // Setup event listeners
     this.setupEventListeners(browserWindow);
+
+    // Setup external link handler (prevents opening new windows in renderer)
+    this.setupWindowOpenHandler(browserWindow);
   }
 
   private initiateContentLoading(): void {
@@ -190,6 +197,26 @@ export default class Browser {
     this.setupFocusListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
     this.setupContextMenu(browserWindow);
+  }
+
+  /**
+   * Setup window open handler to intercept external links
+   * Prevents opening new windows in renderer and uses system browser instead
+   */
+  private setupWindowOpenHandler(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up window open handler for external links`);
+
+    browserWindow.webContents.setWindowOpenHandler(({ url }) => {
+      logger.info(`[${this.identifier}] Intercepted window open for URL: ${url}`);
+
+      // Open external URL in system browser
+      shell.openExternal(url).catch((error) => {
+        logger.error(`[${this.identifier}] Failed to open external URL: ${url}`, error);
+      });
+
+      // Deny creating new window in renderer
+      return { action: 'deny' };
+    });
   }
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
@@ -480,6 +507,8 @@ export default class Browser {
         delete requestHeaders['Origin'];
         logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
+
+      appendVercelCookie(requestHeaders);
 
       callback({ requestHeaders });
     });

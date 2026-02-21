@@ -6,14 +6,14 @@ import { useUserStore } from '@/store/user';
  * TODO: Need to be removed after tts refactor
  * @deprecated
  */
-// eslint-disable-next-line no-undef
+ 
 export const createHeaderWithOpenAI = (header?: HeadersInit): HeadersInit => {
   const state = useUserStore.getState();
 
   const keyVaults: Record<string, any> =
     aiProviderSelectors.providerKeyVaults('openai')(useAiInfraStore.getState()) || {};
 
-  // eslint-disable-next-line no-undef
+   
   return {
     ...header,
     [LOBE_USER_ID]: state.user?.id || '',

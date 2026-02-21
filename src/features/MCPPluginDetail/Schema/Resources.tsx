@@ -29,6 +29,9 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
   return mode === ModeType.Docs ? (
     <Block style={{ overflow: 'hidden' }} variant={'outlined'}>
       <InlineTable
+        dataSource={resources}
+        pagination={false}
+        size={'middle'}
         columns={[
           {
             dataIndex: 'name',
@@ -57,9 +60,6 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
             title: t('mcp.details.schema.resources.table.description'),
           },
         ]}
-        dataSource={resources}
-        pagination={false}
-        size={'middle'}
       />
     </Block>
   ) : (

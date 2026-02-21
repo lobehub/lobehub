@@ -1,11 +1,11 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Empty, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SearchKnowledgeBaseArgs, SearchKnowledgeBaseState } from '../../../types';
+import type { SearchKnowledgeBaseArgs, SearchKnowledgeBaseState } from '../../../types';
 import FileItem from './Item';
 
 const SearchKnowledgeBase = memo<
@@ -19,7 +19,7 @@ const SearchKnowledgeBase = memo<
   }
 
   return (
-    <Flexbox gap={8} horizontal wrap={'wrap'}>
+    <Flexbox horizontal gap={8} wrap={'wrap'}>
       {fileResults.map((file, index) => {
         return <FileItem index={index} key={file.fileId} {...file} />;
       })}

@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS } from '@lobechat/config';
 import { type UserSettings } from '@lobechat/types';
-import type { PartialDeep } from 'type-fest';
+import { type PartialDeep } from 'type-fest';
 
 export interface UserSettingsState {
   defaultSettings: UserSettings;

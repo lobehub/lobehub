@@ -1,6 +1,7 @@
 'use client';
 
-import { Form, type FormGroupItemType, SliderWithInput } from '@lobehub/ui';
+import { type FormGroupItemType } from '@lobehub/ui';
+import { Form, SliderWithInput } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
@@ -60,6 +61,15 @@ const AgentChat = memo(() => {
         name: 'enableCompressHistory',
         valuePropName: 'checked',
       },
+      {
+        children: <Switch />,
+        desc: t('settingChat.enableAutoScrollOnStreaming.desc'),
+        label: t('settingChat.enableAutoScrollOnStreaming.title'),
+        layout: 'horizontal',
+        minWidth: undefined,
+        name: 'enableAutoScrollOnStreaming',
+        valuePropName: 'checked',
+      },
     ],
     title: t('settingChat.title'),
   };
@@ -71,8 +81,8 @@ const AgentChat = memo(() => {
       initialValues={config}
       items={[chat]}
       itemsType={'group'}
-      onFinish={updateConfig}
       variant={'borderless'}
+      onFinish={updateConfig}
       {...FORM_STYLE}
     />
   );

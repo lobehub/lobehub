@@ -60,19 +60,19 @@ const ActivityRightPanel = memo(() => {
         <Text
           as={'h1'}
           fontSize={20}
+          weight={'bold'}
           style={{
             lineHeight: 1.4,
             marginBottom: 0,
           }}
-          weight={'bold'}
         >
           {activity.title || t('activity.defaultType')}
         </Text>
-        <Flexbox align="center" gap={16} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
           {activity.status && <Tag>{activity.status}</Tag>}
           <SourceLink source={activity.source} />
         </Flexbox>
-        <Flexbox align="center" gap={16} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
           <Time capturedAt={capturedAt} />
           {activity.timezone && (
             <Text fontSize={12} type="secondary">

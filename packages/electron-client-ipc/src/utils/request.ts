@@ -1,10 +1,9 @@
 /**
- * 从请求体中获取数据
- * @param body - 请求体
- * @returns 转换后的请求体数据
+ * Get data from request body
+ * @param body - Request body
+ * @returns Converted request body data
  */
 export const getRequestBody = async (
-  // eslint-disable-next-line no-undef
   body?: BodyInit | null,
 ): Promise<string | ArrayBuffer | undefined> => {
   if (!body) {
@@ -23,6 +22,6 @@ export const getRequestBody = async (
     return await body.arrayBuffer();
   }
 
-  console.warn('不支持的 IPC 代理请求体类型:', typeof body);
-  throw new Error('不支持的 IPC 代理请求体类型');
+  console.warn('Unsupported IPC proxy request body type:', typeof body);
+  throw new Error('Unsupported IPC proxy request body type');
 };

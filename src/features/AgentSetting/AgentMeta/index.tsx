@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Form, type FormGroupItemType, type FormItemProps, Tooltip } from '@lobehub/ui';
+import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
+import { Button, Form, Tooltip } from '@lobehub/ui';
 import { useUpdateEffect } from 'ahooks';
 import isEqual from 'fast-deep-equal';
 import { Wand2 } from 'lucide-react';
@@ -67,10 +68,10 @@ const AgentMeta = memo(() => {
         <AutoGenerate
           canAutoGenerate={hasSystemRole}
           loading={loadingState?.[item.key]}
+          placeholder={item.placeholder}
           onGenerate={() => {
             autocompleteMeta(item.key as keyof typeof meta);
           }}
-          placeholder={item.placeholder}
         />
       ),
       label: item.label,
@@ -114,15 +115,15 @@ const AgentMeta = memo(() => {
           disabled={!hasSystemRole}
           icon={Wand2}
           iconPlacement={'end'}
+          loading={Object.values(loadingState as any).some((i) => !!i)}
+          size={'small'}
           iconProps={{
             size: 12,
           }}
-          loading={Object.values(loadingState as any).some((i) => !!i)}
           onClick={(e: any) => {
             e.stopPropagation();
             autocompleteAllMeta(true);
           }}
-          size={'small'}
         >
           {t('autoGenerate', { ns: 'common' })}
         </Button>
@@ -139,8 +140,8 @@ const AgentMeta = memo(() => {
       initialValues={meta}
       items={[metaData]}
       itemsType={'group'}
-      onFinish={updateMeta}
       variant={'borderless'}
+      onFinish={updateMeta}
       {...FORM_STYLE}
     />
   );

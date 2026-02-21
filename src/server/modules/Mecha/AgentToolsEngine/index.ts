@@ -12,15 +12,16 @@
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { type LobeToolManifest, ToolsEngine } from '@lobechat/context-engine';
+import { type LobeToolManifest } from '@lobechat/context-engine';
+import { ToolsEngine } from '@lobechat/context-engine';
 import debug from 'debug';
 
 import { builtinTools } from '@/tools';
 
-import type {
-  ServerAgentToolsContext,
-  ServerAgentToolsEngineConfig,
-  ServerCreateAgentToolsEngineParams,
+import {
+  type ServerAgentToolsContext,
+  type ServerAgentToolsEngineConfig,
+  type ServerCreateAgentToolsEngineParams,
 } from './types';
 
 export type {
@@ -93,7 +94,7 @@ export const createServerAgentToolsEngine = (
     model,
     provider,
   } = params;
-  const searchMode = agentConfig.chatConfig?.searchMode ?? 'off';
+  const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
 
   log(

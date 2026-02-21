@@ -1,7 +1,7 @@
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
 
-import type { State } from '../../initialState';
+import { type State } from '../../initialState';
 import { dataSelectors } from '../data/selectors';
 
 /**
@@ -119,7 +119,7 @@ const isToolApiNameShining =
  * Check if a message has a thread by source message ID
  * This is a bridge selector that reads from global ChatStore
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 const hasThreadBySourceMsgId = (id: string) => (_s: State) => {
   const chatState = useChatStore.getState();
   return threadSelectors.hasThreadBySourceMsgId(id)(chatState);
@@ -129,7 +129,7 @@ const hasThreadBySourceMsgId = (id: string) => (_s: State) => {
  * Check if we are in thread mode (has active thread ID)
  * This is a bridge selector that reads from global ChatStore
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 const isThreadMode = (_s: State) => {
   const chatState = useChatStore.getState();
   return !!chatState.activeThreadId;

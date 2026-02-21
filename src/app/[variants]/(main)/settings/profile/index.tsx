@@ -27,7 +27,7 @@ const SkeletonRow = ({ mobile }: { mobile?: boolean }) => {
   if (mobile) {
     return (
       <Flexbox gap={12} style={rowStyle}>
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Skeleton.Button active size="small" style={{ height: 22, width: 60 }} />
           <Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />
         </Flexbox>
@@ -36,8 +36,8 @@ const SkeletonRow = ({ mobile }: { mobile?: boolean }) => {
     );
   }
   return (
-    <Flexbox align="center" gap={24} horizontal justify="space-between" style={rowStyle}>
-      <Flexbox align="center" gap={24} horizontal style={{ flex: 1 }}>
+    <Flexbox horizontal align="center" gap={24} justify="space-between" style={rowStyle}>
+      <Flexbox horizontal align="center" gap={24} style={{ flex: 1 }}>
         <Skeleton.Button active size="small" style={{ ...labelStyle, height: 22 }} />
         <Skeleton.Button active size="small" style={{ height: 22, minWidth: 120, width: 160 }} />
       </Flexbox>
@@ -59,6 +59,7 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
   const isLoadedAuthProviders = useUserStore(authSelectors.isLoadedAuthProviders);
   const fetchAuthProviders = useUserStore((s) => s.fetchAuthProviders);
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
   const [servers, isServersInit, useFetchUserKlavisServers] = useToolStore((s) => [
     s.servers,
     s.isServersInit,
@@ -113,7 +114,7 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
           <InterestsRow mobile={mobile} />
 
           {/* Password Row - For logged in users to change or set password */}
-          {!isDesktop && isLogin && (
+          {!isDesktop && isLogin && !disableEmailPassword && (
             <>
               <Divider style={{ margin: 0 }} />
               <PasswordRow mobile={mobile} />

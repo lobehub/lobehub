@@ -96,17 +96,17 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
         <Text style={{ fontSize: 12 }} type="secondary">
           {t('localSystem.workingDirectory.agentLevel')}
         </Text>
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           <Input
-            onChange={(e) => setAgentDir(e.target.value)}
             placeholder={t('localSystem.workingDirectory.placeholder')}
             size="small"
             style={{ flex: 1, fontSize: 12 }}
             value={agentDir}
             variant={'filled'}
+            onChange={(e) => setAgentDir(e.target.value)}
           />
           {isDesktop && (
-            <Button onClick={handleSelectAgentFolder} size="small" type={'text'}>
+            <Button size="small" type={'text'} onClick={handleSelectAgentFolder}>
               <Icon icon={FolderOpen} size={14} />
             </Button>
           )}
@@ -118,15 +118,15 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
           <Divider style={{ margin: 0 }} />
 
           <Flexbox
+            horizontal
             align="center"
             gap={8}
-            horizontal
+            style={{ cursor: 'pointer' }}
             onClick={() => {
               setUseTopicOverride(!useTopicOverride);
             }}
-            style={{ cursor: 'pointer' }}
           >
-            <Switch checked={useTopicOverride} onChange={setUseTopicOverride} size="small" />
+            <Switch checked={useTopicOverride} size="small" onChange={setUseTopicOverride} />
             <Text style={{ fontSize: 12 }}>{t('localSystem.workingDirectory.topicOverride')}</Text>
           </Flexbox>
 
@@ -135,17 +135,17 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
               <Text style={{ fontSize: 12 }} type="secondary">
                 {t('localSystem.workingDirectory.topicLevel')}
               </Text>
-              <Flexbox gap={8} horizontal>
+              <Flexbox horizontal gap={8}>
                 <Input
-                  onChange={(e) => setTopicDir(e.target.value)}
                   placeholder={t('localSystem.workingDirectory.placeholder')}
                   size="small"
                   style={{ flex: 1, fontSize: 12 }}
                   value={topicDir}
                   variant={'filled'}
+                  onChange={(e) => setTopicDir(e.target.value)}
                 />
                 {isDesktop && (
-                  <Button onClick={handleSelectTopicFolder} size="small" type={'text'}>
+                  <Button size="small" type={'text'} onClick={handleSelectTopicFolder}>
                     <Icon icon={FolderOpen} size={14} />
                   </Button>
                 )}
@@ -157,10 +157,10 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
 
       <Flexbox horizontal justify="flex-end">
         <Space>
-          <Button onClick={onClose} size="small">
+          <Button size="small" onClick={onClose}>
             {t('cancel', { ns: 'common' })}
           </Button>
-          <Button loading={loading} onClick={handleSave} size="small" type="primary">
+          <Button loading={loading} size="small" type="primary" onClick={handleSave}>
             {t('save', { ns: 'common' })}
           </Button>
         </Space>

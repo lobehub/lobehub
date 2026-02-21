@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const vllmChatModels: AIChatModelCard[] = [
   {
@@ -26,28 +26,32 @@ const vllmChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Gemma 2 is Google’s efficient model family for use cases from small apps to complex data processing.',
+    description:
+      'Gemma 2 is Google’s efficient model family for use cases from small apps to complex data processing.',
     displayName: 'Gemma 2 9B',
     id: 'google/gemma-2-9b',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Gemma 2 is Google’s efficient model family for use cases from small apps to complex data processing.',
+    description:
+      'Gemma 2 is Google’s efficient model family for use cases from small apps to complex data processing.',
     displayName: 'Gemma 2 27B',
     id: 'google/gemma-2-27b',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Mistral (7B) Instruct is known for strong performance across many language tasks.',
+    description:
+      'Mistral (7B) Instruct is known for strong performance across many language tasks.',
     displayName: 'Mistral 7B Instruct v0.1',
     id: 'mistralai/Mistral-7B-Instruct-v0.1',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Mixtral-8x7B Instruct (46.7B) provides high capacity for large-scale data processing.',
+    description:
+      'Mixtral-8x7B Instruct (46.7B) provides high capacity for large-scale data processing.',
     displayName: 'Mistral 8x7B Instruct v0.1',
     id: 'mistralai/Mixtral-8x7B-Instruct-v0.1',
     type: 'chat',

@@ -1,11 +1,11 @@
 'use client';
 
 import { Collapse, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { type LucideIcon } from 'lucide-react';
 import {
   ChartColumnBig,
   Delete,
   FileMinus,
-  type LucideIcon,
   MessageSquareText,
   Pickaxe,
   Thermometer,
@@ -99,18 +99,18 @@ const ParameterList = memo(() => {
         defaultActiveKey={items.map((item) => item.key)}
         expandIconPlacement={'end'}
         gap={16}
+        variant={'outlined'}
         items={items.map((item) => ({
           children: <ParameterItem {...item} key={item.key} />,
           key: item.key,
           label: (
-            <Flexbox align={'center'} gap={8} horizontal>
+            <Flexbox horizontal align={'center'} gap={8}>
               <Icon icon={item.icon} size={16} />
               {item.label}
               <Tag>{item.key}</Tag>
             </Flexbox>
           ),
         }))}
-        variant={'outlined'}
       />
     </Flexbox>
   );

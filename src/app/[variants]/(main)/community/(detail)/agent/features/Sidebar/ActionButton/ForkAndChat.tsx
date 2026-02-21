@@ -121,9 +121,9 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
       block
       className={styles.buttonGroup}
       loading={isLoading}
-      onClick={handleForkAndChat}
       size={'large'}
       type={'primary'}
+      onClick={handleForkAndChat}
     >
       {t('fork.forkAndChat')}
     </Button>

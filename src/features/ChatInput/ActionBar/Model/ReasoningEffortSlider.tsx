@@ -1,4 +1,5 @@
-import { type CreatedLevelSliderProps, createLevelSliderComponent } from './createLevelSlider';
+import { type CreatedLevelSliderProps } from './createLevelSlider';
+import { createLevelSliderComponent } from './createLevelSlider';
 
 const REASONING_EFFORT_LEVELS = ['low', 'medium', 'high'] as const;
 type ReasoningEffort = (typeof REASONING_EFFORT_LEVELS)[number];

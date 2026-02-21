@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeVercelAIGatewayAI, VercelAIGatewayModelCard, formatPrice, params } from './index';
+import type { VercelAIGatewayModelCard } from './index';
+import { formatPrice, LobeVercelAIGatewayAI, params } from './index';
 
 testProvider({
   Runtime: LobeVercelAIGatewayAI,
@@ -243,6 +244,53 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
       expect(model?.pricing).toBeDefined();
       expect(model?.pricing?.units).toBeDefined();
       expect(Array.isArray(model?.pricing?.units)).toBe(true);
+    });
+
+    it('should map extendParams for gpt-5.x reasoning models', async () => {
+      const mockModelData: VercelAIGatewayModelCard[] = [
+        {
+          id: 'openai/gpt-5.2-mini',
+          name: 'GPT-5.2 Mini',
+          pricing: { input: 0.000_003, output: 0.000_015 },
+          tags: ['reasoning'],
+          type: 'chat',
+        },
+        {
+          id: 'openai/gpt-5.1-mini',
+          name: 'GPT-5.1 Mini',
+          pricing: { input: 0.000_003, output: 0.000_015 },
+          tags: ['reasoning'],
+          type: 'chat',
+        },
+        {
+          id: 'openai/gpt-5-mini',
+          name: 'GPT-5 Mini',
+          pricing: { input: 0.000_003, output: 0.000_015 },
+          tags: ['reasoning'],
+          type: 'chat',
+        },
+      ];
+
+      const mockClient = {
+        models: {
+          list: vi.fn().mockResolvedValue({ data: mockModelData }),
+        },
+      };
+
+      const models = await params.models({ client: mockClient as any });
+      const gpt52 = models.find((m) => m.id === 'openai/gpt-5.2-mini');
+      const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
+      const gpt5 = models.find((m) => m.id === 'openai/gpt-5-mini');
+
+      expect(gpt52?.settings?.extendParams).toEqual(
+        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
+      );
+      expect(gpt51?.settings?.extendParams).toEqual(
+        expect.arrayContaining(['gpt5_1ReasoningEffort', 'textVerbosity']),
+      );
+      expect(gpt5?.settings?.extendParams).toEqual(
+        expect.arrayContaining(['gpt5ReasoningEffort', 'textVerbosity']),
+      );
     });
 
     it('should handle models with missing pricing', async () => {

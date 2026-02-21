@@ -4,13 +4,14 @@ import { Center } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
-import Image from '@/libs/next/Image';
-import React, { type FC, memo, useEffect, useRef, useState } from 'react';
+import { type FC } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDragAndDrop } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useDragAndDrop';
 import { useUploadFilesValidation } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useUploadFilesValidation';
 import { configPanelStyles } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/style';
+import Image from '@/libs/next/Image';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
 
@@ -25,6 +26,8 @@ export interface ImageUploadProps {
       | string // Old API: just URL
       | { dimensions?: { height: number; width: number }; url: string }, // New API: URL with dimensions
   ) => void;
+  /** Height of the empty placeholder area. Defaults to 160. */
+  placeholderHeight?: number;
   style?: React.CSSProperties;
   value?: string | null;
 }
@@ -300,24 +303,26 @@ CircularProgress.displayName = 'CircularProgress';
  * 占位视图组件
  */
 interface PlaceholderProps {
+  height?: number;
   isDragOver?: boolean;
   onClick?: () => void;
 }
 
-const Placeholder: FC<PlaceholderProps> = memo(({ isDragOver, onClick }) => {
+const Placeholder: FC<PlaceholderProps> = memo(({ isDragOver, onClick, height }) => {
   const configStyles = configPanelStyles;
   const { t } = useTranslation('components');
 
   return (
     <Center
+      gap={16}
+      horizontal={false}
       className={cx(
         styles.placeholder,
         configStyles.dragTransition,
         isDragOver && configStyles.dragOver,
       )}
-      gap={16}
-      horizontal={false}
       onClick={onClick}
+      style={height ? { height } : undefined}
     >
       <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
       <div className={styles.placeholderText}>
@@ -343,11 +348,11 @@ const UploadingDisplay: FC<UploadingDisplayProps> = memo(({ previewUrl, progress
   return (
     <div className={styles.uploadingDisplay}>
       <Image
-        alt="Uploading preview"
         fill
+        unoptimized
+        alt="Uploading preview"
         src={previewUrl}
         style={{ objectFit: 'cover' }}
-        unoptimized
       />
       <div className={styles.uploadingOverlay}>
         <CircularProgress value={progress} />
@@ -393,11 +398,11 @@ const SuccessDisplay: FC<SuccessDisplayProps> = memo(
         onClick={onChangeImage}
       >
         <Image
-          alt="Uploaded image"
           fill
+          unoptimized
+          alt="Uploaded image"
           src={imageUrl}
           style={{ objectFit: 'cover' }}
-          unoptimized
         />
 
         {/* Delete button */}
@@ -421,7 +426,7 @@ SuccessDisplay.displayName = 'SuccessDisplay';
 // ======== Main Component ======== //
 
 const ImageUpload: FC<ImageUploadProps> = memo(
-  ({ value, onChange, style, className, maxFileSize }) => {
+  ({ value, onChange, style, className, maxFileSize, placeholderHeight }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const [uploadState, setUploadState] = useState<UploadState | null>(null);
@@ -614,14 +619,14 @@ const ImageUpload: FC<ImageUploadProps> = memo(
         {/* Hidden file input */}
         <input
           accept="image/*"
+          ref={inputRef}
+          style={{ display: 'none' }}
+          type="file"
           onChange={handleFileChange}
           onClick={(e) => {
             // Reset value to allow re-selecting the same file
             e.currentTarget.value = '';
           }}
-          ref={inputRef}
-          style={{ display: 'none' }}
-          type="file"
         />
 
         {/* Conditional rendering based on state */}
@@ -635,7 +640,11 @@ const ImageUpload: FC<ImageUploadProps> = memo(
             onDelete={handleDelete}
           />
         ) : (
-          <Placeholder isDragOver={isDragOver} onClick={handleFileSelect} />
+          <Placeholder
+            height={placeholderHeight}
+            isDragOver={isDragOver}
+            onClick={handleFileSelect}
+          />
         )}
       </div>
     );

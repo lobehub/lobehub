@@ -26,17 +26,17 @@ const Sidebar = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   return (
     <ScrollShadow
+      hideScrollBar
       flex={'none'}
       gap={32}
-      hideScrollBar
       size={4}
+      width={360}
       style={{
         maxHeight: 'calc(100vh - 76px)',
         paddingBottom: 24,
         position: 'sticky',
         top: 16,
       }}
-      width={360}
     >
       {isDesktop ? (
         <Flexbox>

@@ -13,6 +13,7 @@ const { mockNativeTheme, mockBrowserWindow } = vi.hoisted(() => ({
     off: vi.fn(),
     on: vi.fn(),
     shouldUseDarkColors: false,
+    themeSource: 'system' as string,
   },
 }));
 
@@ -35,6 +36,8 @@ vi.mock('@/const/dir', () => ({
 
 vi.mock('@/const/env', () => ({
   isDev: false,
+  isMac: false,
+  isMacTahoe: false,
   isWindows: true,
 }));
 
@@ -58,6 +61,7 @@ describe('WindowThemeManager', () => {
     vi.useFakeTimers();
 
     mockNativeTheme.shouldUseDarkColors = false;
+    mockNativeTheme.themeSource = 'system';
     mockBrowserWindow.isDestroyed.mockReturnValue(false);
 
     manager = new WindowThemeManager('test-window');

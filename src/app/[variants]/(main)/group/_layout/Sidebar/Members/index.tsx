@@ -2,7 +2,8 @@
 
 import { AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { Loader2Icon, UserPlus } from 'lucide-react';
-import { type MouseEvent, memo, useState } from 'react';
+import { type MouseEvent } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
@@ -32,20 +33,20 @@ const Members = memo<MembersProps>(({ itemKey }) => {
 
   return (
     <AccordionItem
-      action={
-        <>
-          {isRevalidating && <ActionIcon icon={Loader2Icon} loading size={'small'} />}
-          <ActionIcon
-            icon={UserPlus}
-            onClick={handleAddMember}
-            size={'small'}
-            title={t('groupSidebar.members.addMember')}
-          />
-        </>
-      }
       itemKey={itemKey}
       paddingBlock={4}
       paddingInline={'8px 4px'}
+      action={
+        <>
+          {isRevalidating && <ActionIcon loading icon={Loader2Icon} size={'small'} />}
+          <ActionIcon
+            icon={UserPlus}
+            size={'small'}
+            title={t('groupSidebar.members.addMember')}
+            onClick={handleAddMember}
+          />
+        </>
+      }
       title={
         <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
           {`${t('groupSidebar.tabs.members')} ${membersCount}`}

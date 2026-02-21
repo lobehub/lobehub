@@ -37,20 +37,8 @@ const FileItem = memo<FileItemProps>(({ alt, onRemove, src, loading }) => {
 
   return (
     <Image
-      actions={
-        <ActionIcon
-          className={styles.deleteButton}
-          glass
-          icon={Trash}
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove?.();
-          }}
-          size={'small'}
-        />
-      }
-      alt={alt || ''}
       alwaysShowActions
+      alt={alt || ''}
       classNames={{ wrapper: cx(styles.image, styles.editableImage) }}
       height={64}
       isLoading={loading}
@@ -58,6 +46,18 @@ const FileItem = memo<FileItemProps>(({ alt, onRemove, src, loading }) => {
       size={IMAGE_SIZE as any}
       src={src}
       width={64}
+      actions={
+        <ActionIcon
+          glass
+          className={styles.deleteButton}
+          icon={Trash}
+          size={'small'}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove?.();
+          }}
+        />
+      }
     />
   );
 });

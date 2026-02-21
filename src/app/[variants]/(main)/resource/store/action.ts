@@ -2,7 +2,8 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { type ResourceManagerMode } from '@/features/ResourceManager';
 
-import { type State, initialState } from './initialState';
+import { type State } from './initialState';
+import { initialState } from './initialState';
 
 export interface Action {
   /**

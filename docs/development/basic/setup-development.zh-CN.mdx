@@ -7,6 +7,8 @@ tags:
   - Node.js
   - PNPM
   - Git
+  - Docker
+  - PostgreSQL
 ---
 
 # 环境设置指南
@@ -29,32 +31,87 @@ tags:
 
 - Node.js：LobeHub 是基于 Node.js 构建的，因此你需要安装 Node.js。我们建议安装最新的稳定版。
 - PNPM：我们使用 PNPM 作为管理器。你可以从 [pnpm 的官方网站](https://pnpm.io/installation) 上下载并安装。
-- Bun：我们使用 Bun 作为 npm scripts runner, 你可以从 [Bun 的官方网站](https://bun.com/docs/installation) 上下载并安装。
+- Bun：我们使用 Bun 作为 npm scripts runner，你可以从 [Bun 的官方网站](https://bun.com/docs/installation) 上下载并安装。
 - Git：我们使用 Git 进行版本控制。你可以从 Git 的官方网站上下载并安装。
+- Docker：用于运行 PostgreSQL、RustFS 等服务。你可以从 [Docker 官方网站](https://www.docker.com/get-started) 下载并安装。
 - IDE：你可以选择你喜欢的集成开发环境（IDE），我们推荐使用 WebStorm/VSCode。
 
 ### VSCode 用户
 
-推荐安装 [.vscode/extensions.json](https://github.com/lobehub/lobe-chat/blob/main/.vscode/extensions.json) 中推荐安装的扩展获得最佳开发体验。
+推荐安装 [.vscode/extensions.json](https://github.com/lobehub/lobehub/blob/main/.vscode/extensions.json) 中推荐安装的扩展获得最佳开发体验。
 
 ### 项目设置
 
 完成上述软件的安装后，你可以开始设置 LobeHub 项目了。
 
-1. **获取代码**：首先，你需要从 GitHub 上克隆 LobeHub 的代码库。在终端中运行以下命令：
+#### 1. 获取代码
+
+首先，你需要从 GitHub 上克隆 LobeHub 的代码库。在终端中运行以下命令：
 
 ```bash
-git clone https://github.com/lobehub/lobe-chat.git
+git clone https://github.com/lobehub/lobehub.git
+cd lobehub
 ```
 
-2. **安装依赖**：然后，进入项目目录，并使用 `pnpm` 安装项目的依赖包：
+#### 2. 安装依赖
+
+使用 PNPM 安装项目的依赖包：
 
 ```bash
-cd lobe-chat
 pnpm i
 ```
 
-3. **启动开发服务器**：安装完依赖后，你可以启动开发服务器：
+#### 3. 配置环境
+
+复制示例环境文件：
+
+```bash
+# Docker 服务配置
+cp docker-compose/dev/.env.example docker-compose/dev/.env
+
+# Next.js 开发服务器配置
+cp .env.example.development .env
+```
+
+根据需要编辑这些文件：
+
+- `docker-compose/dev/.env` - Docker 服务配置（PostgreSQL、Redis、RustFS、SearXNG）
+- `.env` - Next.js 开发服务器配置（数据库连接、S3 存储、认证等）
+
+#### 4. 启动 Docker 服务
+
+使用 Docker Compose 启动所有必需的服务：
+
+```bash
+bun run dev:docker
+```
+
+这将启动以下服务：
+
+- PostgreSQL 数据库（端口 5432）
+- Redis 缓存（端口 6379）
+- RustFS 存储（API 端口 9000，控制台端口 9001）
+- SearXNG 搜索（端口 8180）
+
+可以通过运行以下命令检查所有 Docker 服务运行状态：
+
+```bash
+docker compose -f docker-compose/dev/docker-compose.yml ps
+```
+
+#### 5. 运行数据库迁移
+
+执行数据库迁移脚本以创建所有必要的表：
+
+```bash
+pnpm db:migrate
+```
+
+预期输出：`✅ database migration pass.`
+
+#### 6. 启动开发服务器
+
+启动 LobeHub 开发服务器：
 
 ```bash
 bun run dev
@@ -64,19 +121,52 @@ bun run dev
 
 ![Chat Page](https://hub-apac-1.lobeobjects.space/docs/fc7b157a3bc016bc97719065f80c555c.png)
 
-## 使用服务端功能
+## 服务地址
 
-上述基础设置使用 LobeHub 的客户端数据库模式。如果你需要开发服务端功能，如：
+运行 Docker Compose 开发环境时：
 
-- 数据库持久化
-- 文件上传和存储
-- 图像生成
-- 多用户身份验证
-- 高级服务端集成
+- **PostgreSQL**：`postgres://postgres@localhost:5432/lobechat`
+- **Redis**：`redis://localhost:6379`
+- **RustFS API**：`http://localhost:9000`
+- **RustFS 控制台**：`http://localhost:9001`
+- **SearXNG**：`http://localhost:8180`
+- **应用程序**：`http://localhost:3010`
 
-请参考[使用服务端数据库](/docs/development/basic/work-with-server-side-database)指南获得完整的设置说明。
+## 故障排除
+
+### 重置服务
+
+如遇到问题，可以重置整个服务堆栈：
+
+```bash
+# 完全重置 Docker 环境（删除所有数据并重新启动）
+bun run dev:docker:reset
+```
+
+### 端口冲突
+
+如果端口已被占用：
+
+```bash
+# 检查端口使用情况
+lsof -i :5432  # PostgreSQL
+lsof -i :6379  # Redis
+lsof -i :9000  # RustFS API
+lsof -i :9001  # RustFS 控制台
+lsof -i :8180  # SearXNG
+```
+
+### 数据库迁移
+
+如需手动运行迁移：
+
+```bash
+pnpm db:migrate
+```
+
+---
 
 在开发过程中，如果你在环境设置上遇到任何问题，或者有任何关于 LobeHub 开发的问题，欢迎随时向我们提问。我们期待看到你的贡献！
 
-[codespaces-link]: https://codespaces.new/lobehub/lobe-chat
+[codespaces-link]: https://codespaces.new/lobehub/lobehub
 [codespaces-shield]: https://github.com/codespaces/badge.svg

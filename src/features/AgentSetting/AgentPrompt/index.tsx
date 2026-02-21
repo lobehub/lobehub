@@ -22,6 +22,8 @@ const AgentPrompt = memo(() => {
     <Button
       icon={PenLineIcon}
       iconPlacement={'end'}
+      size={'small'}
+      type={'primary'}
       iconProps={{
         size: 12,
       }}
@@ -29,8 +31,6 @@ const AgentPrompt = memo(() => {
         e.stopPropagation();
         setEditing(true);
       }}
-      size={'small'}
-      type={'primary'}
     >
       {t('edit', { ns: 'common' })}
     </Button>
@@ -38,28 +38,30 @@ const AgentPrompt = memo(() => {
 
   return (
     <Form
+      itemsType={'group'}
+      variant={'borderless'}
       items={[
         {
           children: (
             <Flexbox paddingBlock={isMobile ? 16 : 0}>
               <EditableMessage
+                showEditWhenEmpty
                 editing={editing}
                 height={'auto'}
+                placeholder={t('settingAgent.prompt.placeholder')}
+                value={systemRole}
+                variant={'borderless'}
                 markdownProps={{
                   variant: 'chat',
                 }}
-                onChange={(e) => {
-                  updateConfig({ systemRole: e });
-                }}
-                onEditingChange={setEditing}
-                placeholder={t('settingAgent.prompt.placeholder')}
-                showEditWhenEmpty
                 text={{
                   cancel: t('cancel', { ns: 'common' }),
                   confirm: t('ok', { ns: 'common' }),
                 }}
-                value={systemRole}
-                variant={'borderless'}
+                onEditingChange={setEditing}
+                onChange={(e) => {
+                  updateConfig({ systemRole: e });
+                }}
               />
               {!editing && !!systemRole && <Tokens value={systemRole} />}
             </Flexbox>
@@ -68,8 +70,6 @@ const AgentPrompt = memo(() => {
           title: t('settingAgent.prompt.title'),
         },
       ]}
-      itemsType={'group'}
-      variant={'borderless'}
       {...FORM_STYLE}
     />
   );

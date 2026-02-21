@@ -1,5 +1,5 @@
-import { type LocalFileItem } from '@lobechat/electron-client-ipc';
-import { type ChatMessagePluginError } from '@lobechat/types';
+import type { LocalFileItem } from '@lobechat/electron-client-ipc';
+import type { ChatMessagePluginError } from '@lobechat/types';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 

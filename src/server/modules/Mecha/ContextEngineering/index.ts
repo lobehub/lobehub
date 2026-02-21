@@ -1,7 +1,7 @@
 import { MessagesEngine } from '@lobechat/context-engine';
-import type { OpenAIChatMessage } from '@lobechat/types';
+import { type OpenAIChatMessage } from '@lobechat/types';
 
-import type { ServerMessagesEngineParams } from './types';
+import { type ServerMessagesEngineParams } from './types';
 
 /**
  * Create server-side variable generators with runtime context

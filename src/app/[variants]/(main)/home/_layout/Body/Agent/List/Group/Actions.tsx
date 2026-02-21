@@ -1,4 +1,5 @@
-import { ActionIcon, DropdownMenu, type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -13,10 +14,10 @@ const Actions = memo<ActionsProps>(({ dropdownMenu, isLoading }) => {
       <ActionIcon
         icon={MoreHorizontalIcon}
         loading={isLoading}
+        size={'small'}
         onClick={(e) => {
           e.stopPropagation();
         }}
-        size={'small'}
       />
     </DropdownMenu>
   );

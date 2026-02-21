@@ -1,9 +1,10 @@
-import { UIChatMessage } from '@lobechat/types';
-import { LobeAgentChatConfig } from '@lobechat/types';
-import { OpenAIChatMessage } from '@lobechat/types';
+import {
+  type LobeAgentChatConfig,
+  type OpenAIChatMessage,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { encodeAsync } from '@/utils/tokenizer';
 import * as tokenizerObj from '@/utils/tokenizer';
 
 import { chatHelpers } from './helpers';

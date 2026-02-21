@@ -1,7 +1,8 @@
-import type { MemoryExtractionTracePayload } from '@lobechat/types';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import type { MemoryExtractionTracePayload } from '@lobechat/types';
 
 type PromptfooAssert =
   | { type: 'javascript'; value: string }
@@ -39,7 +40,9 @@ const testCases: PromptfooTestCase[] = readdirSync(tracesDir)
   .filter((file) => file.endsWith('.json'))
   .map((file) => {
     const tracePath = join(tracesDir, file);
-    const tracePayload = JSON.parse(readFileSync(tracePath, 'utf8')) as MemoryExtractionTracePayload;
+    const tracePayload = JSON.parse(
+      readFileSync(tracePath, 'utf8'),
+    ) as MemoryExtractionTracePayload;
 
     return {
       assert: [identityShouldDedupe],

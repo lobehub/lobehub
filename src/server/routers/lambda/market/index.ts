@@ -53,8 +53,32 @@ export const marketRouter = router({
   // ============================== Agent Group Management (authenticated) ==============================
   agentGroup: agentGroupRouter,
 
+  
+  getAgentsByPlugin: marketProcedure
+    .input(
+      z.object({
+        locale: z.string().optional(),
+        page: z.number().optional(),
+        pageSize: z.number().optional(),
+        pluginId: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getAgentsByPlugin input: %O', input);
+
+      try {
+        return await ctx.discoverService.getAgentsByPlugin(input);
+      } catch (error) {
+        log('Error fetching agents by plugin: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch agents by plugin',
+        });
+      }
+    }),
+
   // ============================== Assistant Market ==============================
-  getAssistantCategories: marketProcedure
+getAssistantCategories: marketProcedure
     .input(
       z
         .object({

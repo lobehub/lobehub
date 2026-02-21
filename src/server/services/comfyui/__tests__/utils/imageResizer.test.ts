@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  type Architecture,
-  ImageResizer,
-  imageResizer,
-} from '@/server/services/comfyui/utils/imageResizer';
+import { type Architecture } from '@/server/services/comfyui/utils/imageResizer';
+import { ImageResizer, imageResizer } from '@/server/services/comfyui/utils/imageResizer';
 
 // Mock debug module
 vi.mock('debug', () => ({

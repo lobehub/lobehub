@@ -1,13 +1,11 @@
-import { GenerateContentResponse } from '@google/genai';
-import { GroundingSearch } from '@lobechat/types';
+import type { GenerateContentResponse } from '@google/genai';
+import type { GroundingSearch } from '@lobechat/types';
 
 import { nanoid } from '../../utils/uuid';
 import { convertGoogleAIUsage } from '../usageConverters/google-ai';
-import { type GoogleAIStreamOptions } from './google';
+import type { GoogleAIStreamOptions } from './google';
+import type { ChatPayloadForTransformStream, StreamContext, StreamProtocolChunk } from './protocol';
 import {
-  ChatPayloadForTransformStream,
-  StreamContext,
-  StreamProtocolChunk,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,

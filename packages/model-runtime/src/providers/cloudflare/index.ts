@@ -1,7 +1,7 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
-import { LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { createCallbacksTransformer } from '../../core/streams';
 import {
   CloudflareStreamTransformer,
@@ -9,7 +9,7 @@ import {
   desensitizeCloudflareUrl,
   fillUrl,
 } from '../../core/streams/cloudflare';
-import { ChatMethodOptions, ChatStreamPayload } from '../../types';
+import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
@@ -44,7 +44,7 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
         ? baseURLOrAccountID
         : baseURLOrAccountID + '/';
       // Try get accountID from baseURL
-      this.accountID = baseURLOrAccountID.replaceAll(/^.*\/([\dA-Fa-f]{32})\/.*$/g, '$1');
+      this.accountID = baseURLOrAccountID.replaceAll(/^.*\/([\da-f]{32})\/.*$/gi, '$1');
     } else {
       if (!apiKey) {
         throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
@@ -58,7 +58,7 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions): Promise<Response> {
     try {
       // Remove internal apiMode parameter to prevent sending to Cloudflare API
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       const { model, tools, apiMode: _, ...restPayload } = payload;
       const functions = tools?.map((tool) => tool.function);
       const headers = options?.headers || {};

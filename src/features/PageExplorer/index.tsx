@@ -41,10 +41,10 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId }) => {
     <PageEditor
       emoji={emoji}
       key={pageId}
-      onEmojiChange={handleEmojiChange}
-      onTitleChange={handleTitleChange}
       pageId={pageId}
       title={title}
+      onEmojiChange={handleEmojiChange}
+      onTitleChange={handleTitleChange}
     />
   );
 });

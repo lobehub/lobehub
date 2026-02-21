@@ -3,7 +3,8 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeft } from 'lucide-react';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -24,7 +25,7 @@ const Back = memo<{ href: string; style?: CSSProperties }>(({ href, style }) => 
 
   return (
     <Link className={styles.back} style={{ marginBottom: 8, ...style }} to={href}>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Icon icon={ArrowLeft} />
         {t(`back`)}
       </Flexbox>

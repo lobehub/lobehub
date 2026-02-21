@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
-import type { FileListItem } from '@/types/files';
+import { type FileListItem } from '@/types/files';
 
 /**
  * Hook to manage file selection with shift-click range selection support

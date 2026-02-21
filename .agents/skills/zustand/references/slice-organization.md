@@ -3,6 +3,7 @@
 ## Top-Level Store Structure
 
 Key aggregation files:
+
 - `src/store/chat/initialState.ts`: Aggregate all slice initial states
 - `src/store/chat/store.ts`: Define top-level `ChatStore`, combine all slice actions
 - `src/store/chat/selectors.ts`: Export all slice selectors
@@ -74,8 +75,10 @@ export const initialTopicState: ChatTopicState = {
 ```typescript
 const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => s.topicMaps[s.activeId];
 
-const getTopicById = (id: string) => (s: ChatStoreState): ChatTopic | undefined =>
-  currentTopics(s)?.find((topic) => topic.id === id);
+const getTopicById =
+  (id: string) =>
+  (s: ChatStoreState): ChatTopic | undefined =>
+    currentTopics(s)?.find((topic) => topic.id === id);
 
 // Core pattern: Use xxxSelectors aggregate
 export const topicSelectors = {
@@ -100,18 +103,21 @@ src/store/chat/slices/aiChat/
 ## State Design Patterns
 
 ### Map Structure for Associated Data
+
 ```typescript
 topicMaps: Record<string, ChatTopic[]>;
 messagesMap: Record<string, ChatMessage[]>;
 ```
 
 ### Arrays for Loading State
+
 ```typescript
 messageLoadingIds: string[]
 topicLoadingIds: string[]
 ```
 
 ### Optional Fields for Active Items
+
 ```typescript
 activeId: string
 activeTopicId?: string

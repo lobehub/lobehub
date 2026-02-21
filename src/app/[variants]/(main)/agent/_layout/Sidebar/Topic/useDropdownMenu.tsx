@@ -1,4 +1,5 @@
-import { Icon, type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { App, Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import { Hash, Import, LucideCheck, Trash } from 'lucide-react';

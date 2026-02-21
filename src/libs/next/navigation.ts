@@ -3,7 +3,7 @@
  * This module provides a unified interface that can be easily replaced
  * with react-router-dom in the future.
  *
- * @see Phase 3.1: LOBE-2988
+ * @see Phase 3.1
  */
 
 // Re-export all navigation hooks and utilities from Next.js

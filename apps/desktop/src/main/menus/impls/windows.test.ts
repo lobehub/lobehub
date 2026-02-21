@@ -256,14 +256,14 @@ describe('WindowsMenu', () => {
   });
 
   describe('menu accelerators', () => {
-    it('should use Ctrl prefix for Windows shortcuts', () => {
+    it('should use role for standard edit shortcuts (accelerators handled by Electron)', () => {
       windowsMenu.buildAndSetAppMenu();
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const editMenu = template.find((item: any) => item.label === 'Edit');
       const copyItem = editMenu.submenu.find((item: any) => item.label === 'Copy');
 
-      expect(copyItem.accelerator).toBe('Ctrl+C');
+      expect(copyItem.role).toBe('copy');
     });
 
     it('should set correct accelerator for close', () => {
@@ -276,24 +276,24 @@ describe('WindowsMenu', () => {
       expect(closeItem.accelerator).toBe('Alt+F4');
     });
 
-    it('should set correct accelerator for minimize', () => {
+    it('should use role for minimize (accelerator handled by Electron)', () => {
       windowsMenu.buildAndSetAppMenu();
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const fileMenu = template.find((item: any) => item.label === 'File');
       const minimizeItem = fileMenu.submenu.find((item: any) => item.label === 'Minimize');
 
-      expect(minimizeItem.accelerator).toBe('Ctrl+M');
+      expect(minimizeItem.role).toBe('minimize');
     });
 
-    it('should set F11 for fullscreen', () => {
+    it('should use role for fullscreen (accelerator handled by Electron)', () => {
       windowsMenu.buildAndSetAppMenu();
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const viewMenu = template.find((item: any) => item.label === 'View');
       const fullscreenItem = viewMenu.submenu.find((item: any) => item.label === 'Full Screen');
 
-      expect(fullscreenItem.accelerator).toBe('F11');
+      expect(fullscreenItem.role).toBe('togglefullscreen');
     });
   });
 
@@ -320,14 +320,14 @@ describe('WindowsMenu', () => {
       expect(mockApp.browserManager.retrieveByIdentifier).toHaveBeenCalledWith('devtools');
     });
 
-    it('should set Ctrl+Shift+I for developer tools', () => {
+    it('should use role for developer tools (accelerator handled by Electron)', () => {
       windowsMenu.buildAndSetAppMenu({ showDevItems: true });
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const devMenu = template.find((item: any) => item.label === 'Developer');
       const devToolsItem = devMenu.submenu.find((item: any) => item.label === 'Developer Tools');
 
-      expect(devToolsItem.accelerator).toBe('Ctrl+Shift+I');
+      expect(devToolsItem.role).toBe('toggleDevTools');
     });
   });
 
@@ -343,13 +343,14 @@ describe('WindowsMenu', () => {
       expect(pasteItem).toBeDefined();
     });
 
-    it('should use Ctrl accelerators in context menus', () => {
+    it('should use role for copy in context menus (accelerator handled by Electron)', () => {
       windowsMenu.buildContextMenu('editor');
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const copyItem = template.find((item: any) => item.role === 'copy');
 
-      expect(copyItem.accelerator).toBe('Ctrl+C');
+      expect(copyItem).toBeDefined();
+      expect(copyItem.role).toBe('copy');
     });
 
     it('should include cut in editor context menu', () => {
@@ -359,7 +360,7 @@ describe('WindowsMenu', () => {
       const cutItem = template.find((item: any) => item.role === 'cut');
 
       expect(cutItem).toBeDefined();
-      expect(cutItem.accelerator).toBe('Ctrl+X');
+      expect(cutItem.role).toBe('cut');
     });
 
     it('should include delete in editor context menu', () => {

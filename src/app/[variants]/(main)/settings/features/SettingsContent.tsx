@@ -1,13 +1,13 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import dynamic from '@/libs/next/dynamic';
 import { Fragment } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
+import dynamic from '@/libs/next/dynamic';
 import { SettingsTabs } from '@/store/global/initialState';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 const componentMap = {
   [SettingsTabs.Common]: dynamic(() => import('../common'), {
@@ -37,6 +37,9 @@ const componentMap = {
   [SettingsTabs.Proxy]: dynamic(() => import('../proxy'), {
     loading: () => <Loading debugId="Settings > Proxy" />,
   }),
+  [SettingsTabs.SystemTools]: dynamic(() => import('../system-tools'), {
+    loading: () => <Loading debugId="Settings > SystemTools" />,
+  }),
   [SettingsTabs.Storage]: dynamic(() => import('../storage'), {
     loading: () => <Loading debugId="Settings > Storage" />,
   }),
@@ -59,40 +62,25 @@ const componentMap = {
   [SettingsTabs.Skill]: dynamic(() => import('../skill'), {
     loading: () => <Loading debugId="Settings > Skill" />,
   }),
-  ...(ENABLE_BUSINESS_FEATURES
-    ? ({
-        [SettingsTabs.Plans]: dynamic(
-          () => import('@/business/client/BusinessSettingPages/Plans'),
-          {
-            loading: () => <Loading debugId="Settings > Plans" />,
-          },
-        ),
-        [SettingsTabs.Funds]: dynamic(
-          () => import('@/business/client/BusinessSettingPages/Funds'),
-          {
-            loading: () => <Loading debugId="Settings > Funds" />,
-          },
-        ),
-        [SettingsTabs.Usage]: dynamic(
-          () => import('@/business/client/BusinessSettingPages/Usage'),
-          {
-            loading: () => <Loading debugId="Settings > Usage" />,
-          },
-        ),
-        [SettingsTabs.Billing]: dynamic(
-          () => import('@/business/client/BusinessSettingPages/Billing'),
-          {
-            loading: () => <Loading debugId="Settings > Billing" />,
-          },
-        ),
-        [SettingsTabs.Referral]: dynamic(
-          () => import('@/business/client/BusinessSettingPages/Referral'),
-          {
-            loading: () => <Loading debugId="Settings > Referral" />,
-          },
-        ),
-      } as const)
-    : []),
+
+  [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {
+    loading: () => <Loading debugId="Settings > Plans" />,
+  }),
+  [SettingsTabs.Funds]: dynamic(() => import('@/business/client/BusinessSettingPages/Funds'), {
+    loading: () => <Loading debugId="Settings > Funds" />,
+  }),
+  [SettingsTabs.Usage]: dynamic(() => import('@/business/client/BusinessSettingPages/Usage'), {
+    loading: () => <Loading debugId="Settings > Usage" />,
+  }),
+  [SettingsTabs.Billing]: dynamic(() => import('@/business/client/BusinessSettingPages/Billing'), {
+    loading: () => <Loading debugId="Settings > Billing" />,
+  }),
+  [SettingsTabs.Referral]: dynamic(
+    () => import('@/business/client/BusinessSettingPages/Referral'),
+    {
+      loading: () => <Loading debugId="Settings > Referral" />,
+    },
+  ),
 };
 
 interface SettingsContentProps {
@@ -101,6 +89,8 @@ interface SettingsContentProps {
 }
 
 const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+
   const renderComponent = (tab: string) => {
     const Component = componentMap[tab as keyof typeof componentMap] || componentMap.common;
     if (!Component) return null;
@@ -114,7 +104,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         SettingsTabs.Profile,
         SettingsTabs.Stats,
         SettingsTabs.Security,
-        ...(ENABLE_BUSINESS_FEATURES
+        ...(enableBusinessFeatures
           ? [
               SettingsTabs.Plans,
               SettingsTabs.Funds,

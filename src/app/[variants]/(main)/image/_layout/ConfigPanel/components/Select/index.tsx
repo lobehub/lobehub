@@ -1,8 +1,10 @@
 'use client';
 
-import { Block, Center, Grid, type GridProps, Select, Text } from '@lobehub/ui';
+import { type GridProps } from '@lobehub/ui';
+import { Block, Center, Grid, Select, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import useMergeState from 'use-merge-value';
 
 import { useIsDark } from '@/hooks/useIsDark';
@@ -41,7 +43,7 @@ const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultVal
   // If any option cannot be parsed as ratio, fallback to regular Select
   if (hasInvalidRatio) {
     return (
-      <Select onChange={onChange} options={options} style={{ width: '100%' }} value={active} />
+      <Select options={options} style={{ width: '100%' }} value={active} onChange={onChange} />
     );
   }
   return (
@@ -80,21 +82,21 @@ const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultVal
 
           return (
             <Block
-              align={'center'}
               clickable
+              align={'center'}
               gap={4}
               justify={'center'}
               key={item.value}
+              padding={8}
+              shadow={isActive && !isDarkMode}
+              variant={'filled'}
+              style={{
+                backgroundColor: isActive ? cssVar.colorBgElevated : 'transparent',
+              }}
               onClick={() => {
                 setActive(item.value);
                 onChange?.(item.value);
               }}
-              padding={8}
-              shadow={isActive && !isDarkMode}
-              style={{
-                backgroundColor: isActive ? cssVar.colorBgElevated : 'transparent',
-              }}
-              variant={'filled'}
             >
               <Center height={16} style={{ marginTop: 4 }} width={16}>
                 {content}

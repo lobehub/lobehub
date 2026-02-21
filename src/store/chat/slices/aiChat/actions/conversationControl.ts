@@ -3,9 +3,9 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import { type ConversationContext } from '@lobechat/types';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatStore } from '@/store/chat/store';
+import { type StoreSetter } from '@/store/types';
 
 import { displayMessageSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
@@ -15,73 +15,23 @@ import { dbMessageSelectors } from '../../message/selectors';
 /**
  * Actions for controlling conversation operations like cancellation and error handling
  */
-export interface ConversationControlAction {
-  /**
-   * Interrupts the ongoing ai message generation process
-   */
-  stopGenerateMessage: () => void;
-  /**
-   * Cancels sendMessage operation for a specific topic/session
-   */
-  cancelSendMessageInServer: (topicId?: string) => void;
-  /**
-   * Clears any error messages from the send message operation
-   */
-  clearSendMessageError: () => void;
-  /**
-   * Switches to a different branch of a message
-   * @param messageId - The ID of the message to switch branch
-   * @param branchIndex - The index of the branch to switch to
-   * @param context - Optional context for optimistic update (required for Group mode)
-   */
-  switchMessageBranch: (
-    messageId: string,
-    branchIndex: number,
-    context?: OptimisticUpdateContext,
-  ) => Promise<void>;
-  /**
-   * Approve tool intervention
-   * @param toolMessageId - The ID of the tool message to approve
-   * @param assistantGroupId - The ID of the assistant group
-   * @param context - Optional conversation context (for non-main conversations like agent-builder)
-   */
-  approveToolCalling: (
-    toolMessageId: string,
-    assistantGroupId: string,
-    context?: ConversationContext,
-  ) => Promise<void>;
-  /**
-   * Reject tool intervention
-   * @param messageId - The ID of the tool message to reject
-   * @param reason - Optional rejection reason
-   * @param context - Optional conversation context (for non-main conversations like agent-builder)
-   */
-  rejectToolCalling: (
-    messageId: string,
-    reason?: string,
-    context?: ConversationContext,
-  ) => Promise<void>;
-  /**
-   * Reject tool intervention and continue
-   * @param messageId - The ID of the tool message to reject
-   * @param reason - Optional rejection reason
-   * @param context - Optional conversation context (for non-main conversations like agent-builder)
-   */
-  rejectAndContinueToolCalling: (
-    messageId: string,
-    reason?: string,
-    context?: ConversationContext,
-  ) => Promise<void>;
-}
 
-export const conversationControl: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  ConversationControlAction
-> = (set, get) => ({
-  stopGenerateMessage: () => {
-    const { activeAgentId, activeTopicId, cancelOperations } = get();
+type Setter = StoreSetter<ChatStore>;
+export const conversationControl = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new ConversationControlActionImpl(set, get, _api);
+
+export class ConversationControlActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  stopGenerateMessage = (): void => {
+    const { activeAgentId, activeTopicId, cancelOperations } = this.#get();
 
     // Cancel all running execAgentRuntime operations in the current context
     cancelOperations(
@@ -93,22 +43,22 @@ export const conversationControl: StateCreator<
       },
       MESSAGE_CANCEL_FLAT,
     );
-  },
+  };
 
-  cancelSendMessageInServer: (topicId?: string) => {
-    const { activeAgentId, activeTopicId } = get();
+  cancelSendMessageInServer = (topicId?: string): void => {
+    const { activeAgentId, activeTopicId } = this.#get();
 
     // Determine which operation to cancel
     const targetTopicId = topicId ?? activeTopicId;
     const contextKey = messageMapKey({ agentId: activeAgentId, topicId: targetTopicId });
 
     // Cancel operations in the operation system
-    const operationIds = get().operationsByContext[contextKey] || [];
+    const operationIds = this.#get().operationsByContext[contextKey] || [];
 
     operationIds.forEach((opId) => {
-      const operation = get().operations[opId];
+      const operation = this.#get().operations[opId];
       if (operation && operation.type === 'sendMessage' && operation.status === 'running') {
-        get().cancelOperation(opId, 'User cancelled');
+        this.#get().cancelOperation(opId, 'User cancelled');
       }
     });
 
@@ -116,50 +66,59 @@ export const conversationControl: StateCreator<
     if (contextKey === messageMapKey({ agentId: activeAgentId, topicId: activeTopicId })) {
       // Find the latest sendMessage operation with editor state
       for (const opId of [...operationIds].reverse()) {
-        const op = get().operations[opId];
+        const op = this.#get().operations[opId];
         if (op && op.type === 'sendMessage' && op.metadata.inputEditorTempState) {
-          get().mainInputEditor?.setJSONState(op.metadata.inputEditorTempState);
+          this.#get().mainInputEditor?.setJSONState(op.metadata.inputEditorTempState);
           break;
         }
       }
     }
-  },
+  };
 
-  clearSendMessageError: () => {
-    const { activeAgentId, activeTopicId } = get();
+  clearSendMessageError = (): void => {
+    const { activeAgentId, activeTopicId } = this.#get();
     const contextKey = messageMapKey({ agentId: activeAgentId, topicId: activeTopicId });
-    const operationIds = get().operationsByContext[contextKey] || [];
+    const operationIds = this.#get().operationsByContext[contextKey] || [];
 
     // Clear error message from all sendMessage operations in current context
     operationIds.forEach((opId) => {
-      const op = get().operations[opId];
+      const op = this.#get().operations[opId];
       if (op && op.type === 'sendMessage' && op.metadata.inputSendErrorMsg) {
-        get().updateOperationMetadata(opId, { inputSendErrorMsg: undefined });
+        this.#get().updateOperationMetadata(opId, { inputSendErrorMsg: undefined });
       }
     });
-  },
+  };
 
-  switchMessageBranch: async (messageId, branchIndex, context) => {
-    await get().optimisticUpdateMessageMetadata(
+  switchMessageBranch = async (
+    messageId: string,
+    branchIndex: number,
+    context?: OptimisticUpdateContext,
+  ): Promise<void> => {
+    await this.#get().optimisticUpdateMessageMetadata(
       messageId,
       { activeBranchIndex: branchIndex },
       context,
     );
-  },
-  approveToolCalling: async (toolMessageId, _assistantGroupId, context) => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = get();
+  };
+
+  approveToolCalling = async (
+    toolMessageId: string,
+    _assistantGroupId: string,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
-      agentId: get().activeAgentId,
-      topicId: get().activeTopicId,
-      threadId: get().activeThreadId,
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
     };
 
     const { agentId, topicId, threadId, scope } = effectiveContext;
 
     // 1. Get tool message and verify it exists
-    const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(get());
+    const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
     if (!toolMessage) return;
 
     // Create an operation to carry the context for optimistic updates
@@ -178,7 +137,7 @@ export const conversationControl: StateCreator<
     const optimisticContext = { operationId };
 
     // 2. Update intervention status to approved
-    await get().optimisticUpdatePlugin(
+    await this.#get().optimisticUpdatePlugin(
       toolMessageId,
       { intervention: { status: 'approved' } },
       optimisticContext,
@@ -186,10 +145,10 @@ export const conversationControl: StateCreator<
 
     // 3. Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(get());
+    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
 
     // 4. Create agent state and context with user intervention config
-    const { state, context: initialContext } = get().internal_createAgentState({
+    const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
       parentMessageId: toolMessageId,
       agentId,
@@ -226,26 +185,30 @@ export const conversationControl: StateCreator<
     } catch (error) {
       const err = error as Error;
       console.error('[approveToolCalling] Error executing agent runtime:', err);
-      get().failOperation(operationId, {
+      this.#get().failOperation(operationId, {
         type: 'approveToolCalling',
         message: err.message || 'Unknown error',
       });
     }
-  },
+  };
 
-  rejectToolCalling: async (messageId, reason, context) => {
-    const { startOperation, completeOperation } = get();
+  rejectToolCalling = async (
+    messageId: string,
+    reason?: string,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const { startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
-      agentId: get().activeAgentId,
-      topicId: get().activeTopicId,
-      threadId: get().activeThreadId,
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
     };
 
     const { agentId, topicId, threadId, scope } = effectiveContext;
 
-    const toolMessage = dbMessageSelectors.getDbMessageById(messageId)(get());
+    const toolMessage = dbMessageSelectors.getDbMessageById(messageId)(this.#get());
     if (!toolMessage) return;
 
     // Create an operation to carry the context for optimistic updates
@@ -267,13 +230,13 @@ export const conversationControl: StateCreator<
       rejectedReason: reason,
       status: 'rejected',
     } as const;
-    await get().optimisticUpdatePlugin(toolMessage.id, { intervention }, optimisticContext);
+    await this.#get().optimisticUpdatePlugin(toolMessage.id, { intervention }, optimisticContext);
 
     const toolContent = !!reason
       ? `User reject this tool calling with reason: ${reason}`
       : 'User reject this tool calling without reason';
 
-    await get().optimisticUpdateMessageContent(
+    await this.#get().optimisticUpdateMessageContent(
       messageId,
       toolContent,
       undefined,
@@ -281,22 +244,26 @@ export const conversationControl: StateCreator<
     );
 
     completeOperation(operationId);
-  },
+  };
 
-  rejectAndContinueToolCalling: async (messageId, reason, context) => {
+  rejectAndContinueToolCalling = async (
+    messageId: string,
+    reason?: string,
+    context?: ConversationContext,
+  ): Promise<void> => {
     // Pass context to rejectToolCalling for proper context isolation
-    await get().rejectToolCalling(messageId, reason, context);
+    await this.#get().rejectToolCalling(messageId, reason, context);
 
-    const toolMessage = dbMessageSelectors.getDbMessageById(messageId)(get());
+    const toolMessage = dbMessageSelectors.getDbMessageById(messageId)(this.#get());
     if (!toolMessage) return;
 
-    const { internal_execAgentRuntime, startOperation, completeOperation } = get();
+    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
-      agentId: get().activeAgentId,
-      topicId: get().activeTopicId,
-      threadId: get().activeThreadId,
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
     };
 
     const { agentId, topicId, threadId, scope } = effectiveContext;
@@ -315,10 +282,10 @@ export const conversationControl: StateCreator<
 
     // Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(get());
+    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
 
     // Create agent state and context to continue from rejected tool message
-    const { state, context: initialContext } = get().internal_createAgentState({
+    const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
       parentMessageId: messageId,
       agentId,
@@ -349,10 +316,15 @@ export const conversationControl: StateCreator<
     } catch (error) {
       const err = error as Error;
       console.error('[rejectAndContinueToolCalling] Error executing agent runtime:', err);
-      get().failOperation(operationId, {
+      this.#get().failOperation(operationId, {
         type: 'rejectToolCalling',
         message: err.message || 'Unknown error',
       });
     }
-  },
-});
+  };
+}
+
+export type ConversationControlAction = Pick<
+  ConversationControlActionImpl,
+  keyof ConversationControlActionImpl
+>;

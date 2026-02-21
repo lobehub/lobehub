@@ -2,7 +2,8 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React, { type PropsWithChildren, useEffect, useState } from 'react';
+import { type PropsWithChildren } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 
 import { setScopedMutate } from '@/libs/swr';
@@ -29,7 +30,6 @@ const SWRMutateInitializer = ({ children }: PropsWithChildren) => {
     }
   });
 
-  // eslint-disable-next-line react/jsx-no-useless-fragment
   return <>{children}</>;
 };
 

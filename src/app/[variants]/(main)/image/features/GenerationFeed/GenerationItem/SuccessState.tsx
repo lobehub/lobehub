@@ -27,11 +27,11 @@ export const SuccessState = memo<SuccessStateProps>(
         align={'center'}
         className={styles.imageContainer}
         justify={'center'}
+        variant={'filled'}
         style={{
           aspectRatio,
           maxWidth: getThumbnailMaxWidth(generation, generationBatch),
         }}
-        variant={'filled'}
       >
         <ImageItem
           alt={prompt}
@@ -43,12 +43,12 @@ export const SuccessState = memo<SuccessStateProps>(
           url={generation.asset!.url}
         />
         <ActionButtons
+          showDownload
+          seedTooltip={seedTooltip}
+          showCopySeed={!!generation.seed}
           onCopySeed={onCopySeed}
           onDelete={onDelete}
           onDownload={onDownload}
-          seedTooltip={seedTooltip}
-          showCopySeed={!!generation.seed}
-          showDownload
         />
       </Block>
     );

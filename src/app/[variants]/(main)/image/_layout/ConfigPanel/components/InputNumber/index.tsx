@@ -3,7 +3,8 @@
 import { Button, Flexbox, InputNumber, Tooltip } from '@lobehub/ui';
 import { Dices } from 'lucide-react';
 import { MAX_SEED } from 'model-bank';
-import { type CSSProperties, memo, useCallback } from 'react';
+import { type CSSProperties } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { generateUniqueSeeds } from '@/utils/number';
@@ -26,23 +27,23 @@ const SeedNumberInput = memo<SeedNumberInputProps>(
     }, [onChange]);
 
     return (
-      <Flexbox className={className} gap={4} horizontal style={style}>
+      <Flexbox horizontal className={className} gap={4} style={style}>
         <InputNumber
           max={MAX_SEED}
           min={0}
-          onChange={onChange as any}
           placeholder={t('config.seed.random')}
           step={1}
           style={{ width: '100%' }}
           value={value}
+          onChange={onChange as any}
           {...rest}
         />
         <Tooltip title={t('config.seed.random')}>
           <Button
             icon={Dices}
-            onClick={handleClick}
             style={{ flex: 'none', width: 48 }}
             variant={'outlined'}
+            onClick={handleClick}
           />
         </Tooltip>
       </Flexbox>

@@ -4,7 +4,8 @@ import { CheckIcon, CircleX, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type KlavisServer } from '@/store/tool/slices/klavisStore';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 interface ServerStatusControlProps {
   isConnecting: boolean;
@@ -18,7 +19,7 @@ const ServerStatusControl = memo<ServerStatusControlProps>(
 
     // Loading states
     if (isConnecting || isWaitingAuth) {
-      return <Icon color={cssVar.colorTextDescription} icon={Loader2} spin />;
+      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} />;
     }
 
     // No server yet - show nothing (click to connect)

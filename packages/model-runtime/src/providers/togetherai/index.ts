@@ -1,11 +1,9 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
-import { TogetherAIModel } from './type';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { TogetherAIModel } from './type';
 
 export const params = {
   baseURL: 'https://api.together.xyz/v1',

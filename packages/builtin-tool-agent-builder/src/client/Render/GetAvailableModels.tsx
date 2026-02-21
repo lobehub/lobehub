@@ -1,5 +1,5 @@
-import { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox , Tag } from '@lobehub/ui';
+import type { BuiltinRenderProps } from '@lobechat/types';
+import { Flexbox, Tag } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { GetAvailableModelsParams, GetAvailableModelsState } from '../../types';
@@ -21,7 +21,7 @@ const GetAvailableModels = memo<
     <Flexbox gap={12} style={{ fontSize: 13 }}>
       {providers.map((provider) => (
         <Flexbox gap={8} key={provider.id}>
-          <Flexbox align="center" gap={8} horizontal>
+          <Flexbox horizontal align="center" gap={8}>
             <span style={{ fontWeight: 600 }}>{provider.name}</span>
             <Tag color="blue" style={{ margin: 0 }}>
               {provider.models.length} models
@@ -38,7 +38,7 @@ const GetAvailableModels = memo<
             }}
           >
             {provider.models.map((model) => (
-              <Flexbox align="center" gap={8} horizontal key={model.id} style={{ fontSize: 12 }}>
+              <Flexbox horizontal align="center" gap={8} key={model.id} style={{ fontSize: 12 }}>
                 <code style={{ color: 'var(--lobe-text)' }}>{model.id}</code>
                 {model.abilities?.vision && (
                   <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>

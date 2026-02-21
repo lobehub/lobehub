@@ -1,24 +1,28 @@
-import type {
-  UserPersonaDocument,
-  UserPersonaDocumentHistoriesItem,
+import {
+  type UserPersonaDocument,
+  type UserPersonaDocumentHistoriesItem,
 } from '@lobechat/database/schemas';
 import { userMemories } from '@lobechat/database/schemas';
+import { type UserPersonaExtractionResult } from '@lobechat/memory-user-memory';
 import {
   RetrievalUserMemoryContextProvider,
   RetrievalUserMemoryIdentitiesProvider,
-  type UserPersonaExtractionResult,
   UserPersonaExtractor,
 } from '@lobechat/memory-user-memory';
-import { ModelRuntime } from '@lobechat/model-runtime';
 import { desc, eq } from 'drizzle-orm';
 
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
-import { LobeChatDatabase } from '@/database/type';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
+import { type LobeChatDatabase } from '@/database/type';
+import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
-  MemoryAgentConfig,
-  parseMemoryExtractionConfig,
-} from '@/server/globalConfig/parseMemoryExtractionConfig';
+  type ProviderKeyVaultMap,
+  type RuntimeResolveOptions,
+} from '@/server/services/memory/userMemory/extract';
+import { resolveRuntimeAgentConfig } from '@/server/services/memory/userMemory/extract';
 import { LayersEnum } from '@/types/userMemory';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
 
@@ -32,8 +36,8 @@ interface UserPersonaAgentPayload {
   retrievedMemories?: string;
   sourceIds?: string[];
   userId: string;
-  userProfile?: string;
   username?: string;
+  userProfile?: string;
 }
 
 interface UserPersonaAgentResult {
@@ -45,7 +49,6 @@ interface UserPersonaAgentResult {
 export class UserPersonaService {
   private readonly preferredLanguage?: string;
   private readonly db: LobeChatDatabase;
-  private readonly runtime: ModelRuntime;
   private readonly agentConfig: MemoryAgentConfig;
 
   constructor(db: LobeChatDatabase) {
@@ -54,13 +57,35 @@ export class UserPersonaService {
     this.db = db;
     this.preferredLanguage = agentPersonaWriter.language;
     this.agentConfig = agentPersonaWriter;
-    this.runtime = ModelRuntime.initializeWithProvider(agentPersonaWriter.provider || 'openai', {
-      apiKey: agentPersonaWriter.apiKey,
-      baseURL: agentPersonaWriter.baseURL,
-    });
   }
 
   async composeWriting(payload: UserPersonaAgentPayload): Promise<UserPersonaAgentResult> {
+    const aiInfraRepos = new AiInfraRepos(this.db, payload.userId, {});
+    const runtimeState = await aiInfraRepos.getAiProviderRuntimeState(
+      KeyVaultsGateKeeper.getUserKeyVaults,
+    );
+    const providerId = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+      fallbackProvider: this.agentConfig.provider,
+      label: 'persona writer',
+      modelId: this.agentConfig.model,
+    });
+
+    const keyVaults: ProviderKeyVaultMap = Object.entries(runtimeState.runtimeConfig || {}).reduce(
+      (acc, [provider, config]) => {
+        acc[provider.toLowerCase()] = config?.keyVaults;
+        return acc;
+      },
+      {} as ProviderKeyVaultMap,
+    );
+
+    const runtime = await resolveRuntimeAgentConfig({ ...this.agentConfig }, keyVaults, {
+      fallback: {
+        apiKey: this.agentConfig.apiKey,
+        baseURL: this.agentConfig.baseURL,
+      },
+      preferred: { providerIds: [providerId] },
+    } satisfies RuntimeResolveOptions);
+
     const personaModel = new UserPersonaModel(this.db, payload.userId);
     const lastDocument = await personaModel.getLatestPersonaDocument();
     const existingPersonaBaseline = payload.existingPersona ?? lastDocument?.persona;
@@ -68,7 +93,7 @@ export class UserPersonaService {
     const extractor = new UserPersonaExtractor({
       agent: 'user-persona',
       model: this.agentConfig.model,
-      modelRuntime: this.runtime,
+      modelRuntime: runtime,
     });
 
     const agentResult = await extractor.toolCall({

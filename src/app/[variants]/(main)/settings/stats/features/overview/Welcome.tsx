@@ -33,15 +33,17 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
   return (
     <Flexbox padding={mobile ? 16 : 0}>
       <Flexbox
+        horizontal
         align={'center'}
         gap={8}
-        horizontal
         style={{
           fontSize: 16,
           fontWeight: 500,
         }}
       >
         <Trans
+          i18nKey="stats.welcome"
+          ns={'auth'}
           components={{
             span:
               isLoading || !data ? (
@@ -50,8 +52,6 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
                 <span style={{ fontWeight: 'bold' }} />
               ),
           }}
-          i18nKey="stats.welcome"
-          ns={'auth'}
           values={{
             appName: BRANDING_NAME,
             days:
@@ -62,7 +62,7 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
           }}
         />
       </Flexbox>
-      <Flexbox gap={16} horizontal wrap={'wrap'}>
+      <Flexbox horizontal gap={16} wrap={'wrap'}>
         <TimeLabel date={data?.createdAt} icon={Clock3Icon} title={t('stats.createdAt')} />
         <TimeLabel date={data?.updatedAt} icon={ClockArrowUp} title={t('stats.updatedAt')} />
       </Flexbox>

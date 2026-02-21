@@ -1,11 +1,12 @@
 import { MCP } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { Bot, Brain, BrainCircuit, House } from 'lucide-react';
-import { type ReactNode, useMemo } from 'react';
+import { type ReactNode } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 
-import type { MenuProps } from '@/components/Menu';
+import { type MenuProps } from '@/components/Menu';
 import { DiscoverTab } from '@/types/discover';
 
 const ICON_SIZE = 16;
@@ -30,47 +31,29 @@ export const useNav = () => {
       {
         icon: <Icon icon={House} size={ICON_SIZE} />,
         key: DiscoverTab.Home,
-        label: (
-          <div style={{ color: 'inherit', display: 'inline' }}>
-            {t('tab.home')}
-          </div>
-        ),
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.home')}</div>,
       },
       {
         icon: <Icon icon={Bot} size={ICON_SIZE} />,
         key: DiscoverTab.Assistants,
-        label: (
-          <div style={{ color: 'inherit', display: 'inline' }} >
-            {t('tab.assistant')}
-          </div>
-        ),
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.assistant')}</div>,
       },
       {
         icon: <MCP className={'anticon'} size={ICON_SIZE} />,
         key: DiscoverTab.Mcp,
         label: (
-          <div style={{ color: 'inherit', display: 'inline' }} >
-            {`MCP ${t('tab.plugin')}`}
-          </div>
+          <div style={{ color: 'inherit', display: 'inline' }}>{`MCP ${t('tab.plugin')}`}</div>
         ),
       },
       {
         icon: <Icon icon={Brain} size={ICON_SIZE} />,
         key: DiscoverTab.Models,
-        label: (
-          <div style={{ color: 'inherit', display: 'inline' }} >
-            {t('tab.model')}
-          </div>
-        ),
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.model')}</div>,
       },
       {
         icon: <Icon icon={BrainCircuit} size={ICON_SIZE} />,
         key: DiscoverTab.Providers,
-        label: (
-          <div style={{ color: 'inherit', display: 'inline' }} >
-            {t('tab.provider')}
-          </div>
-        ),
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.provider')}</div>,
       },
     ],
     [t],

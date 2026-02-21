@@ -3,7 +3,8 @@
 import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { VList, type VListHandle } from 'virtua';
+import { type VListHandle } from 'virtua';
+import { VList } from 'virtua';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import TopicEmpty from '@/features/TopicEmpty';
@@ -153,9 +154,9 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   return (
     <VList
       bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-      onScroll={handleScroll}
       ref={virtuaRef}
       style={{ height: '100%' }}
+      onScroll={handleScroll}
     >
       {activeTopicList?.map((topic) => (
         <Flexbox gap={1} key={topic.id} padding={'4px 8px'}>

@@ -72,7 +72,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
     const categoryLabel = t(`tab.${category as FilesTabs}` as any);
 
     return (
-      <Flexbox align={'center'} className={styles.breadcrumb} gap={0} horizontal>
+      <Flexbox horizontal align={'center'} className={styles.breadcrumb} gap={0}>
         <span
           className={cx(styles.breadcrumbItem, styles.currentItem)}
           style={{ cursor: 'default' }}
@@ -107,11 +107,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
   const isRootClickable = folderChain.length > 0 || fileName;
 
   return (
-    <Flexbox align={'center'} className={styles.breadcrumb} gap={0} horizontal>
+    <Flexbox horizontal align={'center'} className={styles.breadcrumb} gap={0}>
       <span
         className={cx(styles.breadcrumbItem, isAtRoot && styles.currentItem)}
-        onClick={() => isRootClickable && handleNavigate(null)}
         style={{ cursor: isRootClickable ? 'pointer' : 'default' }}
+        onClick={() => isRootClickable && handleNavigate(null)}
       >
         {knowledgeBaseName ? (
           knowledgeBaseName
@@ -123,12 +123,12 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
       {folderChain.map((folder: FolderCrumb, index: number) => {
         const isLast = index === folderChain.length - 1 && !fileName;
         return (
-          <Flexbox align={'center'} gap={0} horizontal key={folder.id}>
+          <Flexbox horizontal align={'center'} gap={0} key={folder.id}>
             <span className={styles.separator}>/</span>
             <span
               className={cx(styles.breadcrumbItem, isLast && styles.currentItem)}
-              onClick={() => !isLast && handleNavigate(folder.slug)}
               style={{ cursor: isLast ? 'default' : 'pointer' }}
+              onClick={() => !isLast && handleNavigate(folder.slug)}
             >
               {folder.name}
             </span>
@@ -137,7 +137,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
       })}
 
       {fileName && (
-        <Flexbox align={'center'} gap={0} horizontal>
+        <Flexbox horizontal align={'center'} gap={0}>
           <span className={styles.separator}>/</span>
           <span
             className={cx(styles.breadcrumbItem, styles.currentItem)}

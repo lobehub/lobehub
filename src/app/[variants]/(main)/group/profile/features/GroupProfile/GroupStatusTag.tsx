@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
-import type { AgentStatus } from '@/types/discover';
+import { type AgentStatus } from '@/types/discover';
 
 /**
  * Group Status Tag Component

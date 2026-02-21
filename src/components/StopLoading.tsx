@@ -1,8 +1,7 @@
-import type { IconType } from '@lobehub/icons';
+import { type IconType } from '@lobehub/icons';
 import { cssVar, cx } from 'antd-style';
-import { forwardRef } from 'react';
 
-const StopLoadingIcon: IconType = forwardRef(({ size = 16, className, style, ...rest }, ref) => {
+const StopLoadingIcon: IconType = (({ ref, size = 16, className, style, ...rest }) => {
   return (
     <svg
       className={cx('anticon', className)}
@@ -43,5 +42,5 @@ const StopLoadingIcon: IconType = forwardRef(({ size = 16, className, style, ...
       </g>
     </svg>
   );
-});
+}) as IconType;
 export default StopLoadingIcon;

@@ -1,9 +1,10 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
-import type { SidebarAgentItem } from '@lobechat/types';
+import { type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
-import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
+import { type CSSProperties, type DragEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -16,7 +17,6 @@ import { useHomeStore } from '@/store/home';
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
 import Avatar from './Avatar';
-import Editing from './Editing';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
 interface AgentItemProps {
@@ -29,13 +29,10 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   const { id, avatar, title, pinned } = item;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
-  // Get UI state from homeStore (editing, updating)
-  const [editing, isUpdating] = useHomeStore((s) => [
-    s.agentRenamingId === id,
-    s.agentUpdatingId === id,
-  ]);
+  const isUpdating = useHomeStore((s) => s.agentUpdatingId === id);
 
   // Separate loading state from chat store - only show loading for this specific agent
   const isLoading = useChatStore(operationSelectors.isAgentRunning(id));
@@ -71,13 +68,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     openCreateGroupModal(id);
   }, [id, openCreateGroupModal]);
 
-  const toggleEditing = useCallback(
-    (visible?: boolean) => {
-      useHomeStore.getState().setAgentRenamingId(visible ? id : null);
-    },
-    [id],
-  );
-
   // Memoize pin icon
   const pinIcon = useMemo(
     () =>
@@ -90,48 +80,41 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   // Memoize avatar icon (show loader when updating)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon color={cssVar.colorTextDescription} icon={Loader2} size={18} spin />;
+      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
     }
 
     return <Avatar avatar={typeof avatar === 'string' ? avatar : undefined} />;
   }, [isUpdating, avatar]);
 
   const dropdownMenu = useAgentDropdownMenu({
+    anchor,
+    avatar: typeof avatar === 'string' ? avatar : undefined,
     group: undefined, // TODO: pass group from parent if needed
     id,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
-    toggleEditing,
+    title: displayTitle,
   });
 
   return (
-    <>
-      <Link aria-label={displayTitle} to={agentUrl}>
-        <NavItem
-          actions={<Actions dropdownMenu={dropdownMenu} />}
-          className={className}
-          contextMenuItems={dropdownMenu}
-          disabled={editing || isUpdating}
-          draggable={!editing && !isUpdating}
-          extra={pinIcon}
-          icon={avatarIcon}
-          key={id}
-          loading={isLoading}
-          onDoubleClick={handleDoubleClick}
-          onDragEnd={handleDragEnd}
-          onDragStart={handleDragStart}
-          style={style}
-          title={displayTitle}
-        />
-      </Link>
-
-      <Editing
-        avatar={typeof avatar === 'string' ? avatar : undefined}
-        id={id}
+    <Link aria-label={displayTitle} ref={setAnchor} to={agentUrl}>
+      <NavItem
+        actions={<Actions dropdownMenu={dropdownMenu} />}
+        className={className}
+        contextMenuItems={dropdownMenu}
+        disabled={isUpdating}
+        draggable={!isUpdating}
+        extra={pinIcon}
+        icon={avatarIcon}
+        key={id}
+        loading={isLoading}
+        style={style}
         title={displayTitle}
-        toggleEditing={toggleEditing}
+        onDoubleClick={handleDoubleClick}
+        onDragEnd={handleDragEnd}
+        onDragStart={handleDragStart}
       />
-    </>
+    </Link>
   );
 });
 

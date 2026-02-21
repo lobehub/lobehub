@@ -1,11 +1,12 @@
-import { Flexbox, Tag, Tooltip, createRawModal } from '@lobehub/ui';
+import { createRawModal, Flexbox, Tag, Tooltip } from '@lobehub/ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
-import { UPLOAD_STATUS_SET, type UploadFileItem } from '@/types/files/upload';
+import { type UploadFileItem } from '@/types/files/upload';
+import { UPLOAD_STATUS_SET } from '@/types/files/upload';
 
 import Content from './Content';
 import FilePreviewModal from './FilePreviewModal';
@@ -81,7 +82,7 @@ const ContextItem = memo<FileItemProps>((props) => {
     removeChatUploadFile(id);
   });
   return (
-    <Tag closable onClick={handleClick} onClose={handleClose} size={'large'}>
+    <Tag closable size={'large'} onClick={handleClick} onClose={handleClose}>
       <Flexbox className={styles.icon}>
         <Content {...props} />
         {isUploading && (

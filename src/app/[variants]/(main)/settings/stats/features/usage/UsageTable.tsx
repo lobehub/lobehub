@@ -1,5 +1,5 @@
 import { ProviderIcon } from '@lobehub/icons';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text, Tooltip } from '@lobehub/ui';
 import { type TableColumnType } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useEffect } from 'react';
@@ -43,7 +43,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
       dataIndex: 'model',
       key: 'model',
       render: (value, record) => (
-        <Flexbox align={'start'} gap={16} horizontal>
+        <Flexbox horizontal align={'start'} gap={16}>
           <ProviderIcon
             provider={record.provider}
             size={18}
@@ -53,7 +53,9 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
               marginRight: -8,
             }}
           />
-          <Text>{value?.length > 12 ? `${value.slice(0, 12)}...` : value}</Text>
+          <Tooltip title={value}>
+            <Text>{value?.length > 12 ? `${value.slice(0, 12)}...` : value}</Text>
+          </Tooltip>
         </Flexbox>
       ),
       title: t('usage.table.model'),
@@ -120,6 +122,8 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
       columns={columns}
       dataSource={data}
       loading={isLoading}
+      rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
+      size="small"
       pagination={{
         current: currentPage,
         onChange: (page) => {
@@ -131,8 +135,6 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
         },
         pageSize,
       }}
-      rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
-      size="small"
     />
   );
 });

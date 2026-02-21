@@ -11,10 +11,10 @@ const SkeletonList = memo(() => {
       {/* User Message */}
       <Flexbox
         gap={8}
+        width={'100%'}
         style={{
           paddingLeft: '25%',
         }}
-        width={'100%'}
       >
         <Skeleton.Paragraph
           active
@@ -29,11 +29,11 @@ const SkeletonList = memo(() => {
       <Flexbox gap={8} width={'100%'}>
         <Skeleton
           active
+          paragraph={false}
           avatar={{
             shape: 'square',
             size: 28,
           }}
-          paragraph={false}
         />
         <Skeleton.Paragraph />
         <Skeleton.Tags count={2} />
@@ -43,11 +43,11 @@ const SkeletonList = memo(() => {
       <Flexbox gap={8} width={'100%'}>
         <Skeleton
           active
+          paragraph={false}
           avatar={{
             shape: 'square',
             size: 28,
           }}
-          paragraph={false}
         />
         <Skeleton.Paragraph />
         <Skeleton.Tags count={2} />

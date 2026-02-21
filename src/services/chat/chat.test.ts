@@ -1,13 +1,9 @@
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { LobeTool } from '@lobechat/types';
-import { UIChatMessage } from '@lobechat/types';
+import { type ChatStreamPayload, type LobeTool, type UIChatMessage } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { ChatStreamPayload } from '@lobechat/types';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { act } from '@testing-library/react';
-import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_USER_AVATAR } from '@/const/meta';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -15,7 +11,7 @@ import { aiModelSelectors } from '@/store/aiInfra';
 import { useToolStore } from '@/store/tool';
 
 import { chatService } from './index';
-import type { ResolvedAgentConfig } from './mecha';
+import { type ResolvedAgentConfig } from './mecha';
 
 /**
  * Default mock resolvedAgentConfig for tests
@@ -1315,7 +1311,7 @@ describe('ChatService', () => {
           if (options?.onMessageHandle) {
             options.onMessageHandle({ type: 'text', text: 'AI response' });
           }
-          return Promise.resolve(new Response(''));
+          return new Response('');
         });
 
       const params = {
@@ -1362,7 +1358,7 @@ describe('ChatService', () => {
           if (options?.onErrorHandle) {
             options.onErrorHandle({ message: 'translated_response.404', type: 404 });
           }
-          return Promise.resolve(new Response(''));
+          return new Response('');
         });
 
       const params = {

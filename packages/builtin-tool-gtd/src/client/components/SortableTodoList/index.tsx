@@ -4,8 +4,8 @@ import { useUnmount } from 'ahooks';
 import { memo, useEffect, useMemo } from 'react';
 
 import type { TodoItem } from '../../../types';
+import { createTodoListStore, TodoListStoreContext } from './store';
 import TodoList from './TodoList';
-import { TodoListStoreContext, createTodoListStore } from './store';
 
 export type { TodoListItem } from './store';
 
@@ -57,9 +57,9 @@ const SortableTodoList = memo<SortableTodoListProps>(
     });
 
     return (
-      <TodoListStoreContext.Provider value={store}>
+      <TodoListStoreContext value={store}>
         <TodoList placeholder={placeholder} />
-      </TodoListStoreContext.Provider>
+      </TodoListStoreContext>
     );
   },
 );

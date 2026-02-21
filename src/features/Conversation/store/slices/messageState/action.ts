@@ -1,7 +1,7 @@
 import { produce } from 'immer';
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
-import type { State } from '../../initialState';
+import { type State } from '../../initialState';
 
 export interface MessageEditingAction {
   /**
@@ -24,10 +24,12 @@ const toggleBooleanList = (ids: string[], id: string, value: boolean) => {
   });
 };
 
-export const messageEditingSlice: StateCreator<State, [['zustand/devtools', never]], [], MessageEditingAction> = (
-  set,
-  get,
-) => ({
+export const messageEditingSlice: StateCreator<
+  State,
+  [['zustand/devtools', never]],
+  [],
+  MessageEditingAction
+> = (set, get) => ({
   toggleMessageEditing: (id, editing) => {
     set(
       { messageEditingIds: toggleBooleanList(get().messageEditingIds, id, editing) },

@@ -1,48 +1,110 @@
 ---
 title: 架构设计
-description: 深入了解 LobeHub 的架构设计，包括前端、API 和市场组件。
+description: 深入了解 LobeHub 的架构设计，包括前端、后端、运行时和数据存储。
 tags:
   - LobeHub
   - 架构设计
-  - AI 聊天应用
+  - Agent 平台
   - Next.js
-  - Edge Runtime API
 ---
 
 # 架构设计
 
-LobeHub 是一个基于 Next.js 框架构建的 AI 聊天应用，旨在提供一个 AI 生产力平台，使用户能够与 AI 进行自然语言交互。以下是 LobeHub 的架构设计介稿：
+LobeHub 是一个基于 Next.js 构建的开源 AI Agent 平台，使用户能够与 AI 进行自然语言交互、使用工具、管理知识库等。以下是 LobeHub 的架构设计概览。
 
 ## 应用架构概览
 
-LobeHub 的整体架构由前端、EdgeRuntime API、Agents 市场、插件市场和独立插件组成。这些组件相互协作，以提供完整的 AI 体验。
+LobeHub 的整体架构由以下核心层组成：
+
+```plaintext
++---------------------+--------------------------------------------------+
+| Layer               | Description                                      |
++---------------------+--------------------------------------------------+
+| Frontend            | Next.js RSC + React Router DOM 混合路由 SPA      |
+| Backend API         | RESTful WebAPI + tRPC Routers                    |
+| Runtime             | Model Runtime + Agent Runtime                    |
+| Auth                | Better Auth（邮箱密码 + SSO）                     |
+| Data Storage        | PostgreSQL + Redis + S3                          |
+| Marketplace         | Agent 市场 + MCP 工具市场                         |
++---------------------+--------------------------------------------------+
+```
 
 ## 前端架构
 
-LobeHub 的前端采用 Next.js 框架，利用其强大的 SSR（服务器端渲染）能力和路由功能。前端使用了一系列技术栈，包括 antd 组件库和 lobe-ui AIGC 组件库、zustand 状态管理、swr 请求库、i18next 国际化库等。这些技术栈共同支持了 LobeHub 的功能和特性。
+前端采用 Next.js 框架，使用 **Next.js RSC + React Router DOM 混合路由**方案：Next.js App Router 处理服务端渲染页面（如认证页），React Router DOM 承载主应用 SPA。
 
-前端架构中的组件包括 app、components、config、const、features、helpers、hooks、layout、locales、migrations、prompts、services、store、styles、types 和 utils。每个组件都有特定的职责，并与其他组件协同工作，以实现不同的功能。
+主要技术栈：
 
-## Edge Runtime API
+- **UI 组件**：`@lobehub/ui`、antd
+- **CSS-in-JS**：antd-style
+- **状态管理**：zustand（slice 模式）
+- **数据请求**：SWR + tRPC
+- **国际化**：react-i18next
 
-Edge Runtime API 是 LobeHub 的核心组件之一，负责处理 AI 会话的核心逻辑。它提供了与 AI 引擎的交互接口，包括自然语言处理、意图识别和回复生成等。EdgeRuntime API 与前端进行通信，接收用户的输入并返回相应的回复。
+前端代码按职责分层在 `src/` 目录下，详见 [目录架构](/zh/docs/development/basic/folder-structure)。
 
-## Agents 市场
+## 后端 API
 
-Agents 市场是 LobeHub 的一个重要组成部分，它提供了各种不同场景的 AI Agent，用于处理特定的任务和领域。Agents 市场还提供了使用和上传 Agent 的功能，使用户能够发现其他人制作的 Agent ，也可以一键分享自己的 Agent 到市场上。
+后端提供两种 API 形式：
 
-## 插件市场
+- **RESTful WebAPI**（`src/app/(backend)/webapi/`）：处理 chat 流式响应、TTS、文件服务等需要特殊处理的端点
+- **tRPC Routers**（`src/server/routers/`）：类型安全的主要业务路由，按运行时分组：
+  - `lambda/` — 主业务（agent、session、message、topic、file、knowledge、settings 等）
+  - `async/` — 耗时异步操作（文件处理、图像生成、RAG 评估）
+  - `tools/` — 工具调用（search、MCP、market）
+  - `mobile/` — 移动端专用
 
-插件市场是 LobeHub 的另一个关键组件，它提供了各种插件，用于扩展 LobeHub 的功能和特性。插件可以是独立的功能模块，也可以与 Agents 市场的 Agent 进行集成。在会话中，助手将自动识别用户的输入，并识别适合的插件并传递给相应的插件进行处理，并返回处理结果。
+## Runtime
 
-## 安全性和性能优化
+### Model Runtime
 
-LobeHub 的安全性策略包括身份验证和权限管理。用户需要进行身份验证后才能使用 LobeHub，同时根据用户的权限进行相应的操作限制。
+`@lobechat/model-runtime`（`packages/model-runtime/`）是 LLM API 适配层，抹平了 30+ 不同 AI Provider 之间的 API 差异（OpenAI、Anthropic、Google、Bedrock、Ollama 等），提供统一的调用接口。每个 Provider 有独立的适配器实现。它是无状态的，每次调用独立。
 
-为了优化性能，LobeHub 使用了 Next.js 的 SSR 功能，实现了快速的页面加载和响应时间。此外，还采用了一系列的性能优化措施，包括代码分割、缓存和资源压缩等。
+### Agent Runtime
 
-## 开发和部署流程
+`@lobechat/agent-runtime`（`packages/agent-runtime/`）是 Agent 编排引擎，位于 Model Runtime 之上，负责驱动多步 AI Agent 行为的完整生命周期：
 
-LobeHub 的开发流程包括版本控制、测试、持续集成和持续部署。开发团队使用版本控制系统进行代码管理，并进行单元测试和集成测试以确保代码质量。持续集成和持续部署流程确保了代码的快速交付和部署。
+- **Plan-Execute 循环**：核心状态机，循环执行 LLM 调用 → 工具执行 → 结果处理
+- **工具调用与批量执行**：支持单工具和批量工具调用
+- **Human-in-the-Loop**：安全检查、人工审批流程
+- **上下文压缩**：管理上下文窗口
+- **用量与成本追踪**：累计 token 用量和费用
+- **多 Agent 协作**：`GroupOrchestrationRuntime` 支持 Supervisor + Executor 模式的多 Agent 编排
 
-以上是 LobeHub 的架构设计介绍简介，详细解释了各个组件的职责和协作方式，以及设计决策对应用功能和性能的影响。
+简言之：Model Runtime 解决 "如何与 LLM Provider 通信"，Agent Runtime 解决 "如何运行一个使用 LLM、工具、人工审批的完整 Agent"。
+
+## 认证鉴权
+
+LobeHub 使用 [Better Auth](https://www.better-auth.com/) 作为认证框架，支持：
+
+- 邮箱 + 密码注册登录
+- SSO 单点登录（GitHub、Google 等多种 OAuth Provider）
+
+认证配置位于 `src/auth.ts`，相关路由在 `src/app/(backend)/api/` 下。
+
+## 数据存储
+
+```plaintext
++---------------+----------------------------------------------+
+| Storage       | Usage                                        |
++---------------+----------------------------------------------+
+| PostgreSQL    | 主数据库，存储用户、会话、消息、Agent 配置等  |
+| Redis         | 缓存、会话状态、速率限制                      |
+| S3            | 文件存储（用户上传、图片、知识库文件等）      |
++---------------+----------------------------------------------+
+```
+
+数据库使用 Drizzle ORM 操作，schema 定义在 `packages/database/src/schemas/`。
+
+## 市场
+
+- **Agent 市场**：提供各种场景的 AI Agent，用户可以发现、使用和分享 Agent
+- **MCP 工具市场**：发现和集成 MCP 工具，扩展 Agent 的能力
+
+## 开发和部署
+
+- **版本控制**：Git + GitHub，gitmoji commit 规范
+- **代码质量**：ESLint、Stylelint、TypeScript 类型检查、循环依赖检测 (dpdm)、死代码检测 (knip)
+- **测试**：Vitest 单元测试 + Cucumber/Playwright E2E 测试
+- **CI/CD**：GitHub Actions 自动化测试、构建和发布
+- **部署**：支持 Vercel、Docker、各大云平台自托管

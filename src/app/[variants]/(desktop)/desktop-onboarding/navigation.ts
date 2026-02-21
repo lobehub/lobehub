@@ -1,4 +1,4 @@
-import { DesktopOnboardingScreen } from './types';
+import { type DesktopOnboardingScreen } from './types';
 
 const DESKTOP_ONBOARDING_ROUTE = '/desktop-onboarding';
 export const getDesktopOnboardingPath = (screen?: DesktopOnboardingScreen) => {

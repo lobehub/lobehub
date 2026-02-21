@@ -38,6 +38,8 @@ const ConfigAlert = memo<ConfigAlertProps>(({ provider, id }) => {
           <Button
             block
             disabled={loading}
+            style={{ marginTop: 8 }}
+            type={'primary'}
             onClick={async () => {
               setLoading(true);
               resend(id).then(() => {
@@ -45,8 +47,6 @@ const ConfigAlert = memo<ConfigAlertProps>(({ provider, id }) => {
               });
               // deleteMessage(id);
             }}
-            style={{ marginTop: 8 }}
-            type={'primary'}
           >
             {t('search.config.confirm')}
           </Button>

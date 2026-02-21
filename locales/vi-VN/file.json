@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "Đang xử lý",
   "detail.data.embedding.success": "Hoàn tất",
   "detail.data.embeddingStatus": "trạng thái nhúng",
+  "detail.data.noChunk": "Không có phần dữ liệu",
   "empty": "Chưa có tệp hoặc thư mục nào được tải lên.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} tệp đã bị lọc (trong tổng số {{total}})",
   "header.actions.connect": "Kết nối...",

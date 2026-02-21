@@ -23,15 +23,15 @@ const SourceLink = memo<{ source?: MemorySource | null }>(({ source }) => {
       <Button
         icon={<Icon icon={Link2} />}
         size={'small'}
+        title={title}
+        type={'text'}
         style={{
           flex: 1,
           maxWidth: '100%',
           overflow: 'hidden',
         }}
-        title={title}
-        type={'text'}
       >
-        <Text color={cssVar.colorTextSecondary} ellipsis>
+        <Text ellipsis color={cssVar.colorTextSecondary}>
           {title}
         </Text>
       </Button>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { Tool, apiPrompt, toolPrompt, toolsPrompts } from './tools';
+import type { Tool } from './tools';
+import { apiPrompt, toolPrompt, toolsPrompts } from './tools';
 
 describe('Prompt Generation Utils', () => {
   // 测试 apiPrompt 函数

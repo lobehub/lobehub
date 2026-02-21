@@ -1,5 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import type { LucideIcon } from 'lucide-react';
+import { isDesktop } from '@lobechat/const';
+import { type LucideIcon } from 'lucide-react';
 import {
   Brain,
   ChartColumnBigIcon,
@@ -9,15 +10,15 @@ import {
   Gift,
   Image as ImageIcon,
   Info,
-  KeyIcon,
   KeyboardIcon,
+  KeyIcon,
   Map,
   Palette as PaletteIcon,
   PieChart,
   UserCircle,
 } from 'lucide-react';
 
-import type { ContextType, MenuContext } from '../types';
+import { type ContextType, type MenuContext } from '../types';
 
 export interface ContextCommand {
   icon: LucideIcon;
@@ -90,16 +91,20 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
       path: '/settings/image',
       subPath: 'image',
     },
-    {
-      icon: EthernetPort,
-      keywords: ['proxy', 'network', 'connection'],
-      keywordsKey: 'cmdk.keywords.proxy',
-      label: 'Proxy',
-      labelKey: 'tab.proxy',
-      labelNamespace: 'setting',
-      path: '/settings/proxy',
-      subPath: 'proxy',
-    },
+    ...(isDesktop
+      ? [
+          {
+            icon: EthernetPort,
+            keywords: ['proxy', 'network', 'connection'],
+            keywordsKey: 'cmdk.keywords.proxy',
+            label: 'Proxy',
+            labelKey: 'tab.proxy',
+            labelNamespace: 'setting' as const,
+            path: '/settings/proxy',
+            subPath: 'proxy',
+          },
+        ]
+      : []),
     {
       icon: ChartColumnBigIcon,
       keywords: ['stats', 'statistics', 'analytics'],

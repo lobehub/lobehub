@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { getKlavisClient } from '@/libs/klavis';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { MCPService } from '@/server/services/mcp';
 
 /**
@@ -57,6 +57,24 @@ export const klavisRouter = router({
       });
 
       return processedResult;
+    }),
+
+  /**
+   * Get tools by server name (public endpoint, no auth required)
+   */
+  getTools: publicProcedure
+    .input(
+      z.object({
+        serverName: z.string(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const klavisClient = getKlavisClient();
+      const response = await klavisClient.mcpServer.getTools(input.serverName as any);
+
+      return {
+        tools: response.tools,
+      };
     }),
 
   /**

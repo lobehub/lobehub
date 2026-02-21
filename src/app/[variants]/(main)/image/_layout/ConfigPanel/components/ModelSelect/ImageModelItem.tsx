@@ -117,7 +117,7 @@ const ImageModelItem = memo<ImageModelItemProps>(
     }, [description, priceLabel, isDarkMode]);
 
     const content = (
-      <Flexbox align={'center'} gap={8} horizontal style={{ overflow: 'hidden' }}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
         <ModelIcon model={model.id} size={20} />
         <Text ellipsis title={model.displayName || model.id}>
           {model.displayName || model.id}

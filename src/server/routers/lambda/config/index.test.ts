@@ -5,19 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * This file contains the root router of your tRPC-backend
  */
 import { createCallerFactory } from '@/libs/trpc/lambda';
-import { AuthContext, createContextInner } from '@/libs/trpc/lambda/context';
+import { type AuthContext } from '@/libs/trpc/lambda/context';
+import { createContextInner } from '@/libs/trpc/lambda/context';
 
 import { configRouter } from './index';
 
 const createCaller = createCallerFactory(configRouter);
 let ctx: AuthContext;
 let router: ReturnType<typeof createCaller>;
-
-vi.mock('@/libs/next-auth/edge', () => {
-  return {
-    auth: vi.fn().mockResolvedValue(undefined),
-  };
-});
 
 beforeEach(async () => {
   vi.resetAllMocks();

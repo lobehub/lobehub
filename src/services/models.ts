@@ -75,7 +75,6 @@ export class ModelsService {
       const runtimeProvider = resolveRuntimeProvider(provider);
       const enableFetchOnClient = isEnableFetchOnClient(provider);
 
-      console.log('enableFetchOnClient：', enableFetchOnClient);
       let res: Response;
       if (enableFetchOnClient) {
         const agentRuntime = await initializeWithClientStore({
@@ -132,7 +131,6 @@ export class ModelsService {
     const reader = response.body?.getReader();
     if (!reader) return;
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;

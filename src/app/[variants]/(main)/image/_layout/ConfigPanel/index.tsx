@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
@@ -9,7 +10,6 @@ import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 import { useDimensionControl } from '@/store/image/slices/generationConfig/hooks';
 import { useImageStore } from '@/store/image/store';
 
-import ImageConfigSkeleton from './ImageConfigSkeleton';
 import CfgSliderInput from './components/CfgSliderInput';
 import DimensionControlGroup from './components/DimensionControlGroup';
 import ImageNum from './components/ImageNum';
@@ -21,6 +21,7 @@ import ResolutionSelect from './components/ResolutionSelect';
 import SeedNumberInput from './components/SeedNumberInput';
 import SizeSelect from './components/SizeSelect';
 import StepsSliderInput from './components/StepsSliderInput';
+import ImageConfigSkeleton from './ImageConfigSkeleton';
 
 interface ConfigItemLayoutProps {
   children: ReactNode;

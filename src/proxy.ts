@@ -36,7 +36,6 @@ export const config = {
     '/verify-email(.*)',
     '/reset-password(.*)',
     '/auth-error(.*)',
-    '/next-auth/(.*)',
     '/oauth(.*)',
     '/oidc(.*)',
     '/market-auth-callback(.*)',

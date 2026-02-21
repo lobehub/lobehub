@@ -17,9 +17,9 @@ import { marketRouter } from '../lambda/market';
 import { messageRouter } from '../lambda/message';
 import { sessionRouter } from '../lambda/session';
 import { sessionGroupRouter } from '../lambda/sessionGroup';
+import { topicRouter } from '../lambda/topic';
 import { uploadRouter } from '../lambda/upload';
 import { userRouter } from '../lambda/user';
-import { topicRouter } from '../lambda/topic';
 
 export const mobileRouter = router({
   agent: agentRouter,

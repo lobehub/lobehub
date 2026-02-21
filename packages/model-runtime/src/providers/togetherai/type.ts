@@ -50,7 +50,6 @@ interface Depth {
 }
 
 export interface TogetherAIModel {
-  id: string;
   // eslint-disable-next-line typescript-sort-keys/interface
   access: string;
   config: Config;
@@ -63,6 +62,7 @@ export interface TogetherAIModel {
   display_name: string;
   display_type: string;
   hardware_label: string;
+  id: string;
   instances: Instance[];
   isFeaturedModel: boolean;
   license: string;

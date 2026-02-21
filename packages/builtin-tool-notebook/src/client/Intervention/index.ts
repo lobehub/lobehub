@@ -1,4 +1,4 @@
-import { BuiltinIntervention } from '@lobechat/types';
+import type { BuiltinIntervention } from '@lobechat/types';
 
 /**
  * Notebook Tool Intervention Components Registry

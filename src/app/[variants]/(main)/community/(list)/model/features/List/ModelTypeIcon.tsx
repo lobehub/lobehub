@@ -1,11 +1,11 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
+import { type LucideIcon } from 'lucide-react';
 import {
   AudioLines,
   BoltIcon,
   ImageIcon,
-  type LucideIcon,
   MessageSquareTextIcon,
   MicIcon,
   MusicIcon,
@@ -22,8 +22,8 @@ const icons: Record<AiModelType, LucideIcon> = {
   realtime: PhoneIcon,
   stt: MicIcon,
   text2music: MusicIcon,
-  text2video: VideoIcon,
   tts: AudioLines,
+  video: VideoIcon,
 };
 
 const ModelTypeIcon = memo<{ size?: number; type: AiModelType }>(({ type, size = 20 }) => {

@@ -162,7 +162,7 @@ describe('tavily crawler', () => {
       ok: true,
       json: vi.fn().mockResolvedValue({
         base_url: 'https://api.tavily.com',
-        response_time: 1.0,
+        response_time: 1,
         results: [
           {
             url: 'https://example.com',

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { builtinTools } from '@/tools';
 
 import { createServerAgentToolsEngine, createServerToolsEngine } from '../index';
-import type { InstalledPlugin, ServerAgentToolsContext } from '../types';
+import { type InstalledPlugin, type ServerAgentToolsContext } from '../types';
 
 // Mock installed plugins
 const mockInstalledPlugins: InstalledPlugin[] = [

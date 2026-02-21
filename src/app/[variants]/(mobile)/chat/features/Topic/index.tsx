@@ -12,7 +12,7 @@ const Topic = () => {
         <TopicSearchBar />
         <Flexbox
           height={'100%'}
-          style={{ marginInline: -8, overflow: 'hidden', position: 'relative' }}
+          style={{ marginInline: -8, overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
           width={'calc(100% + 16px)'}
         >
           <TopicListContent />

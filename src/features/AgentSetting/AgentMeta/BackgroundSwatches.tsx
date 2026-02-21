@@ -1,4 +1,5 @@
-import { ColorSwatches, type ColorSwatchesProps, primaryColors } from '@lobehub/ui';
+import { type ColorSwatchesProps } from '@lobehub/ui';
+import { ColorSwatches, primaryColors } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -72,14 +73,14 @@ const BackgroundSwatches = memo<BackgroundSwatchesProps>(
 
     return (
       <ColorSwatches
+        enableColorPicker
         colors={colors}
         defaultValue={defaultValue}
-        enableColorPicker
+        value={value}
         onChange={(v) => {
           onChange?.(v);
           onValuesChange?.(v);
         }}
-        value={value}
         {...rest}
       />
     );

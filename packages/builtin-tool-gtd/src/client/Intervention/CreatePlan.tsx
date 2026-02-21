@@ -1,8 +1,9 @@
 'use client';
 
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import {
-  ReactCodePlugin,
   ReactCodeblockPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactLinkPlugin,
   ReactListPlugin,
@@ -10,7 +11,6 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -135,22 +135,22 @@ const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
     return (
       <Flexbox
         gap={8}
+        paddingBlock={16}
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
         }}
-        paddingBlock={16}
       >
         {/* Goal - Main Title */}
         <TextArea
           autoSize={{ minRows: 1 }}
           className={styles.title}
-          onChange={(e) => handleGoalChange(e.target.value)}
-          onKeyDown={handleGoalKeyDown}
           placeholder={t('lobe-gtd.createPlan.goal.placeholder')}
           style={{ padding: 0, resize: 'none' }}
           value={goal}
           variant={'borderless'}
+          onChange={(e) => handleGoalChange(e.target.value)}
+          onKeyDown={handleGoalKeyDown}
         />
 
         {/* Description - Subtitle */}
@@ -158,12 +158,12 @@ const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
           autoSize={{ minRows: 1 }}
           className={styles.description}
           data-testid="plan-description"
-          onChange={(e) => handleDescriptionChange(e.target.value)}
-          onKeyDown={handleDescriptionKeyDown}
           placeholder={t('lobe-gtd.createPlan.description.placeholder')}
           style={{ padding: 0, resize: 'none' }}
           value={description}
           variant={'borderless'}
+          onChange={(e) => handleDescriptionChange(e.target.value)}
+          onKeyDown={handleDescriptionKeyDown}
         />
 
         {/* Context - Rich Text Editor */}
@@ -172,8 +172,8 @@ const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
             content={args.context}
             editor={editor}
             lineEmptyPlaceholder={t('lobe-gtd.createPlan.context.placeholder')}
-            onTextChange={handleContentChange}
             placeholder={t('lobe-gtd.createPlan.context.placeholder')}
+            type={'text'}
             plugins={[
               ReactListPlugin,
               ReactCodePlugin,
@@ -186,7 +186,7 @@ const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
             style={{
               minHeight: 200,
             }}
-            type={'text'}
+            onTextChange={handleContentChange}
           />
         </div>
       </Flexbox>

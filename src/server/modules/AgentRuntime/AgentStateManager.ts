@@ -4,7 +4,7 @@ import {
   type AgentState,
 } from '@lobechat/agent-runtime';
 import debug from 'debug';
-import type { Redis } from 'ioredis';
+import { type Redis } from 'ioredis';
 
 import { getAgentRuntimeRedisClient } from './redis';
 

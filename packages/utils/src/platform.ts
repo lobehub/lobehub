@@ -5,7 +5,7 @@ import { isOnServerSide } from './env';
 export const getParser = () => {
   if (isOnServerSide) return new UAParser('Node');
 
-  let ua = navigator.userAgent;
+  const ua = navigator.userAgent;
   return new UAParser(ua);
 };
 

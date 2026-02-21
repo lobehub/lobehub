@@ -14,13 +14,13 @@ const Header = memo(() => {
   return (
     <SideBarHeaderLayout
       backTo="/resource"
+      left={<LibraryHead id={id || ''} />}
       breadcrumb={[
         {
           href: `/resource/library/${id}`,
           title: t('tab.resource'),
         },
       ]}
-      left={<LibraryHead id={id || ''} />}
     />
   );
 });

@@ -37,7 +37,7 @@ We’re building the world’s largest human–agent co-evolving network.
 [![][share-mastodon-shield]][share-mastodon-link]
 [![][share-linkedin-shield]][share-linkedin-link]
 
-<sup>Agent teams that grow with you</sup>
+<sup>Agent teammates that grow with you</sup>
 
 [![][github-trending-shield]][github-trending-url]
 
@@ -479,13 +479,9 @@ Regardless of which database you choose, LobeHub can provide you with an excelle
 
 ### [Support Multi-User Management][docs-feat-auth]
 
-LobeHub supports multi-user management and provides two main user authentication and management solutions to meet different needs:
+LobeHub supports multi-user management and provides flexible user authentication solutions:
 
-- **next-auth**: LobeHub integrates `next-auth`, a flexible and powerful identity verification library that supports multiple authentication methods, including OAuth, email login, credential login, etc. With `next-auth`, you can easily implement user registration, login, session management, social login, and other functions to ensure the security and privacy of user data.
-
-- [**Clerk**](https://go.clerk.com/exgqLG0): For users who need more advanced user management features, LobeHub also supports `Clerk`, a modern user management platform. `Clerk` provides richer functions, such as multi-factor authentication (MFA), user profile management, login activity monitoring, etc. With `Clerk`, you can get higher security and flexibility, and easily cope with complex user management needs.
-
-Regardless of which user management solution you choose, LobeHub can provide you with an excellent user experience and powerful functional support.
+- **Better Auth**: LobeHub integrates `Better Auth`, a modern and flexible authentication library that supports multiple authentication methods, including OAuth, email login, credential login, magic links, and more. With `Better Auth`, you can easily implement user registration, login, session management, social login, multi-factor authentication (MFA), and other functions to ensure the security and privacy of user data.
 
 <div align="right">
 
@@ -585,7 +581,7 @@ LobeHub provides Self-Hosted Version with Vercel, Alibaba Cloud, and [Docker Ima
 "If you want to deploy this service yourself on Vercel, Zeabur or Alibaba Cloud, you can follow these steps:
 
 - Prepare your [OpenAI API Key](https://platform.openai.com/account/api-keys).
-- Click the button below to start deployment: Log in directly with your GitHub account, and remember to fill in the `OPENAI_API_KEY`(required) and `ACCESS_CODE` (recommended) on the environment variable section.
+- Click the button below to start deployment: Log in directly with your GitHub account, and remember to fill in the `OPENAI_API_KEY`(required) on the environment variable section.
 - After deployment, you can start using it.
 - Bind a custom domain (optional): The DNS of the domain assigned by Vercel is polluted in some areas; binding a custom domain can connect directly.
 
@@ -651,7 +647,6 @@ This project provides some additional configuration items set with environment v
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `OPENAI_API_KEY`     | Yes      | This is the API key you apply on the OpenAI account page                                                                                                                  | `sk-xxxxxx...xxxxxx`                                                                                                 |
 | `OPENAI_PROXY_URL`   | No       | If you manually configure the OpenAI interface proxy, you can use this configuration item to override the default OpenAI API request base URL                             | `https://api.chatanywhere.cn` or `https://aihubmix.com/v1` <br/>The default value is<br/>`https://api.openai.com/v1` |
-| `ACCESS_CODE`        | No       | Add a password to access this service; you can set a long password to avoid leaking. If this value contains a comma, it is a password array.                              | `awCTe)re_r74` or `rtrt_ewee3@09!` or `code1,code2,code3`                                                            |
 | `OPENAI_MODEL_LIST`  | No       | Used to control the model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model, separated by commas. | `qwen-7b-chat,+glm-6b,-gpt-3.5-turbo`                                                                                |
 
 > \[!NOTE]
@@ -833,7 +828,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [codespaces-link]: https://codespaces.new/lobehub/lobe-chat
 [codespaces-shield]: https://github.com/codespaces/badge.svg
 [deploy-button-image]: https://vercel.com/button
-[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat&env=OPENAI_API_KEY,ACCESS_CODE&envDescription=Find%20your%20OpenAI%20API%20Key%20by%20click%20the%20right%20Learn%20More%20button.%20%7C%20Access%20Code%20can%20protect%20your%20website&envLink=https%3A%2F%2Fplatform.openai.com%2Faccount%2Fapi-keys&project-name=lobe-chat&repository-name=lobe-chat
+[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat&env=OPENAI_API_KEY&envDescription=Find%20your%20OpenAI%20API%20Key%20by%20click%20the%20right%20Learn%20More%20button.&envLink=https%3A%2F%2Fplatform.openai.com%2Faccount%2Fapi-keys&project-name=lobe-chat&repository-name=lobe-chat
 [deploy-on-alibaba-cloud-button-image]: https://service-info-public.oss-cn-hangzhou.aliyuncs.com/computenest-en.svg
 [deploy-on-alibaba-cloud-link]: https://computenest.console.aliyun.com/service/instance/create/default?type=user&ServiceName=LobeHub%E7%A4%BE%E5%8C%BA%E7%89%88
 [deploy-on-repocloud-button-image]: https://d16t0pc4846x52.cloudfront.net/deploylobe.svg
@@ -845,12 +840,12 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [discord-link]: https://discord.gg/AYFPHvv2jT
 [discord-shield]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square
 [discord-shield-badge]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=for-the-badge
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat?color=45cc11&labelColor=black&style=flat-square&sort=semver
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat-database?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat-database?color=369eff&labelColor=black&style=flat-square&sort=semver
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square&sort=semver
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
 [docs]: https://lobehub.com/docs/usage/start
 [docs-dev-guide]: https://lobehub.com/docs/development/start
 [docs-docker]: https://lobehub.com/docs/self-hosting/server-database/docker-compose
@@ -964,5 +959,5 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
 [submit-plugin-link]: https://github.com/lobehub/lobe-chat-plugins
 [submit-plugin-shield]: https://img.shields.io/badge/🧩/🏪_submit_plugin-%E2%86%92-95f3d9?labelColor=black&style=for-the-badge
-[vercel-link]: https://chat-preview.lobehub.com
+[vercel-link]: https://app.lobehub.com
 [vercel-shield]: https://img.shields.io/badge/vercel-online-55b467?labelColor=black&logo=vercel&style=flat-square

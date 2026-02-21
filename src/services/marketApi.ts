@@ -5,15 +5,15 @@ import {
 } from '@lobehub/market-sdk';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import type {
-  AgentForkRequest,
-  AgentForkResponse,
-  AgentForkSourceResponse,
-  AgentForksResponse,
-  AgentGroupForkRequest,
-  AgentGroupForkResponse,
-  AgentGroupForkSourceResponse,
-  AgentGroupForksResponse,
+import {
+  type AgentForkRequest,
+  type AgentForkResponse,
+  type AgentForkSourceResponse,
+  type AgentForksResponse,
+  type AgentGroupForkRequest,
+  type AgentGroupForkResponse,
+  type AgentGroupForkSourceResponse,
+  type AgentGroupForksResponse,
 } from '@/types/discover';
 
 interface GetOwnAgentsParams {
@@ -26,7 +26,7 @@ export class MarketApiService {
    * @deprecated This method is no longer needed as authentication is now handled
    * automatically through tRPC middleware. Keeping for backward compatibility.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   setAccessToken(_token: string) {
     // No-op: Authentication is now handled through tRPC authedProcedure middleware
   }
@@ -45,7 +45,9 @@ export class MarketApiService {
   }
 
   // Get agent detail by identifier
-  async getAgentDetail(identifier: string): Promise<AgentItemDetail & { forkedFromAgentId?: string }> {
+  async getAgentDetail(
+    identifier: string,
+  ): Promise<AgentItemDetail & { forkedFromAgentId?: string }> {
     return lambdaClient.market.agent.getAgentDetail.query({
       identifier,
     }) as Promise<AgentItemDetail>;
@@ -147,6 +149,13 @@ export class MarketApiService {
   }
 
   // ==================== Agent Group Status Management ====================
+
+  // Get agent group detail by identifier
+  async getAgentGroupDetail(identifier: string): Promise<any> {
+    return lambdaClient.market.agentGroup.getAgentGroupDetail.query({
+      identifier,
+    }) as Promise<any>;
+  }
 
   async publishAgentGroup(identifier: string): Promise<void> {
     await lambdaClient.market.agentGroup.publishAgentGroup.mutate({ identifier });

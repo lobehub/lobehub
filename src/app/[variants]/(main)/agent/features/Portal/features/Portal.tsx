@@ -1,9 +1,11 @@
 'use client';
 
-import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
+import { type DraggablePanelProps } from '@lobehub/ui';
+import { DraggablePanel } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Activity, type PropsWithChildren, memo, useState } from 'react';
+import { type PropsWithChildren } from 'react';
+import { Activity, memo, useState } from 'react';
 
 import {
   CHAT_PORTAL_MAX_WIDTH,
@@ -67,22 +69,22 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
   return (
     <DraggablePanel
       className={styles.drawer}
-      classNames={{
-        content: styles.content,
-      }}
       defaultSize={{ width: tmpWidth }}
       expand={showPortal}
       expandable={false}
       maxWidth={CHAT_PORTAL_MAX_WIDTH}
-      minWidth={
-        showArtifactUI || showToolUI || showThread ? CHAT_PORTAL_TOOL_UI_WIDTH : CHAT_PORTAL_WIDTH
-      }
       mode={lg ? 'fixed' : 'float'}
-      onSizeChange={handleSizeChange}
       placement={'right'}
       showHandleWhenCollapsed={false}
       showHandleWideArea={false}
       size={{ height: '100%', width: portalWidth }}
+      classNames={{
+        content: styles.content,
+      }}
+      minWidth={
+        showArtifactUI || showToolUI || showThread ? CHAT_PORTAL_TOOL_UI_WIDTH : CHAT_PORTAL_WIDTH
+      }
+      onSizeChange={handleSizeChange}
     >
       <Activity mode={showPortal ? 'visible' : 'hidden'} name="AgentPortal">
         {children}

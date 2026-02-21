@@ -1,4 +1,4 @@
-import { Block, Flexbox, Input, Popover } from '@lobehub/ui';
+import { Block, Flexbox, Input, Popover, stopPropagation } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,19 +45,25 @@ const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEdi
 
   return (
     <Popover
+      open={editing}
+      placement="bottomLeft"
+      trigger="click"
       content={
-        <Flexbox gap={4} horizontal onClick={(e) => e.stopPropagation()} style={{ width: 320 }}>
+        <Flexbox horizontal gap={4} style={{ width: 320 }} onClick={stopPropagation}>
           <EmojiPicker
             allowDelete
+            defaultAvatar={'📄'}
+            locale={locale}
+            value={newEmoji}
             customRender={(emoji) => (
               <Block
-                align={'center'}
                 clickable
+                align={'center'}
                 height={36}
                 justify={'center'}
-                onClick={(e) => e.stopPropagation()}
                 variant={isDarkMode ? 'filled' : 'outlined'}
                 width={36}
+                onClick={stopPropagation}
               >
                 {emoji ? (
                   <span style={{ fontSize: 20 }}>{emoji}</span>
@@ -66,38 +72,32 @@ const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEdi
                 )}
               </Block>
             )}
-            defaultAvatar={'📄'}
-            locale={locale}
             onChange={setNewEmoji}
             onClick={(e) => e?.stopPropagation()}
             onDelete={() => setNewEmoji(undefined)}
-            value={newEmoji}
           />
           <Input
             autoFocus
             defaultValue={title}
+            placeholder={t('pageEditor.titlePlaceholder')}
+            style={{ flex: 1 }}
             onChange={(e) => setNewTitle(e.target.value)}
             onPressEnter={() => {
               handleUpdate();
               toggleEditing(false);
             }}
-            placeholder={t('pageEditor.titlePlaceholder')}
-            style={{ flex: 1 }}
           />
         </Flexbox>
       }
-      onOpenChange={(open) => {
-        if (!open) handleUpdate();
-        toggleEditing(open);
-      }}
-      open={editing}
-      placement="bottomLeft"
       styles={{
         content: {
           padding: 4,
         },
       }}
-      trigger="click"
+      onOpenChange={(open) => {
+        if (!open) handleUpdate();
+        toggleEditing(open);
+      }}
     >
       <div />
     </Popover>

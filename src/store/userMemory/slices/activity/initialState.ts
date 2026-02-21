@@ -1,4 +1,4 @@
-import type { ActivityListItem } from '@lobechat/types';
+import { type ActivityListItem } from '@lobechat/types';
 
 export interface ActivitySliceState {
   activities: ActivityListItem[];

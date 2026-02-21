@@ -1,7 +1,7 @@
 'use client';
 
+import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import type { MenuProps } from '@lobehub/ui';
 import { Hash, LucideCheck } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

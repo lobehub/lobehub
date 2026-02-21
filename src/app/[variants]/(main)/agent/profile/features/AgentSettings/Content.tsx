@@ -1,10 +1,10 @@
 'use client';
 
 import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { type ItemType } from 'antd/es/menu/interface';
 import { useTheme } from 'antd-style';
-import type { ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
-import { BrainIcon, MessageSquareHeartIcon } from 'lucide-react';
+import { BrainIcon, MessageSquareHeartIcon, MessagesSquareIcon, UserIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,7 +24,7 @@ const Content = memo(() => {
   ]);
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const [tab, setTab] = useState(isInbox ? ChatSettingsTabs.Modal : ChatSettingsTabs.Opening);
+  const [tab, setTab] = useState(isInbox ? ChatSettingsTabs.Modal : ChatSettingsTabs.Meta);
 
   const updateAgentConfig = async (config: any) => {
     if (!agentId) return;
@@ -41,11 +41,23 @@ const Content = memo(() => {
       [
         !isInbox
           ? {
+              icon: <Icon icon={UserIcon} />,
+              key: ChatSettingsTabs.Meta,
+              label: t('agentTab.meta'),
+            }
+          : null,
+        !isInbox
+          ? {
               icon: <Icon icon={MessageSquareHeartIcon} />,
               key: ChatSettingsTabs.Opening,
               label: t('agentTab.opening'),
             }
           : null,
+        {
+          icon: <Icon icon={MessagesSquareIcon} />,
+          key: ChatSettingsTabs.Chat,
+          label: t('agentTab.chat'),
+        },
         {
           icon: <Icon icon={BrainIcon} />,
           key: ChatSettingsTabs.Modal,
@@ -70,22 +82,22 @@ const Content = memo(() => {
         height={'100%'}
         paddingBlock={24}
         paddingInline={8}
+        width={200}
         style={{
           background: theme.colorBgLayout,
           borderRight: `1px solid ${theme.colorBorderSecondary}`,
         }}
-        width={200}
       >
         <Block
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           paddingBlock={'14px 16px'}
           paddingInline={4}
+          variant={'borderless'}
           style={{
             overflow: 'hidden',
           }}
-          variant={'borderless'}
         >
           <Avatar
             avatar={isInbox ? DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
@@ -98,11 +110,11 @@ const Content = memo(() => {
           </Text>
         </Block>
         <Menu
-          items={menuItems}
-          onClick={({ key }) => setTab(key as ChatSettingsTabs)}
           selectable
+          items={menuItems}
           selectedKeys={[tab]}
           style={{ width: '100%' }}
+          onClick={({ key }) => setTab(key as ChatSettingsTabs)}
         />
       </Flexbox>
       <Flexbox
@@ -116,9 +128,9 @@ const Content = memo(() => {
           id={agentId}
           loading={false}
           meta={meta}
+          tab={tab}
           onConfigChange={updateAgentConfig}
           onMetaChange={updateAgentMeta}
-          tab={tab}
         />
       </Flexbox>
     </Flexbox>

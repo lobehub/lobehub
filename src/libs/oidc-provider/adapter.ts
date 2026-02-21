@@ -12,7 +12,7 @@ import {
 import debug from 'debug';
 import { eq, sql } from 'drizzle-orm';
 
-// 创建 adapter 日志命名空间
+// Create adapter logging namespace
 const log = debug('lobe-oidc:adapter');
 
 /**
@@ -41,7 +41,7 @@ class OIDCAdapter {
   }
 
   /**
-   * 根据模型名称获取对应的数据库表
+   * Get the corresponding database table based on model name
    */
   private getTable() {
     log('Getting table for model: %s', this.name);
@@ -60,26 +60,26 @@ class OIDCAdapter {
       }
       case 'ClientCredentials': {
         return oidcAccessTokens;
-      } // 使用相同的表
+      } // Use the same table
       case 'Client': {
         return oidcClients;
       }
       case 'InitialAccessToken': {
         return oidcAccessTokens;
-      } // 使用相同的表
+      } // Use the same table
       case 'RegistrationAccessToken': {
         return oidcAccessTokens;
-      } // 使用相同的表
+      } // Use the same table
       case 'Interaction': {
         return oidcInteractions;
       }
       case 'ReplayDetection': {
         log('ReplayDetection - no persistent storage needed');
         return null;
-      } // 不需要持久化
+      } // No persistent storage needed
       case 'PushedAuthorizationRequest': {
         return oidcAuthorizationCodes;
-      } // 使用相同的表
+      } // Use the same table
       case 'Grant': {
         return oidcGrants;
       }
@@ -87,7 +87,7 @@ class OIDCAdapter {
         return oidcSessions;
       }
       default: {
-        const error = `不支持的模型: ${this.name}`;
+        const error = `Unsupported model: ${this.name}`;
         log('ERROR: %s', error);
         throw new Error(error);
       }
@@ -95,7 +95,7 @@ class OIDCAdapter {
   }
 
   /**
-   * 创建模型实例
+   * Create or update model instance
    */
   async upsert(id: string, payload: any, expiresIn: number): Promise<void> {
     log('[%s] upsert called - id: %s, expiresIn: %d', this.name, id, `${expiresIn}s`);
@@ -108,7 +108,7 @@ class OIDCAdapter {
     }
 
     if (this.name === 'Client') {
-      // 客户端模型特殊处理，直接使用传入的数据
+      // Special handling for client model, directly use the passed data
       log('[Client] Upserting client record');
       try {
         await this.db
@@ -161,7 +161,7 @@ class OIDCAdapter {
       return;
     }
 
-    // 对其他模型，保存完整数据和元数据
+    // For other models, save complete data and metadata
     const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined;
     log('[%s] expiresAt set to: %s', this.name, expiresAt ? expiresAt.toISOString() : 'undefined');
 
@@ -171,7 +171,7 @@ class OIDCAdapter {
       id,
     };
 
-    // 添加特定字段
+    // Add specific fields
     if (payload.accountId) {
       record.userId = payload.accountId;
       log('[%s] Setting userId: %s', this.name, payload.accountId);
@@ -187,11 +187,11 @@ class OIDCAdapter {
           }
         } catch (authError) {
           log('[%s] Error getting userId from auth context: %O', this.name, authError);
-          // 如果获取 userId 失败，继续处理而不抛出错误
+          // If getting userId fails, continue processing without throwing error
         }
       } catch (importError) {
         log('[%s] Error importing auth module: %O', this.name, importError);
-        // 如果导入模块失败，继续处理而不抛出错误
+        // If importing module fails, continue processing without throwing error
       }
     }
 
@@ -238,7 +238,7 @@ class OIDCAdapter {
   }
 
   /**
-   * 查找模型实例
+   * Find model instance
    */
   async find(id: string): Promise<any> {
     log('[%s] find called - id: %s', this.name, id);
@@ -266,7 +266,7 @@ class OIDCAdapter {
 
       const model = result[0] as any;
 
-      // 客户端模型特殊处理
+      // Special handling for client model
       if (this.name === 'Client') {
         log('[Client] Converting client record to expected format');
         return {
@@ -286,13 +286,13 @@ class OIDCAdapter {
         };
       }
 
-      // 如果记录已过期，返回 undefined
+      // If record has expired, return undefined
       if (model.expiresAt && new Date() > new Date(model.expiresAt)) {
         log('[%s] Record expired (expiresAt: %s), returning undefined', this.name, model.expiresAt);
         return undefined;
       }
 
-      // 如果记录已被消费，检查是否在宽限期内
+      // If record has been consumed, check if within grace period
       if (model.consumedAt) {
         // For RefreshToken, allow reuse within grace period
         if (this.name === 'RefreshToken') {
@@ -339,13 +339,13 @@ class OIDCAdapter {
   }
 
   /**
-   * 查找模型实例 by userCode (仅用于设备流程)
+   * Find model instance by userCode (only for device flow)
    */
   async findByUserCode(userCode: string): Promise<any> {
     log('[DeviceCode] findByUserCode called - userCode: %s', userCode);
 
     if (this.name !== 'DeviceCode') {
-      const error = 'findByUserCode 只能用于 DeviceCode 模型';
+      const error = 'findByUserCode can only be used for DeviceCode model';
       log('ERROR: %s', error);
       throw new Error(error);
     }
@@ -367,7 +367,7 @@ class OIDCAdapter {
 
       const model = result[0];
 
-      // 如果记录已过期或已被消费，返回 undefined
+      // If record has expired or been consumed, return undefined
       if (model.expiresAt && new Date() > new Date(model.expiresAt)) {
         log('[DeviceCode] Record expired (expiresAt: %s), returning undefined', model.expiresAt);
         return undefined;
@@ -391,7 +391,7 @@ class OIDCAdapter {
   }
 
   /**
-   * 查找交互实例 by uid
+   * Find interaction instance by uid
    */
   async findByUid(uid: string): Promise<any> {
     log('[Interaction] findByUid called - uid: %s', uid);
@@ -409,10 +409,10 @@ class OIDCAdapter {
         }
 
         const model = results[0] as any;
-        // 检查过期
+        // Check expiration
         if (model.expiresAt && model.expiresAt < new Date()) {
           log('[Session] Record found by data.uid but expired: %s', uid);
-          await this.destroy(model.id); // 仍然使用主键 id 删除
+          await this.destroy(model.id); // Still use primary key id for deletion
           return undefined;
         }
 
@@ -423,14 +423,14 @@ class OIDCAdapter {
         console.error(`[OIDC Adapter] Error finding Session by uid:`, error);
       }
     }
-    // 复用 find 方法实现
+    // Reuse find method implementation
     log('[Interaction] Delegating to find() method');
     return this.find(uid);
   }
 
   /**
-   * 根据用户 ID 查找会话
-   * 用于会话预同步
+   * Find session by user ID
+   * Used for session pre-synchronization
    */
   async findSessionByUserId(userId: string): Promise<any> {
     log('[%s] findSessionByUserId called - userId: %s', this.name, userId);
@@ -470,7 +470,7 @@ class OIDCAdapter {
   }
 
   /**
-   * 销毁模型实例
+   * Destroy model instance
    */
   async destroy(id: string): Promise<void> {
     log('[%s] destroy called - id: %s', this.name, id);
@@ -493,7 +493,7 @@ class OIDCAdapter {
   }
 
   /**
-   * 标记模型实例为已消费
+   * Mark model instance as consumed
    */
   async consume(id: string): Promise<void> {
     log('[%s] consume called - id: %s', this.name, id);
@@ -520,26 +520,26 @@ class OIDCAdapter {
   }
 
   /**
-   * 根据 grantId 撤销所有相关模型实例
+   * Revoke all related model instances by grantId
    */
   async revokeByGrantId(grantId: string): Promise<void> {
     log('[%s] revokeByGrantId called - grantId: %s', this.name, grantId);
 
-    // Grants 本身不需要通过 grantId 来撤销
+    // Grants themselves don't need to be revoked by grantId
     if (this.name === 'Grant') {
       log('[Grant] revokeByGrantId skipped for Grant model, as it is the grant itself');
       return;
     }
 
-    // 提前检查模型名称是否有效，即使后续不直接使用 table
+    // Pre-check if model name is valid, even if table is not directly used later
     this.getTable();
 
     try {
       log('[%s] Starting transaction for revokeByGrantId operations', this.name);
 
-      // 使用事务删除所有包含grantId的记录，确保原子性
+      // Use transaction to delete all records containing grantId, ensuring atomicity
       await this.db.transaction(async (tx) => {
-        // 所有可能包含grantId的表
+        // All tables that may contain grantId
         const tables = [
           oidcAccessTokens,
           oidcAuthorizationCodes,
@@ -568,7 +568,7 @@ class OIDCAdapter {
   }
 
   /**
-   * 创建适配器工厂
+   * Create adapter factory
    */
   static createAdapterFactory = (db: LobeChatDatabase) => {
     log('Creating adapter factory with database instance');

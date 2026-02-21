@@ -183,6 +183,8 @@ export default {
 
   'cmdk.keywords.usage': 'usage statistics consumption quota',
 
+  'cmdk.keywords.video': 'video,generate,seedance,kling',
+
   'cmdk.memory': 'Memory',
 
   'cmdk.mentionAgent': 'Mention Agent',
@@ -253,10 +255,13 @@ export default {
   'cmdk.submitIssue': 'Submit Issue',
   'cmdk.theme': 'Theme',
   'cmdk.themeAuto': 'Auto',
+  'cmdk.themeCurrent': 'Current',
   'cmdk.themeDark': 'Dark',
   'cmdk.themeLight': 'Light',
   'cmdk.toOpen': 'Open',
   'cmdk.toSelect': 'Select',
+
+  'cmdk.video': 'AI Video',
 
   'confirm': 'Confirm',
   'contact': 'Contact Us',
@@ -327,6 +332,7 @@ export default {
   'geminiImageChineseWarning.doNotShowAgain': 'Do Not Show Again',
   'geminiImageChineseWarning.title': 'Chinese Input Notice',
   'historyRange': 'History Range',
+  'home.suggestQuestions': 'Try these examples',
   'import': 'Import',
   'importData': 'Import Data',
   'importModal.error.desc':
@@ -442,6 +448,7 @@ export default {
   'setting': 'Settings',
   'share': 'Share',
   'stop': 'Stop',
+  'switch': 'Switch',
   'sync.actions.settings': 'Sync Settings',
   'sync.actions.sync': 'Sync Now',
   'sync.awareness.current': 'Current Device',

@@ -1,12 +1,14 @@
-import { type WriteLocalFileParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInterventionProps } from '@lobechat/types';
+import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { LocalFile, LocalFolder } from '@/features/LocalFile';
+
+import OutOfScopeWarning from '../OutOfScopeWarning';
 
 const WriteFile = memo<BuiltinInterventionProps<WriteLocalFileParams>>(({ args }) => {
   const { t } = useTranslation('tool');
@@ -37,6 +39,7 @@ const WriteFile = memo<BuiltinInterventionProps<WriteLocalFileParams>>(({ args }
 
   return (
     <Flexbox gap={12}>
+      <OutOfScopeWarning paths={[args.path]} />
       <Flexbox horizontal>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />

@@ -12,11 +12,11 @@ const HighlightedContent = memo<HighlightedContentProps>(({ title, children }) =
   const content = (
     <Markdown
       fontSize={14}
+      variant={'chat'}
       style={{
         color: cssVar.colorText,
         overflow: 'visible',
       }}
-      variant={'chat'}
     >
       {children || ''}
     </Markdown>

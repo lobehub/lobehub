@@ -1,14 +1,6 @@
 import { ProviderIcon } from '@lobehub/icons';
-import {
-  type FormItemProps,
-  FormModal,
-  Icon,
-  Input,
-  InputPassword,
-  Select,
-  TextArea,
-} from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Flexbox, FormModal, Icon, Input, InputPassword, Select, TextArea } from '@lobehub/ui';
 import { App } from 'antd';
 import { BrainIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -117,19 +109,19 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
     {
       children: (
         <Select
+          options={CUSTOM_PROVIDER_SDK_OPTIONS}
+          placeholder={t('createNewAiProvider.sdkType.placeholder')}
+          variant={'filled'}
           optionRender={({ label, value }) => {
             // Map 'router' to 'newapi' for displaying the correct icon
             const iconProvider = value === 'router' ? 'newapi' : (value as string);
             return (
-              <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} gap={8}>
                 <ProviderIcon provider={iconProvider} size={18} />
                 {label}
               </Flexbox>
             );
           }}
-          options={CUSTOM_PROVIDER_SDK_OPTIONS}
-          placeholder={t('createNewAiProvider.sdkType.placeholder')}
-          variant={'filled'}
         />
       ),
       label: t('createNewAiProvider.sdkType.title'),
@@ -161,6 +153,10 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
   return (
     <FormModal
       destroyOnHidden
+      open={open}
+      scrollToFirstError={{ behavior: 'instant', block: 'end', focus: true }}
+      submitLoading={loading}
+      submitText={t('createNewAiProvider.confirm')}
       items={[
         {
           children: basicItems,
@@ -171,18 +167,14 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
           title: t('createNewAiProvider.configTitle'),
         },
       ]}
-      onCancel={onClose}
-      onFinish={onFinish}
-      open={open}
-      scrollToFirstError={{ behavior: 'instant', block: 'end', focus: true }}
-      submitLoading={loading}
-      submitText={t('createNewAiProvider.confirm')}
       title={
-        <Flexbox gap={8} horizontal>
+        <Flexbox horizontal gap={8}>
           <Icon icon={BrainIcon} />
           {t('createNewAiProvider.title')}
         </Flexbox>
       }
+      onCancel={onClose}
+      onFinish={onFinish}
     />
   );
 });

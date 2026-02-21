@@ -43,7 +43,7 @@ const OpeningMessage = memo(() => {
   }, []);
 
   const editIconButton = !editing && openingMessage && (
-    <Button onClick={handleEdit} size={'small'}>
+    <Button size={'small'} onClick={handleEdit}>
       <PencilLine size={16} />
     </Button>
   );
@@ -52,22 +52,22 @@ const OpeningMessage = memo(() => {
     <div className={styles.wrapper}>
       <Flexbox direction={'horizontal'}>
         <EditableMessage
-          classNames={{
-            markdown: styles.markdown,
-          }}
+          showEditWhenEmpty
           editButtonSize={'small'}
           editing={editing}
           height={'auto'}
-          onChange={setOpeningMessage}
-          onEditingChange={setEditing}
           placeholder={t('settingOpening.openingMessage.placeholder')}
-          showEditWhenEmpty
+          value={openingMessage ?? ''}
+          variant={'borderless'}
+          classNames={{
+            markdown: styles.markdown,
+          }}
           text={{
             cancel: t('cancel', { ns: 'common' }),
             confirm: t('ok', { ns: 'common' }),
           }}
-          value={openingMessage ?? ''}
-          variant={'borderless'}
+          onChange={setOpeningMessage}
+          onEditingChange={setEditing}
         />
         {editIconButton}
       </Flexbox>

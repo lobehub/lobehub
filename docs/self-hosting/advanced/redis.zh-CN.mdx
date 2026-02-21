@@ -1,6 +1,6 @@
 ---
 title: 配置 Redis 缓存服务
-description: 了解如何配置 Redis 缓存服务以优化 LobeChat 的性能和会话管理。
+description: 了解如何配置 Redis 缓存服务以优化 LobeHub 的性能和会话管理。
 tags:
   - Redis
   - 缓存
@@ -10,17 +10,17 @@ tags:
 
 # 配置 Redis 缓存服务
 
-LobeChat 使用 Redis 作为高性能缓存和会话存储服务，用于优化系统性能和管理用户认证状态。
+LobeHub 使用 Redis 作为高性能缓存和会话存储服务，用于优化系统性能和管理用户认证状态。
 
 <Callout type={'info'}>
-  LobeChat 使用标准 Redis 协议（通过 ioredis 库），支持任何兼容 Redis 协议的服务，包括 Redis
+  LobeHub 使用标准 Redis 协议（通过 ioredis 库），支持任何兼容 Redis 协议的服务，包括 Redis
   官方服务、自部署 Redis、以及云服务商提供的 Redis 服务（如 AWS ElastiCache、阿里云 Redis
   等）。
 </Callout>
 
 ## 使用场景
 
-Redis 在 LobeChat 中主要用于以下场景：
+Redis 在 LobeHub 中主要用于以下场景：
 
 ### 认证会话存储
 
@@ -57,7 +57,7 @@ Redis 在 LobeChat 中主要用于以下场景：
 
   ### `REDIS_PREFIX`
 
-  Redis 键的前缀，用于在共享 Redis 实例中隔离 LobeChat 的数据。
+  Redis 键的前缀，用于在共享 Redis 实例中隔离 LobeHub 的数据。
 
   - 默认值：`lobechat`
   - 示例：`REDIS_PREFIX=my-lobechat`
@@ -118,7 +118,7 @@ REDIS_PREFIX=lobechat
 ## 注意事项
 
 <Callout type={'warning'}>
-  Redis 是可选服务。如果不配置 `REDIS_URL`，LobeChat 仍然可以正常运行，但会失去上述缓存和会话管理的优化功能。
+  Redis 是可选服务。如果不配置 `REDIS_URL`，LobeHub 仍然可以正常运行，但会失去上述缓存和会话管理的优化功能。
 </Callout>
 
 - **内存管理**：Redis 是内存数据库，请确保服务器有足够的内存

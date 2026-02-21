@@ -4,7 +4,7 @@ import { ChatInput } from '@lobehub/editor/react';
 import { Button, Flexbox, TextArea } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Sparkles } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
+import { type KeyboardEvent } from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -126,25 +126,25 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         className={cx(styles.container, isDarkMode && styles.container_dark)}
         styles={{ body: { padding: 8 } }}
       >
-        <Flexbox align="flex-end" gap={12} height={'100%'} horizontal width={'100%'}>
+        <Flexbox horizontal align="flex-end" gap={12} height={'100%'} width={'100%'}>
           <TextArea
             autoSize={{ maxRows: 6, minRows: 3 }}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
             placeholder={t('config.prompt.placeholder')}
+            value={value}
+            variant={'borderless'}
             style={{
               borderRadius: 0,
               padding: 0,
             }}
-            value={value}
-            variant={'borderless'}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
           />
           <Button
             disabled={!value}
             icon={Sparkles}
             loading={isCreating}
-            onClick={handleGenerate}
             size={'large'}
+            type={'primary'}
             style={{
               fontWeight: 500,
               height: 64,
@@ -154,7 +154,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             title={
               isCreating ? t('generation.status.generating') : t('generation.actions.generate')
             }
-            type={'primary'}
+            onClick={handleGenerate}
           />
         </Flexbox>
       </ChatInput>

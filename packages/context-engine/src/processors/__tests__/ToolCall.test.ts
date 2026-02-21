@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { ToolCallProcessor } from '../ToolCall';
 import type { ToolCallConfig } from '../ToolCall';
+import { ToolCallProcessor } from '../ToolCall';
 
 describe('ToolCallProcessor', () => {
   const createContext = (messages: any[]): PipelineContext => ({

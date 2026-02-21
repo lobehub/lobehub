@@ -1,21 +1,17 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import {
-  boolean,
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
+import { createNanoId } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { users } from './user';
 
 // Roles table
 export const roles = pgTable('rbac_roles', {
-  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  id: text('id')
+    .$defaultFn(() => createNanoId(16)())
+    .notNull()
+    .primaryKey(),
+
   name: text('name').notNull().unique(), // Role name, e.g.: admin, user, guest
   displayName: text('display_name').notNull(), // Display name
   description: text('description'), // Role description
@@ -31,7 +27,11 @@ export type RoleItem = typeof roles.$inferSelect;
 
 // Permissions table
 export const permissions = pgTable('rbac_permissions', {
-  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  id: text('id')
+    .$defaultFn(() => createNanoId(16)())
+    .notNull()
+    .primaryKey(),
+
   code: text('code').notNull().unique(), // Permission code, e.g.: chat:create, file:upload
   name: text('name').notNull(), // Permission name
   description: text('description'), // Permission description
@@ -48,10 +48,10 @@ export type PermissionItem = typeof permissions.$inferSelect;
 export const rolePermissions = pgTable(
   'rbac_role_permissions',
   {
-    roleId: integer('role_id')
+    roleId: text('role_id')
       .references(() => roles.id, { onDelete: 'cascade' })
       .notNull(),
-    permissionId: integer('permission_id')
+    permissionId: text('permission_id')
       .references(() => permissions.id, { onDelete: 'cascade' })
       .notNull(),
 
@@ -74,7 +74,7 @@ export const userRoles = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    roleId: integer('role_id')
+    roleId: text('role_id')
       .references(() => roles.id, { onDelete: 'cascade' })
       .notNull(),
 

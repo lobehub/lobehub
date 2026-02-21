@@ -1,6 +1,6 @@
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { marketToolsResultsPrompt, modelsResultsPrompt } from '@lobechat/prompts';
-import { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { discoverService } from '@/services/discover';
 import { getAgentStoreState } from '@/store/agent';
@@ -410,7 +410,6 @@ export class AgentBuilderExecutionRuntime {
 
       window.addEventListener('message', messageHandler);
 
-      // eslint-disable-next-line unicorn/consistent-function-scoping
       const checkAuthStatus = async (): Promise<boolean> => {
         try {
           // Check LobehubSkill status
@@ -516,7 +515,6 @@ export class AgentBuilderExecutionRuntime {
         resolve(result);
       };
 
-      // eslint-disable-next-line unicorn/consistent-function-scoping
       const checkAuthStatus = async (): Promise<boolean> => {
         try {
           // Refresh server status first
@@ -603,7 +601,6 @@ export class AgentBuilderExecutionRuntime {
 
       // Small delay for typewriter effect
       if (i + chunkSize < prompt.length) {
-        // eslint-disable-next-line no-promise-executor-return
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }

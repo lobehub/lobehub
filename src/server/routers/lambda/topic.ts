@@ -417,11 +417,9 @@ export const topicRouter = router({
         const agentId = topicAgentIdMap.get(topic.id);
         const agentInfo = agentId ? agentInfoMap.get(agentId) : null;
 
-        // Clean agent info - if avatar/title are all null, return null
-        const cleanedAgent = agentInfo ? cleanObject(agentInfo) : null;
-        // Only return agent if it has meaningful display info (avatar or title)
-        const validAgent =
-          cleanedAgent && (cleanedAgent.avatar || cleanedAgent.title) ? cleanedAgent : null;
+        // Always return agent with id if agentId exists (even if avatar/title are null)
+        // Frontend needs agent.id to generate links
+        const validAgent = agentInfo ? cleanObject(agentInfo) : null;
 
         return {
           agent: validAgent,

@@ -1,5 +1,5 @@
-import { ActionIcon, Button, Input, type InputProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type InputProps } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Input } from '@lobehub/ui';
 import { Plus, X } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,45 +51,45 @@ const ArgsInput = memo<ArgsInputProps>(({ value = [], onChange, ...res }) => {
   return (
     <Flexbox gap={8} style={{ width: '100%' }}>
       {value.length === 0 ? (
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Input
             {...res}
+            placeholder={t('ArgsInput.enterFirstArgument')}
+            style={{ flex: 1 }}
             onBlur={(e) => {
               if (e.target.value.trim()) {
                 onChange?.([e.target.value.trim()]);
               }
               res.onBlur?.(e);
             }}
-            placeholder={t('ArgsInput.enterFirstArgument')}
-            style={{ flex: 1 }}
           />
-          <Button icon={Plus} onClick={handleAddArg} size="small" type="primary" />
+          <Button icon={Plus} size="small" type="primary" onClick={handleAddArg} />
         </Flexbox>
       ) : (
         <>
           {value.map((arg, index) => (
-            <Flexbox align="center" gap={8} horizontal key={index}>
+            <Flexbox horizontal align="center" gap={8} key={index}>
               <Input
-                onChange={(e) => handleArgChange(index, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, index)}
                 placeholder={t('ArgsInput.argumentPlaceholder', { index: index + 1 })}
                 style={{ flex: 1 }}
                 value={arg}
+                onChange={(e) => handleArgChange(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, index)}
               />
               <ActionIcon
                 icon={X}
-                onClick={() => handleRemoveArg(index)}
                 size="small"
                 style={{ flexShrink: 0 }}
+                onClick={() => handleRemoveArg(index)}
               />
             </Flexbox>
           ))}
           <Button
             icon={Plus}
-            onClick={handleAddArg}
             size="small"
             style={{ alignSelf: 'flex-start' }}
             type="dashed"
+            onClick={handleAddArg}
           >
             {t('ArgsInput.addArgument')}
           </Button>

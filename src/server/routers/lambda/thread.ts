@@ -5,7 +5,8 @@ import { ThreadModel } from '@/database/models/thread';
 import { insertThreadSchema } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { type ThreadItem, createThreadSchema } from '@/types/topic/thread';
+import { type ThreadItem } from '@/types/topic/thread';
+import { createThreadSchema } from '@/types/topic/thread';
 
 const threadProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

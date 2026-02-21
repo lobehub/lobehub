@@ -2,7 +2,8 @@
 
 import { ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
-import { type PropsWithChildren, memo, useEffect, useState } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { isRtlLang } from 'rtl-detect';
 
 import { createI18nNext } from '@/locales/create';

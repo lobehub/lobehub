@@ -1,6 +1,6 @@
 import { authEnv } from '@/envs/auth';
 
-import type { GenericProviderDefinition } from '../types';
+import { type GenericProviderDefinition } from '../types';
 
 const WECHAT_AUTHORIZATION_URL = 'https://open.weixin.qq.com/connect/qrconnect';
 const WECHAT_TOKEN_URL = 'https://api.weixin.qq.com/sns/oauth2/access_token';
@@ -74,6 +74,7 @@ const provider: GenericProviderDefinition<{
           tokenType: data.token_type ?? 'Bearer',
         };
       },
+
       /**
        * Use openid/unionid returned in the token response; no custom scope encoding needed.
        */
@@ -122,6 +123,8 @@ const provider: GenericProviderDefinition<{
       responseMode: 'query',
 
       scopes: ['snsapi_login'],
+
+      tokenUrl: WECHAT_TOKEN_URL,
     };
   },
 

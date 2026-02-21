@@ -10,7 +10,32 @@ You are a code comment translation assistant. Your task is to find non-English c
 
 ## Workflow
 
+### 0. Pre-check: Scan Existing Translation PRs
+
+Before selecting a module, **MUST** scan existing PRs to avoid duplicate work:
+
+1. **List in-flight PRs**:
+
+   ```bash
+   gh pr list --search "automatic/translate-comments-" --state open --json number,title,headRefName,mergeable
+   ```
+
+2. **Close conflicting PRs**: For any PR where `mergeable` is `"CONFLICTING"`, close it with a comment:
+
+   ```bash
+   gh pr close <number> --comment "Closing: this PR has merge conflicts with main and is outdated. A new translation PR may be created for this module."
+   ```
+
+3. **Build exclusion list**: Extract module names from the remaining open PR branch names (`automatic/translate-comments-<module-name>-<date>`), and **exclude those modules** from selection in the next step.
+
+4. **Output summary** (for logging):
+   - Total open translation PRs found
+   - PRs closed due to conflicts
+   - Modules currently in-flight (excluded from selection)
+
 ### 1. Select a Module to Process
+
+- **MUST skip modules that already have an open PR** (from step 0's exclusion list)
 
 Module granularity examples:
 

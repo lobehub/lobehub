@@ -65,7 +65,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     }
 
     try {
-      return await runtime[apiName](args);
+      return await runtime[apiName](args, context);
     } catch (e) {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);

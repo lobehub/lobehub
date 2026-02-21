@@ -1,4 +1,5 @@
-import { CompressionRepository, type LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
+import { CompressionRepository } from '@lobechat/database';
 import {
   type CreateMessageParams,
   type UIChatMessage,
@@ -358,5 +359,24 @@ export class MessageService {
     const messages = await this.messageModel.query(context, this.getQueryOptions());
 
     return { messages };
+  }
+
+  /**
+   * Cancel compression by deleting the compression group and restoring original messages
+   *
+   * @param messageGroupId - The compression group ID to cancel
+   * @param context - Query options for returning updated messages
+   */
+  async cancelCompression(
+    messageGroupId: string,
+    context: QueryOptions,
+  ): Promise<{ messages: UIChatMessage[]; success: boolean }> {
+    // Delete compression group (this also unmarks messages)
+    await this.compressionRepository.deleteCompressionGroup(messageGroupId);
+
+    // Query updated messages
+    const messages = await this.messageModel.query(context, this.getQueryOptions());
+
+    return { messages, success: true };
   }
 }

@@ -8,6 +8,7 @@ description: Testing guide using Vitest. Use when writing tests (.test.ts, .test
 ## Quick Reference
 
 **Commands:**
+
 ```bash
 # Run specific test file
 bunx vitest run --silent='passed-only' '[file-path]'
@@ -19,15 +20,15 @@ cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' '[file]'
 ```
 
-**Never run** `bun run test` - it runs all 3000+ tests (~10 minutes).
+**Never run** `bun run test` - it runs all 3000+ tests (\~10 minutes).
 
 ## Test Categories
 
-| Category | Location | Config |
-|----------|----------|--------|
-| Webapp | `src/**/*.test.ts(x)` | `vitest.config.ts` |
-| Packages | `packages/*/**/*.test.ts` | `packages/*/vitest.config.ts` |
-| Desktop | `apps/desktop/**/*.test.ts` | `apps/desktop/vitest.config.ts` |
+| Category | Location                    | Config                          |
+| -------- | --------------------------- | ------------------------------- |
+| Webapp   | `src/**/*.test.ts(x)`       | `vitest.config.ts`              |
+| Packages | `packages/*/**/*.test.ts`   | `packages/*/vitest.config.ts`   |
+| Desktop  | `apps/desktop/**/*.test.ts` | `apps/desktop/vitest.config.ts` |
 
 ## Core Principles
 
@@ -75,6 +76,7 @@ vi.mock('@/services/chat'); // Too broad
 ## Detailed Guides
 
 See `references/` for specific testing scenarios:
+
 - **Database Model testing**: `references/db-model-test.md`
 - **Electron IPC testing**: `references/electron-ipc-test.md`
 - **Zustand Store Action testing**: `references/zustand-store-action-test.md`

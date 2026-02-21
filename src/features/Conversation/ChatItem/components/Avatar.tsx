@@ -1,7 +1,8 @@
 import { Avatar as A } from '@lobehub/ui';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
-import type { ChatItemProps } from '../type';
+import { type ChatItemProps } from '../type';
 
 export interface AvatarProps {
   alt?: string;
@@ -21,12 +22,12 @@ const Avatar = memo<AvatarProps>(
         animation={loading}
         avatar={avatar.avatar}
         background={avatar.backgroundColor}
-        onClick={onClick}
         shape={'square'}
         size={size}
         style={style}
         title={avatar.title}
         unoptimized={unoptimized}
+        onClick={onClick}
       />
     );
   },

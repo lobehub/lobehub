@@ -1,17 +1,18 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { AiProviderModelListItem } from 'model-bank';
+import { type AiProviderModelListItem } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
+import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { aiModelService } from '@/services/aiModel';
+import { withSWR } from '~test-utils';
 
 import { useAiInfraStore as useStore } from '../../store';
 
 vi.mock('zustand/traditional');
 
 vi.mock('@/libs/swr', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/libs/swr')>();
+  const actual = await importOriginal<typeof SwrModule>();
   return {
     ...actual,
     mutate: vi.fn(),

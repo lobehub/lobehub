@@ -13,7 +13,7 @@ export interface ItemCardProps {
 const ItemCard = memo<ItemCardProps>(({ label, icon, href }) => {
   return (
     <a href={href} rel="noreferrer" style={{ color: 'inherit' }} target="_blank">
-      <Block clickable gap={12} horizontal paddingBlock={12} paddingInline={18}>
+      <Block clickable horizontal gap={12} paddingBlock={12} paddingInline={18}>
         {icon && <Icon fill={cssVar.colorText} icon={icon} size={18} />}
         {label}
       </Block>

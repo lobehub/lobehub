@@ -1,4 +1,4 @@
-import type { NotebookStore } from './store';
+import { type NotebookStore } from './store';
 
 const getDocumentById =
   (topicId: string | undefined, documentId: string | undefined) => (s: NotebookStore) => {

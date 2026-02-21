@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ChatStore } from '@/store/chat';
+import { type ChatStore } from '@/store/chat';
 
 import { messageStateSelectors } from './messageState';
 

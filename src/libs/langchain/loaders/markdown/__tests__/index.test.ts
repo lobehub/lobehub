@@ -6,7 +6,7 @@ import { MarkdownLoader } from '../index';
 
 describe('MarkdownLoader', () => {
   it('should run', async () => {
-    const content = fs.readFileSync(join(__dirname, `./demo.mdx`), 'utf-8');
+    const content = fs.readFileSync(join(__dirname, `./demo.mdx`), 'utf8');
 
     await MarkdownLoader(content);
   });

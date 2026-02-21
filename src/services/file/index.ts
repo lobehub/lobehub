@@ -66,7 +66,7 @@ export class FileService {
       // Document (including folders) - use document endpoint
       const doc = await lambdaClient.document.getDocumentById.query({ id });
       if (!doc) return null;
-      
+
       // Convert document to FileListItem format
       return {
         chunkCount: null,

@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/prefer-top-level-await */
 import { getMigrationMode } from './_internal/config';
 import { db, pool, schema } from './_internal/db';
 

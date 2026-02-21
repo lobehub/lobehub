@@ -9,8 +9,8 @@ const DesktopAnalytics = memo(
     process.env.NEXT_PUBLIC_DESKTOP_PROJECT_ID &&
     process.env.NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL && (
       <Script
-        data-website-id={process.env.NEXT_PUBLIC_DESKTOP_PROJECT_ID}
         defer
+        data-website-id={process.env.NEXT_PUBLIC_DESKTOP_PROJECT_ID}
         src={urlJoin(process.env.NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL, 'script.js')}
       />
     ),

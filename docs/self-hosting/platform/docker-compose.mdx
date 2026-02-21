@@ -1,18 +1,16 @@
 ---
-title: Deploy LobeHub with Docker Compose
+title: Deploying LobeHub with Docker Compose
 description: >-
-  Learn how to deploy the LobeHub service using Docker Compose. Follow
-  step-by-step instructions to install Docker, run the deployment command, and
-  set up automatic updates.
+  Learn how to deploy the LobeHub service using Docker Compose, including
+  configuration tutorials for various services.
 tags:
   - Docker Compose
-  - LobeHub Service
-  - Docker Deployment
-  - Automatic Updates
-  - Crontab Script
+  - LobeHub
+  - Docker Container
+  - Deployment Guide
 ---
 
-# Docker Compose Deployment Guide
+# Deploying LobeHub Server Database Version with Docker Compose
 
 <div style={{display:"flex", gap: 4}}>
   [![][docker-release-shield]][docker-release-link]
@@ -22,111 +20,341 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
-We provide a [Docker image][docker-release-link] for deploying the LobeHub service on your private device.
+## Quick Start
+
+<Callout type="info">
+  **System Compatibility Notes**
+
+  - One-click deployment is supported in Unix environments (Linux/macOS).
+
+  - Windows users must run through [WSL 2](https://aka.ms/wsl).
+
+  - The one-click startup script is only for initial deployment; for subsequent deployments, please refer to the [Custom Deployment](#custom-deployment) section.
+
+  - Port occupation check: Ensure that ports `3210`, `9000`, and `9001` are available.
+</Callout>
+
+Execute the following commands to set up the deployment environment; the directory `lobehub` will be used to store your configuration files and subsequent database files.
+
+```sh
+mkdir lobehub && cd lobehub
+```
+
+Fetch and execute the deployment script:
+
+```sh
+bash <(curl -fsSL https://lobe.li/setup.sh) -l en
+```
+
+The script supports the following deployment modes; please choose the appropriate mode based on your needs and read the rest of the documentation.
+
+- [Local Mode (default)](#local-mode): Accessible only locally, not supporting LAN/public access; suitable for initial experiences.
+- [Port Mode](#port-mode): Supports LAN/public `http` access; suitable for no domain or private network use.
+- [Domain Mode](#domain-mode): Supports LAN/public `http/https` access with reverse proxy; suitable for personal or team use.
+
+<Callout type="info">
+  In the script's options prompt `(Option1/Option2)[Option1]`: `(Option1 / Option2)` indicates
+  selectable options, while `[Option1]` indicates the default option; simply press enter to choose
+  the default.
+</Callout>
+
+### Local Mode
 
 <Steps>
-  ### Install Docker Container Environment
+  ### Complete Remaining Configuration in Interactive Script
 
-  (Skip this step if already installed)
+  Continue pressing enter to use the default configuration.
 
-  <Tabs items={['Ubuntu', 'CentOS']}>
-    <Tab>
-      ```fish
-      $ apt install docker.io
-      ```
-    </Tab>
+  ### Check Configuration Generation Report
 
-    <Tab>
-      ```fish
-      $ yum install docker
-      ```
-    </Tab>
-  </Tabs>
+  After the script finishes running, check the configuration generation report which includes service URLs and passwords.
 
-  ### Run Docker Compose Deployment Command
-
-  When using `docker-compose`, the configuration file is as follows:
-
-  ```yml
-  version: '3.8'
-
-  services:
-    lobe-chat:
-      image: lobehub/lobe-chat
-      container_name: lobe-chat
-      restart: always
-      ports:
-        - '3210:3210'
-      environment:
-        OPENAI_API_KEY: sk-xxxx
-        OPENAI_PROXY_URL: https://api-proxy.com/v1
+  ```log
+  The results of the secure key generation are as follows:
+  LobeHub:
+    - URL: http://localhost:3210
+  RustFS:
+    - URL: http://localhost:9000
+    - Username: admin
+    - Password: 8c82ea41
   ```
 
-  Run the following command to start the Lobe Chat service:
+  ### Start Docker
 
-  ```bash
-  $ docker-compose up -d
+  ```sh
+  docker compose up -d
   ```
 
-  ### Crontab Automatic Update Script (Optional)
+  ### Check Logs
 
-  Similarly, you can use the following script to automatically update Lobe Chat. When using `Docker Compose`, no additional configuration of environment variables is required.
-
-  ```bash
-  #!/bin/bash
-  # auto-update-lobe-chat.sh
-
-  # Set proxy (optional)
-  export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
-
-  # Pull the latest image and store the output in a variable
-  output=$(docker pull lobehub/lobe-chat:latest 2>&1)
-
-  # Check if the pull command was executed successfully
-  if [ $? -ne 0 ]; then
-    exit 1
-  fi
-
-  # Check if the output contains a specific string
-  echo "$output" | grep -q "Image is up to date for lobehub/lobe-chat:latest"
-
-  # If the image is already up to date, do nothing
-  if [ $? -eq 0 ]; then
-    exit 0
-  fi
-
-  echo "Detected Lobe-Chat update"
-
-  # Remove the old container
-  echo "Removed: $(docker rm -f Lobe-Chat)"
-
-  # You may need to navigate to the directory where `docker-compose.yml` is located first
-  # cd /path/to/docker-compose-folder
-
-  # Run the new container
-  echo "Started: $(docker-compose up)"
-
-  # Print the update time and version
-  echo "Update time: $(date)"
-  echo "Version: $(docker inspect lobehub/lobe-chat:latest | grep 'org.opencontainers.image.version' | awk -F'"' '{print $4}')"
-
-  # Clean up unused images
-  docker images | grep 'lobehub/lobe-chat' | grep -v 'lobehub/lobe-chat-database' | grep -v 'latest' | awk '{print $3}' | xargs -r docker rmi > /dev/null 2>&1
-  echo "Removed old images."
+  ```sh
+  docker logs -f lobehub
   ```
 
-  This script can also be used in Crontab, but ensure that your Crontab can find the correct Docker command. It is recommended to use absolute paths.
+  If you see the following logs in the container, it means the startup was successful:
 
-  Configure Crontab to execute the script every 5 minutes:
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        http://localhost:3210
+    - Network:      http://0.0.0.0:3210
 
-  ```bash
-  */5 * * * * /path/to/auto-update-lobe-chat.sh >> /path/to/auto-update-lobe-chat.log 2>&1
+   ✓ Starting...
+   ✓ Ready in 95ms
   ```
+
+  ### Access Application
+
+  Visit your LobeHub service at [http://localhost:3210](http://localhost:3210).
 </Steps>
 
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat?color=45cc11&labelColor=black&style=flat-square
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat?color=369eff&labelColor=black&style=flat-square&sort=semver
+### Port Mode
+
+<Steps>
+  ### Complete Remaining Configuration in Interactive Script
+
+  In port mode, you need to complete the following based on the script prompts:
+
+  - Server IP address settings: for LAN/public access.
+  - Regenerate secure keys: We highly recommend regenerating the secure keys; if you lack the key generation library required by the script, we suggest referring to the [Custom Deployment](#custom-deployment) section for key modifications.
+
+  ### Check Configuration Generation Report
+
+  After the script finishes running, check the configuration generation report which includes service URLs and passwords.
+
+  ```log
+  The results of the secure key generation are as follows:
+  LobeHub:
+    - URL: http://your_server_ip:3210
+  RustFS:
+    - URL: http://your_server_ip:9000
+    - Username: admin
+    - Password: dbac8440
+  ```
+
+  ### Start Docker
+
+  ```sh
+  docker compose up -d
+  ```
+
+  ### Check Logs
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  If you see the following logs in the container, it means the startup was successful:
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        http://your_server_ip:3210
+    - Network:      http://0.0.0.0:3210
+   ✓ Starting...
+   ✓ Ready in 95ms
+  ```
+
+  ### Access Application
+
+  You can access your LobeHub service at `http://your_server_ip:3210`.
+</Steps>
+
+### Domain Mode
+
+<Steps>
+  ### Complete Reverse Proxy Configuration
+
+  In domain mode, you need to complete the reverse proxy configuration and ensure that the LAN/public can access the following services. Please use a reverse proxy to map the following service ports to the domain names:
+
+  | Domain              | Proxy Port | Required |
+  | ------------------- | ---------- | -------- |
+  | `lobe.example.com`  | `3210`     | Yes      |
+  | `s3.example.com`    | `9000`     | Yes      |
+  | `s3-ui.example.com` | `9001`     |          |
+
+  ### Complete Remaining Configuration in Interactive Script
+
+  In domain mode, you need to complete the following configurations based on script prompts:
+
+  - Domain setup for the LobeHub service: `lobe.example.com`
+  - Domain setup for the S3 service: `s3.example.com`
+  - Choose the access protocol: `http` or `https`
+  - Regenerate secure keys: We highly recommend regenerating the secure keys; if you lack the key generation library required by the script, we suggest referring to the [Custom Deployment](#custom-deployment) section for key modifications.
+
+  <Callout type="warning">
+    The following issues may impede access to your service:
+
+    - The domain configuration here must match the reverse proxy configuration in step `1`.
+
+    - If you are using Cloudflare for domain resolution and have activated `full proxy`, please use the `https` protocol.
+
+    - If you have used the HTTPS protocol, ensure that your domain certificate is correctly configured; one-click deployment does not support self-signed certificates by default.
+  </Callout>
+
+  ### Check Configuration Generation Report
+
+  After the script finishes running, check the configuration generation report which includes service URLs and passwords.
+
+  ```log
+  The results of the secure key generation are as follows:
+  LobeHub:
+    - URL: https://lobe.example.com
+  RustFS:
+    - URL: https://s3.example.com
+    - Username: admin
+    - Password: dbac8440
+  ```
+
+  ### Start Docker
+
+  ```sh
+  docker compose up -d
+  ```
+
+  ### Check Logs
+
+  ```sh
+  docker logs -f lobehub
+  ```
+
+  If you see the following logs in the container, it indicates a successful startup:
+
+  ```log
+  [Database] Start to migration...
+  ✅ database migration pass.
+  -------------------------------------
+    ▲ Next.js 16.x.x
+    - Local:        https://localhost:3210
+    - Network:      http://0.0.0.0:3210
+    ✓ Starting...
+    ✓ Ready in 95ms
+  ```
+
+  ### Access Application
+
+  You can access your LobeHub service via `https://lobe.example.com`.
+</Steps>
+
+## Custom Deployment
+
+This section mainly introduces the configurations that need to be modified to customize the deployment of the LobeHub service in different network environments. Before starting, you can download the [Docker Compose configuration file](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml) and the [environment variable configuration file](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.example).
+
+```sh
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.example
+mv .env.example .env
+```
+
+<Callout type="info">
+  This section does not cover all complete variables; remaining variables can be referenced in
+  [Deploying with the Server Database](/en/docs/self-hosting/server-database).
+</Callout>
+
+### Prerequisites
+
+Generally, to fully run the LobeHub database version, you will need at least the following three services:
+
+- The LobeHub database version itself
+- PostgreSQL database with PGVector plugin
+- Object storage service that supports S3 protocol
+
+These services can be combined through self-hosting or online cloud services to meet various deployment needs. In this article, we provide a Docker Compose configuration entirely based on open-source self-hosted services, which can be used directly to start the LobeHub database version or modified to suit your requirements.
+
+We use [RustFS](https://github.com/rustfs/rustfs) as the local S3 object storage service by default. To configure SSO authentication services, please refer to the [Authentication Services](/docs/self-hosting/auth) documentation.
+
+<Callout type="warning">
+  If your network topology is complex, please make sure these services can communicate properly
+  within your network environment.
+</Callout>
+
+### Necessary Configuration
+
+Now, we will introduce the necessary configurations for running these services:
+
+1. S3 Object Storage
+
+LobeHub needs to provide a public access URL for object files for the LLM service provider, so you need to configure the S3 Endpoint:
+
+```env
+S3_ENDPOINT=https://s3.example.com
+```
+
+2. PostgreSQL
+
+This configuration is found in the `docker-compose.yml` file, and you will need to configure the database name and password:
+
+```yaml
+services:
+  lobe:
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+```
+
+## FAQ
+
+#### Database Migration Issues
+
+You can check the logs using the following command:
+
+```sh
+docker logs -f lobehub
+```
+
+<Callout type="tip">
+  In our official Docker images, database schema migration is automatically performed before starting. Our official images guarantee the stability of "empty database -> complete tables" for automatic table creation. Therefore, we recommend your database instance use an empty table instance to avoid the trouble of manually maintaining table structure or migrations.
+</Callout>
+
+If you encounter issues during table creation, you can try the following command to forcibly remove the database container and restart:
+
+```sh
+docker compose down  # Stop the service
+sudo rm -rf ./data   # Remove mounted database data
+docker compose up -d # Restart
+```
+
+#### Using `INTERNAL_APP_URL` for Internal Server Communication
+
+<Callout type="info">
+  If you're deploying LobeHub behind a CDN (like Cloudflare) or reverse proxy, you may want to configure internal server-to-server communication to bypass the CDN/proxy layer for better performance.
+</Callout>
+
+You can configure the `INTERNAL_APP_URL` environment variable:
+
+```yaml
+environment:
+  - 'APP_URL=https://lobe.example.com'  # Public URL for browser access
+  - 'INTERNAL_APP_URL=http://localhost:3210'  # Internal URL for server-to-server calls
+```
+
+**How it works:**
+
+- `APP_URL`: Used for browser/client access, OAuth callbacks, webhooks, etc. (goes through CDN/proxy)
+- `INTERNAL_APP_URL`: Used for internal server-to-server communication (bypasses CDN/proxy)
+
+If `INTERNAL_APP_URL` is not set, it defaults to `APP_URL`.
+
+**Configuration options:**
+
+- `http://localhost:3210` - If using Docker with host network mode
+- `http://lobe:3210` - If using Docker network with service name
+- `http://127.0.0.1:3210` - Alternative localhost address
+
+<Callout type="tip">
+  For Docker Compose deployments with `network_mode: 'service:network-service'`, use `http://localhost:3210` as the `INTERNAL_APP_URL`.
+</Callout>
+
+## Configuring Authentication
+
+To configure SSO authentication services (such as Casdoor, Logto, etc.), please refer to the [Authentication Services](/docs/self-hosting/auth) documentation.
+
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver

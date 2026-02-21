@@ -22,11 +22,13 @@ export const Search = memo<SearchProps>(({ activeTab, onLobeHubSearch }) => {
   const keywords = activeTab === SkillStoreTab.Community ? mcpKeywords : '';
 
   return (
-    <Flexbox align={'center'} gap={8} horizontal justify={'space-between'}>
+    <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
       <Flexbox flex={1}>
         <SearchBar
           allowClear
           defaultValue={keywords}
+          placeholder={t('skillStore.search')}
+          variant="outlined"
           onSearch={(keywords: string) => {
             if (activeTab === SkillStoreTab.Community) {
               useToolStore.setState({ mcpSearchKeywords: keywords, searchLoading: true });
@@ -36,8 +38,6 @@ export const Search = memo<SearchProps>(({ activeTab, onLobeHubSearch }) => {
               onLobeHubSearch(keywords);
             }
           }}
-          placeholder={t('skillStore.search')}
-          variant="outlined"
         />
       </Flexbox>
     </Flexbox>

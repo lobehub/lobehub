@@ -1,19 +1,20 @@
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 
-import type {
-  ActionsBarConfig,
-  ConversationContext,
-  ConversationHooks,
-  OperationState,
+import {
+  type ActionsBarConfig,
+  type ConversationContext,
+  type ConversationHooks,
+  type OperationState,
 } from '../types';
 import { DEFAULT_OPERATION_STATE } from '../types/operation';
-import { type DataState, dataInitialState } from './slices/data/initialState';
-import { type InputState, inputInitialState } from './slices/input/initialState';
-import {
-  type MessageStateState,
-  messageStateInitialState,
-} from './slices/messageState/initialState';
-import { type VirtuaListState, virtuaListInitialState } from './slices/virtuaList/initialState';
+import { type DataState } from './slices/data/initialState';
+import { dataInitialState } from './slices/data/initialState';
+import { type InputState } from './slices/input/initialState';
+import { inputInitialState } from './slices/input/initialState';
+import { type MessageStateState } from './slices/messageState/initialState';
+import { messageStateInitialState } from './slices/messageState/initialState';
+import { type VirtuaListState } from './slices/virtuaList/initialState';
+import { virtuaListInitialState } from './slices/virtuaList/initialState';
 
 export interface State extends DataState, InputState, MessageStateState, VirtuaListState {
   /**

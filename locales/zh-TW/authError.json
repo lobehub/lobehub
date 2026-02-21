@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "此電子郵件已與已刪除的帳戶相關聯，無法用於註冊",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "目前帳號的電子郵件無法修改",
   "codes.EMAIL_NOT_ALLOWED": "此電子郵件不允許用於註冊",
+  "codes.EMAIL_NOT_FOUND": "此帳戶未綁定電子郵件。請確認您的帳戶是否已綁定電子郵件。",
   "codes.EMAIL_NOT_VERIFIED": "請先完成電子郵件驗證",
   "codes.FAILED_TO_CREATE_SESSION": "建立會話失敗",
   "codes.FAILED_TO_CREATE_USER": "建立使用者失敗",

@@ -9,19 +9,19 @@ dotenv.config();
 
 if (!process.env.DOC_S3_ACCESS_KEY_ID) {
   consola.error('请配置 Doc S3 存储的环境变量: DOC_S3_ACCESS_KEY_ID');
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(1);
 }
 
 if (!process.env.DOC_S3_SECRET_ACCESS_KEY) {
   consola.error('请配置 Doc S3 存储的环境变量: DOC_S3_SECRET_ACCESS_KEY');
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(1);
 }
 
 if (!process.env.DOC_S3_PUBLIC_DOMAIN) {
   consola.error('请配置 Doc S3 存储的环境变量: DOC_S3_PUBLIC_DOMAIN');
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(1);
 }
 

@@ -1,12 +1,13 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
-import { Ollama, Tool } from 'ollama/browser';
-import { ClientOptions } from 'openai';
+import type { Tool } from 'ollama/browser';
+import { Ollama } from 'ollama/browser';
+import type { ClientOptions } from 'openai';
 
-import { LobeRuntimeAI } from '../../core/BaseAI';
-import { OllamaStream, convertIterableToStream, createModelPullStream } from '../../core/streams';
-import {
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { convertIterableToStream, createModelPullStream, OllamaStream } from '../../core/streams';
+import type {
   ChatMethodOptions,
   ChatStreamPayload,
   Embeddings,
@@ -21,7 +22,7 @@ import { debugStream } from '../../utils/debugStream';
 import { createErrorResponse } from '../../utils/errorResponse';
 import { StreamingResponse } from '../../utils/response';
 import { parseDataUri } from '../../utils/uriParser';
-import { OllamaMessage } from './type';
+import type { OllamaMessage } from './type';
 
 export interface OllamaModelCard {
   name: string;
@@ -232,7 +233,6 @@ export class LobeOllamaAI implements LobeRuntimeAI {
     const { model, insecure } = params;
     const signal = options?.signal; // 获取传入的 AbortSignal
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const abortOllama = () => {
       // 假设 this.client.abort() 是幂等的或者可以安全地多次调用
       this.client.abort();

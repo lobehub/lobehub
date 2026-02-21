@@ -1,4 +1,9 @@
-import { ChatToolPayload, MessageToolCall } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type DynamicInterventionResolver,
+  type GlobalInterventionAuditConfig,
+  type MessageToolCall,
+} from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
   /** Force create a new assistant message (e.g., after compression) */
@@ -69,16 +74,26 @@ export interface GeneralAgentConfig {
   };
   /**
    * Context compression configuration
-   * Note: Compression checking is always enabled to prevent context overflow.
-   * When triggered, ALL messages are compressed into a single MessageGroup summary.
+   * When enabled and triggered, ALL messages are compressed into a single MessageGroup summary.
    */
   compressionConfig?: {
+    /** Whether context compression is enabled (default: true) */
+    enabled?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
   };
+  /**
+   * Dynamic intervention audits registry (per-tool)
+   * Used to evaluate runtime intervention policies for tools with dynamic config
+   */
+  dynamicInterventionAudits?: Record<string, DynamicInterventionResolver>;
+  /**
+   * Global intervention resolvers that run for EVERY tool call
+   * Evaluated in array order, before per-tool dynamic resolvers.
+   * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
+   */
+  globalInterventionAudits?: GlobalInterventionAuditConfig[];
   modelRuntimeConfig?: {
-    model: string;
-    provider: string;
     /**
      * Compression model configuration
      * Used for context compression tasks
@@ -87,6 +102,8 @@ export interface GeneralAgentConfig {
       model: string;
       provider: string;
     };
+    model: string;
+    provider: string;
   };
   operationId: string;
   userId?: string;

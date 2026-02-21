@@ -1,22 +1,25 @@
-import { ChatCitationItem, ChatMessageError } from '@lobechat/types';
-import OpenAI from 'openai';
+import type { ChatCitationItem, ChatMessageError } from '@lobechat/types';
+import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import { ChatStreamCallbacks } from '../../../types';
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '../../../types/error';
+import type { ChatStreamCallbacks } from '../../../types';
+import type { ILobeAgentRuntimeErrorType } from '../../../types/error';
+import { AgentRuntimeErrorType } from '../../../types/error';
 import { convertOpenAIUsage } from '../../usageConverters';
-import {
+import type {
   ChatPayloadForTransformStream,
-  FIRST_CHUNK_ERROR_KEY,
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
   StreamToolCallChunkData,
+} from '../protocol';
+import {
   convertIterableToStream,
   createCallbacksTransformer,
   createFirstErrorHandleTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
+  FIRST_CHUNK_ERROR_KEY,
   generateToolCallId,
 } from '../protocol';
 
@@ -256,12 +259,12 @@ const transformOpenAIStream = (
         .filter(Boolean) as StreamProtocolChunk[];
     }
 
-    // 给定结束原因
+    // Handle finish reason
     if (item.finish_reason) {
-      // one-api 的流式接口，会出现既有 finish_reason ，也有 content 的情况
+      // one-api's streaming interface can have both finish_reason and content
       //  {"id":"demo","model":"deepl-en","choices":[{"index":0,"delta":{"role":"assistant","content":"Introduce yourself."},"finish_reason":"stop"}]}
       if (typeof item.delta?.content === 'string' && !!item.delta.content) {
-        // MiniMax 内建搜索功能会在第一个 tools 流中 content 返回引用源，需要忽略
+        // MiniMax built-in search returns citation sources in the first tool stream content, needs to be ignored
         // {"id":"0483748a25071c611e2f48d2982fbe96","choices":[{"finish_reason":"stop","index":0,"delta":{"content":"[{\"no\":1,\"url\":\"https://www.xiaohongshu.com/discovery/item/66d8de3c000000001f01e752\",\"title\":\"郑钦文为国而战，没有理由不坚持🏅\",\"content\":\"·2024年08月03日\\n中国队选手郑钦文夺得巴黎奥运会网球女单比赛金牌（巴黎奥运第16金）\\n#巴黎奥运会[话题]# #郑钦文[话题]# #人物素材积累[话题]# #作文素材积累[话题]# #申论素材[话题]#\",\"web_icon\":\"https://www.xiaohongshu.com/favicon.ico\"}]","role":"tool","tool_call_id":"call_function_6696730535"}}],"created":1748255114,"model":"abab6.5s-chat","object":"chat.completion.chunk","usage":{"total_tokens":0,"total_characters":0},"input_sensitive":false,"output_sensitive":false,"input_sensitive_type":0,"output_sensitive_type":0,"output_sensitive_int":0}
         if (typeof item.delta?.role === 'string' && item.delta.role === 'tool') {
           return { data: null, id: chunk.id, type: 'text' };
@@ -285,7 +288,7 @@ const transformOpenAIStream = (
         return { data: text, id: chunk.id, type: 'text' };
       }
 
-      // OpenAI Search Preview 模型返回引用源
+      // OpenAI Search Preview model returns citation sources
       // {"id":"chatcmpl-18037d13-243c-4941-8b05-9530b352cf17","object":"chat.completion.chunk","created":1748351805,"model":"gpt-4o-mini-search-preview-2025-03-11","choices":[{"index":0,"delta":{"annotations":[{"type":"url_citation","url_citation":{"url":"https://zh.wikipedia.org/wiki/%E4%B8%8A%E6%B5%B7%E4%B9%90%E9%AB%98%E4%B9%90%E5%9B%AD?utm_source=openai","title":"上海乐高乐园","start_index":75,"end_index":199}}]},"finish_reason":"stop"}],"service_tier":"default"}
       if ((item as any).delta?.annotations && (item as any).delta.annotations.length > 0) {
         const citations = (item as any).delta.annotations;
@@ -307,7 +310,7 @@ const transformOpenAIStream = (
         ];
       }
 
-      // MiniMax 内建搜索功能会在最后一个流中的 message 数组中返回 4 个 Object，其中最后一个为 annotations
+      // MiniMax built-in search returns 4 objects in the message array of the last stream, with the last one being annotations
       // {"id":"0483bf14ba55225a66de2342a21b4003","choices":[{"finish_reason":"tool_calls","index":0,"messages":[{"content":"","role":"user","reasoning_content":""},{"content":"","role":"assistant","tool_calls":[{"id":"call_function_0872338692","type":"web_search","function":{"name":"get_search_result","arguments":"{\"query_tag\":[\"天气\"],\"query_list\":[\"上海 2025年5月26日 天气\"]}"}}],"reasoning_content":""},{"content":"","role":"tool","tool_call_id":"call_function_0872338692","reasoning_content":""},{"content":"","role":"assistant","name":"海螺AI","annotations":[{"text":"【5†source】","url":"https://mtianqi.eastday.com/tianqi/shanghai/20250526.html","quote":"上海天气预报提供上海2025年05月26日天气"}],"audio_content":"","reasoning_content":""}]}],"created":1748274196,"model":"MiniMax-Text-01","object":"chat.completion","usage":{"total_tokens":13110,"total_characters":0,"prompt_tokens":12938,"completion_tokens":172},"base_resp":{"status_code":0,"status_msg":"Invalid parameters detected, json: unknown field \"user\""}}
       if ((item as any).messages && (item as any).messages.length > 0) {
         const citations = (item as any).messages.at(-1).annotations;
@@ -334,7 +337,7 @@ const transformOpenAIStream = (
         return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
       }
 
-      // xAI Live Search 功能返回引用源
+      // xAI Live Search feature returns citation sources
       // {"id":"8721eebb-6465-4c47-ba2e-8e2ec0f97055","object":"chat.completion.chunk","created":1747809109,"model":"grok-3","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":"stop"}],"system_fingerprint":"fp_1affcf9872","citations":["https://world.huanqiu.com/"]}
       if ((chunk as any).citations) {
         const citations = (chunk as any).citations;
@@ -416,21 +419,21 @@ const transformOpenAIStream = (
       }
 
       if (typeof content === 'string') {
-        // 如果 content 是空字符串但 chunk 带有 usage，则优先返回 usage（例如 Gemini image-preview 最终会在单独的 chunk 中返回 usage）
+        // If content is an empty string but chunk has usage, prioritize returning usage (e.g., Gemini image-preview eventually returns usage in a separate chunk)
         if (content === '' && chunk.usage) {
           const usage = chunk.usage;
           return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
         }
 
-        // 处理包含 </think> 标签的特殊情况：需要分割内容
+        // Handle special case with </think> tag: need to split content
         if (content.includes('</think>')) {
           const parts = content.split('</think>');
-          const beforeThink = parts[0].replaceAll('<think>', ''); // 移除可能的 <think> 标签
-          const afterThink = parts.slice(1).join('</think>'); // 处理可能有多个 </think> 的情况
+          const beforeThink = parts[0].replaceAll('<think>', ''); // Remove possible <think> tag
+          const afterThink = parts.slice(1).join('</think>'); // Handle case with multiple </think> tags
 
           const results: StreamProtocolChunk[] = [];
 
-          // </think> 之前的内容（如果有）作为 reasoning
+          // Content before </think> (if any) as reasoning
           if (beforeThink) {
             results.push({
               data: beforeThink,
@@ -439,10 +442,10 @@ const transformOpenAIStream = (
             });
           }
 
-          // 更新状态：已经结束思考模式
+          // Update state: thinking mode has ended
           streamContext.thinkingInContent = false;
 
-          // </think> 之后的内容（如果有）作为 text
+          // Content after </think> (if any) as text
           if (afterThink) {
             results.push({
               data: afterThink,
@@ -454,15 +457,15 @@ const transformOpenAIStream = (
           return results.length > 0 ? results : { data: '', id: chunk.id, type: 'text' };
         }
 
-        // 清除 <think> 标签（不需要分割，因为 <think> 标签后续内容都是 reasoning）
+        // Remove <think> tag (no need to split, as content after <think> tag is all reasoning)
         const thinkingContent = content.replaceAll(/<\/?think>/g, '');
 
-        // 判断是否有 <think> 标签，更新 thinkingInContent 状态
+        // Check if there's a <think> tag, update thinkingInContent state
         if (content.includes('<think>')) {
           streamContext.thinkingInContent = true;
         }
 
-        // 判断是否有 citations 内容，更新 returnedCitation 状态
+        // Check if there's citation content, update returnedCitation state
         if (!streamContext?.returnedCitation) {
           const citations =
             // in Perplexity api, the citation is in every chunk, but we only need to return it once
@@ -485,7 +488,7 @@ const transformOpenAIStream = (
                       title: typeof item === 'string' ? item : item.title,
                       url: typeof item === 'string' ? item : item.url || item.link,
                     }))
-                    .filter((c) => c.title && c.url), // Zhipu 内建搜索工具有时会返回空 link 引发程序崩溃
+                    .filter((c) => c.title && c.url), // Zhipu built-in search tool sometimes returns empty link causing crashes
                 },
                 id: chunk.id,
                 type: 'grounding',
@@ -500,7 +503,7 @@ const transformOpenAIStream = (
           }
         }
 
-        // 非思考模式下，额外解析 markdown 中的 base64 图片，按顺序输出 text -> base64_image
+        // In non-thinking mode, additionally parse base64 images in markdown, output in order: text -> base64_image
         if (!streamContext?.thinkingInContent) {
           const { urls, cleanedText: cleaned } = processMarkdownBase64Images(thinkingContent);
           if (urls.length > 0) {
@@ -517,7 +520,7 @@ const transformOpenAIStream = (
           }
         }
 
-        // 根据当前思考模式确定返回类型
+        // Determine return type based on current thinking mode
         return {
           data: thinkingContent,
           id: chunk.id,
@@ -526,18 +529,18 @@ const transformOpenAIStream = (
       }
     }
 
-    // 无内容情况
+    // No content case
     if (item.delta && item.delta.content === null) {
       return { data: item.delta, id: chunk.id, type: 'data' };
     }
 
-    // litellm 的返回结果中，存在 delta 为空，但是有 usage 的情况
+    // In litellm responses, there are cases where delta is empty but usage exists
     if (chunk.usage) {
       const usage = chunk.usage;
       return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
     }
 
-    // 其余情况下，返回 delta 和 index
+    // In other cases, return delta and index
     return {
       data: { delta: item.delta, id: chunk.id, index: item.index },
       id: chunk.id,
@@ -559,7 +562,6 @@ const transformOpenAIStream = (
       },
       type: errorName,
     } as ChatMessageError;
-    /* eslint-enable */
 
     return { data: errorData, id: chunk.id, type: 'error' };
   }
@@ -571,7 +573,7 @@ export interface OpenAIStreamOptions {
     name: string;
   }) => ILobeAgentRuntimeErrorType | undefined;
   callbacks?: ChatStreamCallbacks;
-  enableStreaming?: boolean; // 选择 TPS 计算方式（非流式时传 false）
+  enableStreaming?: boolean; // Choose TPS calculation method (pass false for non-streaming)
   inputStartAt?: number;
   payload?: ChatPayloadForTransformStream;
 }

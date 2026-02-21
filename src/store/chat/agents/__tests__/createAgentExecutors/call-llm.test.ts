@@ -1,6 +1,6 @@
-import type { GeneralAgentCallLLMResultPayload } from '@lobechat/agent-runtime';
+import { type GeneralAgentCallLLMResultPayload } from '@lobechat/agent-runtime';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
+import { type ChatToolPayload } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

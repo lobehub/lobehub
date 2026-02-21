@@ -1,6 +1,7 @@
 'use client';
 
-import { Anchor, type AnchorProps } from 'antd';
+import { type AnchorProps } from 'antd';
+import { Anchor } from 'antd';
 import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo, useMemo } from 'react';
 
@@ -80,10 +81,10 @@ const Toc = memo<AnchorProps>(({ items, className, ...rest }) => {
     <Anchor
       affix={false}
       className={cx(className, styles.toc)}
+      items={toc}
       getContainer={
         isOnServerSide ? undefined : () => document.querySelector(`#${SCROLL_PARENT_ID}`) as any
       }
-      items={toc}
       {...rest}
     />
   );

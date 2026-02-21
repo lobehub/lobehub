@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
-import type { ActionKeys } from '@/features/ChatInput';
+import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput, ChatList } from '@/features/Conversation';
 import RightPanel from '@/features/RightPanel';
 import { useAgentStore } from '@/store/agent';
@@ -45,8 +45,8 @@ const FileCopilot = memo(() => {
   return (
     <RightPanel>
       <DragUploadZone
-        onUploadFiles={handleUploadFiles}
         style={{ flex: 1, height: '100%', minWidth: 300 }}
+        onUploadFiles={handleUploadFiles}
       >
         <Flexbox flex={1} height={'100%'}>
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>

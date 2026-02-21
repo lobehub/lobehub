@@ -85,49 +85,51 @@ const NotSupportClient = () => {
 
   return (
     <Center gap={40} height={'100%'} width={'100%'}>
-      <Flexbox className={styles.iconGroup} gap={12} horizontal>
+      <Flexbox horizontal className={styles.iconGroup} gap={12}>
         <Center
           className={styles.icon}
           height={BLOCK_SIZE * 1.25}
+          width={BLOCK_SIZE}
           style={{
             background: cssVar.purple,
             transform: 'rotateZ(-20deg) translateX(10px)',
           }}
-          width={BLOCK_SIZE}
         >
           <Icon icon={FileImage} size={ICON_SIZE} />
         </Center>
         <Center
           className={styles.icon}
           height={BLOCK_SIZE * 1.25}
+          width={BLOCK_SIZE}
           style={{
             background: cssVar.gold,
             transform: 'translateY(-22px)',
             zIndex: 1,
           }}
-          width={BLOCK_SIZE}
         >
           <Icon icon={Sparkles} size={ICON_SIZE} />
         </Center>
         <Center
           className={styles.icon}
           height={BLOCK_SIZE * 1.25}
+          width={BLOCK_SIZE}
           style={{
             background: cssVar.geekblue,
             transform: 'rotateZ(20deg) translateX(-10px)',
           }}
-          width={BLOCK_SIZE}
         >
           <Icon icon={Network} size={ICON_SIZE} />
         </Center>
       </Flexbox>
 
       <Flexbox justify={'center'} style={{ textAlign: 'center' }}>
-        <Text fontSize={18} strong>
+        <Text strong fontSize={18}>
           {t('notSupportGuide.title')}
         </Text>
         <Text type={'secondary'}>
           <Trans
+            i18nKey={'notSupportGuide.desc'}
+            ns={'image'}
             components={[
               <span key="0" />,
               <a href={DATABASE_SELF_HOSTING_URL} key="1" rel="noreferrer" target="_blank" />,
@@ -139,8 +141,6 @@ const NotSupportClient = () => {
                 target="_blank"
               />,
             ]}
-            i18nKey={'notSupportGuide.desc'}
-            ns={'image'}
           />
         </Text>
       </Flexbox>

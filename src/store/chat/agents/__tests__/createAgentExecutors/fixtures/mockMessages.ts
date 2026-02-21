@@ -1,4 +1,4 @@
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 /**

@@ -83,7 +83,7 @@ export const Option = ({
       onClick={() => onClick(value)}
     >
       <div className={styles.optionInner}>
-        <Flexbox gap={16} horizontal>
+        <Flexbox horizontal gap={16}>
           <Center className={styles.iconWrapper}>
             <PrefixIcon />
           </Center>

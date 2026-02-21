@@ -1,11 +1,12 @@
 import { createNanoId } from '@lobechat/utils';
-import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { useGlobalStore } from '@/store/global';
-import { DocumentSourceType, type LobeDocument } from '@/types/document';
+import { type StoreSetter } from '@/store/types';
+import { type LobeDocument } from '@/types/document';
+import { DocumentSourceType } from '@/types/document';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type FileStore } from '../../store';
@@ -27,84 +28,31 @@ const isAllowedDocument = (page: { fileType: string; sourceType: string }) => {
   );
 };
 
-export interface DocumentAction {
-  /**
-   * Create a new document with markdown content (not optimistic, waits for server response)
-   * Returns the created document
-   */
-  createDocument: (params: {
+type Setter = StoreSetter<FileStore>;
+export const createDocumentSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
+  new DocumentActionImpl(set, get, _api);
+
+export class DocumentActionImpl {
+  readonly #get: () => FileStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => FileStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createDocument = async ({
+    title,
+    content,
+    knowledgeBaseId,
+    parentId,
+  }: {
     content: string;
     knowledgeBaseId?: string;
     parentId?: string;
     title: string;
-  }) => Promise<{ [key: string]: any; id: string }>;
-  /**
-   * Create a new folder
-   * Returns the created folder's ID
-   */
-  createFolder: (name: string, parentId?: string, knowledgeBaseId?: string) => Promise<string>;
-  /**
-   * Create a new optimistic document immediately in local map
-   * Returns the temporary ID for the new document
-   */
-  createOptimisticDocument: (title?: string) => string;
-  /**
-   * Duplicate an existing document
-   * Returns the created document
-   */
-  duplicateDocument: (documentId: string) => Promise<{ [key: string]: any; id: string }>;
-  /**
-   * Fetch full document detail by ID and update local map
-   */
-  fetchDocumentDetail: (documentId: string) => Promise<void>;
-  /**
-   * Fetch documents from the server with pagination
-   */
-  fetchDocuments: (params: { pageOnly?: boolean }) => Promise<void>;
-  /**
-   * Get documents from local optimistic map merged with server data
-   */
-  getOptimisticDocuments: () => LobeDocument[];
-  /**
-   * Load more documents (next page)
-   */
-  loadMoreDocuments: () => Promise<void>;
-  /**
-   * Remove a document (deletes from documents table)
-   */
-  removeDocument: (documentId: string) => Promise<void>;
-  /**
-   * Remove a temp document from local map
-   */
-  removeTempDocument: (tempId: string) => void;
-  /**
-   * Replace a temp document with real document data (for smooth UX when creating documents)
-   */
-  replaceTempDocumentWithReal: (tempId: string, realDocument: LobeDocument) => void;
-  /**
-   * Update document directly (no optimistic update)
-   */
-  updateDocument: (documentId: string, updates: Partial<LobeDocument>) => Promise<void>;
-  /**
-   * Optimistically update document in local map and queue for DB sync
-   */
-  updateDocumentOptimistically: (
-    documentId: string,
-    updates: Partial<LobeDocument>,
-  ) => Promise<void>;
-  /**
-   * SWR hook to fetch document detail with caching and auto-sync to store
-   */
-  useFetchDocumentDetail: (documentId: string | undefined) => SWRResponse<LobeDocument | null>;
-}
-
-export const createDocumentSlice: StateCreator<
-  FileStore,
-  [['zustand/devtools', never]],
-  [],
-  DocumentAction
-> = (set, get) => ({
-  createDocument: async ({ title, content, knowledgeBaseId, parentId }) => {
+  }): Promise<{ [key: string]: any; id: string }> => {
     const now = Date.now();
 
     // Create page with markdown content, leave editorData as empty JSON object
@@ -125,9 +73,13 @@ export const createDocumentSlice: StateCreator<
     // without triggering the loading skeleton
 
     return newPage;
-  },
+  };
 
-  createFolder: async (name, parentId, knowledgeBaseId) => {
+  createFolder = async (
+    name: string,
+    parentId?: string,
+    knowledgeBaseId?: string,
+  ): Promise<string> => {
     const now = Date.now();
 
     // Generate random 8-character slug (A-Z, a-z, 0-9)
@@ -152,10 +104,10 @@ export const createDocumentSlice: StateCreator<
     await revalidateResources();
 
     return folder.id;
-  },
+  };
 
-  createOptimisticDocument: (title = 'Untitled') => {
-    const { localDocumentMap } = get();
+  createOptimisticDocument = (title: string = 'Untitled'): string => {
+    const { localDocumentMap } = this.#get();
 
     // Generate temporary ID with prefix to identify optimistic pages
     const tempId = `temp-document-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -180,12 +132,12 @@ export const createDocumentSlice: StateCreator<
     // Add to local map
     const newMap = new Map(localDocumentMap);
     newMap.set(tempId, newPage);
-    set({ localDocumentMap: newMap }, false, n('createOptimisticDocument'));
+    this.#set({ localDocumentMap: newMap }, false, n('createOptimisticDocument'));
 
     return tempId;
-  },
+  };
 
-  duplicateDocument: async (documentId) => {
+  duplicateDocument = async (documentId: string): Promise<{ [key: string]: any; id: string }> => {
     // Fetch the source page
     const sourcePage = await documentService.getDocumentById(documentId);
 
@@ -211,7 +163,7 @@ export const createDocumentSlice: StateCreator<
     });
 
     // Add the new page to local map immediately for instant UI update
-    const { localDocumentMap } = get();
+    const { localDocumentMap } = this.#get();
     const newMap = new Map(localDocumentMap);
     const editorPage: LobeDocument = {
       content: newPage.content || null,
@@ -232,15 +184,15 @@ export const createDocumentSlice: StateCreator<
       updatedAt: newPage.updatedAt ? new Date(newPage.updatedAt) : new Date(),
     };
     newMap.set(newPage.id, editorPage);
-    set({ localDocumentMap: newMap }, false, n('duplicateDocument'));
+    this.#set({ localDocumentMap: newMap }, false, n('duplicateDocument'));
 
     // Don't refresh pages here - we've already added it to the local map
     // This prevents the loading skeleton from appearing
 
     return newPage;
-  },
+  };
 
-  fetchDocumentDetail: async (documentId) => {
+  fetchDocumentDetail = async (documentId: string): Promise<void> => {
     try {
       const document = await documentService.getDocumentById(documentId);
 
@@ -250,7 +202,7 @@ export const createDocumentSlice: StateCreator<
       }
 
       // Update local map with full document details including editorData
-      const { localDocumentMap } = get();
+      const { localDocumentMap } = this.#get();
       const newMap = new Map(localDocumentMap);
 
       const fullDocument: LobeDocument = {
@@ -273,14 +225,14 @@ export const createDocumentSlice: StateCreator<
       };
 
       newMap.set(documentId, fullDocument);
-      set({ localDocumentMap: newMap }, false, n('fetchDocumentDetail'));
+      this.#set({ localDocumentMap: newMap }, false, n('fetchDocumentDetail'));
     } catch (error) {
       console.error('[fetchDocumentDetail] Failed to fetch document:', error);
     }
-  },
+  };
 
-  fetchDocuments: async ({ pageOnly = false }) => {
-    set({ isDocumentListLoading: true }, false, n('fetchDocuments/start'));
+  fetchDocuments = async ({ pageOnly = false }: { pageOnly?: boolean }): Promise<void> => {
+    this.#set({ isDocumentListLoading: true }, false, n('fetchDocuments/start'));
 
     try {
       const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
@@ -304,7 +256,7 @@ export const createDocumentSlice: StateCreator<
 
       const hasMore = result.items.length >= pageSize;
 
-      set(
+      this.#set(
         {
           currentPage: 0,
           documentQueryFilter: queryFilters,
@@ -318,7 +270,7 @@ export const createDocumentSlice: StateCreator<
       );
 
       // Sync with local map: remove temp pages that now exist on server
-      const { localDocumentMap } = get();
+      const { localDocumentMap } = this.#get();
       const newMap = new Map(localDocumentMap);
 
       for (const [id] of localDocumentMap.entries()) {
@@ -327,16 +279,16 @@ export const createDocumentSlice: StateCreator<
         }
       }
 
-      set({ localDocumentMap: newMap }, false, n('fetchDocuments/syncLocalMap'));
+      this.#set({ localDocumentMap: newMap }, false, n('fetchDocuments/syncLocalMap'));
     } catch (error) {
       console.error('Failed to fetch pages:', error);
-      set({ isDocumentListLoading: false }, false, n('fetchDocuments/error'));
+      this.#set({ isDocumentListLoading: false }, false, n('fetchDocuments/error'));
       throw error;
     }
-  },
+  };
 
-  getOptimisticDocuments: () => {
-    const { localDocumentMap, documents } = get();
+  getOptimisticDocuments = (): LobeDocument[] => {
+    const { localDocumentMap, documents } = this.#get();
 
     // Track which pages we've added
     const addedIds = new Set<string>();
@@ -361,16 +313,17 @@ export const createDocumentSlice: StateCreator<
     }
 
     return result;
-  },
+  };
 
-  loadMoreDocuments: async () => {
-    const { currentPage, isLoadingMoreDocuments, hasMoreDocuments, documentQueryFilter } = get();
+  loadMoreDocuments = async (): Promise<void> => {
+    const { currentPage, isLoadingMoreDocuments, hasMoreDocuments, documentQueryFilter } =
+      this.#get();
 
     if (isLoadingMoreDocuments || !hasMoreDocuments) return;
 
     const nextPage = currentPage + 1;
 
-    set({ isLoadingMoreDocuments: true }, false, n('loadMoreDocuments/start'));
+    this.#set({ isLoadingMoreDocuments: true }, false, n('loadMoreDocuments/start'));
 
     try {
       const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
@@ -387,10 +340,10 @@ export const createDocumentSlice: StateCreator<
 
       const hasMore = result.items.length >= pageSize;
 
-      set(
+      this.#set(
         {
           currentPage: nextPage,
-          documents: [...get().documents, ...newPages],
+          documents: [...this.#get().documents, ...newPages],
           documentsTotal: result.total,
           hasMoreDocuments: hasMore,
           isLoadingMoreDocuments: false,
@@ -400,20 +353,20 @@ export const createDocumentSlice: StateCreator<
       );
     } catch (error) {
       console.error('Failed to load more pages:', error);
-      set({ isLoadingMoreDocuments: false }, false, n('loadMoreDocuments/error'));
+      this.#set({ isLoadingMoreDocuments: false }, false, n('loadMoreDocuments/error'));
     }
-  },
+  };
 
-  removeDocument: async (documentId) => {
+  removeDocument = async (documentId: string): Promise<void> => {
     // Remove from local optimistic map first (optimistic update)
-    const { localDocumentMap, documents } = get();
+    const { localDocumentMap, documents } = this.#get();
     const newMap = new Map(localDocumentMap);
     newMap.delete(documentId);
 
     // Also remove from documents array to update the list immediately
     const newDocuments = documents.filter((doc) => doc.id !== documentId);
 
-    set(
+    this.#set(
       { documents: newDocuments, localDocumentMap: newMap },
       false,
       n('removeDocument/optimistic'),
@@ -427,7 +380,7 @@ export const createDocumentSlice: StateCreator<
       console.error('Failed to delete document:', error);
       // Restore the document in local map and documents array on error
       const restoredMap = new Map(localDocumentMap);
-      set(
+      this.#set(
         {
           documents,
           localDocumentMap: restoredMap,
@@ -437,17 +390,17 @@ export const createDocumentSlice: StateCreator<
       );
       throw error;
     }
-  },
+  };
 
-  removeTempDocument: (tempId) => {
-    const { localDocumentMap } = get();
+  removeTempDocument = (tempId: string): void => {
+    const { localDocumentMap } = this.#get();
     const newMap = new Map(localDocumentMap);
     newMap.delete(tempId);
-    set({ localDocumentMap: newMap }, false, n('removeTempDocument'));
-  },
+    this.#set({ localDocumentMap: newMap }, false, n('removeTempDocument'));
+  };
 
-  replaceTempDocumentWithReal: (tempId, realPage) => {
-    const { localDocumentMap } = get();
+  replaceTempDocumentWithReal = (tempId: string, realPage: LobeDocument): void => {
+    const { localDocumentMap } = this.#get();
     const newMap = new Map(localDocumentMap);
 
     // Remove temp page
@@ -456,10 +409,10 @@ export const createDocumentSlice: StateCreator<
     // Add real page with same position
     newMap.set(realPage.id, realPage);
 
-    set({ localDocumentMap: newMap }, false, n('replaceTempDocumentWithReal'));
-  },
+    this.#set({ localDocumentMap: newMap }, false, n('replaceTempDocumentWithReal'));
+  };
 
-  updateDocument: async (id, updates) => {
+  updateDocument = async (id: string, updates: Partial<LobeDocument>): Promise<void> => {
     await documentService.updateDocument({
       content: updates.content ?? undefined,
       editorData: updates.editorData
@@ -476,10 +429,13 @@ export const createDocumentSlice: StateCreator<
     // Refetch resource list to show updated document
     const { revalidateResources } = await import('../resource/hooks');
     await revalidateResources();
-  },
+  };
 
-  updateDocumentOptimistically: async (documentId, updates) => {
-    const { localDocumentMap, documents } = get();
+  updateDocumentOptimistically = async (
+    documentId: string,
+    updates: Partial<LobeDocument>,
+  ): Promise<void> => {
+    const { localDocumentMap, documents } = this.#get();
 
     // Find the page either in local map or documents state
     let existingPage = localDocumentMap.get(documentId);
@@ -515,7 +471,7 @@ export const createDocumentSlice: StateCreator<
     // Update local map immediately for optimistic UI
     const newMap = new Map(localDocumentMap);
     newMap.set(documentId, updatedPage);
-    set({ localDocumentMap: newMap }, false, n('updateDocumentOptimistically'));
+    this.#set({ localDocumentMap: newMap }, false, n('updateDocumentOptimistically'));
 
     // Queue background sync to DB
     try {
@@ -543,11 +499,11 @@ export const createDocumentSlice: StateCreator<
       } else {
         revertMap.delete(documentId);
       }
-      set({ localDocumentMap: revertMap }, false, n('revertOptimisticUpdate'));
+      this.#set({ localDocumentMap: revertMap }, false, n('revertOptimisticUpdate'));
     }
-  },
+  };
 
-  useFetchDocumentDetail: (documentId) => {
+  useFetchDocumentDetail = (documentId: string | undefined): SWRResponse<LobeDocument | null> => {
     const swrKey = documentId ? ['documentDetail', documentId] : null;
 
     return useClientDataSWRWithSync<LobeDocument | null>(
@@ -589,13 +545,15 @@ export const createDocumentSlice: StateCreator<
           if (!document) return;
 
           // Auto-sync to localDocumentMap
-          const { localDocumentMap } = get();
+          const { localDocumentMap } = this.#get();
           const newMap = new Map(localDocumentMap);
           newMap.set(documentId!, document);
-          set({ localDocumentMap: newMap }, false, n('useFetchDocumentDetail/onData'));
+          this.#set({ localDocumentMap: newMap }, false, n('useFetchDocumentDetail/onData'));
         },
         revalidateOnFocus: true, // 5 seconds
       },
     );
-  },
-});
+  };
+}
+
+export type DocumentAction = Pick<DocumentActionImpl, keyof DocumentActionImpl>;

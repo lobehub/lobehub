@@ -56,6 +56,9 @@ const Versions = memo(() => {
       </Title>
       <Block variant={'outlined'}>
         <InlineTable
+          dataSource={versions}
+          rowKey={'version'}
+          size={'middle'}
           columns={[
             {
               dataIndex: 'version',
@@ -68,7 +71,7 @@ const Versions = memo(() => {
                 const statusMeta = statusKey ? statusTagMap[statusKey] : undefined;
 
                 return (
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     <code style={{ fontSize: 14 }}>{record.version}</code>
                     {(record.isLatest || record.version === currentVersion) && (
                       <Tag color={'info'}>
@@ -98,16 +101,13 @@ const Versions = memo(() => {
               align: 'end',
               dataIndex: 'createdAt',
               render: (_: any, record: any) => (
-                <PublishedTime date={record.createdAt} showPrefix={false} />
+                <PublishedTime date={record.createdAt} />
               ),
               title: t('groupAgents.details.version.table.publishAt', {
                 defaultValue: 'Published At',
               }),
             },
           ]}
-          dataSource={versions}
-          rowKey={'version'}
-          size={'middle'}
         />
       </Block>
     </Flexbox>

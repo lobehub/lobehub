@@ -1,9 +1,11 @@
 'use client';
 
-import { Flexbox, type FlexboxProps, Icon } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 
@@ -60,11 +62,11 @@ const HighlightBlock = memo<HighlightBlockProps>(({ avatar, title, icon, childre
   return (
     <Flexbox className={styles.container} flex={'none'} width={'100%'} {...rest}>
       <Flexbox
+        horizontal
         align={'center'}
         className={styles.header}
         flex={'none'}
         gap={12}
-        horizontal
         padding={16}
       >
         <Icon icon={icon} size={20} style={{ zIndex: 1 }} />

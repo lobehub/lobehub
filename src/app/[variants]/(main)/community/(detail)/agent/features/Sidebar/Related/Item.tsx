@@ -26,7 +26,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 
 const RelatedItem = memo<DiscoverAssistantItem>(({ avatar, title, description, identifier }) => {
   return (
-    <Block gap={12} horizontal key={identifier} padding={12} variant={'outlined'}>
+    <Block horizontal gap={12} key={identifier} padding={12} variant={'outlined'}>
       <Avatar avatar={avatar} shape={'square'} size={40} style={{ flex: 'none' }} />
       <Flexbox
         flex={1}
@@ -35,7 +35,7 @@ const RelatedItem = memo<DiscoverAssistantItem>(({ avatar, title, description, i
           overflow: 'hidden',
         }}
       >
-        <Text as={'h2'} className={styles.title} ellipsis>
+        <Text ellipsis as={'h2'} className={styles.title}>
           {title}
         </Text>
         <Text

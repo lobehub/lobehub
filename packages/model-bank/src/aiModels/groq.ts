@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 // https://groq.com/pricing/
 // https://console.groq.com/docs/models

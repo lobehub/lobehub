@@ -104,7 +104,7 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
   return (
     <Flexbox className={styles.container}>
       {/* Header */}
-      <Flexbox align={'center'} className={styles.header} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
         <Flexbox flex={1}>
           <div className={styles.title}>{title || 'Experience Memory'}</div>
         </Flexbox>
@@ -134,7 +134,7 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
                   {summary && <div className={styles.summary}>{summary}</div>}
                   {details && <div className={styles.detail}>{details}</div>}
                   {tags && tags.length > 0 && (
-                    <Flexbox className={styles.tags} gap={8} horizontal wrap={'wrap'}>
+                    <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
                       {tags.map((tag, index) => (
                         <Tag key={index}>{tag}</Tag>
                       ))}
@@ -162,12 +162,13 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
                   className={styles.stepsContainer}
                   current={null as any}
                   direction="vertical"
+                  size="small"
                   items={starItems.map((item) => ({
                     description: <div className={styles.stepContent}>{item.content}</div>,
                     icon: (
                       <Avatar
-                        avatar={item.avatar}
                         shadow
+                        avatar={item.avatar}
                         shape={'square'}
                         size={20}
                         style={{
@@ -182,7 +183,6 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
                       </Text>
                     ),
                   }))}
-                  size="small"
                 />
               </Flexbox>
             </AccordionItem>
@@ -212,7 +212,7 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
               {summary && <div className={styles.summary}>{summary}</div>}
               {details && <StreamingMarkdown>{details}</StreamingMarkdown>}
               {tags && tags.length > 0 && (
-                <Flexbox className={styles.tags} gap={8} horizontal wrap={'wrap'}>
+                <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
                   {tags.map((tag, index) => (
                     <Tag key={index}>{tag}</Tag>
                   ))}

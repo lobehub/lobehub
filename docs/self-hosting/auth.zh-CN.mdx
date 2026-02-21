@@ -1,0 +1,184 @@
+---
+title: LobeHub 身份验证服务配置
+description: >-
+  了解如何使用 Better Auth 配置外部身份验证服务，以统一管理用户授权。支持的身份验证服务包括 Auth0、
+  Azure ID 等。
+tags:
+  - 身份验证服务
+  - Better Auth
+  - LobeHub
+  - SSO
+---
+
+# 身份验证服务
+
+LobeHub 支持使用 Better Auth 配置外部身份验证服务，供企业 / 组织内部使用，统一管理用户授权。
+
+## Better Auth
+
+[Better Auth](https://www.better-auth.com) 是一个现代化、框架无关的身份验证库，旨在提供全面、安全、灵活的身份验证解决方案。它支持多种认证方式，包括邮箱 / 密码登录、魔法链接登录以及多种 OAuth/SSO 提供商。
+
+### 主要特性
+
+- **邮箱 / 密码认证**：内置支持传统的邮箱和密码登录，采用安全的密码哈希算法
+- **邮箱验证**：可选的邮箱验证流程，支持自定义邮件模板
+- **魔法链接登录**：通过邮件魔法链接实现无密码认证
+- **OAuth/SSO 支持**：集成 Google、GitHub、Microsoft、AWS Cognito 等主流身份提供商
+- **通用 OIDC/OAuth**：支持任何符合 OpenID Connect 或 OAuth 2.0 标准的提供商
+
+## 快速开始
+
+要在 LobeHub 中启用 Better Auth，请设置以下环境变量：
+
+| 环境变量                   | 类型 | 描述                                                                                                              |
+| ---------------------- | -- | --------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`          | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`                                                                  |
+| `NEXT_PUBLIC_AUTH_URL` | 必选 | 浏览器可访问的 Better Auth 基础 URL（例如 `http://localhost:3010`、`https://LobeHub.com`）。Vercel 部署时可选（会自动从 `VERCEL_URL` 获取） |
+| `AUTH_SSO_PROVIDERS`   | 可选 | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft`                                                                |
+
+## 支持的 SSO 提供商
+
+| 提供商                   | 值                       | 环境变量                                                                                                               |
+| --------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Google                | `google`                | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`                                                                             |
+| GitHub                | `github`                | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`                                                                             |
+| Microsoft             | `microsoft`             | `AUTH_MICROSOFT_ID`, `AUTH_MICROSOFT_SECRET`, `AUTH_MICROSOFT_AUTHORITY_URL`, `AUTH_MICROSOFT_TENANT_ID`           |
+| Apple                 | `apple`                 | `AUTH_APPLE_CLIENT_ID`, `AUTH_APPLE_CLIENT_SECRET`                                                                 |
+| AWS Cognito           | `cognito`               | `AUTH_COGNITO_ID`, `AUTH_COGNITO_SECRET`, `AUTH_COGNITO_DOMAIN`, `AUTH_COGNITO_REGION`, `AUTH_COGNITO_USERPOOL_ID` |
+| Auth0                 | `auth0`                 | `AUTH_AUTH0_ID`, `AUTH_AUTH0_SECRET`, `AUTH_AUTH0_ISSUER`                                                          |
+| Authelia              | `authelia`              | `AUTH_AUTHELIA_ID`, `AUTH_AUTHELIA_SECRET`, `AUTH_AUTHELIA_ISSUER`                                                 |
+| Authentik             | `authentik`             | `AUTH_AUTHENTIK_ID`, `AUTH_AUTHENTIK_SECRET`, `AUTH_AUTHENTIK_ISSUER`                                              |
+| Casdoor               | `casdoor`               | `AUTH_CASDOOR_ID`, `AUTH_CASDOOR_SECRET`, `AUTH_CASDOOR_ISSUER`                                                    |
+| Cloudflare Zero Trust | `cloudflare-zero-trust` | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`, `AUTH_CLOUDFLARE_ZERO_TRUST_SECRET`, `AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER`          |
+| Keycloak              | `keycloak`              | `AUTH_KEYCLOAK_ID`, `AUTH_KEYCLOAK_SECRET`, `AUTH_KEYCLOAK_ISSUER`                                                 |
+| Logto                 | `logto`                 | `AUTH_LOGTO_ID`, `AUTH_LOGTO_SECRET`, `AUTH_LOGTO_ISSUER`                                                          |
+| Okta                  | `okta`                  | `AUTH_OKTA_ID`, `AUTH_OKTA_SECRET`, `AUTH_OKTA_ISSUER`                                                             |
+| ZITADEL               | `zitadel`               | `AUTH_ZITADEL_ID`, `AUTH_ZITADEL_SECRET`, `AUTH_ZITADEL_ISSUER`                                                    |
+| Generic OIDC          | `generic-oidc`          | `AUTH_GENERIC_OIDC_ID`, `AUTH_GENERIC_OIDC_SECRET`, `AUTH_GENERIC_OIDC_ISSUER`                                     |
+| 飞书                    | `feishu`                | `AUTH_FEISHU_APP_ID`, `AUTH_FEISHU_APP_SECRET`                                                                     |
+| 微信                    | `wechat`                | `AUTH_WECHAT_ID`, `AUTH_WECHAT_SECRET`                                                                             |
+
+点击下方提供商查看详细配置指南：
+
+<Cards>
+  <Card href={'/zh/docs/self-hosting/auth/providers/password'} title={'邮箱密码'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/github'} title={'GitHub'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/google'} title={'Google'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/microsoft'} title={'Microsoft'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/apple'} title={'Apple'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/cognito'} title={'AWS Cognito'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/auth0'} title={'Auth0'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/authelia'} title={'Authelia'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/authentik'} title={'Authentik'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/casdoor'} title={'Casdoor'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/keycloak'} title={'Keycloak'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/logto'} title={'Logto'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/okta'} title={'Okta'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/zitadel'} title={'ZITADEL'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/generic-oidc'} title={'Generic OIDC'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/feishu'} title={'飞书'} />
+
+  <Card href={'/zh/docs/self-hosting/auth/providers/wechat'} title={'微信'} />
+</Cards>
+
+## 回调 URL 格式
+
+配置 OAuth 提供商时，请使用以下回调 URL 格式：
+
+- **开发环境**：`http://localhost:3210/api/auth/callback/{provider}`
+- **生产环境**：`https://yourdomain.com/api/auth/callback/{provider}`
+
+## 邮件服务配置
+
+邮件服务用于邮箱验证、密码重置和魔法链接发送。详细配置请参阅 [邮件服务配置](/zh/docs/self-hosting/auth/email)。
+
+<Callout type={'tip'}>
+  前往 [环境变量](/zh/docs/self-hosting/environment-variables/auth#better-auth) 可查阅所有 Better Auth 相关变量详情。
+</Callout>
+
+## 会话存储配置（可选）
+
+默认情况下，Better Auth 使用数据库存储会话数据。你可以配置 Redis 作为二级存储，以获得更好的性能和跨实例会话共享能力。
+
+| 环境变量           | 类型 | 描述                              |
+| -------------- | -- | ------------------------------- |
+| `REDIS_URL`    | 可选 | Redis 连接 URL，配置后自动启用 Redis 会话存储 |
+| `REDIS_PREFIX` | 可选 | Redis 键前缀，默认为 `lobechat`        |
+
+<Callout type={'info'}>
+  配置 Redis 后，认证会话数据将存储在 Redis 中，可以实现跨多个服务实例的会话共享，并提升会话验证速度。详细配置请参阅 [Redis 缓存服务](/zh/docs/self-hosting/advanced/redis)。
+</Callout>
+
+## 常见问题
+
+### Better Auth 支持哪些 SSO 提供商？
+
+Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Cognito）和通用 OIDC 提供商（Auth0、Authelia、Authentik、Casdoor、Cloudflare Zero Trust、Keycloak、Logto、Okta、ZITADEL、Generic OIDC、飞书、微信）。
+
+### 如何启用多个 SSO 提供商？
+
+设置 `AUTH_SSO_PROVIDERS` 环境变量，使用逗号分隔多个提供商，例如 `google,github,microsoft`。顺序决定登录页面上的显示顺序。
+
+### Casdoor 用户只有 username 没有 email 怎么办？
+
+当前身份验证方案强依赖 email。请在 Casdoor 中为用户配置有效的 email 地址。
+强烈建议使用真实有效的邮箱，否则密码重置、魔法链接登录等功能将无法使用。
+
+### 邮箱可以随便乱填吗？
+
+**强烈不建议**。请务必填写真实有效的邮箱地址。使用虚假邮箱会导致以下问题：
+
+- 密码重置功能无法使用
+- 魔法链接登录无法使用
+- 邮箱验证无法通过
+- 忘记密码时可能无法找回账户
+
+这适用于所有身份验证方式，包括 Casdoor 等 SSO 提供商。请确保用户配置了有效的邮箱地址。
+
+### 如何启用仅 SSO 模式（禁用邮箱密码登录）？
+
+设置 `AUTH_DISABLE_EMAIL_PASSWORD=1` 可禁用邮箱密码登录。启用后：
+
+- 登录页面将隐藏邮箱输入框，仅显示 SSO 登录按钮
+- 注册页面将重定向到登录页面
+- 用户只能通过配置的 SSO 提供商登录
+
+启用此选项前，请确保已通过 `AUTH_SSO_PROVIDERS` 配置了至少一个 SSO 提供商。
+
+### 如何限制只允许特定邮箱或域名注册？
+
+设置 `AUTH_ALLOWED_EMAILS` 环境变量，支持完整邮箱地址或域名，以逗号分隔。例如：
+
+- 只允许 `example.com` 域名：`AUTH_ALLOWED_EMAILS=example.com`
+- 允许多个域名和特定邮箱：`AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
+
+<Callout type={'info'}>
+  注意：`AUTH_ALLOWED_EMAILS` 仅限制哪些邮箱地址可以注册，但不会验证邮箱所有权。如果需要确保用户确实拥有其注册的邮箱地址，请设置 `AUTH_EMAIL_VERIFICATION=1` 以启用邮箱验证。这需要配置邮件服务（SMTP）。
+</Callout>
+
+### Webhook 支持
+
+允许 LobeHub 在身份提供商中用户信息更新时接收通知。支持的提供商包括 Casdoor 和 Logto。请参考具体提供商文档进行配置。
+
+### 其他 SSO 提供商
+
+如果你需要使用上述列表中未包含的 SSO 提供商，可以使用 [Generic OIDC](/zh/docs/self-hosting/auth/providers/generic-oidc) 来配置任何符合 OpenID Connect 或 OAuth 2.0 标准的提供商。
+
+欢迎提交 Pull Request 来添加更多内置 SSO 提供商支持。详情请参考 [Better Auth 文档](https://www.better-auth.com/docs/concepts/oauth)。

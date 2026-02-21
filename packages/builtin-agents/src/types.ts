@@ -1,6 +1,6 @@
 import type { LobeAgentChatConfig, LobeAgentConfig } from '@lobechat/types';
 
-import { GroupSupervisorContext } from './agents/group-supervisor/type';
+import type { GroupSupervisorContext } from './agents/group-supervisor/type';
 
 /**
  * Builtin Agent Slugs - unique identifiers for builtin agents

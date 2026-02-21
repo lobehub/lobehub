@@ -2,20 +2,21 @@
 
 import { Flexbox } from '@lobehub/ui';
 import {
-  CalendarClockIcon,
   BrainCircuitIcon,
   BubblesIcon,
+  CalendarClockIcon,
   HeartPulseIcon,
   LightbulbIcon,
   SearchIcon,
   SignatureIcon,
 } from 'lucide-react';
-import { usePathname } from '@/libs/router/navigation';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
-import NavItem, { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import NavItem from '@/features/NavPanel/components/NavItem';
+import { usePathname } from '@/libs/router/navigation';
 import { useGlobalStore } from '@/store/global';
 
 interface Item {
@@ -105,8 +106,8 @@ const Nav = memo(() => {
             active={tab === item.key}
             icon={item.icon}
             key={item.key}
-            onClick={item.onClick}
             title={item.title}
+            onClick={item.onClick}
           />
         );
         if (!item.url) return content;
@@ -114,6 +115,7 @@ const Nav = memo(() => {
         return (
           <Link
             key={item.key}
+            to={item.url}
             onClick={(e) => {
               e.preventDefault();
               item?.onClick?.();
@@ -121,7 +123,6 @@ const Nav = memo(() => {
                 navigate(item.url);
               }
             }}
-            to={item.url}
           >
             <NavItem active={tab === item.key} icon={item.icon} title={item.title} />
           </Link>

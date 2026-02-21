@@ -1,9 +1,10 @@
-import { consola } from 'consola';
-import { writeJSONSync } from 'fs-extra';
-import matter from 'gray-matter';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { consola } from 'consola';
+import { writeJSONSync } from 'fs-extra';
+import matter from 'gray-matter';
 import pMap from 'p-map';
 
 import { uploader } from './uploader';
@@ -63,7 +64,7 @@ class ImageCDNUploader {
     const links: string[][] = posts.map((post) => {
       const mdx = readFileSync(post, 'utf8');
       const { content, data } = matter(mdx);
-      let inlineLinks: string[] = extractHttpsLinks(content);
+      const inlineLinks: string[] = extractHttpsLinks(content);
 
       // 添加特定字段中的图片链接
       if (data?.image) inlineLinks.push(data.image);

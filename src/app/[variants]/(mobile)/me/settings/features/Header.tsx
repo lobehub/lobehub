@@ -14,18 +14,18 @@ const Header = memo(() => {
   const navigate = useNavigate();
   return (
     <ChatHeader
+      showBackButton
+      style={mobileHeaderSticky}
       center={
         <ChatHeader.Title
           title={
-            <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} gap={4}>
               {t('userPanel.setting')}
             </Flexbox>
           }
         />
       }
       onBackClick={() => navigate('/me')}
-      showBackButton
-      style={mobileHeaderSticky}
     />
   );
 });

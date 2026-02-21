@@ -10,7 +10,7 @@ interface PlausibleAnalyticsProps {
 
 const PlausibleAnalytics = memo<PlausibleAnalyticsProps>(
   ({ domain, scriptBaseUrl }) =>
-    domain && <Script data-domain={domain} defer src={`${scriptBaseUrl}/js/script.js`} />,
+    domain && <Script defer data-domain={domain} src={`${scriptBaseUrl}/js/script.js`} />,
 );
 
 export default PlausibleAnalytics;

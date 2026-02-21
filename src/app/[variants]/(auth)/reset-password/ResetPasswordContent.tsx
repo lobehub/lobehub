@@ -45,6 +45,7 @@ export const ResetPasswordContent = ({
       >
         <InputPassword
           placeholder={t('betterAuth.resetPassword.newPasswordPlaceholder')}
+          size="large"
           prefix={
             <Icon
               icon={Lock}
@@ -53,7 +54,6 @@ export const ResetPasswordContent = ({
               }}
             />
           }
-          size="large"
         />
       </Form.Item>
       <Form.Item
@@ -71,6 +71,7 @@ export const ResetPasswordContent = ({
       >
         <InputPassword
           placeholder={t('betterAuth.resetPassword.confirmPasswordPlaceholder')}
+          size="large"
           prefix={
             <Icon
               icon={Lock}
@@ -79,7 +80,6 @@ export const ResetPasswordContent = ({
               }}
             />
           }
-          size="large"
         />
       </Form.Item>
       <Form.Item style={{ marginBottom: 0 }}>

@@ -1,11 +1,12 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { ImageGenerationAsset } from '@lobechat/types';
+import type { GenerationAsset } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uuid, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
-import { AsyncTaskSelectItem, asyncTasks } from './asyncTask';
+import type { AsyncTaskSelectItem } from './asyncTask';
+import { asyncTasks } from './asyncTask';
 import { files } from './file';
 import { users } from './user';
 
@@ -29,6 +30,9 @@ export const generationTopics = pgTable(
 
     /** Topic cover image URL */
     coverUrl: text('cover_url'),
+
+    /** Topic type: 'image' or 'video' */
+    type: varchar('type', { length: 32 }).notNull().default('image'),
 
     ...timestamps,
   },
@@ -127,7 +131,7 @@ export const generations = pgTable(
     seed: integer('seed'),
 
     /** Generated asset information, including S3 storage key, actual image dimensions, thumbnail key, etc. */
-    asset: jsonb('asset').$type<ImageGenerationAsset>(),
+    asset: jsonb('asset').$type<GenerationAsset>(),
 
     ...timestamps,
   },

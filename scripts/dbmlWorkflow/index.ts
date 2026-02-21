@@ -1,5 +1,6 @@
-import { pgGenerate } from 'drizzle-dbml-generator';
 import { join } from 'node:path';
+
+import { pgGenerate } from 'drizzle-dbml-generator';
 
 import * as schema from '../../packages/database/src/schemas';
 

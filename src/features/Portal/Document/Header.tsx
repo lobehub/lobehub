@@ -56,21 +56,21 @@ const Header = () => {
   if (!title) return null;
 
   return (
-    <Flexbox align={'center'} flex={1} gap={12} horizontal justify={'space-between'} width={'100%'}>
+    <Flexbox horizontal align={'center'} flex={1} gap={12} justify={'space-between'} width={'100%'}>
       <Flexbox flex={1}>
         <Text className={cx(oneLineEllipsis)} type={'secondary'}>
           {title}
         </Text>
       </Flexbox>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <AutoSaveHint />
         {fileType !== 'agent/plan' && (
           <Button
             icon={<ExternalLink size={14} />}
             loading={loading}
-            onClick={handleOpenInPageEditor}
             size={'small'}
             type={'text'}
+            onClick={handleOpenInPageEditor}
           >
             {t('openInPageEditor')}
           </Button>

@@ -1,34 +1,39 @@
-import {
-  EditLocalFileParams,
-  EditLocalFileResult,
-  GlobFilesParams,
-  GlobFilesResult,
-  GrepContentParams,
-  GrepContentResult,
-  ListLocalFileParams,
-  LocalMoveFilesResultItem,
-  LocalReadFileParams,
-  LocalReadFileResult,
-  LocalReadFilesParams,
-  LocalSearchFilesParams,
-  MoveLocalFilesParams,
-  OpenLocalFileParams,
-  OpenLocalFolderParams,
-  RenameLocalFileResult,
-  ShowSaveDialogParams,
-  ShowSaveDialogResult,
-  WriteLocalFileParams,
-} from '@lobechat/electron-client-ipc';
-import { SYSTEM_FILES_TO_IGNORE, loadFile } from '@lobechat/file-loaders';
-import { createPatch } from 'diff';
-import { dialog, shell } from 'electron';
-import fg from 'fast-glob';
-import { Stats, constants } from 'node:fs';
-import { access, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import {
+  type EditLocalFileParams,
+  type EditLocalFileResult,
+  type GlobFilesParams,
+  type GlobFilesResult,
+  type GrepContentParams,
+  type GrepContentResult,
+  type ListLocalFileParams,
+  type LocalMoveFilesResultItem,
+  type LocalReadFileParams,
+  type LocalReadFileResult,
+  type LocalReadFilesParams,
+  type LocalSearchFilesParams,
+  type MoveLocalFilesParams,
+  type OpenLocalFileParams,
+  type OpenLocalFolderParams,
+  type PickFileParams,
+  type PickFileResult,
+  type RenameLocalFileResult,
+  type ShowOpenDialogParams,
+  type ShowOpenDialogResult,
+  type ShowSaveDialogParams,
+  type ShowSaveDialogResult,
+  type WriteLocalFileParams,
+} from '@lobechat/electron-client-ipc';
+import { loadFile, SYSTEM_FILES_TO_IGNORE } from '@lobechat/file-loaders';
+import { createPatch } from 'diff';
+import { dialog, shell } from 'electron';
+
+import { type FileResult, type SearchOptions } from '@/modules/fileSearch';
+import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
-import { FileResult, SearchOptions } from '@/types/fileSearch';
 import { makeSureDirExist } from '@/utils/file-system';
 import { createLogger } from '@/utils/logger';
 
@@ -41,6 +46,10 @@ export default class LocalFileCtr extends ControllerModule {
   static override readonly groupName = 'localSystem';
   private get searchService() {
     return this.app.getService(FileSearchService);
+  }
+
+  private get contentSearchService() {
+    return this.app.getService(ContentSearchService);
   }
 
   // ==================== File Operation ====================
@@ -78,6 +87,67 @@ export default class LocalFileCtr extends ControllerModule {
       logger.error(`Failed to open folder ${folderPath}:`, error);
       return { error: (error as Error).message, success: false };
     }
+  }
+
+  @IpcMethod()
+  async handleShowOpenDialog({
+    filters,
+    multiple,
+    title,
+  }: ShowOpenDialogParams): Promise<ShowOpenDialogResult> {
+    logger.debug('Showing open dialog:', { filters, multiple, title });
+
+    const result = await dialog.showOpenDialog({
+      filters,
+      properties: multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+      title,
+    });
+
+    logger.debug('Open dialog result:', { canceled: result.canceled, filePaths: result.filePaths });
+
+    return {
+      canceled: result.canceled,
+      filePaths: result.filePaths,
+    };
+  }
+
+  @IpcMethod()
+  async handlePickFile({ filters, title }: PickFileParams): Promise<PickFileResult> {
+    logger.debug('Picking file:', { filters, title });
+
+    const result = await dialog.showOpenDialog({
+      filters,
+      properties: ['openFile'],
+      title,
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true };
+    }
+
+    const filePath = result.filePaths[0];
+    const data = await readFile(filePath);
+    const name = path.basename(filePath);
+    const ext = path.extname(filePath).toLowerCase().slice(1);
+
+    const MIME_MAP: Record<string, string> = {
+      avif: 'image/avif',
+      gif: 'image/gif',
+      jpeg: 'image/jpeg',
+      jpg: 'image/jpeg',
+      png: 'image/png',
+      svg: 'image/svg+xml',
+      webp: 'image/webp',
+    };
+
+    return {
+      canceled: false,
+      file: {
+        data: new Uint8Array(data),
+        mimeType: MIME_MAP[ext] || 'application/octet-stream',
+        name,
+      },
+    };
   }
 
   @IpcMethod()
@@ -218,8 +288,13 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async listLocalFiles({ path: dirPath }: ListLocalFileParams): Promise<FileResult[]> {
-    logger.debug('Listing directory contents:', { dirPath });
+  async listLocalFiles({
+    path: dirPath,
+    sortBy = 'modifiedTime',
+    sortOrder = 'desc',
+    limit = 100,
+  }: ListLocalFileParams): Promise<{ files: FileResult[]; totalCount: number }> {
+    logger.debug('Listing directory contents:', { dirPath, limit, sortBy, sortOrder });
 
     const results: FileResult[] = [];
     try {
@@ -256,22 +331,51 @@ export default class LocalFileCtr extends ControllerModule {
         }
       }
 
-      // Sort entries: folders first, then by name
+      // Sort entries based on sortBy and sortOrder
       results.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1; // Directories first
+        let comparison = 0;
+
+        switch (sortBy) {
+          case 'name': {
+            comparison = (a.name || '').localeCompare(b.name || '');
+            break;
+          }
+          case 'modifiedTime': {
+            comparison = a.modifiedTime.getTime() - b.modifiedTime.getTime();
+            break;
+          }
+          case 'createdTime': {
+            comparison = a.createdTime.getTime() - b.createdTime.getTime();
+            break;
+          }
+          case 'size': {
+            comparison = a.size - b.size;
+            break;
+          }
+          default: {
+            comparison = a.modifiedTime.getTime() - b.modifiedTime.getTime();
+          }
         }
-        // Add null/undefined checks for robustness if needed, though names should exist
-        return (a.name || '').localeCompare(b.name || ''); // Then sort by name
+
+        return sortOrder === 'desc' ? -comparison : comparison;
       });
 
-      logger.debug('Directory listing successful', { dirPath, resultCount: results.length });
-      return results;
+      const totalCount = results.length;
+
+      // Apply limit
+      const limitedResults = results.slice(0, limit);
+
+      logger.debug('Directory listing successful', {
+        dirPath,
+        resultCount: limitedResults.length,
+        totalCount,
+      });
+      return { files: limitedResults, totalCount };
     } catch (error) {
       logger.error(`Failed to list directory ${dirPath}:`, error);
       // Rethrow or return an empty array/error object depending on desired behavior
-      // For now, returning empty array on error listing directory itself
-      return [];
+      // For now, returning empty result on error listing directory itself
+      return { files: [], totalCount: 0 };
     }
   }
 
@@ -550,163 +654,12 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async handleGrepContent(params: GrepContentParams): Promise<GrepContentResult> {
-    const {
-      pattern,
-      path: searchPath = process.cwd(),
-      output_mode = 'files_with_matches',
-    } = params;
-    const logPrefix = `[grepContent: ${pattern}]`;
-    logger.debug(`${logPrefix} Starting content search`, { output_mode, searchPath });
-
-    try {
-      const regex = new RegExp(
-        pattern,
-        `g${params['-i'] ? 'i' : ''}${params.multiline ? 's' : ''}`,
-      );
-
-      // Determine files to search
-      let filesToSearch: string[] = [];
-      const stats = await stat(searchPath);
-
-      if (stats.isFile()) {
-        filesToSearch = [searchPath];
-      } else {
-        // Use glob pattern if provided, otherwise search all files
-        // If glob doesn't contain directory separator and doesn't start with **,
-        // auto-prefix with **/ to make it recursive
-        let globPattern = params.glob || '**/*';
-        if (params.glob && !params.glob.includes('/') && !params.glob.startsWith('**')) {
-          globPattern = `**/${params.glob}`;
-        }
-
-        filesToSearch = await fg(globPattern, {
-          absolute: true,
-          cwd: searchPath,
-          dot: true,
-          ignore: ['**/node_modules/**', '**/.git/**'],
-        });
-
-        // Filter by type if provided
-        if (params.type) {
-          const ext = `.${params.type}`;
-          filesToSearch = filesToSearch.filter((file) => file.endsWith(ext));
-        }
-      }
-
-      logger.debug(`${logPrefix} Found ${filesToSearch.length} files to search`);
-
-      const matches: string[] = [];
-      let totalMatches = 0;
-
-      for (const filePath of filesToSearch) {
-        try {
-          const fileStats = await stat(filePath);
-          if (!fileStats.isFile()) continue;
-
-          const content = await readFile(filePath, 'utf8');
-          const lines = content.split('\n');
-
-          switch (output_mode) {
-            case 'files_with_matches': {
-              if (regex.test(content)) {
-                matches.push(filePath);
-                totalMatches++;
-                if (params.head_limit && matches.length >= params.head_limit) break;
-              }
-              break;
-            }
-            case 'content': {
-              const matchedLines: string[] = [];
-              for (let i = 0; i < lines.length; i++) {
-                if (regex.test(lines[i])) {
-                  const contextBefore = params['-B'] || params['-C'] || 0;
-                  const contextAfter = params['-A'] || params['-C'] || 0;
-
-                  const startLine = Math.max(0, i - contextBefore);
-                  const endLine = Math.min(lines.length - 1, i + contextAfter);
-
-                  for (let j = startLine; j <= endLine; j++) {
-                    const lineNum = params['-n'] ? `${j + 1}:` : '';
-                    matchedLines.push(`${filePath}:${lineNum}${lines[j]}`);
-                  }
-                  totalMatches++;
-                }
-              }
-              matches.push(...matchedLines);
-              if (params.head_limit && matches.length >= params.head_limit) break;
-              break;
-            }
-            case 'count': {
-              const fileMatches = (content.match(regex) || []).length;
-              if (fileMatches > 0) {
-                matches.push(`${filePath}:${fileMatches}`);
-                totalMatches += fileMatches;
-              }
-              break;
-            }
-          }
-        } catch (error) {
-          logger.debug(`${logPrefix} Skipping file ${filePath}:`, error);
-        }
-      }
-
-      logger.info(`${logPrefix} Search completed`, {
-        matchCount: matches.length,
-        totalMatches,
-      });
-
-      return {
-        matches: params.head_limit ? matches.slice(0, params.head_limit) : matches,
-        success: true,
-        total_matches: totalMatches,
-      };
-    } catch (error) {
-      logger.error(`${logPrefix} Grep failed:`, error);
-      return {
-        matches: [],
-        success: false,
-        total_matches: 0,
-      };
-    }
+    return this.contentSearchService.grep(params);
   }
 
   @IpcMethod()
-  async handleGlobFiles({
-    path: searchPath = process.cwd(),
-    pattern,
-  }: GlobFilesParams): Promise<GlobFilesResult> {
-    const logPrefix = `[globFiles: ${pattern}]`;
-    logger.debug(`${logPrefix} Starting glob search`, { searchPath });
-
-    try {
-      const files = await fg(pattern, {
-        absolute: true,
-        cwd: searchPath,
-        dot: true,
-        onlyFiles: false,
-        stats: true,
-      });
-
-      // Sort by modification time (most recent first)
-      const sortedFiles = (files as unknown as Array<{ path: string; stats: Stats }>)
-        .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime())
-        .map((f) => f.path);
-
-      logger.info(`${logPrefix} Glob completed`, { fileCount: sortedFiles.length });
-
-      return {
-        files: sortedFiles,
-        success: true,
-        total_files: sortedFiles.length,
-      };
-    } catch (error) {
-      logger.error(`${logPrefix} Glob failed:`, error);
-      return {
-        files: [],
-        success: false,
-        total_files: 0,
-      };
-    }
+  async handleGlobFiles(params: GlobFilesParams): Promise<GlobFilesResult> {
+    return this.searchService.glob(params);
   }
 
   // ==================== File Editing ====================

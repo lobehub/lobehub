@@ -1,8 +1,8 @@
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
-  type ChatTTS,
   type ChatTranslate,
+  type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
   type MessageMetadata,
@@ -13,7 +13,7 @@ import {
   type UpdateMessageRAGParams,
   type UpdateMessageResult,
 } from '@lobechat/types';
-import type { HeatmapsProps } from '@lobehub/charts';
+import { type HeatmapsProps } from '@lobehub/charts';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -275,6 +275,20 @@ export class MessageService {
     return {
       messages: (result.messages || []) as unknown as UIChatMessage[],
     };
+  };
+
+  /**
+   * Cancel compression by deleting the compression group and restoring original messages
+   */
+  cancelCompression = async (params: {
+    agentId: string;
+    groupId?: string | null;
+    messageGroupId: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{ messages: UIChatMessage[] }> => {
+    const result = await lambdaClient.message.cancelCompression.mutate(params);
+    return { messages: (result.messages || []) as unknown as UIChatMessage[] };
   };
 }
 

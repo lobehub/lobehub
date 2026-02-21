@@ -2,11 +2,11 @@ import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronRight, Globe } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
-import Image from '@/libs/next/Image';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
+import Image from '@/libs/next/Image';
 import { type GroundingSearch } from '@/types/search';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -53,35 +53,37 @@ const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => 
 
   return (
     <Flexbox
+      gap={16}
+      style={{ width: showDetail ? '100%' : undefined }}
       className={cx(
         styles.container,
         isDarkMode ? styles.containerDark : styles.containerLight,
         showDetail && (isDarkMode ? styles.expandDark : styles.expandLight),
       )}
-      gap={16}
-      style={{ width: showDetail ? '100%' : undefined }}
     >
       <Flexbox
+        horizontal
         distribution={'space-between'}
         flex={1}
         gap={8}
-        horizontal
+        style={{ cursor: 'pointer' }}
         onClick={() => {
           setShowDetail(!showDetail);
         }}
-        style={{ cursor: 'pointer' }}
       >
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Icon icon={Globe} />
           <Flexbox horizontal>{t('search.grounding.title', { count: citations?.length })}</Flexbox>
           {!showDetail && (
             <Flexbox horizontal>
               {citations?.slice(0, 8).map((item, index) => (
                 <Image
+                  unoptimized
                   alt={item.title || item.url}
                   height={16}
                   key={`${item.url}-${index}`}
                   src={`https://icons.duckduckgo.com/ip3/${new URL(item.url).host}.ico`}
+                  width={16}
                   style={{
                     background: cssVar.colorBgContainer,
                     borderRadius: 8,
@@ -89,15 +91,13 @@ const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => 
                     padding: 2,
                     zIndex: 100 - index,
                   }}
-                  unoptimized
-                  width={16}
                 />
               ))}
             </Flexbox>
           )}
         </Flexbox>
 
-        <Flexbox gap={4} horizontal>
+        <Flexbox horizontal gap={4}>
           <Icon icon={showDetail ? ChevronDown : ChevronRight} />
         </Flexbox>
       </Flexbox>
@@ -120,9 +120,9 @@ const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => 
           >
             <Flexbox gap={12}>
               {searchQueries && (
-                <Flexbox gap={4} horizontal>
+                <Flexbox horizontal gap={4}>
                   {t('search.grounding.searchQueries')}
-                  <Flexbox gap={8} horizontal>
+                  <Flexbox horizontal gap={8}>
                     {searchQueries.map((query, index) => (
                       <Tag key={index}>{query}</Tag>
                     ))}

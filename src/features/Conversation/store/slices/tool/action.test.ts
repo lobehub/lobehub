@@ -1,7 +1,7 @@
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ConversationContext, ConversationHooks } from '../../../types';
+import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
 
 // Mock dependencies

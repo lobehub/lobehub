@@ -22,12 +22,12 @@ const AgentItem = memo<AgentItemProps>(
       <NavItem
         active={active}
         icon={<AgentAvatar avatar={typeof avatar === 'string' ? avatar : undefined} />}
+        style={{ flexShrink: 0 }}
+        title={agentTitle || t('untitledAgent')}
         onClick={() => {
           onAgentChange(agentId);
           onClose();
         }}
-        style={{ flexShrink: 0 }}
-        title={agentTitle || t('untitledAgent')}
       />
     );
   },

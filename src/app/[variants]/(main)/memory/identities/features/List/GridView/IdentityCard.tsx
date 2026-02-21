@@ -1,4 +1,4 @@
-import type { IdentityListItem } from '@lobechat/types';
+import { type IdentityListItem } from '@lobechat/types';
 import { memo } from 'react';
 
 import GridCard from '@/app/[variants]/(main)/memory/features/GridView/GridCard';
@@ -16,9 +16,9 @@ const IdentityCard = memo<IdentityCardProps>(({ identity, onClick }) => {
       actions={<IdentityDropdown id={identity.id} />}
       cate={identity.type}
       hashTags={identity.tags}
-      onClick={() => onClick?.(identity)}
       title={identity.title}
       titleAddon={identity.role?.toLowerCase()}
+      onClick={() => onClick?.(identity)}
     >
       {identity.description}
     </GridCard>

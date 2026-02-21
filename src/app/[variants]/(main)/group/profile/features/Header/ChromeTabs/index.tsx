@@ -3,7 +3,8 @@
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
-import { ReactNode, memo, useEffect, useRef } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
@@ -139,7 +140,7 @@ const ChromeTabs = memo<ChromeTabsProps>(({ items, activeId, onChange, onAdd }) 
             key={item.id}
             onClick={() => onChange(item.id)}
           >
-            <Flexbox align="center" gap={6} horizontal>
+            <Flexbox horizontal align="center" gap={6}>
               {item.icon ? (
                 item.icon
               ) : item.avatar ? (

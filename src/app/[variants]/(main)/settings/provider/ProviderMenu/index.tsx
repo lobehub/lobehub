@@ -3,7 +3,8 @@
 import { Flexbox, Icon, SearchBar } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -31,20 +32,21 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
   const width = mobile ? undefined : 280;
   return (
     <Flexbox
+      width={width}
       style={{
         background: cssVar.colorBgContainer,
         borderRight: `1px solid ${cssVar.colorBorderSecondary}`,
         minWidth: width,
         overflow: mobile ? undefined : 'scroll',
       }}
-      width={width}
     >
       <Flexbox
+        horizontal
         align={'center'}
         gap={8}
-        horizontal
         justify={'space-between'}
         padding={8}
+        width={'100%'}
         style={{
           background: cssVar.colorBgContainer,
           borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
@@ -53,16 +55,13 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
           top: 0,
           zIndex: 50,
         }}
-        width={'100%'}
       >
         <SearchBar
           allowClear
           defaultValue={providerSearchKeyword}
-          onInputChange={(v) => {
-            if (!v) useAiInfraStore.setState({ providerSearchKeyword: '' });
-          }}
-          onSearch={(v) => useAiInfraStore.setState({ providerSearchKeyword: v })}
           placeholder={t('menu.searchProviders')}
+          style={{ width: '100%' }}
+          variant={'borderless'}
           prefix={
             <Icon
               color={cssVar.colorTextDescription}
@@ -72,14 +71,16 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
               }}
             />
           }
-          style={{ width: '100%' }}
           styles={{
             input: {
               paddingBlock: 3,
               paddingLeft: 6,
             },
           }}
-          variant={'borderless'}
+          onSearch={(v) => useAiInfraStore.setState({ providerSearchKeyword: v })}
+          onInputChange={(v) => {
+            if (!v) useAiInfraStore.setState({ providerSearchKeyword: '' });
+          }}
         />
         <AddNew />
       </Flexbox>

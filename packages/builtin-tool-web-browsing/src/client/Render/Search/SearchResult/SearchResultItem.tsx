@@ -1,8 +1,9 @@
-import { type UniformSearchResult } from '@lobechat/types';
+import type { UniformSearchResult } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import Link from 'next/link';
-import { CSSProperties, memo } from 'react';
+import type { CSSProperties } from 'react';
+import { memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';
 
@@ -25,15 +26,15 @@ const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
     return (
       <Link href={url} target={'_blank'}>
         <Block
-          className={styles.container}
           clickable
+          className={styles.container}
           gap={2}
           justify={'space-between'}
           style={style}
           variant={'outlined'}
         >
           <Text ellipsis={{ rows: 2 }}>{title}</Text>
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             <WebFavicon size={14} title={title} url={url} />
             <Text ellipsis type={'secondary'}>
               {host.replace('www.', '')}

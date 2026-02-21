@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { GithubModelCard, LobeGithubAI, params } from './index';
+import type { GithubModelCard } from './index';
+import { LobeGithubAI, params } from './index';
 
 // Basic provider tests
 testProvider({

@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { ChatToolPayload } from '@lobechat/types';
+import type { ChatToolPayload } from '@lobechat/types';
 
 import type { AgentState, ToolsCalling } from './state';
 
@@ -8,51 +8,51 @@ export interface AgentEventInit {
 }
 
 export interface AgentEventLlmStart {
-  type: 'llm_start';
   payload: unknown;
+  type: 'llm_start';
 }
 
 export interface AgentEventLlmStream {
-  type: 'llm_stream';
   chunk: unknown;
+  type: 'llm_stream';
 }
 
 export interface AgentEventLlmResult {
-  type: 'llm_result';
   result: unknown;
+  type: 'llm_result';
 }
 
 export interface AgentEventToolPending {
-  type: 'tool_pending';
   toolCalls: ToolsCalling[];
+  type: 'tool_pending';
 }
 
 export interface AgentEventToolResult {
-  type: 'tool_result';
   id: string;
   result: any;
+  type: 'tool_result';
 }
 
 export interface AgentEventHumanApproveRequired {
-  type: 'human_approve_required';
-  pendingToolsCalling: ChatToolPayload[];
   operationId: string;
+  pendingToolsCalling: ChatToolPayload[];
+  type: 'human_approve_required';
 }
 
 export interface AgentEventHumanPromptRequired {
-  type: 'human_prompt_required';
   metadata?: Record<string, unknown>;
-  prompt: string;
   operationId: string;
+  prompt: string;
+  type: 'human_prompt_required';
 }
 
 export interface AgentEventHumanSelectRequired {
-  type: 'human_select_required';
   metadata?: Record<string, unknown>;
   multi?: boolean;
+  operationId: string;
   options: { label: string; value: string }[];
   prompt?: string;
-  operationId: string;
+  type: 'human_select_required';
 }
 
 /**
@@ -70,43 +70,43 @@ export type FinishReason =
   | 'system_shutdown'; // System is shutting down
 
 export interface AgentEventDone {
-  type: 'done';
   finalState: AgentState;
   reason: FinishReason;
   reasonDetail?: string;
+  type: 'done';
 }
 
 export interface AgentEventError {
-  type: 'error';
   error: any;
+  type: 'error';
 }
 
 export interface AgentEventInterrupted {
-  type: 'interrupted';
-  reason: string;
+  canResume: boolean;
   interruptedAt: string;
   interruptedInstruction?: any;
-  canResume: boolean;
   metadata?: Record<string, unknown>;
+  reason: string;
+  type: 'interrupted';
 }
 
 export interface AgentEventResumed {
-  type: 'resumed';
+  metadata?: Record<string, unknown>;
   reason: string;
   resumedAt: string;
   resumedFromStep: number;
-  metadata?: Record<string, unknown>;
+  type: 'resumed';
 }
 
 export interface AgentEventCompressionComplete {
-  type: 'compression_complete';
   groupId: string;
   parentMessageId?: string;
+  type: 'compression_complete';
 }
 
 export interface AgentEventCompressionError {
-  type: 'compression_error';
   error: unknown;
+  type: 'compression_error';
 }
 
 /**

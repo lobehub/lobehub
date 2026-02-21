@@ -1,10 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
-import { Popover, Select, Space, Switch, Tag, Typography, theme } from 'antd';
-import type { ExtendParamsType } from 'model-bank';
+import { Popover, Select, Space, Switch, Tag, theme, Typography } from 'antd';
+import { type ExtendParamsType } from 'model-bank';
+import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
-import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import EffortSlider from '@/features/ChatInput/ActionBar/Model/EffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT52ProReasoningEffortSlider';
@@ -16,6 +17,7 @@ import ReasoningTokenSlider from '@/features/ChatInput/ActionBar/Model/Reasoning
 import TextVerbositySlider from '@/features/ChatInput/ActionBar/Model/TextVerbositySlider';
 import ThinkingBudgetSlider from '@/features/ChatInput/ActionBar/Model/ThinkingBudgetSlider';
 import ThinkingLevel2Slider from '@/features/ChatInput/ActionBar/Model/ThinkingLevel2Slider';
+import ThinkingLevel3Slider from '@/features/ChatInput/ActionBar/Model/ThinkingLevel3Slider';
 import ThinkingLevelSlider from '@/features/ChatInput/ActionBar/Model/ThinkingLevelSlider';
 import ThinkingSlider from '@/features/ChatInput/ActionBar/Model/ThinkingSlider';
 
@@ -34,8 +36,16 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'enableReasoning',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint',
+    key: 'enableAdaptiveThinking',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint',
     key: 'reasoningBudgetToken',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.effort.hint',
+    key: 'effort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint',
@@ -78,6 +88,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'thinkingLevel2',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint',
+    key: 'thinkingLevel3',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.urlContext.hint',
     key: 'urlContext',
   },
@@ -99,6 +113,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_2ProReasoningEffort: 'reasoningEffort',
   gpt5_2ReasoningEffort: 'reasoningEffort',
   thinkingLevel2: 'thinkingLevel',
+  thinkingLevel3: 'thinkingLevel',
 };
 
 type PreviewMeta = {
@@ -110,6 +125,12 @@ type PreviewMeta = {
 
 const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
+  effort: { labelSuffix: ' (Opus 4.6)', previewWidth: 280, tag: 'output_config.effort' },
+  enableAdaptiveThinking: {
+    labelSuffix: ' (Opus 4.6)',
+    previewWidth: 300,
+    tag: 'thinking.type',
+  },
   enableReasoning: { previewWidth: 300, tag: 'thinking.type' },
   gpt5ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
   gpt5_1ReasoningEffort: { labelSuffix: ' (GPT-5.1)', previewWidth: 300, tag: 'reasoning_effort' },
@@ -126,8 +147,9 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   textVerbosity: { labelSuffix: '', previewWidth: 250, tag: 'text_verbosity' },
   thinking: { labelSuffix: ' (Doubao)', previewWidth: 300, tag: 'thinking.type' },
   thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 500, tag: 'thinkingBudget' },
-  thinkingLevel: { labelSuffix: ' (Gemini 3)', previewWidth: 280, tag: 'thinkingLevel' },
-  thinkingLevel2: { labelSuffix: ' (Gemini 3)', previewWidth: 200, tag: 'thinkingLevel' },
+  thinkingLevel: { labelSuffix: ' (3 Flash)', previewWidth: 280, tag: 'thinkingLevel' },
+  thinkingLevel2: { labelSuffix: ' (3 Pro)', previewWidth: 200, tag: 'thinkingLevel' },
+  thinkingLevel3: { labelSuffix: ' (Gemini 3.1)', previewWidth: 200, tag: 'thinkingLevel' },
   urlContext: { labelSuffix: ' (Gemini)', previewWidth: 400, tag: 'urlContext' },
 };
 
@@ -184,7 +206,7 @@ const PreviewContent = ({
             width: previewWidth,
           }}
         >
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             <Typography.Text strong>{label}</Typography.Text>
             {parameterTag ? <Tag color={'cyan'}>{parameterTag}</Tag> : null}
           </Flexbox>
@@ -212,6 +234,8 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
       disableContextCaching: <Switch checked disabled />,
+      effort: <EffortSlider value="high" />,
+      enableAdaptiveThinking: <Switch checked disabled />,
       enableReasoning: <Switch checked disabled />,
       gpt5ReasoningEffort: <GPT5ReasoningEffortSlider value="medium" />,
       gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
@@ -226,39 +250,11 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       thinkingBudget: <ThinkingBudgetSlider defaultValue={2 * 1024} />,
       thinkingLevel: <ThinkingLevelSlider value="high" />,
       thinkingLevel2: <ThinkingLevel2Slider value="high" />,
+      thinkingLevel3: <ThinkingLevel3Slider value="high" />,
       urlContext: <Switch checked disabled />,
     }),
     [],
   );
-
-  const descOverrides: Partial<Record<ExtendParamsType, ReactNode>> = {
-    disableContextCaching: (() => {
-      const original = tChat('extendParams.disableContextCaching.desc', { defaultValue: '' });
-
-      const sanitized = original.replace(/（<\d>.*?<\/\d>）/u, '');
-
-      return (
-        sanitized || (
-          <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
-            单条对话生成成本最高可降低 90%，响应速度提升 4 倍。开启后将自动禁用历史消息数限制
-          </Trans>
-        )
-      );
-    })(),
-    enableReasoning: (() => {
-      const original = tChat('extendParams.enableReasoning.desc', { defaultValue: '' });
-
-      const sanitized = original.replace(/（<\d>.*?<\/\d>）/u, '');
-
-      return (
-        sanitized || (
-          <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
-            基于 Claude Thinking 机制限制，开启后将自动禁用历史消息数限制
-          </Trans>
-        )
-      );
-    })(),
-  };
 
   const previewFallback = String(
     t('providerModels.item.modelConfig.extendParams.previewFallback', {
@@ -267,6 +263,35 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   );
 
   const definitions = useMemo<ExtendParamsDefinition[]>(() => {
+    const descOverrides: Partial<Record<ExtendParamsType, ReactNode>> = {
+      disableContextCaching: (() => {
+        const original = tChat('extendParams.disableContextCaching.desc', { defaultValue: '' });
+
+        const sanitized = original.replace(/（<\d>.*?<\/\d>）/u, '');
+
+        return (
+          sanitized || (
+            <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
+              单条对话生成成本最高可降低 90%，响应速度提升 4 倍。开启后将自动禁用历史消息数限制
+            </Trans>
+          )
+        );
+      })(),
+      enableReasoning: (() => {
+        const original = tChat('extendParams.enableReasoning.desc', { defaultValue: '' });
+
+        const sanitized = original.replace(/（<\d>.*?<\/\d>）/u, '');
+
+        return (
+          sanitized || (
+            <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
+              基于 Claude Thinking 机制限制，开启后将自动禁用历史消息数限制
+            </Trans>
+          )
+        );
+      })(),
+    };
+
     return EXTEND_PARAMS_OPTIONS.map((item) => {
       const descKey = `extendParams.${item.key}.desc`;
       const rawDesc = tChat(descKey as any, { defaultValue: '' });
@@ -280,11 +305,10 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
         tChat(`extendParams.${titleKey}.title` as any, { defaultValue: item.key }),
       );
 
-      const label = meta?.labelOverride
-        ? meta.labelOverride
-        : meta?.labelSuffix
-          ? `${baseLabel}${meta.labelSuffix}`
-          : baseLabel;
+      const label =
+        meta?.labelOverride ||
+        (meta?.labelSuffix && `${baseLabel}${meta.labelSuffix}`) ||
+        baseLabel;
 
       return {
         desc,
@@ -327,13 +351,18 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       <Select
         allowClear
         mode={'multiple'}
-        onChange={(val) => handleChange(val as ExtendParamsType[])}
+        options={options}
+        placeholder={placeholder}
+        popupMatchSelectWidth={false}
+        style={{ width: '100%' }}
+        value={value}
         optionRender={(option) => {
           const def = definitionMap.get(option.value as ExtendParamsType);
           if (!def) return option.label;
 
           return (
             <Popover
+              placement={'right'}
               content={
                 <PreviewContent
                   desc={def.desc}
@@ -345,7 +374,6 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
                   previewWidth={def.previewWidth}
                 />
               }
-              placement={'right'}
             >
               <Flexbox gap={4}>
                 <Typography.Text>{def.label}</Typography.Text>
@@ -356,19 +384,17 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
             </Popover>
           );
         }}
-        options={options}
-        placeholder={placeholder}
-        popupMatchSelectWidth={false}
-        style={{ width: '100%' }}
-        value={value}
+        onChange={(val) => handleChange(val as ExtendParamsType[])}
       />
       {value && value.length > 0 && (
-        <Space size={[8, 8]} wrap>
+        <Space wrap size={[8, 8]}>
           {value.map((key) => {
             const def = definitionMap.get(key);
             if (!def) return null;
             return (
               <Popover
+                key={key}
+                placement={'top'}
                 content={
                   <PreviewContent
                     desc={def.desc}
@@ -380,8 +406,6 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
                     previewWidth={def.previewWidth}
                   />
                 }
-                key={key}
-                placement={'top'}
               >
                 <Tag bordered={false} color={'processing'}>
                   {def.label}

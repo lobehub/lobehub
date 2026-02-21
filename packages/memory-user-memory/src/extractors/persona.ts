@@ -2,7 +2,7 @@ import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 import { z } from 'zod';
 
 import { userPersonaPrompt } from '../prompts';
-import {
+import type {
   PersonaExtractorOptions,
   PersonaTemplateProps,
   UserPersonaExtractionResult,
@@ -40,7 +40,6 @@ export class UserPersonaExtractor extends BaseMemoryExtractor<
     return undefined;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected getTools(_options: PersonaTemplateProps) {
     return [
       {

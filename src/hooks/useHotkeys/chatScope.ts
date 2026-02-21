@@ -49,7 +49,7 @@ export const useClearCurrentMessagesHotkey = () => {
   });
 };
 
-// 注册聚合
+// Register aggregate
 
 export const useRegisterChatHotkeys = () => {
   const { enableScope, disableScope } = useHotkeysContext();

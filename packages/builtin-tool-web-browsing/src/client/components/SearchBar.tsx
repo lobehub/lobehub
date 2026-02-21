@@ -1,4 +1,4 @@
-import { type SearchQuery } from '@lobechat/types';
+import type { SearchQuery } from '@lobechat/types';
 import {
   Block,
   Checkbox,
@@ -10,7 +10,8 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type ReactNode, memo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -69,26 +70,26 @@ const SearchBar = memo<SearchBarProps>(
         searchTimeRange: time_range,
       };
       onSearch?.(data);
-      await reSearchWithSearXNG(messageId, data, { aiSummary });
+      await reSearchWithSearXNG(messageId, data);
     };
 
     const searchComponent = (
       <Search
         autoFocus
         loading={loading}
-        onChange={(e) => {
-          setQuery(e.target.value);
-        }}
-        onSearch={updateAndSearch}
         placeholder={t('search.searchBar.placeholder')}
         style={{ minWidth: isMobile ? undefined : 400, width: '100%' }}
         value={query}
+        onSearch={updateAndSearch}
+        onChange={(e) => {
+          setQuery(e.target.value);
+        }}
       />
     );
 
     return (
       <>
-        <Flexbox align={'center'} flex={1} gap={8} height={32} horizontal justify={'space-between'}>
+        <Flexbox horizontal align={'center'} flex={1} gap={8} height={32} justify={'space-between'}>
           {tooltip ? (
             <Tooltip title={t('search.searchBar.tooltip')}>{searchComponent}</Tooltip>
           ) : (
@@ -100,47 +101,47 @@ const SearchBar = memo<SearchBarProps>(
           {isMobile ? (
             <Select
               mode={'multiple'}
-              onChange={(checkedValue) => {
-                setEngines(checkedValue);
-              }}
+              placeholder={t('search.searchEngine.placeholder')}
+              size={'small'}
+              value={engines}
+              variant={'filled'}
               optionRender={(item) => (
-                <Flexbox align={'center'} gap={8} horizontal>
+                <Flexbox horizontal align={'center'} gap={8}>
                   <EngineAvatar engine={item.value as string} />
                   {item.value}
                 </Flexbox>
               )}
               options={Object.keys(ENGINE_ICON_MAP).map((item) => ({
                 label: (
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     <EngineAvatar engine={item} />
                   </Flexbox>
                 ),
                 value: item,
               }))}
-              placeholder={t('search.searchEngine.placeholder')}
-              size={'small'}
-              value={engines}
-              variant={'filled'}
+              onChange={(checkedValue) => {
+                setEngines(checkedValue);
+              }}
             />
           ) : (
-            <Flexbox align={'flex-start'} gap={8} horizontal>
+            <Flexbox horizontal align={'flex-start'} gap={8}>
               <Text className={styles.textHeader} type={'secondary'}>
                 {t('search.searchEngine.title')}
               </Text>
               <Checkbox.Group
-                onChange={(checkedValue) => {
-                  setEngines(checkedValue);
-                }}
+                value={engines}
                 options={Object.keys(ENGINE_ICON_MAP).map((item) => ({
                   label: (
-                    <Flexbox align={'center'} gap={8} horizontal>
+                    <Flexbox horizontal align={'center'} gap={8}>
                       <EngineAvatar engine={item} />
                       {item}
                     </Flexbox>
                   ),
                   value: item,
                 }))}
-                value={engines}
+                onChange={(checkedValue) => {
+                  setEngines(checkedValue);
+                }}
               />
             </Flexbox>
           )}
@@ -148,56 +149,56 @@ const SearchBar = memo<SearchBarProps>(
           {isMobile ? (
             <Select
               mode="multiple"
-              onChange={(checkedValue) => {
-                setCategories(checkedValue);
-              }}
+              placeholder={t('search.searchCategory.placeholder')}
+              size="small"
+              value={categories}
+              variant="filled"
               optionRender={(item) => (
-                <Flexbox align={'center'} gap={8} horizontal>
+                <Flexbox horizontal align={'center'} gap={8}>
                   <CategoryAvatar category={item.value as string} />
                   {t(`search.searchCategory.value.${item.value}` as any)}
                 </Flexbox>
               )}
               options={Object.keys(CATEGORY_ICON_MAP).map((item) => ({
                 label: (
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     <CategoryAvatar category={item as any} />
                     {t(`search.searchCategory.value.${item}` as any)}
                   </Flexbox>
                 ),
                 value: item,
               }))}
-              placeholder={t('search.searchCategory.placeholder')}
-              size="small"
-              value={categories}
-              variant="filled"
+              onChange={(checkedValue) => {
+                setCategories(checkedValue);
+              }}
             />
           ) : (
-            <Flexbox align="flex-start" gap={8} horizontal>
+            <Flexbox horizontal align="flex-start" gap={8}>
               <Text className={styles.textHeader} type={'secondary'}>
                 {t('search.searchCategory.title')}
               </Text>
               <Checkbox.Group
-                onChange={(checkedValue) => setCategories(checkedValue)}
+                value={categories}
                 options={Object.keys(CATEGORY_ICON_MAP).map((item) => ({
                   label: (
-                    <Flexbox align={'center'} gap={8} horizontal>
+                    <Flexbox horizontal align={'center'} gap={8}>
                       <CategoryAvatar category={item as any} />
                       {t(`search.searchCategory.value.${item}` as any)}
                     </Flexbox>
                   ),
                   value: item,
                 }))}
-                value={categories}
+                onChange={(checkedValue) => setCategories(checkedValue)}
               />
             </Flexbox>
           )}
 
-          <Flexbox align={'center'} gap={16} horizontal wrap={'wrap'}>
+          <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
             <Text className={styles.textHeader} type={'secondary'}>
               {t('search.searchTimeRange.title')}
             </Text>
             <Segmented
-              onChange={(e) => setTimeRange(e as any)}
+              value={time_range}
               options={[
                 { label: t('search.searchTimeRange.value.anytime'), value: 'anytime' },
                 { label: t('search.searchTimeRange.value.day'), value: 'day' },
@@ -205,7 +206,7 @@ const SearchBar = memo<SearchBarProps>(
                 { label: t('search.searchTimeRange.value.month'), value: 'month' },
                 { label: t('search.searchTimeRange.value.year'), value: 'year' },
               ]}
-              value={time_range}
+              onChange={(e) => setTimeRange(e as any)}
             />
           </Flexbox>
         </Block>

@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 
-import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-import type { GroupMode, ListItem, ModelWithProviders } from '../types';
+import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
 
 export const useBuildListItems = (
   enabledList: EnabledProviderWithModels[],

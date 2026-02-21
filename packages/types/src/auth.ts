@@ -8,36 +8,42 @@ export interface ClientSecretPayload {
    */
   apiKey?: string;
   /**
+   * ComfyUI specific authentication fields
+   */
+  authType?: string;
+
+  awsAccessKeyId?: string;
+
+  awsRegion?: string;
+
+  awsSecretAccessKey?: string;
+  awsSessionToken?: string;
+  azureApiVersion?: string;
+  /**
    * Represents the endpoint of provider
    */
   baseURL?: string;
 
-  runtimeProvider?: string;
+  bearerToken?: string;
 
-  azureApiVersion?: string;
-
-  awsAccessKeyId?: string;
-  awsRegion?: string;
-  awsSecretAccessKey?: string;
-  awsSessionToken?: string;
+  bearerTokenExpiresAt?: number;
 
   cloudflareBaseURLOrAccountID?: string;
-
-  vertexAIRegion?: string;
-
-  /**
-   * ComfyUI specific authentication fields
-   */
-  authType?: string;
-  username?: string;
-  password?: string;
   customHeaders?: Record<string, string>;
+  /**
+   * GitHub Copilot OAuth fields
+   */
+  oauthAccessToken?: string;
+  password?: string;
 
+  runtimeProvider?: string;
   /**
    * user id
    * in client db mode it's a uuid
    * in server db mode it's a user id
    */
   userId?: string;
+  username?: string;
+
+  vertexAIRegion?: string;
 }
-/* eslint-enable */

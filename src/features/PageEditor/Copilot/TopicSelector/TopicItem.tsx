@@ -29,12 +29,12 @@ const TopicItem = memo<TopicItemProps>(
         actions={<Actions dropdownMenu={dropdownMenu} />}
         active={active}
         contextMenuItems={dropdownMenu}
+        style={{ flexShrink: 0 }}
+        title={topicTitle || t('untitled', { defaultValue: 'Untitled' })}
         onClick={() => {
           onTopicChange(topicId);
           onClose();
         }}
-        style={{ flexShrink: 0 }}
-        title={topicTitle || t('untitled', { defaultValue: 'Untitled' })}
       />
     );
   },

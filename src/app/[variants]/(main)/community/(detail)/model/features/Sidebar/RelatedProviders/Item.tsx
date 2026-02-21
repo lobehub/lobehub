@@ -29,7 +29,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const RelatedItem = memo<DiscoverModelDetailProviderItem>(({ id, name }) => {
   const { t } = useTranslation('providers');
   return (
-    <Block gap={12} horizontal key={id} padding={12} variant={'outlined'}>
+    <Block horizontal gap={12} key={id} padding={12} variant={'outlined'}>
       <ProviderIcon provider={id} size={40} style={{ flex: 'none' }} type={'avatar'} />
       <Flexbox
         flex={1}
@@ -38,7 +38,7 @@ const RelatedItem = memo<DiscoverModelDetailProviderItem>(({ id, name }) => {
           overflow: 'hidden',
         }}
       >
-        <Text as={'h2'} className={styles.title} ellipsis>
+        <Text ellipsis as={'h2'} className={styles.title}>
           {name}
         </Text>
         <Text

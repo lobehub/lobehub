@@ -1,12 +1,13 @@
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
-const THINKING_MODELS = new Set(['deepseek-ai/deepseek-v3.1', 'deepseek-ai/deepseek-v3.1-terminus']);
+const THINKING_MODELS = new Set([
+  'deepseek-ai/deepseek-v3.1',
+  'deepseek-ai/deepseek-v3.1-terminus',
+]);
 
 export interface NvidiaModelCard {
   id: string;

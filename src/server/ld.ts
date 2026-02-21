@@ -94,7 +94,7 @@ export class Ld {
         'email': BRANDING_EMAIL.support,
       },
       'description':
-        'Agent teams that grow with you\n' +
+        'Agent teammates that grow with you\n' +
         'LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teams that grow with you.',
       'email': BRANDING_EMAIL.business,
       'founders': [this.getAuthors(['arvinxx']), this.getAuthors(['canisminor'])],

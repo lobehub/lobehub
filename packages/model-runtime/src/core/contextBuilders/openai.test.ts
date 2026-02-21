@@ -1,8 +1,8 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OpenAIChatMessage } from '../../types';
+import type { OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   convertImageUrlToFile,
@@ -72,6 +72,30 @@ describe('convertMessageContent', () => {
 
     expect(result).toEqual(content);
     expect(imageUrlToBase64).not.toHaveBeenCalled();
+  });
+
+  it('should convert image URL when forceImageBase64 is true', async () => {
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+
+    const content = {
+      type: 'image_url',
+      image_url: { url: 'https://example.com/image.jpg' },
+    } as OpenAI.ChatCompletionContentPart;
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'image/jpeg',
+    });
+
+    const result = await convertMessageContent(content, { forceImageBase64: true });
+
+    expect(result).toEqual({
+      type: 'image_url',
+      image_url: { url: 'data:image/jpeg;base64,forcedBase64' },
+    });
+
+    expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
   });
 });
 

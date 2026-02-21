@@ -59,14 +59,14 @@ interface McpInstallParams {
  */
 export default class McpInstallController extends ControllerModule {
   /**
-   * 处理 MCP 插件安装请求
-   * @param parsedData 解析后的协议数据
-   * @returns 是否处理成功
+   * Handle MCP plugin installation request
+   * @param parsedData Parsed protocol data
+   * @returns Whether processing succeeded
    */
   @protocolHandler('install')
   public async handleInstallRequest(parsedData: McpInstallParams): Promise<boolean> {
     try {
-      // 从参数中提取必需字段
+      // Extract required fields from parameters
       const { id, schema: schemaParam, marketId } = parsedData;
 
       if (!id) {
@@ -76,11 +76,11 @@ export default class McpInstallController extends ControllerModule {
         return false;
       }
 
-      // 映射协议来源
+      // Map protocol source
 
       const isOfficialMarket = marketId === 'lobehub';
 
-      // 对于官方市场，schema 是可选的；对于第三方市场，schema 是必需的
+      // For official marketplace, schema is optional; for third-party marketplace, schema is required
       if (!isOfficialMarket && !schemaParam) {
         logger.warn(`🔧 [McpInstall] Schema is required for third-party marketplace:`, {
           marketId,
@@ -90,7 +90,7 @@ export default class McpInstallController extends ControllerModule {
 
       let mcpSchema: McpSchema | undefined;
 
-      // 如果提供了 schema 参数，则解析和验证
+      // If schema parameter is provided, parse and validate
       if (schemaParam) {
         try {
           mcpSchema = JSON.parse(schemaParam);
@@ -104,7 +104,7 @@ export default class McpInstallController extends ControllerModule {
           return false;
         }
 
-        // 验证 identifier 与 id 参数匹配
+        // Verify identifier matches id parameter
         if (mcpSchema.identifier !== id) {
           logger.error(`🔧 [McpInstall] Schema identifier does not match URL id parameter:`, {
             schemaId: mcpSchema.identifier,
@@ -122,7 +122,7 @@ export default class McpInstallController extends ControllerModule {
         pluginVersion: mcpSchema?.version || 'Unknown',
       });
 
-      // 广播安装请求到前端
+      // Broadcast installation request to frontend
       const installRequest = {
         marketId,
         pluginId: id,
@@ -136,7 +136,7 @@ export default class McpInstallController extends ControllerModule {
         pluginName: installRequest.schema?.name || 'Unknown',
       });
 
-      // 通过应用实例广播到前端
+      // Broadcast to frontend via app instance
       if (this.app?.browserManager) {
         this.app.browserManager.broadcastToWindow('app', 'mcpInstallRequest', installRequest);
         logger.debug(`🔧 [McpInstall] Install request broadcasted successfully`);

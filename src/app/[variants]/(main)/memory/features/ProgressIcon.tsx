@@ -1,5 +1,6 @@
 import { Flexbox, Text, Tooltip } from '@lobehub/ui';
-import { Progress, type ProgressProps } from 'antd';
+import { type ProgressProps } from 'antd';
+import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -23,7 +24,7 @@ const ProgressIcon = memo<ProgressIconProps>(({ showInfo, format, percent, ...re
 
   if (showInfo)
     return (
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         {content}
         <Text color={cssVar.colorTextSecondary} fontSize={12}>
           {format?.(percent)}

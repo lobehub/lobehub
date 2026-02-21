@@ -1,16 +1,17 @@
 import { type UIChatMessage } from '@lobechat/types';
+import { type ActionIconGroupEvent, type ActionIconGroupItemType } from '@lobehub/ui';
 import { ActionIconGroup, createRawModal } from '@lobehub/ui';
-import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
 import { useEventCallback } from '@/hooks/useEventCallback';
 
-import ShareMessageModal, { type ShareModalProps } from '../../../components/ShareMessageModal';
-import { Provider, createStore, useConversationStoreApi } from '../../../store';
-import type {
-  MessageActionItem,
-  MessageActionItemOrDivider,
-  MessageActionsConfig,
+import { type ShareModalProps } from '../../../components/ShareMessageModal';
+import ShareMessageModal from '../../../components/ShareMessageModal';
+import { createStore, Provider, useConversationStoreApi } from '../../../store';
+import {
+  type MessageActionItem,
+  type MessageActionItemOrDivider,
+  type MessageActionsConfig,
 } from '../../../types';
 import { ErrorActionsBar } from './Error';
 import { useAssistantActions } from './useAssistantActions';

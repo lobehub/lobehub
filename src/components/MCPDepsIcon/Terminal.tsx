@@ -1,6 +1,6 @@
 'use client';
 
-import type { IconType } from '@lobehub/icons';
+import { type IconType } from '@lobehub/icons';
 import { memo } from 'react';
 
 const Icon: IconType = memo(({ size = '1em', style, ...rest }) => {

@@ -1,6 +1,7 @@
 'use client';
 
-import { GroupAvatar, GroupAvatarProps, Skeleton } from '@lobehub/ui';
+import { type GroupAvatarProps } from '@lobehub/ui';
+import { GroupAvatar, Skeleton } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 
@@ -43,13 +44,13 @@ const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
     return (
       <GroupAvatar
         avatarShape={'square'}
+        cornerShape={'square'}
+        size={size}
         avatars={groupAvatars.map((agent: any) => ({
           avatar: agent.avatar || DEFAULT_AVATAR,
           background: agent?.backgroundColor || undefined,
           ...agent,
         }))}
-        cornerShape={'square'}
-        size={size}
         {...rest}
       />
     );
