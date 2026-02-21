@@ -134,7 +134,13 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
       );
     }
 
-    return <VideoLoadingItem aspectRatio={batch.config?.aspectRatio} generation={generation} />;
+    return (
+      <VideoLoadingItem
+        aspectRatio={batch.config?.aspectRatio}
+        avgLatencyMs={batch.avgLatencyMs}
+        generation={generation}
+      />
+    );
   };
 
   const hasReferenceFrames = batch.config?.imageUrl || batch.config?.endImageUrl;

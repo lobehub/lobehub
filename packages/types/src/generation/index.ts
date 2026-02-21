@@ -81,6 +81,7 @@ export interface Generation {
 }
 
 export interface GenerationBatch {
+  avgLatencyMs?: number | null;
   config?: GenerationConfig;
   createdAt: Date;
   generations: Generation[];

@@ -194,6 +194,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
     );
 
     await asyncTaskModel.update(asyncTask.id, {
+      duration: Date.now() - asyncTask.createdAt.getTime(),
       status: AsyncTaskStatus.Success,
     });
 
