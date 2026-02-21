@@ -41,8 +41,8 @@ jobs:
             echo "⏭️ Not a release PR"
           fi
 
-      - name: Detect hotfix PR (branch first, title fallback)
-        id: hotfix
+      - name: Detect patch PR (branch first, title fallback)
+        id: patch
         if: steps.release.outputs.should_tag != 'true'
         run: |
           HEAD_REF="${{ github.event.pull_request.head.ref }}"
@@ -50,31 +50,31 @@ jobs:
           echo "Head ref: $HEAD_REF"
           echo "PR Title: $PR_TITLE"
 
-          # Priority 1: hotfix/* branch always counts as hotfix, ignore PR title gate.
-          if [[ "$HEAD_REF" == hotfix/* ]]; then
+          # Priority 1: hotfix/* or release/* branch always triggers, ignore PR title gate.
+          if [[ "$HEAD_REF" == hotfix/* ]] || [[ "$HEAD_REF" == release/* ]]; then
             echo "should_tag=true" >> $GITHUB_OUTPUT
-            echo "✅ Detected hotfix PR from hotfix/* branch (title gate bypassed)"
+            echo "✅ Detected auto-release PR from $HEAD_REF branch (title gate bypassed)"
             exit 0
           fi
 
           # Priority 2: fallback to PR title prefix gate (legacy behavior).
           if echo "$PR_TITLE" | grep -qiE '^(💄[[:space:]]*)?style(\(.+\))?:|^(✨[[:space:]]*)?feat(\(.+\))?:|^(🐛[[:space:]]*)?fix(\(.+\))?:|^(♻️[[:space:]]*)?refactor(\(.+\))?:|^((🐛|🩹)[[:space:]]*)?hotfix(\(.+\))?:|^(👷[[:space:]]*)?build(\(.+\))?:'; then
             echo "should_tag=true" >> $GITHUB_OUTPUT
-            echo "✅ Detected hotfix PR from title prefix gate"
+            echo "✅ Detected patch PR from title prefix gate"
           else
             echo "should_tag=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Not a hotfix PR (neither hotfix/* branch nor style/feat/fix/refactor/hotfix/build title prefix)"
+            echo "⏭️ Not a patch PR (neither hotfix/release branch nor style/feat/fix/refactor/hotfix/build title prefix)"
           fi
 
       - name: Prepare main branch
-        if: steps.release.outputs.should_tag == 'true' || steps.hotfix.outputs.should_tag == 'true'
+        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
         run: |
           git checkout main
           git pull --rebase origin main
 
-      - name: Resolve hotfix version (patch bump)
-        id: hotfix-version
-        if: steps.hotfix.outputs.should_tag == 'true'
+      - name: Resolve patch version (patch bump)
+        id: patch-version
+        if: steps.patch.outputs.should_tag == 'true'
         run: |
           CURRENT_VERSION="$(node -p "require('./package.json').version")"
           echo "Current version: ${CURRENT_VERSION}"
@@ -87,7 +87,7 @@ jobs:
           fi
 
           NEXT_VERSION="$(npx -y semver@7 -i patch "${BASE_VERSION}")"
-          echo "📦 Hotfix version: ${NEXT_VERSION}"
+          echo "📦 Patch version: ${NEXT_VERSION}"
           echo "version=${NEXT_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Set context (release)
@@ -97,12 +97,12 @@ jobs:
           echo "KIND=release" >> $GITHUB_ENV
           echo "VERSION=${{ steps.release.outputs.version }}" >> $GITHUB_ENV
 
-      - name: Set context (hotfix)
-        if: steps.hotfix.outputs.should_tag == 'true'
+      - name: Set context (patch)
+        if: steps.patch.outputs.should_tag == 'true'
         run: |
           echo "SHOULD_TAG=true" >> $GITHUB_ENV
-          echo "KIND=hotfix" >> $GITHUB_ENV
-          echo "VERSION=${{ steps.hotfix-version.outputs.version }}" >> $GITHUB_ENV
+          echo "KIND=patch" >> $GITHUB_ENV
+          echo "VERSION=${{ steps.patch-version.outputs.version }}" >> $GITHUB_ENV
 
       - name: Check if tag already exists
         if: env.SHOULD_TAG == 'true'
@@ -151,11 +151,7 @@ jobs:
 
           # Commit changes (if any) and push
           git add package.json
-          if [ "$KIND" == "hotfix" ]; then
-            COMMIT_MSG="🐛 chore(hotfix): bump version to v$VERSION [skip ci]"
-          else
-            COMMIT_MSG="🔧 chore(release): bump version to v$VERSION [skip ci]"
-          fi
+          COMMIT_MSG="🔖 chore(release): release version v$VERSION [skip ci]"
           git commit -m "$COMMIT_MSG" || echo "Nothing to commit"
           git push origin HEAD:main
 
@@ -172,14 +168,8 @@ jobs:
           # Tag the bumped version commit SHA (not the PR merge commit SHA)
           TAG_SHA="${{ steps.bump-version.outputs.tag_sha }}"
 
-          if [ "$KIND" == "hotfix" ]; then
-            PREFIX="🐛 hotfix"
-          else
-            PREFIX="🚀 release"
-          fi
-
           # Create annotated tag with single line message
-          git tag -a "v$VERSION" "$TAG_SHA" -m "$PREFIX: v$VERSION | PR #${{ github.event.pull_request.number }} | Author: ${{ github.event.pull_request.user.login }}"
+          git tag -a "v$VERSION" "$TAG_SHA" -m "🚀 release: v$VERSION | PR #${{ github.event.pull_request.number }} | Author: ${{ github.event.pull_request.user.login }}"
 
           # Push tag
           git push origin "v$VERSION"
@@ -215,5 +205,5 @@ jobs:
               echo "✅ Result: Tag v${{ env.VERSION }} created successfully!"
             fi
           else
-            echo "ℹ️ Result: Not a release/hotfix PR, no tag created"
+            echo "ℹ️ Result: Not a release/patch PR, no tag created"
           fi
