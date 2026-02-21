@@ -1,8 +1,7 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
+import type { LobeChatDatabase } from '@lobechat/database';
 import { agentSkills } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentSkillsRouter } from '../../agentSkills';
@@ -35,8 +34,24 @@ vi.mock('@/server/services/skill/resource', () => ({
 }));
 
 // Mock GitHub module
+const normalizeIdentifierPart = (part: string) =>
+  part
+    .replaceAll(/[^\w-]/g, '-')
+    .replaceAll(/-+/g, '-')
+    .replaceAll(/^-|-$/g, '');
+
 const mockGitHubInstance = {
   downloadRepoZip: vi.fn(),
+  generateIdentifier: vi
+    .fn()
+    .mockImplementation((info: { owner: string; path?: string; repo: string }) => {
+      const parts = [normalizeIdentifierPart(info.owner), normalizeIdentifierPart(info.repo)];
+      if (info.path) {
+        const lastSegment = info.path.split('/').findLast(Boolean);
+        if (lastSegment) parts.push(normalizeIdentifierPart(lastSegment));
+      }
+      return parts.join('-').toLowerCase();
+    }),
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
@@ -487,7 +502,7 @@ describe('Skill Router Integration Tests', () => {
 
       expect(result).toBeDefined();
       expect(result!.skill.name).toBe('skill-creator');
-      expect(result!.skill.identifier).toBe('github.openclaw.openclaw.skills.skill-creator');
+      expect(result!.skill.identifier).toBe('openclaw-openclaw-skill-creator');
       expect(result!.skill.source).toBe('market');
       expect(result!.skill.manifest).toMatchObject({
         repository: 'https://github.com/openclaw/openclaw',

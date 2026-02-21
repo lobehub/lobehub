@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type CreateSkillInput,
@@ -9,7 +11,6 @@ import {
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
-import { readFile } from 'node:fs/promises';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { GitHub, GitHubNotFoundError, GitHubParseError } from '@/server/modules/GitHub';
@@ -188,8 +189,7 @@ export class SkillImporter {
     );
 
     // 4. Generate identifier (use GitHub info for uniqueness, include path for subdirectory imports)
-    const pathSuffix = repoInfo.path ? `.${repoInfo.path.replaceAll('/', '.')}` : '';
-    const identifier = `github.${repoInfo.owner}.${repoInfo.repo}${pathSuffix}`;
+    const identifier = this.github.generateIdentifier(repoInfo);
     log('importFromGitHub: identifier=%s', identifier);
 
     // 5. Check for existing skill with same zipHash (deduplication)

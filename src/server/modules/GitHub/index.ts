@@ -73,6 +73,44 @@ export class GitHub {
   }
 
   /**
+   * Generate skill identifier from repo info
+   *
+   * Format: {owner}-{repo}-{skillName}
+   * The skill name is the last segment of the path (directory name).
+   * All parts are lowercased and joined with hyphens.
+   *
+   * @param info - Repository information
+   * @returns Skill identifier string
+   */
+  generateIdentifier(info: GitHubRepoInfo): string {
+    const parts = [
+      this.normalizeIdentifierPart(info.owner),
+      this.normalizeIdentifierPart(info.repo),
+    ];
+
+    if (info.path) {
+      const lastSegment = info.path.split('/').findLast(Boolean);
+      if (lastSegment) {
+        parts.push(this.normalizeIdentifierPart(lastSegment));
+      }
+    }
+
+    return parts.join('-').toLowerCase();
+  }
+
+  /**
+   * Normalize a string for use as part of a skill identifier.
+   * Replaces non-alphanumeric characters (except hyphens) with hyphens,
+   * collapses consecutive hyphens, and trims leading/trailing hyphens.
+   */
+  private normalizeIdentifierPart(part: string): string {
+    return part
+      .replaceAll(/[^\w-]/g, '-')
+      .replaceAll(/-+/g, '-')
+      .replaceAll(/^-|-$/g, '');
+  }
+
+  /**
    * Build the ZIP download URL for a GitHub repository
    */
   buildRepoZipUrl(info: GitHubRepoInfo): string {

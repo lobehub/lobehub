@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
+import type { LobeChatDatabase } from '@lobechat/database';
 import { agentSkills, files, globalFiles, users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
@@ -9,8 +9,24 @@ import { SkillImportError } from './errors';
 import { SkillImporter } from './importer';
 
 // Mock external dependencies only (GitHub, S3, parser)
+const normalizeIdentifierPart = (part: string) =>
+  part
+    .replaceAll(/[^\w-]/g, '-')
+    .replaceAll(/-+/g, '-')
+    .replaceAll(/^-|-$/g, '');
+
 const mockGitHubInstance = {
   downloadRepoZip: vi.fn(),
+  generateIdentifier: vi
+    .fn()
+    .mockImplementation((info: { owner: string; path?: string; repo: string }) => {
+      const parts = [normalizeIdentifierPart(info.owner), normalizeIdentifierPart(info.repo)];
+      if (info.path) {
+        const lastSegment = info.path.split('/').findLast(Boolean);
+        if (lastSegment) parts.push(normalizeIdentifierPart(lastSegment));
+      }
+      return parts.join('-').toLowerCase();
+    }),
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
@@ -354,7 +370,7 @@ describe('SkillImporter', () => {
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
       expect(result.skill.name).toBe('GitHub Skill');
-      expect(result.skill.identifier).toBe('github.lobehub.skill-demo');
+      expect(result.skill.identifier).toBe('lobehub-skill-demo');
       expect(result.skill.source).toBe('market');
 
       // Verify manifest contains repository info
@@ -388,7 +404,7 @@ describe('SkillImporter', () => {
 
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
-      expect(result.skill.identifier).toBe('github.openclaw.openclaw.skills.skill-creator');
+      expect(result.skill.identifier).toBe('openclaw-openclaw-skill-creator');
 
       // Verify parseZipPackage was called with basePath and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
@@ -443,10 +459,7 @@ describe('SkillImporter', () => {
         .select()
         .from(agentSkills)
         .where(
-          and(
-            eq(agentSkills.userId, userId),
-            eq(agentSkills.identifier, 'github.lobehub.skill-update'),
-          ),
+          and(eq(agentSkills.userId, userId), eq(agentSkills.identifier, 'lobehub-skill-update')),
         );
       expect(dbSkills).toHaveLength(1);
     });
@@ -726,7 +739,7 @@ describe('SkillImporter', () => {
       const dbSkills = await db
         .select()
         .from(agentSkills)
-        .where(eq(agentSkills.identifier, 'github.lobehub.skill-dedup'));
+        .where(eq(agentSkills.identifier, 'lobehub-skill-dedup'));
       expect(dbSkills).toHaveLength(1);
     });
 
