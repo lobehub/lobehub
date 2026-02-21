@@ -1,5 +1,5 @@
 import { AsyncTaskStatus, AsyncTaskType } from '@lobechat/types';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
 
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
@@ -23,23 +23,13 @@ function getCacheKey(model: string): string {
   return `${CACHE_KEY_PREFIX}:${model}`;
 }
 
-/**
- * Query latency samples from asyncTasks for a given model.
- * Uses `duration` column if available, falls back to `updatedAt - createdAt` for historical data.
- */
 async function queryTrimmedAvgLatency(model: string): Promise<number | null> {
   const db = await getServerDB();
 
   const threeDaysAgo = sql`NOW() - INTERVAL '3 days'`;
 
-  // Prefer duration column; fallback to updatedAt - createdAt for historical records
-  const latencyExpr = sql<number>`COALESCE(
-    ${asyncTasks.duration},
-    EXTRACT(EPOCH FROM (${asyncTasks.updatedAt} - ${asyncTasks.createdAt})) * 1000
-  )`;
-
   const rows = await db
-    .select({ latency: latencyExpr })
+    .select({ latency: asyncTasks.duration })
     .from(asyncTasks)
     .innerJoin(generations, eq(generations.asyncTaskId, asyncTasks.id))
     .innerJoin(generationBatches, eq(generations.generationBatchId, generationBatches.id))
@@ -49,13 +39,14 @@ async function queryTrimmedAvgLatency(model: string): Promise<number | null> {
         eq(asyncTasks.status, AsyncTaskStatus.Success),
         eq(generationBatches.model, model),
         gte(asyncTasks.createdAt, threeDaysAgo),
+        isNotNull(asyncTasks.duration),
       ),
     )
-    .orderBy(latencyExpr);
+    .orderBy(asyncTasks.duration);
 
   if (rows.length === 0) return null;
 
-  const latencies = rows.map((r) => Number(r.latency));
+  const latencies = rows.map((r) => r.latency!);
 
   // Not enough samples to trim meaningfully, just average all
   if (latencies.length < 5) {
