@@ -23,7 +23,7 @@ export interface MCPTypeProps {
 }
 
 const MCPType = memo<MCPTypeProps>(({ pluginState, arguments: args }) => {
-  if (!pluginState) return;
+  if (!pluginState?.content || !Array.isArray(pluginState.content)) return;
 
   const { content } = pluginState;
 

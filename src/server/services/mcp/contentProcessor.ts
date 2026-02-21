@@ -64,6 +64,12 @@ export const processContentBlocks = async (
 };
 
 /**
+ * Resolve a media URL: return as-is if already absolute, otherwise join with APP_URL.
+ */
+const resolveMediaUrl = (data: string): string =>
+  /^https?:\/\//.test(data) ? data : urlJoin(appEnv.APP_URL, data);
+
+/**
  * Convert content blocks to string
  * - text: Extract text field
  * - image/audio: Extract data field (usually the proxy URL after upload)
@@ -80,11 +86,11 @@ export const contentBlocksToString = (blocks: ToolCallContent[] | null | undefin
         }
 
         case 'image': {
-          return `![](${urlJoin(appEnv.APP_URL, item.data)})`;
+          return `![](${resolveMediaUrl(item.data)})`;
         }
 
         case 'audio': {
-          return `<resource type="${item.type}" url="${urlJoin(appEnv.APP_URL, item.data)}" />`;
+          return `<resource type="${item.type}" url="${resolveMediaUrl(item.data)}" />`;
         }
 
         case 'resource': {
