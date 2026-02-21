@@ -8,7 +8,7 @@ import { testProvider } from '../../providerTestUtils';
 import { LobeTaichuAI } from './index';
 
 const provider = ModelProvider.Taichu;
-const defaultBaseURL = 'https://ai-maas.wair.ac.cn/maas/v1';
+const defaultBaseURL = 'https://cloud.zidongtaichu.com/maas/v1';
 
 testProvider({
   Runtime: LobeTaichuAI,
