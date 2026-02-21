@@ -58,12 +58,12 @@ jobs:
           fi
 
           # Priority 2: fallback to PR title prefix gate (legacy behavior).
-          if echo "$PR_TITLE" | grep -qiE '^(💄[[:space:]]*)?style(\(.+\))?:|^(✨[[:space:]]*)?feat(\(.+\))?:|^(🐛[[:space:]]*)?fix(\(.+\))?:|^(♻️[[:space:]]*)?refactor(\(.+\))?:|^((🐛|🩹)[[:space:]]*)?hotfix(\(.+\))?:'; then
+          if echo "$PR_TITLE" | grep -qiE '^(💄[[:space:]]*)?style(\(.+\))?:|^(✨[[:space:]]*)?feat(\(.+\))?:|^(🐛[[:space:]]*)?fix(\(.+\))?:|^(♻️[[:space:]]*)?refactor(\(.+\))?:|^((🐛|🩹)[[:space:]]*)?hotfix(\(.+\))?:|^(👷[[:space:]]*)?build(\(.+\))?:'; then
             echo "should_tag=true" >> $GITHUB_OUTPUT
             echo "✅ Detected hotfix PR from title prefix gate"
           else
             echo "should_tag=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Not a hotfix PR (neither hotfix/* branch nor style/feat/fix/refactor/hotfix title prefix)"
+            echo "⏭️ Not a hotfix PR (neither hotfix/* branch nor style/feat/fix/refactor/hotfix/build title prefix)"
           fi
 
       - name: Prepare main branch
