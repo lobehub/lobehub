@@ -48,18 +48,20 @@ export const generationBatchRouter = router({
     }),
 
   getGenerationBatches: generationBatchProcedure
-    .input(z.object({ topicId: z.string() }))
+    .input(z.object({ topicId: z.string(), type: z.enum(['image', 'video']).optional() }))
     .query(async ({ ctx, input }) => {
       const batches = await ctx.generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(
         input.topicId,
       );
+
+      if (input.type !== 'video') return batches;
 
       const uniqueModels = [...new Set(batches.map((b) => b.model))];
       const latencyMap = new Map<string, number | null>();
 
       await Promise.all(
         uniqueModels.map(async (model) => {
-          const latency = await getVideoAvgLatency(model);
+          const latency = await getVideoAvgLatency(model).catch(() => null);
           latencyMap.set(model, latency);
         }),
       );

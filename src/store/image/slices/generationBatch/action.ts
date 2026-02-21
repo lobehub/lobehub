@@ -167,7 +167,7 @@ export class GenerationBatchActionImpl {
     return useClientDataSWR<GenerationBatch[]>(
       topicId ? [SWR_USE_FETCH_GENERATION_BATCHES, topicId] : null,
       async ([, topicId]: [string, string]) => {
-        return generationBatchService.getGenerationBatches(topicId);
+        return generationBatchService.getGenerationBatches(topicId, 'image');
       },
       {
         onSuccess: (data) => {
