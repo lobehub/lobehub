@@ -111,7 +111,6 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
                   {t('agentSkillDetail.updatedAt')}{' '}
                   <PublishedTime
                     date={new Date(skillDetail.updatedAt).toISOString()}
-                    showPrefix={false}
                     template={'MMM DD, YYYY'}
                   />
                 </Flexbox>
