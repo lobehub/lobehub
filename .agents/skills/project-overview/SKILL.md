@@ -3,7 +3,7 @@ name: project-overview
 description: Complete project architecture and structure guide. Use when exploring the codebase, understanding project organization, finding files, or needing comprehensive architectural context. Triggers on architecture questions, directory navigation, or project overview needs.
 ---
 
-# LobeChat Project Overview
+# LobeHub Project Overview
 
 ## Project Description
 

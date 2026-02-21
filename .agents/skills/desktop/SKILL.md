@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 ## Architecture Overview
 
-LobeChat desktop is built on Electron with main-renderer architecture:
+LobeHub desktop is built on Electron with main-renderer architecture:
 
 1. **Main Process** (`apps/desktop/src/main`): App lifecycle, system APIs, window management
 2. **Renderer Process**: Reuses web code from `src/`

@@ -79,7 +79,7 @@ Update all Dockerfiles at the **end** of ENV section:
 
 - Cover image
 - 3-4 API dashboard screenshots
-- 2-3 LobeChat configuration screenshots
+- 2-3 LobeHub configuration screenshots
 - Host on LobeHub CDN: `hub-apac-1.lobeobjects.space`
 
 ## Checklist

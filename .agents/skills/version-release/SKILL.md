@@ -1,28 +1,28 @@
 ---
 name: version-release
-description: "版本发布工作流。当用户提到 '发版'、'发布'、'release'、'hotfix'、'版本升级'、'小班车' 时使用。提供 Minor Release 和 Patch Release 两种发版流程指引。"
+description: "Version release workflow. Use when the user mentions 'release', 'hotfix', 'version upgrade', 'weekly release', or '发版'/'发布'/'小班车'. Provides guides for Minor Release and Patch Release workflows."
 ---
 
-# 版本发布工作流
+# Version Release Workflow
 
-## 概述
+## Overview
 
-本项目主要开发分支为 **canary**，所有日常开发在 canary 上进行。发版时从 canary 合入 main，合入后由 `auto-tag-release.yml` 自动完成打 tag、bump version、创建 GitHub Release、同步回 canary 分支。
+The primary development branch is **canary**. All day-to-day development happens on canary. When releasing, canary is merged into main. After merge, `auto-tag-release.yml` automatically handles tagging, version bumping, creating a GitHub Release, and syncing back to the canary branch.
 
-日常开发中只涉及两种发版类型（major 极少使用，可忽略）：
+Only two release types are used in practice (major releases are extremely rare and can be ignored):
 
-| 类型  | 适用场景                            | 频率              | 源分支         | PR 标题格式                       | 版本号        |
-| ----- | ----------------------------------- | ----------------- | -------------- | --------------------------------- | ------------- |
-| Minor | 功能迭代版本                        | \~4 周一次        | canary         | `🚀 release: v{x.y.0}`            | 手动指定      |
-| Patch | 每周小班车 /hotfix/model /db 修复等 | \~ 每周一次或按需 | canary 或 main | 自定（如 `🚀 release: 20260222`） | 自动 patch +1 |
+| Type  | Use Case                                       | Frequency             | Source Branch  | PR Title Format                      | Version       |
+| ----- | ---------------------------------------------- | --------------------- | -------------- | ------------------------------------ | ------------- |
+| Minor | Feature iteration release                      | \~Every 4 weeks       | canary         | `🚀 release: v{x.y.0}`               | Manually set  |
+| Patch | Weekly release / hotfix / model / DB migration | \~Weekly or as needed | canary or main | Custom (e.g. `🚀 release: 20260222`) | Auto patch +1 |
 
-## Minor Release 流程
+## Minor Release Workflow
 
-用于发布新的 minor 版本（如 v2.2.0），约 4 周一次。
+Used to publish a new minor version (e.g. v2.2.0), roughly every 4 weeks.
 
-### 步骤
+### Steps
 
-1. **从 canary 创建 release 分支**
+1. **Create a release branch from canary**
 
 ```bash
 git checkout canary
@@ -31,9 +31,9 @@ git checkout -b release/v{version}
 git push -u origin release/v{version}
 ```
 
-2. **确定版本号** — 读取 `package.json` 当前版本，计算下一个 minor 版本（如 2.1.x → 2.2.0）
+2. **Determine the version number** — Read the current version from `package.json` and compute the next minor version (e.g. 2.1.x → 2.2.0)
 
-3. **创建 PR 到 main**
+3. **Create a PR to main**
 
 ```bash
 gh pr create \
@@ -43,50 +43,50 @@ gh pr create \
   --body "## 📦 Release v{version} ..."
 ```
 
-> **关键**：PR 标题必须严格匹配 `🚀 release: v{x.y.z}` 格式，CI 通过正则检测此标题来确定精确版本号。
+> \[!IMPORTANT]: The PR title must strictly match the `🚀 release: v{x.y.z}` format. CI uses a regex on this title to determine the exact version number.
 
-4. **合并后自动触发**：auto-tag-release 检测到标题格式，使用标题中的版本号完成发版。
+4. **Automatic trigger after merge**: auto-tag-release detects the title format and uses the version number from the title to complete the release.
 
-### 对应脚本
-
-```bash
-bun run release:branch         # 交互式
-bun run release:branch --minor # 直接指定 minor
-```
-
-## Patch Release 流程
-
-版本号自动 patch +1，有 4 种常见场景：
-
-| 场景                | 源分支 | 分支命名                      | 说明                               |
-| ------------------- | ------ | ----------------------------- | ---------------------------------- |
-| Weekly Release      | canary | `release/weekly-{YYYYMMDD}`   | 每周小班车，canary → main          |
-| Bug Hotfix          | main   | `hotfix/v{version}-{hash}`    | 紧急 bug 修复                      |
-| New Model Launch    | canary | 社区 PR 直接合入              | 新模型上线，通过 PR title 前缀触发 |
-| DB Schema Migration | canary | `release/db-migration-{name}` | 数据库迁移，需专门 changelog       |
-
-所有场景版本号均自动 patch +1，Patch PR 标题不需要写版本号。各场景详细流程参见 `references/patch-release-scenarios.md`。
-
-### 对应脚本
+### Scripts
 
 ```bash
-bun run hotfix:branch # hotfix 场景
+bun run release:branch         # Interactive
+bun run release:branch --minor # Directly specify minor
 ```
 
-## 自动发版触发规则（auto-tag-release.yml）
+## Patch Release Workflow
 
-PR 合入 main 后，CI 按以下优先级判断是否发版：
+Version number is automatically bumped by patch +1. There are 4 common scenarios:
 
-### 1. Minor Release（精确版本）
+| Scenario            | Source Branch | Branch Naming                 | Description                                      |
+| ------------------- | ------------- | ----------------------------- | ------------------------------------------------ |
+| Weekly Release      | canary        | `release/weekly-{YYYYMMDD}`   | Weekly release train, canary → main              |
+| Bug Hotfix          | main          | `hotfix/v{version}-{hash}`    | Emergency bug fix                                |
+| New Model Launch    | canary        | Community PR merged directly  | New model launch, triggered by PR title prefix   |
+| DB Schema Migration | canary        | `release/db-migration-{name}` | Database migration, requires dedicated changelog |
 
-PR 标题匹配 `🚀 release: v{x.y.z}` → 使用标题中的版本号。
+All scenarios auto-bump patch +1. Patch PR titles do not need a version number. See `reference/patch-release-scenarios.md` for detailed steps per scenario.
 
-### 2. Patch Release（自动 patch +1）
+### Scripts
 
-按以下优先级触发：
+```bash
+bun run hotfix:branch # Hotfix scenario
+```
 
-- **分支名匹配**：`hotfix/*` 或 `release/*` → 直接触发（跳过标题检测）
-- **标题前缀匹配**：以下前缀的 PR 标题会触发：
+## Auto-Release Trigger Rules (auto-tag-release.yml)
+
+After a PR is merged into main, CI determines whether to release based on the following priority:
+
+### 1. Minor Release (Exact Version)
+
+PR title matches `🚀 release: v{x.y.z}` → uses the version number from the title.
+
+### 2. Patch Release (Auto patch +1)
+
+Triggered by the following priority:
+
+- **Branch name match**: `hotfix/*` or `release/*` → triggers directly (skips title detection)
+- **Title prefix match**: PRs with the following title prefixes will trigger:
   - `style` / `💄 style`
   - `feat` / `✨ feat`
   - `fix` / `🐛 fix`
@@ -94,62 +94,58 @@ PR 标题匹配 `🚀 release: v{x.y.z}` → 使用标题中的版本号。
   - `hotfix` / `🐛 hotfix` / `🩹 hotfix`
   - `build` / `👷 build`
 
-### 3. 不触发
+### 3. No Trigger
 
-不满足以上任何条件的 PR（如 `docs`、`chore`、`ci`、`test` 前缀）合入 main 后不会发版。
+PRs that don't match any of the above conditions (e.g. `docs`, `chore`, `ci`, `test` prefixes) will not trigger a release when merged into main.
 
-## 发版后自动动作
+## Post-Release Automated Actions
 
-1. **Bump package.json** — 提交 `🔖 chore(release): release version v{x.y.z} [skip ci]`
-2. **创建 annotated tag** — `v{x.y.z}`
-3. **创建 GitHub Release**
-4. **Dispatch sync-main-to-canary** — 同步 main 回 canary 分支
+1. **Bump package.json** — commits `🔖 chore(release): release version v{x.y.z} [skip ci]`
+2. **Create annotated tag** — `v{x.y.z}`
+3. **Create GitHub Release**
+4. **Dispatch sync-main-to-canary** — syncs main back to the canary branch
 
-## Claude 操作指引
+## Claude Action Guide
 
-当用户要求发版时：
+When the user requests a release:
 
 ### Minor Release
 
-1. 读取 `package.json` 获取当前版本，计算下一个 minor 版本
-2. 从 canary 创建 `release/v{version}` 分支
-3. 推送并创建 PR，**标题必须为 `🚀 release: v{version}`**
-4. 告知用户合并 PR 后将自动发版
+1. Read `package.json` to get the current version and compute the next minor version
+2. Create a `release/v{version}` branch from canary
+3. Push and create a PR — **title must be `🚀 release: v{version}`**
+4. Inform the user that merging the PR will automatically trigger the release
 
-### Patch Release（小班车）
+### Patch Release
 
-1. 从 canary 创建 `release/weekly-{YYYYMMDD}` 分支
-2. 执行 `git log main..canary --oneline` 扫描变更
-3. 以面向用户的视角撰写 changelog（新功能 / 优化 / 修复），写入 PR body
-4. 推送并创建 PR，标题如 `🚀 release: 20260222`
-5. 告知用户合并 PR 后将自动 patch +1 发版
+Choose the appropriate workflow based on the scenario (see `reference/patch-release-scenarios.md`):
 
-### Patch Release（hotfix）
+- **Weekly Release**: Create a `release/weekly-{YYYYMMDD}` branch from canary, scan `git log main..canary` to write the changelog, title like `🚀 release: 20260222`
+- **Bug Hotfix**: Create a `hotfix/` branch from main, use a gitmoji prefix title (e.g. `🐛 fix: ...`)
+- **New Model Launch**: Community PRs trigger automatically via title prefix (`feat` / `style`), no extra steps needed
+- **DB Migration**: Create a `release/db-migration-{name}` branch from canary, write a dedicated migration changelog
 
-1. 从 main 创建 `hotfix/v{version}-{hash}` 分支
-2. 推送并创建 PR，标题使用 gitmoji 前缀（如 `🐛 fix: ...`）
-3. 告知用户合并 PR 后将自动 patch +1 发版
+### Important Notes
 
-### 注意事项
+- **Do NOT manually modify the version in package.json** — CI will auto-bump it
+- **Do NOT manually create tags** — CI will create them automatically
+- The Minor Release PR title format is a hard requirement — incorrect format will not use the specified version number
+- Patch PRs do not need a version number — CI auto-bumps patch +1
+- All release PRs must include a user-facing changelog
 
-- **不要手动修改 package.json 的 version** — CI 会自动 bump
-- **不要手动打 tag** — CI 会自动创建
-- Minor Release 的 PR 标题格式是硬性要求，格式错误将不会使用指定版本号
-- Patch PR 不需要写版本号，CI 自动 patch +1
-- 所有发版 PR 都需要包含面向用户的 changelog
+## Changelog Writing Guidelines
 
-## Changelog 撰写规范
+All release PR bodies (both Minor and Patch) must include a user-facing changelog. Scan changes via `git log main..canary --oneline` or `git diff main...canary --stat`, then write following the format below.
 
-所有发版 PR（无论 Minor 还是 Patch）的 body 都需要包含面向用户视角的变更日志。通过 `git log main..canary --oneline` 或 `git diff main...canary --stat` 扫描变更后，按以下格式撰写。
+### Format Reference
 
-### 格式参考
+- Weekly Release: See `reference/changelog-example/weekly-release.md`
+- DB Migration: See `reference/changelog-example/db-migration.md`
 
-参见 `references/patch-release-changelog-example.md`。
+### Writing Tips
 
-### 撰写要点
-
-- **面向用户**：描述用户可感知的变化，而非内部实现细节
-- **分类清晰**：按功能特性、模型 / Provider、桌面端、修复稳定性等分类
-- **标注重点**：关键功能名用 `**加粗**` 突出
-- **致谢贡献者**：通过 `git log` 收集所有 committer，按字母序列出
-- **分类可灵活调整**：根据实际变更内容选用合适的分类，不必强行套用所有分类
+- **User-facing**: Describe changes that users can perceive, not internal implementation details
+- **Clear categories**: Group by features, models/providers, desktop, stability/fixes, etc.
+- **Highlight key items**: Use `**bold**` for important feature names
+- **Credit contributors**: Collect all committers via `git log` and list alphabetically
+- **Flexible categories**: Choose categories based on actual changes — no need to force-fit all categories

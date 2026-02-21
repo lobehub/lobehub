@@ -2,7 +2,7 @@
 
 ## Testing Framework & Directory Structure
 
-LobeChat Desktop uses Vitest as the test framework. Controller unit tests should be placed in the `__tests__` directory adjacent to the controller file, named with the original controller filename plus `.test.ts`.
+LobeHub Desktop uses Vitest as the test framework. Controller unit tests should be placed in the `__tests__` directory adjacent to the controller file, named with the original controller filename plus `.test.ts`.
 
 ```plaintext
 apps/desktop/src/main/controllers/

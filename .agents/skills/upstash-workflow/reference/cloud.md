@@ -53,11 +53,13 @@ lobehub-cloud/
 **Example**: `welcome-placeholder`, `agent-welcome`
 
 **Implementation**:
+
 - Implement directly in `lobehub-cloud/src/app/(backend)/api/workflows/`
 - No need for re-exports
 - Can use cloud-specific packages and services
 
 **Structure**:
+
 ```
 lobehub-cloud/src/
 ├── app/(backend)/api/workflows/
@@ -79,6 +81,7 @@ lobehub-cloud/src/
 **Example**: `agent-eval-run`, `memory-user-memory`
 
 **Why Re-export?**
+
 - Cloud deployment needs to serve these endpoints
 - Lobehub submodule code is not directly accessible in cloud routes
 - Allows cloud-specific overrides if needed in the future
@@ -145,6 +148,7 @@ The cloud project uses tsconfig path mappings to override lobehub code:
 ```
 
 **Resolution Order**:
+
 1. `./src/*` (cloud code) - checked first
 2. `./lobehub/src/*` (open-source) - fallback
 
@@ -178,14 +182,15 @@ Both lobehub and cloud workflows require:
 
 ```bash
 # Required for all workflows
-APP_URL=https://your-app.com          # Base URL for workflow endpoints
-QSTASH_TOKEN=qstash_xxx               # QStash authentication token
+APP_URL=https://your-app.com # Base URL for workflow endpoints
+QSTASH_TOKEN=qstash_xxx      # QStash authentication token
 
 # Optional (for custom QStash URL)
 QSTASH_URL=https://custom-qstash.com # Custom QStash endpoint
 ```
 
 **Cloud-Specific**:
+
 ```bash
 # Cloud database (for monetization features)
 CLOUD_DATABASE_URL=postgresql://...
@@ -201,11 +206,13 @@ REDIS_URL=redis://...
 ### 1. Decide: Cloud or Open-Source?
 
 **Implement in Lobehub if**:
-- Feature is useful for all LobeChat users
+
+- Feature is useful for all LobeHub users
 - No proprietary business logic
 - Can be open-sourced
 
 **Implement in Cloud if**:
+
 - Premium/paid feature
 - Uses cloud-specific services
 - Contains proprietary algorithms
@@ -213,12 +220,14 @@ REDIS_URL=redis://...
 ### 2. Re-export Pattern
 
 ✅ **Do**:
+
 ```typescript
 // Simple re-export
 export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/route';
 ```
 
 ❌ **Don't**:
+
 ```typescript
 // Avoid circular imports with @/ path
 export { POST } from '@/app/(backend)/api/workflows/feature/route'; // ❌
@@ -227,6 +236,7 @@ export { POST } from '@/app/(backend)/api/workflows/feature/route'; // ❌
 ### 3. Keep Workflow Logic in Lobehub
 
 For shared features:
+
 - Implement core logic in `lobehub/` (open-source)
 - Only override if cloud needs different behavior
 - Use re-exports for cloud deployment
@@ -248,29 +258,34 @@ lobehub-cloud/src/app/(backend)/api/workflows/feature-name/
 ### Moving Workflow from Cloud to Lobehub
 
 **Step 1**: Copy workflow to lobehub
+
 ```bash
 cp -r lobehub-cloud/src/app/(backend)/api/workflows/feature \
       lobehub/src/app/(backend)/api/workflows/
 ```
 
 **Step 2**: Remove cloud-specific dependencies
+
 - Replace cloud services with generic interfaces
 - Remove proprietary business logic
 - Update imports to use lobehub paths
 
 **Step 3**: Create re-exports in cloud
+
 ```typescript
 // lobehub-cloud/src/app/(backend)/api/workflows/feature/*/route.ts
 export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/*/route';
 ```
 
 **Step 4**: Move workflow class to lobehub
+
 ```bash
 mv lobehub-cloud/src/server/workflows/feature \
-   lobehub/src/server/workflows/
+  lobehub/src/server/workflows/
 ```
 
 **Step 5**: Update cloud imports
+
 ```typescript
 // Change from
 import { Workflow } from '@/server/workflows/feature';
@@ -290,6 +305,7 @@ import { Workflow } from 'lobehub/src/server/workflows/feature';
 **Why Cloud-Only**: Uses proprietary AI generation service and Redis caching
 
 **Structure**:
+
 ```
 lobehub-cloud/
 ├── src/app/(backend)/api/workflows/welcome-placeholder/
@@ -303,12 +319,14 @@ lobehub-cloud/
 ### Re-exported Workflow: agent-eval-run
 
 **Location**:
+
 - Implementation: `lobehub/src/app/(backend)/api/workflows/agent-eval-run/`
 - Re-export: `lobehub-cloud/src/app/(backend)/api/workflows/agent-eval-run/`
 
 **Why Re-export**: Core feature available in open-source, also used by cloud
 
 **Cloud Re-export Files**:
+
 ```typescript
 // lobehub-cloud/src/app/(backend)/api/workflows/agent-eval-run/run-benchmark/route.ts
 export { POST } from 'lobehub/src/app/(backend)/api/workflows/agent-eval-run/run-benchmark/route';
@@ -330,6 +348,7 @@ export { POST } from 'lobehub/src/app/(backend)/api/workflows/agent-eval-run/pag
 **Cause**: Using `@/` path in re-export within cloud codebase
 
 **Solution**: Use `lobehub/src/` path instead
+
 ```typescript
 // ❌ Wrong
 export { POST } from '@/app/(backend)/api/workflows/feature/route';
@@ -343,14 +362,14 @@ export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/route';
 **Cause**: Missing re-export in cloud
 
 **Solution**: Create re-export files for all workflow layers
+
 ```bash
 # Check if re-export exists
 ls lobehub-cloud/src/app/\(backend\)/api/workflows/feature-name/
 
 # If missing, create re-exports
 mkdir -p lobehub-cloud/src/app/\(backend\)/api/workflows/feature-name/layer
-echo "export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature-name/layer/route';" > \
-  lobehub-cloud/src/app/\(backend\)/api/workflows/feature-name/layer/route.ts
+echo "export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature-name/layer/route';" > lobehub-cloud/src/app/\(backend\)/api/workflows/feature-name/layer/route.ts
 ```
 
 ### Type Errors After Moving to Lobehub
@@ -358,6 +377,7 @@ echo "export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature-name
 **Cause**: Cloud-specific types or services used in lobehub code
 
 **Solution**:
+
 1. Extract cloud-specific logic to cloud-only wrapper
 2. Use dependency injection for services
 3. Define generic interfaces in lobehub
