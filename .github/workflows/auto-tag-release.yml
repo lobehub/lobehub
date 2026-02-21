@@ -196,6 +196,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Sync main to canary
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
+        run: |
+          gh workflow run sync-main-to-canary.yaml
+          echo "✅ Dispatched sync-main-to-canary workflow"
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Output result
         run: |
           if [ "${{ env.SHOULD_TAG }}" == "true" ]; then

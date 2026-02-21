@@ -1,6 +1,7 @@
 name: 🔄 Branch Synchronization
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
