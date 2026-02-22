@@ -31,7 +31,7 @@ export const skillRouter = router({
         order: z.enum(['asc', 'desc']).optional(),
         page: z.number().optional(),
         pageSize: z.number().optional(),
-        search: z.string().optional(),
+        q: z.string().optional(),
         sort: z
           .enum([
             'createdAt',

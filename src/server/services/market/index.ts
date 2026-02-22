@@ -396,7 +396,7 @@ export class MarketService {
     order?: 'asc' | 'desc';
     page?: number;
     pageSize?: number;
-    search?: string;
+    q?: string;
     sort?:
       | 'createdAt'
       | 'forks'
@@ -409,8 +409,7 @@ export class MarketService {
   }) {
     log('searchSkill: %O', params);
 
-    const { search, ...rest } = params;
-    const result = await this.market.marketSkills.getSkillList({ ...rest, q: search });
+    const result = await this.market.marketSkills.getSkillList(params);
 
     log('searchSkill response: %O', result);
 

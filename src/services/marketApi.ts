@@ -213,7 +213,7 @@ export class MarketApiService {
     order?: 'asc' | 'desc';
     page?: number;
     pageSize?: number;
-    search?: string;
+    q?: string;
     sort?:
       | 'createdAt'
       | 'forks'
