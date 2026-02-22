@@ -439,7 +439,7 @@
     "dotenv-expand": "^12.0.3",
     "dpdm-fast": "^1.0.14",
     "drizzle-dbml-generator": "^0.10.0",
-    "drizzle-kit": "^0.31.8",
+    "drizzle-kit": "^0.31.9",
     "eslint": "10.0.0",
     "eslint-plugin-mdx": "^3.6.2",
     "fake-indexeddb": "^6.2.5",
