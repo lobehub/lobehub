@@ -193,8 +193,10 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       FileSource.VideoGeneration,
     );
 
+    const duration = Date.now() - asyncTask.createdAt.getTime();
+
     await asyncTaskModel.update(asyncTask.id, {
-      duration: Date.now() - asyncTask.createdAt.getTime(),
+      duration,
       status: AsyncTaskStatus.Success,
     });
 
@@ -204,7 +206,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
         computePriceParams: {
           generateAudio: (batch?.config as RuntimeVideoGenParams)?.generateAudio,
         },
-        latency: Date.now() - asyncTask.createdAt.getTime(),
+        latency: duration,
         metadata: {
           asyncTaskId: asyncTask.id,
           generationBatchId: generation.generationBatchId!,

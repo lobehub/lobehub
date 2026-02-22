@@ -14,7 +14,7 @@ vi.mock('@/libs/redis', () => ({
 }));
 
 // Must import after vi.mock declarations
-const { getVideoAvgLatency } = await import('../latency');
+const { getVideoAvgLatency } = await import('./latency');
 const { getServerDB } = await import('@/database/server');
 const { isRedisEnabled, initializeRedis } = await import('@/libs/redis');
 
