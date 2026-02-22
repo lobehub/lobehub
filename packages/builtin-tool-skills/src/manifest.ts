@@ -1,4 +1,4 @@
-import { BuiltinToolManifest } from '@lobechat/types';
+import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { isDesktop } from './const';
 import { systemPrompt } from './systemRole';
@@ -134,7 +134,7 @@ export const SkillsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Search for skills in the LobeHub Market. Use this to discover available skills that can extend Claude\'s capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).',
+        "Search for skills in the LobeHub Market. Use this to discover available skills that can extend Claude's capabilities. Search across skill names, descriptions, and summaries. Results can be filtered and sorted by various criteria (stars, downloads, etc).",
       name: SkillsApiName.searchSkill,
       parameters: {
         properties: {
@@ -155,15 +155,24 @@ export const SkillsManifest: BuiltinToolManifest = {
             description: 'Number of results per page. Default: 20.',
             type: 'number',
           },
-          search: {
+          q: {
             description:
               'Search query to filter skills. Searches across skill name, description, and summary. Optional.',
             type: 'string',
           },
           sort: {
             description:
-              'Field to sort by. Options: createdAt (creation date), downloadCount (downloads), forks (GitHub forks), name (alphabetical), stars (GitHub stars), updatedAt (last update), watchers (GitHub watchers). Default: "updatedAt".',
-            enum: ['createdAt', 'downloadCount', 'forks', 'name', 'stars', 'updatedAt', 'watchers'],
+              'Field to sort by. Options: createdAt (creation date), installCount (installs), forks (GitHub forks), name (alphabetical), relevance (search relevance), stars (GitHub stars), updatedAt (last update), watchers (GitHub watchers). Default: "updatedAt".',
+            enum: [
+              'createdAt',
+              'forks',
+              'installCount',
+              'name',
+              'relevance',
+              'stars',
+              'updatedAt',
+              'watchers',
+            ],
             type: 'string',
           },
         },

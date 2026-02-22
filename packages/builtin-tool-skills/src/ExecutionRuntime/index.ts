@@ -322,8 +322,8 @@ export class SkillsExecutionRuntime {
 
       if (result.items.length === 0) {
         return {
-          content: args.search
-            ? `No skills found matching "${args.search}"`
+          content: args.q
+            ? `No skills found matching "${args.q}"`
             : 'No skills found in the market',
           state: result,
           success: true,
@@ -334,7 +334,7 @@ export class SkillsExecutionRuntime {
       const skillsList = result.items
         .map(
           (skill, index) =>
-            `${index + 1}. **${skill.name}** (${skill.identifier})\n   ${skill.description}${skill.summary ? `\n   Summary: ${skill.summary}` : ''}${skill.repository ? `\n   Repository: ${skill.repository}` : ''}${skill.downloadCount ? `\n   Downloads: ${skill.downloadCount}` : ''}`,
+            `${index + 1}. **${skill.name}** (${skill.identifier})\n   ${skill.description}${skill.summary ? `\n   Summary: ${skill.summary}` : ''}${skill.repository ? `\n   Repository: ${skill.repository}` : ''}${skill.installCount ? `\n   Installs: ${skill.installCount}` : ''}`,
         )
         .join('\n\n');
 

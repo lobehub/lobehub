@@ -397,11 +397,20 @@ export class MarketService {
     page?: number;
     pageSize?: number;
     search?: string;
-    sort?: 'createdAt' | 'downloadCount' | 'forks' | 'name' | 'stars' | 'updatedAt' | 'watchers';
+    sort?:
+      | 'createdAt'
+      | 'forks'
+      | 'installCount'
+      | 'name'
+      | 'relevance'
+      | 'stars'
+      | 'updatedAt'
+      | 'watchers';
   }) {
     log('searchSkill: %O', params);
 
-    const result = await this.market.marketSkills.getSkillList(params);
+    const { search, ...rest } = params;
+    const result = await this.market.marketSkills.getSkillList({ ...rest, q: search });
 
     log('searchSkill response: %O', result);
 

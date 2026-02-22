@@ -131,19 +131,27 @@ export interface SearchSkillParams {
   /**
    * Search query (searches name, description, summary)
    */
-  search?: string;
+  q?: string;
   /**
-   * Sort field: createdAt | downloadCount | forks | name | stars | updatedAt | watchers
+   * Sort field: createdAt | installCount | forks | name | relevance | stars | updatedAt | watchers
    */
-  sort?: 'createdAt' | 'downloadCount' | 'forks' | 'name' | 'stars' | 'updatedAt' | 'watchers';
+  sort?:
+    | 'createdAt'
+    | 'forks'
+    | 'installCount'
+    | 'name'
+    | 'relevance'
+    | 'stars'
+    | 'updatedAt'
+    | 'watchers';
 }
 
 export interface MarketSkillItem {
   category?: string;
   createdAt: string;
   description: string;
-  downloadCount: number;
   identifier: string;
+  installCount: number;
   name: string;
   repository?: string;
   sourceUrl?: string;

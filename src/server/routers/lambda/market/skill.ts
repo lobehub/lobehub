@@ -33,7 +33,16 @@ export const skillRouter = router({
         pageSize: z.number().optional(),
         search: z.string().optional(),
         sort: z
-          .enum(['createdAt', 'downloadCount', 'forks', 'name', 'stars', 'updatedAt', 'watchers'])
+          .enum([
+            'createdAt',
+            'forks',
+            'installCount',
+            'name',
+            'relevance',
+            'stars',
+            'updatedAt',
+            'watchers',
+          ])
           .optional(),
       }),
     )
