@@ -137,7 +137,7 @@ export class SkillsExecutionRuntime {
             exitCode: result.exitCode,
             success: result.success,
           },
-          success: true,
+          success: result.success,
         };
       } catch (e) {
         return {
@@ -167,7 +167,7 @@ export class SkillsExecutionRuntime {
           exitCode: result.exitCode,
           success: result.success,
         },
-        success: true,
+        success: result.success,
       };
     } catch (e) {
       return {
