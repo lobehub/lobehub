@@ -9,6 +9,7 @@
   "azureai.description": "توفر Azure نماذج ذكاء اصطناعي متقدمة، بما في ذلك سلسلة GPT-3.5 وGPT-4، لمعالجة أنواع بيانات متنوعة ومهام معقدة مع التركيز على الأمان والموثوقية والاستدامة.",
   "baichuan.description": "تركز Baichuan AI على النماذج الأساسية ذات الأداء القوي في المعرفة الصينية، ومعالجة السياقات الطويلة، والتوليد الإبداعي. تم تحسين نماذجها (Baichuan 4 وBaichuan 3 Turbo وBaichuan 3 Turbo 128k) لسيناريوهات مختلفة وتقدم قيمة عالية.",
   "bedrock.description": "توفر Amazon Bedrock للمؤسسات نماذج لغوية وبصرية متقدمة، بما في ذلك Anthropic Claude وMeta Llama 3.1، بدءًا من الخيارات الخفيفة إلى عالية الأداء لمهام النصوص والدردشة والصور.",
+  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
   "bfl.description": "مختبر أبحاث رائد في مجال الذكاء الاصطناعي المتقدم، يعمل على بناء البنية التحتية البصرية للمستقبل.",
   "cerebras.description": "Cerebras هي منصة استدلال تعتمد على نظام CS-3، تركز على تقديم خدمات نماذج لغوية كبيرة بزمن استجابة منخفض جدًا وسرعة عالية لمهام الوقت الحقيقي مثل توليد الأكواد والمهام التفاعلية.",
   "cloudflare.description": "تشغيل نماذج تعلم الآلة المعتمدة على وحدات معالجة الرسومات (GPU) بدون خوادم عبر شبكة Cloudflare العالمية.",

@@ -9,6 +9,7 @@
   "azureai.description": "Azure 提供先进的 AI 模型，包括 GPT-3.5 和 GPT-4 系列，支持多种数据类型和复杂任务，注重安全、可靠与可持续的 AI 实践。",
   "baichuan.description": "百川智能专注于基础模型研发，具备强大的中文知识理解、长文本处理与创意生成能力。其模型（如百川4、百川3 Turbo、百川3 Turbo 128k）针对不同场景优化，性价比高。",
   "bedrock.description": "Amazon Bedrock 为企业提供先进的语言与视觉模型，包括 Anthropic Claude 和 Meta Llama 3.1，涵盖轻量级到高性能选项，支持文本、对话与图像任务。",
+  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
   "bfl.description": "一家前沿 AI 研究实验室，致力于构建未来的视觉基础设施。",
   "cerebras.description": "Cerebras 是基于其 CS-3 系统构建的推理平台，专注于超低延迟和高吞吐量的大模型服务，适用于代码生成和智能体等实时任务。",
   "cloudflare.description": "在 Cloudflare 全球网络上运行无服务器、GPU 加速的机器学习模型。",

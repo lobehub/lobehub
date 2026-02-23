@@ -9,6 +9,7 @@
   "azureai.description": "Azure, GPT-3.5 ve GPT-4 serisi dahil olmak üzere gelişmiş yapay zeka modelleri sunar. Farklı veri türleri ve karmaşık görevler için güvenli, güvenilir ve sürdürülebilir yapay zeka çözümlerine odaklanır.",
   "baichuan.description": "Baichuan AI, Çin bilgisi, uzun bağlam işleme ve yaratıcı üretim konularında güçlü performans sergileyen temel modellere odaklanır. Modelleri (Baichuan 4, Baichuan 3 Turbo, Baichuan 3 Turbo 128k) farklı senaryolar için optimize edilmiştir ve yüksek değer sunar.",
   "bedrock.description": "Amazon Bedrock, işletmelere Anthropic Claude ve Meta Llama 3.1 gibi gelişmiş dil ve görsel modeller sunar. Metin, sohbet ve görsel görevler için hafiften yüksek performansa kadar çeşitli seçenekler içerir.",
+  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
   "bfl.description": "Geleceğin görsel altyapısını inşa eden öncü bir yapay zeka araştırma laboratuvarı.",
   "cerebras.description": "Cerebras, CS-3 sistemi üzerine inşa edilmiş bir çıkarım platformudur. Kod üretimi ve ajan görevleri gibi gerçek zamanlı iş yükleri için ultra düşük gecikme ve yüksek verimlilik sağlar.",
   "cloudflare.description": "Cloudflare’ın küresel ağı üzerinde sunucusuz, GPU destekli makine öğrenimi modelleri çalıştırın.",

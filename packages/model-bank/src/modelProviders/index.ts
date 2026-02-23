@@ -12,6 +12,7 @@ import AzureProvider from './azure';
 import AzureAIProvider from './azureai';
 import BaichuanProvider from './baichuan';
 import BedrockProvider from './bedrock';
+import BrainiallProvider from './brainiall';
 import BflProvider from './bfl';
 import CerebrasProvider from './cerebras';
 import CloudflareProvider from './cloudflare';
@@ -198,6 +199,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   QiniuProvider,
   ReplicateProvider,
   NebiusProvider,
+  BrainiallProvider,
   CometAPIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
@@ -225,6 +227,7 @@ export { default as AzureProviderCard } from './azure';
 export { default as AzureAIProviderCard } from './azureai';
 export { default as BaichuanProviderCard } from './baichuan';
 export { default as BedrockProviderCard } from './bedrock';
+export { default as BrainiallProviderCard } from './brainiall';
 export { default as BflProviderCard } from './bfl';
 export { default as CerebrasProviderCard } from './cerebras';
 export { default as CloudflareProviderCard } from './cloudflare';

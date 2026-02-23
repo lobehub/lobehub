@@ -9,6 +9,7 @@
   "azureai.description": "Azure provides advanced AI models, including GPT-3.5 and GPT-4 series, for diverse data types and complex tasks with a focus on safe, reliable, and sustainable AI.",
   "baichuan.description": "Baichuan AI focuses on foundation models with strong performance on Chinese knowledge, long-context processing, and creative generation. Its models (Baichuan 4, Baichuan 3 Turbo, Baichuan 3 Turbo 128k) are optimized for different scenarios and offer strong value.",
   "bedrock.description": "Amazon Bedrock provides enterprises with advanced language and vision models, including Anthropic Claude and Meta Llama 3.1, spanning lightweight to high-performance options for text, chat, and image tasks.",
+  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
   "bfl.description": "A leading frontier AI research lab building the visual infrastructure of tomorrow.",
   "cerebras.description": "Cerebras is an inference platform built on its CS-3 system, focused on ultra-low latency and high-throughput LLM service for real-time workloads like code generation and agent tasks.",
   "cloudflare.description": "Run serverless GPU-powered ML models across Cloudflare’s global network.",

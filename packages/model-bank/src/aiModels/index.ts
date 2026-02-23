@@ -11,6 +11,7 @@ import { default as azure } from './azure';
 import { default as azureai } from './azureai';
 import { default as baichuan } from './baichuan';
 import { default as bedrock } from './bedrock';
+import { default as brainiall } from './brainiall';
 import { default as bfl } from './bfl';
 import { default as cerebras } from './cerebras';
 import { default as cloudflare } from './cloudflare';
@@ -104,6 +105,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   azureai,
   baichuan,
   bedrock,
+  brainiall,
   bfl,
   cerebras,
   cloudflare,
@@ -178,6 +180,7 @@ export { default as azure } from './azure';
 export { default as azureai } from './azureai';
 export { default as baichuan } from './baichuan';
 export { default as bedrock } from './bedrock';
+export { default as brainiall } from './brainiall';
 export { default as bfl } from './bfl';
 export { default as cerebras } from './cerebras';
 export { default as cloudflare } from './cloudflare';

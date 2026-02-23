@@ -11,6 +11,7 @@ export { LobeAnthropicAI } from './providers/anthropic';
 export { LobeAzureAI } from './providers/azureai';
 export { LobeAzureOpenAI } from './providers/azureOpenai';
 export { LobeBedrockAI } from './providers/bedrock';
+export { LobeBrainiallAI } from './providers/brainiall';
 export { LobeBflAI } from './providers/bfl';
 export { LobeCerebrasAI } from './providers/cerebras';
 export { LobeCometAPIAI } from './providers/cometapi';

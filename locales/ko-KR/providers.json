@@ -9,6 +9,7 @@
   "azureai.description": "Azure는 GPT-3.5 및 GPT-4 시리즈를 포함한 고급 AI 모델을 제공하며, 다양한 데이터 유형과 복잡한 작업을 안전하고 신뢰할 수 있으며 지속 가능한 방식으로 처리합니다.",
   "baichuan.description": "Baichuan AI는 중국어 지식, 장문 문맥 처리, 창의적 생성에서 뛰어난 성능을 보이는 기반 모델에 집중하며, Baichuan 4, Baichuan 3 Turbo, Baichuan 3 Turbo 128k 등 다양한 시나리오에 최적화된 모델을 제공합니다.",
   "bedrock.description": "Amazon Bedrock은 기업을 위한 고급 언어 및 비전 모델을 제공하며, Anthropic Claude와 Meta Llama 3.1을 포함해 텍스트, 대화, 이미지 작업을 위한 경량부터 고성능 모델까지 지원합니다.",
+  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
   "bfl.description": "미래의 시각 인프라를 구축하는 선도적인 AI 연구소입니다.",
   "cerebras.description": "Cerebras는 CS-3 시스템 기반의 추론 플랫폼으로, 코드 생성 및 에이전트 작업과 같은 실시간 워크로드를 위한 초저지연, 고처리량 LLM 서비스를 제공합니다.",
   "cloudflare.description": "Cloudflare의 글로벌 네트워크를 통해 서버리스 GPU 기반 ML 모델을 실행할 수 있습니다.",
