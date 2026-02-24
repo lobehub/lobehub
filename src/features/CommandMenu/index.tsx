@@ -114,7 +114,9 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
           <CommandInput />
 
           <Command.List ref={listRef}>
-            <Command.Empty>{t('cmdk.noResults')}</Command.Empty>
+            {!(hasSearch && (isSearching || searchResults.length > 0)) && (
+              <Command.Empty>{t('cmdk.noResults')}</Command.Empty>
+            )}
 
             {/* Show send command when agent is selected */}
             {selectedAgent && (

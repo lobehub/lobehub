@@ -268,8 +268,8 @@ const SearchResults = memo<SearchResultsProps>(
 
       return (
         <CommandItem
-          description={subtitle}
           forceMount
+          description={subtitle}
           icon={getIcon(result.type)}
           key={result.id}
           title={titleWithPrefix}
@@ -313,70 +313,70 @@ const SearchResults = memo<SearchResultsProps>(
       <>
         {/* Render search results grouped by type without headers */}
         {messageResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {messageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('message', messageResults.length)}
           </Command.Group>
         )}
 
         {agentResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {agentResults.map((result) => renderResultItem(result))}
             {renderSearchMore('agent', agentResults.length)}
           </Command.Group>
         )}
 
         {topicResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {topicResults.map((result) => renderResultItem(result))}
             {renderSearchMore('topic', topicResults.length)}
           </Command.Group>
         )}
 
         {pageResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {pageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('page', pageResults.length)}
           </Command.Group>
         )}
 
         {memoryResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {memoryResults.map((result) => renderResultItem(result))}
             {renderSearchMore('memory', memoryResults.length)}
           </Command.Group>
         )}
 
         {fileResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {fileResults.map((result) => renderResultItem(result))}
             {renderSearchMore('file', fileResults.length)}
           </Command.Group>
         )}
 
         {folderResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {folderResults.map((result) => renderResultItem(result))}
             {renderSearchMore('folder', folderResults.length)}
           </Command.Group>
         )}
 
         {mcpResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {mcpResults.map((result) => renderResultItem(result))}
             {renderSearchMore('mcp', mcpResults.length)}
           </Command.Group>
         )}
 
         {pluginResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {pluginResults.map((result) => renderResultItem(result))}
             {renderSearchMore('plugin', pluginResults.length)}
           </Command.Group>
         )}
 
         {assistantResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {assistantResults.map((result) => renderResultItem(result))}
             {renderSearchMore('communityAgent', assistantResults.length)}
           </Command.Group>
@@ -384,7 +384,7 @@ const SearchResults = memo<SearchResultsProps>(
 
         {/* Show loading skeleton below existing results */}
         {isLoading && (
-          <Command.Group>
+          <Command.Group forceMount>
             {[1, 2, 3].map((i) => (
               <Command.Item
                 disabled
