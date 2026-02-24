@@ -189,6 +189,29 @@ describe('createVolcengineImage', () => {
       });
     });
 
+    it('should strip height and width when size is provided', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        size: '2048x2048',
+        height: 1024,
+        width: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        size: '2048x2048',
+      });
+    });
+
     it('should convert height and width to size parameter', async () => {
       const mockResponse = {
         data: [{ url: 'https://example.com/test.jpg' }],
@@ -352,6 +375,23 @@ describe('createVolcengineImage', () => {
       expect(OpenAI.default).toHaveBeenCalledWith({
         apiKey: 'test-api-key',
         baseURL: 'https://custom-endpoint.com/api/v1',
+      });
+    });
+
+    it('should use BytePlus baseURL for international endpoint', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      options.baseURL = 'https://ark.ap-southeast.bytepluses.com/api/v3';
+
+      await createVolcengineImage(payload, options);
+
+      const OpenAI = await import('openai');
+      expect(OpenAI.default).toHaveBeenCalledWith({
+        apiKey: 'test-api-key',
+        baseURL: 'https://ark.ap-southeast.bytepluses.com/api/v3',
       });
     });
 
