@@ -42,6 +42,8 @@ export async function createVolcengineImage(
   // Handle size parameter: use directly if provided, otherwise convert from height/width
   if (userInput.size) {
     log('Using direct size parameter: %s', userInput.size);
+    delete userInput.height;
+    delete userInput.width;
   } else {
     const imgHeight = userInput.height;
     const imgWidth = userInput.width;
