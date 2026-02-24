@@ -277,7 +277,7 @@
     "debug": "^4.4.3",
     "dexie": "^3.2.7",
     "diff": "^8.0.3",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.5.1",
     "epub2": "^3.0.2",
     "es-toolkit": "^1.44.0",
@@ -488,7 +488,7 @@
       "@types/react": "19.2.13",
       "better-auth": "1.4.6",
       "better-call": "1.1.8",
-      "drizzle-orm": "0.44.7"
+      "drizzle-orm": "^0.45.1"
     }
   }
 }
