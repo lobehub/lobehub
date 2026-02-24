@@ -104,7 +104,7 @@ describe('createClientGroupAgentTaskThread Integration', () => {
     testTopicId = topic.id;
 
     // Create parent message from supervisor (simulating supervisor's task message)
-    const [parentMsg] = await serverDB
+    const [parentMsg] = (await serverDB
       .insert(messages)
       .values({
         userId,
@@ -114,7 +114,7 @@ describe('createClientGroupAgentTaskThread Integration', () => {
         agentId: supervisorAgentId, // Parent message from supervisor
         groupId: testGroupId,
       })
-      .returning();
+      .returning()) as any[];
     parentMessageId = parentMsg.id;
   });
 
@@ -249,7 +249,7 @@ describe('createClientGroupAgentTaskThread Integration', () => {
 
     it('should include ancestor messages in thread context', async () => {
       // Create a chain of messages with different agentIds
-      const [userMsg] = await serverDB
+      const [userMsg] = (await serverDB
         .insert(messages)
         .values({
           userId,
@@ -259,9 +259,9 @@ describe('createClientGroupAgentTaskThread Integration', () => {
           agentId: supervisorAgentId,
           groupId: testGroupId,
         })
-        .returning();
+        .returning()) as any[];
 
-      const [supervisorResponse] = await serverDB
+      const [supervisorResponse] = (await serverDB
         .insert(messages)
         .values({
           userId,
@@ -272,7 +272,7 @@ describe('createClientGroupAgentTaskThread Integration', () => {
           groupId: testGroupId,
           parentId: userMsg.id,
         })
-        .returning();
+        .returning()) as any[];
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
