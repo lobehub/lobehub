@@ -158,6 +158,37 @@ export const lobehubImageModels: AIImageModelCard[] = [
   },
   {
     description:
+      'ByteDance-Seedream-5.0-lite by BytePlus features web-retrieval-augmented generation for real-time information, enhanced complex prompt interpretation, and improved reference consistency for professional visual creation.',
+    displayName: 'Seedream 5 Lite',
+    enabled: true,
+    id: 'seedream-5-0-260128',
+    parameters: {
+      imageUrls: { default: [], maxCount: 14, maxFileSize: 10 * 1024 * 1024 },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '2048x2048',
+        enum: [
+          '2048x2048',
+          '2560x1440',
+          '1440x2560',
+          '3072x2048',
+          '2048x3072',
+          '2560x2048',
+          '2048x2560',
+          '3072x1920',
+          '1920x3072',
+        ],
+      },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.035, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-02-24',
+    type: 'image',
+  },
+  {
+    description:
       'Seedream 4.5, built by ByteDance Seed team, supports multi-image editing and composition. Features enhanced subject consistency, precise instruction following, spatial logic understanding, aesthetic expression, poster layout and logo design with high-precision text-image rendering.',
     displayName: 'Seedream 4.5',
     enabled: true,
