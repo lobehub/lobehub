@@ -18,8 +18,30 @@ const hunyuanChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 3.975,
+              '[0.032, infinity]': 5.3,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 15.9,
+              '[0.032, infinity]': 21.2,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2025-11-09',
@@ -39,57 +61,40 @@ const hunyuanChatModels: AIChatModelCard[] = [
     displayName: 'Tencent HY 2.0 Instruct',
     enabled: true,
     id: 'hunyuan-2.0-instruct-20251111',
-    maxOutput: 64_000,
+    maxOutput: 16_000,
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 3.18,
+              '[0.032, infinity]': 4.505,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 7.95,
+              '[0.032, infinity]': 11.13,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2025-11-11',
     settings: {
       searchImpl: 'params',
     },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens complex instruction following, multi-turn and long-text understanding, code, Agent, and reasoning abilities.',
-    displayName: 'Tencent HY 2.0 Think',
-    enabled: true,
-    id: 'hunyuan-2.0-thinking-20251109',
-    maxOutput: 64_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-11-09',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 128_000,
-    description:
-      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens instruction following, multi-turn and long-text understanding, literary creation, knowledge accuracy, code, and reasoning abilities.',
-    displayName: 'Tencent HY 2.0 Instruct',
-    enabled: true,
-    id: 'hunyuan-2.0-instruct-20251111',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-11-11',
     type: 'chat',
   },
   {
@@ -442,24 +447,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
     settings: {
       searchImpl: 'params',
     },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 256_000,
-    description:
-      'Upgraded to an MoE architecture with a 256k context window, leading many open models across NLP, code, math, and industry benchmarks.',
-    displayName: 'Hunyuan Lite',
-    enabled: true,
-    id: 'hunyuan-lite',
-    maxOutput: 6000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-10-30',
     type: 'chat',
   },
   {
