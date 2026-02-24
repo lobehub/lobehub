@@ -1,6 +1,7 @@
 import { type ModelUsage } from '@/types/index';
 
 interface ChargeParams {
+  latency?: number;
   metadata: {
     asyncTaskId: string;
     generationBatchId: string;

@@ -265,20 +265,6 @@ export const imageRouter = router({
 
           const { modelUsage } = response;
 
-          if (ENABLE_BUSINESS_FEATURES) {
-            await chargeAfterGenerate({
-              metadata: {
-                asyncTaskId: taskId,
-                generationBatchId,
-                modelId: model,
-                topicId: generationTopicId,
-              },
-              modelUsage,
-              provider,
-              userId: ctx.userId,
-            });
-          }
-
           // Check if operation has been cancelled
           checkAbortSignal(signal);
 
@@ -348,10 +334,28 @@ export const imageRouter = router({
             },
           );
 
-          log('Updating task status to Success: %s', taskId);
+          const duration = Date.now() - generationBatch.createdAt.getTime();
+
+          log('Updating task status to Success: %s, duration: %dms', taskId, duration);
           await ctx.asyncTaskModel.update(taskId, {
+            duration,
             status: AsyncTaskStatus.Success,
           });
+
+          if (ENABLE_BUSINESS_FEATURES) {
+            await chargeAfterGenerate({
+              latency: duration,
+              metadata: {
+                asyncTaskId: taskId,
+                generationBatchId,
+                modelId: model,
+                topicId: generationTopicId,
+              },
+              modelUsage,
+              provider,
+              userId: ctx.userId,
+            });
+          }
 
           log('Async image generation completed successfully: %s', taskId);
           return { success: true };
