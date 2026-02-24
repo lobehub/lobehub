@@ -344,7 +344,7 @@ export const imageRouter = router({
 
           if (ENABLE_BUSINESS_FEATURES) {
             await chargeAfterGenerate({
-              latency: duration,
+              metrics: { latency: duration },
               metadata: {
                 asyncTaskId: taskId,
                 generationBatchId,

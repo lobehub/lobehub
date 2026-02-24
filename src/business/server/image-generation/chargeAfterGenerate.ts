@@ -1,13 +1,13 @@
-import { type ModelUsage } from '@/types/index';
+import { type ModelPerformance, type ModelUsage } from '@/types/index';
 
 interface ChargeParams {
-  latency?: number;
   metadata: {
     asyncTaskId: string;
     generationBatchId: string;
     modelId: string;
     topicId?: string;
   };
+  metrics?: ModelPerformance;
   modelUsage?: ModelUsage;
   provider: string;
   userId: string;
