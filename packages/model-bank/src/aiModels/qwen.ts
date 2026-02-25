@@ -739,6 +739,150 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
+{
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
+    displayName: 'Qwen3.5-122B-A10B',
+    id: 'qwen3.5-122b-a10b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8,
+              '[0.128, infinity]': 2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 6.4,
+              '[0.128, infinity]': 16,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+{
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
+    displayName: 'Qwen3.5-27B',
+    id: 'qwen3.5-27b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.6,
+              '[0.128, infinity]': 1.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 4.8,
+              '[0.128, infinity]': 14.4,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+{
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
+    displayName: 'Qwen3.5-35B-A3B',
+    id: 'qwen3.5-35b-a3b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.4,
+              '[0.128, infinity]': 1.6,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 3.2,
+              '[0.128, infinity]': 12.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -1102,6 +1246,64 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-03-05',
     settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+{
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'qwen3.5-flash-2026-02-23',
+    },
+    contextWindowTokens: 1_000_000,
+    description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
+    displayName: 'Qwen3.5 Flash',
+    enabled: true,
+    id: 'qwen3.5-flash',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2, upTo: 0.128 },
+            { rate: 0.8, upTo: 0.256 },
+            { rate: 1.2, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 0.128 },
+            { rate: 8, upTo: 0.256 },
+            { rate: 12, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2 * 0.2, upTo: 0.128 },
+            { rate: 0.8 * 0.2, upTo: 0.256 },
+            { rate: 1.2 * 0.2, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
       searchImpl: 'params',
     },
     type: 'chat',
