@@ -1321,7 +1321,6 @@ const qwenChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_000_000,
     description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
     displayName: 'Qwen Flash',
-    enabled: true,
     id: 'qwen-flash',
     maxOutput: 32_768,
     organization: 'Qwen',
@@ -1480,7 +1479,6 @@ const qwenChatModels: AIChatModelCard[] = [
     description:
       'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
     displayName: 'Qwen Plus',
-    enabled: true,
     id: 'qwen-plus',
     maxOutput: 32_768,
     organization: 'Qwen',
