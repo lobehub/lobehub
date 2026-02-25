@@ -1,0 +1,21 @@
+export const ToolsActivatorIdentifier = 'lobe-tools';
+
+export const ToolsActivatorApiName = {
+  activateTools: 'activateTools',
+};
+
+export interface ActivateToolsParams {
+  identifiers: string[];
+}
+
+export interface ActivatedToolInfo {
+  apiCount: number;
+  identifier: string;
+  name: string;
+}
+
+export interface ActivateToolsState {
+  activatedTools: ActivatedToolInfo[];
+  alreadyActive: string[];
+  notFound: string[];
+}

@@ -47,15 +47,29 @@ export interface MemoryRuntimeService {
   ) => Promise<UpdateIdentityMemoryResult>;
 }
 
+export type MemoryToolPermission = 'read-only' | 'read-write';
+
 export interface MemoryExecutionRuntimeOptions {
   service: MemoryRuntimeService;
+  toolPermission?: MemoryToolPermission;
 }
+
+const READ_ONLY_RESULT: BuiltinServerRuntimeOutput = {
+  content: 'Memory tool is in read-only mode for this chat',
+  success: false,
+};
 
 export class MemoryExecutionRuntime {
   private service: MemoryRuntimeService;
+  private toolPermission: MemoryToolPermission;
 
   constructor(options: MemoryExecutionRuntimeOptions) {
     this.service = options.service;
+    this.toolPermission = options.toolPermission ?? 'read-write';
+  }
+
+  private get isReadOnly() {
+    return this.toolPermission === 'read-only';
   }
 
   async searchUserMemory(params: SearchMemoryParams): Promise<BuiltinServerRuntimeOutput> {
@@ -78,6 +92,7 @@ export class MemoryExecutionRuntime {
   async addContextMemory(
     params: z.infer<typeof ContextMemoryItemSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
       const result = await this.service.addContextMemory(params);
 
@@ -101,6 +116,7 @@ export class MemoryExecutionRuntime {
   async addActivityMemory(
     params: z.infer<typeof ActivityMemoryItemSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
       const result = await this.service.addActivityMemory(params);
 
@@ -124,6 +140,7 @@ export class MemoryExecutionRuntime {
   async addExperienceMemory(
     params: z.infer<typeof ExperienceMemoryItemSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
       const result = await this.service.addExperienceMemory(params);
 
@@ -147,6 +164,7 @@ export class MemoryExecutionRuntime {
   async addIdentityMemory(
     params: z.infer<typeof AddIdentityActionSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
       const result = await this.service.addIdentityMemory(params);
 
@@ -170,6 +188,7 @@ export class MemoryExecutionRuntime {
   async addPreferenceMemory(
     params: z.infer<typeof PreferenceMemoryItemSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
       const result = await this.service.addPreferenceMemory(params);
 
@@ -193,6 +212,7 @@ export class MemoryExecutionRuntime {
   async updateIdentityMemory(
     params: z.infer<typeof UpdateIdentityActionSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
       const result = await this.service.updateIdentityMemory(params);
 
@@ -216,6 +236,7 @@ export class MemoryExecutionRuntime {
   async removeIdentityMemory(
     params: z.infer<typeof RemoveIdentityActionSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
       const result = await this.service.removeIdentityMemory(params);
 

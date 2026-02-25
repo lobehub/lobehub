@@ -689,7 +689,10 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       userId: context.userId,
     });
 
-    return new MemoryExecutionRuntime({ service });
+    return new MemoryExecutionRuntime({
+      service,
+      toolPermission: context.memoryToolPermission,
+    });
   },
   identifier: MemoryIdentifier,
 };

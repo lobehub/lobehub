@@ -3,6 +3,8 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
 
 export interface ToolExecutionContext {
+  /** Memory tool permission from agent chat config */
+  memoryToolPermission?: 'read-only' | 'read-write';
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
   toolManifestMap: Record<string, LobeToolManifest>;

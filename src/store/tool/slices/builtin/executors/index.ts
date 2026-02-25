@@ -17,6 +17,7 @@ import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from
 import { notebookExecutor } from './lobe-notebook';
 import { pageAgentExecutor } from './lobe-page-agent';
 import { skillsExecutor } from './lobe-skills';
+import { toolsActivatorExecutor } from './lobe-tools';
 import { webBrowsing } from './lobe-web-browsing';
 
 // ==================== Import and register all executors ====================
@@ -132,5 +133,6 @@ registerExecutors([
   notebookExecutor,
   pageAgentExecutor,
   skillsExecutor,
+  toolsActivatorExecutor,
   webBrowsing,
 ]);

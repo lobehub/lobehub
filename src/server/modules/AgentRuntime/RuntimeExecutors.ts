@@ -560,6 +560,7 @@ export const createRuntimeExecutors = (
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+        memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
         serverDB: ctx.serverDB,
         toolManifestMap: state.toolManifestMap,
         toolResultMaxLength,
@@ -736,6 +737,7 @@ export const createRuntimeExecutors = (
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
           const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+            memoryToolPermission: state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
             serverDB: ctx.serverDB,
             toolManifestMap: state.toolManifestMap,
             topicId: ctx.topicId,
