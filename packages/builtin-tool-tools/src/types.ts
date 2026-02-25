@@ -1,4 +1,4 @@
-export const ToolsActivatorIdentifier = 'lobe-tools';
+export const LobeToolIdentifier = 'lobe-tools';
 
 export const ToolsActivatorApiName = {
   activateTools: 'activateTools',

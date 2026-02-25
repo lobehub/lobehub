@@ -1,7 +1,7 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { AgentRuntime, GeneralChatAgent } from '@lobechat/agent-runtime';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
-import type { AgentRuntimeErrorType, ChatErrorType, ChatMessageError } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 

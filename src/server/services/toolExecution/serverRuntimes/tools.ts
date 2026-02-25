@@ -1,4 +1,4 @@
-import { ToolsActivatorIdentifier } from '@lobechat/builtin-tool-tools';
+import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import {
   type ToolManifestInfo,
   ToolsActivatorExecutionRuntime,
@@ -33,5 +33,5 @@ export const toolsActivatorRuntime: ServerRuntimeRegistration = {
 
     return new ToolsActivatorExecutionRuntime({ service });
   },
-  identifier: ToolsActivatorIdentifier,
+  identifier: LobeToolIdentifier,
 };

@@ -1,14 +1,10 @@
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
 import type { ToolsActivatorExecutionRuntime } from '../ExecutionRuntime';
-import {
-  type ActivateToolsParams,
-  ToolsActivatorApiName,
-  ToolsActivatorIdentifier,
-} from '../types';
+import { type ActivateToolsParams, LobeToolIdentifier, ToolsActivatorApiName } from '../types';
 
 class ToolsActivatorExecutor extends BaseExecutor<typeof ToolsActivatorApiName> {
-  readonly identifier = ToolsActivatorIdentifier;
+  readonly identifier = LobeToolIdentifier;
   protected readonly apiEnum = ToolsActivatorApiName;
 
   private runtime: ToolsActivatorExecutionRuntime;

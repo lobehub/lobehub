@@ -4,6 +4,6 @@ export {
   type ActivatedToolInfo,
   type ActivateToolsParams,
   type ActivateToolsState,
+  LobeToolIdentifier,
   ToolsActivatorApiName,
-  ToolsActivatorIdentifier,
 } from './types';

@@ -1,7 +1,7 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
-import { ToolsActivatorApiName, ToolsActivatorIdentifier } from './types';
+import { LobeToolIdentifier, ToolsActivatorApiName } from './types';
 
 export const LobeToolsManifest: BuiltinToolManifest = {
   api: [
@@ -25,7 +25,7 @@ export const LobeToolsManifest: BuiltinToolManifest = {
       },
     },
   ],
-  identifier: ToolsActivatorIdentifier,
+  identifier: LobeToolIdentifier,
   meta: {
     avatar: '🔧',
     description: 'Discover and activate tools on demand',
