@@ -61,6 +61,12 @@ export default eslint(
       'react/no-unknown-property': 0,
       'regexp/match-any': 0,
       'unicorn/better-regex': 0,
+    },
+  },
+  // TypeScript files - enforce consistent type imports
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
       '@typescript-eslint/consistent-type-imports': [
         2,
         {
@@ -76,6 +82,7 @@ export default eslint(
     rules: {
       ...mdxFlat.rules,
       '@typescript-eslint/no-unused-vars': 1,
+      'mdx/remark': 0,
       'no-undef': 0,
       'react/jsx-no-undef': 0,
       'react/no-unescaped-entities': 0,
