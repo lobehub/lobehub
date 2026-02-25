@@ -1255,6 +1255,7 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      vision: true,
     },
     config: {
       deploymentName: 'qwen3.5-flash-2026-02-23',
