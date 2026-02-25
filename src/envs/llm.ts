@@ -222,6 +222,9 @@ export const getLLMConfig = () => {
 
       ENABLED_XIAOMIMIMO: z.boolean(),
       XIAOMIMIMO_API_KEY: z.string().optional(),
+
+      ENABLED_BRAINIALL: z.boolean(),
+      BRAINIALL_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -442,6 +445,9 @@ export const getLLMConfig = () => {
 
       ENABLED_XIAOMIMIMO: !!process.env.XIAOMIMIMO_API_KEY,
       XIAOMIMIMO_API_KEY: process.env.XIAOMIMIMO_API_KEY,
+
+      ENABLED_BRAINIALL: !!process.env.BRAINIALL_API_KEY,
+      BRAINIALL_API_KEY: process.env.BRAINIALL_API_KEY,
     },
   });
 };
