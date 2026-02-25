@@ -1,3 +1,5 @@
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
@@ -9,8 +11,6 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
-import { getBuiltinRender } from '@/tools/renders';
-import { getBuiltinStreaming } from '@/tools/streamings';
 
 import { ToolErrorBoundary } from '../../Tool/ErrorBoundary';
 import Actions from './Actions';

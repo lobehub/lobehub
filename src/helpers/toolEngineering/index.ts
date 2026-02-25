@@ -3,6 +3,7 @@
  */
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { defaultToolIds } from '@lobechat/builtin-tools';
 import { isDesktop } from '@lobechat/const';
 import { type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -17,7 +18,6 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { defaultToolIds } from '@/tools';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
@@ -135,8 +135,8 @@ export const getEnabledTools = (
 
   return (
     toolsEngine.generateTools({
-      model: model, // Use provided model or fallback
-      provider: provider, // Use provided provider or fallback
+      model, // Use provided model or fallback
+      provider, // Use provided provider or fallback
       toolIds,
     }) || []
   );

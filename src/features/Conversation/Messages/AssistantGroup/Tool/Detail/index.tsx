@@ -1,9 +1,8 @@
+import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense } from 'react';
-
-import { getBuiltinStreaming } from '@/tools/streamings';
 
 import AbortResponse from './AbortResponse';
 import ErrorResponse from './ErrorResponse';

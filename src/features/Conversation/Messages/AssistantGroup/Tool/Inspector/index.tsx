@@ -1,10 +1,10 @@
+import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
 import { type ToolIntervention } from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
-import { getBuiltinInspector } from '@/tools/inspectors';
 
 import StatusIndicator from './StatusIndicator';
 import ToolTitle from './ToolTitle';

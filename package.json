@@ -199,6 +199,7 @@
     "@lobechat/builtin-tool-page-agent": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
+    "@lobechat/builtin-tools": "workspace:*",
     "@lobechat/business-config": "workspace:*",
     "@lobechat/business-const": "workspace:*",
     "@lobechat/config": "workspace:*",

@@ -9,7 +9,7 @@ const mockCodeInterpreterRender = vi.fn(({ content }) => (
   <div>CodeInterpreterRender: {content}</div>
 ));
 
-vi.mock('@/tools/renders', () => ({
+vi.mock('@lobechat/builtin-tools/renders', () => ({
   getBuiltinRender: vi.fn((identifier, apiName) => {
     if (identifier === 'lobe-web-browsing') return mockWebBrowsingRender;
     if (identifier === 'lobe-code-interpreter') return mockCodeInterpreterRender;

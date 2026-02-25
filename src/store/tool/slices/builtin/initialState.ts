@@ -1,7 +1,6 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
+import { builtinTools } from '@lobechat/builtin-tools';
 import { type BuiltinSkill, type LobeBuiltinTool } from '@lobechat/types';
-
-import { builtinTools } from '@/tools';
 
 export interface BuiltinToolState {
   builtinSkills: BuiltinSkill[];

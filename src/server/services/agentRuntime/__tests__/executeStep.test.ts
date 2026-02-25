@@ -47,7 +47,7 @@ vi.mock('@/server/services/toolExecution', () => ({
 vi.mock('@/server/services/toolExecution/builtin', () => ({
   BuiltinToolsExecutor: vi.fn().mockImplementation(() => ({})),
 }));
-vi.mock('@/tools/dynamicInterventionAudits', () => ({
+vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],
 }));
 
