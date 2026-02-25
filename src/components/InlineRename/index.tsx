@@ -6,6 +6,8 @@ import { type InputRef, type PopoverProps } from 'antd';
 import { type KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
+import { useOverlayPopoverPortalProps } from '@/features/NavPanel/OverlayContainer';
+
 function FocusableInput(props: InputProps) {
   const ref = useRef<InputRef>(null);
   useEffect(() => {
@@ -51,6 +53,7 @@ const InlineRename = memo<InlineRenameProps>(
   ({ open, title, onOpenChange, onSave, onCancel, placement = 'bottomLeft', width = 320 }) => {
     const [newTitle, setNewTitle] = useState(title);
     const savedRef = useRef(false);
+    const popoverPortalProps = useOverlayPopoverPortalProps();
 
     // Reset state when opening
     useEffect(() => {
@@ -89,6 +92,7 @@ const InlineRename = memo<InlineRenameProps>(
       <Popover
         open={open}
         placement={placement}
+        portalProps={popoverPortalProps}
         trigger="click"
         content={
           <FocusableInput
