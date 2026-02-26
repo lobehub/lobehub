@@ -553,9 +553,6 @@
     }
   },
   "src/store/chat/agents/createAgentExecutors.ts": {
-    "prefer-const": {
-      "count": 1
-    },
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
@@ -599,11 +596,6 @@
     }
   },
   "src/store/chat/slices/aiChat/actions/memory.ts": {
-    "no-unused-private-class-members": {
-      "count": 1
-    }
-  },
-  "src/store/chat/slices/aiChat/actions/streamingExecutor.ts": {
     "no-unused-private-class-members": {
       "count": 1
     }

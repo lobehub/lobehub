@@ -9,7 +9,7 @@ import debug from 'debug';
 import { throttle } from 'es-toolkit/compat';
 import pMap from 'p-map';
 
-import { cleanSpeakerTag } from '../../../utils/cleanSpeakerTag';
+import { cleanSpeakerTag } from '../utils/cleanSpeakerTag';
 import {
   type FinishData,
   type GroundingData,
