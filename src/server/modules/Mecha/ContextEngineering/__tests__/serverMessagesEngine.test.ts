@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { serverMessagesEngine } from '../index';
 
+// Helper to compute expected date content from SystemDateProvider
+const getCurrentDateContent = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `Current date: ${year}-${month}-${day}`;
+};
+
 describe('serverMessagesEngine', () => {
   const createBasicMessages = (): UIChatMessage[] => [
     {
@@ -32,7 +41,9 @@ describe('serverMessagesEngine', () => {
       });
 
       expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBe(2);
+      // 3 messages: system date + 2 original messages
+      expect(result.length).toBe(3);
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
       result.forEach((msg) => {
         expect(msg).toHaveProperty('role');
         expect(msg).toHaveProperty('content');
@@ -54,7 +65,7 @@ describe('serverMessagesEngine', () => {
       });
 
       expect(result[0].role).toBe('system');
-      expect(result[0].content).toBe(systemRole);
+      expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
     });
 
     it('should handle empty messages', async () => {
@@ -64,7 +75,8 @@ describe('serverMessagesEngine', () => {
         provider: 'openai',
       });
 
-      expect(result).toEqual([]);
+      // SystemDateProvider injects a system date message even with empty input
+      expect(result).toEqual([{ content: getCurrentDateContent(), role: 'system' }]);
     });
   });
 
