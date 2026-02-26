@@ -22,6 +22,7 @@ import { type LobeBuiltinTool } from '@lobechat/types';
 export const defaultToolIds = [
   LobeToolsManifest.identifier,
   SkillsManifest.identifier,
+  SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
 ];
@@ -42,6 +43,7 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
     hidden: true,
     identifier: SkillStoreManifest.identifier,
     manifest: SkillStoreManifest,
