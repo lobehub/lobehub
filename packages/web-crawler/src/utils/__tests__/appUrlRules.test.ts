@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyUrlRules } from './appUrlRules';
+import { applyUrlRules } from '../appUrlRules';
 
 describe('applyUrlRules', () => {
   // @gru-agent github file rules 不要改
