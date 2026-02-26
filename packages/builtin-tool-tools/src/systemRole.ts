@@ -18,8 +18,8 @@ export const systemPrompt = `You have access to a Tool Discovery system that all
 </tool_selection_guidelines>
 
 <best_practices>
+- **IMPORTANT: Plan ahead and activate all needed tools upfront in a single call.** Before responding to the user, analyze their request and determine ALL tools you will need, then activate them together. Do NOT activate tools incrementally during a multi-step task.
 - Check the \`<available_tools>\` list before activating tools
-- Activate all tools you'll need for a task in a single call when possible
 - Only activate tools that are relevant to the user's current request
 - After activation, use the tools' APIs directly — no need to call activateTools again for the same tools
 </best_practices>
