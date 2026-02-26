@@ -5,7 +5,6 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense } from 'react';
 
 import AbortResponse from './AbortResponse';
-import ErrorResponse from './ErrorResponse';
 import Intervention from './Intervention';
 import ModeSelector from './Intervention/ModeSelector';
 import LoadingPlaceholder from './LoadingPlaceholder';
@@ -96,26 +95,6 @@ const Render = memo<RenderProps>(
       return null;
     }
 
-    // Handle error state
-    if (result.error) {
-      return (
-        <ErrorResponse
-          {...result.error}
-          id={messageId}
-          plugin={
-            type
-              ? ({
-                  apiName,
-                  arguments: requestArgs || '',
-                  identifier,
-                  type,
-                } as any)
-              : undefined
-          }
-        />
-      );
-    }
-
     const placeholder = (
       <LoadingPlaceholder
         loading
@@ -134,9 +113,10 @@ const Render = memo<RenderProps>(
         <Flexbox gap={8}>
           <ToolRender
             content={result.content || ''}
+            error={result.error}
             messageId={toolMessageId}
             pluginState={result.state}
-            showCustomToolRender={showCustomToolRender}
+            showCustomToolRender={result.error ? false : showCustomToolRender}
             toolCallId={toolCallId}
             plugin={{
               apiName,

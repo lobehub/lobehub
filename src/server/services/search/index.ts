@@ -109,7 +109,18 @@ export class SearchService {
    * Query for search results
    */
   async query(query: string, params?: SearchParams) {
-    return this.searchImpl.query(query, params);
+    try {
+      return await this.searchImpl.query(query, params);
+    } catch (e) {
+      console.error('[SearchService] query failed:', (e as Error).message);
+      return {
+        costTime: 0,
+        errorDetail: (e as Error).message,
+        query,
+        resultNumbers: 0,
+        results: [],
+      };
+    }
   }
 
   async webSearch({ query, searchCategories, searchEngines, searchTimeRange }: SearchQuery) {

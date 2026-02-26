@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { SEARCH_SEARXNG_NOT_CONFIG } from '@lobechat/types';
-import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolsEnv } from '@/envs/tools';
@@ -80,19 +79,22 @@ describe('searchRouter', () => {
   });
 
   describe('query', () => {
-    it('should throw error if SEARXNG_URL is not configured', async () => {
+    it('should return error detail if SEARXNG_URL is not configured', async () => {
       // @ts-ignore
       toolsEnv.SEARXNG_URL = undefined;
 
       const caller = searchRouter.createCaller(mockContext as any);
 
-      await expect(
-        caller.query({
-          query: 'test query',
-        }),
-      ).rejects.toThrow(
-        new TRPCError({ code: 'NOT_IMPLEMENTED', message: SEARCH_SEARXNG_NOT_CONFIG }),
-      );
+      const result = await caller.query({
+        query: 'test query',
+      });
+
+      expect(result).toMatchObject({
+        errorDetail: SEARCH_SEARXNG_NOT_CONFIG,
+        query: 'test query',
+        resultNumbers: 0,
+        results: [],
+      });
     });
 
     it('should return search results successfully', async () => {
@@ -166,18 +168,23 @@ describe('searchRouter', () => {
       });
     });
 
-    it('should handle search errors', async () => {
+    it('should return error detail when search fails', async () => {
       (SearXNGClient as any).mockImplementation(() => ({
         search: vi.fn().mockRejectedValue(new Error('Search failed')),
       }));
 
       const caller = searchRouter.createCaller(mockContext as any);
 
-      await expect(
-        caller.query({
-          query: 'test query',
-        }),
-      ).rejects.toThrow(new TRPCError({ code: 'SERVICE_UNAVAILABLE', message: 'Search failed' }));
+      const result = await caller.query({
+        query: 'test query',
+      });
+
+      expect(result).toMatchObject({
+        errorDetail: 'Search failed',
+        query: 'test query',
+        resultNumbers: 0,
+        results: [],
+      });
     });
   });
 });

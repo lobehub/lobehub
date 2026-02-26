@@ -10,6 +10,7 @@ export interface ActivateToolsParams {
 
 export interface ActivatedToolInfo {
   apiCount: number;
+  avatar?: string;
   identifier: string;
   name: string;
 }

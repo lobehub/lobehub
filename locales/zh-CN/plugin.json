@@ -178,6 +178,7 @@
   "builtins.lobe-skills.apiName.runSkill": "激活技能",
   "builtins.lobe-skills.apiName.searchSkill": "搜索技能",
   "builtins.lobe-skills.title": "技能",
+  "builtins.lobe-tools.apiName.activateTools": "激活工具",
   "builtins.lobe-user-memory.apiName.addContextMemory": "添加情境记忆",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "添加经验记忆",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "添加身份记忆",

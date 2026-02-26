@@ -83,8 +83,11 @@ const Tool = memo<GroupToolProps>(
     );
 
     // Fallback: arguments completed but no final result yet
+    const hasError = !!result?.error;
     const isToolCallingFallback =
-      !isArgumentsStreaming && (!result || result.content === LOADING_FLAT || !result.content);
+      !hasError &&
+      !isArgumentsStreaming &&
+      (!result || result.content === LOADING_FLAT || !result.content);
     const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
 
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);

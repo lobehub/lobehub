@@ -65,7 +65,10 @@ export class SearXNGClient {
         return await response.json();
       }
 
-      throw new Error(`Failed to search: ${response.statusText}`);
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Failed to search: ${response.status} ${response.statusText}${body ? ` - ${body}` : ''}`,
+      );
     } catch (error) {
       console.error('Error searching:', error);
       throw error;

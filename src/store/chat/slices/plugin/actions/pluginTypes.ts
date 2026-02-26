@@ -144,11 +144,14 @@ export class PluginTypesActionImpl {
           topicId,
         });
 
+      // When error exists but content is empty, backfill error message into content
+      const content = result.content || result.error?.message || '';
+
       // Use optimisticUpdateToolMessage to batch update content, state, error, metadata
       await optimisticUpdateToolMessage(
         id,
         {
-          content: result.content,
+          content,
           metadata: result.metadata,
           pluginError: result.error
             ? {
@@ -307,7 +310,7 @@ export class PluginTypesActionImpl {
     if (!data) return;
 
     // Truncate content to prevent context overflow
-    const truncatedContent = truncateToolResult(data.content);
+    const truncatedContent = truncateToolResult(data.content || (data.error as any)?.message || '');
 
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;
@@ -379,20 +382,21 @@ export class PluginTypesActionImpl {
     // If error occurred, exit
     if (!data) return;
 
+    const remoteContent = data.content || (data.error as any)?.message || '';
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call
     await this.#get().optimisticUpdateToolMessage(
       id,
       {
-        content: data.content,
+        content: remoteContent,
         pluginError: data.success ? undefined : data.error,
         pluginState: data.success ? data.state : undefined,
       },
       context,
     );
 
-    return data.content;
+    return remoteContent;
   };
 
   internal_callPluginApi = async (
