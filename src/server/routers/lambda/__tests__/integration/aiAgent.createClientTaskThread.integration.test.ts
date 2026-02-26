@@ -294,7 +294,7 @@ describe('createClientTaskThread Integration', () => {
       });
 
       // Create second parent message for second thread
-      const [secondParentMsg] = await serverDB
+      const [secondParentMsg] = (await serverDB
         .insert(messages)
         .values({
           userId,
@@ -303,7 +303,7 @@ describe('createClientTaskThread Integration', () => {
           topicId: testTopicId,
           agentId: testAgentId,
         })
-        .returning();
+        .returning()) as any;
 
       // Create second thread
       const result2 = await caller.createClientTaskThread({

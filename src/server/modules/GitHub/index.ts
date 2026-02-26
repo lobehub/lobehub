@@ -48,7 +48,7 @@ export class GitHub {
     // Handle full URL formats
     // Capture: owner, repo, branch, and optional path after branch
     const match = url.match(
-      /(?:https?:\/\/)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/tree\/([^/]+)(?:\/(.+))?)?$/,
+      /(?:https?:\/\/)?github\.com\/([^/]+)\/([^/]+)(?:\/tree\/([^/]+)(?:\/(.+))?)?$/,
     );
 
     if (!match) {
