@@ -189,23 +189,15 @@ export const createAgentExecutors = (context: {
       if (!operation) {
         throw new Error(`Operation not found: ${context.operationId}`);
       }
-      const topicId = operation.context.topicId;
-      const threadId = operation.context.threadId ?? undefined;
-      const groupId = operation.context.groupId;
-      const scope = operation.context.scope;
-      const subAgentId = operation.context.subAgentId;
+      const { subAgentId, groupId, topicId } = operation.context;
       const abortController = operation.abortController;
 
-      let agentId: string;
-      if (groupId && subAgentId) {
-        agentId = subAgentId;
-      } else {
-        agentId = operation.context.agentId!;
-      }
+      // In group orchestration, subAgentId is the actual responding agent
+      const agentId = groupId && subAgentId ? subAgentId : operation.context.agentId!;
 
       const traceId = operation.metadata?.traceId;
 
-      const fetchContext = { agentId, topicId, threadId, groupId, scope };
+      const fetchContext = { ...operation.context, agentId };
 
       const { agentConfig: agentConfigData, chatConfig } = context.agentConfig;
 
