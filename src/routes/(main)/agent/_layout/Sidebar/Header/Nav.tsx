@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
+import { BlocksIcon, MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -12,8 +12,6 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useActionSWR } from '@/libs/swr';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -21,15 +19,15 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
-  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const params = useParams();
   const agentId = params.aid;
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
+  const isIntegrationActive = pathname.includes('/integration');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const hideProfile = isInbox || !isAgentEditable;
+  const hideProfile = !isAgentEditable;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
 
@@ -57,6 +55,17 @@ const Nav = memo(() => {
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
             router.push(urlJoin('/agent', agentId!, 'profile'));
+          }}
+        />
+      )}
+      {!hideProfile && (
+        <NavItem
+          active={isIntegrationActive}
+          icon={BlocksIcon}
+          title={t('tab.integration')}
+          onClick={() => {
+            switchTopic(null, { skipRefreshMessage: true });
+            router.push(urlJoin('/agent', agentId!, 'integration'));
           }}
         />
       )}

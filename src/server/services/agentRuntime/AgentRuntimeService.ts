@@ -251,6 +251,7 @@ export class AgentRuntimeService {
       modelRuntimeConfig,
       userId,
       autoStart = true,
+      stream,
       tools,
       initialMessages = [],
       appContext,
@@ -280,6 +281,7 @@ export class AgentRuntimeService {
           evalContext,
           // need be removed
           modelRuntimeConfig,
+          stream,
           userId,
           workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
@@ -514,83 +516,152 @@ export class AgentRuntimeService {
         type: 'step_complete',
       });
 
-      // Build enhanced step completion log
+      // Build enhanced step completion log & presentation data
       const { usage, cost } = stepResult.newState;
       const phase = stepResult.nextContext?.phase;
+      const isToolPhase = phase === 'tool_result' || phase === 'tools_batch_result';
+
+      // --- Extract presentation fields from step result ---
+      let content: string | undefined;
+      let reasoning: string | undefined;
+      let toolsCalling:
+        | Array<{ apiName: string; arguments?: string; identifier: string }>
+        | undefined;
+      let toolsResult: Array<{ apiName: string; identifier: string; output?: string }> | undefined;
       let stepSummary: string;
 
       if (phase === 'tool_result') {
         const toolPayload = stepResult.nextContext?.payload as any;
         const toolCall = toolPayload?.toolCall;
-        const toolName = toolCall ? `${toolCall.identifier}/${toolCall.apiName}` : 'unknown';
-        stepSummary = `[tool] ${toolName}`;
+        const identifier = toolCall?.identifier || 'unknown';
+        const apiName = toolCall?.apiName || 'unknown';
+        const output = toolPayload?.result;
+        toolsResult = [
+          {
+            apiName,
+            identifier,
+            output:
+              typeof output === 'string'
+                ? output
+                : output != null
+                  ? JSON.stringify(output)
+                  : undefined,
+          },
+        ];
+        stepSummary = `[tool] ${identifier}/${apiName}`;
       } else if (phase === 'tools_batch_result') {
         const nextPayload = stepResult.nextContext?.payload as any;
         const toolCount = nextPayload?.toolCount || 0;
-        const toolResults = nextPayload?.toolResults || [];
-        const toolNames = toolResults.map((r: any) => {
-          const tc = r.toolCall;
-          return tc ? `${tc.identifier}/${tc.apiName}` : 'unknown';
-        });
+        const rawToolResults = nextPayload?.toolResults || [];
+        const mappedResults: Array<{ apiName: string; identifier: string; output?: string }> =
+          rawToolResults.map((r: any) => {
+            const tc = r.toolCall;
+            const output = r.result;
+            return {
+              apiName: tc?.apiName || 'unknown',
+              identifier: tc?.identifier || 'unknown',
+              output:
+                typeof output === 'string'
+                  ? output
+                  : output != null
+                    ? JSON.stringify(output)
+                    : undefined,
+            };
+          });
+        toolsResult = mappedResults;
+        const toolNames = mappedResults.map((r) => `${r.identifier}/${r.apiName}`);
         stepSummary = `[tools×${toolCount}] ${toolNames.join(', ')}`;
       } else {
         // LLM result
         const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
-        const content = (llmEvent as any)?.result?.content || '';
-        const reasoning = (llmEvent as any)?.result?.reasoning || '';
-        const toolCalling = (llmEvent as any)?.result?.tool_calls;
-        const hasToolCalls = Array.isArray(toolCalling) && toolCalling.length > 0;
+        content = (llmEvent as any)?.result?.content || undefined;
+        reasoning = (llmEvent as any)?.result?.reasoning || undefined;
+
+        // Use parsed ChatToolPayload from payload (has identifier + apiName)
+        const payloadToolsCalling = (stepResult.nextContext?.payload as any)?.toolsCalling as
+          | Array<{ apiName: string; arguments: string; identifier: string }>
+          | undefined;
+        const hasToolCalls = Array.isArray(payloadToolsCalling) && payloadToolsCalling.length > 0;
+
+        if (hasToolCalls) {
+          toolsCalling = payloadToolsCalling.map((tc) => ({
+            apiName: tc.apiName,
+            arguments: tc.arguments,
+            identifier: tc.identifier,
+          }));
+        }
 
         const parts: string[] = [];
-
-        // Thinking preview
         if (reasoning) {
           const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
           parts.push(`💭 "${thinkPreview}"`);
         }
-
         if (!content && hasToolCalls) {
-          const names = toolCalling.map((tc: any) => tc.function?.name || 'unknown');
-          parts.push(`→ call tools: ${names.join(', ')}`);
+          parts.push(
+            `→ call tools: ${toolsCalling!.map((tc) => `${tc.identifier}|${tc.apiName}`).join(', ')}`,
+          );
         } else if (content) {
           const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
           parts.push(`"${preview}"`);
         }
-
         stepSummary = `[llm] ${parts.join(' | ') || '(empty)'}`;
       }
 
-      const rawTokens = usage?.llm?.tokens?.total ?? 0;
-      const totalTokens =
-        rawTokens >= 1_000_000
-          ? `${(rawTokens / 1_000_000).toFixed(1)}m`
-          : rawTokens >= 1000
-            ? `${(rawTokens / 1000).toFixed(1)}k`
-            : String(rawTokens);
-      const totalCost = (cost?.total ?? 0).toFixed(4);
+      // --- Step-level usage from nextContext.stepUsage ---
+      const stepUsage = stepResult.nextContext?.stepUsage as Record<string, number> | undefined;
+
+      // --- Cumulative usage ---
+      const tokens = usage?.llm?.tokens;
+      const totalInputTokens = tokens?.input ?? 0;
+      const totalOutputTokens = tokens?.output ?? 0;
+      const totalTokensNum = tokens?.total ?? 0;
+      const totalCostNum = cost?.total ?? 0;
+
+      const totalTokensStr =
+        totalTokensNum >= 1_000_000
+          ? `${(totalTokensNum / 1_000_000).toFixed(1)}m`
+          : totalTokensNum >= 1000
+            ? `${(totalTokensNum / 1000).toFixed(1)}k`
+            : String(totalTokensNum);
       const llmCalls = usage?.llm?.apiCalls ?? 0;
-      const toolCalls = usage?.tools?.totalCalls ?? 0;
+      const toolCallCount = usage?.tools?.totalCalls ?? 0;
 
       log(
         '[%s][%d] completed %s | total: %s tokens / $%s | llm×%d | tools×%d',
         operationId,
         stepIndex,
         stepSummary,
-        totalTokens,
-        totalCost,
+        totalTokensStr,
+        totalCostNum.toFixed(4),
         llmCalls,
-        toolCalls,
+        toolCallCount,
       );
 
-      // Call onAfterStep callback
+      // Call onAfterStep callback with presentation data
       if (callbacks?.onAfterStep) {
         try {
           await callbacks.onAfterStep({
+            content,
+            executionTimeMs: Date.now() - startAt,
             operationId,
+            reasoning,
             shouldContinue,
             state: stepResult.newState,
+            stepCost: stepUsage?.cost ?? undefined,
             stepIndex,
+            stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
+            stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
             stepResult,
+            stepTotalTokens: stepUsage?.totalTokens ?? undefined,
+            stepType: isToolPhase ? 'call_tool' : 'call_llm',
+            thinking: !isToolPhase,
+            toolsCalling,
+            toolsResult,
+            totalCost: totalCostNum,
+            totalInputTokens,
+            totalOutputTokens,
+            totalSteps: stepResult.newState.stepCount ?? 0,
+            totalTokens: totalTokensNum,
           });
         } catch (callbackError) {
           log('[%s] onAfterStep callback error: %O', operationId, callbackError);
@@ -1047,6 +1118,7 @@ export class AgentRuntimeService {
       operationId,
       serverDB: this.serverDB,
       stepIndex,
+      stream: metadata?.stream,
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,
       topicId: metadata?.topicId,

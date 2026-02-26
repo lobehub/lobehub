@@ -370,6 +370,7 @@ export default {
   'supervisor.todoList.allComplete': 'All tasks completed',
   'supervisor.todoList.title': 'Tasks Completed',
   'tab.groupProfile': 'Group Profile',
+  'tab.integration': 'Integration',
   'tab.profile': 'Agent Profile',
   'tab.search': 'Search',
   'task.activity.calling': 'Calling Skill...',
