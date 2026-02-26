@@ -1,5 +1,5 @@
-import { type SearchParams, type SearchQuery } from '@lobechat/types';
-import { type CrawlImplType, type CrawlUniformResult } from '@lobechat/web-crawler';
+import type { SearchParams, SearchQuery } from '@lobechat/types';
+import type { Crawler, CrawlImplType, CrawlUniformResult } from '@lobechat/web-crawler';
 import pMap from 'p-map';
 
 import { toolsEnv } from '@/envs/tools';
@@ -57,9 +57,7 @@ export class SearchService {
   }
 
   private async crawlWithRetry(
-    crawler: {
-      crawl: (input: { impls?: CrawlImplType[]; url: string }) => Promise<CrawlUniformResult>;
-    },
+    crawler: Crawler,
     url: string,
     impls?: CrawlImplType[],
   ): Promise<CrawlUniformResult> {
@@ -95,8 +93,8 @@ export class SearchService {
     };
   }
 
-  private isFailedCrawlResult(result: CrawlUniformResult) {
-    return 'errorType' in result.data || 'errorMessage' in result.data;
+  private isFailedCrawlResult(result: CrawlUniformResult): boolean {
+    return !('contentType' in result.data);
   }
 
   private get searchImpls() {
