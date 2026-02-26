@@ -38,7 +38,8 @@ lobe-chat/
 
 ### Git Workflow
 
-- The current release branch is `next` until v2.0.0 is officially released
+- **Branch strategy**: `canary` is the development branch (cloud production); `main` is the release branch (periodically cherry-picks from canary)
+- New branches should be created from `canary`; PRs should target `canary`
 - Use rebase for git pull
 - Git commit messages should prefix with gitmoji
 - Git branch name format: `username/feat/feature-name`

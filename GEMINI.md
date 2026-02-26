@@ -33,6 +33,8 @@ lobe-chat/
 
 ### Git Workflow
 
+- **Branch strategy**: `canary` is the development branch (cloud production); `main` is the release branch (periodically cherry-picks from canary)
+- New branches should be created from `canary`; PRs should target `canary`
 - Use rebase for `git pull`
 - Commit messages: prefix with gitmoji
 - Branch format: `<type>/<feature-name>`
