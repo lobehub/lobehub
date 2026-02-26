@@ -1,11 +1,14 @@
 import { type SearchParams, type SearchQuery } from '@lobechat/types';
-import { type CrawlImplType } from '@lobechat/web-crawler';
+import { type CrawlImplType, type CrawlUniformResult } from '@lobechat/web-crawler';
 import pMap from 'p-map';
 
 import { toolsEnv } from '@/envs/tools';
 
 import { type SearchImplType, type SearchServiceImpl } from './impls';
 import { createSearchServiceImpl } from './impls';
+
+const DEFAULT_CRAWL_CONCURRENCY = 3;
+const DEFAULT_CRAWLER_RETRY = 1;
 
 const parseImplEnv = (envString: string = '') => {
   // Handle full-width commas and extra whitespace
@@ -24,6 +27,14 @@ export class SearchService {
     return parseImplEnv(toolsEnv.CRAWLER_IMPLS);
   }
 
+  private get crawlConcurrency() {
+    return toolsEnv.CRAWL_CONCURRENCY || DEFAULT_CRAWL_CONCURRENCY;
+  }
+
+  private get crawlerRetry() {
+    return toolsEnv.CRAWLER_RETRY ?? DEFAULT_CRAWLER_RETRY;
+  }
+
   constructor() {
     const impls = this.searchImpls;
     // TODO: need use turn mode
@@ -37,12 +48,55 @@ export class SearchService {
     const results = await pMap(
       input.urls,
       async (url) => {
-        return await crawler.crawl({ impls: input.impls, url });
+        return await this.crawlWithRetry(crawler, url, input.impls);
       },
-      { concurrency: 3 },
+      { concurrency: this.crawlConcurrency },
     );
 
     return { results };
+  }
+
+  private async crawlWithRetry(
+    crawler: {
+      crawl: (input: { impls?: CrawlImplType[]; url: string }) => Promise<CrawlUniformResult>;
+    },
+    url: string,
+    impls?: CrawlImplType[],
+  ): Promise<CrawlUniformResult> {
+    const maxAttempts = this.crawlerRetry + 1;
+    let lastResult: CrawlUniformResult | undefined;
+    let lastError: Error | undefined;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const result = await crawler.crawl({ impls, url });
+        lastResult = result;
+
+        if (!this.isFailedCrawlResult(result)) {
+          return result;
+        }
+      } catch (error) {
+        lastError = error as Error;
+      }
+    }
+
+    if (lastResult) {
+      return lastResult;
+    }
+
+    return {
+      crawler: 'unknown',
+      data: {
+        content: `Fail to crawl the page. Error type: ${lastError?.name || 'UnknownError'}, error message: ${lastError?.message}`,
+        errorMessage: lastError?.message,
+        errorType: lastError?.name || 'UnknownError',
+      },
+      originalUrl: url,
+    };
+  }
+
+  private isFailedCrawlResult(result: CrawlUniformResult) {
+    return 'errorType' in result.data || 'errorMessage' in result.data;
   }
 
   private get searchImpls() {
@@ -58,17 +112,17 @@ export class SearchService {
 
   async webSearch({ query, searchCategories, searchEngines, searchTimeRange }: SearchQuery) {
     let data = await this.query(query, {
-      searchCategories: searchCategories,
-      searchEngines: searchEngines,
-      searchTimeRange: searchTimeRange,
+      searchCategories,
+      searchEngines,
+      searchTimeRange,
     });
 
     // First retry: remove search engine restrictions if no results found
     if (data.results.length === 0 && searchEngines && searchEngines?.length > 0) {
       const paramsExcludeSearchEngines = {
-        searchCategories: searchCategories,
+        searchCategories,
         searchEngines: undefined,
-        searchTimeRange: searchTimeRange,
+        searchTimeRange,
       };
       data = await this.query(query, paramsExcludeSearchEngines);
     }
