@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import * as path from 'node:path';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -32,5 +32,30 @@ describe('htmlToMarkdown', () => {
 
       expect(data).toMatchSnapshot();
     }, 20000);
+  });
+
+  it('should truncate HTML exceeding 1 MB', () => {
+    // Create HTML slightly over 1 MB
+    const maxSize = 1024 * 1024;
+    const largeContent = 'x'.repeat(maxSize + 1000);
+    const html = `<html><body><p>${largeContent}</p></body></html>`;
+
+    // Should not throw - the function handles large HTML by truncating
+    const result = htmlToMarkdown(html, { url: 'https://example.com', filterOptions: {} });
+
+    // Verify content was produced (truncated HTML is still parseable)
+    expect(result).toBeDefined();
+    expect(result.content).toBeDefined();
+    // The output content should be smaller than the input due to truncation
+    expect(result.content.length).toBeLessThan(html.length);
+  }, 20000);
+
+  it('should not truncate HTML under 1 MB', () => {
+    const html = '<html><body><p>Small content</p></body></html>';
+
+    const result = htmlToMarkdown(html, { url: 'https://example.com', filterOptions: {} });
+
+    expect(result).toBeDefined();
+    expect(result.content).toContain('Small content');
   });
 });

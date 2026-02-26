@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolsEnv } from '@/envs/tools';
 
-import { createSearchServiceImpl,SearchImplType } from './impls';
+import { createSearchServiceImpl, SearchImplType } from './impls';
 import { SearchService } from './index';
 
 // Mock dependencies
@@ -11,7 +11,9 @@ vi.mock('@lobechat/web-crawler');
 vi.mock('./impls');
 vi.mock('@/envs/tools', () => ({
   toolsEnv: {
+    CRAWL_CONCURRENCY: undefined,
     CRAWLER_IMPLS: '',
+    CRAWLER_RETRY: undefined,
     SEARCH_PROVIDERS: '',
   },
 }));
@@ -279,10 +281,9 @@ describe('SearchService', () => {
   describe('crawlPages', () => {
     it('should crawl multiple pages concurrently', async () => {
       const mockCrawlResult = {
-        content: 'Page content',
-        description: 'Page description',
-        title: 'Page title',
-        url: 'https://example.com',
+        crawler: 'naive',
+        data: { content: 'Page content', contentType: 'text' },
+        originalUrl: 'https://example.com',
       };
 
       const mockCrawler = {
@@ -304,8 +305,13 @@ describe('SearchService', () => {
     it('should use crawler implementations from env', async () => {
       vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,reader';
 
+      const mockSuccessResult = {
+        crawler: 'jina',
+        data: { content: 'ok', contentType: 'text' },
+        originalUrl: 'https://example.com',
+      };
       const mockCrawler = {
-        crawl: vi.fn().mockResolvedValue({}),
+        crawl: vi.fn().mockResolvedValue(mockSuccessResult),
       };
       vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
 
@@ -317,8 +323,13 @@ describe('SearchService', () => {
     });
 
     it('should pass impls parameter to crawler.crawl', async () => {
+      const mockSuccessResult = {
+        crawler: 'jina',
+        data: { content: 'ok', contentType: 'text' },
+        originalUrl: 'https://example.com',
+      };
       const mockCrawler = {
-        crawl: vi.fn().mockResolvedValue({}),
+        crawl: vi.fn().mockResolvedValue(mockSuccessResult),
       };
       vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
 
@@ -333,6 +344,134 @@ describe('SearchService', () => {
         impls: ['jina'],
         url: 'https://example.com',
       });
+    });
+
+    it('should use CRAWL_CONCURRENCY from env', async () => {
+      vi.mocked(toolsEnv).CRAWL_CONCURRENCY = 1;
+
+      const mockCrawler = {
+        crawl: vi.fn().mockResolvedValue({
+          crawler: 'naive',
+          data: { content: 'ok', contentType: 'text' },
+          originalUrl: 'https://example.com',
+        }),
+      };
+      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+
+      searchService = new SearchService();
+      const urls = ['https://a.com', 'https://b.com'];
+      await searchService.crawlPages({ urls });
+
+      // All URLs should still be crawled
+      expect(mockCrawler.crawl).toHaveBeenCalledTimes(2);
+    });
+
+    it('should retry on failed crawl results', async () => {
+      vi.mocked(toolsEnv).CRAWLER_RETRY = 1;
+
+      const failedResult = {
+        crawler: 'naive',
+        data: { content: 'Fail', errorType: 'NetworkError', errorMessage: 'timeout' },
+        originalUrl: 'https://example.com',
+      };
+      const successResult = {
+        crawler: 'naive',
+        data: { content: 'Page content', contentType: 'text' },
+        originalUrl: 'https://example.com',
+      };
+
+      const mockCrawler = {
+        crawl: vi.fn().mockResolvedValueOnce(failedResult).mockResolvedValueOnce(successResult),
+      };
+      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+
+      searchService = new SearchService();
+      const result = await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      expect(mockCrawler.crawl).toHaveBeenCalledTimes(2);
+      expect(result.results[0]).toBe(successResult);
+    });
+
+    it('should return last failed result after all retries exhausted', async () => {
+      vi.mocked(toolsEnv).CRAWLER_RETRY = 1;
+
+      const failedResult = {
+        crawler: 'naive',
+        data: { content: 'Fail', errorType: 'NetworkError', errorMessage: 'timeout' },
+        originalUrl: 'https://example.com',
+      };
+
+      const mockCrawler = {
+        crawl: vi.fn().mockResolvedValue(failedResult),
+      };
+      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+
+      searchService = new SearchService();
+      const result = await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      expect(mockCrawler.crawl).toHaveBeenCalledTimes(2); // 1 + 1 retry
+      expect(result.results[0]).toBe(failedResult);
+    });
+
+    it('should not retry when CRAWLER_RETRY is 0', async () => {
+      vi.mocked(toolsEnv).CRAWLER_RETRY = 0;
+
+      const failedResult = {
+        crawler: 'naive',
+        data: { content: 'Fail', errorType: 'Error', errorMessage: 'fail' },
+        originalUrl: 'https://example.com',
+      };
+
+      const mockCrawler = {
+        crawl: vi.fn().mockResolvedValue(failedResult),
+      };
+      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+
+      searchService = new SearchService();
+      const result = await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      expect(mockCrawler.crawl).toHaveBeenCalledTimes(1);
+      expect(result.results[0]).toBe(failedResult);
+    });
+
+    it('should handle crawl exceptions during retry', async () => {
+      vi.mocked(toolsEnv).CRAWLER_RETRY = 1;
+
+      const mockCrawler = {
+        crawl: vi.fn().mockRejectedValue(new Error('Network error')),
+      };
+      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+
+      searchService = new SearchService();
+      const result = await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      expect(mockCrawler.crawl).toHaveBeenCalledTimes(2);
+      expect(result.results[0].data).toMatchObject({
+        errorType: 'Error',
+        errorMessage: 'Network error',
+      });
+    });
+
+    it('should detect successful results by contentType presence', async () => {
+      vi.mocked(toolsEnv).CRAWLER_RETRY = 1;
+
+      const successResult = {
+        crawler: 'naive',
+        data: { content: 'Page content', contentType: 'text' },
+        originalUrl: 'https://example.com',
+      };
+
+      const mockCrawler = {
+        crawl: vi.fn().mockResolvedValue(successResult),
+      };
+      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+
+      searchService = new SearchService();
+      const result = await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      // Should not retry since result has contentType (successful)
+      expect(mockCrawler.crawl).toHaveBeenCalledTimes(1);
+      expect(result.results[0]).toBe(successResult);
     });
   });
 });

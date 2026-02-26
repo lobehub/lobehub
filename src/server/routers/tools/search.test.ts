@@ -46,6 +46,27 @@ describe('searchRouter', () => {
       expect(result.results[1]).toEqual({ content: 'test content' });
     });
 
+    it('should accept all supported crawler implementations', async () => {
+      const caller = searchRouter.createCaller(mockContext as any);
+
+      const allImpls = [
+        'browserless',
+        'exa',
+        'firecrawl',
+        'jina',
+        'naive',
+        'search1api',
+        'tavily',
+      ] as const;
+      for (const impl of allImpls) {
+        const result = await caller.crawlPages({
+          urls: ['http://test.com'],
+          impls: [impl],
+        });
+        expect(result.results).toHaveLength(1);
+      }
+    });
+
     it('should work without specifying impls', async () => {
       const caller = searchRouter.createCaller(mockContext as any);
 

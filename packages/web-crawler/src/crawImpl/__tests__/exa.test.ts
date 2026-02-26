@@ -9,6 +9,27 @@ vi.mock('../../utils/withTimeout', () => ({
   withTimeout: vi.fn(),
 }));
 
+/** Helper to create a mock Response with clone() and text() support */
+const createMockResponse = (
+  body: any,
+  opts: { ok: boolean; status?: number; statusText?: string } = { ok: true },
+) => {
+  const self: any = {
+    ok: opts.ok,
+    status: opts.status ?? (opts.ok ? 200 : 500),
+    statusText: opts.statusText ?? (opts.ok ? 'OK' : 'Internal Server Error'),
+    json: vi.fn().mockResolvedValue(body),
+    text: vi.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
+    clone: vi.fn(),
+  };
+  self.clone.mockReturnValue({
+    ...self,
+    json: vi.fn().mockResolvedValue(body),
+    text: vi.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
+  });
+  return self;
+};
+
 describe('exa crawler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -18,23 +39,20 @@ describe('exa crawler', () => {
   it('should successfully crawl content with API key', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        requestId: 'test-request-id',
-        results: [
-          {
-            id: 'test-id',
-            title: 'Test Article',
-            url: 'https://example.com',
-            text: 'This is a test article with enough content to pass the length check. '.repeat(3),
-            author: 'Test Author',
-            publishedDate: '2023-01-01',
-            summary: 'Test summary',
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      requestId: 'test-request-id',
+      results: [
+        {
+          id: 'test-id',
+          title: 'Test Article',
+          url: 'https://example.com',
+          text: 'This is a test article with enough content to pass the length check. '.repeat(3),
+          author: 'Test Author',
+          publishedDate: '2023-01-01',
+          summary: 'Test summary',
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -51,23 +69,20 @@ describe('exa crawler', () => {
       url: 'https://example.com',
     });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 30000);
   });
 
   it('should handle missing API key', async () => {
     // API key is undefined
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        results: [
-          {
-            title: 'Test Article',
-            url: 'https://example.com',
-            text: 'Test content with sufficient length. '.repeat(5),
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      results: [
+        {
+          title: 'Test Article',
+          url: 'https://example.com',
+          text: 'Test content with sufficient length. '.repeat(5),
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -75,19 +90,16 @@ describe('exa crawler', () => {
     await exa('https://example.com', { filterOptions: {} });
 
     // Check that fetch was called with empty API key header
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 30000);
   });
 
   it('should return undefined when no results are returned', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        requestId: 'test-request-id',
-        results: [],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      requestId: 'test-request-id',
+      results: [],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -108,18 +120,15 @@ describe('exa crawler', () => {
   it('should return undefined for short content', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        results: [
-          {
-            title: 'Test Article',
-            url: 'https://example.com',
-            text: 'Short', // Content too short
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      results: [
+        {
+          title: 'Test Article',
+          url: 'https://example.com',
+          text: 'Short', // Content too short
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -132,11 +141,11 @@ describe('exa crawler', () => {
   it('should throw PageNotFoundError for 404 status', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
+    const mockResponse = createMockResponse('Not Found', {
       ok: false,
       status: 404,
       statusText: 'Not Found',
-    };
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -149,11 +158,11 @@ describe('exa crawler', () => {
   it('should throw error for other HTTP errors', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
+    const mockResponse = createMockResponse('', {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
-    };
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -198,42 +207,37 @@ describe('exa crawler', () => {
     );
   });
 
-  it('should return undefined when JSON parsing fails', async () => {
+  it('should throw ResponseBodyParseError when JSON parsing fails', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
+    const mockResponse = createMockResponse('not json', { ok: true });
+    mockResponse.json = vi.fn().mockRejectedValue(new Error('Invalid JSON'));
+    mockResponse.clone.mockReturnValue({
+      ...mockResponse,
       json: vi.fn().mockRejectedValue(new Error('Invalid JSON')),
-    };
+      text: vi.fn().mockResolvedValue('not json'),
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const result = await exa('https://example.com', { filterOptions: {} });
-
-    expect(result).toBeUndefined();
-    expect(consoleSpy).toHaveBeenCalled();
-
-    consoleSpy.mockRestore();
+    await expect(exa('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      'Exa returned non-JSON response: not json',
+    );
   });
 
   it('should use result URL when available', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        results: [
-          {
-            title: 'Test Article',
-            url: 'https://redirected.example.com',
-            text: 'Test content with sufficient length. '.repeat(5),
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      results: [
+        {
+          title: 'Test Article',
+          url: 'https://redirected.example.com',
+          text: 'Test content with sufficient length. '.repeat(5),
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -246,18 +250,15 @@ describe('exa crawler', () => {
   it('should fallback to original URL when result URL is missing', async () => {
     process.env.EXA_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        results: [
-          {
-            title: 'Test Article',
-            text: 'Test content with sufficient length. '.repeat(5),
-            // url is missing
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      results: [
+        {
+          title: 'Test Article',
+          text: 'Test content with sufficient length. '.repeat(5),
+          // url is missing
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
