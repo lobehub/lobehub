@@ -812,9 +812,8 @@ export const MemoryManifest: BuiltinToolManifest = {
   identifier: 'lobe-user-memory',
   meta: {
     avatar: '🧠',
-    description: 'Remember user preferences, activities, and experiences across conversations',
-    readme:
-      'Build a personalized knowledge base about you. Remember preferences, track activities and experiences, store identity information, and recall relevant context in future conversations.',
+    description:
+      'Store and recall user preferences, activities, identities, and experiences across conversations',
     title: 'Memory',
   },
   systemRole: systemPrompt,

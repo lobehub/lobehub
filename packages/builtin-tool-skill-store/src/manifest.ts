@@ -95,7 +95,7 @@ export const SkillStoreManifest: BuiltinToolManifest = {
   identifier: SkillStoreIdentifier,
   meta: {
     avatar: '🏪',
-    description: 'Search and install skills from the LobeHub Market',
+    description: 'Browse and install agent skills from the LobeHub marketplace',
     title: 'Skill Store',
   },
   systemRole: systemPrompt,

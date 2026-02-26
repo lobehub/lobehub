@@ -534,7 +534,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toBe('Hello TestUser, missing: {{missing_var}}');
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toBe('Hello TestUser, missing: {{missing_var}}');
     });
 
     it('should not modify messages without placeholder variables', async () => {
@@ -554,7 +555,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toBe('Hello there, no variables here');
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toBe('Hello there, no variables here');
     });
 
     it('should process placeholder variables combined with other processors', async () => {
@@ -584,8 +586,9 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(Array.isArray(result[0].content)).toBe(true);
-      const content = result[0].content as any[];
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(Array.isArray(result[1].content)).toBe(true);
+      const content = result[1].content as any[];
 
       // Should contain processed placeholder variables in the text content
       expect(content[0].text).toContain('Hello TestUser, check this image from 2023-12-25');
@@ -647,9 +650,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      // Should keep all messages
-      expect(result).toHaveLength(5);
+      // Should keep all messages (plus system date)
+      expect(result).toHaveLength(6);
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         { content: 'Message 1', role: 'user' },
         { content: 'Response 1', role: 'assistant' },
         { content: 'Message 2', role: 'user' },
@@ -685,6 +689,7 @@ describe('contextEngineering', () => {
 
       // Should apply template to user message only
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: 'Template: Original user input - End',
           role: 'user',
@@ -694,7 +699,7 @@ describe('contextEngineering', () => {
           content: 'Assistant response',
         },
       ]);
-      expect(result[1].content).toBe('Assistant response'); // Unchanged
+      expect(result[2].content).toBe('Assistant response'); // Unchanged
     });
 
     it('should inject system role at the beginning', async () => {
@@ -715,9 +720,9 @@ describe('contextEngineering', () => {
         systemRole: 'You are a helpful assistant.',
       });
 
-      // Should have system role at the beginning
+      // Should have system role at the beginning (with date appended)
       expect(result).toEqual([
-        { content: 'You are a helpful assistant.', role: 'system' },
+        { content: 'You are a helpful assistant.\n\n' + getCurrentDateContent(), role: 'system' },
         { content: 'User message', role: 'user' },
       ]);
     });
@@ -755,10 +760,10 @@ describe('contextEngineering', () => {
         inputTemplate: 'Processed: {{text}}',
       });
 
-      // System role should be first, followed by all messages with input template applied to user messages
+      // System role should be first (with date appended), followed by all messages with input template applied to user messages
       expect(result).toEqual([
         {
-          content: 'System instructions.',
+          content: 'System instructions.\n\n' + getCurrentDateContent(),
           role: 'system',
         },
         {
@@ -793,8 +798,9 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      // Should pass message unchanged
+      // Should pass message unchanged (with system date prepended)
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: 'Simple message',
           role: 'user',
@@ -834,10 +840,10 @@ describe('contextEngineering', () => {
         systemRole: 'System role here.',
       });
 
-      // Should have system role + all messages
+      // Should have system role (with date) + all messages
       expect(result).toEqual([
         {
-          content: 'System role here.',
+          content: 'System role here.\n\n' + getCurrentDateContent(),
           role: 'system',
         },
         {
@@ -874,8 +880,9 @@ describe('contextEngineering', () => {
         inputTemplate: '<%- invalid javascript syntax %>',
       });
 
-      // Should keep original message when template fails
+      // Should keep original message when template fails (with system date prepended)
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: 'User message',
           role: 'user',
