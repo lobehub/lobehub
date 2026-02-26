@@ -28,7 +28,7 @@ export class SearchService {
   }
 
   private get crawlConcurrency() {
-    return toolsEnv.CRAWL_CONCURRENCY || DEFAULT_CRAWL_CONCURRENCY;
+    return toolsEnv.CRAWL_CONCURRENCY ?? DEFAULT_CRAWL_CONCURRENCY;
   }
 
   private get crawlerRetry() {
@@ -93,6 +93,10 @@ export class SearchService {
     };
   }
 
+  /**
+   * A successful crawl result always includes `contentType` (e.g. 'text', 'json')
+   * in `result.data`, while a failed result contains `errorType`/`errorMessage` instead.
+   */
   private isFailedCrawlResult(result: CrawlUniformResult): boolean {
     return !('contentType' in result.data);
   }

@@ -1,5 +1,5 @@
 import type { CrawlImpl } from '../type';
-import { NetworkConnectionError, TimeoutError } from '../utils/errorType';
+import { toFetchError } from '../utils/errorType';
 import { parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
@@ -21,16 +21,7 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
       DEFAULT_TIMEOUT,
     );
   } catch (e) {
-    const error = e as Error;
-    if (error.message === 'fetch failed') {
-      throw new NetworkConnectionError();
-    }
-
-    if (error instanceof TimeoutError) {
-      throw error;
-    }
-
-    throw e;
+    throw toFetchError(e);
   }
 
   if (!res.ok) {

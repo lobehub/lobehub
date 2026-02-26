@@ -24,7 +24,7 @@ describe('browserless', () => {
 
   it('should throw NetworkConnectionError on fetch failed', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    global.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
 
     const { NetworkConnectionError } = await import('../../utils/errorType');
     await expect(browserless('https://example.com', { filterOptions: {} })).rejects.toThrow(

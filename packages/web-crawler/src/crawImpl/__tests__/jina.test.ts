@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMockResponse } from '../../test-utils';
 import * as withTimeoutModule from '../../utils/withTimeout';
 import { jina } from '../jina';
 
@@ -7,22 +8,6 @@ import { jina } from '../jina';
 vi.spyOn(withTimeoutModule, 'withTimeout').mockImplementation((fn) =>
   fn(new AbortController().signal),
 );
-
-/** Helper to create a mock Response with clone() support */
-const createMockResponse = (
-  body: any,
-  opts: { ok: boolean; status?: number; statusText?: string } = { ok: true },
-) => {
-  const self: any = {
-    ok: opts.ok,
-    status: opts.status ?? (opts.ok ? 200 : 500),
-    statusText: opts.statusText ?? (opts.ok ? 'OK' : 'Internal Server Error'),
-    json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
-    clone: () => createMockResponse(body, opts),
-  };
-  return self;
-};
 
 describe('jina crawler', () => {
   const mockFetch = vi.fn();

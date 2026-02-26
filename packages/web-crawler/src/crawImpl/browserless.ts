@@ -2,7 +2,7 @@ import qs from 'query-string';
 import urlJoin from 'url-join';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
+import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
@@ -60,16 +60,7 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
       DEFAULT_TIMEOUT,
     );
   } catch (e) {
-    const error = e as Error;
-    if (error.message === 'fetch failed') {
-      throw new NetworkConnectionError();
-    }
-
-    if (error instanceof TimeoutError) {
-      throw error;
-    }
-
-    throw e;
+    throw toFetchError(e);
   }
 
   if (!res.ok) {

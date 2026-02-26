@@ -183,7 +183,7 @@ describe('naive crawler', () => {
 
   it('should throw NetworkConnectionError for fetch failures', async () => {
     const { withTimeout } = await import('../../utils/withTimeout');
-    vi.mocked(withTimeout).mockRejectedValue(new Error('fetch failed'));
+    vi.mocked(withTimeout).mockRejectedValue(new TypeError('fetch failed'));
 
     await expect(naive('https://example.com', { filterOptions: {} })).rejects.toThrow(
       NetworkConnectionError,

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMockResponse } from '../../test-utils';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
 import { firecrawl } from '../firecrawl';
 
@@ -8,27 +9,6 @@ vi.mock('../../utils/withTimeout', () => ({
   DEFAULT_TIMEOUT: 30000,
   withTimeout: vi.fn(),
 }));
-
-/** Helper to create a mock Response with clone() and text() support */
-const createMockResponse = (
-  body: any,
-  opts: { ok: boolean; status?: number; statusText?: string } = { ok: true },
-) => {
-  const self: any = {
-    ok: opts.ok,
-    status: opts.status ?? (opts.ok ? 200 : 500),
-    statusText: opts.statusText ?? (opts.ok ? 'OK' : 'Internal Server Error'),
-    json: vi.fn().mockResolvedValue(body),
-    text: vi.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
-    clone: vi.fn(),
-  };
-  self.clone.mockReturnValue({
-    ...self,
-    json: vi.fn().mockResolvedValue(body),
-    text: vi.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
-  });
-  return self;
-};
 
 describe('firecrawl crawler', () => {
   beforeEach(() => {
@@ -194,7 +174,7 @@ describe('firecrawl crawler', () => {
     process.env.FIRECRAWL_API_KEY = 'test-api-key';
 
     const { withTimeout } = await import('../../utils/withTimeout');
-    vi.mocked(withTimeout).mockRejectedValue(new Error('fetch failed'));
+    vi.mocked(withTimeout).mockRejectedValue(new TypeError('fetch failed'));
 
     await expect(firecrawl('https://example.com', { filterOptions: {} })).rejects.toThrow(
       NetworkConnectionError,
