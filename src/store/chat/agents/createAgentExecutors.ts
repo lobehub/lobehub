@@ -45,7 +45,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getFileStoreState } from '@/store/file/store';
 import { sleep } from '@/utils/sleep';
 
-import { topicSelectors } from '../selectors';
 import { StreamingHandler } from './StreamingHandler';
 import { type StreamChunk } from './types/streaming';
 
@@ -102,7 +101,6 @@ export const createAgentExecutors = (context: {
     return opContext.subAgentId || opContext.agentId;
   };
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const executors: Partial<Record<AgentInstruction['type'], InstructionExecutor>> = {
     /**
      * Custom call_llm executor
@@ -301,10 +299,6 @@ export const createAgentExecutors = (context: {
 
       const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
 
-      const historySummary = chatConfig.enableCompressHistory
-        ? topicSelectors.currentActiveTopicSummary(context.get())
-        : undefined;
-
       // Expand dynamically activated tools (from lobe-tools activateTools API)
       // and merge them into the agent config for this LLM call
       const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
@@ -312,6 +306,7 @@ export const createAgentExecutors = (context: {
 
       if (activatedToolIds?.length && context.toolsEngine) {
         const additional = context.toolsEngine.generateToolsDetailed({
+          context: { isExplicitActivation: true },
           model: agentConfigData.model,
           provider: agentConfigData.provider!,
           skipDefaultTools: true,
@@ -352,7 +347,6 @@ export const createAgentExecutors = (context: {
           topicId: topicId ?? undefined,
           ...agentConfigData.params,
         },
-        historySummary: historySummary?.content,
         initialContext: runtimeContext?.initialContext,
         stepContext: runtimeContext?.stepContext,
         trace: {

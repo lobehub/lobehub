@@ -552,11 +552,6 @@
       "count": 1
     }
   },
-  "src/store/chat/agents/createAgentExecutors.ts": {
-    "sort-keys-fix/sort-keys-fix": {
-      "count": 1
-    }
-  },
   "src/store/chat/slices/aiAgent/actions/groupOrchestration.ts": {
     "no-unused-private-class-members": {
       "count": 1
