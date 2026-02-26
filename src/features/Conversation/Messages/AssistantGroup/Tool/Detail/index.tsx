@@ -113,7 +113,6 @@ const Render = memo<RenderProps>(
         <Flexbox gap={8}>
           <ToolRender
             content={result.content || ''}
-            error={result.error}
             messageId={toolMessageId}
             pluginState={result.state}
             showCustomToolRender={result.error ? false : showCustomToolRender}
