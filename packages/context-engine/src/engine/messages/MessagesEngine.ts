@@ -153,6 +153,13 @@ export class MessagesEngine {
     const isGTDPlanEnabled = gtd?.enabled && gtd?.plan;
     const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
 
+    // System date is redundant when web-browsing or memory tools are enabled,
+    // as they already include current date in their system prompts
+    const toolIds = toolsConfig?.tools || [];
+    const hasDateAwareTools =
+      toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
+    const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+
     return [
       // =============================================
       // Phase 1: System Role Injection
@@ -165,7 +172,7 @@ export class MessagesEngine {
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
 
       // 3. System date injection (appends current date to system message)
-      new SystemDateProvider({ enabled: enableSystemDate !== false }),
+      new SystemDateProvider({ enabled: isSystemDateEnabled }),
 
       // =============================================
       // Phase 2: First User Message Context Injection
