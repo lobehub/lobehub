@@ -1,8 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC, type ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso } from 'react-virtuoso';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 
@@ -37,7 +36,6 @@ export const List: FC<ListProps> = ({
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
 
-  const [isScrolling, setIsScrolling] = useState(false);
   const enabledList = useEnabledChatModels();
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
@@ -56,45 +54,28 @@ export const List: FC<ListProps> = ({
 
   const activeKey = menuKey(provider, model);
 
-  const handleScrollingStateChange = useCallback((scrolling: boolean) => {
-    setIsScrolling(scrolling);
-  }, []);
-
-  const itemContent = useCallback(
-    (index: number) => {
-      const item = listItems[index];
-      return (
-        <ListItemRenderer
-          activeKey={activeKey}
-          extraControls={extraControls}
-          isScrolling={isScrolling}
-          item={item}
-          newLabel={newLabel}
-          onClose={handleClose}
-          onModelChange={handleModelChange}
-        />
-      );
-    },
-    [activeKey, extraControls, handleClose, handleModelChange, isScrolling, listItems, newLabel],
-  );
-
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;
 
   return (
-    <Flexbox
-      className={styles.list}
-      flex={1}
-      style={{
-        height: listHeight,
-      }}
-    >
-      <Virtuoso
-        isScrolling={handleScrollingStateChange}
-        itemContent={itemContent}
-        overscan={200}
-        style={{ height: listHeight }}
-        totalCount={listItems.length}
-      />
+    <Flexbox className={styles.list} flex={1} style={{ height: listHeight }}>
+      {listItems.map((item, index) => (
+        <ListItemRenderer
+          activeKey={activeKey}
+          extraControls={extraControls}
+          item={item}
+          newLabel={newLabel}
+          key={menuKey(
+            'provider' in item && item.provider ? item.provider.id : '',
+            'model' in item && item.model
+              ? item.model.id
+              : 'data' in item && item.data
+                ? item.data.displayName
+                : `${item.type}-${index}`,
+          )}
+          onClose={handleClose}
+          onModelChange={handleModelChange}
+        />
+      ))}
     </Flexbox>
   );
 };
