@@ -1,5 +1,6 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
+import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 interface Search1ApiResponse {
@@ -51,30 +52,24 @@ export const search1api: CrawlImpl = async (url) => {
       throw new PageNotFoundError(res.statusText);
     }
 
-    throw new Error(`Search1API request failed with status ${res.status}: ${res.statusText}`);
+    throw await createHTTPStatusError(res, 'Search1API');
   }
 
-  try {
-    const data = (await res.json()) as Search1ApiResponse;
+  const data = await parseJSONResponse<Search1ApiResponse>(res, 'Search1API');
 
-    // Check if content is empty or too short
-    if (!data.results.content || data.results.content.length < 100) {
-      return;
-    }
-
-    return {
-      content: data.results.content,
-      contentType: 'text',
-      description: data.results.title,
-      // Using title as description since API doesn't provide a separate description
-      length: data.results.content.length,
-      siteName: new URL(url).hostname,
-      title: data.results.title,
-      url: data.results.link || url,
-    } satisfies CrawlSuccessResult;
-  } catch (error) {
-    console.error(error);
+  // Check if content is empty or too short
+  if (!data.results?.content || data.results.content.length < 100) {
+    return;
   }
 
-  return;
+  return {
+    content: data.results.content,
+    contentType: 'text',
+    description: data.results?.title,
+    // Using title as description since API doesn't provide a separate description
+    length: data.results.content.length,
+    siteName: new URL(url).hostname,
+    title: data.results?.title,
+    url: data.results?.link || url,
+  } satisfies CrawlSuccessResult;
 };

@@ -1,5 +1,6 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
+import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 interface ExaResults {
@@ -59,35 +60,29 @@ export const exa: CrawlImpl = async (url) => {
       throw new PageNotFoundError(res.statusText);
     }
 
-    throw new Error(`Exa request failed with status ${res.status}: ${res.statusText}`);
+    throw await createHTTPStatusError(res, 'Exa');
   }
 
-  try {
-    const data = (await res.json()) as ExaResponse;
+  const data = await parseJSONResponse<ExaResponse>(res, 'Exa');
 
-    if (!data.results || data.results.length === 0) {
-      console.warn('Exa API returned no results for URL:', url);
-      return;
-    }
-
-    const firstResult = data.results[0];
-
-    // Check if content is empty or too short
-    if (!firstResult.text || firstResult.text.length < 100) {
-      return;
-    }
-
-    return {
-      content: firstResult.text,
-      contentType: 'text',
-      length: firstResult.text.length,
-      siteName: new URL(url).hostname,
-      title: firstResult.title,
-      url: firstResult.url || url,
-    } satisfies CrawlSuccessResult;
-  } catch (error) {
-    console.error(error);
+  if (!data.results || data.results.length === 0) {
+    console.warn('Exa API returned no results for URL:', url);
+    return;
   }
 
-  return;
+  const firstResult = data.results[0];
+
+  // Check if content is empty or too short
+  if (!firstResult.text || firstResult.text.length < 100) {
+    return;
+  }
+
+  return {
+    content: firstResult.text,
+    contentType: 'text',
+    length: firstResult.text.length,
+    siteName: new URL(url).hostname,
+    title: firstResult.title,
+    url: firstResult.url || url,
+  } satisfies CrawlSuccessResult;
 };

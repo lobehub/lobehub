@@ -1,5 +1,6 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
+import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 interface TavilyResults {
@@ -60,35 +61,29 @@ export const tavily: CrawlImpl = async (url) => {
       throw new PageNotFoundError(res.statusText);
     }
 
-    throw new Error(`Tavily request failed with status ${res.status}: ${res.statusText}`);
+    throw await createHTTPStatusError(res, 'Tavily');
   }
 
-  try {
-    const data = (await res.json()) as TavilyResponse;
+  const data = await parseJSONResponse<TavilyResponse>(res, 'Tavily');
 
-    if (!data.results || data.results.length === 0) {
-      console.warn('Tavily API returned no results for URL:', url);
-      return;
-    }
-
-    const firstResult = data.results[0];
-
-    // Check if content is empty or too short
-    if (!firstResult.raw_content || firstResult.raw_content.length < 100) {
-      return;
-    }
-
-    return {
-      content: firstResult.raw_content,
-      contentType: 'text',
-      length: firstResult.raw_content.length,
-      siteName: new URL(url).hostname,
-      title: new URL(url).hostname,
-      url: firstResult.url || url,
-    } satisfies CrawlSuccessResult;
-  } catch (error) {
-    console.error(error);
+  if (!data.results || data.results.length === 0) {
+    console.warn('Tavily API returned no results for URL:', url);
+    return;
   }
 
-  return;
+  const firstResult = data.results[0];
+
+  // Check if content is empty or too short
+  if (!firstResult.raw_content || firstResult.raw_content.length < 100) {
+    return;
+  }
+
+  return {
+    content: firstResult.raw_content,
+    contentType: 'text',
+    length: firstResult.raw_content.length,
+    siteName: new URL(url).hostname,
+    title: new URL(url).hostname,
+    url: firstResult.url || url,
+  } satisfies CrawlSuccessResult;
 };
