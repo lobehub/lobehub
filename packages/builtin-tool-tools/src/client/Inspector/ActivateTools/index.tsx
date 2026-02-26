@@ -16,14 +16,9 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 2px;
     align-items: center;
 
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
     font-size: 14px;
     line-height: 18px;
-
-    background: ${cssVar.colorFillTertiary};
+    color: ${cssVar.colorText};
   `,
   tools: css`
     display: inline-flex;

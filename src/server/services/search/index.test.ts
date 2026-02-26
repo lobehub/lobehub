@@ -94,6 +94,20 @@ describe('SearchService', () => {
 
       expect(mockSearchImpl.query).toHaveBeenCalledWith('test query', params);
     });
+
+    it('should return errorDetail instead of throwing when impl fails', async () => {
+      mockSearchImpl.query.mockRejectedValue(new Error('Service unavailable'));
+
+      const result = await searchService.query('test query');
+
+      expect(result).toEqual({
+        costTime: 0,
+        errorDetail: 'Service unavailable',
+        query: 'test query',
+        resultNumbers: 0,
+        results: [],
+      });
+    });
   });
 
   describe('webSearch', () => {

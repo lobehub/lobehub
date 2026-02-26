@@ -66,6 +66,21 @@ export class SearXNGClient {
       }
 
       const body = await response.text().catch(() => '');
+
+      // SearXNG returns 500 for empty results, treat as normal empty response
+      if (body.toLowerCase().includes('empty results')) {
+        return {
+          answers: [],
+          corrections: [],
+          infoboxes: [],
+          number_of_results: 0,
+          query,
+          results: [],
+          suggestions: [],
+          unresponsive_engines: [],
+        };
+      }
+
       throw new Error(
         `Failed to search: ${response.status} ${response.statusText}${body ? ` - ${body}` : ''}`,
       );
