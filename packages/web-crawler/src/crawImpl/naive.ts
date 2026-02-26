@@ -61,6 +61,11 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   if (res.status === 404) {
     throw new PageNotFoundError(res.statusText);
   }
+
+  if (!res.ok) {
+    throw new Error(`Naive request failed with status ${res.status}: ${res.statusText}`);
+  }
+
   const type = res.headers.get('content-type');
 
   if (type?.includes('application/json')) {
@@ -74,7 +79,7 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
     }
 
     return {
-      content: content,
+      content,
       contentType: 'json',
       length: content.length,
       url,
@@ -91,8 +96,8 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
       return;
     }
 
-    // it's blocked by cloudflare
-    if (result.title !== 'Just a moment...') {
+    // It's blocked by Cloudflare.
+    if (result.title === 'Just a moment...') {
       return;
     }
 
