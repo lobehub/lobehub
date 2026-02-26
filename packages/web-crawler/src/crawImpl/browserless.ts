@@ -38,23 +38,25 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
 
   try {
     res = await withTimeout(
-      fetch(
-        qs.stringifyUrl({
-          query: {
-            blockAds: BROWSERLESS_BLOCK_ADS,
-            launch: JSON.stringify({ stealth: BROWSERLESS_STEALTH_MODE }),
-            token: BROWSERLESS_TOKEN,
+      (signal) =>
+        fetch(
+          qs.stringifyUrl({
+            query: {
+              blockAds: BROWSERLESS_BLOCK_ADS,
+              launch: JSON.stringify({ stealth: BROWSERLESS_STEALTH_MODE }),
+              token: BROWSERLESS_TOKEN,
+            },
+            url: urlJoin(BASE_URL, '/content'),
+          }),
+          {
+            body: JSON.stringify(input),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            method: 'POST',
+            signal,
           },
-          url: urlJoin(BASE_URL, '/content'),
-        }),
-        {
-          body: JSON.stringify(input),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          method: 'POST',
-        },
-      ),
+        ),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {

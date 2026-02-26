@@ -28,18 +28,20 @@ export const exa: CrawlImpl = async (url) => {
 
   try {
     res = await withTimeout(
-      fetch('https://api.exa.ai/contents', {
-        body: JSON.stringify({
-          livecrawl: 'fallback', // always, fallback
-          text: true,
-          urls: [url],
+      (signal) =>
+        fetch('https://api.exa.ai/contents', {
+          body: JSON.stringify({
+            livecrawl: 'fallback', // always, fallback
+            text: true,
+            urls: [url],
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': !apiKey ? '' : apiKey,
+          },
+          method: 'POST',
+          signal,
         }),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': !apiKey ? '' : apiKey,
-        },
-        method: 'POST',
-      }),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {

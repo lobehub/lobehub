@@ -9,13 +9,15 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
 
   try {
     res = await withTimeout(
-      fetch(`https://r.jina.ai/${url}`, {
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : '',
-          'x-send-from': 'LobeChat Community',
-        },
-      }),
+      (signal) =>
+        fetch(`https://r.jina.ai/${url}`, {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '',
+            'x-send-from': 'LobeChat Community',
+          },
+          signal,
+        }),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {

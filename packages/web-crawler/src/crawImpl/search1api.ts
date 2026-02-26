@@ -22,16 +22,18 @@ export const search1api: CrawlImpl = async (url) => {
 
   try {
     res = await withTimeout(
-      fetch('https://api.search1api.com/crawl', {
-        body: JSON.stringify({
-          url,
+      (signal) =>
+        fetch('https://api.search1api.com/crawl', {
+          body: JSON.stringify({
+            url,
+          }),
+          headers: {
+            'Authorization': !apiKey ? '' : `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+          signal,
         }),
-        headers: {
-          'Authorization': !apiKey ? '' : `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      }),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {

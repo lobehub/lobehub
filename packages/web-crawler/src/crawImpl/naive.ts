@@ -3,6 +3,7 @@ import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
+import { createHTTPStatusError } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 const mixinHeaders = {
@@ -39,10 +40,11 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
 
   try {
     res = await withTimeout(
-      ssrfSafeFetch(url, {
-        headers: mixinHeaders,
-        signal: new AbortController().signal,
-      }),
+      (signal) =>
+        ssrfSafeFetch(url, {
+          headers: mixinHeaders,
+          signal,
+        }),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {
@@ -63,7 +65,7 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   }
 
   if (!res.ok) {
-    throw new Error(`Naive request failed with status ${res.status}: ${res.statusText}`);
+    throw await createHTTPStatusError(res, 'Naive');
   }
 
   const type = res.headers.get('content-type');

@@ -29,18 +29,20 @@ export const tavily: CrawlImpl = async (url) => {
 
   try {
     res = await withTimeout(
-      fetch('https://api.tavily.com/extract', {
-        body: JSON.stringify({
-          extract_depth: process.env.TAVILY_EXTRACT_DEPTH || 'basic', // basic or advanced
-          include_images: false,
-          urls: url,
+      (signal) =>
+        fetch('https://api.tavily.com/extract', {
+          body: JSON.stringify({
+            extract_depth: process.env.TAVILY_EXTRACT_DEPTH || 'basic', // basic or advanced
+            include_images: false,
+            urls: url,
+          }),
+          headers: {
+            'Authorization': !apiKey ? '' : `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+          signal,
         }),
-        headers: {
-          'Authorization': !apiKey ? '' : `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      }),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {
