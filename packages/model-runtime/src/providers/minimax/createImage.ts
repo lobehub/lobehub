@@ -39,7 +39,7 @@ export async function createMiniMaxImage(
       model,
       n: 1,
       prompt: params.prompt,
-      //prompt_optimizer: true, // 开启 prompt 自动优化
+      //prompt_optimizer: true, // Enable automatic prompt optimization
       ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
     };
 
