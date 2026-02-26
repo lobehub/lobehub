@@ -26,6 +26,10 @@ import {
 import { MemoryInspectors, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
 import { NotebookInspectors, NotebookManifest } from '@lobechat/builtin-tool-notebook/client';
 import { PageAgentInspectors, PageAgentManifest } from '@lobechat/builtin-tool-page-agent/client';
+import {
+  SkillStoreInspectors,
+  SkillStoreManifest,
+} from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsInspectors, SkillsManifest } from '@lobechat/builtin-tool-skills/client';
 import { LobeToolsInspectors, LobeToolsManifest } from '@lobechat/builtin-tool-tools/client';
 import {
@@ -59,6 +63,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [NotebookManifest.identifier]: NotebookInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
   [LobeToolsManifest.identifier]: LobeToolsInspectors as Record<string, BuiltinInspector>,
+  [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
 };

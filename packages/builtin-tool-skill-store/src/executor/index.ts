@@ -1,28 +1,27 @@
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
-import type { SkillsExecutionRuntime } from '../ExecutionRuntime';
+import type { SkillStoreExecutionRuntime } from '../ExecutionRuntime';
 import {
-  type ExecScriptParams,
-  type ExportFileParams,
-  type ReadReferenceParams,
-  type RunSkillParams,
-  SkillsApiName,
-  SkillsIdentifier,
+  type ImportFromMarketParams,
+  type ImportSkillParams,
+  type SearchSkillParams,
+  SkillStoreApiName,
+  SkillStoreIdentifier,
 } from '../types';
 
-class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
-  readonly identifier = SkillsIdentifier;
-  protected readonly apiEnum = SkillsApiName;
+class SkillStoreExecutor extends BaseExecutor<typeof SkillStoreApiName> {
+  readonly identifier = SkillStoreIdentifier;
+  protected readonly apiEnum = SkillStoreApiName;
 
-  private runtime: SkillsExecutionRuntime;
+  private runtime: SkillStoreExecutionRuntime;
 
-  constructor(runtime: SkillsExecutionRuntime) {
+  constructor(runtime: SkillStoreExecutionRuntime) {
     super();
     this.runtime = runtime;
   }
 
-  execScript = async (
-    params: ExecScriptParams,
+  importSkill = async (
+    params: ImportSkillParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
@@ -30,7 +29,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.runtime.execScript(params);
+      const result = await this.runtime.importSkill(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };
@@ -50,8 +49,8 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
     }
   };
 
-  runSkill = async (
-    params: RunSkillParams,
+  searchSkill = async (
+    params: SearchSkillParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
@@ -59,7 +58,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.runtime.runSkill(params);
+      const result = await this.runtime.searchSkill(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };
@@ -79,8 +78,8 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
     }
   };
 
-  readReference = async (
-    params: ReadReferenceParams,
+  importFromMarket = async (
+    params: ImportFromMarketParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
@@ -88,36 +87,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.runtime.readReference(params);
-
-      if (result.success) {
-        return { content: result.content, state: result.state, success: true };
-      }
-
-      return {
-        content: result.content,
-        error: { message: result.content, type: 'PluginServerError' },
-        success: false,
-      };
-    } catch (e) {
-      const err = e as Error;
-      return {
-        error: { body: e, message: err.message, type: 'PluginServerError' },
-        success: false,
-      };
-    }
-  };
-
-  exportFile = async (
-    params: ExportFileParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    try {
-      if (ctx.signal?.aborted) {
-        return { stop: true, success: false };
-      }
-
-      const result = await this.runtime.exportFile(params);
+      const result = await this.runtime.importFromMarket(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };
@@ -138,4 +108,4 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
   };
 }
 
-export { SkillsExecutor };
+export { SkillStoreExecutor };

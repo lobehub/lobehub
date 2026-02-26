@@ -16,14 +16,23 @@ import {
 import { ToolsActivatorExecutor } from '@lobechat/builtin-tool-tools/executor';
 
 import { getToolStoreState } from '@/store/tool';
+import { toolSelectors } from '@/store/tool/selectors/tool';
 
 const service: ToolsActivatorRuntimeService = {
   getActivatedToolIds: () => [],
   getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
     const s = getToolStoreState();
+
+    // Only allow activation of tools that passed discovery filters
+    // (discoverable, platform-available, not internal/hidden)
+    const discoverable = new Set(
+      toolSelectors.availableToolsForDiscovery(s).map((t) => t.identifier),
+    );
+    const allowedIds = identifiers.filter((id) => discoverable.has(id));
+
     const results: ToolManifestInfo[] = [];
 
-    for (const id of identifiers) {
+    for (const id of allowedIds) {
       // Search builtin tools
       const builtin = s.builtinTools.find((t) => t.identifier === id);
       if (builtin) {

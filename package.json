@@ -197,6 +197,7 @@
     "@lobechat/builtin-tool-memory": "workspace:*",
     "@lobechat/builtin-tool-notebook": "workspace:*",
     "@lobechat/builtin-tool-page-agent": "workspace:*",
+    "@lobechat/builtin-tool-skill-store": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-tools": "workspace:*",
     "@lobechat/builtin-tool-web-browsing": "workspace:*",

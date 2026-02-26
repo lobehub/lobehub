@@ -1,6 +1,6 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { memo } from 'react';
@@ -15,7 +15,7 @@ const ImportSkill = memo<BuiltinRenderProps<ImportSkillParams, ImportSkillState>
 
     if (!success) {
       return (
-        <Flexbox align={'center'} gap={8} horizontal style={{ fontSize: 13 }}>
+        <Flexbox horizontal align={'center'} gap={8} style={{ fontSize: 13 }}>
           <XCircle size={14} style={{ color: 'var(--lobe-error-6)' }} />
           <span style={{ fontWeight: 500 }}>
             Failed to import skill
@@ -44,7 +44,7 @@ const ImportSkill = memo<BuiltinRenderProps<ImportSkillParams, ImportSkillState>
       status === 'created' ? 'Imported' : status === 'updated' ? 'Updated' : 'Already up to date';
 
     return (
-      <Flexbox align={'center'} gap={8} horizontal style={{ fontSize: 13 }}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ fontSize: 13 }}>
         <CheckCircle size={14} style={{ color: 'var(--lobe-success-6)' }} />
         <span style={{ fontWeight: 500 }}>
           {statusLabel}:{' '}

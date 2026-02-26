@@ -37,6 +37,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// Helper to compute expected date content from SystemDateProvider
+const getCurrentDateContent = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `Current date: ${year}-${month}-${day}`;
+};
+
 describe('contextEngineering', () => {
   describe('handle with files content in server mode', () => {
     it('should includes files', async () => {
@@ -82,6 +91,7 @@ describe('contextEngineering', () => {
       });
 
       expect(output).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: [
             {
@@ -149,6 +159,7 @@ describe('contextEngineering', () => {
       });
 
       expect(output).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: [
             {
@@ -203,7 +214,7 @@ describe('contextEngineering', () => {
 
     expect(result).toEqual([
       {
-        content: '## Tools\n\nYou can use these tools',
+        content: '## Tools\n\nYou can use these tools\n\n' + getCurrentDateContent(),
         role: 'system',
       },
       {
@@ -232,6 +243,7 @@ describe('contextEngineering', () => {
     });
 
     expect(result).toEqual([
+      { content: getCurrentDateContent(), role: 'system' },
       {
         content: [
           {
@@ -300,7 +312,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toEqual([
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toEqual([
         { text: 'Here is an image.', type: 'text' },
         { image_url: { detail: 'auto', url: 'http://example.com/image.png' }, type: 'image_url' },
       ]);
@@ -326,7 +339,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toEqual([
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toEqual([
         { image_url: { detail: 'auto', url: 'http://example.com/image.png' }, type: 'image_url' },
       ]);
     });
@@ -361,8 +375,9 @@ describe('contextEngineering', () => {
       provider: 'openai',
     });
 
-    expect(result[0].tool_calls).toBeUndefined();
-    expect(result[0].content).toBe('I have a tool call.');
+    expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+    expect(result[1].tool_calls).toBeUndefined();
+    expect(result[1].content).toBe('I have a tool call.');
   });
 
   describe('Process placeholder variables', () => {
@@ -390,10 +405,11 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toBe(
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toBe(
         'Hello TestUser, today is 2023-12-25 and the time is 14:30:45',
       );
-      expect(result[1].content).toBe('Hi there! Your random number is 12345');
+      expect(result[2].content).toBe('Hi there! Your random number is 12345');
     });
 
     it('should process placeholder variables in array content', async () => {
@@ -422,8 +438,9 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(Array.isArray(result[0].content)).toBe(true);
-      const content = result[0].content as any[];
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(Array.isArray(result[1].content)).toBe(true);
+      const content = result[1].content as any[];
       expect(content[0].text).toBe('Hello TestUser, today is 2023-12-25');
       expect(content[1].image_url.url).toBe('data:image/png;base64,abc123');
     });
@@ -481,10 +498,11 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      // Keep the original system message as-is
+      // Keep the original system message as-is (with date appended by SystemDateProvider)
       expect(result[0].role).toBe('system');
       expect(result[0].content).toBe(
-        'Memory load: available={{memory_available}}, total contexts={{memory_contexts_count}}\n{{memory_summary}}',
+        'Memory load: available={{memory_available}}, total contexts={{memory_contexts_count}}\n{{memory_summary}}\n\n' +
+          getCurrentDateContent(),
       );
 
       // Memory context is injected as a consolidated user message before the first user message

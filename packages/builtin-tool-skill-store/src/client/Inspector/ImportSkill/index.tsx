@@ -28,7 +28,7 @@ export const ImportSkillInspector = memo<
   if (isArgumentsStreaming && !url) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-skills.apiName.importSkill')}</span>
+        <span>{t('builtins.lobe-skill-store.apiName.importSkill')}</span>
       </div>
     );
   }
@@ -43,7 +43,7 @@ export const ImportSkillInspector = memo<
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{t('builtins.lobe-skills.apiName.importSkill')}: </span>
+      <span>{t('builtins.lobe-skill-store.apiName.importSkill')}: </span>
       {displayName && <span className={highlightTextStyles.primary}>{displayName}</span>}
       {!isLoading &&
         hasResult &&

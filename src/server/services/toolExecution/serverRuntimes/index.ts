@@ -11,6 +11,7 @@ import { cloudSandboxRuntime } from './cloudSandbox';
 import { memoryRuntime } from './memory';
 import { notebookRuntime } from './notebook';
 import { skillsRuntime } from './skills';
+import { skillStoreRuntime } from './skillStore';
 import { toolsActivatorRuntime } from './tools';
 import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
 import { webBrowsingRuntime } from './webBrowsing';
@@ -34,6 +35,7 @@ registerRuntimes([
   webBrowsingRuntime,
   cloudSandboxRuntime,
   notebookRuntime,
+  skillStoreRuntime,
   skillsRuntime,
   memoryRuntime,
   toolsActivatorRuntime,
