@@ -9,18 +9,33 @@ import { type ServerRuntimeRegistration } from './types';
 
 /**
  * Tools Activator Server Runtime
- * Stub implementation — actual tool manifest resolution
- * will be implemented in follow-up work when ToolDiscoveryProvider is ready.
+ * Resolves tool manifests from context.toolManifestMap (populated by the agent state).
  */
 export const toolsActivatorRuntime: ServerRuntimeRegistration = {
-  factory: (_context) => {
+  factory: (context) => {
     const activatedIds: string[] = [];
 
     const service: ToolsActivatorRuntimeService = {
       getActivatedToolIds: () => [...activatedIds],
-      getToolManifests: async (_identifiers: string[]): Promise<ToolManifestInfo[]> => {
-        // Stub: will be replaced with real tool manifest lookup
-        return [];
+      getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
+        const results: ToolManifestInfo[] = [];
+
+        for (const id of identifiers) {
+          const manifest = context.toolManifestMap[id];
+          if (!manifest) continue;
+
+          results.push({
+            apiDescriptions: manifest.api.map((a) => ({
+              description: a.description,
+              name: a.name,
+            })),
+            identifier: manifest.identifier,
+            name: manifest.meta?.title ?? manifest.identifier,
+            systemRole: manifest.systemRole,
+          });
+        }
+
+        return results;
       },
       markActivated: (identifiers: string[]) => {
         for (const id of identifiers) {

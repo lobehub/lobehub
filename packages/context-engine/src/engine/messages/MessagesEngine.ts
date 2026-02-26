@@ -33,7 +33,9 @@ import {
   PageEditorContextInjector,
   PageSelectionsInjector,
   SkillContextProvider,
+  SystemDateProvider,
   SystemRoleInjector,
+  ToolDiscoveryProvider,
   ToolSystemRoleProvider,
   UserMemoryInjector,
 } from '../../providers';
@@ -122,6 +124,7 @@ export class MessagesEngine {
       formatHistorySummary,
       knowledge,
       skillsConfig,
+      toolDiscoveryConfig,
       toolsConfig,
       capabilities,
       variableGenerators,
@@ -135,6 +138,7 @@ export class MessagesEngine {
       initialContext,
       stepContext,
       pageContentContext,
+      enableSystemDate,
     } = this.params;
 
     const isAgentBuilderEnabled = !!agentBuilderContext;
@@ -159,6 +163,9 @@ export class MessagesEngine {
 
       // 1b. Eval context injection (appends envPrompt to system message)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
+
+      // 1c. System date injection (appends current date to system message)
+      new SystemDateProvider({ enabled: enableSystemDate !== false }),
 
       // =============================================
       // Phase 2: First User Message Context Injection
@@ -188,6 +195,11 @@ export class MessagesEngine {
         fileContents: knowledge?.fileContents,
         knowledgeBases: knowledge?.knowledgeBases,
       }),
+
+      // 5.5. Tool Discovery context injection (available tools for dynamic activation)
+      ...(toolDiscoveryConfig?.availableTools && toolDiscoveryConfig.availableTools.length > 0
+        ? [new ToolDiscoveryProvider({ availableTools: toolDiscoveryConfig.availableTools })]
+        : []),
 
       // =============================================
       // Phase 3: Additional System Context

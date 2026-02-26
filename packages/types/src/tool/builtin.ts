@@ -212,6 +212,7 @@ export const BuiltinToolManifestSchema = z.object({
 });
 
 export interface LobeBuiltinTool {
+  discoverable?: boolean;
   hidden?: boolean;
   identifier: string;
   manifest: BuiltinToolManifest;
@@ -219,6 +220,7 @@ export interface LobeBuiltinTool {
 }
 
 export const LobeBuiltinToolSchema = z.object({
+  discoverable: z.boolean().optional(),
   hidden: z.boolean().optional(),
   identifier: z.string(),
   manifest: BuiltinToolManifestSchema,

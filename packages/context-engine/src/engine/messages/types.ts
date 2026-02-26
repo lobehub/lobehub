@@ -12,6 +12,7 @@ import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
 import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
+import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -52,6 +53,13 @@ export interface ToolsConfig {
  */
 export interface SkillsConfig {
   enabledSkills?: SkillMeta[];
+}
+
+/**
+ * Tool Discovery configuration
+ */
+export interface ToolDiscoveryConfig {
+  availableTools?: ToolDiscoveryMeta[];
 }
 
 /**
@@ -186,6 +194,10 @@ export interface MessagesEngineParams {
   /** Provider ID */
   provider: string;
 
+  // ========== System date ==========
+  /** Whether to inject current date into system message (default: true) */
+  enableSystemDate?: boolean;
+
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
@@ -215,6 +227,10 @@ export interface MessagesEngineParams {
   // ========== Skills ==========
   /** Skills configuration */
   skillsConfig?: SkillsConfig;
+
+  // ========== Tool Discovery ==========
+  /** Tool Discovery configuration (available tools for dynamic activation) */
+  toolDiscoveryConfig?: ToolDiscoveryConfig;
 
   // ========== Tools ==========
   /** Tools configuration */
@@ -288,5 +304,6 @@ export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilder
 export { type GTDPlan } from '../../providers/GTDPlanInjector';
 export { type GTDTodoItem, type GTDTodoList } from '../../providers/GTDTodoInjector';
 export { type SkillMeta } from '../../providers/SkillContextProvider';
+export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
 export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';

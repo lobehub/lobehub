@@ -12,4 +12,5 @@ export * from './plugin';
 export * from './search';
 export * from './skills';
 export * from './systemRole';
+export * from './toolDiscovery';
 export * from './userMemory';

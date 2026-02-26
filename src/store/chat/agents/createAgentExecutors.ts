@@ -1,25 +1,26 @@
-import {
-  type AgentEvent,
-  type AgentInstruction,
-  type AgentInstructionCallLlm,
-  type AgentInstructionCallTool,
-  type AgentInstructionCompressContext,
-  type AgentInstructionExecClientTask,
-  type AgentInstructionExecClientTasks,
-  type AgentInstructionExecTask,
-  type AgentInstructionExecTasks,
-  type AgentRuntimeContext,
-  type GeneralAgentCallingToolInstructionPayload,
-  type GeneralAgentCallLLMInstructionPayload,
-  type GeneralAgentCallLLMResultPayload,
-  type GeneralAgentCallToolResultPayload,
-  type GeneralAgentCompressionResultPayload,
-  type InstructionExecutor,
-  type TaskResultPayload,
-  type TasksBatchResultPayload,
+import type {
+  AgentEvent,
+  AgentInstruction,
+  AgentInstructionCallLlm,
+  AgentInstructionCallTool,
+  AgentInstructionCompressContext,
+  AgentInstructionExecClientTask,
+  AgentInstructionExecClientTasks,
+  AgentInstructionExecTask,
+  AgentInstructionExecTasks,
+  AgentRuntimeContext,
+  GeneralAgentCallingToolInstructionPayload,
+  GeneralAgentCallLLMInstructionPayload,
+  GeneralAgentCallLLMResultPayload,
+  GeneralAgentCallToolResultPayload,
+  GeneralAgentCompressionResultPayload,
+  InstructionExecutor,
+  TaskResultPayload,
+  TasksBatchResultPayload,
 } from '@lobechat/agent-runtime';
 import { calculateMessageTokens, UsageCounter } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
+import type { ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatToolPayload,
@@ -74,6 +75,8 @@ export const createAgentExecutors = (context: {
   operationId: string;
   parentId: string;
   skipCreateFirstMessage?: boolean;
+  /** ToolsEngine for expanding dynamically activated tools */
+  toolsEngine?: ToolsEngine;
 }) => {
   let shouldSkipCreateMessage = context.skipCreateFirstMessage;
 
@@ -302,6 +305,41 @@ export const createAgentExecutors = (context: {
         ? topicSelectors.currentActiveTopicSummary(context.get())
         : undefined;
 
+      // Expand dynamically activated tools (from lobe-tools activateTools API)
+      // and merge them into the agent config for this LLM call
+      const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
+      let resolvedAgentConfig = context.agentConfig;
+
+      if (activatedToolIds?.length && context.toolsEngine) {
+        const additional = context.toolsEngine.generateToolsDetailed({
+          model: agentConfigData.model,
+          provider: agentConfigData.provider!,
+          skipDefaultTools: true,
+          toolIds: activatedToolIds,
+        });
+
+        if (additional.tools?.length) {
+          resolvedAgentConfig = {
+            ...context.agentConfig,
+            enabledManifests: [
+              ...(context.agentConfig.enabledManifests || []),
+              ...additional.enabledManifests,
+            ],
+            enabledToolIds: [
+              ...(context.agentConfig.enabledToolIds || []),
+              ...additional.enabledToolIds,
+            ],
+            tools: [...(context.agentConfig.tools || []), ...additional.tools],
+          };
+
+          log(
+            `${stagePrefix} Injected %d activated tools: %o`,
+            activatedToolIds.length,
+            activatedToolIds,
+          );
+        }
+      }
+
       await chatService.createAssistantMessageStream({
         abortController,
         params: {
@@ -310,7 +348,7 @@ export const createAgentExecutors = (context: {
           messages,
           model: llmPayload.model,
           provider: llmPayload.provider,
-          resolvedAgentConfig: context.agentConfig,
+          resolvedAgentConfig,
           topicId: topicId ?? undefined,
           ...agentConfigData.params,
         },

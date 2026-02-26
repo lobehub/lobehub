@@ -19,13 +19,22 @@ import { type LobeBuiltinTool } from '@lobechat/types';
  * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
  */
 export const defaultToolIds = [
+  LobeToolsManifest.identifier,
+  SkillsManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
-  SkillsManifest.identifier,
 ];
 
 export const builtinTools: LobeBuiltinTool[] = [
   {
+    discoverable: false,
+    hidden: true,
+    identifier: LobeToolsManifest.identifier,
+    manifest: LobeToolsManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
     hidden: true,
     identifier: SkillsManifest.identifier,
     manifest: SkillsManifest,
@@ -60,24 +69,28 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
     hidden: true,
     identifier: PageAgentManifest.identifier,
     manifest: PageAgentManifest,
     type: 'builtin',
   },
   {
+    discoverable: false,
     hidden: true,
     identifier: AgentBuilderManifest.identifier,
     manifest: AgentBuilderManifest,
     type: 'builtin',
   },
   {
+    discoverable: false,
     hidden: true,
     identifier: GroupAgentBuilderManifest.identifier,
     manifest: GroupAgentBuilderManifest,
     type: 'builtin',
   },
   {
+    discoverable: false,
     hidden: true,
     identifier: GroupManagementManifest.identifier,
     manifest: GroupManagementManifest,
@@ -91,12 +104,6 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     identifier: NotebookManifest.identifier,
     manifest: NotebookManifest,
-    type: 'builtin',
-  },
-  {
-    hidden: true,
-    identifier: LobeToolsManifest.identifier,
-    manifest: LobeToolsManifest,
     type: 'builtin',
   },
 ];

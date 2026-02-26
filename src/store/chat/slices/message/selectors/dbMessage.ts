@@ -1,3 +1,5 @@
+import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import { type StepContextTodos, type UIChatMessage } from '@lobechat/types';
 
 import { chatHelpers } from '../../../helpers';
@@ -146,9 +148,44 @@ const inboxActiveTopicDbMessages = (state: ChatStoreState) => {
   return state.dbMessagesMap[key] || [];
 };
 
-// ============= GTD Todos Selectors ========== //
+// ============= Activated Tools Selectors ========== //
 
-const GTD_IDENTIFIER = 'lobe-gtd';
+/**
+ * Accumulate activated tool identifiers from all lobe-tools messages.
+ *
+ * Unlike todos (which take the latest snapshot), activated tools are
+ * cumulative — once a tool is activated it stays active for the rest
+ * of the conversation.
+ *
+ * @param messages - Array of chat messages to scan
+ * @returns Deduplicated array of activated tool identifiers, or undefined if none
+ */
+export const selectActivatedToolIdsFromMessages = (
+  messages: UIChatMessage[],
+): string[] | undefined => {
+  const ids = new Set<string>();
+
+  for (const msg of messages) {
+    if (
+      msg.role === 'tool' &&
+      msg.plugin?.identifier === LobeToolIdentifier &&
+      msg.pluginState?.activatedTools
+    ) {
+      const activatedTools = msg.pluginState.activatedTools as Array<{ identifier?: string }>;
+      if (Array.isArray(activatedTools)) {
+        for (const tool of activatedTools) {
+          if (tool.identifier) {
+            ids.add(tool.identifier);
+          }
+        }
+      }
+    }
+  }
+
+  return ids.size > 0 ? [...ids] : undefined;
+};
+
+// ============= GTD Todos Selectors ========== //
 
 /**
  * Select the latest todos state from messages array
@@ -171,11 +208,7 @@ export const selectTodosFromMessages = (
     const msg = messages[i];
 
     // Check if this is a GTD tool message with todos state
-    if (
-      msg.role === 'tool' &&
-      msg.plugin?.identifier === GTD_IDENTIFIER &&
-      msg.pluginState?.todos
-    ) {
+    if (msg.role === 'tool' && msg.plugin?.identifier === GTDIdentifier && msg.pluginState?.todos) {
       const todos = msg.pluginState.todos as { items?: unknown[]; updatedAt?: string };
 
       // Handle the todos structure: { items: TodoItem[], updatedAt: string }
@@ -223,5 +256,6 @@ export const dbMessageSelectors = {
   isCurrentDbChatLoaded,
   latestDbMessage,
   latestUserMessage,
+  selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 };

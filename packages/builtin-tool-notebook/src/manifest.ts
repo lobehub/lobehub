@@ -95,7 +95,8 @@ export const NotebookManifest: BuiltinToolManifest = {
   identifier: NotebookIdentifier,
   meta: {
     avatar: '📓',
-    description: 'Create and manage documents in the topic notebook',
+    description:
+      'Create and manage documents in the Notebook. Use this tool for any document-related tasks, including writing reports, saving notes, drafting articles, or organizing content.',
     readme:
       'Create and manage persistent documents within conversation topics. Save notes, reports, articles, and markdown content that stays accessible across sessions.',
     title: 'Notebook',

@@ -9,6 +9,7 @@ import { AgentRuntime, computeStepContext, GeneralChatAgent } from '@lobechat/ag
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { isDesktop } from '@lobechat/const';
+import { type ToolsEngine } from '@lobechat/context-engine';
 import {
   type ConversationContext,
   type RuntimeInitialContext,
@@ -34,7 +35,10 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { topicMapKey } from '../../../utils/topicMapKey';
-import { selectTodosFromMessages } from '../../message/selectors/dbMessage';
+import {
+  selectActivatedToolIdsFromMessages,
+  selectTodosFromMessages,
+} from '../../message/selectors/dbMessage';
 
 const log = debug('lobe-store:streaming-executor');
 
@@ -85,6 +89,7 @@ export class StreamingExecutorActionImpl {
     state: AgentState;
     context: AgentRuntimeContext;
     agentConfig: ResolvedAgentConfig;
+    toolsEngine?: ToolsEngine;
   } => {
     // Use provided agentId/topicId or fallback to global state
     // Note: Use || instead of ?? to also fallback when paramAgentId is empty string
@@ -243,7 +248,7 @@ export class StreamingExecutorActionImpl {
       initialContext: runtimeInitialContext,
     };
 
-    return { agentConfig: agentConfigWithTools, context, state };
+    return { agentConfig: agentConfigWithTools, context, state, toolsEngine };
   };
 
   internal_execAgentRuntime = async (params: {
@@ -326,6 +331,7 @@ export class StreamingExecutorActionImpl {
       state: initialAgentState,
       context: initialAgentContext,
       agentConfig,
+      toolsEngine,
     } = this.#get().internal_createAgentState({
       messages,
       parentMessageId: params.parentMessageId,
@@ -374,6 +380,7 @@ export class StreamingExecutorActionImpl {
         operationId,
         parentId: params.parentMessageId,
         skipCreateFirstMessage: params.skipCreateFirstMessage,
+        toolsEngine, // Pass toolsEngine for dynamic tool injection via activateTools
       }),
       getOperation: (opId: string) => {
         const op = this.#get().operations[opId];
@@ -420,7 +427,9 @@ export class StreamingExecutorActionImpl {
       const currentDBMessages = this.#get().dbMessagesMap[messageKey] || [];
       // Use selectTodosFromMessages selector (shared with UI display)
       const todos = selectTodosFromMessages(currentDBMessages);
-      const stepContext = computeStepContext({ todos });
+      // Accumulate activated tool IDs from lobe-tools messages
+      const activatedToolIds = selectActivatedToolIdsFromMessages(currentDBMessages);
+      const stepContext = computeStepContext({ activatedToolIds, todos });
 
       // If page agent is enabled, get the latest XML for stepPageEditor
       if (nextContext.initialContext?.pageEditor) {
