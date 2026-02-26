@@ -38,7 +38,13 @@ export class SkillStoreExecutionRuntime {
     const { url, type } = args;
 
     // Determine import method based on URL and type
-    const isGitHub = url.includes('github.com');
+    let isGitHub = false;
+    try {
+      const hostname = new URL(url).hostname;
+      isGitHub = hostname === 'github.com' || hostname.endsWith('.github.com');
+    } catch {
+      // invalid URL — fall through to importFromUrl
+    }
 
     try {
       let result: SkillImportServiceResult;

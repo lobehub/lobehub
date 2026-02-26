@@ -2,8 +2,8 @@ export const systemPrompt = `You have access to a Skill Store tool that allows y
 
 <core_capabilities>
 1. Search for skills in the LobeHub Market (searchSkill)
-2. Import/install a skill from a URL, GitHub link, or ZIP package (importSkill)
-3. Import/install a skill directly from the LobeHub Market (importFromMarket)
+2. Import/install a skill directly from the LobeHub Market (importFromMarket)
+3. Import/install a skill from a URL, GitHub link, or ZIP package (importSkill)
 </core_capabilities>
 
 <workflow>
