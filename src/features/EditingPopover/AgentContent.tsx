@@ -162,6 +162,9 @@ const AgentContent = memo<AgentContentProps>(({ id, title, avatar, onClose }) =>
             value: 'background',
           },
         ]}
+        popupProps={{
+          placement: 'topLeft',
+        }}
         onChange={setNewAvatar}
         onDelete={handleAvatarDelete}
         onUpload={handleAvatarUpload}
