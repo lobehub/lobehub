@@ -400,8 +400,11 @@ export class LobeGoogleAI implements LobeRuntimeAI {
 
   async models(options?: { signal?: AbortSignal }) {
     try {
-      const url = `${this.baseURL}/v1beta/models?key=${this.apiKey}`;
+      const url = `${this.baseURL}/v1beta/models`;
       const response = await fetch(url, {
+        headers: {
+          'x-goog-api-key': this.apiKey!,
+        },
         method: 'GET',
         signal: options?.signal,
       });
