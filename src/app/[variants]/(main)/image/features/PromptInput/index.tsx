@@ -9,13 +9,11 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
-import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useImageStore } from '@/store/image';
 import { createImageSelectors } from '@/store/image/selectors';
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
-import { imageGenerationConfigSelectors } from '@/store/image/slices/generationConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -47,9 +45,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { value, setValue } = useGenerationConfigParam('prompt');
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
-  const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const isLogin = useUserStore(authSelectors.isLogin);
-  const checkGeminiChineseWarning = useGeminiChineseWarning();
 
   // Read prompt from query parameter
   const [promptParam, setPromptParam] = useQueryState('prompt');
@@ -60,14 +56,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       loginRequired.redirect({ timeout: 2000 });
       return;
     }
-    // Check for Chinese text warning with Gemini model
-    const shouldContinue = await checkGeminiChineseWarning({
-      model: currentModel,
-      prompt: value,
-      scenario: 'image',
-    });
-
-    if (!shouldContinue) return;
 
     await createImage();
   };
@@ -89,26 +77,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
       // Auto-trigger generation after a short delay to ensure state is updated
       setTimeout(async () => {
-        const shouldContinue = await checkGeminiChineseWarning({
-          model: currentModel,
-          prompt: decodedPrompt,
-          scenario: 'image',
-        });
-
-        if (shouldContinue) {
-          await createImage();
-        }
+        await createImage();
       }, 100);
     }
-  }, [
-    promptParam,
-    isLogin,
-    setValue,
-    setPromptParam,
-    checkGeminiChineseWarning,
-    currentModel,
-    createImage,
-  ]);
+  }, [promptParam, isLogin, setValue, setPromptParam, createImage]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
