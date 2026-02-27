@@ -59,6 +59,7 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    hidden: true,
     identifier: MemoryManifest.identifier,
     manifest: MemoryManifest,
     type: 'builtin',
