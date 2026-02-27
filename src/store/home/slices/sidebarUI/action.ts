@@ -104,8 +104,9 @@ export class SidebarUIActionImpl {
     groupId: string,
     title: string,
     avatar?: string | null,
+    backgroundColor?: string,
   ): Promise<void> => {
-    await chatGroupService.updateGroup(groupId, { avatar, title });
+    await chatGroupService.updateGroup(groupId, { avatar, backgroundColor, title });
     await this.#get().refreshAgentList();
   };
 

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 export interface EditingTarget {
   anchor: HTMLElement;
   avatar?: string;
+  backgroundColor?: string;
   id: string;
   memberAvatars?: { avatar?: string; background?: string }[];
   title: string;
