@@ -189,9 +189,6 @@ const GroupContent = memo<GroupContentProps>(
                 value: 'background',
               },
             ]}
-            popupProps={{
-              placement: 'topLeft',
-            }}
             onChange={setNewAvatar}
             onDelete={handleAvatarDelete}
             onUpload={handleAvatarUpload}
