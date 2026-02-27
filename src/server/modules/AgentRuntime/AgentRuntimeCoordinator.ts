@@ -181,6 +181,24 @@ export class AgentRuntimeCoordinator {
   }
 
   /**
+   * Atomically try to claim a step for execution (distributed lock).
+   */
+  async tryClaimStep(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds?: number,
+  ): Promise<boolean> {
+    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds);
+  }
+
+  /**
+   * Release the step execution lock.
+   */
+  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
+    return this.stateManager.releaseStepLock(operationId, stepIndex);
+  }
+
+  /**
    * Close connections
    */
   async disconnect(): Promise<void> {

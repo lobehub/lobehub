@@ -3,6 +3,7 @@ import {
   DEFAULT_SEARCH_USER_MEMORY_TOP_K,
   DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
+  MEMORY_SEARCH_TOP_K_LIMITS,
 } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
@@ -39,6 +40,7 @@ import {
   userMemoriesExperiences,
   userMemoriesIdentities,
   userMemoriesPreferences,
+  userSettings,
 } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -54,6 +56,7 @@ const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
 
 type MemorySearchContext = {
   memoryModel: UserMemoryModel;
+  memoryEffort: MemoryEffort;
   serverDB: LobeChatDatabase;
   userId: string;
 };
@@ -134,6 +137,27 @@ const mapMemorySearchResult = (layeredResults: MemorySearchResult): SearchMemory
   } satisfies SearchMemoryResult;
 };
 
+type MemoryEffort = 'high' | 'low' | 'medium';
+
+const normalizeMemoryEffort = (value: unknown): MemoryEffort => {
+  if (value === 'low' || value === 'medium' || value === 'high') return value;
+  return 'medium';
+};
+
+const applySearchLimitsByEffort = (
+  effort: MemoryEffort,
+  requested: { activities: number; contexts: number; experiences: number; preferences: number },
+) => {
+  const limit = MEMORY_SEARCH_TOP_K_LIMITS[effort];
+
+  return {
+    activities: Math.min(requested.activities, limit.activities),
+    contexts: Math.min(requested.contexts, limit.contexts),
+    experiences: Math.min(requested.experiences, limit.experiences),
+    preferences: Math.min(requested.preferences, limit.preferences),
+  };
+};
+
 const searchUserMemories = async (
   ctx: MemorySearchContext,
   input: z.infer<typeof searchMemorySchema>,
@@ -149,16 +173,21 @@ const searchUserMemories = async (
     model: embeddingModel,
   });
 
-  const limits = {
-    activities: input.topK?.activities ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.activities,
-    contexts: input.topK?.contexts ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.contexts,
-    experiences: input.topK?.experiences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.experiences,
-    preferences: input.topK?.preferences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.preferences,
+  const effectiveEffort = normalizeMemoryEffort(input.effort ?? ctx.memoryEffort);
+  const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
+
+  const requestedLimits = {
+    activities: input.topK?.activities ?? effortDefaults.activities,
+    contexts: input.topK?.contexts ?? effortDefaults.contexts,
+    experiences: input.topK?.experiences ?? effortDefaults.experiences,
+    preferences: input.topK?.preferences ?? effortDefaults.preferences,
   };
+
+  const effortConstrainedLimits = applySearchLimitsByEffort(effectiveEffort, requestedLimits);
 
   const layeredResults = await ctx.memoryModel.searchWithEmbedding({
     embedding: queryEmbeddings?.[0],
-    limits,
+    limits: effortConstrainedLimits,
   });
 
   return mapMemorySearchResult(layeredResults);
@@ -233,12 +262,23 @@ const normalizeEmbeddable = (value?: string | null): string | undefined => {
 
 const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const userSettingsRow = await ctx.serverDB.query.userSettings.findFirst({
+    columns: { memory: true },
+    where: eq(userSettings.id, ctx.userId),
+  });
+  const memoryConfig =
+    typeof userSettingsRow?.memory === 'object' && userSettingsRow?.memory !== null
+      ? (userSettingsRow.memory as { effort?: unknown })
+      : undefined;
+  const memoryEffort = normalizeMemoryEffort(memoryConfig?.effort);
+
   return opts.next({
     ctx: {
       activityModel: new UserMemoryActivityModel(ctx.serverDB, ctx.userId),
       experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId),
       identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId),
       memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
+      memoryEffort,
     },
   });
 });
@@ -917,14 +957,17 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  searchMemory: memoryProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
-    try {
-      return await searchUserMemories(ctx, input);
-    } catch (error) {
-      console.error('Failed to retrieve memories:', error);
-      return EMPTY_SEARCH_RESULT;
+  searchMemory: memoryProcedure
+    .input(searchMemorySchema)
+    .query(async ({ input, ctx }) => {
+      try {
+        return await searchUserMemories(ctx, input);
+      } catch (error) {
+        console.error('Failed to retrieve memories:', error);
+        return EMPTY_SEARCH_RESULT;
+      }
     }
-  }),
+  ),
 
   toolAddActivityMemory: memoryProcedure
     .input(ActivityMemoryItemSchema)

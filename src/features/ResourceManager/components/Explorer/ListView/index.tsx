@@ -60,7 +60,6 @@ const ListView = memo(function ListView() {
   const [
     libraryId,
     category,
-    searchQuery,
     selectFileIds,
     setSelectedFileIds,
     pendingRenameItemId,
@@ -70,7 +69,6 @@ const ListView = memo(function ListView() {
   ] = useResourceManagerStore((s) => [
     s.libraryId,
     s.category,
-    s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.pendingRenameItemId,
@@ -107,12 +105,11 @@ const ListView = memo(function ListView() {
       category: libraryId ? undefined : category,
       libraryId,
       parentId: currentFolderSlug || null,
-      q: searchQuery ?? undefined,
       showFilesInKnowledgeBase: false,
       sortType,
       sorter,
     }),
-    [category, currentFolderSlug, libraryId, searchQuery, sorter, sortType],
+    [category, currentFolderSlug, libraryId, sorter, sortType],
   );
 
   const { isLoading, isValidating } = useFetchResources(queryParams);
@@ -124,8 +121,7 @@ const ListView = memo(function ListView() {
     return (
       currentQueryParams.libraryId !== queryParams.libraryId ||
       currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category ||
-      currentQueryParams.q !== queryParams.q
+      currentQueryParams.category !== queryParams.category
     );
   }, [currentQueryParams, queryParams]);
 

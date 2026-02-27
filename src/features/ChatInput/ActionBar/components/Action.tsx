@@ -43,7 +43,7 @@ const Action = memo<ActionProps>(
       value: open,
     });
     const mobile = useServerConfigStore((s) => s.isMobile);
-    const { dropdownPlacement } = useActionBarContext();
+    const { actionSize, dropdownPlacement } = useActionBarContext();
     const iconNode = (
       <ActionIcon
         disabled={disabled}
@@ -60,10 +60,12 @@ const Action = memo<ActionProps>(
           setShow(true);
         }}
         {...rest}
-        size={{
-          blockSize: 36,
-          size: 20,
-        }}
+        size={
+          actionSize ?? {
+            blockSize: 36,
+            size: 20,
+          }
+        }
       />
     );
 

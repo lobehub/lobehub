@@ -7,7 +7,7 @@ import { LobehubSkillStatus } from './types';
  */
 export const lobehubSkillStoreSelectors = {
   /**
-   * 获取所有 LobeHub Skill 服务器的 identifier 集合
+   * Get all LobeHub Skill server identifiers as a set
    */
   getAllServerIdentifiers: (s: ToolStoreState): Set<string> => {
     const servers = s.lobehubSkillServers || [];
@@ -15,7 +15,7 @@ export const lobehubSkillStoreSelectors = {
   },
 
   /**
-   * 获取所有可用的工具（来自所有已连接的服务器）
+   * Get all available tools from all connected servers
    */
   getAllTools: (s: ToolStoreState) => {
     const connectedServers = lobehubSkillStoreSelectors.getConnectedServers(s);
@@ -28,7 +28,7 @@ export const lobehubSkillStoreSelectors = {
   },
 
   /**
-   * 获取所有已连接的服务器
+   * Get all connected servers
    */
   getConnectedServers: (s: ToolStoreState): LobehubSkillServer[] =>
     (s.lobehubSkillServers || []).filter(
@@ -36,20 +36,20 @@ export const lobehubSkillStoreSelectors = {
     ),
 
   /**
-   * 根据 identifier 获取服务器
-   * @param identifier - Provider 标识符 (e.g., 'linear')
+   * Get server by identifier
+   * @param identifier - Provider identifier (e.g., 'linear')
    */
   getServerByIdentifier: (identifier: string) => (s: ToolStoreState) =>
     s.lobehubSkillServers?.find((server) => server.identifier === identifier),
 
   /**
-   * 获取所有 LobeHub Skill 服务器
+   * Get all LobeHub Skill servers
    */
   getServers: (s: ToolStoreState): LobehubSkillServer[] => s.lobehubSkillServers || [],
 
   /**
-   * 检查给定的 identifier 是否是 LobeHub Skill 服务器
-   * @param identifier - Provider 标识符 (e.g., 'linear')
+   * Check if the given identifier is a LobeHub Skill server
+   * @param identifier - Provider identifier (e.g., 'linear')
    */
   isLobehubSkillServer:
     (identifier: string) =>
@@ -59,14 +59,14 @@ export const lobehubSkillStoreSelectors = {
     },
 
   /**
-   * 检查服务器是否正在加载
-   * @param identifier - Provider 标识符 (e.g., 'linear')
+   * Check if a server is loading
+   * @param identifier - Provider identifier (e.g., 'linear')
    */
   isServerLoading: (identifier: string) => (s: ToolStoreState) =>
     s.lobehubSkillLoadingIds?.has(identifier) || false,
 
   /**
-   * 检查工具是否正在执行
+   * Check if a tool is currently executing
    */
   isToolExecuting: (provider: string, toolName: string) => (s: ToolStoreState) => {
     const toolId = `${provider}:${toolName}`;

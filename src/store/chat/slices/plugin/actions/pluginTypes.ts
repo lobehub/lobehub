@@ -302,7 +302,7 @@ export class PluginTypesActionImpl {
       }
     }
 
-    // 如果报错则结束了
+    // If error occurred, exit
 
     if (!data) return;
 
@@ -454,7 +454,7 @@ export class PluginTypesActionImpl {
 
       data = '';
     }
-    // 如果报错则结束了
+    // If error occurred, exit
     if (!data) return;
 
     // operationId already declared above, reuse it

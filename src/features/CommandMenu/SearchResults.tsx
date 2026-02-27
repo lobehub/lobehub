@@ -269,6 +269,7 @@ const SearchResults = memo<SearchResultsProps>(
       return (
         <CommandItem
           description={subtitle}
+          forceMount
           icon={getIcon(result.type)}
           key={result.id}
           title={titleWithPrefix}

@@ -94,6 +94,7 @@ export function defineConfig() {
       '/group',
       '/community',
       '/resource',
+      '/eval',
       '/page',
       '/settings',
       '/image',
@@ -117,12 +118,10 @@ export function defineConfig() {
       ? urlJoin(url.origin, nextPathname)
       : nextPathname;
 
-    console.log(`[rewrite] ${url.pathname} -> ${nextURL}`);
-
     logDefault('URL rewrite: %O', {
       isLocalRewrite: appEnv.MIDDLEWARE_REWRITE_THROUGH_LOCAL,
-      nextPathname: nextPathname,
-      nextURL: nextURL,
+      nextPathname,
+      nextURL,
       originalPathname: url.pathname,
     });
 
@@ -184,7 +183,6 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
- 
   ]);
 
   const betterAuthMiddleware = async (req: NextRequest) => {

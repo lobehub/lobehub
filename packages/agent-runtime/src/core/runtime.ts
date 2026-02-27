@@ -88,20 +88,14 @@ export class AgentRuntime {
 
       // Check maximum steps limit
       if (newState.maxSteps && newState.stepCount > newState.maxSteps) {
-        // Finish execution when maxSteps is exceeded
-        newState.status = 'done';
-        const finishEvent = {
-          finalState: newState,
-          reason: 'max_steps_exceeded' as const,
-          reasonDetail: `Maximum steps exceeded: ${newState.maxSteps}`,
-          type: 'done' as const,
-        };
-
-        return {
-          events: [finishEvent],
-          newState,
-          nextContext: undefined, // No next context when done
-        };
+        if (newState.forceFinish) {
+          // Already in forceFinish flow, skip maxSteps check and continue execution
+        } else {
+          // First time exceeding: set forceFinish flag
+          // Tools will be allowed to complete, but the next LLM call will produce
+          // a final text response (tools stripped, summary prompt injected)
+          newState.forceFinish = true;
+        }
       }
 
       // Use provided context or create initial context
@@ -164,8 +158,11 @@ export class AgentRuntime {
       let currentState = newState;
       const allEvents: AgentEvent[] = [];
       let finalNextContext: AgentRuntimeContext | undefined = undefined;
+      let hasFinishInstruction = false;
 
       for (const instruction of normalizedInstructions) {
+        if (instruction.type === 'finish') hasFinishInstruction = true;
+
         let result;
 
         // Special handling for batch tool execution
@@ -207,6 +204,11 @@ export class AgentRuntime {
       // Ensure stepCount and lastModified are preserved
       currentState.stepCount = newState.stepCount;
       currentState.lastModified = newState.lastModified;
+
+      // A 'finish' instruction is not a real execution step, undo the +1 from the top of step()
+      if (hasFinishInstruction) {
+        currentState.stepCount = Math.max(currentState.stepCount - 1, 0);
+      }
 
       return {
         events: allEvents,

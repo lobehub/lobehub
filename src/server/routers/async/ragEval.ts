@@ -13,7 +13,7 @@ import {
   EvalDatasetRecordModel,
   EvalEvaluationModel,
   EvaluationRecordModel,
-} from '@/database/server/models/ragEval';
+} from '@/database/models/ragEval';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';

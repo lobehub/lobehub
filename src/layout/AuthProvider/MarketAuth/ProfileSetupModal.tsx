@@ -3,7 +3,7 @@
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
 import { Center, Flexbox, Icon, Input, Modal, Text, TextArea, Tooltip } from '@lobehub/ui';
 import { type UploadProps } from 'antd';
-import { App, Form, Upload } from 'antd';
+import { App, Form, Modal as AntModal, Upload } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -185,7 +185,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
       setBannerUrl(null);
     }, []);
 
-    const handleSubmit = useCallback(async () => {
+    const doSubmit = useCallback(async () => {
       // 如果不是自动授权模式，需要校验 accessToken
       if (!enableMarketTrustedClient && !accessToken) {
         message.error(t('profileSetup.errors.notAuthenticated'));
@@ -263,6 +263,33 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
       onSuccess,
       t,
     ]);
+
+    const handleSubmit = useCallback(async () => {
+      try {
+        const values = await form.validateFields();
+        const oldUserName = userProfile?.userName;
+
+        // If userName changed and it's not first-time setup, show confirmation
+        if (!isFirstTimeSetup && oldUserName && values.userName !== oldUserName) {
+          AntModal.confirm({
+            cancelText: t('profileSetup.confirmChangeUserId.cancel'),
+            content: t('profileSetup.confirmChangeUserId.description', {
+              newId: values.userName,
+              oldId: oldUserName,
+            }),
+            okButtonProps: { danger: true },
+            okText: t('profileSetup.confirmChangeUserId.confirm'),
+            title: t('profileSetup.confirmChangeUserId.title'),
+            onOk: doSubmit,
+          });
+          return;
+        }
+
+        await doSubmit();
+      } catch {
+        // validateFields failed, form will show errors
+      }
+    }, [doSubmit, form, isFirstTimeSetup, t, userProfile?.userName]);
 
     const handleCancel = useCallback(() => {
       if (!isFirstTimeSetup) {

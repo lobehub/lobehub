@@ -6,6 +6,7 @@ import {
   LibraryBigIcon,
   Settings,
   ShapesIcon,
+  Video,
 } from 'lucide-react';
 
 export interface NavigationRoute {
@@ -43,6 +44,16 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     keywordsKey: 'cmdk.keywords.community',
     path: '/community',
     pathPrefix: '/community',
+  },
+  {
+    cmdkKey: 'cmdk.video',
+    electronKey: 'navigation.video',
+    icon: Video,
+    id: 'video',
+    keywords: ['video', 'generate', 'seedance', 'kling'],
+    keywordsKey: 'cmdk.keywords.video',
+    path: '/video',
+    pathPrefix: '/video',
   },
   {
     cmdkKey: 'cmdk.painting',
@@ -108,5 +119,5 @@ export const getRouteById = (id: string): NavigationRoute | undefined =>
  */
 export const getNavigableRoutes = (): NavigationRoute[] =>
   NAVIGATION_ROUTES.filter((r) =>
-    ['community', 'image', 'resource', 'page', 'memory'].includes(r.id),
+    ['community', 'video', 'image', 'resource', 'page', 'memory'].includes(r.id),
   );

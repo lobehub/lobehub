@@ -10,6 +10,7 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { agentRouter } from './agent';
 import { agentCronJobRouter } from './agentCronJob';
+import { agentEvalRouter } from './agentEval';
 import { agentGroupRouter } from './agentGroup';
 import { aiAgentRouter } from './aiAgent';
 import { aiChatRouter } from './aiChat';
@@ -47,10 +48,12 @@ import { usageRouter } from './usage';
 import { userRouter } from './user';
 import { userMemoriesRouter } from './userMemories';
 import { userMemoryRouter } from './userMemory';
+import { videoRouter } from './video';
 
 export const lambdaRouter = router({
   agent: agentRouter,
   agentCronJob: agentCronJobRouter,
+  agentEval: agentEvalRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,
@@ -89,6 +92,7 @@ export const lambdaRouter = router({
   user: userRouter,
   userMemories: userMemoriesRouter,
   userMemory: userMemoryRouter,
+  video: videoRouter,
   /* eslint-disable sort-keys-fix/sort-keys-fix */
   accountDeletion: accountDeletionRouter,
   referral: referralRouter,

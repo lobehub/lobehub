@@ -8,6 +8,7 @@ import type {
 } from './layers';
 
 export const searchMemorySchema = z.object({
+  effort: z.enum(['low', 'medium', 'high']).optional(),
   query: z.string(),
   /**
    * Optional limits for each memory layer. If omitted, server defaults are used.

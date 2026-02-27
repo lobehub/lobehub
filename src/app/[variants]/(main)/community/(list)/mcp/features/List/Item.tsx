@@ -208,7 +208,7 @@ const McpItem = memo<DiscoverMcpItem>(
               <PublishedTime
                 className={styles.secondaryDesc}
                 date={updatedAt}
-                template={'MMM DD, YYYY'}
+               
               />
             </Flexbox>
             <Flexbox horizontal align={'center'} gap={8}>

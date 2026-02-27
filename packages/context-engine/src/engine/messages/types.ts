@@ -1,4 +1,4 @@
-/* eslint-disable typescript-sort-keys/interface */
+/* eslint-disable perfectionist/sort-interfaces */
 import type { FileContent, KnowledgeBaseInfo, PageContentContext } from '@lobechat/prompts';
 import type { RuntimeInitialContext, RuntimeStepContext } from '@lobechat/types';
 
@@ -6,10 +6,11 @@ import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
-import type { GTDPlan } from '../../providers/GTDPlanInjector';
-import type { GTDTodoList } from '../../providers/GTDTodoInjector';
+import type { EvalContext } from '../../providers/EvalContextSystemInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
+import type { GTDPlan } from '../../providers/GTDPlanInjector';
+import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -180,6 +181,8 @@ export interface MessagesEngineParams {
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
+  /** Force finish flag: when true, injects summary prompt for max-steps completion */
+  forceFinish?: boolean;
   /** Function to format history summary */
   formatHistorySummary?: (summary: string) => string;
   /** History message count limit */
@@ -212,6 +215,8 @@ export interface MessagesEngineParams {
   // ========== Extended contexts (both frontend and backend) ==========
   /** Agent Builder context */
   agentBuilderContext?: AgentBuilderContext;
+  /** Eval context for injecting environment prompts into system message */
+  evalContext?: EvalContext;
   /** Agent group configuration for multi-agent scenarios */
   agentGroup?: AgentGroupConfig;
   /** Group Agent Builder context */
@@ -266,6 +271,7 @@ export interface MessagesEngineResult {
 
 export { type AgentInfo } from '../../processors/GroupRoleTransform';
 export { type AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
+export { type EvalContext } from '../../providers/EvalContextSystemInjector';
 export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 export { type GTDPlan } from '../../providers/GTDPlanInjector';
 export { type GTDTodoItem, type GTDTodoList } from '../../providers/GTDTodoInjector';

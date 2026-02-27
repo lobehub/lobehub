@@ -24,7 +24,7 @@ const createFailedResult = (
 });
 
 export const klavisExecutor: RemoteToolExecutor = async (p) => {
-  // payload.identifier 现在是存储用的 identifier（如 'google-calendar'）
+  // payload.identifier is now the storage identifier (e.g., 'google-calendar')
   const identifier = p.identifier;
   const klavisServers = useToolStore.getState().servers || [];
   const server = klavisServers.find((s) => s.identifier === identifier);

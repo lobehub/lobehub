@@ -28,7 +28,7 @@ interface TokenDetailProps {
 const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provider }) => {
   const { t } = useTranslation('chat');
 
-  // 使用 systemStatus 管理短格式显示状态
+  // Use systemStatus to manage short-format display state
   const isShortFormat = useGlobalStore(systemStatusSelectors.tokenDisplayFormatShort);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
@@ -221,7 +221,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
         gap={2}
         style={{ cursor: 'pointer' }}
         onClick={(e) => {
-          // 阻止 Popover 并切换格式
+          // Prevent Popover from closing and toggle the format
           e.preventDefault();
           e.stopPropagation();
           updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });

@@ -51,8 +51,6 @@ jobs:
       version: ${{ steps.set_version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -103,8 +101,6 @@ jobs:
         os: [macos-latest, macos-15-intel]
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -181,8 +177,6 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
@@ -227,8 +221,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-node-pnpm

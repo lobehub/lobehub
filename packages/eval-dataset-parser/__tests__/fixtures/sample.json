@@ -1,0 +1,5 @@
+[
+  {"input": "What is 2+2?", "expected": "4", "tags": "math"},
+  {"input": "Capital of France?", "expected": "Paris", "tags": "geography"},
+  {"input": "Who wrote Hamlet?", "expected": "Shakespeare", "tags": "literature"}
+]

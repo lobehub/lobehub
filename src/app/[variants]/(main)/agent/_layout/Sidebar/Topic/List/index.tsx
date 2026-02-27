@@ -18,7 +18,7 @@ import AllTopicsDrawer from '../AllTopicsDrawer';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 
-const fetchParams = { excludeTriggers: ['cron'] };
+const fetchParams = { excludeTriggers: ['cron', 'eval'] };
 
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');

@@ -4,6 +4,7 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
 import {
   type ChatImageItem,
+  type ChatThreadType,
   type ChatVideoItem,
   type ConversationContext,
   type SendMessageParams,
@@ -89,7 +90,10 @@ export class ConversationLifecycleActionImpl {
     // Only create newThread if we have both sourceMessageId and threadType
     const newThread =
       isCreatingNewThread && context.sourceMessageId && context.threadType
-        ? { sourceMessageId: context.sourceMessageId, type: context.threadType }
+        ? {
+            sourceMessageId: context.sourceMessageId,
+            type: context.threadType as ChatThreadType,
+          }
         : undefined;
 
     if (!agentId) return;

@@ -15,6 +15,7 @@ import DesktopGroupLayout from '../(main)/group/_layout';
 import DesktopImageLayout from '../(main)/image/_layout';
 import DesktopMemoryLayout from '../(main)/memory/_layout';
 import DesktopPageLayout from '../(main)/page/_layout';
+import DesktopVideoLayout from '../(main)/video/_layout';
 
 // Desktop router configuration (declarative mode)
 export const desktopRoutes: RouteConfig[] = [
@@ -364,6 +365,19 @@ export const desktopRoutes: RouteConfig[] = [
         path: 'memory',
       },
 
+      // Video routes
+      {
+        children: [
+          {
+            element: dynamicElement(() => import('../(main)/video'), 'Desktop > Video'),
+            index: true,
+          },
+        ],
+        element: <DesktopVideoLayout />,
+        errorElement: <ErrorBoundary resetPath="/video" />,
+        path: 'video',
+      },
+
       // Image routes
       {
         children: [
@@ -378,6 +392,75 @@ export const desktopRoutes: RouteConfig[] = [
       },
 
       ...BusinessDesktopRoutesWithMainLayout,
+
+      // Eval routes
+      {
+        children: [
+          // Home (overview)
+          {
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('../(main)/eval'),
+                  'Desktop > Eval > Overview',
+                ),
+                index: true,
+              },
+            ],
+            element: dynamicElement(
+              () => import('../(main)/eval/(home)/_layout'),
+              'Desktop > Eval > Home > Layout',
+            ),
+          },
+          // Bench routes (with dedicated sidebar)
+          {
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('../(main)/eval/bench/[benchmarkId]'),
+                  'Desktop > Eval > Benchmark Detail',
+                ),
+                index: true,
+              },
+              {
+                children: [
+                  {
+                    element: dynamicElement(
+                      () => import('../(main)/eval/bench/[benchmarkId]/runs/[runId]'),
+                      'Desktop > Eval > Run Detail',
+                    ),
+                    index: true,
+                  },
+                  {
+                    element: dynamicElement(
+                      () =>
+                        import('../(main)/eval/bench/[benchmarkId]/runs/[runId]/cases/[caseId]'),
+                      'Desktop > Eval > Case Detail',
+                    ),
+                    path: 'cases/:caseId',
+                  },
+                ],
+                path: 'runs/:runId',
+              },
+              {
+                element: dynamicElement(
+                  () => import('../(main)/eval/bench/[benchmarkId]/datasets/[datasetId]'),
+                  'Desktop > Eval > Dataset Detail',
+                ),
+                path: 'datasets/:datasetId',
+              },
+            ],
+            element: dynamicElement(
+              () => import('../(main)/eval/bench/[benchmarkId]/_layout'),
+              'Desktop > Eval > Bench > Layout',
+            ),
+            path: 'bench/:benchmarkId',
+          },
+        ],
+        element: dynamicElement(() => import('../(main)/eval/_layout'), 'Desktop > Eval > Layout'),
+        errorElement: <ErrorBoundary resetPath="/eval" />,
+        path: 'eval',
+      },
 
       // Pages routes
       {

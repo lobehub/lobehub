@@ -400,6 +400,40 @@ export class AgentStateManager {
     }
   }
 
+  private stepLockKey(operationId: string, stepIndex: number): string {
+    return `agent_runtime_step_lock:${operationId}:${stepIndex}`;
+  }
+
+  async tryClaimStep(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number = 35,
+  ): Promise<boolean> {
+    try {
+      const result = await this.redis.set(
+        this.stepLockKey(operationId, stepIndex),
+        Date.now().toString(),
+        'EX',
+        ttlSeconds,
+        'NX',
+      );
+
+      return result === 'OK';
+    } catch (error) {
+      // Fail-open: on Redis error, allow execution to proceed
+      console.error('Failed to acquire step lock:', error);
+      return true;
+    }
+  }
+
+  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
+    try {
+      await this.redis.del(this.stepLockKey(operationId, stepIndex));
+    } catch (error) {
+      console.error('Failed to release step lock:', error);
+    }
+  }
+
   /**
    * Close Redis connection
    */

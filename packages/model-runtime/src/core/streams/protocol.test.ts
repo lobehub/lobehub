@@ -672,4 +672,90 @@ describe('createCallbacksTransformer', () => {
 
     expect(onToolsCalling).toHaveBeenCalledTimes(2);
   });
+
+  // Regression: stream errors silently swallowed by createCallbacksTransformer
+  // These tests assert the CORRECT expected behavior. They will FAIL until the bug is fixed.
+  describe('error event handling', () => {
+    it('should call onError callback when stream contains an error event', async () => {
+      const onError = vi.fn();
+      const onText = vi.fn();
+      const onCompletion = vi.fn();
+      const transformer = createCallbacksTransformer({ onCompletion, onError, onText } as any);
+
+      const errorPayload = {
+        body: { message: 'rate limit exceeded' },
+        message: 'rate limit exceeded',
+        type: 'ProviderBizError',
+      };
+
+      const chunks = ['event: error\n', `data: ${JSON.stringify(errorPayload)}\n\n`];
+
+      await processChunks(transformer, chunks);
+
+      // onText should NOT be called
+      expect(onText).not.toHaveBeenCalled();
+
+      // onError SHOULD be called with the error data
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(errorPayload);
+    });
+
+    it('should include error in onCompletion data when stream has error after partial text', async () => {
+      const onCompletion = vi.fn();
+      const transformer = createCallbacksTransformer({ onCompletion } as any);
+
+      const errorPayload = {
+        body: { message: 'content filter triggered' },
+        message: 'content filter triggered',
+        type: 'ProviderBizError',
+      };
+
+      const chunks = [
+        'event: text\n',
+        'data: "Partial response"\n\n',
+        'event: error\n',
+        `data: ${JSON.stringify(errorPayload)}\n\n`,
+      ];
+
+      await processChunks(transformer, chunks);
+
+      // onCompletion should include the error so callers can detect the failure
+      expect(onCompletion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: errorPayload,
+          text: 'Partial response',
+        }),
+      );
+    });
+
+    it('should surface first-chunk error via onError callback', async () => {
+      // Simulates the full chain: provider throws → ERROR_CHUNK_PREFIX → FIRST_CHUNK_ERROR_KEY
+      // → transformOpenAIStream returns { type: 'error' } → createSSEProtocolTransformer
+      // → createCallbacksTransformer should handle 'error' in switch
+      const onError = vi.fn();
+      const onCompletion = vi.fn();
+      const transformer = createCallbacksTransformer({ onCompletion, onError } as any);
+
+      const errorPayload = {
+        body: { message: 'insufficient balance', status_code: 1008 },
+        message: 'insufficient balance',
+        type: 'ProviderBizError',
+      };
+
+      const chunks = ['event: error\n', `data: ${JSON.stringify(errorPayload)}\n\n`];
+
+      await processChunks(transformer, chunks);
+
+      // onError should be called
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(errorPayload);
+
+      // onCompletion should include the error information
+      expect(onCompletion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: errorPayload,
+        }),
+      );
+    });
+  });
 });

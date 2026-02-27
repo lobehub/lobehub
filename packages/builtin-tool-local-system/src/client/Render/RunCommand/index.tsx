@@ -1,5 +1,5 @@
-import type { RunCommandParams, RunCommandResult } from '@lobechat/electron-client-ipc';
-import type { BuiltinRenderProps } from '@lobechat/types';
+import { type RunCommandParams, type RunCommandResult } from '@lobechat/electron-client-ipc';
+import { type BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
@@ -7,7 +7,12 @@ import { memo } from 'react';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
-    padding-inline: 8px 0;
+    padding-inline: 8px;
+
+    & .ant-highlighter-highlighter-hover-actions {
+      inset-block-start: 4px;
+      inset-inline-end: 4px;
+    }
   `,
   head: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -41,12 +46,12 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
 
     return (
       <Flexbox className={styles.container} gap={8}>
-        <Block gap={8} padding={8} variant={'outlined'}>
+        <Block gap={8} padding={'0 8px 0'} variant={'outlined'}>
           <Highlighter
             wrap
             language={'sh'}
             showLanguage={false}
-            style={{ paddingInline: 8 }}
+            style={{ padding: 8 }}
             variant={'borderless'}
           >
             {args.command}

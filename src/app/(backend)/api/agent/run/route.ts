@@ -29,7 +29,7 @@ async function verifyQStashSignature(request: NextRequest, rawBody: string): Pro
   }
 
   const { Receiver } = await import('@upstash/qstash');
-  const receiver = new Receiver({ currentSigningKey, nextSigningKey: nextSigningKey });
+  const receiver = new Receiver({ currentSigningKey, nextSigningKey });
 
   try {
     return await receiver.verify({ body: rawBody, signature });
@@ -91,6 +91,20 @@ export async function POST(request: NextRequest) {
       rejectionReason,
       stepIndex,
     });
+
+    // Step is currently being executed by another instance — tell QStash to retry later
+    if (result.locked) {
+      log(`[${operationId}] Step ${stepIndex} locked by another instance, returning 429`);
+      return NextResponse.json(
+        { error: 'Step is currently being executed, retry later', operationId, stepIndex },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': '37', // 单位：秒
+          },
+        },
+      );
+    }
 
     const executionTime = Date.now() - startTime;
 

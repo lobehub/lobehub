@@ -28,6 +28,7 @@ export type RedisMSetArgument = Record<string, RedisValue> | Map<RedisKey, Redis
 export interface RedisClient {
   decr: (key: RedisKey) => Promise<number>;
   del: (...keys: RedisKey[]) => Promise<number>;
+  eval: <T = unknown>(script: string, numkeys: number, ...args: RedisValue[]) => Promise<T>;
   exists: (...keys: RedisKey[]) => Promise<number>;
   expire: (key: RedisKey, seconds: number) => Promise<number>;
   get: (key: RedisKey) => Promise<string | null>;

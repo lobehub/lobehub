@@ -91,7 +91,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             <PublishedTime
               className={styles.time}
               date={releasedAt as string}
-              template={'MMM DD, YYYY'}
+             
             />
           </Flexbox>
         </Flexbox>

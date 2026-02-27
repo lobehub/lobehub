@@ -3,6 +3,7 @@ export enum AsyncTaskType {
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
+  VideoGeneration = 'video_generation',
 }
 
 export enum AsyncTaskStatus {
@@ -20,7 +21,7 @@ export enum AsyncTaskErrorType {
    * Free plan users are not allowed to use this feature
    */
   FreePlanLimit = 'FreePlanLimit',
-  // eslint-disable-next-line typescript-sort-keys/string-enum
+
   InvalidProviderAPIKey = 'InvalidProviderAPIKey',
   /* ↑ cloud slot ↑ */
 
@@ -81,4 +82,9 @@ export interface UserMemoryExtractionMetadata {
     to?: string;
   };
   source: 'chat_topic';
+}
+
+export interface VideoGenerationTaskMetadata {
+  precharge?: Record<string, unknown>;
+  webhookToken?: string;
 }

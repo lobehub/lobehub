@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as TraceparentModule from '@/libs/observability/traceparent';
 import { injectSpanTraceHeaders } from '@/libs/observability/traceparent';
 
-// eslint-disable-next-line import/first
 import { openTelemetry } from './openTelemetry';
 
 const spanContext = {
@@ -55,7 +55,7 @@ vi.mock('../lambda/init', () => {
 });
 
 vi.mock('@/libs/observability/traceparent', async () => {
-  const actual = await vi.importActual<typeof import('@/libs/observability/traceparent')>(
+  const actual = await vi.importActual<typeof TraceparentModule>(
     '@/libs/observability/traceparent',
   );
   return {

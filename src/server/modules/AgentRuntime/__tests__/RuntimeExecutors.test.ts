@@ -1,22 +1,39 @@
 import { type AgentState } from '@lobechat/agent-runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type RuntimeExecutorContext } from '../RuntimeExecutors';
-import { createRuntimeExecutors } from '../RuntimeExecutors';
+import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+
+import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 
 // Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
-    chat: vi.fn().mockResolvedValue({
-      [Symbol.asyncIterator]: async function* () {
-        yield { type: 'text', text: 'Hello' };
-      },
-    }),
+    chat: vi.fn().mockResolvedValue(new Response('done')),
   }),
 }));
 
+// @lobechat/model-runtime resolves to @cloud/business-model-runtime which has
+// cloud-specific dependencies that are unavailable in the test environment
 vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
+}));
+
+// model-bank is a TypeScript source file that cannot be dynamically imported in vitest
+vi.mock('model-bank', () => ({
+  LOBE_DEFAULT_MODEL_LIST: [
+    {
+      abilities: { functionCall: true, video: false, vision: true },
+      id: 'gpt-4',
+      providerId: 'openai',
+    },
+    {
+      abilities: { functionCall: false, video: false, vision: false },
+      id: 'no-tools-model',
+      providerId: 'test-provider',
+    },
+  ],
 }));
 
 describe('RuntimeExecutors', () => {
@@ -395,6 +412,372 @@ describe('RuntimeExecutors', () => {
 
         // Empty string is falsy, so should create new message
         expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('forceFinish behavior', () => {
+      let mockChat: ReturnType<typeof vi.fn>;
+
+      beforeEach(() => {
+        mockChat = vi.fn().mockResolvedValue(new Response('done'));
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      });
+
+      it('should strip tools when state.forceFinish is true', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState({ forceFinish: true });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [{ description: 'Search the web', name: 'search' }],
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ tools: undefined }),
+          expect.anything(),
+        );
+      });
+
+      it('should pass tools normally when state.forceFinish is not set', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const tools = [{ description: 'Search the web', name: 'search' }];
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools,
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ tools }),
+          expect.anything(),
+        );
+      });
+
+      it('should fallback to state.tools when payload.tools is not provided', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const stateTools = [{ description: 'State tool', name: 'state-tool' }];
+        const state = createMockState({ tools: stateTools as any });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ tools: stateTools }),
+          expect.anything(),
+        );
+      });
+
+      it('should strip state.tools too when forceFinish is true', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState({
+          forceFinish: true,
+          tools: [{ description: 'State tool', name: 'state-tool' }] as any,
+        });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ tools: undefined }),
+          expect.anything(),
+        );
+      });
+    });
+
+    describe('serverMessagesEngine integration', () => {
+      let mockChat: ReturnType<typeof vi.fn>;
+
+      let engineSpy: any;
+
+      beforeEach(() => {
+        mockChat = vi.fn().mockResolvedValue(new Response('done'));
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+        engineSpy = vi.spyOn(ContextEngineering, 'serverMessagesEngine');
+      });
+
+      afterEach(() => {
+        engineSpy.mockRestore();
+      });
+
+      it('should process messages through serverMessagesEngine when agentConfig is set', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'You are a helpful assistant',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        // Real serverMessagesEngine should have been called
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+
+        // Verify the engine actually processed messages:
+        // system role should be injected as the first message
+        const chatMessages = mockChat.mock.calls[0][0].messages;
+        expect(chatMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('You are a helpful assistant'),
+            role: 'system',
+          }),
+        );
+        // Original user message should be preserved
+        expect(chatMessages.at(-1)).toEqual(
+          expect.objectContaining({ content: 'Hello', role: 'user' }),
+        );
+      });
+
+      it('should not call serverMessagesEngine when agentConfig is not set', async () => {
+        const executors = createRuntimeExecutors(ctx); // ctx without agentConfig
+        const state = createMockState();
+
+        const rawMessages = [{ content: 'Hello', role: 'user' }];
+        const instruction = {
+          payload: {
+            messages: rawMessages,
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).not.toHaveBeenCalled();
+
+        // Raw messages should be passed directly to chat
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ messages: rawMessages }),
+          expect.anything(),
+        );
+      });
+
+      it('should pass correct params from agentConfig to serverMessagesEngine', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { enableHistoryCount: true, historyCount: 10 },
+            files: [{ content: 'file contents', enabled: true, id: 'file-1', name: 'doc.pdf' }],
+            knowledgeBases: [{ enabled: true, id: 'kb-1', name: 'My KB' }],
+            plugins: ['web-search', 'calculator'],
+            systemRole: 'You are a helpful assistant',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            enableHistoryCount: true,
+            historyCount: 10,
+            knowledge: {
+              fileContents: [{ content: 'file contents', fileId: 'file-1', filename: 'doc.pdf' }],
+              knowledgeBases: [{ id: 'kb-1', name: 'My KB' }],
+            },
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            systemRole: 'You are a helpful assistant',
+            toolsConfig: { tools: ['web-search', 'calculator'] },
+          }),
+        );
+      });
+
+      it('should pass forceFinish flag to serverMessagesEngine and inject summary', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState({ forceFinish: true });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        // forceFinish should be passed to the engine
+        expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ forceFinish: true }));
+
+        // The engine's ForceFinishSummaryInjector should inject a summary system message
+        const chatMessages = mockChat.mock.calls[0][0].messages;
+        const hasForceFinishMessage = chatMessages.some(
+          (m: any) =>
+            m.role === 'system' &&
+            m.content.includes('maximum step limit') &&
+            m.content.includes('Do not attempt to use any tools'),
+        );
+        expect(hasForceFinishMessage).toBe(true);
+      });
+
+      it('should pass evalContext to serverMessagesEngine', async () => {
+        const evalContext = { expectedOutput: 'test answer', evalMode: true };
+        const ctxWithEval: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+          evalContext: evalContext as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithEval);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ evalContext }));
+      });
+
+      it('should build capabilities from LOBE_DEFAULT_MODEL_LIST', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        const callArgs = engineSpy.mock.calls[0][0];
+
+        // gpt-4/openai is in mock list with functionCall: true, vision: true, video: false
+        expect(callArgs.capabilities.isCanUseFC('gpt-4', 'openai')).toBe(true);
+        expect(callArgs.capabilities.isCanUseVision('gpt-4', 'openai')).toBe(true);
+        expect(callArgs.capabilities.isCanUseVideo('gpt-4', 'openai')).toBe(false);
+
+        // no-tools-model has all abilities set to false
+        expect(callArgs.capabilities.isCanUseFC('no-tools-model', 'test-provider')).toBe(false);
+        expect(callArgs.capabilities.isCanUseVision('no-tools-model', 'test-provider')).toBe(false);
+        expect(callArgs.capabilities.isCanUseVideo('no-tools-model', 'test-provider')).toBe(false);
+
+        // Unknown model defaults: functionCall=true, vision=true, video=false
+        expect(callArgs.capabilities.isCanUseFC('unknown', 'unknown')).toBe(true);
+        expect(callArgs.capabilities.isCanUseVision('unknown', 'unknown')).toBe(true);
+        expect(callArgs.capabilities.isCanUseVideo('unknown', 'unknown')).toBe(false);
+      });
+
+      it('should filter disabled files and knowledgeBases from agentConfig', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            files: [
+              { content: 'yes', enabled: true, id: 'f1', name: 'enabled.pdf' },
+              { content: 'no', enabled: false, id: 'f2', name: 'disabled.pdf' },
+              { content: 'maybe', enabled: null, id: 'f3', name: 'null.pdf' },
+            ],
+            knowledgeBases: [
+              { enabled: true, id: 'kb1', name: 'Enabled KB' },
+              { enabled: false, id: 'kb2', name: 'Disabled KB' },
+            ],
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        const callArgs = engineSpy.mock.calls[0][0];
+
+        // Only enabled files should be included (enabled === true)
+        expect(callArgs.knowledge.fileContents).toHaveLength(1);
+        expect(callArgs.knowledge.fileContents[0]).toEqual({
+          content: 'yes',
+          fileId: 'f1',
+          filename: 'enabled.pdf',
+        });
+
+        // Only enabled knowledge bases
+        expect(callArgs.knowledge.knowledgeBases).toHaveLength(1);
+        expect(callArgs.knowledge.knowledgeBases[0]).toEqual({
+          id: 'kb1',
+          name: 'Enabled KB',
+        });
       });
     });
   });
@@ -992,6 +1375,79 @@ describe('RuntimeExecutors', () => {
       });
     });
 
+    // LOBE-5143: After DB refresh, state.messages stores raw UIChatMessage[]
+    // and call_llm re-injects context via serverMessagesEngine on each invocation
+    it('should store raw UIChatMessage[] from DB after refresh (context re-injected by call_llm)', async () => {
+      // DB only stores raw user/assistant/tool messages, NOT MessagesEngine injections
+      const dbMessages = [
+        { id: 'msg-1', content: 'What is quantum computing?', role: 'user' },
+        {
+          id: 'msg-2',
+          content: '',
+          role: 'assistant',
+          tool_calls: [{ id: 'tool-call-1', function: { name: 'search', arguments: '{}' } }],
+        },
+        {
+          id: 'tool-msg-1',
+          content: 'Search results...',
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+        },
+      ];
+      mockMessageModel.query = vi.fn().mockResolvedValue(dbMessages);
+
+      const executors = createRuntimeExecutors(ctx);
+
+      // State before tool execution: messages are raw UIChatMessage[]
+      const state = createMockState({
+        messages: [
+          { id: 'msg-1', content: 'What is quantum computing?', role: 'user' },
+          {
+            id: 'msg-2',
+            content: '',
+            role: 'assistant',
+            tool_calls: [{ id: 'tool-call-1', function: { name: 'search', arguments: '{}' } }],
+          },
+        ],
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'msg-2',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      const result = await executors.call_tools_batch!(instruction, state);
+
+      // After DB refresh, messages should be full UIChatMessage[] (via parse),
+      // preserving all fields (id, content, role, tool_calls, tool_call_id)
+      expect(result.newState.messages).toHaveLength(3);
+      expect(result.newState.messages[0]).toEqual(
+        expect.objectContaining({
+          id: 'msg-1',
+          role: 'user',
+          content: 'What is quantum computing?',
+        }),
+      );
+      expect(result.newState.messages[2]).toEqual(
+        expect.objectContaining({
+          id: 'tool-msg-1',
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+        }),
+      );
+    });
+
     it('should preserve messages in newState even when state.metadata.topicId is undefined', async () => {
       // Regression test: When state.metadata.topicId is undefined, previously the query
       // only passed topicId, which caused isNull(topicId) condition and returned 0 messages.
@@ -1329,6 +1785,128 @@ describe('RuntimeExecutors', () => {
 
       // Only the first tool message should be added to state
       expect(result.newState.messages).toHaveLength(1);
+    });
+  });
+
+  // Regression: stream errors silently produce empty llm_result
+  // Uses real consumeStreamUntilDone + createCallbacksTransformer to test the full stream pipeline.
+  // Only the lowest-level chat() return is mocked to simulate provider error responses.
+  describe('stream error detection in call_llm', () => {
+    const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [],
+      metadata: {
+        agentId: 'agent-123',
+        threadId: 'thread-123',
+        topicId: 'topic-123',
+      },
+      modelRuntimeConfig: {
+        model: 'gpt-4',
+        provider: 'openai',
+      },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    afterEach(() => {
+      // Restore default mock for other tests
+      vi.mocked(consumeStreamUntilDone).mockResolvedValue(undefined);
+    });
+
+    it('should throw when LLM stream contains error events from provider', async () => {
+      // Import real implementations directly from source (bypassing the @lobechat/model-runtime mock)
+      const { consumeStreamUntilDone: realConsume } =
+        await import('../../../../../packages/model-runtime/src/utils/consumeStream');
+      const { createCallbacksTransformer } =
+        await import('../../../../../packages/model-runtime/src/core/streams/protocol');
+
+      // Use real consumeStreamUntilDone so the stream is actually consumed
+      vi.mocked(consumeStreamUntilDone).mockImplementation(realConsume);
+
+      const errorPayload = {
+        body: { message: 'rate limit exceeded' },
+        message: 'rate limit exceeded',
+        type: 'ProviderBizError',
+      };
+
+      // Mock chat() at the lowest level: return a Response with SSE error stream
+      // piped through the real createCallbacksTransformer (just like the OpenAI factory does)
+      const mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+        const callbacks = options?.callback;
+        const sseLines = ['event: error\n', `data: ${JSON.stringify(errorPayload)}\n\n`];
+        const source = new ReadableStream<string>({
+          start(controller) {
+            for (const line of sseLines) controller.enqueue(line);
+            controller.close();
+          },
+        });
+        return new Response(source.pipeThrough(createCallbacksTransformer(callbacks)));
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toThrow(/LLM stream error/);
+
+      // Error event should be published to stream manager
+      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+        'op-123',
+        expect.objectContaining({
+          type: 'error',
+        }),
+      );
+    });
+
+    it('should throw and not produce llm_result when modelRuntime.chat rejects', async () => {
+      // When chat() throws (pre-stream error like auth failure), it SHOULD propagate
+      const mockChat = vi.fn().mockRejectedValue(new Error('401 Unauthorized'));
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toThrow('401 Unauthorized');
+
+      // Error event should be published to stream
+      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+        'op-123',
+        expect.objectContaining({
+          type: 'error',
+          data: expect.objectContaining({
+            error: '401 Unauthorized',
+            phase: 'llm_execution',
+          }),
+        }),
+      );
     });
   });
 });

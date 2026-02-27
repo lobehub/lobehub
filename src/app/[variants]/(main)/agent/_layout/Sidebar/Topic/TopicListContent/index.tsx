@@ -30,7 +30,7 @@ const TopicListContent = memo(() => {
 
   const [topicDisplayMode] = useUserStore((s) => [preferenceSelectors.topicDisplayMode(s)]);
 
-  useFetchTopics({ excludeTriggers: ['cron'] });
+  useFetchTopics({ excludeTriggers: ['cron', 'eval'] });
 
   if (isInSearchMode) return <SearchResult />;
 

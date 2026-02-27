@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import { type ModelProviderCard } from '@/types/llm';
 
 // ref: https://platform.minimaxi.com/document/Models
 const Minimax: ModelProviderCard = {
@@ -19,6 +19,7 @@ const Minimax: ModelProviderCard = {
       text: 'smooth',
     },
     sdkType: 'openai',
+    showModelFetcher: false,
   },
   url: 'https://www.minimaxi.com',
 };

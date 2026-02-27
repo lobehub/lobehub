@@ -38,8 +38,9 @@ describe('aiProviderRouter', () => {
     enabledAiModels: [],
     enabledAiProviders: [],
     enabledChatAiProviders: [],
-    runtimeConfig: {},
     enabledImageAiProviders: [],
+    enabledVideoAiProviders: [],
+    runtimeConfig: {},
   };
 
   beforeEach(() => {

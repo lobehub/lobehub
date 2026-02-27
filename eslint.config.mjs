@@ -1,5 +1,9 @@
+import { fileURLToPath } from 'node:url';
+
 import { eslint } from '@lobehub/lint';
 import { flat as mdxFlat } from 'eslint-plugin-mdx';
+
+const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default eslint(
   {
@@ -40,6 +44,13 @@ export default eslint(
     next: true,
     react: 'next',
   },
+  {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir,
+      },
+    },
+  },
   // Global rule overrides
   {
     rules: {
@@ -50,6 +61,12 @@ export default eslint(
       'react/no-unknown-property': 0,
       'regexp/match-any': 0,
       'unicorn/better-regex': 0,
+      '@typescript-eslint/consistent-type-imports': [
+        2,
+        {
+          fixStyle: 'separate-type-imports',
+        },
+      ],
     },
   },
   // MDX files
@@ -79,6 +96,13 @@ export default eslint(
     rules: {
       'unicorn/no-process-exit': 0,
       'unicorn/prefer-top-level-await': 0,
+    },
+  },
+  // E2E and test files - allow console.log for debugging
+  {
+    files: ['e2e/**/*', '**/*.test.ts', '**/*.test.tsx'],
+    rules: {
+      'no-console': 0,
     },
   },
 );

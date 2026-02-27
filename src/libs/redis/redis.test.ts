@@ -42,6 +42,7 @@ const createMockedProvider = async () => {
     hset: vi.fn().mockResolvedValue(1),
     hdel: vi.fn().mockResolvedValue(1),
     hgetall: vi.fn().mockResolvedValue({ a: '1' }),
+    eval: vi.fn().mockResolvedValue(null),
   };
 
   vi.resetModules();
@@ -69,6 +70,7 @@ const createMockedProvider = async () => {
       hset = mocks.hset;
       hdel = mocks.hdel;
       hgetall = mocks.hgetall;
+      eval = mocks.eval;
     }
 
     return { default: FakeRedis };
@@ -138,6 +140,17 @@ describe('mocked', () => {
     await provider.set('key', 'value', { ex: 10, nx: true, get: true });
 
     expect(mocks.set).toHaveBeenCalledWith('key', 'value', 'EX', 10, 'NX', 'GET');
+    await provider.disconnect();
+  });
+
+  it('forwards eval to ioredis', async () => {
+    const { mocks, provider } = await createMockedProvider();
+    mocks.eval.mockResolvedValue(1);
+
+    const result = await provider.eval('return redis.call("GET", KEYS[1])', 1, 'my-key');
+
+    expect(mocks.eval).toHaveBeenCalledWith('return redis.call("GET", KEYS[1])', 1, 'my-key');
+    expect(result).toBe(1);
     await provider.disconnect();
   });
 

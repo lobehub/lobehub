@@ -23,6 +23,8 @@ export const getFileConfig = () => {
     runtimeEnv: {
       CHUNKS_AUTO_EMBEDDING: process.env.CHUNKS_AUTO_EMBEDDING !== '0',
       CHUNKS_AUTO_GEN_METADATA: process.env.CHUNKS_AUTO_GEN_METADATA !== '0',
+      EMBEDDING_BATCH_SIZE: process.env.EMBEDDING_BATCH_SIZE,
+      EMBEDDING_CONCURRENCY: process.env.EMBEDDING_CONCURRENCY,
 
       NEXT_PUBLIC_S3_DOMAIN: process.env.NEXT_PUBLIC_S3_DOMAIN,
       NEXT_PUBLIC_S3_FILE_PATH: process.env.NEXT_PUBLIC_S3_FILE_PATH || DEFAULT_S3_FILE_PATH,
@@ -40,6 +42,8 @@ export const getFileConfig = () => {
     server: {
       CHUNKS_AUTO_EMBEDDING: z.boolean(),
       CHUNKS_AUTO_GEN_METADATA: z.boolean(),
+      EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+      EMBEDDING_CONCURRENCY: z.coerce.number().int().positive().default(10),
 
       // S3
       S3_ACCESS_KEY_ID: z.string().optional(),

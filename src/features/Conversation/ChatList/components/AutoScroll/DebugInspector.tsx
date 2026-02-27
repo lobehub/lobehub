@@ -7,8 +7,8 @@ import { messageStateSelectors, useConversationStore, virtuaListSelectors } from
 import { AT_BOTTOM_THRESHOLD } from './const';
 
 /**
- * 是否开启调试面板
- * 设为 true 可以显示滚动位置调试信息
+ * Whether to enable the debug panel
+ * Set to true to display scroll position debug information
  */
 export const OPEN_DEV_INSPECTOR = false;
 
@@ -23,7 +23,7 @@ const DebugInspector = memo(() => {
   const scrollSize = virtuaScrollMethods?.getScrollSize?.() ?? 0;
   const viewportSize = virtuaScrollMethods?.getViewportSize?.() ?? 0;
   const distanceToBottom = scrollSize - scrollOffset - viewportSize;
-  // 可视化计算
+  // Visual calculation
   const visualHeight = 120;
   const scale = scrollSize > 0 ? visualHeight / scrollSize : 0;
   const viewportVisualHeight = Math.max(viewportSize * scale, 10);
@@ -46,7 +46,7 @@ const DebugInspector = memo(() => {
         zIndex: 9999,
       }}
     >
-      {/* 滚动条可视化 */}
+      {/* Scroll bar visualization */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ color: '#9ca3af', fontSize: 10 }}>Scroll Position</div>
         <div
@@ -58,7 +58,7 @@ const DebugInspector = memo(() => {
             width: 24,
           }}
         >
-          {/* threshold 区域 (底部 200px) */}
+          {/* Threshold area (bottom 200px) */}
           <div
             style={{
               background: atBottom ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
@@ -70,7 +70,7 @@ const DebugInspector = memo(() => {
               right: 0,
             }}
           />
-          {/* 当前视口位置 */}
+          {/* Current viewport position */}
           <div
             style={{
               background: atBottom ? '#22c55e' : '#3b82f6',
@@ -83,7 +83,7 @@ const DebugInspector = memo(() => {
               transition: 'top 0.1s',
             }}
           />
-          {/* threshold 线 */}
+          {/* Threshold line */}
           <div
             style={{
               background: '#f59e0b',
@@ -100,7 +100,7 @@ const DebugInspector = memo(() => {
         </div>
       </div>
 
-      {/* 数值信息 */}
+      {/* Numeric information */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ color: '#9ca3af', fontSize: 10 }}>
           scrollSize: <span style={{ color: 'white' }}>{Math.round(scrollSize)}px</span>

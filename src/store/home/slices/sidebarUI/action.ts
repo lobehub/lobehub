@@ -100,8 +100,12 @@ export class SidebarUIActionImpl {
     await this.#get().refreshAgentList();
   };
 
-  renameAgentGroup = async (groupId: string, title: string): Promise<void> => {
-    await chatGroupService.updateGroup(groupId, { title });
+  renameAgentGroup = async (
+    groupId: string,
+    title: string,
+    avatar?: string | null,
+  ): Promise<void> => {
+    await chatGroupService.updateGroup(groupId, { avatar, title });
     await this.#get().refreshAgentList();
   };
 
@@ -142,16 +146,8 @@ export class SidebarUIActionImpl {
     await this.#get().refreshAgentList();
   };
 
-  setAgentRenamingId = (id: string | null): void => {
-    this.#set({ agentRenamingId: id }, false, n('setAgentRenamingId'));
-  };
-
   setAgentUpdatingId = (id: string | null): void => {
     this.#set({ agentUpdatingId: id }, false, n('setAgentUpdatingId'));
-  };
-
-  setGroupRenamingId = (id: string | null): void => {
-    this.#set({ groupRenamingId: id }, false, n('setGroupRenamingId'));
   };
 
   setGroupUpdatingId = (id: string | null): void => {

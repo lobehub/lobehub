@@ -8,6 +8,25 @@ import { AgentRuntimeError } from '../../utils/createError';
 
 const log = createDebug('lobe-image:qwen');
 
+const text2ImageModels = [
+  /^wan2\.(2|5)-t2i-/,
+  /^wanx2\.(0|1)-t2i-/,
+  /^wanx-v1/,
+  /^stable-diffusion-/,
+  /^flux-/,
+];
+
+const image2ImageModels = [/^wan2\.(2|5)-i2i-/];
+
+const imageRequiredModels = [/^qwen-image-edit/, /^wan2\.(2|5)-i2i-/, /^wan2\.6-image/];
+
+// Helper function to check if model matches any pattern in the array
+function matchesModel(model: string, patterns: Array<string | RegExp>): boolean {
+  return patterns.some((pattern) =>
+    pattern instanceof RegExp ? pattern.test(model) : pattern === model,
+  );
+}
+
 interface QwenImageTaskResponse {
   output: {
     error_message?: string;
@@ -20,8 +39,8 @@ interface QwenImageTaskResponse {
   request_id: string;
 }
 
-// Interface for qwen-image-edit multimodal-generation response
-interface QwenImageEditResponse {
+// Interface for multimodal-generation response
+interface QwenMultimodalGenerationResponse {
   output: {
     choices: Array<{
       message: {
@@ -35,31 +54,57 @@ interface QwenImageEditResponse {
 }
 
 /**
- * Create an image generation task with Qwen API for text-to-image models
+ * Create an image generation task with Qwen API
+ * Supports both text-to-image and image-to-image workflows
  */
-async function createImageTask(payload: CreateImagePayload, apiKey: string): Promise<string> {
+async function createQwenImageTask(
+  payload: CreateImagePayload,
+  apiKey: string,
+  endpoint: 'text2image' | 'image2image',
+  provider: string,
+  baseUrl: string,
+): Promise<string> {
   const { model, params } = payload;
-  // I can only say that the design of Alibaba Cloud's API is really bad; each model has a different endpoint path.
-  const endpoint = `https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis`;
-  log('Creating image task with model: %s, endpoint: %s', model, endpoint);
+  const url = `${baseUrl}/api/v1/services/aigc/${endpoint}/image-synthesis`;
+  log('Creating %s task with model: %s, endpoint: %s', endpoint, model, url);
 
-  const response = await fetch(endpoint, {
+  const input: Record<string, any> = {
+    prompt: params.prompt,
+  };
+
+  const parameters: Record<string, any> = {
+    n: 1,
+    ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
+    ...(params.width && params.height
+      ? { size: `${params.width}*${params.height}` }
+      : params.size
+        ? { size: params.size.replaceAll('x', '*') }
+        : { size: '1024*1024' }),
+  };
+
+  if (endpoint === 'image2image') {
+    let images = params.imageUrls;
+    if (!images && params.imageUrl) {
+      images = [params.imageUrl];
+      log('Converting imageUrl to images array: using image %s', params.imageUrl);
+    }
+
+    if (!images || images.length === 0) {
+      throw AgentRuntimeError.createImage({
+        error: new Error('imageUrls or imageUrl is required for image-to-image models'),
+        errorType: 'ProviderBizError',
+        provider,
+      });
+    }
+
+    input.images = images;
+  }
+
+  const response = await fetch(url, {
     body: JSON.stringify({
-      input: {
-        prompt: params.prompt,
-        // negativePrompt is not part of standard parameters
-        // but can be supported by extending the params type if needed
-      },
+      input,
       model,
-      parameters: {
-        n: 1,
-        ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
-        ...(params.width && params.height
-          ? { size: `${params.width}*${params.height}` }
-          : params.size
-            ? { size: params.size.replaceAll('x', '*') }
-            : { size: '1024*1024' }),
-      },
+      parameters,
     }),
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -77,7 +122,7 @@ async function createImageTask(payload: CreateImagePayload, apiKey: string): Pro
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to create image task (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to create ${endpoint} task for model ${model} (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
@@ -88,26 +133,39 @@ async function createImageTask(payload: CreateImagePayload, apiKey: string): Pro
 }
 
 /**
- * Create image with Qwen image-edit API for image-to-image models
+ * Create image with Qwen multimodal-generation API
  * This is a synchronous API that returns the result directly
+ * Supports both text-to-image (t2i) and image-to-image (i2i) workflows
  */
-async function createImageEdit(
+async function createMultimodalGeneration(
   payload: CreateImagePayload,
   apiKey: string,
+  baseUrl: string,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
-  const endpoint = `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`;
-  log('Creating image edit with model: %s, endpoint: %s', model, endpoint);
+  const endpoint = `${baseUrl}/api/v1/services/aigc/multimodal-generation/generation`;
+  log('Creating image with model: %s, endpoint: %s', model, endpoint);
 
-  // Handle imageUrls to imageUrl conversion
-  let imageUrl = params.imageUrl;
-  if (!imageUrl && params.imageUrls && params.imageUrls.length > 0) {
-    imageUrl = params.imageUrls[0];
-    log('Converting imageUrls to imageUrl: using first image %s', imageUrl);
+  // Check if this model requires an image
+  const requiresImage = matchesModel(model, imageRequiredModels);
+
+  if (requiresImage && !params.imageUrl && (!params.imageUrls || params.imageUrls.length === 0)) {
+    throw AgentRuntimeError.createImage({
+      error: new Error(`imageUrl or imageUrls is required for model ${model}`),
+      errorType: 'ProviderBizError',
+      provider: 'qwen',
+    });
   }
 
-  if (!imageUrl) {
-    throw new Error('imageUrl or imageUrls is required for qwen-image-edit model');
+  const content: Array<{ image: string } | { text: string }> = [{ text: params.prompt }];
+
+  if (params.imageUrl) {
+    content.unshift({ image: params.imageUrl });
+  } else if (params.imageUrls && params.imageUrls.length > 0) {
+    // Add each image as a separate object in the content array
+    for (const imageUrl of params.imageUrls) {
+      content.unshift({ image: imageUrl });
+    }
   }
 
   const response = await fetch(endpoint, {
@@ -115,7 +173,7 @@ async function createImageEdit(
       input: {
         messages: [
           {
-            content: [{ image: imageUrl }, { text: params.prompt }],
+            content,
             role: 'user',
           },
         ],
@@ -140,24 +198,24 @@ async function createImageEdit(
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to create image edit (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to create image for model ${model} (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
-  const data: QwenImageEditResponse = await response.json();
+  const data: QwenMultimodalGenerationResponse = await response.json();
 
   if (!data.output.choices || data.output.choices.length === 0) {
-    throw new Error('No image choices returned from qwen-image-edit API');
+    throw new Error(`No image choices returned from API for model ${model}`);
   }
 
   const choice = data.output.choices[0];
   if (!choice.message.content || choice.message.content.length === 0) {
-    throw new Error('No image content returned from qwen-image-edit API');
+    throw new Error(`No image content returned from API for model ${model}`);
   }
 
   const imageContent = choice.message.content.find((content) => 'image' in content);
   if (!imageContent) {
-    throw new Error('No image found in response content');
+    throw new Error(`No image found in response content for model ${model}`);
   }
 
   const resultImageUrl = imageContent.image;
@@ -169,8 +227,12 @@ async function createImageEdit(
 /**
  * Query the status of an image generation task
  */
-async function queryTaskStatus(taskId: string, apiKey: string): Promise<QwenImageTaskResponse> {
-  const endpoint = `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`;
+async function queryTaskStatus(
+  taskId: string,
+  apiKey: string,
+  baseUrl: string,
+): Promise<QwenImageTaskResponse> {
+  const endpoint = `${baseUrl}/api/v1/tasks/${taskId}`;
 
   log('Querying task status for: %s', taskId);
 
@@ -188,7 +250,7 @@ async function queryTaskStatus(taskId: string, apiKey: string): Promise<QwenImag
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to query task status (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to query task status for ${taskId} (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
@@ -197,69 +259,78 @@ async function queryTaskStatus(taskId: string, apiKey: string): Promise<QwenImag
 
 /**
  * Create image using Qwen API
- * Supports both text-to-image (async with polling) and image-to-image (sync) workflows
+ * Supports three types:
+ * - text2image (async with polling for legacy models)
+ * - image2image (async with polling for legacy models)
+ * - multimodal-generation (sync for new models, default fallback)
  */
 export async function createQwenImage(
   payload: CreateImagePayload,
   options: CreateImageOptions,
 ): Promise<CreateImageResponse> {
-  const { apiKey, provider } = options;
+  const { apiKey, baseURL, provider } = options;
   const { model } = payload;
 
+  // Check if URL has /compatible-mode/v1 suffix and remove it
+  const suffixIndex = baseURL ? baseURL.indexOf('/compatible-mode/v1') : -1;
+  const dashscopeURL: string =
+    suffixIndex > -1 ? baseURL!.slice(0, suffixIndex) : baseURL || 'https://dashscope.aliyuncs.com';
+  log('Using dashscopeURL: %s', dashscopeURL);
+
   try {
-    // Check if this is qwen-image-edit model for image-to-image
-    if (model === 'qwen-image-edit') {
-      log('Using multimodal-generation API for qwen-image-edit model');
-      return await createImageEdit(payload, apiKey);
-    }
+    const isText2Image = matchesModel(model, text2ImageModels);
+    const isImage2Image = matchesModel(model, image2ImageModels);
 
-    // Default to text-to-image workflow for other qwen models
-    log('Using text2image API for model: %s', model);
+    if (isText2Image || isImage2Image) {
+      const endpoint = isImage2Image ? 'image2image' : 'text2image';
+      log('Using %s API for model: %s', endpoint, model);
 
-    // 1. Create image generation task
-    const taskId = await createImageTask(payload, apiKey);
+      const taskId = await createQwenImageTask(payload, apiKey, endpoint, provider, dashscopeURL);
 
-    // 2. Poll task status until completion using asyncifyPolling
-    const result = await asyncifyPolling<QwenImageTaskResponse, CreateImageResponse>({
-      checkStatus: (taskStatus: QwenImageTaskResponse): TaskResult<CreateImageResponse> => {
-        log('Task %s status: %s', taskId, taskStatus.output.task_status);
+      const result = await asyncifyPolling<QwenImageTaskResponse, CreateImageResponse>({
+        checkStatus: (taskStatus: QwenImageTaskResponse): TaskResult<CreateImageResponse> => {
+          log('Task %s status: %s', taskId, taskStatus.output.task_status);
 
-        if (taskStatus.output.task_status === 'SUCCEEDED') {
-          if (!taskStatus.output.results || taskStatus.output.results.length === 0) {
+          if (taskStatus.output.task_status === 'SUCCEEDED') {
+            if (!taskStatus.output.results || taskStatus.output.results.length === 0) {
+              return {
+                error: new Error('Task succeeded but no images generated'),
+                status: 'failed',
+              };
+            }
+
+            const generatedImageUrl = taskStatus.output.results[0].url;
+            log('Image generated successfully: %s', generatedImageUrl);
+
             return {
-              error: new Error('Task succeeded but no images generated'),
+              data: { imageUrl: generatedImageUrl },
+              status: 'success',
+            };
+          }
+
+          if (taskStatus.output.task_status === 'FAILED') {
+            const errorMessage =
+              taskStatus.output.error_message || 'Task failed without error message';
+            return {
+              error: new Error(`Image generation failed for model ${model}: ${errorMessage}`),
               status: 'failed',
             };
           }
 
-          const generatedImageUrl = taskStatus.output.results[0].url;
-          log('Image generated successfully: %s', generatedImageUrl);
+          return { status: 'pending' };
+        },
+        logger: {
+          debug: (message: any, ...args: any[]) => log(message, ...args),
+          error: (message: any, ...args: any[]) => log(message, ...args),
+        },
+        pollingQuery: () => queryTaskStatus(taskId, apiKey, dashscopeURL),
+      });
 
-          return {
-            data: { imageUrl: generatedImageUrl },
-            status: 'success',
-          };
-        }
+      return result;
+    }
 
-        if (taskStatus.output.task_status === 'FAILED') {
-          const errorMessage = taskStatus.output.error_message || 'Image generation task failed';
-          return {
-            error: new Error(`Qwen image generation failed: ${errorMessage}`),
-            status: 'failed',
-          };
-        }
-
-        // Continue polling for pending/running status or other unknown statuses
-        return { status: 'pending' };
-      },
-      logger: {
-        debug: (message: any, ...args: any[]) => log(message, ...args),
-        error: (message: any, ...args: any[]) => log(message, ...args),
-      },
-      pollingQuery: () => queryTaskStatus(taskId, apiKey),
-    });
-
-    return result;
+    log('Using multimodal-generation API for model: %s', model);
+    return await createMultimodalGeneration(payload, apiKey, dashscopeURL);
   } catch (error) {
     log('Error in createQwenImage: %O', error);
 

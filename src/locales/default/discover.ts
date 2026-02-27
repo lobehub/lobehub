@@ -171,6 +171,10 @@ export default {
 
   'groupAgents.underReview': 'Under Review',
 
+  'home.creatorReward.action': 'Apply Now',
+  'home.creatorReward.subtitle': '2026 Creator Reward Program is officially live.',
+  'home.creatorReward.title': 'Create. Share. Get Paid.',
+
   'home.communityAgents': 'Community Agents',
 
   'home.featuredAssistants': 'Featured Agents',
@@ -261,6 +265,10 @@ export default {
   'mcp.categories.travel-transport.description': 'Travel Planning and Transportation',
 
   'mcp.categories.travel-transport.name': 'Travel & Transport',
+
+  'mcp.categories.utility.name': 'Utility',
+
+  'mcp.categories.utility.description': 'Weather Forecasting and Meteorological Services',
 
   'mcp.categories.weather.description': 'Weather Forecasting and Meteorological Services',
 
@@ -845,6 +853,11 @@ export default {
   'providers.supportedModels': 'Supported Models',
 
   'publishedTime': 'Published',
+
+  'time.formatOtherYear': 'MMM D, YYYY',
+  'time.formatThisYear': 'MMM D',
+  'time.today': 'Today',
+  'time.yesterday': 'Yesterday',
 
   'search.placeholder': 'Search by name, description, or keywords...',
 

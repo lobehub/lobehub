@@ -15,6 +15,7 @@ import {
 } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { Check, LucideBolt } from 'lucide-react';
+import { type ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -25,10 +26,12 @@ import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { styles } from '../../styles';
 import { type ModelWithProviders } from '../../types';
 import { menuKey } from '../../utils';
+import ModelDetailPanel from '../ModelDetailPanel';
 
 interface MultipleProvidersModelItemProps {
   activeKey: string;
   data: ModelWithProviders;
+  extraControls?: (modelId: string, providerId: string) => ReactNode;
   isScrolling: boolean;
   newLabel: string;
   onClose: () => void;
@@ -36,7 +39,7 @@ interface MultipleProvidersModelItemProps {
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
-  ({ activeKey, data, isScrolling, newLabel, onModelChange, onClose }) => {
+  ({ activeKey, data, extraControls, isScrolling, newLabel, onModelChange, onClose }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -47,7 +50,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
       }
     }, [isScrolling]);
 
-    const isActive = data.providers.some((p) => menuKey(p.id, data.model.id) === activeKey);
+    const activeProvider = data.providers.find((p) => menuKey(p.id, data.model.id) === activeKey);
+    const isActive = !!activeProvider;
 
     return (
       <DropdownMenuSubmenuRoot open={submenuOpen} onOpenChange={setSubmenuOpen}>
@@ -63,8 +67,15 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
           />
         </DropdownMenuSubmenuTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuPositioner anchor={null} placement="rightTop" sideOffset={-4}>
-            <DropdownMenuPopup className={styles.dropdownMenu}>
+          <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
+            <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
+              <ModelDetailPanel
+                model={data.model}
+                extraControls={extraControls?.(
+                  data.model.id,
+                  (activeProvider ?? data.providers[0]).id,
+                )}
+              />
               <DropdownMenuGroup>
                 <DropdownMenuGroupLabel>
                   {t('ModelSwitchPanel.useModelFrom')}

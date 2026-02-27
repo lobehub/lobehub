@@ -2,11 +2,17 @@ import { z } from 'zod';
 
 export const ThreadType = {
   Continuation: 'continuation',
+  Eval: 'eval',
   Isolation: 'isolation',
   Standalone: 'standalone',
 } as const;
 
 export type IThreadType = (typeof ThreadType)[keyof typeof ThreadType];
+
+/**
+ * Thread types available for chat (excludes eval-only types)
+ */
+export type ChatThreadType = Exclude<IThreadType, 'eval'>;
 
 export enum ThreadStatus {
   Active = 'active',
@@ -103,5 +109,10 @@ export const createThreadSchema = z.object({
   sourceMessageId: z.string().optional(),
   title: z.string().optional(),
   topicId: z.string(),
-  type: z.enum([ThreadType.Continuation, ThreadType.Standalone, ThreadType.Isolation]),
+  type: z.enum([
+    ThreadType.Continuation,
+    ThreadType.Eval,
+    ThreadType.Standalone,
+    ThreadType.Isolation,
+  ]),
 });

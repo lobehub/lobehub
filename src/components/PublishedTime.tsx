@@ -1,7 +1,5 @@
 'use client';
 
-import 'dayjs/locale/zh.js';
-
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { type CSSProperties, type FC } from 'react';
@@ -18,6 +16,17 @@ const formatTime = (time?: string) => {
   }
 };
 
+const formatDate = (date: string, t: (key: string) => string, template?: string) => {
+  if (template) return dayjs(date).format(template);
+  const d = dayjs(date);
+  const now = dayjs();
+
+  if (d.isSame(now, 'day')) return t('time.today');
+  if (d.isSame(now.subtract(1, 'day'), 'day')) return t('time.yesterday');
+  if (d.isSame(now, 'year')) return d.format(t('time.formatThisYear'));
+  return d.format(t('time.formatOtherYear'));
+};
+
 const styles = createStaticStyles(({ css }) => {
   return {
     time: css`
@@ -28,44 +37,26 @@ const styles = createStaticStyles(({ css }) => {
   };
 });
 
-interface PrivacyUpdatedProps {
+interface PublishedTimeProps {
   className?: string;
   date: string;
-  showPrefix?: boolean;
   style?: CSSProperties;
   template?: string;
 }
-const PublishedTime: FC<PrivacyUpdatedProps> = ({
-  date,
-  style,
-  className,
-  template = 'dddd, MMMM D YYYY',
-  showPrefix = true,
-}) => {
-  const { t, i18n } = useTranslation('discover');
-  const time = dayjs(date).locale(i18n.language).format(template);
+const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, template }) => {
+  const { t } = useTranslation('discover');
+  const time = formatDate(date, t as (key: string) => string, template);
 
-  if (showPrefix) {
-    return (
-      <div className={cx(styles.time, className)} style={style}>
-        {t('publishedTime')}{' '}
-        <time aria-label={'published-date'} dateTime={formatTime(date)}>
-          {time}
-        </time>
-      </div>
-    );
-  } else {
-    return (
-      <time
-        aria-label={'published-date'}
-        className={cx(styles.time, className)}
-        dateTime={formatTime(date)}
-        style={style}
-      >
-        {time}
-      </time>
-    );
-  }
+  return (
+    <time
+      aria-label={'published-date'}
+      className={cx(styles.time, className)}
+      dateTime={formatTime(date)}
+      style={style}
+    >
+      {time}
+    </time>
+  );
 };
 
 export default PublishedTime;

@@ -5,6 +5,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as EnvsAuthModule from '@/envs/auth';
 import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -19,7 +20,7 @@ vi.mock('@lobechat/utils/server', () => ({
 }));
 
 vi.mock('@/envs/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/envs/auth')>();
+  const actual = await importOriginal<typeof EnvsAuthModule>();
   return {
     ...actual,
   };

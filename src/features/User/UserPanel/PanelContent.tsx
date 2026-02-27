@@ -1,6 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { type FC } from 'react';
 import { Link } from 'react-router-dom';
 
 import { navigateToDesktopOnboarding } from '@/app/[variants]/(desktop)/desktop-onboarding/navigation';
@@ -19,7 +19,7 @@ import UserLoginOrSignup from '../UserLoginOrSignup';
 import LangButton from './LangButton';
 import { useMenu } from './useMenu';
 
-const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
+const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
   const isLoginWithAuth = useUserStore(authSelectors.isLoginWithAuth);
   const [openSignIn, signOut] = useUserStore((s) => [s.openLogin, s.logout]);
   const { mainItems, logoutItems } = useMenu();
@@ -72,6 +72,6 @@ const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
       </Flexbox>
     </Flexbox>
   );
-});
+};
 
 export default PanelContent;

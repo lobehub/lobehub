@@ -26,8 +26,6 @@ jobs:
     steps:
       - name: Checkout base
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node & Bun
         uses: ./.github/actions/setup-node-bun
@@ -56,8 +54,6 @@ jobs:
       version: ${{ steps.set_version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -96,8 +92,6 @@ jobs:
         os: [macos-latest, macos-15-intel, windows-2025, ubuntu-latest]
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -286,8 +280,6 @@ jobs:
       artifact_path: ${{ steps.set_path.outputs.path }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       # 下载合并后的构建产物
       - name: Download merged artifacts

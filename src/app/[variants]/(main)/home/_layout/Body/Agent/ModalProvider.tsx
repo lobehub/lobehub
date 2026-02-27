@@ -5,6 +5,7 @@ import { createContext, memo, use, useMemo, useState } from 'react';
 
 import { ChatGroupWizard } from '@/components/ChatGroupWizard';
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
+import EditingPopover from '@/features/EditingPopover';
 
 import ConfigGroupModal from './Modals/ConfigGroupModal';
 import CreateGroupModal from './Modals/CreateGroupModal';
@@ -139,6 +140,8 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
           await memberSelectionCallbacks.onConfirm?.(selectedAgents);
         }}
       />
+
+      <EditingPopover />
     </AgentModalContext>
   );
 });

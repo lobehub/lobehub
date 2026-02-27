@@ -404,6 +404,7 @@ const FileListItem = memo<FileListItemProps>(
           onDragOver={handleDragOver}
           onDragStart={handleDragStart}
           onDrop={handleDrop}
+          onClick={handleItemClick}
           onMouseEnter={() => onHoverChange(true)}
           onMouseLeave={() => onHoverChange(false)}
         >
@@ -437,7 +438,6 @@ const FileListItem = memo<FileListItemProps>(
               paddingInline: 8,
               width: columnWidths.name,
             }}
-            onClick={handleItemClick}
           >
             <Flexbox horizontal align={'center'} className={styles.nameContainer}>
               <Flexbox

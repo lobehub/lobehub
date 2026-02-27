@@ -48,6 +48,11 @@ export type DropdownPlacement = DropdownMenuPlacement;
 export interface ModelSwitchPanelProps {
   children?: ReactNode;
   /**
+   * Render function for extra controls in the model detail popup (e.g. ControlsForm).
+   * Receives the hovered model's ID and provider ID.
+   */
+  extraControls?: (modelId: string, providerId: string) => ReactNode;
+  /**
    * Current model ID. If not provided, uses currentAgentModel from store.
    */
   model?: string;
@@ -57,6 +62,10 @@ export interface ModelSwitchPanelProps {
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  /**
+   * Whether to open the panel on hover. Defaults to true.
+   */
+  openOnHover?: boolean;
   /**
    * Dropdown placement. Defaults to 'topLeft'.
    */

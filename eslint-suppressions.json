@@ -1,40 +1,62 @@
 {
+  "src/app/(backend)/api/dev/memory-user-memory/benchmark-locomo/route.ts": {
+    "no-console": {
+      "count": 6
+    }
+  },
+  "src/app/(backend)/api/webhooks/logto/route.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/app/(backend)/trpc/async/[trpc]/route.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/app/(backend)/trpc/mobile/[trpc]/route.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/app/(backend)/webapi/chat/[provider]/route.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(auth)/market-auth-callback/page.tsx": {
+    "no-console": {
+      "count": 2
+    }
+  },
   "src/app/[variants]/(desktop)/desktop-onboarding/features/WelcomeStep.tsx": {
     "@eslint-react/no-nested-component-definitions": {
       "count": 1
     }
   },
-  "src/app/[variants]/(main)/agent/profile/features/Header/AgentPublishButton/PublishButton.tsx": {
-    "import-x/consistent-type-specifier-style": {
+  "src/app/[variants]/(main)/agent/features/Conversation/AgentWelcome/ToolAuthAlert.tsx": {
+    "no-console": {
       "count": 1
     }
   },
-  "src/app/[variants]/(main)/community/(detail)/agent/features/Details/Capabilities/PluginItem.tsx": {
-    "simple-import-sort/imports": {
+  "src/app/[variants]/(main)/agent/profile/features/Header/AgentForkTag.tsx": {
+    "no-console": {
       "count": 1
     }
   },
-  "src/app/[variants]/(main)/community/(detail)/agent/features/Header.tsx": {
-    "simple-import-sort/imports": {
+  "src/app/[variants]/(main)/community/(detail)/agent/features/AgentForkTag.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/community/(detail)/user/features/UserAgentList.tsx": {
+    "no-console": {
       "count": 1
     }
   },
   "src/app/[variants]/(main)/community/components/VirtuosoGridList/index.tsx": {
     "@eslint-react/no-nested-component-definitions": {
       "count": 2
-    }
-  },
-  "src/app/[variants]/(main)/home/_layout/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx": {
-    "import-x/consistent-type-specifier-style": {
-      "count": 1
-    }
-  },
-  "src/app/[variants]/(main)/home/_layout/Body/Agent/Modals/ConfigGroupModal/index.tsx": {
-    "@typescript-eslint/consistent-type-imports": {
-      "count": 1
-    },
-    "simple-import-sort/imports": {
-      "count": 1
     }
   },
   "src/app/[variants]/(main)/home/features/RecentPage/Item.tsx": {
@@ -52,6 +74,11 @@
       "count": 1
     }
   },
+  "src/app/[variants]/(main)/memory/features/MemoryAnalysis/index.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/app/[variants]/(main)/resource/features/hooks/useResourceManagerUrlSync.ts": {
     "react-hooks/exhaustive-deps": {
       "count": 1
@@ -62,6 +89,21 @@
       "count": 1
     },
     "regexp/no-obscure-range": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/(main)/settings/skill/features/KlavisSkillItem.tsx": {
+    "no-console": {
+      "count": 2
+    }
+  },
+  "src/app/[variants]/(main)/settings/skill/features/LobehubSkillItem.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/app/[variants]/onboarding/components/KlavisServerList/hooks/useKlavisOAuth.ts": {
+    "no-console": {
       "count": 1
     }
   },
@@ -85,6 +127,16 @@
       "count": 1
     },
     "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/components/DebugNode.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/components/FeedbackModal/index.tsx": {
+    "no-console": {
       "count": 1
     }
   },
@@ -114,9 +166,6 @@
     }
   },
   "src/envs/auth.ts": {
-    "perfectionist/sort-interfaces": {
-      "count": 19
-    },
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     },
@@ -150,6 +199,21 @@
       "count": 1
     }
   },
+  "src/features/ChatInput/ActionBar/Tools/KlavisServerItem.tsx": {
+    "no-console": {
+      "count": 2
+    }
+  },
+  "src/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem.tsx": {
+    "no-console": {
+      "count": 3
+    }
+  },
+  "src/features/CommandMenu/SearchResults.tsx": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/features/Conversation/Error/OllamaBizError/index.tsx": {
     "regexp/no-dupe-characters-character-class": {
       "count": 1
@@ -158,13 +222,8 @@
       "count": 1
     }
   },
-  "src/features/Conversation/Messages/CompressedGroup/index.tsx": {
-    "import-x/consistent-type-specifier-style": {
-      "count": 1
-    }
-  },
-  "src/features/Conversation/Messages/Supervisor/components/ContentBlock.tsx": {
-    "simple-import-sort/imports": {
+  "src/features/Conversation/store/slices/message/action/sendMessage.ts": {
+    "no-console": {
       "count": 1
     }
   },
@@ -180,11 +239,6 @@
   },
   "src/features/DevPanel/CacheViewer/index.tsx": {
     "react-hooks/rules-of-hooks": {
-      "count": 1
-    }
-  },
-  "src/features/NavPanel/SideBarHeaderLayout.tsx": {
-    "@eslint-react/dom/no-flush-sync": {
       "count": 1
     }
   },
@@ -228,7 +282,20 @@
       "count": 1
     }
   },
+  "src/hooks/useAgentOwnershipCheck.ts": {
+    "no-console": {
+      "count": 6
+    }
+  },
+  "src/hooks/useHotkeys/useHotkeyById.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/layout/AuthProvider/MarketAuth/oidc.ts": {
+    "no-console": {
+      "count": 17
+    },
     "prefer-const": {
       "count": 1
     }
@@ -254,6 +321,16 @@
       "count": 1
     }
   },
+  "src/libs/swr/localStorageProvider.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/libs/traces/index.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/libs/trpc/middleware/openTelemetry.test.ts": {
     "import/first": {
       "count": 1
@@ -267,9 +344,14 @@
       "count": 1
     }
   },
-  "src/server/modules/Mecha/ContextEngineering/index.ts": {
-    "sort-keys-fix/sort-keys-fix": {
-      "count": 1
+  "src/server/manifest.ts": {
+    "object-shorthand": {
+      "count": 3
+    }
+  },
+  "src/server/modules/KeyVaultsEncrypt/index.ts": {
+    "object-shorthand": {
+      "count": 2
     }
   },
   "src/server/modules/ModelRuntime/apiKeyManager.test.ts": {
@@ -287,6 +369,16 @@
       "count": 2
     }
   },
+  "src/server/routers/lambda/agent.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/server/routers/lambda/aiAgent.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/server/routers/lambda/aiChat.ts": {
     "prefer-const": {
       "count": 1
@@ -302,30 +394,24 @@
       "count": 2
     }
   },
+  "src/server/routers/lambda/knowledge.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/server/routers/lambda/ragEval.ts": {
     "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/server/routers/lambda/sessionGroup.ts": {
+    "no-console": {
       "count": 1
     }
   },
   "src/server/routers/lambda/user.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 2
-    }
-  },
-  "src/server/routers/lambda/userMemory.ts": {
-    "@typescript-eslint/consistent-type-imports": {
-      "count": 1
-    },
-    "import-x/no-duplicates": {
-      "count": 2
-    },
-    "simple-import-sort/imports": {
-      "count": 1
-    }
-  },
-  "src/server/routers/tools/_helpers/scheduleToolCallReport.test.ts": {
-    "simple-import-sort/imports": {
-      "count": 1
     }
   },
   "src/server/routers/tools/mcp.ts": {
@@ -431,14 +517,24 @@
       "count": 7
     }
   },
+  "src/server/services/webhookUser/index.ts": {
+    "no-console": {
+      "count": 2
+    }
+  },
   "src/services/_url.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
-  "src/services/chat/mecha/contextEngineering.ts": {
-    "sort-keys-fix/sort-keys-fix": {
+  "src/services/models.ts": {
+    "no-console": {
       "count": 1
+    }
+  },
+  "src/services/tableViewer/client.ts": {
+    "no-console": {
+      "count": 2
     }
   },
   "src/store/agent/slices/cron/action.ts": {
@@ -485,14 +581,6 @@
       "count": 1
     }
   },
-  "src/store/chat/slices/aiChat/actions/__tests__/StreamingHandler.test.ts": {
-    "import-x/consistent-type-specifier-style": {
-      "count": 1
-    },
-    "unused-imports/no-unused-imports": {
-      "count": 1
-    }
-  },
   "src/store/chat/slices/aiChat/actions/conversationControl.ts": {
     "no-unused-private-class-members": {
       "count": 1
@@ -536,6 +624,11 @@
     },
     "typescript-sort-keys/interface": {
       "count": 1
+    }
+  },
+  "src/store/chat/slices/message/supervisor.ts": {
+    "no-console": {
+      "count": 5
     }
   },
   "src/store/chat/slices/operation/types.ts": {
@@ -680,6 +773,11 @@
       "count": 1
     }
   },
+  "src/store/file/slices/chat/action.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/store/file/slices/chunk/action.ts": {
     "no-unused-private-class-members": {
       "count": 1
@@ -710,6 +808,11 @@
       "count": 1
     }
   },
+  "src/store/home/slices/homeInput/action.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/store/image/slices/generationConfig/initialState.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
@@ -733,6 +836,11 @@
       "count": 1
     }
   },
+  "src/store/session/slices/homeInput/action.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
   "src/store/session/slices/session/action.ts": {
     "typescript-sort-keys/interface": {
       "count": 1
@@ -746,8 +854,13 @@
       "count": 1
     }
   },
-  "src/store/tool/slices/builtin/executors/index.ts": {
-    "import-x/consistent-type-specifier-style": {
+  "src/store/tool/slices/klavisStore/action.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/store/tool/slices/mcpStore/action.ts": {
+    "no-console": {
       "count": 1
     }
   },

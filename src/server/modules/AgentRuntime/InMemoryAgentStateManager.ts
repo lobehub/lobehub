@@ -213,6 +213,18 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     return stats;
   }
 
+  async tryClaimStep(
+    _operationId: string,
+    _stepIndex: number,
+    _ttlSeconds?: number,
+  ): Promise<boolean> {
+    return true;
+  }
+
+  async releaseStepLock(_operationId: string, _stepIndex: number): Promise<void> {
+    // noop
+  }
+
   async disconnect(): Promise<void> {
     // In-memory implementation doesn't need to disconnect
     log('InMemoryAgentStateManager disconnected');

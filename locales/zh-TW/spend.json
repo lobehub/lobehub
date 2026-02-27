@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "權杖使用量",
   "table.columns.type.enums.chat": "文字生成",
   "table.columns.type.enums.imageGeneration": "圖像生成",
+  "table.columns.type.enums.videoGeneration": "影片生成",
   "table.columns.type.title": "類型",
   "table.desc": "文字生成、嵌入、圖像生成等計算點數使用詳情",
   "table.more": "查看詳情",

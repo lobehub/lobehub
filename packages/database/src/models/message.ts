@@ -43,6 +43,7 @@ import {
 } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
+import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 import { today } from '@/utils/time';
 
 import {
@@ -201,7 +202,6 @@ export class MessageModel {
     // 1. get basic messages with joins, excluding messages that belong to MessageGroups
     const result = await this.db
       .select({
-        /* eslint-disable sort-keys-fix/sort-keys-fix*/
         id: messages.id,
         role: messages.role,
         content: messages.content,
@@ -463,8 +463,8 @@ export class MessageModel {
             })),
 
           extra: {
-            model: model,
-            provider: provider,
+            model,
+            provider,
             translate,
             tts: ttsId
               ? {
@@ -540,7 +540,6 @@ export class MessageModel {
     // 1. Query messages with joins
     const result = await this.db
       .select({
-        /* eslint-disable sort-keys-fix/sort-keys-fix*/
         id: messages.id,
         role: messages.role,
         content: messages.content,
@@ -736,8 +735,8 @@ export class MessageModel {
             })),
 
           extra: {
-            model: model,
-            provider: provider,
+            model,
+            provider,
             translate,
             tts: ttsId
               ? {
@@ -1259,11 +1258,11 @@ export class MessageModel {
       if (message.role === 'tool') {
         await trx.insert(messagePlugins).values({
           apiName: plugin?.apiName,
-          arguments: plugin?.arguments,
+          arguments: sanitizeNullBytes(plugin?.arguments),
           id,
           identifier: plugin?.identifier,
           intervention: pluginIntervention,
-          state: pluginState,
+          state: sanitizeNullBytes(pluginState),
           toolCallId: message.tool_call_id,
           type: plugin?.type,
           userId: this.userId,

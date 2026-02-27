@@ -1,7 +1,7 @@
 import { ActionIcon, Block, Text } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BotIcon, FilePenIcon, ImageIcon, PenLineIcon, X } from 'lucide-react';
+import { BotIcon, FilePenIcon, ImageIcon, PenLineIcon, VideoIcon, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,6 +24,7 @@ const modeConfig = {
   group: { icon: GroupBotSquareIcon, titleKey: 'starter.createGroup' },
   image: { icon: ImageIcon, titleKey: 'starter.image' },
   research: { icon: FilePenIcon, titleKey: 'starter.deepResearch' },
+  video: { icon: VideoIcon, titleKey: 'starter.seedance' },
   write: { icon: PenLineIcon, titleKey: 'starter.write' },
 } as const;
 

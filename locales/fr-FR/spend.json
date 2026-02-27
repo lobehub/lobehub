@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "Utilisation des jetons",
   "table.columns.type.enums.chat": "Génération de texte",
   "table.columns.type.enums.imageGeneration": "Génération d’images",
+  "table.columns.type.enums.videoGeneration": "Génération de vidéo",
   "table.columns.type.title": "Type",
   "table.desc": "Détails de l’utilisation des crédits de calcul pour la génération de texte, l’intégration, la génération d’images, etc.",
   "table.more": "Voir les détails",

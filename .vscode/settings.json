@@ -53,7 +53,8 @@
     "typescriptreact"
   ],
   "typescript.tsdk": "node_modules/typescript/lib",
-  "vitest.maximumConfigs": 20,
+  "vitest.disableWorkspaceWarning": true,
+  "vitest.maximumConfigs": 10,
   "workbench.editor.customLabels.patterns": {
     "**/app/**/[[]*[]]/[[]*[]]/page.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • page component",
     "**/app/**/[[]*[]]/page.tsx": "${dirname(1)}/${dirname} • page component",

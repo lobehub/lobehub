@@ -29,7 +29,7 @@ const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: s
     const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
     const { t } = useTranslation(['chat', 'common']);
 
-    // 生成唯一的预览ID，避免DOM冲突
+    // Generate a unique preview ID to avoid DOM conflicts
     const previewId = uniqueId ? `preview-${uniqueId}` : 'preview';
 
     const { loading, onDownload, title } = useScreenshot({

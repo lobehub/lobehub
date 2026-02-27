@@ -1,11 +1,11 @@
-import type { ChatModelCard } from '@lobechat/types';
+import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { type LobeRuntimeAI } from '../../core/BaseAI';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { OpenAIStream } from '../../core/streams';
-import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
+import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { StreamingResponse } from '../../utils/response';
@@ -14,7 +14,6 @@ const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
 const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';
 
 const MAX_TOTAL_ATTEMPTS = 5;
-const MAX_AUTH_REFRESH = 1;
 const MAX_RATE_LIMIT_RETRIES = 3;
 
 interface CachedToken {
@@ -227,7 +226,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
 
   private async executeWithRetry<T>(fn: () => Promise<T>): Promise<T> {
     let totalAttempts = 0;
-    let authRefreshAttempts = 0;
+    let hasRefreshedAuth = false;
     let rateLimitAttempts = 0;
 
     while (totalAttempts < MAX_TOTAL_ATTEMPTS) {
@@ -238,9 +237,10 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       } catch (error: any) {
         const status = error?.status ?? error?.error?.status ?? error?.response?.status;
 
-        // 401: Refresh token once
-        if (status === 401 && authRefreshAttempts < MAX_AUTH_REFRESH) {
-          authRefreshAttempts++;
+        // 401: Refresh token once (only if we have an exchange credential to fall back to)
+        if (status === 401 && !hasRefreshedAuth && this.githubToken) {
+          hasRefreshedAuth = true;
+          this.cachedBearerToken = undefined;
           tokenManager.invalidate(this.githubToken);
           continue;
         }

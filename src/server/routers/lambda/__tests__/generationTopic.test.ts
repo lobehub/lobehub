@@ -45,7 +45,7 @@ describe('generationTopicRouter', () => {
     const result = await caller.createTopic();
 
     expect(result).toBe(mockTopicId);
-    expect(mockCreate).toHaveBeenCalledWith('');
+    expect(mockCreate).toHaveBeenCalledWith('', undefined);
   });
 
   it('should get all generation topics', async () => {
@@ -55,6 +55,7 @@ describe('generationTopicRouter', () => {
         title: 'Test Topic 1',
         userId: 'test-user',
         coverUrl: 'cover-url-1',
+        type: 'image',
         accessedAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -64,6 +65,7 @@ describe('generationTopicRouter', () => {
         title: 'Test Topic 2',
         userId: 'test-user',
         coverUrl: null,
+        type: 'image',
         accessedAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),

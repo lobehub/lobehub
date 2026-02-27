@@ -183,6 +183,8 @@ export default {
 
   'cmdk.keywords.usage': 'usage statistics consumption quota',
 
+  'cmdk.keywords.video': 'video,generate,seedance,kling',
+
   'cmdk.memory': 'Memory',
 
   'cmdk.mentionAgent': 'Mention Agent',
@@ -258,6 +260,8 @@ export default {
   'cmdk.themeLight': 'Light',
   'cmdk.toOpen': 'Open',
   'cmdk.toSelect': 'Select',
+
+  'cmdk.video': 'AI Video',
 
   'confirm': 'Confirm',
   'contact': 'Contact Us',
@@ -469,6 +473,7 @@ export default {
   'tab.chat': 'Chat',
   'tab.community': 'Community',
   'tab.discover': 'Discover',
+  'tab.eval': 'Eval Lab',
   'tab.files': 'Files',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',

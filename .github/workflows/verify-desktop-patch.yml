@@ -23,7 +23,7 @@ on:
       - 'src/components/mdx/**'
       - 'src/features/DevPanel/**'
       - 'src/server/translation.ts'
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -39,8 +39,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node & Bun
         uses: ./.github/actions/setup-node-bun

@@ -293,6 +293,88 @@ const xaiChatModels: AIChatModelCard[] = [
 const xaiImageModels: AIImageModelCard[] = [
   {
     description:
+      'Generate images from text prompts, edit existing images with natural language, or iteratively refine images through multi-turn conversations.',
+    displayName: 'Grok Imagine Image Pro',
+    enabled: true,
+    id: 'grok-imagine-image-pro',
+    parameters: {
+      aspectRatio: {
+        default: 'auto',
+        enum: [
+          'auto',
+          '1:1',
+          '3:4',
+          '4:3',
+          '9:16',
+          '16:9',
+          '2:3',
+          '3:2',
+          '9:19.5',
+          '19.5:9',
+          '9:20',
+          '20:9',
+          '1:2',
+          '2:1',
+        ],
+      },
+      imageUrls: { default: [] },
+      prompt: {
+        default: '',
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
+      },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.07, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'image',
+  },
+  {
+    description:
+      'Generate images from text prompts, edit existing images with natural language, or iteratively refine images through multi-turn conversations.',
+    displayName: 'Grok Imagine Image',
+    enabled: true,
+    id: 'grok-imagine-image',
+    parameters: {
+      aspectRatio: {
+        default: 'auto',
+        enum: [
+          'auto',
+          '1:1',
+          '3:4',
+          '4:3',
+          '9:16',
+          '16:9',
+          '2:3',
+          '3:2',
+          '9:19.5',
+          '19.5:9',
+          '9:20',
+          '20:9',
+          '1:2',
+          '2:1',
+        ],
+      },
+      imageUrls: { default: [] },
+      prompt: {
+        default: '',
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
+      },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.02, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'image',
+  },
+  {
+    description:
       'Our latest image generation model creates vivid, realistic images from prompts and excels in marketing, social media, and entertainment use cases.',
     displayName: 'Grok 2 Image 1212',
     enabled: true,
@@ -301,6 +383,9 @@ const xaiImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.07, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2024-12-12',
     type: 'image',

@@ -1,0 +1,394 @@
+name: Release Desktop Canary
+
+# ============================================
+# Canary 自动发版工作流
+# ============================================
+# 触发条件:
+#   1. canary 分支有 push (合入 PR) 且 commit 前缀为 style/feat/fix/refactor/release (支持 gitmoji)
+#   2. 手动触发 (workflow_dispatch)
+#
+# 并发策略:
+#   同一 workflow 仅保留最新一次运行，自动取消排队中的旧 build
+#
+# 版本策略:
+#   基于最新 stable tag 的 patch+1, postfix 为递增序号
+#   格式: X.Y.(Z+1)-canary.N
+#   例: 当前 tag v2.1.28 → v2.1.29-canary.1, 下次 → v2.1.29-canary.2
+# ============================================
+
+on:
+  push:
+    branches:
+      - canary
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force build (skip commit message check)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  # ============================================
+  # 检查 commit 前缀并计算版本号
+  # ============================================
+  calculate-version:
+    name: Calculate Canary Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check commit message prefix
+        id: check
+        run: |
+          # 手动触发 + force 时跳过检查
+          if [ "${{ inputs.force }}" == "true" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "🔧 Force build requested, skipping commit check"
+            exit 0
+          fi
+
+          # 手动触发 (无 force) 也直接构建
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "🔧 Manual trigger, proceeding with build"
+            exit 0
+          fi
+
+          # 获取本次 push 的 head commit message
+          commit_msg=$(git log -1 --pretty=%s HEAD)
+          echo "📝 Head commit: $commit_msg"
+
+          # 检查是否匹配 style/feat/fix/refactor/release 前缀 (支持 gitmoji 前缀)
+          if echo "$commit_msg" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:|^(🚀\s*)?release(\(.+\))?:'; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "✅ Commit matches canary build trigger: $commit_msg"
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Commit does not match style/feat/fix/refactor/release prefix, skipping: $commit_msg"
+          fi
+
+      - name: Calculate canary version
+        if: steps.check.outputs.should_build == 'true'
+        id: version
+        run: |
+          # 获取最新的 stable tag (排除 nightly/canary/beta 等)
+          latest_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+
+          if [ -z "$latest_tag" ]; then
+            echo "❌ No stable tag found"
+            exit 1
+          fi
+
+          echo "📌 Latest stable tag: $latest_tag"
+
+          # 去掉 v 前缀，解析 major.minor.patch → a.b.c 取 c+1
+          base_version="${latest_tag#v}"
+          IFS='.' read -r major minor patch <<< "$base_version"
+          new_patch=$((patch + 1))
+          base_canary="${major}.${minor}.${new_patch}"
+
+          # postfix: 同 base 下已有 canary 标签的最大序号 + 1
+          max_seq=0
+          for t in $(git tag -l "v${base_canary}-canary.*" 2>/dev/null || true); do
+            seq=$(echo "$t" | grep -oE '[0-9]+$' || true)
+            if [ -n "$seq" ] && [ "$seq" -gt "$max_seq" ] 2>/dev/null; then
+              max_seq=$seq
+            fi
+          done
+          next_seq=$((max_seq + 1))
+
+          version="${base_canary}-canary.${next_seq}"
+          tag="v${version}"
+
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          echo "✅ Canary version: ${version}"
+          echo "🏷️ Tag: ${tag}"
+
+  # ============================================
+  # 代码质量检查
+  # ============================================
+  test:
+    name: Code quality check
+    needs: [calculate-version]
+    if: needs.calculate-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun i
+
+      - name: Lint
+        run: bun run lint
+
+  # ============================================
+  # 多平台构建
+  # ============================================
+  build:
+    needs: [calculate-version, test]
+    if: needs.calculate-version.outputs.should_build == 'true'
+    name: Build Desktop App
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel, windows-2025, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} canary
+
+      # macOS 构建前清理 (修复 hdiutil 问题)
+      - name: Clean previous build artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sudo rm -rf apps/desktop/release || true
+          sudo rm -rf apps/desktop/dist || true
+          sudo rm -rf /tmp/electron-builder* || true
+
+      # macOS 构建
+      - name: Build artifact on macOS
+        if: runner.os == 'macOS'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: canary
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_FOR_PULL_REQUEST: true
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+
+      # Windows 构建
+      - name: Build artifact on Windows
+        if: runner.os == 'Windows'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: canary
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+          TEMP: C:\temp
+          TMP: C:\temp
+
+      # Linux 构建
+      - name: Build artifact on Linux
+        if: runner.os == 'Linux'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: canary
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+
+      - name: Upload artifacts
+        uses: ./.github/actions/desktop-upload-artifacts
+        with:
+          artifact-name: release-${{ matrix.os }}
+          retention-days: 3
+
+  # ============================================
+  # 合并 macOS 多架构 latest-mac.yml 文件
+  # ============================================
+  merge-mac-files:
+    needs: [build]
+    name: Merge macOS Release Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release
+          pattern: release-*
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -R release
+
+      - name: Install yaml only for merge step
+        run: |
+          cd scripts/electronWorkflow
+          if [ ! -f package.json ]; then
+            echo '{"name":"merge-mac-release","private":true}' > package.json
+          fi
+          bun add --no-save yaml@2.8.1
+
+      - name: Merge latest-mac.yml files
+        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+
+      - name: Upload artifacts with merged macOS files
+        uses: actions/upload-artifact@v6
+        with:
+          name: merged-release
+          path: release/
+          retention-days: 1
+
+  # ============================================
+  # 创建 Canary Release
+  # ============================================
+  publish-release:
+    needs: [merge-mac-files, calculate-version]
+    name: Publish Canary Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download merged artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: merged-release
+          path: release
+
+      - name: List final artifacts
+        run: ls -R release
+
+      - name: Create Canary Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.calculate-version.outputs.tag }}
+          name: 'Desktop Canary ${{ needs.calculate-version.outputs.tag }}'
+          prerelease: true
+          body: |
+            ## 🐤 Canary Build — ${{ needs.calculate-version.outputs.tag }}
+
+            > Automated canary build from `canary` branch.
+
+            ### ⚠️ Important Notes
+
+            - **This is an automated canary build and is NOT intended for production use.**
+            - Canary builds are triggered by `build`/`fix`/`style` commits on the `canary` branch.
+            - May contain **unstable or incomplete changes**. **Use at your own risk.**
+            - It is strongly recommended to **back up your data** before using a canary build.
+
+            ### 📦 Installation
+
+            Download the appropriate installer for your platform from the assets below.
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon) | `.dmg` (arm64) |
+            | macOS (Intel) | `.dmg` (x64) |
+            | Windows | `.exe` |
+            | Linux | `.AppImage` / `.deb` |
+          files: |
+            release/latest*
+            release/*.dmg*
+            release/*.zip*
+            release/*.exe*
+            release/*.AppImage
+            release/*.deb*
+            release/*.snap*
+            release/*.rpm*
+            release/*.tar.gz*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # 清理旧的 Canary Releases (保留最近 7 个)
+  # ============================================
+  cleanup-old-canaries:
+    needs: [publish-release]
+    name: Cleanup Old Canary Releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete old canary releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            const canaryReleases = releases
+              .filter(r => r.tag_name.includes('-canary.'))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            const toDelete = canaryReleases.slice(7);
+
+            for (const release of toDelete) {
+              console.log(`🗑️ Deleting old canary release: ${release.tag_name}`);
+
+              // Delete the release
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+              });
+
+              // Delete the tag
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `tags/${release.tag_name}`,
+                });
+              } catch (e) {
+                console.log(`⚠️ Could not delete tag ${release.tag_name}: ${e.message}`);
+              }
+            }
+
+            console.log(`✅ Cleanup complete. Kept ${Math.min(canaryReleases.length, 7)} canary releases, deleted ${toDelete.length}.`);

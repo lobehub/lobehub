@@ -1,5 +1,7 @@
 // Context Provider exports
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
+export { EvalContextSystemInjector } from './EvalContextSystemInjector';
+export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
 export { GroupAgentBuilderContextInjector } from './GroupAgentBuilderContextInjector';
 export { GroupContextInjector } from './GroupContextInjector';
 export { GTDPlanInjector } from './GTDPlanInjector';
@@ -18,6 +20,8 @@ export type {
   AgentBuilderContextInjectorConfig,
   OfficialToolItem,
 } from './AgentBuilderContextInjector';
+export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
+export type { ForceFinishSummaryInjectorConfig } from './ForceFinishSummaryInjector';
 export type {
   GroupAgentBuilderContext,
   GroupAgentBuilderContextInjectorConfig,
@@ -36,4 +40,4 @@ export type { PageEditorContextInjectorConfig } from './PageEditorContextInjecto
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
 export type { ToolSystemRoleConfig } from './ToolSystemRole';
-export type { UserMemoryInjectorConfig } from './UserMemoryInjector';
+export type { MemoryContext, UserMemoryInjectorConfig } from './UserMemoryInjector';

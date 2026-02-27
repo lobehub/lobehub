@@ -434,8 +434,10 @@ export class GeneralChatAgent implements Agent {
 
         // No tool calls, conversation is complete
         return {
-          reason: 'completed',
-          reasonDetail: 'LLM response completed without tool calls',
+          reason: state.forceFinish ? 'max_steps_completed' : 'completed',
+          reasonDetail: state.forceFinish
+            ? 'Force finish: LLM produced final text response after max steps'
+            : 'LLM response completed without tool calls',
           type: 'finish',
         };
       }

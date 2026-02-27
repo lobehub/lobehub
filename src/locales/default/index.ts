@@ -9,6 +9,7 @@ import components from './components';
 import desktopOnboarding from './desktop-onboarding';
 import discover from './discover';
 import editor from './editor';
+import eval_ from './eval';
 import electron from './electron';
 import error from './error';
 import file from './file';
@@ -37,6 +38,7 @@ import thread from './thread';
 import tool from './tool';
 import topic from './topic';
 import ui from './ui';
+import video from './video';
 import welcome from './welcome';
 
 const resources = {
@@ -51,6 +53,7 @@ const resources = {
   'desktop-onboarding': desktopOnboarding,
   discover,
   editor,
+  eval: eval_,
   electron,
   error,
   file,
@@ -81,6 +84,7 @@ const resources = {
   tool,
   topic,
   ui,
+  video,
   welcome,
 } as const;
 

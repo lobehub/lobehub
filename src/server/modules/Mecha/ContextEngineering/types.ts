@@ -1,12 +1,14 @@
-import {
-  type AgentBuilderContext,
-  type FileContent,
-  type KnowledgeBaseInfo,
-  type LobeToolManifest,
-  type UserMemoryData,
+/* eslint-disable perfectionist/sort-interfaces */
+import type {
+  AgentBuilderContext,
+  EvalContext,
+  FileContent,
+  KnowledgeBaseInfo,
+  LobeToolManifest,
+  UserMemoryData,
 } from '@lobechat/context-engine';
-import { type PageContentContext } from '@lobechat/prompts';
-import { type UIChatMessage } from '@lobechat/types';
+import type { PageContentContext } from '@lobechat/prompts';
+import type { UIChatMessage } from '@lobechat/types';
 
 /**
  * Model capability checker functions for server-side
@@ -63,9 +65,16 @@ export interface ServerMessagesEngineParams {
   // ========== Capability injection ==========
   /** Model capability checkers */
   capabilities?: ServerModelCapabilities;
+  // ========== Eval context ==========
+  /** Eval context for injecting environment prompts into system message */
+  evalContext?: EvalContext;
+
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
+
+  /** Force finish flag: when true, injects summary prompt for max-steps completion */
+  forceFinish?: boolean;
 
   /** Function to format history summary */
   formatHistorySummary?: (summary: string) => string;
@@ -106,6 +115,7 @@ export interface ServerMessagesEngineParams {
 
 export {
   type AgentBuilderContext,
+  type EvalContext,
   type FileContent,
   type KnowledgeBaseInfo,
   type UserMemoryData,

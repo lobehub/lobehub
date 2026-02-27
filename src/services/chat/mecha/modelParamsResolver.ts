@@ -78,11 +78,19 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     };
   }
 
-  // Adaptive thinking (Claude Opus 4.6)
+  // Adaptive thinking (Claude Opus/Sonnet 4.6)
   if (modelExtendParams.includes('enableAdaptiveThinking')) {
-    extendParams.thinking = {
-      type: chatConfig.enableAdaptiveThinking ? 'adaptive' : 'disabled',
-    };
+    if (chatConfig.enableAdaptiveThinking) {
+      extendParams.thinking = {
+        type: 'adaptive',
+      };
+    } else if (!modelExtendParams.includes('enableReasoning')) {
+      // Only disable when the model has no enableReasoning fallback
+      extendParams.thinking = {
+        type: 'disabled',
+      };
+    }
+    // When adaptive is off and model also has enableReasoning, let enableReasoning result stand
   }
 
   // Context caching
@@ -134,6 +142,14 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
 
   if (modelExtendParams.includes('thinkingLevel') && chatConfig.thinkingLevel) {
     extendParams.thinkingLevel = chatConfig.thinkingLevel;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
   }
 
   // URL context

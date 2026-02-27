@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type * as ConstVersionModule from '@/const/version';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import { useUserStore } from '@/store/user';
 
@@ -24,7 +25,7 @@ vi.mock('react-i18next', () => ({
 
 // Mock version constants
 vi.mock('@/const/version', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/const/version')>();
+  const actual = await importOriginal<typeof ConstVersionModule>();
   return {
     ...actual,
     isServerMode: false,

@@ -1,8 +1,9 @@
-import dotenv from 'dotenv';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import dotenv from 'dotenv';
 
 import {
   copyNativeModules,
@@ -27,9 +28,11 @@ const updateServerUrl = process.env.UPDATE_SERVER_URL;
 console.log(`🚄 Build Version ${packageJSON.version}, Channel: ${channel}`);
 console.log(`🏗️ Building for architecture: ${arch}`);
 
+// Channel identity derived solely from UPDATE_CHANNEL env var.
+// Adding a new channel won't break stable detection.
+const isStable = !channel || channel === 'stable';
 const isNightly = channel === 'nightly';
-const isBeta = packageJSON.name.includes('beta');
-const isStable = !isNightly && !isBeta;
+const isBeta = channel === 'beta';
 
 // 根据 channel 配置不同的 publish provider
 // - Stable + UPDATE_SERVER_URL: 使用 generic (自定义 HTTP 服务器)
@@ -80,9 +83,10 @@ const protocolScheme = getProtocolScheme();
 
 // Determine icon file based on version type
 const getIconFileName = () => {
-  if (isNightly) return 'Icon-nightly';
+  if (isStable) return 'Icon';
   if (isBeta) return 'Icon-beta';
-  return 'Icon';
+  // nightly, canary, and any future pre-release channels share nightly icon
+  return 'Icon-nightly';
 };
 
 /**
@@ -196,6 +200,16 @@ const config = {
 
   dmg: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
+    background: 'resources/dmg.png',
+    contents: [
+      { type: 'file', x: 150, y: 240 },
+      { type: 'link', path: '/Applications', x: 450, y: 240 },
+    ],
+    iconSize: 80,
+    window: {
+      height: 400,
+      width: 600,
+    },
   },
 
   electronDownload: {
@@ -208,6 +222,7 @@ const config = {
     // Ensure Next export assets are packaged
     'dist/next/**/*',
     '!resources/locales',
+    '!resources/dmg.png',
     '!dist/next/docs',
     '!dist/next/packages',
     '!dist/next/.next/server/app/sitemap',
@@ -249,15 +264,10 @@ const config = {
     hardenedRuntime: hasAppleCertificate,
     notarize: hasAppleCertificate,
     ...(hasAppleCertificate ? {} : { identity: null }),
-    target:
-      // 降低构建时间，nightly 只打 dmg
-      // 根据当前机器架构只构建对应架构的包
-      isNightly
-        ? [{ arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'dmg' }]
-        : [
-            { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'dmg' },
-            { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'zip' },
-          ],
+    target: [
+      { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'dmg' },
+      { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'zip' },
+    ],
   },
   npmRebuild: true,
   nsis: {

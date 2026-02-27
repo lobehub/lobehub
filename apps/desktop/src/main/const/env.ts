@@ -11,6 +11,15 @@ export const isMac = macOS();
 export const isWindows = windows();
 export const isLinux = linux();
 
+function getIsMacTahoe(): boolean {
+  if (!isMac) return false;
+  // macOS 26 (Tahoe) corresponds to Darwin kernel 25.x
+  const darwinMajor = parseInt(os.release().split('.')[0], 10);
+  return darwinMajor >= 25;
+}
+
+export const isMacTahoe = getIsMacTahoe();
+
 function getIsWindows11() {
   if (!isWindows) return false;
   // Get OS version (e.g., "10.0.22621")

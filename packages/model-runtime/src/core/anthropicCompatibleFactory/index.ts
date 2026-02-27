@@ -1,10 +1,10 @@
-import Anthropic, { ClientOptions } from '@anthropic-ai/sdk';
+import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk';
 import type { Stream } from '@anthropic-ai/sdk/streaming';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 
 import { hasTemperatureTopPConflict } from '../../const/models';
-import {
+import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamCallbacks,
@@ -12,14 +12,15 @@ import {
   GenerateObjectOptions,
   GenerateObjectPayload,
 } from '../../types';
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '../../types/error';
+import type { ILobeAgentRuntimeErrorType } from '../../types/error';
+import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { StreamingResponse } from '../../utils/response';
-import { LobeRuntimeAI } from '../BaseAI';
+import type { LobeRuntimeAI } from '../BaseAI';
 import {
   buildAnthropicMessages,
   buildAnthropicTools,
@@ -27,7 +28,7 @@ import {
 } from '../contextBuilders/anthropic';
 import { resolveParameters } from '../parameterResolver';
 import { AnthropicStream } from '../streams';
-import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
+import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 import { createAnthropicGenerateObject } from './generateObject';
 import { handleAnthropicError } from './handleAnthropicError';
 import { resolveCacheTTL } from './resolveCacheTTL';
@@ -148,8 +149,8 @@ export const buildDefaultAnthropicPayload = async (
 
   const postMessages = await buildAnthropicMessages(userMessages, { enabledContextCaching });
 
-  // Claude Opus 4.6 does not support assistant turn prefill
-  if (model.includes('opus-4-6') && postMessages.at(-1)?.role === 'assistant') {
+  // Claude 4.6 models do not support assistant turn prefill
+  if (model.includes('-4-6') && postMessages.at(-1)?.role === 'assistant') {
     postMessages.pop();
   }
 
@@ -166,10 +167,7 @@ export const buildDefaultAnthropicPayload = async (
     const resolvedThinking: Anthropic.MessageCreateParams['thinking'] =
       thinking.type === 'enabled'
         ? {
-            budget_tokens: Math.min(
-              thinking?.budget_tokens || 1024,
-              resolvedMaxTokens - 1,
-            ),
+            budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
             type: 'enabled',
           }
         : { type: 'adaptive' };
@@ -178,8 +176,8 @@ export const buildDefaultAnthropicPayload = async (
       max_tokens: resolvedMaxTokens,
       messages: postMessages,
       model,
+      ...(effort ? { output_config: { effort } } : {}),
       system: systemPrompts,
-      ...(thinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
       thinking: resolvedThinking,
       tools: postTools as Anthropic.MessageCreateParams['tools'],
     } as Anthropic.MessageCreateParams;
@@ -191,7 +189,8 @@ export const buildDefaultAnthropicPayload = async (
     { hasConflict, normalizeTemperature: true, preferTemperature: true },
   );
 
-  return {
+  // Support effort parameter even without thinking (per Claude 4.6 guidance)
+  const basePayload: Anthropic.MessageCreateParams = {
     max_tokens: resolvedMaxTokens,
     messages: postMessages,
     model,
@@ -199,7 +198,17 @@ export const buildDefaultAnthropicPayload = async (
     temperature: resolvedParams.temperature,
     tools: postTools as Anthropic.MessageCreateParams['tools'],
     top_p: resolvedParams.top_p,
-  } satisfies Anthropic.MessageCreateParams;
+  };
+
+  // If effort is specified without thinking mode, add output_config
+  if (effort) {
+    return {
+      ...basePayload,
+      output_config: { effort },
+    } as Anthropic.MessageCreateParams;
+  }
+
+  return basePayload;
 };
 
 /**
@@ -431,7 +440,9 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const finalPayload = { ...postPayload, stream: shouldStream };
 
         if (debugParams?.chatCompletion?.()) {
+          // eslint-disable-next-line no-console
           console.log('[requestPayload]');
+          // eslint-disable-next-line no-console
           console.log(JSON.stringify(finalPayload), '\n');
         }
 

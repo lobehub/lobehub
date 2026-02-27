@@ -1,3 +1,4 @@
+import type * as LobechatConstModule from '@lobechat/const';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { type PluginItem } from '@lobehub/market-sdk';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -59,7 +60,7 @@ const bootstrapToolStoreWithDesktop = async (isDesktopEnv: boolean) => {
   process.env.NEXT_PUBLIC_IS_DESKTOP_APP = isDesktopEnv ? '1' : '0';
 
   vi.doMock('@lobechat/const', async () => {
-    const actual = await vi.importActual<typeof import('@lobechat/const')>('@lobechat/const');
+    const actual = await vi.importActual<typeof LobechatConstModule>('@lobechat/const');
     return {
       ...actual,
       isDesktop: isDesktopEnv,

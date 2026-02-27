@@ -128,6 +128,14 @@ export default {
   'limitation.image.topupSuccess.desc':
     'Your top-up credits are now active. Enjoy AI image generation. Your current plan includes:',
   'limitation.image.topupSuccess.title': 'Top-up Successful',
+  'limitation.video.success.action': 'Continue Generating',
+  'limitation.video.success.desc':
+    'Your {{plan}} subscription has been upgraded successfully. Enjoy AI video generation. Your current plan includes:',
+  'limitation.video.success.title': 'Upgrade Successful',
+  'limitation.video.topupSuccess.action': 'Continue Generating',
+  'limitation.video.topupSuccess.desc':
+    'Your top-up credits are now active. Enjoy AI video generation. Your current plan includes:',
+  'limitation.video.topupSuccess.title': 'Top-up Successful',
   'limitation.limited.action': 'Upgrade Now',
   'limitation.limited.advanceFeature': 'Upgrade to enjoy premium features:',
   'limitation.limited.desc':

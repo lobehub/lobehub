@@ -5,6 +5,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import type * as AiInfraReposModule from '@/database/repositories/aiInfra';
 
 import { UserPersonaService } from '../service';
 
@@ -18,7 +19,7 @@ const aiInfraMocks = vi.hoisted(() => ({
 vi.mock('@/database/repositories/aiInfra', () => {
   const AiInfraRepos = vi.fn().mockImplementation(() => ({
     getAiProviderRuntimeState: aiInfraMocks.getAiProviderRuntimeState,
-  })) as unknown as typeof import('@/database/repositories/aiInfra').AiInfraRepos;
+  })) as unknown as typeof AiInfraReposModule.AiInfraRepos;
 
   (AiInfraRepos as any).tryMatchingModelFrom = aiInfraMocks.tryMatchingModelFrom;
   (AiInfraRepos as any).tryMatchingProviderFrom = aiInfraMocks.tryMatchingProviderFrom;

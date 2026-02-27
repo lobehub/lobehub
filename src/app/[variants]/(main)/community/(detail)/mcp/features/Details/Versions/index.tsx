@@ -61,7 +61,7 @@ const Versions = memo(() => {
             {
               align: 'end',
               dataIndex: 'createdAt',
-              render: (_, record) => <PublishedTime date={record.createdAt} showPrefix={false} />,
+              render: (_, record) => <PublishedTime date={record.createdAt} />,
               title: t('mcp.details.versions.table.publishAt'),
             },
           ]}

@@ -63,6 +63,11 @@ export interface AgentExecutionParams {
 }
 
 export interface AgentExecutionResult {
+  /**
+   * When true, the step was already being executed by another instance (lock conflict).
+   * The caller should return 429 to force QStash to retry later.
+   */
+  locked?: boolean;
   nextStepScheduled: boolean;
   state: any;
   stepResult?: any;
@@ -78,8 +83,19 @@ export interface OperationCreationParams {
     topicId?: string | null;
   };
   autoStart?: boolean;
+  /**
+   * Completion webhook configuration
+   * When set, an HTTP POST will be fired when the operation completes (success or error).
+   * The webhook is persisted in Redis state so it survives across QStash step boundaries.
+   */
+  completionWebhook?: {
+    body?: Record<string, unknown>;
+    url: string;
+  };
+  evalContext?: any;
   initialContext: AgentRuntimeContext;
   initialMessages?: any[];
+  maxSteps?: number;
   modelRuntimeConfig?: any;
   operationId: string;
   /**

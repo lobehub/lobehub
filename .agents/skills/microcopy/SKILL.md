@@ -25,6 +25,10 @@ Brand: **Where Agents Collaborate** - Focus on collaborative agent system, not j
 | 资源       | Resource      |
 | 库         | Library       |
 | 模型服务商 | Provider      |
+| 评测       | Evaluation    |
+| 基准       | Benchmark     |
+| 数据集     | Dataset       |
+| 用例       | Test Case     |
 
 ## Brand Principles
 

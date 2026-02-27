@@ -139,7 +139,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
 
   return (
     <div style={{ height: '100%', position: 'relative' }}>
-      {/* Debug Inspector - 放在 VList 外面，不会被虚拟列表回收 */}
+      {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
       {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
@@ -159,7 +159,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
             return (
               <div key={messageId} style={{ position: 'relative', width: '100%' }}>
                 {content}
-                {/* AutoScroll 放在最后一个 Item 里面，这样只有当最后一个 Item 可见时才会触发自动滚动 */}
+                {/* AutoScroll is placed inside the last Item so it only triggers when the last Item is visible */}
                 {isLastItem && <AutoScroll />}
               </div>
             );
@@ -168,13 +168,13 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
           return (
             <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
               {content}
-              {/* AutoScroll 放在最后一个 Item 里面，这样只有当最后一个 Item 可见时才会触发自动滚动 */}
+              {/* AutoScroll is placed inside the last Item so it only triggers when the last Item is visible */}
               {isLastItem && <AutoScroll />}
             </WideScreenContainer>
           );
         }}
       </VList>
-      {/* BackBottom 放在 VList 外面，这样无论滚动到哪里都能看到 */}
+      {/* BackBottom is placed outside VList so it remains visible regardless of scroll position */}
       <BackBottom
         atBottom={atBottom}
         visible={!atBottom}

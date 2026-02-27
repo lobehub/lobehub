@@ -234,7 +234,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             <PublishedTime
               className={styles.time}
               date={(updatedAt || createdAt) as string}
-              template={'MMM DD, YYYY'}
+             
             />
           </Flexbox>
         </Flexbox>

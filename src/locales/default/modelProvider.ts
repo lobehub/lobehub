@@ -279,6 +279,8 @@ export default {
     'For Gemini 3 Flash Preview models; controls thinking depth.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint':
     'For Gemini 3 Pro Preview models; controls thinking depth.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint':
+    'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':
@@ -318,8 +320,8 @@ export default {
   'providerModels.item.modelConfig.type.options.realtime': 'Real-time Chat',
   'providerModels.item.modelConfig.type.options.stt': 'Speech-to-Text',
   'providerModels.item.modelConfig.type.options.text2music': 'Text-to-Music',
-  'providerModels.item.modelConfig.type.options.text2video': 'Text-to-Video',
   'providerModels.item.modelConfig.type.options.tts': 'Text-to-Speech',
+  'providerModels.item.modelConfig.type.options.video': 'Video Generation',
   'providerModels.item.modelConfig.type.placeholder': 'Please select a model type',
   'providerModels.item.modelConfig.type.title': 'Model Type',
   'providerModels.item.modelConfig.video.extra':

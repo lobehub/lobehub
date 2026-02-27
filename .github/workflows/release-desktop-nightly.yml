@@ -48,7 +48,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Check for code changes since last nightly
         id: changes
@@ -128,8 +127,6 @@ jobs:
     steps:
       - name: Checkout base
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -162,8 +159,6 @@ jobs:
         os: [macos-15, macos-15-intel, windows-2025, ubuntu-latest]
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup

@@ -9,6 +9,7 @@ interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
   outputFileTracingExcludes?: NextConfig['outputFileTracingExcludes'];
+  outputFileTracingIncludes?: NextConfig['outputFileTracingIncludes'];
   redirects?: Redirect[];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
@@ -41,6 +42,7 @@ export function defineConfig(config: CustomNextConfig) {
               // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
               // which may not be picked up by Next.js output tracing.
               'node_modules/@napi-rs/canvas/**/*',
+              'node_modules/@napi-rs/canvas-*/**/*',
               // pnpm real package locations (including platform-specific bindings with `.node`)
               'node_modules/.pnpm/@napi-rs+canvas*/**/*',
               'node_modules/.pnpm/@napi-rs+canvas-*/**/*',
@@ -259,6 +261,9 @@ export function defineConfig(config: CustomNextConfig) {
     },
     ...(config.outputFileTracingExcludes && {
       outputFileTracingExcludes: config.outputFileTracingExcludes,
+    }),
+    ...(config.outputFileTracingIncludes && {
+      outputFileTracingIncludes: config.outputFileTracingIncludes,
     }),
     reactStrictMode: true,
     redirects: async () => [

@@ -118,7 +118,7 @@ const Controls = memo(() => {
   );
 
   useEffect(() => {
-    if (isModelBuiltinSearchInternal && (searchMode ?? 'off') === 'off') {
+    if (isModelBuiltinSearchInternal && (searchMode ?? 'auto') === 'off') {
       updateAgentChatConfig({ searchMode: 'auto' });
     }
   }, [isModelBuiltinSearchInternal, searchMode, updateAgentChatConfig]);

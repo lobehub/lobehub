@@ -532,6 +532,7 @@ describe('GenerationModel', () => {
           params: {},
           error: null,
           duration: null,
+          inferenceId: null,
           accessedAt: new Date(),
           createdAt: new Date(),
           updatedAt: new Date(),

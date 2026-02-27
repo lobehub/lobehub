@@ -7,6 +7,7 @@ import { selectors, useChatInputStore } from '../store';
 const SendButton = memo(() => {
   const sendMenu = useChatInputStore((s) => s.sendMenu);
   const shape = useChatInputStore((s) => s.sendButtonProps?.shape);
+  const size = useChatInputStore((s) => s.sendButtonProps?.size);
   const { generating, disabled } = useChatInputStore(selectors.sendButtonProps, isEqual);
   const [send, handleStop] = useChatInputStore((s) => [s.handleSendButton, s.handleStop]);
 
@@ -17,6 +18,7 @@ const SendButton = memo(() => {
       menu={sendMenu as any}
       placement={'topRight'}
       shape={shape}
+      size={size}
       trigger={['hover']}
       onClick={() => send()}
       onStop={() => handleStop()}

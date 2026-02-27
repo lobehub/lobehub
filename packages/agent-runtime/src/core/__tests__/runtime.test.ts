@@ -466,6 +466,39 @@ describe('AgentRuntime', () => {
         });
 
         expect(result.newState.status).toBe('done');
+        // finish is not a real execution step, should not increment stepCount
+        expect(result.newState.stepCount).toBe(0);
+      });
+
+      it('should not count finish as a step in stepCount', async () => {
+        const agent = new MockAgent();
+        agent.modelRuntime = async function* () {
+          yield { content: 'test response' };
+        };
+
+        agent.runner = vi.fn().mockImplementation((context: AgentRuntimeContext) => {
+          if (context.phase === 'user_input') {
+            return Promise.resolve({ type: 'call_llm', payload: { messages: [] } });
+          }
+          // After LLM result, finish
+          return Promise.resolve({ type: 'finish', reason: 'completed', reasonDetail: 'Done' });
+        });
+
+        const runtime = new AgentRuntime(agent);
+        const state = AgentRuntime.createInitialState({
+          operationId: 'test-session',
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+        // Step 1: call_llm (real work)
+        const result1 = await runtime.step(state, createTestContext('user_input'));
+        expect(result1.newState.stepCount).toBe(1);
+        expect(result1.newState.status).toBe('running');
+
+        // Step 2: finish (not real work)
+        const result2 = await runtime.step(result1.newState, result1.nextContext);
+        expect(result2.newState.stepCount).toBe(1); // should stay at 1, not become 2
+        expect(result2.newState.status).toBe('done');
       });
     });
   });
@@ -563,18 +596,17 @@ describe('AgentRuntime', () => {
       expect(result3.newState.stepCount).toBe(3);
       expect(result3.newState.status).not.toBe('error');
 
-      // Fourth step - should finish due to maxSteps
+      // Fourth step - exceeds maxSteps, enters forceFinish mode
+      // Instead of immediately stopping, the runtime sets forceFinish=true
+      // and continues execution so the agent can produce a final text response
       const result4 = await runtime.step(result3.newState, createTestContext('user_input'));
       expect(result4.newState.stepCount).toBe(4);
-      expect(result4.newState.status).toBe('done');
-      expect(result4.events[0]).toMatchObject({
-        type: 'done',
-        finalState: expect.objectContaining({
-          status: 'done',
-        }),
-        reason: 'max_steps_exceeded',
-        reasonDetail: 'Maximum steps exceeded: 3',
-      });
+      expect(result4.newState.forceFinish).toBe(true);
+      expect(result4.newState.status).toBe('running'); // continues for final LLM call
+
+      // Fifth step - LLM result with no tool calls, agent finishes
+      const result5 = await runtime.step(result4.newState, result4.nextContext!);
+      expect(result5.newState.status).toBe('done');
     });
 
     it('should include stepCount in session context', async () => {
@@ -1835,6 +1867,7 @@ describe('AgentRuntime', () => {
     it('should handle LLM errors', async () => {
       const agent = new MockAgent();
       agent.modelRuntime = async function* () {
+        yield* []; // satisfy require-yield
         throw new Error('LLM API error');
       };
 

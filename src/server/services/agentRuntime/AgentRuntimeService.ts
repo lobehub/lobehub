@@ -34,6 +34,11 @@ import {
   type StepLifecycleCallbacks,
 } from './types';
 
+if (process.env.VERCEL) {
+  // eslint-disable-next-line no-console
+  debug.log = console.log.bind(console);
+}
+
 const log = debug('lobe-server:agent-runtime-service');
 
 /**
@@ -168,7 +173,7 @@ export class AgentRuntimeService {
     if (impl instanceof LocalQueueServiceImpl) {
       log('Setting up local execution callback');
       impl.setExecutionCallback(async (operationId, stepIndex, context) => {
-        log('[%s] Local callback executing step %d', operationId, stepIndex);
+        log('[%s][%d] Local callback executing...', operationId, stepIndex);
         await this.executeStep({
           context,
           operationId,
@@ -207,6 +212,33 @@ export class AgentRuntimeService {
     return this.stepCallbacks.get(operationId);
   }
 
+  // ==================== Operation Interruption ====================
+
+  /**
+   * Interrupt a running agent operation by setting its state to 'interrupted'.
+   * The agent will stop at the next step boundary (cannot abort an in-flight LLM call).
+   * Works with both Redis and InMemory state managers via the coordinator abstraction.
+   *
+   * @returns true if the operation was interrupted, false if already in a terminal state or not found
+   */
+  async interruptOperation(operationId: string): Promise<boolean> {
+    const state = await this.coordinator.loadAgentState(operationId);
+    if (!state) return false;
+
+    if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
+      return false;
+    }
+
+    await this.coordinator.saveAgentState(operationId, {
+      ...state,
+      lastModified: new Date().toISOString(),
+      status: 'interrupted',
+    });
+
+    log('[%s] Operation interrupted', operationId);
+    return true;
+  }
+
   // ==================== Operation Management ====================
 
   /**
@@ -227,6 +259,9 @@ export class AgentRuntimeService {
       toolSourceMap,
       stepCallbacks,
       userInterventionConfig,
+      completionWebhook,
+      evalContext,
+      maxSteps,
     } = params;
 
     try {
@@ -242,12 +277,15 @@ export class AgentRuntimeService {
         messages: initialMessages,
         metadata: {
           agentConfig,
+          completionWebhook,
+          evalContext,
           // need be removed
           modelRuntimeConfig,
           userId,
           workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
         },
+        maxSteps,
         // modelRuntimeConfig at state level for executor fallback
         modelRuntimeConfig,
         operationId,
@@ -315,8 +353,24 @@ export class AgentRuntimeService {
     // Get registered callbacks
     const callbacks = this.getStepCallbacks(operationId);
 
+    // ===== Distributed lock: prevent duplicate execution from QStash retries =====
+    const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
+    if (!claimed) {
+      log(
+        '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
+        operationId,
+        stepIndex,
+      );
+      return {
+        locked: true,
+        nextStepScheduled: false,
+        state: {},
+        success: false,
+      };
+    }
+
     try {
-      log('[%s] Executing step %d', operationId, stepIndex);
+      log('[%s][%d] Start step executing...', operationId, stepIndex);
 
       // Publish step start event
       await this.streamManager.publishStreamEvent(operationId, {
@@ -330,6 +384,60 @@ export class AgentRuntimeService {
 
       if (!agentState) {
         throw new Error(`Agent state not found for operation ${operationId}`);
+      }
+
+      // Layer 2 defense: catch extremely delayed retries that arrive after lock TTL expired
+      if (agentState.stepCount > stepIndex) {
+        log(
+          '[%s][%d] Step already completed (stepCount=%d), skipping',
+          operationId,
+          stepIndex,
+          agentState.stepCount,
+        );
+        return {
+          nextStepScheduled: false,
+          state: agentState,
+          stepResult: null,
+          success: true,
+        };
+      }
+
+      // Early exit: skip step if operation is already in a terminal state
+      // This prevents executing expensive LLM/tool calls after timeout or interruption
+      if (
+        agentState.status === 'interrupted' ||
+        agentState.status === 'done' ||
+        agentState.status === 'error'
+      ) {
+        log(
+          '[%s][%d] Skipping step — operation already in terminal state: %s',
+          operationId,
+          stepIndex,
+          agentState.status,
+        );
+
+        const reason = this.determineCompletionReason(agentState);
+
+        // Trigger completion callback so eval run can finalize properly
+        if (callbacks?.onComplete) {
+          try {
+            await callbacks.onComplete({
+              finalState: agentState,
+              operationId,
+              reason,
+            });
+            this.unregisterStepCallbacks(operationId);
+          } catch (callbackError) {
+            log('[%s] onComplete callback error: %O', operationId, callbackError);
+          }
+        }
+
+        return {
+          nextStepScheduled: false,
+          state: agentState,
+          stepResult: null,
+          success: true,
+        };
       }
 
       // Call onBeforeStep callback
@@ -373,6 +481,15 @@ export class AgentRuntimeService {
       const startAt = Date.now();
       const stepResult = await runtime.step(currentState, currentContext);
 
+      // Check if the operation was interrupted while the step was executing
+      // (e.g., user clicked abort during a long LLM call)
+      const latestState = await this.coordinator.loadAgentState(operationId);
+      if (latestState?.status === 'interrupted') {
+        stepResult.newState.status = 'interrupted';
+        stepResult.newState.lastModified = new Date().toISOString();
+        log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
+      }
+
       // Save state, coordinator will handle event sending automatically
       await this.coordinator.saveStepResult(operationId, {
         ...stepResult,
@@ -398,7 +515,73 @@ export class AgentRuntimeService {
         type: 'step_complete',
       });
 
-      log('[%s] Step %d completed', operationId, stepIndex);
+      // Build enhanced step completion log
+      const { usage, cost } = stepResult.newState;
+      const phase = stepResult.nextContext?.phase;
+      let stepSummary: string;
+
+      if (phase === 'tool_result') {
+        const toolPayload = stepResult.nextContext?.payload as any;
+        const toolCall = toolPayload?.toolCall;
+        const toolName = toolCall ? `${toolCall.identifier}/${toolCall.apiName}` : 'unknown';
+        stepSummary = `[tool] ${toolName}`;
+      } else if (phase === 'tools_batch_result') {
+        const nextPayload = stepResult.nextContext?.payload as any;
+        const toolCount = nextPayload?.toolCount || 0;
+        const toolResults = nextPayload?.toolResults || [];
+        const toolNames = toolResults.map((r: any) => {
+          const tc = r.toolCall;
+          return tc ? `${tc.identifier}/${tc.apiName}` : 'unknown';
+        });
+        stepSummary = `[tools×${toolCount}] ${toolNames.join(', ')}`;
+      } else {
+        // LLM result
+        const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
+        const content = (llmEvent as any)?.result?.content || '';
+        const reasoning = (llmEvent as any)?.result?.reasoning || '';
+        const toolCalling = (llmEvent as any)?.result?.tool_calls;
+        const hasToolCalls = Array.isArray(toolCalling) && toolCalling.length > 0;
+
+        const parts: string[] = [];
+
+        // Thinking preview
+        if (reasoning) {
+          const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
+          parts.push(`💭 "${thinkPreview}"`);
+        }
+
+        if (!content && hasToolCalls) {
+          const names = toolCalling.map((tc: any) => tc.function?.name || 'unknown');
+          parts.push(`→ call tools: ${names.join(', ')}`);
+        } else if (content) {
+          const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
+          parts.push(`"${preview}"`);
+        }
+
+        stepSummary = `[llm] ${parts.join(' | ') || '(empty)'}`;
+      }
+
+      const rawTokens = usage?.llm?.tokens?.total ?? 0;
+      const totalTokens =
+        rawTokens >= 1_000_000
+          ? `${(rawTokens / 1_000_000).toFixed(1)}m`
+          : rawTokens >= 1000
+            ? `${(rawTokens / 1000).toFixed(1)}k`
+            : String(rawTokens);
+      const totalCost = (cost?.total ?? 0).toFixed(4);
+      const llmCalls = usage?.llm?.apiCalls ?? 0;
+      const toolCalls = usage?.tools?.totalCalls ?? 0;
+
+      log(
+        '[%s][%d] completed %s | total: %s tokens / $%s | llm×%d | tools×%d',
+        operationId,
+        stepIndex,
+        stepSummary,
+        totalTokens,
+        totalCost,
+        llmCalls,
+        toolCalls,
+      );
 
       // Call onAfterStep callback
       if (callbacks?.onAfterStep) {
@@ -430,22 +613,29 @@ export class AgentRuntimeService {
         });
         nextStepScheduled = true;
 
-        log('[%s] Scheduled next step %d', operationId, nextStepIndex);
+        log('[%s][%d] Scheduled next step %d', operationId, stepIndex, nextStepIndex);
       }
 
-      // Check if operation is complete, call onComplete callback
-      if (!shouldContinue && callbacks?.onComplete) {
+      // Check if operation is complete
+      if (!shouldContinue) {
         const reason = this.determineCompletionReason(stepResult.newState);
-        try {
-          await callbacks.onComplete({
-            finalState: stepResult.newState,
-            operationId,
-            reason,
-          });
-          // Clean up callbacks after operation completes
-          this.unregisterStepCallbacks(operationId);
-        } catch (callbackError) {
-          log('[%s] onComplete callback error: %O', operationId, callbackError);
+
+        // Trigger completion webhook (fire-and-forget)
+        await this.triggerCompletionWebhook(stepResult.newState, operationId, reason);
+
+        // Call onComplete callback
+        if (callbacks?.onComplete) {
+          try {
+            await callbacks.onComplete({
+              finalState: stepResult.newState,
+              operationId,
+              reason,
+            });
+            // Clean up callbacks after operation completes
+            this.unregisterStepCallbacks(operationId);
+          } catch (callbackError) {
+            log('[%s] onComplete callback error: %O', operationId, callbackError);
+          }
         }
       }
 
@@ -480,6 +670,9 @@ export class AgentRuntimeService {
       // Save the error state to coordinator so getOperationStatus can retrieve it
       await this.coordinator.saveAgentState(operationId, finalStateWithError);
 
+      // Trigger completion webhook on error (fire-and-forget)
+      await this.triggerCompletionWebhook(finalStateWithError, operationId, 'error');
+
       // Also call onComplete callback when execution fails
       if (callbacks?.onComplete) {
         try {
@@ -495,6 +688,11 @@ export class AgentRuntimeService {
       }
 
       throw error;
+    } finally {
+      // Release lock so legitimate retries or next operations can proceed.
+      // If Vercel force-kills the process, this won't execute — the lock
+      // auto-expires after TTL (35s), allowing QStash retries to self-heal.
+      await this.coordinator.releaseStepLock(operationId, stepIndex);
     }
   }
 
@@ -844,6 +1042,8 @@ export class AgentRuntimeService {
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
+      agentConfig: metadata?.agentConfig,
+      evalContext: metadata?.evalContext,
       messageModel: this.messageModel,
       operationId,
       serverDB: this.serverDB,
@@ -887,6 +1087,80 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Trigger completion webhook if configured in state metadata.
+   * Fire-and-forget: errors are logged but never thrown.
+   */
+  private async triggerCompletionWebhook(
+    state: any,
+    operationId: string,
+    reason: StepCompletionReason,
+  ): Promise<void> {
+    const webhook = state.metadata?.completionWebhook;
+    if (!webhook?.url) return;
+
+    try {
+      log('[%s] Triggering completion webhook: %s', operationId, webhook.url);
+
+      const duration = state.createdAt
+        ? Date.now() - new Date(state.createdAt).getTime()
+        : undefined;
+
+      await fetch(webhook.url, {
+        body: JSON.stringify({
+          ...webhook.body,
+          cost: state.cost?.total,
+          duration,
+          errorDetail: state.error,
+          errorMessage: this.extractErrorMessage(state.error),
+          llmCalls: state.usage?.llm?.apiCalls,
+          operationId,
+          reason,
+          status: state.status,
+          steps: state.stepCount,
+          toolCalls: state.usage?.tools?.totalCalls,
+          totalTokens: state.usage?.llm?.tokens?.total,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error('[%s] Completion webhook failed:', operationId, error);
+    }
+  }
+
+  /**
+   * Extract a human-readable error message from the agent state error object.
+   * Handles both raw ChatCompletionErrorPayload (from runtime.step catch) and
+   * formatted ChatMessageError (from executeStep catch).
+   */
+  private extractErrorMessage(error: any): string | undefined {
+    if (!error) return undefined;
+
+    // Path B: formatted ChatMessageError — { body, message, type }
+    // Try to extract meaningful info from body first
+    if (error.body) {
+      const body = error.body;
+      // OpenAI-style: body.error.message
+      if (body.error?.message) return body.error.message;
+      // Direct message on body
+      if (body.message) return body.message;
+    }
+
+    // Path A: raw ChatCompletionErrorPayload — { errorType, error: {...}, provider }
+    if (error.error) {
+      const inner = error.error;
+      if (inner.error?.message) return inner.error.message;
+      if (inner.message) return inner.message;
+    }
+
+    // Fallback to message or type
+    if (error.message && error.message !== 'error') return error.message;
+    if (error.type || error.errorType) return String(error.type || error.errorType);
+
+    return undefined;
+  }
+
+  /**
    * Decide whether to continue execution
    */
   private shouldContinueExecution(state: any, context?: any): boolean {
@@ -902,8 +1176,8 @@ export class AgentRuntimeService {
     // Interrupted
     if (state.status === 'interrupted') return false;
 
-    // Reached maximum steps
-    if (state.maxSteps && state.stepCount >= state.maxSteps) return false;
+    // maxSteps is handled by runtime.step() which sets forceFinish → status:'done'
+    // No redundant check here — trust the runtime state machine
 
     // Exceeded cost limit
     if (state.costLimit && state.cost?.total >= state.costLimit.maxTotalCost) {
@@ -995,7 +1269,7 @@ export class AgentRuntimeService {
       onStepComplete?: (stepIndex: number, state: AgentState) => void;
     },
   ): Promise<AgentState> {
-    const { maxSteps = 9999, onStepComplete, initialContext } = options ?? {};
+    const { maxSteps = 999, onStepComplete, initialContext } = options ?? {};
 
     log('[%s] Starting sync execution (maxSteps: %d)', operationId, maxSteps);
 
@@ -1040,7 +1314,7 @@ export class AgentRuntimeService {
       }
 
       // Execute one step
-      log('[%s] Executing step %d', operationId, stepIndex);
+      log('[%s][%d] Start executing...', operationId, stepIndex);
       const result = await this.executeStep({
         context,
         operationId,

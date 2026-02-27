@@ -24,17 +24,25 @@ import ReasoningTokenSlider from './ReasoningTokenSlider';
 import TextVerbositySlider from './TextVerbositySlider';
 import ThinkingBudgetSlider from './ThinkingBudgetSlider';
 import ThinkingLevel2Slider from './ThinkingLevel2Slider';
+import ThinkingLevel3Slider from './ThinkingLevel3Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
-const ControlsForm = memo(() => {
+interface ControlsFormProps {
+  model?: string;
+  provider?: string;
+}
+
+const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: providerProp }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [model, provider] = useAgentStore((s) => [
+  const [agentModel, agentProvider] = useAgentStore((s) => [
     agentByIdSelectors.getAgentModelById(agentId)(s),
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
+  const model = modelProp ?? agentModel;
+  const provider = providerProp ?? agentProvider;
   const [form] = Form.useForm();
   const enableReasoning = AntdForm.useWatch(['enableReasoning'], form);
 
@@ -209,7 +217,7 @@ const ControlsForm = memo(() => {
       children: <ThinkingBudgetSlider />,
       label: t('extendParams.thinkingBudget.title'),
       layout: 'vertical',
-      minWidth: 460,
+      minWidth: undefined,
       name: 'thinkingBudget',
       style: {
         paddingBottom: 0,
@@ -227,7 +235,7 @@ const ControlsForm = memo(() => {
       layout: isNarrow ? 'vertical' : 'horizontal',
       minWidth: undefined,
       name: 'urlContext',
-      style: isNarrow ? undefined : { minWidth: 360 },
+      style: undefined,
       tag: 'urlContext',
     },
     {
@@ -247,10 +255,9 @@ const ControlsForm = memo(() => {
       minWidth: undefined,
       name: 'thinkingLevel',
       style: {
-        minWidth: 400,
         paddingBottom: 0,
       },
-      tag: 'thinkingLevel',
+      desc: 'thinkingLevel',
     },
     {
       children: <ThinkingLevel2Slider />,
@@ -259,10 +266,20 @@ const ControlsForm = memo(() => {
       minWidth: undefined,
       name: 'thinkingLevel2',
       style: {
-        minWidth: 400,
         paddingBottom: 0,
       },
-      tag: 'thinkingLevel',
+      desc: 'thinkingLevel',
+    },
+    {
+      children: <ThinkingLevel3Slider />,
+      label: t('extendParams.thinkingLevel.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'thinkingLevel3',
+      style: {
+        paddingBottom: 0,
+      },
+      desc: 'thinkingLevel',
     },
     {
       children: <ImageAspectRatioSelect />,
@@ -273,7 +290,7 @@ const ControlsForm = memo(() => {
       style: {
         paddingBottom: 0,
       },
-      tag: 'aspectRatio',
+      desc: 'aspectRatio',
     },
     {
       children: <ImageResolutionSlider />,
@@ -284,7 +301,7 @@ const ControlsForm = memo(() => {
       style: {
         paddingBottom: 0,
       },
-      tag: 'imageSize',
+      desc: 'imageSize',
     },
   ].filter(Boolean) as FormItemProps[];
 

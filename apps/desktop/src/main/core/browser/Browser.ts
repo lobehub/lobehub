@@ -110,7 +110,18 @@ export default class Browser {
   // ==================== Window Creation ====================
 
   private createBrowserWindow(): BrowserWindow {
-    const { title, width, height, ...rest } = this.options;
+    const {
+      title,
+      width,
+      height,
+      // Strip platform visual effect props — these are managed exclusively
+      // by WindowThemeManager.getPlatformConfig() to prevent config leaking
+      // from appBrowsers/windowTemplates into the BrowserWindow constructor.
+      vibrancy: _vibrancy,
+      visualEffectState: _visualEffectState,
+      transparent: _transparent,
+      ...rest
+    } = this.options;
 
     const resolvedState = this.stateManager.resolveState({ height, width });
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
@@ -125,9 +136,6 @@ export default class Browser {
       height: resolvedState.height,
       show: false,
       title,
-
-      vibrancy: 'sidebar',
-      visualEffectState: 'active',
       webPreferences: {
         backgroundThrottling: false,
         contextIsolation: true,
@@ -138,6 +146,7 @@ export default class Browser {
       width: resolvedState.width,
       x: resolvedState.x,
       y: resolvedState.y,
+      // Platform visual config is the SOLE source of vibrancy / transparency / titleBarOverlay.
       ...this.themeManager.getPlatformConfig(),
     });
   }
@@ -145,7 +154,7 @@ export default class Browser {
   private setupWindow(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] BrowserWindow instance created.`);
 
-    // Setup theme management
+    // Setup theme management (includes liquid glass lifecycle on macOS Tahoe)
     this.themeManager.attach(browserWindow);
 
     // Setup network interceptors

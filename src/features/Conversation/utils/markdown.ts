@@ -59,17 +59,17 @@ export const processWithArtifact = (input: string = '') => {
   return output;
 };
 
-// 预处理函数：确保 think 标签前后有两个换行符
+// Preprocessing function: ensure two newlines before and after think tags
 export const normalizeThinkTags = (input: string) => {
   return (
     input
-      // 确保 <think> 标签前后有两个换行符
+      // Ensure two newlines before and after <think> tags
       .replaceAll(/([^\n])\s*<think>/g, '$1\n\n<think>')
       .replaceAll(/<think>\s*([^\n])/g, '<think>\n\n$1')
-      // 确保 </think> 标签前后有两个换行符
+      // Ensure two newlines before and after </think> tags
       .replaceAll(/([^\n])\s*<\/think>/g, '$1\n\n</think>')
       .replaceAll(/<\/think>\s*([^\n])/g, '</think>\n\n$1')
-      // 处理可能产生的多余换行符
+      // Remove excess newlines that may have been introduced
       .replaceAll(/\n{3,}/g, '\n\n')
   );
 };

@@ -51,6 +51,7 @@ export default defineConfig({
       '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
       '@/utils/electron': resolve(__dirname, './src/utils/electron'),
       '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),
+      '@/utils/sanitizeFileName': resolve(__dirname, './src/utils/sanitizeFileName'),
       '@/utils': resolve(__dirname, './packages/utils/src'),
       '@/types': resolve(__dirname, './packages/types/src'),
       '@/const': resolve(__dirname, './packages/const/src'),

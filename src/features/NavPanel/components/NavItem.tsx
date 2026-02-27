@@ -53,6 +53,7 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    */
   href?: string;
   icon?: IconProps['icon'];
+  iconSize?: number;
   loading?: boolean;
   slots?: NavItemSlots;
   title: ReactNode;
@@ -66,6 +67,7 @@ const NavItem = memo<NavItemProps>(
     active,
     href,
     icon,
+    iconSize = 18,
     title,
     onClick,
     disabled,
@@ -113,9 +115,9 @@ const NavItem = memo<NavItemProps>(
         {icon && (
           <Center flex={'none'} height={28} width={28}>
             {loading ? (
-              <NeuralNetworkLoading size={18} />
+              <NeuralNetworkLoading size={iconSize} />
             ) : (
-              <Icon color={iconColor} icon={icon} size={18} />
+              <Icon color={iconColor} icon={icon} size={iconSize} />
             )}
           </Center>
         )}

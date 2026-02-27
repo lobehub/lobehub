@@ -27,7 +27,7 @@ const AutoScroll = memo(() => {
 
   const shouldAutoScroll = isAutoScrollEnabled && atBottom && isGenerating && !isScrolling;
 
-  // 获取最后一条消息的 content 长度，用于监听流式输出
+  // Get the content length of the last message to monitor streaming output
   const lastMessage = dbMessages.at(-1);
   const lastMessageContentLength =
     typeof lastMessage?.content === 'string' ? lastMessage.content.length : 0;

@@ -37,6 +37,12 @@ export class AsyncTaskModel {
     return this.db.query.asyncTasks.findFirst({ where: and(eq(asyncTasks.id, id)) });
   };
 
+  static findByInferenceId = async (db: LobeChatDatabase, inferenceId: string) => {
+    return db.query.asyncTasks.findFirst({
+      where: eq(asyncTasks.inferenceId, inferenceId),
+    });
+  };
+
   update(taskId: string, value: Partial<AsyncTaskSelectItem>) {
     return this.db
       .update(asyncTasks)

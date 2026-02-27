@@ -2,7 +2,7 @@ import { toMarkdown } from 'mdast-util-to-markdown';
 import { type Parent } from 'unist';
 
 const processNode = (node: any): string => {
-  // 处理数学公式节点
+  // Handle math formula nodes
   if (node.type === 'inlineMath') {
     return `$${node.value}$`;
   }
@@ -13,16 +13,16 @@ const processNode = (node: any): string => {
     return `[${text}](${node.url})`;
   }
 
-  // 处理带有子节点的容器
+  // Handle containers with child nodes
   if (node.children) {
     const content = node.children.map((element: Parent) => processNode(element)).join('');
 
-    // 处理列表的特殊换行逻辑
+    // Handle special line-break logic for lists
     if (node.type === 'list') {
       return `\n${content}\n`;
     }
 
-    // 处理列表项的前缀
+    // Handle list item prefixes
     if (node.type === 'listItem') {
       const prefix = node.checked !== null ? `[${node.checked ? 'x' : ' '}] ` : '';
       return `${prefix}${content}`;
@@ -31,20 +31,20 @@ const processNode = (node: any): string => {
     return content;
   }
 
-  // 处理文本节点
+  // Handle text nodes
   if (node.value) {
-    // 保留原始空白字符处理逻辑
+    // Preserve original whitespace handling logic
     return node.value.replaceAll(/^\s+|\s+$/g, ' ');
   }
 
-  // 兜底使用标准转换
+  // Fall back to standard conversion
   return toMarkdown(node);
 };
 
 export const treeNodeToString = (nodes: Parent[]) => {
   return nodes
     .map((node) => {
-      // 处理列表的缩进问题
+      // Handle list indentation
       if (node.type === 'list') {
         return node.children
           .map((item, index) => {

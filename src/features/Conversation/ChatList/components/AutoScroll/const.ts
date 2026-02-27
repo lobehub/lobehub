@@ -1,5 +1,5 @@
 /**
- * 判断是否在底部的阈值（单位：px）
- * 当距离底部小于等于此值时，认为在底部
+ * Threshold for determining if at the bottom (unit: px)
+ * When the distance to the bottom is less than or equal to this value, considered at the bottom
  */
 export const AT_BOTTOM_THRESHOLD = 100;

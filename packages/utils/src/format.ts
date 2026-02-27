@@ -106,6 +106,13 @@ export const formatTokenNumber = (num: number): string => {
   return kiloToken < 1000 ? `${kiloToken}K` : `${Math.floor(kiloToken / 1000)}M`;
 };
 
+export const formatCost = (value: number): string => {
+  return value.toLocaleString('en-US', {
+    maximumSignificantDigits: 4,
+    minimumSignificantDigits: 2,
+  });
+};
+
 export const formatPrice = (price: number, fractionDigits: number = 2) => {
   if (!price && price !== 0) return '--';
 

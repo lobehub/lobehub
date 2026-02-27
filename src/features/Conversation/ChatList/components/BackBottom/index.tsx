@@ -19,7 +19,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
 
   return (
     <>
-      {/* Debug: 底部指示线 */}
+      {/* Debug: bottom indicator line */}
       {OPEN_DEV_INSPECTOR && (
         <div
           style={{
@@ -30,7 +30,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
             right: 0,
           }}
         >
-          {/* Threshold 区域顶部边界线 */}
+          {/* Threshold area top boundary line */}
           <div
             style={{
               background: atBottom ? '#22c55e' : '#ef4444',
@@ -43,7 +43,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
             }}
           />
 
-          {/* Threshold 区域 mask - 显示在指示线上方 */}
+          {/* Threshold area mask - displayed above the indicator line */}
           <div
             style={{
               background: atBottom
@@ -57,7 +57,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
             }}
           />
 
-          {/* AutoScroll 位置指示线（底部） */}
+          {/* AutoScroll position indicator line (bottom) */}
           <div
             style={{
               background: atBottom ? '#22c55e' : '#ef4444',

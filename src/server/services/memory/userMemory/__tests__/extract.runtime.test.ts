@@ -12,6 +12,7 @@ const createRuntimeState = (models: EnabledAiModel[], keyVaults: Record<string, 
     enabledAiProviders: [],
     enabledChatAiProviders: [],
     enabledImageAiProviders: [],
+    enabledVideoAiProviders: [],
     runtimeConfig: Object.fromEntries(
       Object.entries(keyVaults).map(([providerId, vault]) => [
         providerId,

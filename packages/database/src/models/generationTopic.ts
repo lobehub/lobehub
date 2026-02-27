@@ -1,4 +1,8 @@
-import type { GenerationAsset, ImageGenerationTopic } from '@lobechat/types';
+import type {
+  ImageGenerationAsset,
+  ImageGenerationTopic,
+  VideoGenerationAsset,
+} from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
@@ -6,6 +10,7 @@ import { FileService } from '@/server/services/file';
 import type { GenerationTopicItem } from '../schemas/generation';
 import { generationTopics } from '../schemas/generation';
 import type { LobeChatDatabase } from '../type';
+import type { GenerationTopicType } from '../types/generation';
 
 export class GenerationTopicModel {
   private userId: string;
@@ -18,12 +23,17 @@ export class GenerationTopicModel {
     this.fileService = new FileService(db, userId);
   }
 
-  queryAll = async () => {
+  queryAll = async (type?: GenerationTopicType) => {
+    const conditions = [eq(generationTopics.userId, this.userId)];
+    if (type) {
+      conditions.push(eq(generationTopics.type, type));
+    }
+
     const topics = await this.db
       .select()
       .from(generationTopics)
       .orderBy(desc(generationTopics.updatedAt))
-      .where(eq(generationTopics.userId, this.userId));
+      .where(and(...conditions));
 
     return Promise.all(
       topics.map(async (topic) => {
@@ -38,11 +48,12 @@ export class GenerationTopicModel {
     );
   };
 
-  create = async (title: string) => {
+  create = async (title: string, type?: GenerationTopicType) => {
     const [newGenerationTopic] = await this.db
       .insert(generationTopics)
       .values({
         title,
+        type: type ?? 'image',
         userId: this.userId,
       })
       .returning();
@@ -106,13 +117,15 @@ export class GenerationTopicModel {
       filesToDelete.push(topicWithBatches.coverUrl);
     }
 
-    // Add thumbnail URLs from all generations
+    // Add asset file URLs from all generations (video, cover, thumbnail)
     if (topicWithBatches.batches) {
       for (const batch of topicWithBatches.batches) {
         for (const gen of batch.generations) {
-          const asset = gen.asset as GenerationAsset;
-          if (asset?.thumbnailUrl) {
-            filesToDelete.push(asset.thumbnailUrl);
+          const asset = gen.asset as ImageGenerationAsset | VideoGenerationAsset | null;
+          if (asset?.url) filesToDelete.push(asset.url);
+          if (asset?.thumbnailUrl) filesToDelete.push(asset.thumbnailUrl);
+          if (asset && 'coverUrl' in asset && asset.coverUrl) {
+            filesToDelete.push(asset.coverUrl);
           }
         }
       }

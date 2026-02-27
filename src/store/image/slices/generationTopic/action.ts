@@ -147,7 +147,7 @@ export class GenerationTopicActionImpl {
     this.#get().internal_updateGenerationTopicLoading(tmpId, true);
 
     // 2. Call backend service
-    const topicId = await generationTopicService.createTopic();
+    const topicId = await generationTopicService.createTopic('image');
     this.#get().internal_updateGenerationTopicLoading(tmpId, false);
 
     // 3. Refresh data to ensure consistency
@@ -210,7 +210,7 @@ export class GenerationTopicActionImpl {
   useFetchGenerationTopics = (enabled: boolean): SWRResponse<ImageGenerationTopic[]> => {
     return useClientDataSWR<ImageGenerationTopic[]>(
       enabled ? [FETCH_GENERATION_TOPICS_KEY] : null,
-      () => generationTopicService.getAllGenerationTopics(),
+      () => generationTopicService.getAllGenerationTopics('image'),
       {
         suspense: true,
         onSuccess: (data) => {

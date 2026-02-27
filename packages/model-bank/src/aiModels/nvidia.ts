@@ -1,6 +1,18 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import { type AIChatModelCard } from '../types/aiModel';
 
 const nvidiaChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
+    displayName: 'GLM-5',
+    id: 'z-ai/glm5',
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -10,9 +22,90 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2 is a compact, fast, cost-effective MoE model (230B total, 10B active) built for top-tier coding and agent performance while retaining strong general intelligence. It excels at multi-file edits, code-run-fix loops, test validation, and complex toolchains.',
     displayName: 'MiniMax-M2',
-    enabled: true,
     id: 'minimaxai/minimax-m2',
     maxOutput: 16_384,
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
+      'MiniMax-M2.1 is a compact, fast, cost-effective MoE model built for top-tier coding and agent performance.',
+    displayName: 'MiniMax-M2.1',
+    enabled: true,
+    id: 'minimaxai/minimax-m2.1',
+    maxOutput: 131_072,
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'DeepSeek V3.2 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought capabilities.',
+    displayName: 'DeepSeek V3.2',
+    enabled: true,
+    id: 'deepseek-ai/deepseek-v3.2',
+    maxOutput: 65_536,
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'GLM-4.7 is Zhipu latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities.',
+    displayName: 'GLM-4.7',
+    enabled: true,
+    id: 'z-ai/glm4.7',
+    maxOutput: 131_072,
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      "GLM-5 is Zhipu AI's new flagship foundation model for agent engineering, achieving open-source SOTA performance in coding and agent capabilities. It matches Claude Opus 4.5 in performance.",
+    displayName: 'GLM-5',
+    enabled: true,
+    id: 'z-ai/glm5',
+    maxOutput: 131_072,
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.5 is the most intelligent Kimi model to date, featuring native multimodal architecture.',
+    displayName: 'Kimi K2.5',
+    enabled: true,
+    id: 'moonshotai/kimi-k2.5',
+    maxOutput: 65_536,
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -24,7 +117,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek V3.1 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought for deep analysis tasks.',
     displayName: 'DeepSeek V3.1 Terminus',
-    enabled: true,
     id: 'deepseek-ai/deepseek-v3.1-terminus',
     maxOutput: 16_384,
     settings: {

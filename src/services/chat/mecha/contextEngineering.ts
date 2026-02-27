@@ -9,6 +9,8 @@ import {
   type GroupOfficialToolItem,
   type GTDConfig,
   type LobeToolManifest,
+  type MemoryContext,
+  type UserMemoryData,
 } from '@lobechat/context-engine';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
@@ -63,6 +65,8 @@ interface ContextEngineeringContext {
   inputTemplate?: string;
   /** Tool manifests with systemRole and API definitions */
   manifests?: LobeToolManifest[];
+  /** Memory-related context for prompt/runtime behavior */
+  memoryContext?: MemoryContext;
   messages: UIChatMessage[];
   model: string;
   provider: string;
@@ -97,6 +101,7 @@ export const contextEngineering = async ({
   initialContext,
   stepContext,
   topicId,
+  memoryContext,
 }: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
   log('tools: %o', tools);
 
@@ -280,7 +285,7 @@ export const contextEngineering = async ({
 
   // Resolve user memories: topic memories and global identities are independent layers
   // Both functions now read from cache only (no network requests) to avoid blocking sendMessage
-  let userMemoryData;
+  let userMemoryData: UserMemoryData | undefined;
   if (enableUserMemories) {
     const topicMemories = resolveTopicMemories();
     const globalIdentities = resolveGlobalIdentities();
@@ -331,8 +336,15 @@ export const contextEngineering = async ({
     }
   }
 
+  const userMemoryConfig =
+    enableUserMemories && userMemoryData
+      ? {
+          enabled: enableUserMemories,
+          memories: userMemoryData,
+        }
+      : undefined;
+
   // Create MessagesEngine with injected dependencies
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const engine = new MessagesEngine({
     // Agent configuration
     enableHistoryCount,
@@ -376,16 +388,14 @@ export const contextEngineering = async ({
     },
 
     // User memory configuration
-    userMemory:
-      enableUserMemories && userMemoryData
-        ? {
-            enabled: enableUserMemories,
-            memories: userMemoryData,
-          }
-        : undefined,
+    userMemory: userMemoryConfig,
 
     // Variable generators
-    variableGenerators: VARIABLE_GENERATORS,
+    variableGenerators: {
+      ...VARIABLE_GENERATORS,
+      // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
+      memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
+    },
 
     // Extended contexts - only pass when enabled
     ...(isAgentBuilderEnabled && { agentBuilderContext }),

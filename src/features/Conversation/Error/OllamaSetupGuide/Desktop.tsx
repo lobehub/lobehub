@@ -7,7 +7,7 @@ import { useConversationStore } from '@/features/Conversation/store';
 
 import BaseErrorForm from '../BaseErrorForm';
 
-// TODO: 优化 Ollama setup 的流程，isDesktop 模式下可以直接做到端到端检测
+// TODO: Optimize the Ollama setup flow - in isDesktop mode, end-to-end detection can be done directly
 const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
   const { t } = useTranslation('components');
 

@@ -43,7 +43,7 @@ beforeEach(async () => {
     ]);
     await trx.insert(files).values({
       id: 'f1',
-      userId: userId,
+      userId,
       url: 'abc',
       name: 'file-1',
       fileType: 'image/png',
@@ -202,6 +202,50 @@ describe('MessageModel Create Tests', () => {
       expect(pluginResult).toHaveLength(1);
       expect(pluginResult[0].identifier).toBe('lobe-web-browsing');
       expect(pluginResult[0].state!).toMatchObject(state);
+    });
+
+    it('should handle tool message with null bytes (\\u0000) in plugin state/arguments', async () => {
+      // Regression: PostgreSQL rejects \u0000 in text/jsonb columns.
+      // This reproduces a real crash from web search tool returning corrupted Unicode,
+      // e.g. "montée" encoded as "mont\u0000e9e" instead of "mont\u00e9e".
+      const stateWithNullByte = {
+        query: 'Auxerre mont\u0000e Ligue 1',
+        results: [
+          {
+            content: 'Some result with null\u0000byte',
+            url: 'https://example.com',
+          },
+        ],
+      };
+
+      const argsWithNullByte = `{"query":"Auxerre mont\u0000e9e 2022"}`;
+
+      await expect(
+        messageModel.create({
+          content: 'tool result',
+          plugin: {
+            apiName: 'search',
+            arguments: argsWithNullByte,
+            identifier: 'lobe-web-browsing',
+            type: 'builtin',
+          },
+          pluginState: stateWithNullByte,
+          role: 'tool',
+          tool_call_id: 'call_null_byte_test',
+          sessionId: '1',
+        }),
+      ).resolves.toBeDefined();
+
+      // Verify the data was stored and null bytes were handled
+      const pluginResult = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.toolCallId, 'call_null_byte_test'));
+      expect(pluginResult).toHaveLength(1);
+      expect(pluginResult[0].identifier).toBe('lobe-web-browsing');
+      // The stored data should not contain null bytes
+      expect(JSON.stringify(pluginResult[0].state)).not.toContain('\u0000');
+      expect(pluginResult[0].arguments).not.toContain('\u0000');
     });
 
     describe('create with advanced parameters', () => {

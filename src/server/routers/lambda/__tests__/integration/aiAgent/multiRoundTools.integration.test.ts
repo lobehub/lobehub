@@ -336,7 +336,7 @@ describe('Multi-Round Tool Execution', () => {
     mockExecuteTool.mockRestore();
   });
 
-  it('should maintain correct state.messages count in AgentState across tool rounds', async () => {
+  it('should maintain correct state.messages structure in AgentState across tool rounds', async () => {
     let callCount = 0;
     mockResponsesCreate.mockImplementation(() => {
       callCount++;
@@ -372,13 +372,33 @@ describe('Multi-Round Tool Execution', () => {
 
     expect(finalState.status).toBe('done');
 
-    const stateToolMessages = finalState.messages.filter(
-      (m: { role: string }) => m.role === 'tool',
-    );
-    expect(stateToolMessages).toHaveLength(4);
+    // After LOBE-5143: state.messages stores parse()-processed UIChatMessage[]
+    // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
+    // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
+    expect(finalState.messages.length).toBeGreaterThan(0);
 
-    const stateToolCallIds = stateToolMessages.map((m: { tool_call_id: string }) => m.tool_call_id);
-    expect(new Set(stateToolCallIds).size).toBe(4);
+    // After LOBE-5143: state.messages stores parse()-processed UIChatMessage[]
+    // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
+    // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
+    expect(finalState.messages.length).toBeGreaterThan(0);
+
+    // parse() combines the multi-round assistant+tool chain into one assistantGroup
+    const assistantGroupMessages = finalState.messages.filter(
+      (m: { role: string }) => m.role === 'assistantGroup',
+    );
+    expect(assistantGroupMessages).toHaveLength(1);
+
+    // The assistantGroup children are assistant messages, each with a tools array
+    // containing the tool calls for that round
+    const group = assistantGroupMessages[0] as any;
+    expect(group.children).toHaveLength(2); // 2 rounds of tool calls
+
+    // Each child should have 2 tools (search + crawl per round)
+    const totalToolCalls = group.children.reduce(
+      (sum: number, child: any) => sum + (child.tools?.length ?? 0),
+      0,
+    );
+    expect(totalToolCalls).toBe(4);
 
     mockExecuteTool.mockRestore();
   });

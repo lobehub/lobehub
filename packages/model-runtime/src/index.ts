@@ -31,6 +31,7 @@ export { LobeOpenRouterAI } from './providers/openrouter';
 export { LobePerplexityAI } from './providers/perplexity';
 export { LobeQwenAI } from './providers/qwen';
 export { LobeStepfunAI } from './providers/stepfun';
+export { LobeStraicoAI } from './providers/straico';
 export { LobeTogetherAI } from './providers/togetherai';
 export { LobeVolcengineAI } from './providers/volcengine';
 export { LobeXiaomiMiMoAI } from './providers/xiaomimimo';

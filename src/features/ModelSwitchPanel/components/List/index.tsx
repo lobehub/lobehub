@@ -1,5 +1,5 @@
-import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import { type FC } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import { type FC, type ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
@@ -16,6 +16,7 @@ import { menuKey } from '../../utils';
 import { ListItemRenderer } from './ListItemRenderer';
 
 interface ListProps {
+  extraControls?: (modelId: string, providerId: string) => ReactNode;
   groupMode: GroupMode;
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
@@ -25,6 +26,7 @@ interface ListProps {
 }
 
 export const List: FC<ListProps> = ({
+  extraControls,
   groupMode,
   model: modelProp,
   onModelChange: onModelChangeProp,
@@ -64,6 +66,7 @@ export const List: FC<ListProps> = ({
       return (
         <ListItemRenderer
           activeKey={activeKey}
+          extraControls={extraControls}
           isScrolling={isScrolling}
           item={item}
           newLabel={newLabel}
@@ -72,7 +75,7 @@ export const List: FC<ListProps> = ({
         />
       );
     },
-    [activeKey, handleClose, handleModelChange, isScrolling, listItems, newLabel],
+    [activeKey, extraControls, handleClose, handleModelChange, isScrolling, listItems, newLabel],
   );
 
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;
@@ -85,15 +88,13 @@ export const List: FC<ListProps> = ({
         height: listHeight,
       }}
     >
-      <TooltipGroup>
-        <Virtuoso
-          isScrolling={handleScrollingStateChange}
-          itemContent={itemContent}
-          overscan={200}
-          style={{ height: listHeight }}
-          totalCount={listItems.length}
-        />
-      </TooltipGroup>
+      <Virtuoso
+        isScrolling={handleScrollingStateChange}
+        itemContent={itemContent}
+        overscan={200}
+        style={{ height: listHeight }}
+        totalCount={listItems.length}
+      />
     </Flexbox>
   );
 };

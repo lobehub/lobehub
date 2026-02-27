@@ -158,7 +158,7 @@ export default class FileService extends ServiceModule {
   async getFile(path: string): Promise<{ content: ArrayBuffer; mimeType: string }> {
     logger.info(`Getting file content: ${path}`);
     try {
-      // 处理desktop://路径
+      // Handle desktop:// paths
       if (!path.startsWith('desktop://')) {
         logger.error(`Invalid desktop file path: ${path}`);
         throw new Error(`Invalid desktop file path: ${path}`);
@@ -208,7 +208,7 @@ export default class FileService extends ServiceModule {
             logger.error(
               `Both legacy and fallback paths failed. Legacy error: ${(firstError as Error).message}, Fallback error: ${(fallbackError as Error).message}`,
             );
-            throw firstError; // 抛出原始错误
+            throw firstError; // Re-throw the original error
           }
         } else {
           throw firstError;
@@ -286,7 +286,7 @@ export default class FileService extends ServiceModule {
   async deleteFile(path: string): Promise<{ success: boolean }> {
     logger.info(`Deleting file: ${path}`);
     try {
-      // 处理desktop://路径
+      // Handle desktop:// paths
       if (!path.startsWith('desktop://')) {
         logger.error(`Invalid desktop file path: ${path}`);
         throw new Error(`Invalid desktop file path: ${path}`);
@@ -333,7 +333,7 @@ export default class FileService extends ServiceModule {
             logger.error(
               `Both legacy and fallback deletion failed. Legacy error: ${(firstError as Error).message}, Fallback error: ${(fallbackError as Error).message}`,
             );
-            throw firstError; // 抛出原始错误
+            throw firstError; // Re-throw the original error
           }
         } else {
           throw firstError;

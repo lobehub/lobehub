@@ -22,8 +22,8 @@ const icons: Record<AiModelType, LucideIcon> = {
   realtime: PhoneIcon,
   stt: MicIcon,
   text2music: MusicIcon,
-  text2video: VideoIcon,
   tts: AudioLines,
+  video: VideoIcon,
 };
 
 const ModelTypeIcon = memo<{ size?: number; type: AiModelType }>(({ type, size = 20 }) => {

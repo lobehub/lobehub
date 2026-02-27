@@ -111,7 +111,7 @@ const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => 
             style={{ overflow: 'hidden', width: '100%' }}
             transition={{
               duration: 0.2,
-              ease: [0.4, 0, 0.2, 1], // 使用 ease-out 缓动函数
+              ease: [0.4, 0, 0.2, 1], // Using ease-out easing function
             }}
             variants={{
               collapsed: { height: 0, opacity: 0, width: 'auto' },

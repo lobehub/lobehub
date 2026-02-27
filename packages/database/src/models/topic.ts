@@ -455,6 +455,7 @@ export class TopicModel {
             id: params.id || this.genId(),
             sessionId: params.groupId ? null : params.sessionId,
             title: params.title,
+            trigger: params.trigger,
             userId: this.userId,
           })),
         )

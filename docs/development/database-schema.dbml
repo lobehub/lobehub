@@ -102,6 +102,107 @@ table agent_cron_jobs {
   }
 }
 
+table agent_eval_benchmarks {
+  id text [pk, not null]
+  identifier text [not null]
+  name text [not null]
+  description text
+  rubrics jsonb [not null]
+  reference_url text
+  metadata jsonb
+  is_system boolean [not null, default: true]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    identifier [name: 'agent_eval_benchmarks_identifier_unique', unique]
+    is_system [name: 'agent_eval_benchmarks_is_system_idx']
+  }
+}
+
+table agent_eval_datasets {
+  id text [pk, not null]
+  benchmark_id text [not null]
+  identifier text [not null]
+  user_id text
+  name text [not null]
+  description text
+  eval_mode text
+  eval_config jsonb
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (identifier, user_id) [name: 'agent_eval_datasets_identifier_user_id_unique', unique]
+    benchmark_id [name: 'agent_eval_datasets_benchmark_id_idx']
+    user_id [name: 'agent_eval_datasets_user_id_idx']
+  }
+}
+
+table agent_eval_run_topics {
+  user_id text [not null]
+  run_id text [not null]
+  topic_id text [not null]
+  test_case_id text [not null]
+  status text
+  score real
+  passed boolean
+  eval_result jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (run_id, topic_id) [pk]
+    user_id [name: 'agent_eval_run_topics_user_id_idx']
+    run_id [name: 'agent_eval_run_topics_run_id_idx']
+    test_case_id [name: 'agent_eval_run_topics_test_case_id_idx']
+  }
+}
+
+table agent_eval_runs {
+  id text [pk, not null]
+  dataset_id text [not null]
+  target_agent_id text
+  user_id text [not null]
+  name text
+  status text [not null, default: 'idle']
+  config jsonb
+  metrics jsonb
+  started_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    dataset_id [name: 'agent_eval_runs_dataset_id_idx']
+    user_id [name: 'agent_eval_runs_user_id_idx']
+    status [name: 'agent_eval_runs_status_idx']
+    target_agent_id [name: 'agent_eval_runs_target_agent_id_idx']
+  }
+}
+
+table agent_eval_test_cases {
+  id text [pk, not null]
+  user_id text [not null]
+  dataset_id text [not null]
+  content jsonb [not null]
+  eval_mode text
+  eval_config jsonb
+  metadata jsonb
+  sort_order integer
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_eval_test_cases_user_id_idx']
+    dataset_id [name: 'agent_eval_test_cases_dataset_id_idx']
+    sort_order [name: 'agent_eval_test_cases_sort_order_idx']
+  }
+}
+
 table agent_skills {
   id text [pk, not null]
   name text [not null]
@@ -201,6 +302,7 @@ table async_tasks {
   type text
   status text
   error jsonb
+  inference_id text
   user_id text [not null]
   duration integer
   parent_id uuid
@@ -213,6 +315,7 @@ table async_tasks {
     user_id [name: 'async_tasks_user_id_idx']
     parent_id [name: 'async_tasks_parent_id_idx']
     (type, status) [name: 'async_tasks_type_status_idx']
+    inference_id [name: 'async_tasks_inference_id_idx']
     metadata [name: 'async_tasks_metadata_idx']
   }
 }
@@ -479,6 +582,7 @@ table generation_topics {
   user_id text [not null]
   title text
   cover_url text
+  type varchar(32) [not null, default: 'image']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1195,6 +1299,7 @@ table threads {
     (client_id, user_id) [name: 'threads_client_id_user_id_unique', unique]
     user_id [name: 'threads_user_id_idx']
     topic_id [name: 'threads_topic_id_idx']
+    type [name: 'threads_type_idx']
     agent_id [name: 'threads_agent_id_idx']
     group_id [name: 'threads_group_id_idx']
     parent_thread_id [name: 'threads_parent_thread_id_idx']
@@ -1257,6 +1362,7 @@ table topics {
     session_id [name: 'topics_session_id_idx']
     group_id [name: 'topics_group_id_idx']
     agent_id [name: 'topics_agent_id_idx']
+    trigger [name: 'topics_trigger_idx']
     () [name: 'topics_extract_status_gin_idx']
   }
 }
@@ -1559,6 +1665,24 @@ ref: passkey.userId > users.id
 ref: auth_sessions.user_id > users.id
 
 ref: two_factor.user_id > users.id
+
+ref: agent_eval_datasets.benchmark_id > agent_eval_benchmarks.id
+
+ref: agent_eval_datasets.user_id - users.id
+
+ref: agent_eval_run_topics.run_id > agent_eval_runs.id
+
+ref: agent_eval_run_topics.topic_id - topics.id
+
+ref: agent_eval_run_topics.test_case_id > agent_eval_test_cases.id
+
+ref: agent_eval_runs.dataset_id > agent_eval_datasets.id
+
+ref: agent_eval_runs.target_agent_id - agents.id
+
+ref: agent_eval_runs.user_id - users.id
+
+ref: agent_eval_test_cases.dataset_id > agent_eval_datasets.id
 
 ref: agents_files.file_id > files.id
 

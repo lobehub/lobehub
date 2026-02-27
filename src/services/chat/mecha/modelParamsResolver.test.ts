@@ -484,6 +484,96 @@ describe('resolveModelExtendParams', () => {
         expect(result.thinkingLevel).toBeUndefined();
       });
     });
+
+    describe('thinkingLevel2 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel2',
+        ]);
+      });
+
+      it('should set thinkingLevel from thinkingLevel2 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel2: 'low',
+          } as any,
+          model: 'gemini-3-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('low');
+      });
+
+      it('should not set thinkingLevel when thinkingLevel2 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+
+      it('should not read from thinkingLevel config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel: 'high',
+          } as any,
+          model: 'gemini-3-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+    });
+
+    describe('thinkingLevel3 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel3',
+        ]);
+      });
+
+      it('should set thinkingLevel from thinkingLevel3 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel3: 'medium',
+          } as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('medium');
+      });
+
+      it('should not set thinkingLevel when thinkingLevel3 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+
+      it('should not read from thinkingLevel config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel: 'high',
+          } as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+    });
   });
 
   describe('URL context', () => {

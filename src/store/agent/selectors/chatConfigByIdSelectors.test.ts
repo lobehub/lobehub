@@ -182,12 +182,12 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getSearchModeById('agent-1')(state)).toBe('auto');
     });
 
-    it('should return "off" as default', () => {
+    it('should return "auto" as default', () => {
       const state = createState({
         agentMap: { 'agent-1': {} },
       });
 
-      expect(chatConfigByIdSelectors.getSearchModeById('agent-1')(state)).toBe('off');
+      expect(chatConfigByIdSelectors.getSearchModeById('agent-1')(state)).toBe('auto');
     });
   });
 
@@ -216,12 +216,12 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.isEnableSearchById('agent-1')(state)).toBe(false);
     });
 
-    it('should return false when searchMode is not set', () => {
+    it('should return true when searchMode is not set (defaults to auto)', () => {
       const state = createState({
         agentMap: { 'agent-1': {} },
       });
 
-      expect(chatConfigByIdSelectors.isEnableSearchById('agent-1')(state)).toBe(false);
+      expect(chatConfigByIdSelectors.isEnableSearchById('agent-1')(state)).toBe(true);
     });
   });
 

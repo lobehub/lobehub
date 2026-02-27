@@ -379,5 +379,6 @@ export interface AiProviderRuntimeState {
   enabledAiProviders: EnabledProvider[];
   enabledChatAiProviders: EnabledProvider[];
   enabledImageAiProviders: EnabledProvider[];
+  enabledVideoAiProviders: EnabledProvider[];
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }

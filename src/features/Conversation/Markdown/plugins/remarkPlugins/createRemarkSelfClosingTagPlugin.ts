@@ -2,7 +2,7 @@ import debug from 'debug';
 import { type Plugin } from 'unified';
 import { SKIP, visit } from 'unist-util-visit';
 
-// 创建 debugger 实例
+// Create debugger instance
 const log = debug('lobe-markdown:remark-plugin:self-closing');
 
 const escapeRegExp = (str: string) => str.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');

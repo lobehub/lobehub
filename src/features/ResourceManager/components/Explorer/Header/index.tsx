@@ -3,13 +3,12 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import { BookMinusIcon, FileBoxIcon, SearchIcon, Trash2Icon } from 'lucide-react';
+import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import NavHeader from '@/features/NavHeader';
-import { useGlobalStore } from '@/store/global';
 import { FilesTabs } from '@/types/files';
 
 import AddButton from '../../Header/AddButton';
@@ -17,6 +16,7 @@ import BatchActionsDropdown from '../ToolBar/BatchActionsDropdown';
 import SortDropdown from '../ToolBar/SortDropdown';
 import ViewSwitcher from '../ToolBar/ViewSwitcher';
 import Breadcrumb from './Breadcrumb';
+import SearchInput from './SearchInput';
 
 /**
  * Toolbar for the resource explorer
@@ -32,8 +32,6 @@ const Header = memo(() => {
     s.onActionClick,
     s.selectedFileIds,
   ]);
-  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-
   const selectCount = selectFileIds.length;
   const isMultiSelected = selectCount > 1;
 
@@ -103,7 +101,7 @@ const Header = memo(() => {
       left={leftContent}
       right={
         <>
-          <ActionIcon icon={SearchIcon} onClick={() => toggleCommandMenu(true)} />
+          <SearchInput />
           <SortDropdown />
           <BatchActionsDropdown selectCount={selectCount} onActionClick={onActionClick} />
           <ViewSwitcher />

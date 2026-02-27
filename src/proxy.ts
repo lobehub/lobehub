@@ -12,6 +12,8 @@ export const config = {
     '/community',
     '/community(.*)',
     '/labs',
+    '/eval',
+    '/eval(.*)',
     '/agent',
     '/agent(.*)',
     '/group',

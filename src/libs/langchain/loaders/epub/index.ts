@@ -19,6 +19,6 @@ export const EPubLoader = async (content: Uint8Array) => {
   } catch (e) {
     throw new Error(`EPubLoader error: ${(e as Error).message}`);
   } finally {
-    tempManager.cleanup(); // 确保清理
+    tempManager.cleanup(); // Ensure cleanup
   }
 };

@@ -1,5 +1,5 @@
-import type { ModelParamsSchema } from '../standard-parameters';
-import type { AIChatModelCard, AIImageModelCard } from '../types';
+import { type ModelParamsSchema } from '../standard-parameters';
+import { type AIChatModelCard, type AIImageModelCard } from '../types';
 
 /**
  * gemini implicit caching not extra cost
@@ -118,6 +118,67 @@ const googleChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
+      'Gemini 3.1 Pro Preview improves on Gemini 3 Pro with enhanced reasoning capabilities and adds medium thinking level support.',
+    displayName: 'Gemini 3.1 Pro Preview',
+    enabled: true,
+    id: 'gemini-3.1-pro-preview',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2, upTo: 200_000 },
+            { rate: 0.4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 12, upTo: 200_000 },
+            { rate: 18, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          lookup: { prices: { '1h': 4.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-19',
+    settings: {
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
       video: true,
       vision: true,
     },
@@ -125,7 +186,6 @@ const googleChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3 Pro is Google’s most powerful agent and vibe-coding model, delivering richer visuals and deeper interaction on top of state-of-the-art reasoning.',
     displayName: 'Gemini 3 Pro Preview',
-    enabled: true,
     id: 'gemini-3-pro-preview',
     maxOutput: 65_536,
     pricing: {
@@ -424,34 +484,6 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-06-17',
-    settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Preview release (Septempber 25th, 2025) of Gemini 2.5 Flash',
-    displayName: 'Gemini 2.5 Flash Preview Sep 2025',
-    id: 'gemini-2.5-flash-preview-09-2025',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-25',
     settings: {
       extendParams: ['thinkingBudget', 'urlContext'],
       searchImpl: 'params',
@@ -884,7 +916,6 @@ export const nanoBananaProParameters: ModelParamsSchema = {
   },
 };
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana Pro',
@@ -961,33 +992,7 @@ const googleImageModels: AIImageModelCard[] = [
       units: [{ name: 'imageGeneration', rate: 0.02, strategy: 'fixed', unit: 'image' }],
     },
   },
-  {
-    displayName: 'Imagen 4 Preview 06-06',
-    id: 'imagen-4.0-generate-preview-06-06',
-    type: 'image',
-    description: 'Imagen fourth-generation text-to-image model family.',
-    organization: 'Deepmind',
-    releasedAt: '2025-06-06',
-    parameters: imagenGenParameters,
-    pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
-    },
-  },
-  {
-    displayName: 'Imagen 4 Ultra Preview 06-06',
-    id: 'imagen-4.0-ultra-generate-preview-06-06',
-    type: 'image',
-    description: 'Imagen fourth-generation text-to-image Ultra variant.',
-    organization: 'Deepmind',
-    releasedAt: '2025-06-11',
-    parameters: imagenGenParameters,
-    pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.06, strategy: 'fixed', unit: 'image' }],
-    },
-  },
 ];
-/* eslint-enable sort-keys-fix/sort-keys-fix */
-
 export const allModels = [...googleChatModels, ...googleImageModels];
 
 export default allModels;
