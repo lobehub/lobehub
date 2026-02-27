@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';
 import { createImageSelectors } from '@/store/image/selectors';
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
@@ -45,11 +46,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { value, setValue } = useGenerationConfigParam('prompt');
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
+  const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
+  const isInit = useImageStore((s) => s.isInit);
   const isLogin = useUserStore(authSelectors.isLogin);
+  const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
 
   // Read prompt from query parameter
   const [promptParam, setPromptParam] = useQueryState('prompt');
+  // Read model from query parameter
+  const [modelParam, setModelParam] = useQueryState('model');
   const hasProcessedPrompt = useRef(false);
+  const hasProcessedModel = useRef(false);
 
   const handleGenerate = async () => {
     if (!isLogin) {
@@ -59,6 +66,25 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
     await createImage();
   };
+
+  // Auto-select model when model query parameter is present
+  useEffect(() => {
+    if (modelParam && !hasProcessedModel.current && isInit) {
+      const targetModel = modelParam;
+
+      // Find the provider for this model from enabledImageModelList
+      for (const providerGroup of enabledImageModelList) {
+        const found = providerGroup.children.some((m) => m.id === targetModel);
+        if (found) {
+          setModelAndProviderOnSelect(targetModel, providerGroup.id);
+          break;
+        }
+      }
+
+      hasProcessedModel.current = true;
+      setModelParam(null);
+    }
+  }, [modelParam, isInit, enabledImageModelList, setModelAndProviderOnSelect, setModelParam]);
 
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
