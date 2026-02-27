@@ -1,8 +1,10 @@
+import { LoadingOutlined } from '@ant-design/icons';
 import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox } from '@lobehub/ui';
+import { Spin } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Settings2Icon } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
@@ -97,7 +99,21 @@ const ModelSwitch = memo(() => {
           style={{ borderRadius: 24, marginInlineStart: -4 }}
           title={t('extendParams.title')}
           popover={{
-            content: <ModelDetailPanel model={model} provider={provider} />,
+            content: (
+              <Suspense
+                fallback={
+                  <Flexbox
+                    align={'center'}
+                    justify={'center'}
+                    style={{ minHeight: 100, width: '100%' }}
+                  >
+                    <Spin indicator={<LoadingOutlined spin />} />
+                  </Flexbox>
+                }
+              >
+                <ModelDetailPanel model={model} provider={provider} />
+              </Suspense>
+            ),
             maxWidth: 400,
             minWidth: 400,
             placement: 'topLeft',
