@@ -249,6 +249,156 @@ describe('chatConfigByIdSelectors', () => {
     });
   });
 
+  describe('getMemoryConfigById', () => {
+    it('should return memory config for specified agent', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: {
+              memory: { effort: 'high', enabled: true, toolPermission: 'read-write' },
+            },
+          },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryConfigById('agent-1')(state)).toEqual({
+        effort: 'high',
+        enabled: true,
+        toolPermission: 'read-write',
+      });
+    });
+
+    it('should return undefined when memory config is not set', () => {
+      const state = createState({
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryConfigById('agent-1')(state)).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent agent', () => {
+      const state = createState({
+        agentMap: {},
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryConfigById('non-existent')(state)).toBeUndefined();
+    });
+  });
+
+  describe('isMemoryEnabledById', () => {
+    it('should return true when memory is enabled', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { chatConfig: { memory: { enabled: true } } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('agent-1')(state)).toBe(true);
+    });
+
+    it('should return false when memory is explicitly disabled', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { chatConfig: { memory: { enabled: false } } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('agent-1')(state)).toBe(false);
+    });
+
+    it('should return false when memory config is not set (default)', () => {
+      const state = createState({
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('agent-1')(state)).toBe(false);
+    });
+
+    it('should return false when memory exists but enabled is not set', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { chatConfig: { memory: { effort: 'high' } } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('agent-1')(state)).toBe(false);
+    });
+
+    it('should return false for non-existent agent', () => {
+      const state = createState({
+        agentMap: {},
+      });
+
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('non-existent')(state)).toBe(false);
+    });
+
+    it('should work with different agents independently', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { chatConfig: { memory: { enabled: true } } },
+          'agent-2': { chatConfig: { memory: { enabled: false } } },
+          'agent-3': { chatConfig: {} },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('agent-1')(state)).toBe(true);
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('agent-2')(state)).toBe(false);
+      expect(chatConfigByIdSelectors.isMemoryEnabledById('agent-3')(state)).toBe(false);
+    });
+  });
+
+  describe('getMemoryEffortById', () => {
+    it('should return effort level for specified agent', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { chatConfig: { memory: { effort: 'high' } } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryEffortById('agent-1')(state)).toBe('high');
+    });
+
+    it('should return "medium" as default when effort is not set', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { chatConfig: { memory: { enabled: true } } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryEffortById('agent-1')(state)).toBe('medium');
+    });
+
+    it('should return "medium" when memory config is not set', () => {
+      const state = createState({
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryEffortById('agent-1')(state)).toBe('medium');
+    });
+
+    it('should return "medium" for non-existent agent', () => {
+      const state = createState({
+        agentMap: {},
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryEffortById('non-existent')(state)).toBe('medium');
+    });
+
+    it('should return each effort level correctly', () => {
+      const state = createState({
+        agentMap: {
+          'agent-low': { chatConfig: { memory: { effort: 'low' } } },
+          'agent-medium': { chatConfig: { memory: { effort: 'medium' } } },
+          'agent-high': { chatConfig: { memory: { effort: 'high' } } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getMemoryEffortById('agent-low')(state)).toBe('low');
+      expect(chatConfigByIdSelectors.getMemoryEffortById('agent-medium')(state)).toBe('medium');
+      expect(chatConfigByIdSelectors.getMemoryEffortById('agent-high')(state)).toBe('high');
+    });
+  });
+
   describe('getSearchFCModelById', () => {
     it('should return searchFCModel from config when explicitly set', () => {
       const state = createState({
