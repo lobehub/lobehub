@@ -39,6 +39,9 @@ export const getLLMConfig = () => {
       ENABLED_ANTHROPIC: z.boolean(),
       ANTHROPIC_API_KEY: z.string().optional(),
 
+      ENABLED_AVIAN: z.boolean(),
+      AVIAN_API_KEY: z.string().optional(),
+
       ENABLED_MINIMAX: z.boolean(),
       MINIMAX_API_KEY: z.string().optional(),
 
@@ -257,6 +260,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ANTHROPIC: process.env.ENABLED_ANTHROPIC !== '0',
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+
+      ENABLED_AVIAN: !!process.env.AVIAN_API_KEY,
+      AVIAN_API_KEY: process.env.AVIAN_API_KEY,
 
       ENABLED_MINIMAX: !!process.env.MINIMAX_API_KEY,
       MINIMAX_API_KEY: process.env.MINIMAX_API_KEY,

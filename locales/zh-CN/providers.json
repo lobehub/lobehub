@@ -5,6 +5,7 @@
   "aihubmix.description": "AiHubMix 通过统一 API 提供多种 AI 模型的访问能力。",
   "akashchat.description": "Akash 是一个无需许可的云资源市场，与传统云提供商相比，其定价具有竞争力。",
   "anthropic.description": "Anthropic 构建了先进的语言模型，如 Claude 3.5 Sonnet、Claude 3 Sonnet、Claude 3 Opus 和 Claude 3 Haiku，兼顾智能、速度与成本，适用于企业级到快速响应等多种场景。",
+  "avian.description": "Avian 是一个 AI 推理平台，通过兼容 OpenAI 的 API 提供前沿开源模型，包括 DeepSeek、Kimi、GLM 和 MiniMax，具有高性能和有竞争力的定价。",
   "azure.description": "Azure 提供先进的 AI 模型，包括 GPT-3.5 和 GPT-4 系列，支持多种数据类型和复杂任务，注重安全、可靠与可持续的 AI 实践。",
   "azureai.description": "Azure 提供先进的 AI 模型，包括 GPT-3.5 和 GPT-4 系列，支持多种数据类型和复杂任务，注重安全、可靠与可持续的 AI 实践。",
   "baichuan.description": "百川智能专注于基础模型研发，具备强大的中文知识理解、长文本处理与创意生成能力。其模型（如百川4、百川3 Turbo、百川3 Turbo 128k）针对不同场景优化，性价比高。",

@@ -7,6 +7,7 @@ import { default as ai360 } from './ai360';
 import { default as aihubmix } from './aihubmix';
 import { default as akashchat } from './akashchat';
 import { default as anthropic } from './anthropic';
+import { default as avian } from './avian';
 import { default as azure } from './azure';
 import { default as azureai } from './azureai';
 import { default as baichuan } from './baichuan';
@@ -100,6 +101,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   aihubmix,
   akashchat,
   anthropic,
+  avian,
   azure,
   azureai,
   baichuan,
@@ -174,6 +176,7 @@ export { default as ai360 } from './ai360';
 export { default as aihubmix } from './aihubmix';
 export { default as akashchat } from './akashchat';
 export { default as anthropic } from './anthropic';
+export { default as avian } from './avian';
 export { default as azure } from './azure';
 export { default as azureai } from './azureai';
 export { default as baichuan } from './baichuan';

@@ -8,6 +8,7 @@ import Ai360Provider from './ai360';
 import AiHubMixProvider from './aihubmix';
 import AkashChatProvider from './akashchat';
 import AnthropicProvider from './anthropic';
+import AvianProvider from './avian';
 import AzureProvider from './azure';
 import AzureAIProvider from './azureai';
 import BaichuanProvider from './baichuan';
@@ -203,6 +204,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   CerebrasProvider,
   ZenMuxProvider,
   StraicoProvider,
+  AvianProvider,
   XiaomiMiMoProvider,
 ];
 
@@ -221,6 +223,7 @@ export { default as Ai360ProviderCard } from './ai360';
 export { default as AiHubMixProviderCard } from './aihubmix';
 export { default as AkashChatProviderCard } from './akashchat';
 export { default as AnthropicProviderCard } from './anthropic';
+export { default as AvianProviderCard } from './avian';
 export { default as AzureProviderCard } from './azure';
 export { default as AzureAIProviderCard } from './azureai';
 export { default as BaichuanProviderCard } from './baichuan';
