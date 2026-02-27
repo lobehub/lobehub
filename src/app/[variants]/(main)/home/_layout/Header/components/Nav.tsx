@@ -62,7 +62,6 @@ const Nav = memo(() => {
       {
         hidden: !enableBusinessFeatures,
         icon: getRouteById('video')!.icon,
-        isNew: true,
         key: SidebarTabKey.Video,
         title: t('tab.video'),
         url: '/video',
