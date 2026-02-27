@@ -58,7 +58,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
           />
         </DropdownMenuSubmenuTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
+          <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
               <ModelDetailPanel
                 model={data.model.id}
