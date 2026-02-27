@@ -1,6 +1,7 @@
 'use client';
 
 import { TooltipGroup } from '@lobehub/ui';
+import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
 import { lazy, memo, type PropsWithChildren, Suspense, useLayoutEffect } from 'react';
 
@@ -57,7 +58,9 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                     <DragUploadProvider>
                       <LazyMotion features={domMax}>
                         <TooltipGroup layoutAnimation={false}>
-                          <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                          <StyleProvider speedy={import.meta.env.PROD}>
+                            <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                          </StyleProvider>
                         </TooltipGroup>
                         <Suspense>
                           <ModalHost />
