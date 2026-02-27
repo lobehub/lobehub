@@ -46,8 +46,12 @@ const ProfileArea = memo(() => {
               height={'100%'}
               style={styles.contentWrapper}
               width={'100%'}
-              onClick={() => {
-                editor?.focus();
+              onClick={(e) => {
+                // Only focus editor for clicks within this DOM element,
+                // not from React portal (e.g. Modal) whose DOM is outside this tree
+                if (e.currentTarget.contains(e.target as Node)) {
+                  editor?.focus();
+                }
               }}
             >
               <WideScreenContainer>
