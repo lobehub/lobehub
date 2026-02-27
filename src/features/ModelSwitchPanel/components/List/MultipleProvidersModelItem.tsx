@@ -61,8 +61,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
           <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
               <ModelDetailPanel
-                model={data.model}
-                providerId={(activeProvider ?? data.providers[0]).id}
+                model={data.model.id}
+                provider={(activeProvider ?? data.providers[0]).id}
               />
               <DropdownMenuGroup>
                 <DropdownMenuGroupLabel>

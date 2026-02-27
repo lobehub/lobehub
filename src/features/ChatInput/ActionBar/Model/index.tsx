@@ -2,12 +2,11 @@ import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Settings2Icon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import ModelDetailPanel from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -65,12 +64,6 @@ const ModelSwitch = memo(() => {
     aiModelSelectors.isModelHasExtendParams(model, provider),
   );
 
-  const enabledList = useEnabledChatModels();
-  const modelData = useMemo(() => {
-    const providerData = enabledList.find((p) => p.id === provider);
-    return providerData?.children.find((m) => m.id === model);
-  }, [enabledList, model, provider]);
-
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
       await updateAgentConfigById(agentId, params);
@@ -97,14 +90,14 @@ const ModelSwitch = memo(() => {
         </Center>
       </ModelSwitchPanel>
 
-      {isModelHasExtendParams && modelData && (
+      {isModelHasExtendParams && (
         <Action
           icon={Settings2Icon}
           showTooltip={false}
           style={{ borderRadius: 24, marginInlineStart: -4 }}
           title={t('extendParams.title')}
           popover={{
-            content: <ModelDetailPanel model={modelData} providerId={provider} />,
+            content: <ModelDetailPanel model={model} provider={provider} />,
             maxWidth: 400,
             minWidth: 400,
             placement: 'topLeft',

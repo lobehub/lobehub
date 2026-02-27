@@ -137,7 +137,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
                   <DropdownMenuPopup className={styles.detailPopup}>
-                    <ModelDetailPanel model={item.model} providerId={item.provider.id} />
+                    <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
               </DropdownMenuPortal>
@@ -168,7 +168,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
                   <DropdownMenuPopup className={styles.detailPopup}>
-                    <ModelDetailPanel model={item.data.model} providerId={singleProvider.id} />
+                    <ModelDetailPanel model={item.data.model.id} provider={singleProvider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
               </DropdownMenuPortal>
