@@ -337,12 +337,12 @@ const processReleasedAt = (model: any, knownModel?: any): string | undefined => 
  */
 const processDisplayName = (displayName: string): string => {
   if (displayName.includes('Gemini 3.1 Flash Image Preview')) {
-    return displayName.replace('Gemini 3.1 Flash Image Preview', '🍌 Nano Banana 2');
+    return displayName.replace('Gemini 3.1 Flash Image Preview', 'Nano Banana 2');
   }
 
   // If it contains "Gemini 2.5 Flash Image Preview", replace the corresponding part with "Nano Banana"
   if (displayName.includes('Gemini 2.5 Flash Image Preview')) {
-    return displayName.replace('Gemini 2.5 Flash Image Preview', '🍌 Nano Banana');
+    return displayName.replace('Gemini 2.5 Flash Image Preview', 'Nano Banana');
   }
 
   return displayName;

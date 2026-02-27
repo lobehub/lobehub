@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { NanoBanana } from '@lobehub/icons';
 import { type ButtonProps } from '@lobehub/ui';
 import { Button, Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
@@ -76,6 +77,7 @@ const StarterList = memo(() => {
         titleKey: 'starter.write',
       },
       {
+        icon: NanoBanana.Color,
         key: 'image',
         titleKey: 'starter.nanoBanana2',
       },
