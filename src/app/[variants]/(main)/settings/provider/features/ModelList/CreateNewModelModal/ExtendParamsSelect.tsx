@@ -5,21 +5,21 @@ import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import EffortSlider from '@/features/ChatInput/ActionBar/Model/EffortSlider';
-import GPT5ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT5ReasoningEffortSlider';
-import GPT51ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT51ReasoningEffortSlider';
-import GPT52ProReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT52ProReasoningEffortSlider';
-import GPT52ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT52ReasoningEffortSlider';
-import ImageAspectRatioSelect from '@/features/ChatInput/ActionBar/Model/ImageAspectRatioSelect';
-import ImageResolutionSlider from '@/features/ChatInput/ActionBar/Model/ImageResolutionSlider';
-import ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/ReasoningEffortSlider';
-import ReasoningTokenSlider from '@/features/ChatInput/ActionBar/Model/ReasoningTokenSlider';
-import TextVerbositySlider from '@/features/ChatInput/ActionBar/Model/TextVerbositySlider';
-import ThinkingBudgetSlider from '@/features/ChatInput/ActionBar/Model/ThinkingBudgetSlider';
-import ThinkingLevel2Slider from '@/features/ChatInput/ActionBar/Model/ThinkingLevel2Slider';
-import ThinkingLevel3Slider from '@/features/ChatInput/ActionBar/Model/ThinkingLevel3Slider';
-import ThinkingLevelSlider from '@/features/ChatInput/ActionBar/Model/ThinkingLevelSlider';
-import ThinkingSlider from '@/features/ChatInput/ActionBar/Model/ThinkingSlider';
+import EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/EffortSlider';
+import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT5ReasoningEffortSlider';
+import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
+import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
+import GPT52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ReasoningEffortSlider';
+import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
+import ImageResolutionSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolutionSlider';
+import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningEffortSlider';
+import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
+import TextVerbositySlider from '@/features/ModelSwitchPanel/components/ControlsForm/TextVerbositySlider';
+import ThinkingBudgetSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingBudgetSlider';
+import ThinkingLevel2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel2Slider';
+import ThinkingLevel3Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel3Slider';
+import ThinkingLevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevelSlider';
+import ThinkingSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingSlider';
 
 type ExtendParamsOption = {
   hintKey: string;

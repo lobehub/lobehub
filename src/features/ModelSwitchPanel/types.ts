@@ -1,6 +1,5 @@
 import { type DropdownMenuPlacement } from '@lobehub/ui';
 import { type AiModelForSelect } from 'model-bank';
-import { type ReactNode } from 'react';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
@@ -46,12 +45,7 @@ export type ListItem =
 export type DropdownPlacement = DropdownMenuPlacement;
 
 export interface ModelSwitchPanelProps {
-  children?: ReactNode;
-  /**
-   * Render function for extra controls in the model detail popup (e.g. ControlsForm).
-   * Receives the hovered model's ID and provider ID.
-   */
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
+  children?: React.ReactNode;
   /**
    * Current model ID. If not provided, uses currentAgentModel from store.
    */

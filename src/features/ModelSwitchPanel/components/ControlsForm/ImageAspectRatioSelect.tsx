@@ -1,11 +1,10 @@
 import { Select } from 'antd';
 import { memo, useMemo } from 'react';
 
+import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
-
-import { useAgentId } from '../../hooks/useAgentId';
-import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
 const NANO_BANANA_ASPECT_RATIOS = [
   '1:1', // 1024x1024 / 2048x2048 / 4096x4096

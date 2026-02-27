@@ -15,7 +15,6 @@ import {
 } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { Check, LucideBolt } from 'lucide-react';
-import { type ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -31,14 +30,13 @@ import ModelDetailPanel from '../ModelDetailPanel';
 interface MultipleProvidersModelItemProps {
   activeKey: string;
   data: ModelWithProviders;
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
-  ({ activeKey, data, extraControls, newLabel, onModelChange, onClose }) => {
+  ({ activeKey, data, newLabel, onModelChange, onClose }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -64,10 +62,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
               <ModelDetailPanel
                 model={data.model}
-                extraControls={extraControls?.(
-                  data.model.id,
-                  (activeProvider ?? data.providers[0]).id,
-                )}
+                providerId={(activeProvider ?? data.providers[0]).id}
               />
               <DropdownMenuGroup>
                 <DropdownMenuGroupLabel>

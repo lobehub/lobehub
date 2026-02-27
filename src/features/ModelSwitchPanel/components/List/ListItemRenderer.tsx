@@ -12,7 +12,6 @@ import {
 } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
-import { type ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -29,7 +28,6 @@ import { SingleProviderModelItem } from './SingleProviderModelItem';
 
 interface ListItemRendererProps {
   activeKey: string;
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
   item: ListItem;
   newLabel: string;
   onClose: () => void;
@@ -37,7 +35,7 @@ interface ListItemRendererProps {
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ activeKey, extraControls, item, newLabel, onModelChange, onClose }) => {
+  ({ activeKey, item, newLabel, onModelChange, onClose }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [detailOpen, setDetailOpen] = useState(false);
@@ -139,10 +137,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
                   <DropdownMenuPopup className={styles.detailPopup}>
-                    <ModelDetailPanel
-                      extraControls={extraControls?.(item.model.id, item.provider.id)}
-                      model={item.model}
-                    />
+                    <ModelDetailPanel model={item.model} providerId={item.provider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
               </DropdownMenuPortal>
@@ -173,10 +168,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
                   <DropdownMenuPopup className={styles.detailPopup}>
-                    <ModelDetailPanel
-                      extraControls={extraControls?.(item.data.model.id, singleProvider.id)}
-                      model={item.data.model}
-                    />
+                    <ModelDetailPanel model={item.data.model} providerId={singleProvider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
               </DropdownMenuPortal>
@@ -191,7 +183,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             <MultipleProvidersModelItem
               activeKey={activeKey}
               data={item.data}
-              extraControls={extraControls}
               newLabel={newLabel}
               onClose={onClose}
               onModelChange={onModelChange}

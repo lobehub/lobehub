@@ -1,4 +1,4 @@
-import { type FC, type ReactNode } from 'react';
+import { type FC } from 'react';
 import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 
@@ -13,7 +13,6 @@ import { List } from './List';
 import { Toolbar } from './Toolbar';
 
 interface PanelContentProps {
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
@@ -21,7 +20,6 @@ interface PanelContentProps {
 }
 
 export const PanelContent: FC<PanelContentProps> = ({
-  extraControls,
   model: modelProp,
   onModelChange: onModelChangeProp,
   onOpenChange,
@@ -56,7 +54,6 @@ export const PanelContent: FC<PanelContentProps> = ({
         onSearchKeywordChange={setSearchKeyword}
       />
       <List
-        extraControls={extraControls}
         groupMode={groupMode}
         model={modelProp}
         provider={providerProp}

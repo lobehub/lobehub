@@ -4,8 +4,8 @@ import { ChevronDownIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 
 import ActionPopover from '@/features/ChatInput/ActionBar/components/ActionPopover';
-import ControlsForm from '@/features/ChatInput/ActionBar/Model/ControlsForm';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';

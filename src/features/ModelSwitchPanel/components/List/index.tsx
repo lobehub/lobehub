@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { type FC, type ReactNode } from 'react';
+import { type FC } from 'react';
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +15,6 @@ import { menuKey } from '../../utils';
 import { ListItemRenderer } from './ListItemRenderer';
 
 interface ListProps {
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
   groupMode: GroupMode;
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
@@ -25,7 +24,6 @@ interface ListProps {
 }
 
 export const List: FC<ListProps> = ({
-  extraControls,
   groupMode,
   model: modelProp,
   onModelChange: onModelChangeProp,
@@ -100,7 +98,6 @@ export const List: FC<ListProps> = ({
         const renderItem = (key?: string) => (
           <ListItemRenderer
             activeKey={activeKey}
-            extraControls={extraControls}
             item={item}
             key={key}
             newLabel={newLabel}

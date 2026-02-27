@@ -18,7 +18,7 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
   const [token, setTokens] = useMergeState(0, {
     defaultValue,
     onChange,
-    value: value,
+    value,
   });
 
   const [powValue, setPowValue] = useMergeState(0, {

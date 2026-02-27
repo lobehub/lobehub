@@ -5,12 +5,12 @@ import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
-import { useAgentId } from '../../hooks/useAgentId';
-import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';

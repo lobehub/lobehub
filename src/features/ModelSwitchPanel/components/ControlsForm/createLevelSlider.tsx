@@ -5,11 +5,11 @@ import { type SliderSingleProps } from 'antd/es/slider';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
+import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
-import { useAgentId } from '../../hooks/useAgentId';
-import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import LevelSlider from './LevelSlider';
 
 export interface LevelSliderConfig<T extends string> {
