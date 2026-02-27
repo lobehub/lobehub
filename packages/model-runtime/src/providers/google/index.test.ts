@@ -73,7 +73,7 @@ describe('LobeGoogleAI', () => {
     });
 
     it('should withGrounding', () => {
-      const data = [
+      const _data = [
         {
           candidates: [{ content: { parts: [{ text: 'As' }], role: 'model' } }],
           usageMetadata: { promptTokenCount: 8, totalTokenCount: 8 },
@@ -440,10 +440,9 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read first value then cancel to trigger error chunk
-        chunks.push((await reader.read()).value);
+        const chunks: any[] = [(await reader.read()).value];
         abortController.abort();
 
         // Read all remaining chunks
@@ -494,10 +493,9 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read first value then collect remaining chunks (error included)
-        chunks.push((await reader.read()).value);
+        const chunks: any[] = [(await reader.read()).value];
         let result;
         while (!(result = await reader.read()).done) {
           chunks.push(result.value);
@@ -518,6 +516,7 @@ describe('LobeGoogleAI', () => {
       });
 
       it('should handle AbortError without data', async () => {
+        // eslint-disable-next-line require-yield
         const mockStream = (async function* () {
           throw new Error('aborted');
         })();
@@ -559,10 +558,9 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read first value then collect remaining chunks (parsing error)
-        chunks.push((await reader.read()).value);
+        const chunks: any[] = [(await reader.read()).value];
         let result;
         while (!(result = await reader.read()).done) {
           chunks.push(result.value);
