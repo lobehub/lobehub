@@ -3,7 +3,6 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
-import { viteEmotionSpeedy } from './emotionSpeedy';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
 
@@ -116,7 +115,6 @@ interface SharedRendererOptions {
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   const defaultTsconfigPaths = options.tsconfigPaths ?? true;
   return [
-    viteEmotionSpeedy(),
     nodePolyfills({ include: ['buffer'] }),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
