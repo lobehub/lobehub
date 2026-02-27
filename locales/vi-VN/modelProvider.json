@@ -232,6 +232,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint": "Dành cho dòng Gemini; điều chỉnh ngân sách suy nghĩ.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint": "Dành cho các mô hình Gemini 3 Flash Preview; điều chỉnh độ sâu suy nghĩ.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "Dành cho các mô hình Gemini 3 Pro Preview; điều chỉnh độ sâu suy nghĩ.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "Dành cho các mô hình Gemini 3.1 Pro Preview; điều chỉnh độ sâu suy nghĩ với các mức thấp/trung bình/cao.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "Dành cho dòng Gemini; hỗ trợ cung cấp ngữ cảnh từ URL.",
   "providerModels.item.modelConfig.extendParams.placeholder": "Chọn các tham số mở rộng để kích hoạt",
   "providerModels.item.modelConfig.extendParams.previewFallback": "Không thể xem trước",

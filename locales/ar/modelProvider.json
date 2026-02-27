@@ -232,6 +232,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint": "لسلسلة Gemini؛ يتحكم في ميزانية التفكير.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint": "لنماذج المعاينة السريعة من Gemini 3 Flash؛ يتحكم في عمق التفكير.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "لنماذج المعاينة الاحترافية من Gemini 3 Pro؛ يتحكم في عمق التفكير.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "لنماذج Gemini 3.1 Pro Preview؛ يتحكم في عمق التفكير بمستويات منخفضة/متوسطة/عالية.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "لسلسلة Gemini؛ يدعم توفير سياق من خلال عنوان URL.",
   "providerModels.item.modelConfig.extendParams.placeholder": "اختر المعلمات الموسعة لتفعيلها",
   "providerModels.item.modelConfig.extendParams.previewFallback": "المعاينة غير متوفرة",

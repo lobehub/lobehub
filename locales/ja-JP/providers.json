@@ -54,6 +54,7 @@
   "siliconcloud.description": "SiliconCloudは、強力なオープンソースモデルを基盤とした、コスト効率の高い生成AIクラウドサービスです。",
   "spark.description": "iFLYTEK Sparkは、スマートハードウェア、医療、金融などの分野で革新を可能にする、強力な多言語AIを提供します。",
   "stepfun.description": "Stepfunのモデルは、マルチモーダル処理と複雑な推論に優れ、長文コンテキスト理解や自律的な検索オーケストレーションに対応します。",
+  "straico.description": "Straicoは、テキスト、画像、音声の生成AIモデルを統合したワークスペースを提供することで、AIの統合を簡素化します。これにより、マーケター、起業家、そして愛好家が多様なAIツールにシームレスにアクセスできるようになります。",
   "taichu.description": "Taichuは、CASIAと武漢AI研究所が開発した次世代マルチモーダルモデルで、マルチターンQA、文章生成、画像生成、3D理解、信号解析などに対応し、認知力と創造性を強化しています。",
   "tencentcloud.description": "LLM Knowledge Engine Atomic Powerは、企業や開発者向けに、文書解析、分割、埋め込み、多ターンリライトなどのモジュール型サービスを通じて、カスタムAIソリューションを構築できるエンドツーエンドの知識QAを提供します。",
   "togetherai.description": "Together AIは、革新的なモデル、高度なカスタマイズ、迅速なスケーリング、シンプルな導入により、企業ニーズに応える高性能AIを提供します。",
