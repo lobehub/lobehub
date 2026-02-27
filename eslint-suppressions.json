@@ -795,14 +795,6 @@
       "count": 1
     }
   },
-  "src/store/image/slices/generationConfig/initialState.ts": {
-    "sort-keys-fix/sort-keys-fix": {
-      "count": 1
-    },
-    "typescript-sort-keys/interface": {
-      "count": 1
-    }
-  },
   "src/store/library/slices/content/action.ts": {
     "no-unused-private-class-members": {
       "count": 2

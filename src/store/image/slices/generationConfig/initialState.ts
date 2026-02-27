@@ -1,12 +1,11 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type ModelParamsSchema, type RuntimeImageGenParams } from 'model-bank';
 import { extractDefaultValues, ModelProvider } from 'model-bank';
-import { nanoBananaProParameters } from 'model-bank/google';
+import { nanoBanana2Parameters } from 'model-bank/lobehub';
 
 import { DEFAULT_IMAGE_CONFIG } from '@/const/settings';
 
 export const DEFAULT_AI_IMAGE_PROVIDER = ModelProvider.Google;
-export const DEFAULT_AI_IMAGE_MODEL = 'gemini-3-pro-image-preview:image';
+export const DEFAULT_AI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview:image';
 
 export interface GenerationConfigState {
   parameters: RuntimeImageGenParams;
@@ -26,14 +25,14 @@ export interface GenerationConfigState {
 }
 
 export const DEFAULT_IMAGE_GENERATION_PARAMETERS: RuntimeImageGenParams =
-  extractDefaultValues(nanoBananaProParameters);
+  extractDefaultValues(nanoBanana2Parameters);
 
 export const initialGenerationConfigState: GenerationConfigState = {
   model: DEFAULT_AI_IMAGE_MODEL,
   provider: DEFAULT_AI_IMAGE_PROVIDER,
   imageNum: DEFAULT_IMAGE_CONFIG.defaultImageNum,
   parameters: DEFAULT_IMAGE_GENERATION_PARAMETERS,
-  parametersSchema: nanoBananaProParameters,
+  parametersSchema: nanoBanana2Parameters,
   isAspectRatioLocked: false,
   activeAspectRatio: null,
   isInit: false,
