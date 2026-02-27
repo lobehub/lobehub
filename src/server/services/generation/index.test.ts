@@ -9,7 +9,7 @@ import { calculateThumbnailDimensions } from '@/utils/number';
 import { getYYYYmmddHHMMss } from '@/utils/time';
 import { inferFileExtensionFromImageUrl } from '@/utils/url';
 
-import { fetchImageFromUrl,GenerationService } from './index';
+import { fetchImageFromUrl, GenerationService } from './index';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -102,10 +102,12 @@ describe('GenerationService', () => {
           'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAGAWqGfKwAAAABJRU5ErkJggg==';
         const dataUri = `data:image/png;charset=utf-8;base64,${base64Data}`;
 
-        // This should fail because parseDataUri only supports the strict format: data:mime/type;base64,data
-        await expect(fetchImageFromUrl(dataUri)).rejects.toThrow(
-          'Invalid data URI format: data:image/png;charset=utf-8;base64,',
-        );
+        const result = await fetchImageFromUrl(dataUri);
+
+        // parseDataUri now supports additional parameters before ;base64,
+        expect(result.mimeType).toBe('image/png;charset=utf-8');
+        expect(result.buffer).toBeInstanceOf(Buffer);
+        expect(Buffer.from(base64Data, 'base64').equals(result.buffer)).toBe(true);
       });
     });
 
