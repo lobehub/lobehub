@@ -1,5 +1,6 @@
 'use client';
 
+import { type UserMemoryEffort } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, Icon, Skeleton } from '@lobehub/ui';
 import { Switch } from 'antd';
@@ -9,8 +10,11 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/LevelSlider';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+
+const MEMORY_EFFORT_LEVELS: readonly UserMemoryEffort[] = ['low', 'medium', 'high'];
 
 const MemorySetting = memo(() => {
   const { t } = useTranslation('setting');
@@ -31,6 +35,30 @@ const MemorySetting = memo(() => {
         minWidth: undefined,
         name: 'enabled',
         valuePropName: 'checked',
+      },
+      {
+        children: (
+          <LevelSlider<UserMemoryEffort>
+            defaultValue="medium"
+            levels={MEMORY_EFFORT_LEVELS}
+            style={{ minWidth: 160 }}
+            value={memory?.effort ?? 'medium'}
+            marks={{
+              0: t('memory.effort.level.low'),
+              1: t('memory.effort.level.medium'),
+              2: t('memory.effort.level.high'),
+            }}
+            onChange={async (value) => {
+              setLoading(true);
+              await setSettings({ memory: { effort: value } });
+              setLoading(false);
+            }}
+          />
+        ),
+        desc: t('memory.effort.desc'),
+        label: t('memory.effort.title'),
+        layout: 'horizontal',
+        minWidth: undefined,
       },
     ],
     extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
