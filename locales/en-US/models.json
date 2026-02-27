@@ -545,6 +545,8 @@
   "gemini-3-pro-image-preview.description": "Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。",
   "gemini-3-pro-image-preview:image.description": "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model and also supports multimodal chat.",
   "gemini-3-pro-preview.description": "Gemini 3 Pro is Google’s most powerful agent and vibe-coding model, delivering richer visuals and deeper interaction on top of state-of-the-art reasoning.",
+  "gemini-3.1-flash-image-preview.description": "Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.",
+  "gemini-3.1-flash-image-preview:image.description": "Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.",
   "gemini-flash-latest.description": "Latest release of Gemini Flash",
   "gemini-flash-lite-latest.description": "Latest release of Gemini Flash-Lite",
   "gemini-pro-latest.description": "Latest release of Gemini Pro",

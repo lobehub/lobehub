@@ -545,6 +545,8 @@
   "gemini-3-pro-image-preview.description": "Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。",
   "gemini-3-pro-image-preview:image.description": "Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。",
   "gemini-3-pro-preview.description": "Gemini 3 Pro 是 Google 最强大的智能体与编程模型，在最先进推理基础上提供更丰富的视觉效果与更深入的交互体验。",
+  "gemini-3.1-flash-image-preview.description": "Gemini 3.1 Flash Image（Nano Banana 2）以 Flash 速度提供 Pro 级图像质量，同时支持多模态对话。",
+  "gemini-3.1-flash-image-preview:image.description": "Gemini 3.1 Flash Image（Nano Banana 2）以 Flash 速度提供 Pro 级图像质量，同时支持多模态对话。",
   "gemini-flash-latest.description": "Latest release of Gemini Flash",
   "gemini-flash-lite-latest.description": "Latest release of Gemini Flash-Lite",
   "gemini-pro-latest.description": "Latest release of Gemini Pro",
