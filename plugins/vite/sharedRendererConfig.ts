@@ -79,6 +79,9 @@ function sharedManualChunks(id: string): string | undefined {
     if (locale) return `i18n-${locale}`;
   }
 
+  // dayjs core — keep out of locale chunks so entry doesn't statically pull i18n-ar
+  if (id.includes('/dayjs/') && !id.includes('/dayjs/locale/')) return 'vendor-dayjs';
+
   // dayjs locale → merge into i18n-{locale}
   const dayjsMatch = id.match(/dayjs\/locale\/([^/.]+)\.js/);
   if (dayjsMatch) {
