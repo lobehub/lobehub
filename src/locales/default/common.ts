@@ -325,12 +325,6 @@ export default {
   'footer.star.title': 'Star us on GitHub',
   'footer.title': 'Like Our Product?',
   'fullscreen': 'Full Screen Mode',
-  'geminiImageChineseWarning.content':
-    'Nano Banana may occasionally fail to generate images when using Chinese. It is recommended to use English for better results.',
-  'geminiImageChineseWarning.continueGenerate': 'Continue Generating',
-  'geminiImageChineseWarning.continueSend': 'Continue Sending',
-  'geminiImageChineseWarning.doNotShowAgain': 'Do Not Show Again',
-  'geminiImageChineseWarning.title': 'Chinese Input Notice',
   'historyRange': 'History Range',
   'home.suggestQuestions': 'Try these examples',
   'import': 'Import',

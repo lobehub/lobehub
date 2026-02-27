@@ -13,6 +13,15 @@ import { useToolStore } from '@/store/tool';
 import { chatService } from './index';
 import { type ResolvedAgentConfig } from './mecha';
 
+// Helper to compute expected date content from SystemDateProvider
+const getCurrentDateContent = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `Current date: ${year}-${month}-${day}`;
+};
+
 /**
  * Default mock resolvedAgentConfig for tests
  */
@@ -331,6 +340,7 @@ describe('ChatService', () => {
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
             messages: [
+              { content: getCurrentDateContent(), role: 'system' },
               {
                 content: [
                   {
@@ -381,6 +391,7 @@ describe('ChatService', () => {
           {
             enabledSearch: undefined,
             messages: [
+              { content: getCurrentDateContent(), role: 'system' },
               { content: 'Hello', role: 'user' },
               { content: 'Hey', role: 'assistant' },
             ],
@@ -449,6 +460,7 @@ describe('ChatService', () => {
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
             messages: [
+              { content: getCurrentDateContent(), role: 'system' },
               {
                 content: [
                   {
@@ -541,6 +553,7 @@ describe('ChatService', () => {
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
             messages: [
+              { content: getCurrentDateContent(), role: 'system' },
               {
                 content: [
                   {
@@ -653,9 +666,9 @@ describe('ChatService', () => {
         expect(imageUrlToBase64).toHaveBeenCalledWith('http://127.0.0.1:8080/local2.gif');
         expect(imageUrlToBase64).toHaveBeenCalledTimes(2); // Only for local URLs
 
-        // Verify the final result has correct URLs
+        // Verify the final result has correct URLs (index 1 because index 0 is system date)
         const callArgs = getChatCompletionSpy.mock.calls[0][0];
-        const imageContent = (callArgs.messages?.[0].content as any[])?.filter(
+        const imageContent = (callArgs.messages?.[1].content as any[])?.filter(
           (c) => c.type === 'image_url',
         );
 
@@ -806,7 +819,9 @@ describe('ChatService', () => {
             ],
             messages: [
               {
-                content: `<plugins description="The plugins you can use below">
+                content:
+                  getCurrentDateContent() +
+                  `\n\n<plugins description="The plugins you can use below">
 <collection name="SEO">
 <collection.instructions>The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.</collection.instructions>
 <api identifier="seo____getData">Get data from users</api>
@@ -956,9 +971,10 @@ describe('ChatService', () => {
             ],
             messages: [
               {
-                content: `system
-
-<plugins description="The plugins you can use below">
+                content:
+                  `system\n\n` +
+                  getCurrentDateContent() +
+                  `\n\n<plugins description="The plugins you can use below">
 <collection name="SEO">
 <collection.instructions>The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.</collection.instructions>
 <api identifier="seo____getData">Get data from users</api>
@@ -1001,7 +1017,7 @@ describe('ChatService', () => {
             top_p: 1,
             messages: [
               {
-                content: 'system',
+                content: 'system\n\n' + getCurrentDateContent(),
                 role: 'system',
               },
               { content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n', role: 'user' },

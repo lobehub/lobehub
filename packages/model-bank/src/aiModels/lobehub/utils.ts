@@ -48,6 +48,29 @@ export const nanoBananaProParameters: ModelParamsSchema = {
   },
 };
 
+export const NANO_BANANA_2_ASPECT_RATIOS = [
+  ...NANO_BANANA_ASPECT_RATIOS,
+  '1:4',
+  '4:1',
+  '1:8',
+  '8:1',
+];
+
+export const nanoBanana2Parameters: ModelParamsSchema = {
+  aspectRatio: {
+    default: '1:1',
+    enum: NANO_BANANA_2_ASPECT_RATIOS,
+  },
+  imageUrls: {
+    default: [],
+  },
+  prompt: { default: '' },
+  resolution: {
+    default: '1K',
+    enum: ['0.5K', '1K', '2K', '4K'],
+  },
+};
+
 export const gptImage1Schema = {
   imageUrls: { default: [], maxCount: 1, maxFileSize: 5 },
   prompt: { default: '' },

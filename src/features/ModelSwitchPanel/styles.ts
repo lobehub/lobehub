@@ -2,6 +2,7 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    pointer-events: auto;
     overflow: hidden;
     padding: 0 !important;
   `,

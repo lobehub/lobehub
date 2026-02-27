@@ -1079,7 +1079,7 @@ describe('modelParse', () => {
 
       // First model should have "Nano Banana" as displayName
       const geminiModel = result.find((m) => m.id === 'gemini-2.5-flash-image-preview');
-      expect(geminiModel?.displayName).toBe('Nano Banana');
+      expect(geminiModel?.displayName).toBe('🍌 Nano Banana');
 
       // Second model should keep original displayName
       const otherModel = result.find((m) => m.id === 'some-other-model');
@@ -1087,11 +1087,11 @@ describe('modelParse', () => {
 
       // Third model (partial match) should replace only the matching part
       const partialModel = result.find((m) => m.id === 'partial-gemini-model');
-      expect(partialModel?.displayName).toBe('Custom Nano Banana Enhanced');
+      expect(partialModel?.displayName).toBe('Custom 🍌 Nano Banana Enhanced');
 
       // Fourth model should preserve the (free) suffix
       const freeModel = result.find((m) => m.id === 'gemini-free-model');
-      expect(freeModel?.displayName).toBe('Nano Banana (free)');
+      expect(freeModel?.displayName).toBe('🍌 Nano Banana (free)');
     });
 
     it('should keep original displayName when not matching Gemini 2.5 Flash Image Preview', async () => {

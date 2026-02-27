@@ -232,6 +232,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint": "Gemini 시리즈용; 사고 예산을 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint": "Gemini 3 Flash Preview 모델용; 사고의 깊이를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "Gemini 3 Pro Preview 모델용; 사고의 깊이를 제어합니다.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "Gemini 3.1 Pro Preview 모델용; 낮음/중간/높음 수준으로 사고 깊이를 조절합니다.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "Gemini 시리즈용; URL 컨텍스트 제공을 지원합니다.",
   "providerModels.item.modelConfig.extendParams.placeholder": "활성화할 확장 매개변수를 선택하세요",
   "providerModels.item.modelConfig.extendParams.previewFallback": "미리보기를 사용할 수 없습니다",

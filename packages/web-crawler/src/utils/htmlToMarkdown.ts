@@ -5,6 +5,9 @@ import { NodeHtmlMarkdown } from 'node-html-markdown';
 
 import type { FilterOptions } from '../type';
 
+/** Truncate HTML to 1 MB before DOM parsing to prevent CPU spikes on large pages */
+const MAX_HTML_SIZE = 1024 * 1024;
+
 const cleanObj = <T extends object>(
   obj: T,
 ): {
@@ -24,9 +27,10 @@ interface HtmlToMarkdownOutput {
 }
 
 export const htmlToMarkdown = (
-  html: string,
+  rawHtml: string,
   { url, filterOptions }: { filterOptions: FilterOptions; url: string },
 ): HtmlToMarkdownOutput => {
+  const html = rawHtml.length > MAX_HTML_SIZE ? rawHtml.slice(0, MAX_HTML_SIZE) : rawHtml;
   const window = new Window({ url });
 
   const document = window.document;

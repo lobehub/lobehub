@@ -42,6 +42,7 @@ export interface UniformSearchResult {
 
 export interface UniformSearchResponse {
   costTime: number;
+  errorDetail?: string;
   query: string;
   resultNumbers: number;
   results: UniformSearchResult[];

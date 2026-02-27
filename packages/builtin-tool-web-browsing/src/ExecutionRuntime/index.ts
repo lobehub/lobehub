@@ -24,6 +24,16 @@ export class WebBrowsingExecutionRuntime {
     try {
       const data = await this.searchService.webSearch(args as SearchQuery, options);
 
+      // If search failed with error detail, return as failure
+      if (data.errorDetail) {
+        return {
+          content: data.errorDetail,
+          error: { message: data.errorDetail },
+          state: data,
+          success: false,
+        };
+      }
+
       // add LIMITED_COUNT search results to message content
       const searchContent: SearchContent[] = data.results
         .slice(0, SEARCH_ITEM_LIMITED_COUNT)

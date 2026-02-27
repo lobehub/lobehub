@@ -1,10 +1,10 @@
+import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
-import { getBuiltinIntervention } from '@/tools/interventions';
 
 import { useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';

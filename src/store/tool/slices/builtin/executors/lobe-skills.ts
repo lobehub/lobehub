@@ -11,7 +11,6 @@ import { isDesktop } from '@lobechat/const';
 
 import { cloudSandboxService } from '@/services/cloudSandbox';
 import { localFileService } from '@/services/electron/localFileService';
-import { marketApiService } from '@/services/marketApi';
 import { agentSkillService } from '@/services/skill';
 import { useChatStore } from '@/store/chat';
 
@@ -105,35 +104,7 @@ const runtime = new SkillsExecutionRuntime({
     findAll: () => agentSkillService.list(),
     findById: (id) => agentSkillService.getById(id),
     findByName: (name) => agentSkillService.getByName(name),
-    importFromGitHub: async (gitUrl) => {
-      const result = await agentSkillService.importFromGitHub({ gitUrl });
-      if (!result) throw new Error('Import failed');
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-    },
-    importFromUrl: async (url) => {
-      const result = await agentSkillService.importFromUrl({ url });
-      if (!result) throw new Error('Import failed');
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-    },
-    importFromZipUrl: async (url) => {
-      const result = await agentSkillService.importFromUrl({ url });
-      if (!result) throw new Error('Import failed');
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-    },
-    onSkillImported: async () => {
-      // Dynamic import to avoid circular dependency (this file is inside the tool store)
-      const { getToolStoreState } = await import('@/store/tool/store');
-      await getToolStoreState().refreshAgentSkills();
-    },
     readResource: (id, path) => agentSkillService.readResource(id, path),
-    searchSkill: async (params) => {
-      return marketApiService.searchSkill(params);
-    },
-    importFromMarket: async (identifier) => {
-      const result = await agentSkillService.importFromMarket(identifier);
-      if (!result) throw new Error('Import failed');
-      return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-    },
     runCommand: async ({ command, runInClient, timeout }) => {
       // Desktop: run in local client if requested
       if (isDesktop && runInClient) {

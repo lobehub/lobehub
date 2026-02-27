@@ -1,30 +1,34 @@
-import {
-  type AgentEvent,
-  type AgentInstruction,
-  type AgentInstructionCallLlm,
-  type AgentInstructionCallTool,
-  type AgentInstructionCompressContext,
-  type AgentInstructionExecClientTask,
-  type AgentInstructionExecClientTasks,
-  type AgentInstructionExecTask,
-  type AgentInstructionExecTasks,
-  type AgentRuntimeContext,
-  type GeneralAgentCallingToolInstructionPayload,
-  type GeneralAgentCallLLMInstructionPayload,
-  type GeneralAgentCallLLMResultPayload,
-  type GeneralAgentCallToolResultPayload,
-  type GeneralAgentCompressionResultPayload,
-  type InstructionExecutor,
-  type TaskResultPayload,
-  type TasksBatchResultPayload,
+import type {
+  AgentEvent,
+  AgentInstruction,
+  AgentInstructionCallLlm,
+  AgentInstructionCallTool,
+  AgentInstructionCompressContext,
+  AgentInstructionExecClientTask,
+  AgentInstructionExecClientTasks,
+  AgentInstructionExecTask,
+  AgentInstructionExecTasks,
+  AgentRuntimeContext,
+  GeneralAgentCallingToolInstructionPayload,
+  GeneralAgentCallLLMInstructionPayload,
+  GeneralAgentCallLLMResultPayload,
+  GeneralAgentCallToolResultPayload,
+  GeneralAgentCompressionResultPayload,
+  InstructionExecutor,
+  TaskResultPayload,
+  TasksBatchResultPayload,
 } from '@lobechat/agent-runtime';
 import { calculateMessageTokens, UsageCounter } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
+import type { ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatToolPayload,
   type ConversationContext,
   type CreateMessageParams,
+  type MessageToolCall,
+  type ModelUsage,
+  TraceNameMap,
 } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -38,7 +42,11 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getFileStoreState } from '@/store/file/store';
 import { sleep } from '@/utils/sleep';
+
+import { StreamingHandler } from './StreamingHandler';
+import { type StreamChunk } from './types/streaming';
 
 const log = debug('lobe-store:agent-executors');
 
@@ -66,6 +74,8 @@ export const createAgentExecutors = (context: {
   operationId: string;
   parentId: string;
   skipCreateFirstMessage?: boolean;
+  /** ToolsEngine for expanding dynamically activated tools */
+  toolsEngine?: ToolsEngine;
 }) => {
   let shouldSkipCreateMessage = context.skipCreateFirstMessage;
 
@@ -91,7 +101,6 @@ export const createAgentExecutors = (context: {
     return opContext.subAgentId || opContext.agentId;
   };
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const executors: Partial<Record<AgentInstruction['type'], InstructionExecutor>> = {
     /**
      * Custom call_llm executor
@@ -169,32 +178,244 @@ export const createAgentExecutors = (context: {
         llmPayload.tools?.length ?? 0,
       );
 
-      // Call existing internal_fetchAIChatMessage
-      // This method already handles:
-      // - Stream processing (text, tool_calls, reasoning, grounding, base64_image)
-      // - UI updates via dispatchMessage
-      // - Loading state management
-      // - Error handling
-      // Use messages from state (already contains full conversation history)
-      const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
+      // ======== Inlined streaming logic (previously internal_fetchAIChatMessage) ========
       const {
-        isFunctionCall,
-        content,
-        tools,
-        usage: currentStepUsage,
-        tool_calls,
-        finishType,
-      } = await context.get().internal_fetchAIChatMessage({
-        messageId: assistantMessageId,
-        messages,
-        model: llmPayload.model,
-        provider: llmPayload.provider,
-        operationId: context.operationId,
-        agentConfig: context.agentConfig, // Pass pre-resolved config
-        // Pass runtime context for page editor injection
+        optimisticUpdateMessageContent,
+        internal_dispatchMessage,
+        internal_toggleToolCallingStreaming,
+      } = context.get();
+
+      // Get agentId, topicId, groupId and abortController from operation
+      const operation = context.get().operations[context.operationId];
+      if (!operation) {
+        throw new Error(`Operation not found: ${context.operationId}`);
+      }
+      const { subAgentId, groupId, topicId } = operation.context;
+      const abortController = operation.abortController;
+
+      // In group orchestration, subAgentId is the actual responding agent
+      const agentId = groupId && subAgentId ? subAgentId : operation.context.agentId!;
+
+      const traceId = operation.metadata?.traceId;
+
+      const fetchContext = { ...operation.context, agentId };
+
+      const { agentConfig: agentConfigData, chatConfig } = context.agentConfig;
+
+      let finalUsage: ModelUsage | undefined;
+      let finalToolCalls: MessageToolCall[] | undefined;
+
+      // Create streaming handler with callbacks
+      const handler = new StreamingHandler(
+        {
+          messageId: assistantMessageId,
+          operationId: context.operationId,
+          agentId,
+          groupId,
+          topicId,
+        },
+        {
+          onContentUpdate: (content, reasoning, contentMetadata) => {
+            internal_dispatchMessage(
+              {
+                id: assistantMessageId,
+                type: 'updateMessage',
+                value: {
+                  content,
+                  reasoning,
+                  ...(contentMetadata && {
+                    metadata: {
+                      isMultimodal: contentMetadata.isMultimodal,
+                      tempDisplayContent: contentMetadata.tempDisplayContent,
+                    },
+                  }),
+                },
+              },
+              { operationId: context.operationId },
+            );
+          },
+          onReasoningUpdate: (reasoning) => {
+            internal_dispatchMessage(
+              {
+                id: assistantMessageId,
+                type: 'updateMessage',
+                value: { reasoning },
+              },
+              { operationId: context.operationId },
+            );
+          },
+          onToolCallsUpdate: (tools) => {
+            internal_dispatchMessage(
+              {
+                id: assistantMessageId,
+                type: 'updateMessage',
+                value: { tools },
+              },
+              { operationId: context.operationId },
+            );
+          },
+          onGroundingUpdate: (grounding) => {
+            internal_dispatchMessage(
+              {
+                id: assistantMessageId,
+                type: 'updateMessage',
+                value: { search: grounding },
+              },
+              { operationId: context.operationId },
+            );
+          },
+          onImagesUpdate: (images) => {
+            internal_dispatchMessage(
+              {
+                id: assistantMessageId,
+                type: 'updateMessage',
+                value: { imageList: images },
+              },
+              { operationId: context.operationId },
+            );
+          },
+          onReasoningStart: () => {
+            const { operationId: reasoningOpId } = context.get().startOperation({
+              type: 'reasoning',
+              context: { ...fetchContext, messageId: assistantMessageId },
+              parentOperationId: context.operationId,
+            });
+            context.get().associateMessageWithOperation(assistantMessageId, reasoningOpId);
+            return reasoningOpId;
+          },
+          onReasoningComplete: (opId) => context.get().completeOperation(opId),
+          uploadBase64Image: (data) =>
+            getFileStoreState()
+              .uploadBase64FileWithProgress(data)
+              .then((file) => ({
+                id: file?.id,
+                url: file?.url,
+                alt: file?.filename || file?.id,
+              })),
+          transformToolCalls: context.get().internal_transformToolCalls,
+          toggleToolCallingStreaming: internal_toggleToolCallingStreaming,
+        },
+      );
+
+      const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
+
+      // Expand dynamically activated tools (from lobe-tools activateTools API)
+      // and merge them into the agent config for this LLM call
+      const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
+      let resolvedAgentConfig = context.agentConfig;
+
+      if (activatedToolIds?.length && context.toolsEngine) {
+        const additional = context.toolsEngine.generateToolsDetailed({
+          context: { isExplicitActivation: true },
+          model: agentConfigData.model,
+          provider: agentConfigData.provider!,
+          skipDefaultTools: true,
+          toolIds: activatedToolIds,
+        });
+
+        if (additional.tools?.length) {
+          resolvedAgentConfig = {
+            ...context.agentConfig,
+            enabledManifests: [
+              ...(context.agentConfig.enabledManifests || []),
+              ...additional.enabledManifests,
+            ],
+            enabledToolIds: [
+              ...(context.agentConfig.enabledToolIds || []),
+              ...additional.enabledToolIds,
+            ],
+            tools: [...(context.agentConfig.tools || []), ...additional.tools],
+          };
+
+          log(
+            `${stagePrefix} Injected %d activated tools: %o`,
+            activatedToolIds.length,
+            activatedToolIds,
+          );
+        }
+      }
+
+      await chatService.createAssistantMessageStream({
+        abortController,
+        params: {
+          agentId: agentId || undefined,
+          groupId,
+          messages,
+          model: llmPayload.model,
+          provider: llmPayload.provider,
+          resolvedAgentConfig,
+          topicId: topicId ?? undefined,
+          ...agentConfigData.params,
+        },
         initialContext: runtimeContext?.initialContext,
         stepContext: runtimeContext?.stepContext,
+        trace: {
+          traceId,
+          topicId: topicId ?? undefined,
+          traceName: TraceNameMap.Conversation,
+        },
+        onErrorHandle: async (error) => {
+          await context.get().optimisticUpdateMessageError(assistantMessageId, error, {
+            operationId: context.operationId,
+          });
+        },
+        onFinish: async (
+          content,
+          { traceId, observationId, toolCalls, reasoning, grounding, usage, speed, type },
+        ) => {
+          if (traceId) {
+            messageService.updateMessage(
+              assistantMessageId,
+              { traceId, observationId: observationId ?? undefined },
+              { agentId, groupId, topicId },
+            );
+          }
+
+          const result = await handler.handleFinish({
+            traceId,
+            observationId,
+            toolCalls,
+            reasoning,
+            grounding,
+            usage,
+            speed,
+            type,
+          });
+
+          finalUsage = result.usage;
+          finalToolCalls = result.toolCalls;
+
+          await optimisticUpdateMessageContent(
+            assistantMessageId,
+            result.content,
+            {
+              tools: result.tools,
+              reasoning: result.metadata.reasoning,
+              search: result.metadata.search,
+              imageList: result.metadata.imageList,
+              metadata: {
+                ...result.metadata.usage,
+                ...result.metadata.performance,
+                performance: result.metadata.performance,
+                usage: result.metadata.usage,
+                finishType: result.metadata.finishType,
+                ...(result.metadata.isMultimodal && { isMultimodal: true }),
+              },
+            },
+            { operationId: context.operationId },
+          );
+        },
+        onMessageHandle: async (chunk) => {
+          handler.handleChunk(chunk as StreamChunk);
+        },
       });
+
+      const isFunctionCall = handler.getIsFunctionCall();
+      const content = handler.getOutput();
+      const tools = handler.getTools();
+      const currentStepUsage = finalUsage;
+      const tool_calls = finalToolCalls;
+      const finishType = handler.getFinishType();
 
       log(`[${sessionLogId}] finish model-runtime calling`);
 
@@ -328,9 +549,8 @@ export const createAgentExecutors = (context: {
       // Get context from operation
       const opContext = getOperationContext();
 
-      let toolOperationId: string | undefined;
       // ============ Create toolCalling operation (top-level) ============
-      const { operationId } = context.get().startOperation({
+      const { operationId: toolOperationId } = context.get().startOperation({
         type: 'toolCalling',
         context: {
           agentId: opContext.agentId!,
@@ -345,7 +565,6 @@ export const createAgentExecutors = (context: {
           tool_call_id: chatToolPayload.id,
         },
       });
-      toolOperationId = operationId;
 
       try {
         // Get assistant message to extract groupId
@@ -691,7 +910,7 @@ export const createAgentExecutors = (context: {
       } catch (error) {
         log('[%s][call_tool] ERROR: Tool execution failed: %O', sessionLogId, error);
 
-        events.push({ error: error, type: 'error' });
+        events.push({ error, type: 'error' });
 
         // Return current state on error (no state change)
         return { events, newState: state };

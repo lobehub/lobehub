@@ -1,7 +1,6 @@
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { safeParseJSON } from '@lobechat/utils';
 import { memo } from 'react';
-
-import { getBuiltinRender } from '@/tools/renders';
 
 import { useParseContent } from '../useParseContent';
 

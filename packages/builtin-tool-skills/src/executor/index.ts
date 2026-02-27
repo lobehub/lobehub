@@ -1,14 +1,11 @@
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
-import { SkillsExecutionRuntime } from '../ExecutionRuntime';
+import type { SkillsExecutionRuntime } from '../ExecutionRuntime';
 import {
   type ExecScriptParams,
   type ExportFileParams,
-  type ImportFromMarketParams,
-  type ImportSkillParams,
   type ReadReferenceParams,
   type RunSkillParams,
-  type SearchSkillParams,
   SkillsApiName,
   SkillsIdentifier,
 } from '../types';
@@ -23,35 +20,6 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
     super();
     this.runtime = runtime;
   }
-
-  importSkill = async (
-    params: ImportSkillParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    try {
-      if (ctx.signal?.aborted) {
-        return { stop: true, success: false };
-      }
-
-      const result = await this.runtime.importSkill(params);
-
-      if (result.success) {
-        return { content: result.content, state: result.state, success: true };
-      }
-
-      return {
-        content: result.content,
-        error: { message: result.content, type: 'PluginServerError' },
-        success: false,
-      };
-    } catch (e) {
-      const err = e as Error;
-      return {
-        error: { body: e, message: err.message, type: 'PluginServerError' },
-        success: false,
-      };
-    }
-  };
 
   execScript = async (
     params: ExecScriptParams,
@@ -150,64 +118,6 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
       }
 
       const result = await this.runtime.exportFile(params);
-
-      if (result.success) {
-        return { content: result.content, state: result.state, success: true };
-      }
-
-      return {
-        content: result.content,
-        error: { message: result.content, type: 'PluginServerError' },
-        success: false,
-      };
-    } catch (e) {
-      const err = e as Error;
-      return {
-        error: { body: e, message: err.message, type: 'PluginServerError' },
-        success: false,
-      };
-    }
-  };
-
-  searchSkill = async (
-    params: SearchSkillParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    try {
-      if (ctx.signal?.aborted) {
-        return { stop: true, success: false };
-      }
-
-      const result = await this.runtime.searchSkill(params);
-
-      if (result.success) {
-        return { content: result.content, state: result.state, success: true };
-      }
-
-      return {
-        content: result.content,
-        error: { message: result.content, type: 'PluginServerError' },
-        success: false,
-      };
-    } catch (e) {
-      const err = e as Error;
-      return {
-        error: { body: e, message: err.message, type: 'PluginServerError' },
-        success: false,
-      };
-    }
-  };
-
-  importFromMarket = async (
-    params: ImportFromMarketParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    try {
-      if (ctx.signal?.aborted) {
-        return { stop: true, success: false };
-      }
-
-      const result = await this.runtime.importFromMarket(params);
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };

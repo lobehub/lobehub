@@ -54,6 +54,7 @@
   "siliconcloud.description": "SiliconCloud 是一個具成本效益的生成式 AI 雲端服務，基於強大的開源基礎模型構建。",
   "spark.description": "科大訊飛星火提供強大的多語言 AI 能力，推動智慧硬體、醫療、金融等垂直領域的創新。",
   "stepfun.description": "Stepfun 模型具備領先的多模態與複雜推理能力，支援長文本理解與強大的自主搜尋編排。",
+  "straico.description": "Straico 簡化了 AI 的整合，提供一個統一的工作空間，將頂尖的文字、圖像和音頻生成 AI 模型匯聚一處，為行銷人員、企業家和愛好者提供便捷的多元 AI 工具使用體驗。",
   "taichu.description": "太初是中科院自動化所與武漢人工智慧研究院推出的新一代多模態模型，支援多輪問答、寫作、圖像生成、3D 理解與訊號分析，具備更強的認知與創造力。",
   "tencentcloud.description": "騰訊雲 LLM 知識引擎原子能力為企業與開發者提供端到端的知識問答服務，包含文件解析、分段、嵌入與多輪重寫等模組化服務，打造客製化 AI 解決方案。",
   "togetherai.description": "Together AI 提供領先效能的創新模型，支援廣泛自訂、快速擴展與簡易部署，滿足企業需求。",

@@ -3,6 +3,7 @@
  */
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { defaultToolIds } from '@lobechat/builtin-tools';
 import { isDesktop } from '@lobechat/const';
 import { type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -17,7 +18,6 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { defaultToolIds } from '@/tools';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
@@ -85,7 +85,10 @@ export const createAgentToolsEngine = (workingModel: WorkingModel) =>
     // Add default tools based on configuration
     defaultToolIds,
     // Create search-aware enableChecker for this request
-    enableChecker: ({ pluginId }) => {
+    enableChecker: ({ pluginId, context }) => {
+      // Explicitly activated tools (via lobe-tools activateTools) bypass all filters
+      if (context?.isExplicitActivation) return true;
+
       // Check platform-specific constraints (e.g., LocalSystem desktop-only)
       if (!shouldEnableTool(pluginId)) {
         return false;
@@ -135,8 +138,8 @@ export const getEnabledTools = (
 
   return (
     toolsEngine.generateTools({
-      model: model, // Use provided model or fallback
-      provider: provider, // Use provided provider or fallback
+      model, // Use provided model or fallback
+      provider, // Use provided provider or fallback
       toolIds,
     }) || []
   );

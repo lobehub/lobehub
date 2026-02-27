@@ -16,7 +16,7 @@ const SearchResult = memo((props: { onProviderSelect?: (key: string) => void }) 
   const searchKeyword = useAiInfraStore((s) => s.providerSearchKeyword);
   const aiProviderList = useAiInfraStore((s) => s.aiProviderList, isEqual);
 
-  // 使用 useMemo 优化过滤性能
+  // Use useMemo to optimize filtering performance
   const filteredProviders = useMemo(() => {
     const keyword = searchKeyword.toLowerCase().trim();
 

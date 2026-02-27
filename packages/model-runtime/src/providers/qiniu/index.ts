@@ -18,7 +18,7 @@ export const params = {
       return rest;
     });
 
-    // 自动检测模型提供商并选择相应配置
+    // Auto-detect the model provider and select the corresponding configuration
     return processMultiProviderModelList(modelList, 'qiniu');
   },
   provider: ModelProvider.Qiniu,

@@ -12,7 +12,7 @@ export class LobeVertexAI extends LobeGoogleAI {
     try {
       const client = new GoogleGenAI({
         ...params,
-        location: params?.location ?? DEFAULT_VERTEXAI_LOCATION, // @google/genai 不传 location 会报错
+        location: params?.location ?? DEFAULT_VERTEXAI_LOCATION, // @google/genai throws an error if location is not provided
         vertexai: true,
       });
 

@@ -2,7 +2,10 @@ import qs from 'query-string';
 import urlJoin from 'url-join';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
+import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
+import { createHTTPStatusError } from '../utils/response';
+import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 const BASE_URL = process.env.BROWSERLESS_URL ?? 'https://chrome.browserless.io';
 // Allowed file types: html, css, js, json, xml, webmanifest, txt, md
@@ -31,46 +34,62 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
     url,
   };
 
+  let res: Response;
+
   try {
-    const res = await fetch(
-      qs.stringifyUrl({
-        query: {
-          blockAds: BROWSERLESS_BLOCK_ADS,
-          launch: JSON.stringify({ stealth: BROWSERLESS_STEALTH_MODE }),
-          token: BROWSERLESS_TOKEN,
-        },
-        url: urlJoin(BASE_URL, '/content'),
-      }),
-      {
-        body: JSON.stringify(input),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      },
+    res = await withTimeout(
+      (signal) =>
+        fetch(
+          qs.stringifyUrl({
+            query: {
+              blockAds: BROWSERLESS_BLOCK_ADS,
+              launch: JSON.stringify({ stealth: BROWSERLESS_STEALTH_MODE }),
+              token: BROWSERLESS_TOKEN,
+            },
+            url: urlJoin(BASE_URL, '/content'),
+          }),
+          {
+            body: JSON.stringify(input),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            method: 'POST',
+            signal,
+          },
+        ),
+      DEFAULT_TIMEOUT,
     );
-    const html = await res.text();
+  } catch (e) {
+    throw toFetchError(e);
+  }
 
-    const result = htmlToMarkdown(html, { filterOptions, url });
-
-    if (
-      !!result.content &&
-      result.title &&
-      // "Just a moment..." indicates being blocked by CloudFlare
-      result.title.trim() !== 'Just a moment...'
-    ) {
-      return {
-        content: result.content,
-        contentType: 'text',
-        description: result?.description,
-        length: result.length,
-        siteName: result?.siteName,
-        title: result?.title,
-        url,
-      } satisfies CrawlSuccessResult;
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new PageNotFoundError(res.statusText);
     }
-  } catch (error) {
-    console.error(error);
+
+    throw await createHTTPStatusError(res, 'Browserless');
+  }
+
+  const html = await res.text();
+  const result = htmlToMarkdown(html, { filterOptions, url });
+
+  if (
+    !!result.content &&
+    result.content.length > 100 &&
+    result.title &&
+    // "Just a moment..." indicates being blocked by CloudFlare
+    result.title.trim() !== 'Just a moment...'
+  ) {
+    return {
+      content: result.content,
+      contentType: 'text',
+      description: result?.description,
+      length: result.length,
+      siteName: result?.siteName,
+      title: result?.title,
+      url,
+    } satisfies CrawlSuccessResult;
   }
 
   return;

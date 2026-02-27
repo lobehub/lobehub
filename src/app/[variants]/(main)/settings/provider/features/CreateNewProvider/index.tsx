@@ -28,13 +28,13 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
     setLoading(true);
 
     try {
-      // 如果 name 为空，使用 id 作为 name
+      // If name is empty, use id as the name
       const finalValues = {
         ...values,
         name: values.name || values.id,
       };
 
-      // 只为 openai 和 router (newapi) 类型的自定义 provider 添加 supportResponsesApi: true
+      // Only add supportResponsesApi: true for custom providers of type openai and router (newapi)
       const sdkType = values.settings?.sdkType;
       if (sdkType === 'openai' || sdkType === 'router') {
         finalValues.settings = {

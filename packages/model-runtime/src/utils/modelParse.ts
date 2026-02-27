@@ -1,7 +1,7 @@
-import  { type ChatModelCard } from '@lobechat/types';
-import  { type AIBaseModelCard, type AiModelSettings, type ExtendParamsType } from 'model-bank';
+import { type ChatModelCard } from '@lobechat/types';
+import { type AIBaseModelCard, type AiModelSettings, type ExtendParamsType } from 'model-bank';
 
-import  { type ModelProviderKey } from '../types';
+import { type ModelProviderKey } from '../types';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -336,9 +336,13 @@ const processReleasedAt = (model: any, knownModel?: any): string | undefined => 
  * @returns Processed display name
  */
 const processDisplayName = (displayName: string): string => {
+  if (displayName.includes('Gemini 3.1 Flash Image Preview')) {
+    return displayName.replace('Gemini 3.1 Flash Image Preview', '🍌 Nano Banana 2');
+  }
+
   // If it contains "Gemini 2.5 Flash Image Preview", replace the corresponding part with "Nano Banana"
   if (displayName.includes('Gemini 2.5 Flash Image Preview')) {
-    return displayName.replace('Gemini 2.5 Flash Image Preview', 'Nano Banana');
+    return displayName.replace('Gemini 2.5 Flash Image Preview', '🍌 Nano Banana');
   }
 
   return displayName;

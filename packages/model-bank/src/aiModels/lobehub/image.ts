@@ -3,6 +3,7 @@ import { huanyuanImageParamsSchema, qwenEditParamsSchema, qwenImageParamsSchema 
 import {
   gptImage1Schema,
   imagenBaseParameters,
+  nanoBanana2Parameters,
   nanoBananaParameters,
   nanoBananaProParameters,
 } from './utils';
@@ -10,8 +11,26 @@ import {
 export const lobehubImageModels: AIImageModelCard[] = [
   {
     description:
+      'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
+    displayName: '🍌 Nano Banana 2',
+    enabled: true,
+    id: 'gemini-3.1-flash-image-preview:image',
+    parameters: nanoBanana2Parameters,
+    pricing: {
+      approximatePricePerImage: 0.067,
+      units: [
+        { name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-02-26',
+    type: 'image',
+  },
+  {
+    description:
       "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model and also supports multimodal chat.",
-    displayName: 'Nano Banana Pro',
+    displayName: '🍌 Nano Banana Pro',
     enabled: true,
     id: 'gemini-3-pro-image-preview:image',
     parameters: nanoBananaProParameters,
@@ -29,7 +48,7 @@ export const lobehubImageModels: AIImageModelCard[] = [
   {
     description:
       "Nano Banana is Google's newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.",
-    displayName: 'Nano Banana',
+    displayName: '🍌 Nano Banana',
     id: 'gemini-2.5-flash-image-preview:image',
     parameters: nanoBananaParameters,
     pricing: {

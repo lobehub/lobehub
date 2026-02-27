@@ -1,4 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
+import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolArgumentsRepairer, ToolNameResolver } from '@lobechat/context-engine';
 import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
@@ -11,7 +12,6 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type StoreSetter } from '@/store/types';
-import { builtinTools } from '@/tools';
 
 /**
  * Internal utility methods and runtime state management

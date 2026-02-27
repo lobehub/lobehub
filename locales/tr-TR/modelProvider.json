@@ -232,6 +232,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint": "Gemini serisi için; düşünme bütçesini kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint": "Gemini 3 Flash Önizleme modelleri için; düşünme derinliğini kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "Gemini 3 Pro Önizleme modelleri için; düşünme derinliğini kontrol eder.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "Gemini 3.1 Pro Önizleme modelleri için; düşünme derinliğini düşük/orta/yüksek seviyelerle kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "Gemini serisi için; URL bağlamı sağlamayı destekler.",
   "providerModels.item.modelConfig.extendParams.placeholder": "Etkinleştirilecek gelişmiş parametreleri seçin",
   "providerModels.item.modelConfig.extendParams.previewFallback": "Önizleme kullanılamıyor",

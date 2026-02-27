@@ -1,0 +1,21 @@
+{
+  "name": "@lobechat/builtin-tool-skill-store",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executor": "./src/executor/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
+  },
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "*",
+    "antd-style": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

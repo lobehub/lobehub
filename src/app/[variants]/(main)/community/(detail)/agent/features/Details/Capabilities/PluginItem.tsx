@@ -1,6 +1,7 @@
+import { builtinTools } from '@lobechat/builtin-tools';
 import {
-  KLAVIS_SERVER_TYPES,
   getLobehubSkillProviderById,
+  KLAVIS_SERVER_TYPES,
   type KlavisServerType,
   type LobehubSkillProviderType,
 } from '@lobechat/const';
@@ -13,23 +14,22 @@ import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useDiscoverStore } from '@/store/discover';
-import { builtinTools } from '@/tools';
 
 /**
  * Icon component for built-in tools (Klavis & LobehubSkill)
  * For string type icon, use Image component to render
  * For IconType type icon, use Icon component to render with theme fill color
  */
-const BuiltinToolIcon = memo<
-  Pick<KlavisServerType | LobehubSkillProviderType, 'icon' | 'label'>
->(({ icon, label }) => {
-  if (typeof icon === 'string') {
-    return <Image alt={label} height={40} src={icon} style={{ flex: 'none' }} width={40} />;
-  }
+const BuiltinToolIcon = memo<Pick<KlavisServerType | LobehubSkillProviderType, 'icon' | 'label'>>(
+  ({ icon, label }) => {
+    if (typeof icon === 'string') {
+      return <Image alt={label} height={40} src={icon} style={{ flex: 'none' }} width={40} />;
+    }
 
-  // Use theme color fill, automatically adapts in dark mode
-  return <Icon fill={cssVar.colorText} icon={icon} size={40} />;
-});
+    // Use theme color fill, automatically adapts in dark mode
+    return <Icon fill={cssVar.colorText} icon={icon} size={40} />;
+  },
+);
 
 BuiltinToolIcon.displayName = 'BuiltinToolIcon';
 
@@ -195,7 +195,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   if (isLoading)
     return (
-      <Block gap={12} horizontal key={identifier} padding={12} variant={'outlined'}>
+      <Block horizontal gap={12} key={identifier} padding={12} variant={'outlined'}>
         <Skeleton paragraph={{ rows: 1 }} title={false} />
       </Block>
     );
@@ -216,9 +216,9 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   const content = (
     <Block
+      horizontal
       className={cx(sourceConfig.clickable ? styles.clickable : styles.noLink)}
       gap={12}
-      horizontal
       key={identifier}
       padding={12}
       variant={'outlined'}
@@ -232,7 +232,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
         }}
       >
         <div className={styles.titleRow}>
-          <Text as={'h2'} className={cx(styles.title, 'plugin-title')} ellipsis>
+          <Text ellipsis as={'h2'} className={cx(styles.title, 'plugin-title')}>
             {data.title}
           </Text>
           {sourceConfig.tagText && (

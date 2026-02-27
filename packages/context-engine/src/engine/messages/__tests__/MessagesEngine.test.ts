@@ -24,6 +24,7 @@ describe('MessagesEngine', () => {
   ];
 
   const createBasicParams = (overrides?: Partial<MessagesEngineParams>): MessagesEngineParams => ({
+    enableSystemDate: false,
     messages: createBasicMessages(),
     model: 'gpt-4',
     provider: 'openai',

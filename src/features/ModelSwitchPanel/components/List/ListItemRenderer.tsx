@@ -13,7 +13,7 @@ import {
 import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
@@ -30,7 +30,6 @@ import { SingleProviderModelItem } from './SingleProviderModelItem';
 interface ListItemRendererProps {
   activeKey: string;
   extraControls?: (modelId: string, providerId: string) => ReactNode;
-  isScrolling: boolean;
   item: ListItem;
   newLabel: string;
   onClose: () => void;
@@ -38,16 +37,10 @@ interface ListItemRendererProps {
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ activeKey, extraControls, isScrolling, item, newLabel, onModelChange, onClose }) => {
+  ({ activeKey, extraControls, item, newLabel, onModelChange, onClose }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [detailOpen, setDetailOpen] = useState(false);
-
-    useEffect(() => {
-      if (isScrolling) {
-        setDetailOpen(false);
-      }
-    }, [isScrolling]);
 
     switch (item.type) {
       case 'no-provider': {
@@ -199,7 +192,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               activeKey={activeKey}
               data={item.data}
               extraControls={extraControls}
-              isScrolling={isScrolling}
               newLabel={newLabel}
               onClose={onClose}
               onModelChange={onModelChange}

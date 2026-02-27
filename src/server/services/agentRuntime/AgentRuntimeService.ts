@@ -1,7 +1,7 @@
-import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { AgentRuntime, GeneralChatAgent } from '@lobechat/agent-runtime';
-import { type ChatMessageError } from '@lobechat/types';
-import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
+import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -19,7 +19,6 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
-import { dynamicInterventionAudits } from '@/tools/dynamicInterventionAudits';
 
 import {
   type AgentExecutionParams,

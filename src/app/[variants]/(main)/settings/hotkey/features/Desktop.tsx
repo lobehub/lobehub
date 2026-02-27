@@ -48,7 +48,7 @@ const HotkeySetting = memo(() => {
             if (result.success) {
               message.success(t('hotkey.updateSuccess', { ns: 'setting' }));
             } else {
-              // 根据错误类型显示相应的错误消息
+              // Show the appropriate error message based on error type
 
               message.error(t(`hotkey.errors.${result.errorType}` as any, { ns: 'setting' }));
             }

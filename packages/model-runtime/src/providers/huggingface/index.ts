@@ -71,11 +71,11 @@ export const params = {
       .map((model) => {
         const { architecture, providers } = model;
 
-        // 选择提供商信息的优先级：is_model_author > 信息完整度 > 默认首个
+        // Provider info selection priority: is_model_author > field completeness > first by default
         const mainProvider =
           providers.find((p) => p.is_model_author) ||
           providers.reduce((prev, curr) => {
-            // 计算每个 provider 非 undefined 的字段数
+            // Count the number of non-undefined fields for each provider
             const prevFieldCount = Object.values(prev).filter(
               (v) => v !== undefined && v !== null,
             ).length;
@@ -90,13 +90,13 @@ export const params = {
           return undefined;
         }
 
-        // 多 provider 回退策略：先从主 provider 获取，缺失时查其他 provider
+        // Multi-provider fallback strategy: get from main provider first, fall back to others if missing
         const getFieldFromProviders = (field: keyof typeof mainProvider) => {
           const value = mainProvider[field];
           if (value !== undefined && value !== null) {
             return value;
           }
-          // 缺失时遍历其他 provider
+          // Traverse other providers when the field is missing
           return providers.find(
             (p) => p !== mainProvider && p[field] !== undefined && p[field] !== null,
           )?.[field];
@@ -107,7 +107,7 @@ export const params = {
         const supportsTools = getFieldFromProviders('supports_tools') as boolean | undefined;
         // const supportsStructuredOutput = getFieldFromProviders('supports_structured_output') as boolean | undefined;
 
-        // displayName 使用 id 去除斜杠左侧内容（例如 'zai-org/GLM-4.6' -> 'GLM-4.6'）
+        // displayName strips everything to the left of the slash from the id (e.g. 'zai-org/GLM-4.6' -> 'GLM-4.6')
         const displayName =
           typeof model.id === 'string' && model.id.includes('/')
             ? model.id.split('/').slice(1).join('/').trim()

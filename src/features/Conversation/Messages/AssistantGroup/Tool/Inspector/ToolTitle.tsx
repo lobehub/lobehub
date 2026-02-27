@@ -1,3 +1,4 @@
+import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -8,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { shinyTextStyles } from '@/styles';
-import { builtinToolIdentifiers } from '@/tools/identifiers';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   aborted: css`

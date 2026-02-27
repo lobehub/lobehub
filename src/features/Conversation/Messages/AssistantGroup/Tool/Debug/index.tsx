@@ -3,6 +3,7 @@ import { type TabsProps } from '@lobehub/ui';
 import { Block, Highlighter, Icon, Tabs } from '@lobehub/ui';
 import {
   BracesIcon,
+  CircleAlertIcon,
   FunctionSquareIcon,
   HandIcon,
   MessageSquareCodeIcon,
@@ -118,8 +119,35 @@ const Debug = memo<DebugProps>(
           key: 'intervention',
           label: t('debug.intervention'),
         },
+        ...(result?.error
+          ? [
+              {
+                children: (
+                  <Highlighter
+                    language={'json'}
+                    style={{ background: 'transparent', borderRadius: 0, height: '100%' }}
+                    variant={'filled'}
+                  >
+                    {JSON.stringify(result.error, null, 2)}
+                  </Highlighter>
+                ),
+                icon: <Icon icon={CircleAlertIcon} />,
+                key: 'error',
+                label: t('debug.error'),
+              },
+            ]
+          : []),
       ],
-      [functionCall, isJsonResult, params, result?.content, result?.state, intervention, t],
+      [
+        functionCall,
+        isJsonResult,
+        params,
+        result?.content,
+        result?.error,
+        result?.state,
+        intervention,
+        t,
+      ],
     );
 
     return (

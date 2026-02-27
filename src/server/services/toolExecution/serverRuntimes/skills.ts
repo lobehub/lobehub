@@ -1,13 +1,7 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
-import {
-  type CommandResult,
-  type MarketSkillItem,
-  type SearchSkillParams,
-  SkillsIdentifier,
-} from '@lobechat/builtin-tool-skills';
+import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   type ExportFileResult,
-  type SkillImportServiceResult,
   type SkillRuntimeService,
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
@@ -22,7 +16,6 @@ import { UserModel } from '@/database/models/user';
 import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
-import { SkillImporter } from '@/server/services/skill/importer';
 import { SkillResourceService } from '@/server/services/skill/resource';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -30,7 +23,6 @@ import { type ServerRuntimeRegistration } from './types';
 const log = debug('lobe-server:skills-runtime');
 
 class SkillServerRuntimeService implements SkillRuntimeService {
-  private importer: SkillImporter;
   private resourceService: SkillResourceService;
   private skillModel: AgentSkillModel;
   private marketService: MarketService;
@@ -42,7 +34,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   constructor(options: {
     fileModel: FileModel;
     fileService: FileService;
-    importer: SkillImporter;
     marketService: MarketService;
     resourceService: SkillResourceService;
     skillModel: AgentSkillModel;
@@ -51,7 +42,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   }) {
     this.skillModel = options.skillModel;
     this.resourceService = options.resourceService;
-    this.importer = options.importer;
     this.marketService = options.marketService;
     this.fileService = options.fileService;
     this.fileModel = options.fileModel;
@@ -69,21 +59,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
   findByName = (name: string): Promise<SkillItem | undefined> => {
     return this.skillModel.findByName(name);
-  };
-
-  importFromGitHub = async (gitUrl: string): Promise<SkillImportServiceResult> => {
-    const result = await this.importer.importFromGitHub({ gitUrl });
-    return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-  };
-
-  importFromUrl = async (url: string): Promise<SkillImportServiceResult> => {
-    const result = await this.importer.importFromUrl({ url });
-    return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
-  };
-
-  importFromZipUrl = async (url: string): Promise<SkillImportServiceResult> => {
-    const result = await this.importer.importFromUrl({ url });
-    return { skill: { id: result.skill.id, name: result.skill.name }, status: result.status };
   };
 
   readResource = async (id: string, path: string): Promise<SkillResourceContent> => {
@@ -109,7 +84,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
     try {
       // Look up skill zipUrl if config is provided (same logic as market.ts)
-      let enhancedParams: any = {
+      const enhancedParams: any = {
         command,
         config,
         description,
@@ -267,40 +242,6 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       };
     }
   };
-
-  searchSkill = async (
-    params: SearchSkillParams,
-  ): Promise<{ items: MarketSkillItem[]; page: number; pageSize: number; total: number }> => {
-    log('Searching skills with params: %O', params);
-
-    try {
-      const result = await this.marketService.searchSkill(params);
-      log('Search skills result: %O', result);
-      return result;
-    } catch (error) {
-      log('Error searching skills: %O', error);
-      throw error;
-    }
-  };
-
-  importFromMarket = async (identifier: string): Promise<SkillImportServiceResult> => {
-    log('Importing skill from market: %s', identifier);
-
-    try {
-      // Get download URL and import ZIP
-      // The ZIP contains SKILL.md (manifest + content) and resources
-      // Everything is extracted and stored according to DB structure
-      const downloadUrl = this.marketService.getSkillDownloadUrl(identifier);
-      log('Download URL: %s', downloadUrl);
-
-      const result = await this.importFromZipUrl(downloadUrl);
-      log('Import from market result: %O', result);
-      return result;
-    } catch (error) {
-      log('Error importing skill from market: %O', error);
-      throw error;
-    }
-  };
 }
 
 /**
@@ -333,7 +274,6 @@ export const skillsRuntime: ServerRuntimeRegistration = {
 
     const skillModel = new AgentSkillModel(context.serverDB, context.userId);
     const resourceService = new SkillResourceService(context.serverDB, context.userId);
-    const importer = new SkillImporter(context.serverDB, context.userId);
     const marketService = new MarketService({
       accessToken: marketAccessToken,
       userInfo: { userId: context.userId },
@@ -344,7 +284,6 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     const service = new SkillServerRuntimeService({
       fileModel,
       fileService,
-      importer,
       marketService,
       resourceService,
       skillModel,

@@ -1130,7 +1130,7 @@ export class DiscoverService {
     }
 
     // Step 3: Try to find in builtin tools
-    const { builtinTools } = await import('@/tools/index');
+    const { builtinTools } = await import('@lobechat/builtin-tools');
     const builtinTool = builtinTools.find((tool) => tool.identifier === identifier);
     if (builtinTool) {
       log('getPluginDetail: found builtin tool for identifier=%s', identifier);
@@ -1800,7 +1800,15 @@ export class DiscoverService {
         return undefined;
       }
 
-      const { user, agents, agentGroups, forkedAgents, forkedAgentGroups, favoriteAgents, favoriteAgentGroups } = response;
+      const {
+        user,
+        agents,
+        agentGroups,
+        forkedAgents,
+        forkedAgentGroups,
+        favoriteAgents,
+        favoriteAgentGroups,
+      } = response;
 
       // Transform agents to DiscoverAssistantItem format
       const transformedAgents: DiscoverAssistantItem[] = (agents || []).map((agent: any) => ({

@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { searchResultsPrompt } from './searchResults';
 
 describe('searchResultsPrompt', () => {
-  it('should return empty XML for empty results', () => {
+  it('should return explicit empty message for empty results', () => {
     const result = searchResultsPrompt([]);
-    expect(result).toBe('<searchResults />');
+    expect(result).toBe('<searchResults>No results found.</searchResults>');
   });
 
   it('should convert basic search results to compact XML format', () => {

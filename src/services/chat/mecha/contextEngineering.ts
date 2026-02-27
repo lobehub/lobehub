@@ -1,6 +1,7 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import {
   type AgentBuilderContext,
@@ -10,6 +11,7 @@ import {
   type GTDConfig,
   type LobeToolManifest,
   type MemoryContext,
+  type ToolDiscoveryConfig,
   type UserMemoryData,
 } from '@lobechat/context-engine';
 import { MessagesEngine } from '@lobechat/context-engine';
@@ -35,6 +37,7 @@ import {
   builtinToolSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
+  toolSelectors,
 } from '@/store/tool/selectors';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
@@ -348,6 +351,23 @@ export const contextEngineering = async ({
         }
       : undefined;
 
+  // Build tool discovery config if lobe-tools is enabled
+  const enabledToolSet = new Set(tools || []);
+  const isLobeToolsEnabled = enabledToolSet.has(LobeToolIdentifier);
+
+  let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
+  if (isLobeToolsEnabled) {
+    const toolState = getToolStoreState();
+    const availableTools = toolSelectors
+      .availableToolsForDiscovery(toolState)
+      .filter((tool) => !enabledToolSet.has(tool.identifier));
+
+    if (availableTools.length > 0) {
+      toolDiscoveryConfig = { availableTools };
+      log('Tool discovery config built, available tools count: %d', availableTools.length);
+    }
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -389,6 +409,9 @@ export const contextEngineering = async ({
     skillsConfig: {
       enabledSkills: plugins ? createSkillEngine().getEnabledSkills(plugins) : undefined,
     },
+
+    // Tool Discovery configuration
+    toolDiscoveryConfig,
 
     // Tools configuration
     toolsConfig: {

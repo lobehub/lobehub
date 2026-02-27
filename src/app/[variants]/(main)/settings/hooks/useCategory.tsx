@@ -82,7 +82,7 @@ export const useCategory = () => {
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
-    // 个人资料组 - Profile 相关设置
+    // Profile group - Profile-related settings
     const profileItems: CategoryItem[] = [
       {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : UserCircle,
@@ -143,7 +143,7 @@ export const useCategory = () => {
       });
     }
 
-    // 账号组 - 个人相关设置
+    // Account group - personal settings
     const commonItems: CategoryItem[] = [
       {
         icon: PaletteIcon,
@@ -168,7 +168,7 @@ export const useCategory = () => {
       title: t('group.common'),
     });
 
-    // AI 配置组 - AI 相关设置
+    // AI configuration group - AI-related settings
     const aiConfigItems: CategoryItem[] = [
       {
         icon: Brain,
@@ -208,7 +208,7 @@ export const useCategory = () => {
       title: t('group.aiConfig'),
     });
 
-    // 系统组 - 系统相关设置
+    // System group - system-related settings
     const systemItems: CategoryItem[] = [
       isDesktop && {
         icon: EthernetPort,

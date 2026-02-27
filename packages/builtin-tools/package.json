@@ -1,0 +1,45 @@
+{
+  "name": "@lobechat/builtin-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./renders": "./src/renders.ts",
+    "./inspectors": "./src/inspectors.ts",
+    "./interventions": "./src/interventions.ts",
+    "./placeholders": "./src/placeholders.ts",
+    "./portals": "./src/portals.ts",
+    "./streamings": "./src/streamings.ts",
+    "./identifiers": "./src/identifiers.ts",
+    "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
+    "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-group-management": "workspace:*",
+    "@lobechat/builtin-tool-gtd": "workspace:*",
+    "@lobechat/builtin-tool-knowledge-base": "workspace:*",
+    "@lobechat/builtin-tool-local-system": "workspace:*",
+    "@lobechat/builtin-tool-memory": "workspace:*",
+    "@lobechat/builtin-tool-notebook": "workspace:*",
+    "@lobechat/builtin-tool-page-agent": "workspace:*",
+    "@lobechat/builtin-tool-skill-store": "workspace:*",
+    "@lobechat/builtin-tool-skills": "workspace:*",
+    "@lobechat/builtin-tool-tools": "workspace:*",
+    "@lobechat/builtin-tool-web-browsing": "workspace:*",
+    "@lobechat/const": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^4",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}
