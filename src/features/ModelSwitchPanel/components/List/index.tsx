@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC, type ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -54,10 +54,21 @@ export const List: FC<ListProps> = ({
 
   const activeKey = menuKey(provider, model);
 
+  // Scroll active model into center view on mount
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const activeEl = listRef.current?.querySelector(`.${styles.menuItemActive}`);
+    if (activeEl) {
+      requestAnimationFrame(() => {
+        activeEl.scrollIntoView({ block: 'center' });
+      });
+    }
+  }, []);
+
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;
 
   return (
-    <Flexbox className={styles.list} flex={1} style={{ height: listHeight }}>
+    <Flexbox className={styles.list} flex={1} ref={listRef} style={{ height: listHeight }}>
       {listItems.map((item, index) => (
         <ListItemRenderer
           activeKey={activeKey}
