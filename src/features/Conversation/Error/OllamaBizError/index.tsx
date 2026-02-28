@@ -23,7 +23,8 @@ interface OllamaErrorResponse {
   error: OllamaError;
 }
 
-const UNRESOLVED_MODEL_REGEXP = /model "([\w+,.-]+)" not found/;
+// eslint-disable-next-line regexp/no-dupe-characters-character-class, regexp/no-obscure-range
+const UNRESOLVED_MODEL_REGEXP = /model "([\w+,-_]+)" not found/;
 
 interface OllamaBizErrorProps {
   alertError?: AlertProps;
