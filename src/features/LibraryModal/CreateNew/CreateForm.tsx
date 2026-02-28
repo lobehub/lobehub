@@ -3,7 +3,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/library';
-import { type CreateKnowledgeBaseParams } from '@/types/knowledgeBase';
 
 interface CreateFormProps {
   id?: string;
@@ -67,7 +66,7 @@ const CreateForm = memo<CreateFormProps>(({ id, initialValues, onClose, onSucces
           onChange={(e) => setDescription(e.target.value)}
         />
       </Flexbox>
-      <Button block loading={loading} onClick={handleSubmit} type={'primary'}>
+      <Button block loading={loading} type={'primary'} onClick={handleSubmit}>
         {isEditMode ? t('createNew.edit.confirm') : t('createNew.confirm')}
       </Button>
     </Flexbox>

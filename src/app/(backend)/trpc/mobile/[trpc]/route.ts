@@ -20,7 +20,7 @@ const handler = (req: NextRequest) => {
     endpoint: '/trpc/mobile',
 
     onError: ({ error, path, type }) => {
-      console.log(`Error in tRPC handler (mobile) on path: ${path}, type: ${type}`);
+      console.info(`Error in tRPC handler (mobile) on path: ${path}, type: ${type}`);
       console.error(error);
     },
 

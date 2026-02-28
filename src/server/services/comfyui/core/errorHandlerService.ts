@@ -71,6 +71,7 @@ function extractMissingFileInfo(message: string): {
   if (!message) return null;
 
   // Check for "Expected one of:" pattern from enhanced model errors
+  // eslint-disable-next-line regexp/no-super-linear-backtracking, regexp/no-dupe-disjunctions
   const expectedPattern = /expected one of:\s*([^.]+\.(?:safetensors|ckpt|pt|pth))/i;
   const expectedMatch = message.match(expectedPattern);
 

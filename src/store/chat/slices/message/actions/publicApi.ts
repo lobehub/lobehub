@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix,typescript-sort-keys/interface */
 import { TraceEventType } from '@lobechat/types';
 import { copyToClipboard } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';

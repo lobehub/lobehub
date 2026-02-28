@@ -3,7 +3,7 @@ import { type Theme } from 'antd-style';
 import { css } from 'antd-style';
 import { rgba } from 'polished';
 
-export default ({ token }: { prefixCls: string; token: Theme }) => css`
+const antdOverride = ({ token }: { prefixCls: string; token: Theme }) => css`
   .${token.prefixCls}-popover {
     z-index: 1100;
   }
@@ -27,3 +27,5 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     }
   `}
 `;
+
+export default antdOverride;

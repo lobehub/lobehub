@@ -44,7 +44,7 @@ export const getJWKS = (): object => {
     return jwks;
   } catch (error) {
     console.error('解析 JWKS 失败:', error);
-    throw new Error(`JWKS_KEY 解析错误: ${(error as Error).message}`);
+    throw new Error(`JWKS_KEY 解析错误: ${(error as Error).message}`, { cause: error });
   }
 };
 
@@ -89,7 +89,7 @@ const getVerificationKey = async () => {
     return await importJWK(publicKeyJwk, 'RS256');
   } catch (error) {
     log('获取 JWKS 公钥失败: %O', error);
-    throw new Error(`JWKS_KEY 公钥获取失败: ${(error as Error).message}`);
+    throw new Error(`JWKS_KEY 公钥获取失败: ${(error as Error).message}`, { cause: error });
   }
 };
 
@@ -130,7 +130,7 @@ export const validateOIDCJWT = async (token: string) => {
       clientId,
       payload,
       tokenData: {
-        aud: aud,
+        aud,
         client_id: clientId,
         exp: payload.exp,
         iat: payload.iat,

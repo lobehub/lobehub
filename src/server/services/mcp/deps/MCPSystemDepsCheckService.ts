@@ -6,7 +6,7 @@ import debug from 'debug';
 
 import { type SystemDependencyCheckResult } from '@/types/plugins';
 
-import { type InstallationChecker, type PackageInstallCheckResult } from './types';
+import { type InstallationChecker } from './types';
 
 const execPromise = promisify(exec);
 const log = debug('lobe-mcp:deps-check');
@@ -183,11 +183,10 @@ class MCPSystemDepsCheckService {
     // Get corresponding installation checker
     const checker = this.checkers.get(option.installationMethod);
     let packageInstalled = false;
-    let packageResult: PackageInstallCheckResult | null = null;
 
     if (checker) {
       // Use specific installation checker to check package installation status
-      packageResult = await checker.checkPackageInstalled(option.installationDetails);
+      const packageResult = await checker.checkPackageInstalled(option.installationDetails);
       packageInstalled = packageResult.installed;
     } else {
       log(`Installation checker not found: ${option.installationMethod}`);

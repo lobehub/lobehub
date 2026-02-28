@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, memo } from 'react';
+import { memo, Suspense } from 'react';
 
 import {
   GenerationTopicStoreProvider,
@@ -23,10 +23,10 @@ const TopicSidebar = memo(() => {
   return (
     <GenerationTopicStoreProvider value={{ namespace: 'video', useStore: useVideoStore as any }}>
       <GenerationTopicPanel
-        onExpandChange={(expand) => updateSystemStatus({ showVideoTopicPanel: expand })}
-        onSizeChange={(width) => updateSystemStatus({ videoTopicPanelWidth: width })}
         panelWidth={videoTopicPanelWidth ?? 256}
         showPanel={showVideoTopicPanel ?? true}
+        onExpandChange={(expand) => updateSystemStatus({ showVideoTopicPanel: expand })}
+        onSizeChange={(width) => updateSystemStatus({ videoTopicPanelWidth: width })}
       >
         <Suspense fallback={<SkeletonList />}>
           <TopicList />

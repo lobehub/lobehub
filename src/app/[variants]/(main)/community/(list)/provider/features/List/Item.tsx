@@ -1,5 +1,5 @@
 import { Github, ModelTag, ProviderCombine } from '@lobehub/icons';
-import { ActionIcon, Block, Flexbox, MaskShadow, Text, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, MaskShadow, stopPropagation, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { GlobeIcon } from 'lucide-react';
 import { memo } from 'react';

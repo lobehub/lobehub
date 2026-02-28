@@ -322,7 +322,7 @@ export class MCPClient {
       console.error('Listed tools error: %O', e);
 
       if ((e as Error).message.includes('No valid session ID provided')) {
-        throw new Error('NoValidSessionId');
+        throw new Error('NoValidSessionId', { cause: e });
       }
 
       return [];

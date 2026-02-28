@@ -245,8 +245,6 @@ export const chunkRouter = router({
       try {
         const { model, provider } =
           getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
-        let embedding: number[];
-
         // Read user's provider config from database
         const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
@@ -259,7 +257,7 @@ export const chunkRouter = router({
           model,
         });
 
-        embedding = embeddings![0];
+        const embedding = embeddings![0];
 
         let finalFileIds = input.fileIds ?? [];
 

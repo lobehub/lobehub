@@ -19,10 +19,10 @@ const ActionButton = memo<{ mobile?: boolean }>(({ mobile }) => {
       {identifier && (
         <ShareButton
           meta={{
-            avatar: avatar,
+            avatar,
             desc: description,
             hashtags: tags,
-            title: title,
+            title,
             url: urlJoin(OFFICIAL_URL, '/community/group_agent', identifier),
           }}
         />

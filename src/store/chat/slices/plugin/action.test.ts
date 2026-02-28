@@ -835,7 +835,7 @@ describe('ChatPluginAction', () => {
         id: messageId,
         role: 'tool',
         content: 'Tool content',
-        plugin: { identifier: identifier, arguments: '{"oldKey":"oldValue"}' },
+        plugin: { identifier, arguments: '{"oldKey":"oldValue"}' },
         tool_call_id: toolCallId,
         parentId,
       } as UIChatMessage;
@@ -844,7 +844,7 @@ describe('ChatPluginAction', () => {
         id: parentId,
         role: 'assistant',
         content: 'Assistant content',
-        tools: [{ identifier: identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
+        tools: [{ identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
       } as UIChatMessage;
 
       act(() => {
@@ -1185,7 +1185,7 @@ describe('ChatPluginAction', () => {
         id: messageId,
         role: 'assistant',
         content: 'Assistant content',
-        tools: [{ identifier: identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
+        tools: [{ identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
       } as UIChatMessage;
 
       act(() => {

@@ -7,13 +7,12 @@ export const createMentionSlice = (set: Setter, get: () => MentionStore, _api?: 
   new MentionActionImpl(set, get, _api);
 
 export class MentionActionImpl {
-  readonly #get: () => MentionStore;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => MentionStore, _api?: unknown) {
     void _api;
     this.#set = set;
-    this.#get = get;
+    void get;
   }
 
   addMentionedUser = (userId: string): void => {

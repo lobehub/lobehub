@@ -46,13 +46,13 @@ const VideoConfigSkeleton = memo(() => {
       </Flexbox>
 
       {/* generateAudio switch */}
-      <Flexbox align="center" horizontal justify="space-between">
+      <Flexbox horizontal align="center" justify="space-between">
         <Skeleton.Button active size="small" style={{ width: 70 }} />
         <Skeleton.Button active size="small" style={{ borderRadius: 12, width: 44 }} />
       </Flexbox>
 
       {/* cameraFixed switch */}
-      <Flexbox align="center" horizontal justify="space-between">
+      <Flexbox horizontal align="center" justify="space-between">
         <Skeleton.Button active size="small" style={{ width: 70 }} />
         <Skeleton.Button active size="small" style={{ borderRadius: 12, width: 44 }} />
       </Flexbox>

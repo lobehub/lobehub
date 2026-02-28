@@ -17,10 +17,10 @@ const ActionButton = memo<{ mobile?: boolean }>(({ mobile }) => {
       <ForkAndChat mobile={mobile} />
       <ShareButton
         meta={{
-          avatar: avatar,
+          avatar,
           desc: description,
           hashtags: tags,
-          title: title,
+          title,
           url: urlJoin(OFFICIAL_URL, '/community/agent', identifier as string),
         }}
       />

@@ -399,12 +399,12 @@ const FileListItem = memo<FileListItemProps>(
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
             userSelect: 'none',
           }}
+          onClick={handleItemClick}
           onDragEnd={handleDragEnd}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDragStart={handleDragStart}
           onDrop={handleDrop}
-          onClick={handleItemClick}
           onMouseEnter={() => onHoverChange(true)}
           onMouseLeave={() => onHoverChange(false)}
         >
@@ -491,8 +491,8 @@ const FileListItem = memo<FileListItemProps>(
               align={'center'}
               gap={8}
               paddingInline={8}
-              onPointerDown={stopPropagation}
               onClick={stopPropagation}
+              onPointerDown={stopPropagation}
             >
               {!isFolder &&
                 !isPage &&

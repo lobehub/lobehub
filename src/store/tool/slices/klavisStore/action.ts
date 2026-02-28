@@ -58,7 +58,7 @@ export class KlavisStoreActionImpl {
         toolName,
       });
 
-      console.log('toolsClient.klavis.callTool-response', response);
+      console.info('toolsClient.klavis.callTool-response', response);
 
       this.#set(
         produce((draft: KlavisStoreState) => {

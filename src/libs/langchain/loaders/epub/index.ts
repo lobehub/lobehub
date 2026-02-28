@@ -17,7 +17,7 @@ export const EPubLoader = async (content: Uint8Array) => {
     const splitter = new RecursiveCharacterTextSplitter(loaderConfig);
     return await splitter.splitDocuments(documents);
   } catch (e) {
-    throw new Error(`EPubLoader error: ${(e as Error).message}`);
+    throw new Error(`EPubLoader error: ${(e as Error).message}`, { cause: e });
   } finally {
     tempManager.cleanup(); // Ensure cleanup
   }

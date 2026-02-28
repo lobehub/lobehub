@@ -149,7 +149,6 @@ class MCPService {
       success = true;
       return result;
     } catch (error) {
-      success = false;
       const err = error as Error;
       errorCode = 'CALL_FAILED';
       errorMessage = err.message;

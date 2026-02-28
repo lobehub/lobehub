@@ -85,7 +85,7 @@ const VideoReferenceFrames = memo<VideoReferenceFramesProps>(({ imageUrl, endIma
   if (!imageUrl && !endImageUrl) return null;
 
   return (
-    <Flexbox align={'center'} gap={12} horizontal>
+    <Flexbox horizontal align={'center'} gap={12}>
       {imageUrl && (
         <div className={styles.frameStart}>
           <div className={styles.frameInner}>

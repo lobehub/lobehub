@@ -3,13 +3,13 @@ import { useEffect, useMemo } from 'react';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 import { useVideoStore } from '@/store/video';
 import {
   DEFAULT_AI_VIDEO_MODEL,
   DEFAULT_AI_VIDEO_PROVIDER,
 } from '@/store/video/slices/generationConfig/initialState';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
 
 const checkModelEnabled = (
   enabledVideoModelList: ReturnType<typeof aiProviderSelectors.enabledVideoModelList>,

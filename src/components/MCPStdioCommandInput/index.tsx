@@ -39,7 +39,7 @@ const MCPStdioCommandInput = memo<AutoCompleteProps>((props) => (
           {value}
         </Flexbox>
       ),
-      value: value,
+      value,
     }))}
     {...props}
   />

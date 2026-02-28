@@ -4,7 +4,13 @@ import { Select } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-export type StatusFilterValue = 'published' | 'unpublished' | 'deprecated' | 'archived' | 'forked' | 'favorite';
+export type StatusFilterValue =
+  | 'published'
+  | 'unpublished'
+  | 'deprecated'
+  | 'archived'
+  | 'forked'
+  | 'favorite';
 
 interface StatusFilterProps {
   onChange: (value: StatusFilterValue) => void;
@@ -23,14 +29,7 @@ const StatusFilter = memo<StatusFilterProps>(({ value, onChange }) => {
     { label: t('user.statusFilter.favorite'), value: 'favorite' as const },
   ];
 
-  return (
-    <Select
-      onChange={onChange}
-      options={options}
-      style={{ minWidth: 120 }}
-      value={value}
-    />
-  );
+  return <Select options={options} style={{ minWidth: 120 }} value={value} onChange={onChange} />;
 });
 
 export default StatusFilter;

@@ -23,6 +23,7 @@ const Home = memo(() => {
   // Hide other modules when a starter mode is active
   const hideOtherModules = inputActiveMode && ['agent', 'group', 'write'].includes(inputActiveMode);
 
+  // eslint-disable-next-line @eslint-react/no-nested-component-definitions
   const Welcome = useCallback(() => <WelcomeText />, [i18n.language]);
 
   return (

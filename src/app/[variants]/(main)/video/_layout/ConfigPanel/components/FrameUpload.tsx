@@ -20,9 +20,9 @@ const FrameUpload = memo<FrameUploadProps>(({ paramName }) => {
   return (
     <ImageUpload
       maxFileSize={maxFileSize}
-      onChange={handleChange}
       placeholderHeight={120}
       value={value}
+      onChange={handleChange}
     />
   );
 });

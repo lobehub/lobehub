@@ -7,8 +7,8 @@ import {
   Center,
   DropdownMenu,
   Skeleton,
-  Text,
   stopPropagation,
+  Text,
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';

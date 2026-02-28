@@ -11,11 +11,11 @@ const SkeletonList = memo(() => {
     <Flexbox align="center" gap={6} width={'100%'}>
       <ActionIcon
         icon={Plus}
+        variant={'filled'}
         size={{
           blockSize: 48,
           size: 20,
         }}
-        variant={'filled'}
       />
 
       {Array.from({ length: 5 }).map((_, index) => (

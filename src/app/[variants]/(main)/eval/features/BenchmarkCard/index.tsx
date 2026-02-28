@@ -293,9 +293,6 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                       <RunRow
                         agentName={agentSnapshot?.title}
                         benchmarkId={id}
-                        completedCases={
-                          metrics?.completedCases ?? passedCases + failedCases + errorCases
-                        }
                         cost={metrics?.totalCost}
                         createdAt={run.createdAt}
                         errorCount={errorCases}
@@ -309,6 +306,9 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                         score={metrics?.averageScore}
                         status={run.status}
                         totalCases={metrics?.totalCases ?? 0}
+                        completedCases={
+                          metrics?.completedCases ?? passedCases + failedCases + errorCases
+                        }
                       />
                     );
                   })

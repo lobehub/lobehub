@@ -66,10 +66,10 @@ const VideoLoadingItem = memo<VideoLoadingItemProps>(
       <Block
         align={'center'}
         justify={'center'}
+        variant={'filled'}
         style={{
           aspectRatio: aspectRatio?.includes(':') ? aspectRatio.replace(':', '/') : '16/9',
         }}
-        variant={'filled'}
       >
         <Center gap={8}>
           {progress !== null ? (
@@ -77,9 +77,7 @@ const VideoLoadingItem = memo<VideoLoadingItemProps>(
           ) : (
             <Spin indicator={<LoadingOutlined spin />} />
           )}
-          {progress === 99 && (
-            <ElapsedTime generationId={generation.id} isActive={isGenerating} />
-          )}
+          {progress === 99 && <ElapsedTime generationId={generation.id} isActive={isGenerating} />}
         </Center>
       </Block>
     );

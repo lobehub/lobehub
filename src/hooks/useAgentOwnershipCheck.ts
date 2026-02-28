@@ -26,7 +26,7 @@ function getCurrentAccountId(marketAuth: MarketAuthContextType): string | number
     // First try to get user info from marketAuth
     const userInfo = marketAuth.getCurrentUserInfo?.();
     if (userInfo?.accountId !== null) {
-      console.log('[useAgentOwnershipCheck] User ID from userInfo:', userInfo?.accountId);
+      console.info('[useAgentOwnershipCheck] User ID from userInfo:', userInfo?.accountId);
       return userInfo?.accountId ?? null;
     }
 
@@ -34,7 +34,7 @@ function getCurrentAccountId(marketAuth: MarketAuthContextType): string | number
     const userInfoData = sessionStorage.getItem('market_user_info');
     if (userInfoData) {
       const parsedUserInfo = JSON.parse(userInfoData);
-      console.log(
+      console.info(
         '[useAgentOwnershipCheck] User ID from sessionStorage:',
         parsedUserInfo.accountId,
       );
@@ -84,7 +84,7 @@ export const checkOwnership = async ({
   const cacheKey = buildCacheKey(marketIdentifier, accountId);
   const cached = agentOwnershipCache.get(cacheKey);
   if (!skipCache && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log('[checkOwnership] Using cached result:', cached.result);
+    console.info('[checkOwnership] Using cached result:', cached.result);
     return cached.result;
   }
 
@@ -94,7 +94,7 @@ export const checkOwnership = async ({
   }
 
   const agentDetail = await marketApiService.getAgentDetail(marketIdentifier);
-  console.log('[checkOwnership] Agent detail:', agentDetail);
+  console.info('[checkOwnership] Agent detail:', agentDetail);
 
   const isOwner = `${agentDetail?.ownerId ?? ''}` === `${accountId}`;
   agentOwnershipCache.set(cacheKey, {
@@ -126,11 +126,11 @@ export const useAgentOwnershipCheck = (marketIdentifier?: string): AgentOwnershi
 
     const runOwnershipCheck = async () => {
       try {
-        console.log('[useAgentOwnershipCheck] Checking ownership for:', marketIdentifier);
+        console.info('[useAgentOwnershipCheck] Checking ownership for:', marketIdentifier);
 
         // Get current user ID
         const currentAccountId = getCurrentAccountId(marketAuth);
-        console.log('[useAgentOwnershipCheck] Current user ID:', currentAccountId);
+        console.info('[useAgentOwnershipCheck] Current user ID:', currentAccountId);
 
         if (!currentAccountId) {
           console.warn('[useAgentOwnershipCheck] Could not get current user ID');

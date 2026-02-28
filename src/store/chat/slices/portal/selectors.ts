@@ -123,7 +123,6 @@ const toolUIIdentifier = (s: ChatStoreState) => currentToolUI(s)?.identifier;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 export const chatPortalSelectors = {
   // Core stack selectors
   currentView,

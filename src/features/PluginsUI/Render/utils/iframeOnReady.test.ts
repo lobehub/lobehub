@@ -9,6 +9,7 @@ describe('useOnPluginReadyForInteraction', () => {
 
   afterEach(() => {
     mockOnReady.mockReset();
+    // eslint-disable-next-line unicorn/no-invalid-remove-event-listener
     window.removeEventListener('message', () => {});
   });
 

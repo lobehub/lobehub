@@ -7,10 +7,10 @@ import {
   Block,
   Flexbox,
   Icon,
+  stopPropagation,
   Tag,
   Text,
   Tooltip,
-  stopPropagation,
 } from '@lobehub/ui';
 import { Spotlight } from '@lobehub/ui/awesome';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -205,11 +205,7 @@ const McpItem = memo<DiscoverMcpItem>(
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime
-                className={styles.secondaryDesc}
-                date={updatedAt}
-               
-              />
+              <PublishedTime className={styles.secondaryDesc} date={updatedAt} />
             </Flexbox>
             <Flexbox horizontal align={'center'} gap={8}>
               {t(`mcp.categories.${category}.name` as any)}

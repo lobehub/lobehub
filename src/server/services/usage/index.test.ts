@@ -38,7 +38,7 @@ describe('UsageRecordService', () => {
       const mockMessages = [
         {
           id: 'msg-1',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-4',
@@ -69,7 +69,7 @@ describe('UsageRecordService', () => {
         tps: 10,
         ttft: 500,
         type: 'chat',
-        userId: userId,
+        userId,
       });
     });
 
@@ -77,7 +77,7 @@ describe('UsageRecordService', () => {
       const mockMessages = [
         {
           id: 'msg-1',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'anthropic',
           model: 'claude-3',
@@ -102,7 +102,7 @@ describe('UsageRecordService', () => {
       const mockMessages = [
         {
           id: 'msg-1',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-3.5-turbo',
@@ -143,7 +143,7 @@ describe('UsageRecordService', () => {
       const mockMessages = [
         {
           id: 'msg-1',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-4',
@@ -156,7 +156,7 @@ describe('UsageRecordService', () => {
         },
         {
           id: 'msg-2',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-4',
@@ -169,7 +169,7 @@ describe('UsageRecordService', () => {
         },
         {
           id: 'msg-3',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'anthropic',
           model: 'claude-3',
@@ -203,7 +203,7 @@ describe('UsageRecordService', () => {
       const mockMessages = [
         {
           id: 'msg-1',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-4',
@@ -239,7 +239,7 @@ describe('UsageRecordService', () => {
       const mockMessages = [
         {
           id: 'msg-1',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-4',
@@ -252,7 +252,7 @@ describe('UsageRecordService', () => {
         },
         {
           id: 'msg-2',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-4',
@@ -283,7 +283,7 @@ describe('UsageRecordService', () => {
       const mockMessages = [
         {
           id: 'msg-1',
-          userId: userId,
+          userId,
           role: 'assistant',
           provider: 'openai',
           model: 'gpt-4',

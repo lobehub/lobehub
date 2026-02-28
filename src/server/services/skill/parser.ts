@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import {
   type ParsedSkill,
   type ParsedZipSkill,
@@ -7,7 +9,6 @@ import {
 import { unzip as fflateUnzip, zip as fflateZip } from 'fflate';
 import matter from 'gray-matter';
 import { sha256 } from 'js-sha256';
-import { readFile } from 'node:fs/promises';
 
 import { SkillManifestError, SkillParseError } from './errors';
 

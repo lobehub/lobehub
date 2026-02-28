@@ -380,7 +380,6 @@ export const imageRouter = router({
         // Clean up timeout timer
         if (timeoutId) {
           clearTimeout(timeoutId);
-          timeoutId = null;
         }
 
         log('Async image generation failed: %O', {

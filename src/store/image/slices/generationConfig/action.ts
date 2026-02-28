@@ -95,12 +95,7 @@ export class GenerationConfigActionImpl {
   setWidth = (width: number): void => {
     this.#set(
       (state) => {
-        const {
-          parameters,
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parametersSchema: parametersSchema,
-        } = state;
+        const { parameters, isAspectRatioLocked, activeAspectRatio, parametersSchema } = state;
 
         const newParams = { ...parameters, width };
         if (isAspectRatioLocked && activeAspectRatio) {
@@ -126,12 +121,7 @@ export class GenerationConfigActionImpl {
   setHeight = (height: number): void => {
     this.#set(
       (state) => {
-        const {
-          parameters,
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parametersSchema: parametersSchema,
-        } = state;
+        const { parameters, isAspectRatioLocked, activeAspectRatio, parametersSchema } = state;
         const newParams = { ...parameters, height };
 
         if (isAspectRatioLocked && activeAspectRatio) {
@@ -157,12 +147,7 @@ export class GenerationConfigActionImpl {
   toggleAspectRatioLock = (): void => {
     this.#set(
       (state) => {
-        const {
-          isAspectRatioLocked,
-          activeAspectRatio,
-          parameters,
-          parametersSchema: parametersSchema,
-        } = state;
+        const { isAspectRatioLocked, activeAspectRatio, parameters, parametersSchema } = state;
         const newLockState = !isAspectRatioLocked;
 
         // If transitioning from unlocked to locked and there's an active aspect ratio, adjust dimensions immediately
@@ -227,7 +212,7 @@ export class GenerationConfigActionImpl {
   };
 
   setAspectRatio = (aspectRatio: string): void => {
-    const { parameters, parametersSchema: parametersSchema } = this.#get();
+    const { parameters, parametersSchema } = this.#get();
     if (!parameters || !parametersSchema) return;
 
     const defaultValues = extractDefaultValues(parametersSchema);
@@ -302,7 +287,7 @@ export class GenerationConfigActionImpl {
         model,
         provider,
         parameters: { ...defaultValues, ...settings },
-        parametersSchema: parametersSchema,
+        parametersSchema,
       }),
       false,
       `reuseSettings/${model}/${provider}`,

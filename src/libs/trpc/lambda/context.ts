@@ -118,7 +118,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   log('LobeChat Authorization header: %s', authorization ? 'exists' : 'not found');
 
   let userId;
-  let oidcAuth = null;
+  let oidcAuth;
 
   // Prioritize checking for OIDC authentication (both standard Authorization and custom Oidc-Auth headers)
   if (authEnv.ENABLE_OIDC) {

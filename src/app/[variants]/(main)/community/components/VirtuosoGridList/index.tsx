@@ -17,6 +17,7 @@ export const VirtuosoList = memo<VirtuosoGridProps<any, any>>(({ data, ...rest }
       initialItemCount={initialItemCount}
       overscan={24}
       components={{
+        // eslint-disable-next-line @eslint-react/no-nested-component-definitions
         List: (({ ref, ...props }: DivProps & { ref?: React.RefObject<HTMLDivElement | null> }) => (
           <Flexbox gap={16} ref={ref} {...props} />
         )) as any,
@@ -42,6 +43,7 @@ const VirtuosoGridList = memo<VirtuosoGridProps<any, any>>(
         initialItemCount={maxInitialItemCount || count}
         overscan={24}
         components={{
+          // eslint-disable-next-line @eslint-react/no-nested-component-definitions
           List: (({
             ref,
             ...props

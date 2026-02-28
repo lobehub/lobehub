@@ -256,7 +256,7 @@ export function clearSWRCache(cacheKey = 'lobechat-swr-cache'): void {
 
   try {
     localStorage.removeItem(cacheKey);
-    console.log('[SWR Cache] Cache cleared');
+    console.info('[SWR Cache] Cache cleared');
   } catch (error) {
     console.error('[SWR Cache] Failed to clear cache:', error);
   }

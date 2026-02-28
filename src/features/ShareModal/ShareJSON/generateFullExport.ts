@@ -23,7 +23,6 @@ export const generateFullExport = ({
   const exportedMessages: Record<string, any>[] = messages
     .filter((m) => m.content !== LOADING_FLAT)
     .map((m) =>
-      /* eslint-disable sort-keys-fix/sort-keys-fix */
       cleanObject({
         // Core fields
         content: m.content,

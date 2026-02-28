@@ -1,6 +1,6 @@
 'use client';
 
-import { type PropsWithChildren, memo } from 'react';
+import { memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';

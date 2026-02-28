@@ -18,13 +18,10 @@ export const createModelSlice = (set: Setter, get: () => DiscoverStore, _api?: u
   new ModelActionImpl(set, get, _api);
 
 export class ModelActionImpl {
-  readonly #get: () => DiscoverStore;
-  readonly #set: Setter;
-
   constructor(set: Setter, get: () => DiscoverStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
+    void set;
+    void get;
   }
 
   useModelCategories = (params: CategoryListQuery): SWRResponse<CategoryItem[]> => {

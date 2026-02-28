@@ -98,7 +98,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           try {
             await refreshKlavisServerTools(serverName);
           } catch (error) {
-            console.debug('[Klavis] Polling check (expected during auth):', error);
+            console.info('[Klavis] Polling check (expected during auth):', error);
           }
         }, POLL_INTERVAL_MS);
 
@@ -136,7 +136,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
             }
           } catch {
             // COOP 阻止了访问，降级到轮询方案
-            console.log('[Klavis] COOP blocked window.closed access, falling back to polling');
+            console.info('[Klavis] COOP blocked window.closed access, falling back to polling');
             if (windowCheckIntervalRef.current) {
               clearInterval(windowCheckIntervalRef.current);
               windowCheckIntervalRef.current = null;

@@ -41,6 +41,9 @@ const CreateBenchmarkModal = memo<CreateBenchmarkModalProps>(({ open, onCancel }
       destroyOnHidden
       okButtonProps={{ loading }}
       okText={t('benchmark.create.confirm')}
+      open={open}
+      title={t('benchmark.create.title')}
+      width={480}
       onCancel={(e) => {
         form.resetFields();
         setIdentifierTouched(false);
@@ -71,9 +74,6 @@ const CreateBenchmarkModal = memo<CreateBenchmarkModalProps>(({ open, onCancel }
           setLoading(false);
         }
       }}
-      open={open}
-      title={t('benchmark.create.title')}
-      width={480}
     >
       <Form form={form} layout="vertical" style={{ paddingBlock: 16 }}>
         <Form.Item
@@ -90,8 +90,8 @@ const CreateBenchmarkModal = memo<CreateBenchmarkModalProps>(({ open, onCancel }
           rules={[{ message: t('benchmark.create.identifierRequired'), required: true }]}
         >
           <Input
-            onChange={() => setIdentifierTouched(true)}
             placeholder={t('benchmark.create.identifier.placeholder')}
+            onChange={() => setIdentifierTouched(true)}
           />
         </Form.Item>
 

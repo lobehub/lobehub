@@ -1,5 +1,5 @@
-import { Flexbox, createModal, useModalContext } from '@lobehub/ui';
-import { Suspense, memo, useCallback } from 'react';
+import { createModal, Flexbox, useModalContext } from '@lobehub/ui';
+import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CreateForm from './CreateForm';

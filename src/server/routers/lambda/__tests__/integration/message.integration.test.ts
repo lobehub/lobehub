@@ -110,7 +110,7 @@ describe('Message Router Integration Tests', () => {
         id: result.id,
         agentId: testAgentId, // sessionId 会解析为 agentId 存储
         topicId: testTopicId,
-        userId: userId,
+        userId,
         content: 'Test message',
         role: 'user',
       });

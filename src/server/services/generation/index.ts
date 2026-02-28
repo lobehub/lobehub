@@ -46,6 +46,7 @@ export async function fetchImageFromUrl(
     } catch (error) {
       throw new Error(
         `Failed to decode base64 data: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
     }
   } else {

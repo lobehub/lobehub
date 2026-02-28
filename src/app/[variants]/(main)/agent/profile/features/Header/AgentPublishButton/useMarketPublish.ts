@@ -146,15 +146,15 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
                 return null;
               }
             }) || [],
-          systemRole: systemRole,
+          systemRole,
         },
         description: meta?.description || '',
-        editorData: editorData,
+        editorData,
         // 传递现有的 identifier，后端会检查 ownership
         identifier: meta?.marketIdentifier,
         name: meta?.title || '',
         tags: meta?.tags,
-        tokenUsage: tokenUsage,
+        tokenUsage,
       });
 
       // 如果是新创建的 agent，需要更新 meta

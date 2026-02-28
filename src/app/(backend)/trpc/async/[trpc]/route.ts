@@ -24,7 +24,7 @@ const handler = (req: NextRequest) => {
     endpoint: '/trpc/async',
 
     onError: ({ error, path, type }) => {
-      console.log(`Error in tRPC handler (async) on path: ${path}, type: ${type}`);
+      console.info(`Error in tRPC handler (async) on path: ${path}, type: ${type}`);
       console.error(error);
     },
 

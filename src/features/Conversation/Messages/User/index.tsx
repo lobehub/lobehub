@@ -46,13 +46,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const dmIndicator = useMemo(() => {
     if (!targetId) return undefined;
 
-    let targetName = targetId;
-    if (targetId === 'user') {
-      targetName = userName;
-    } else {
-      const targetAgent = agents?.find((agent) => agent.id === targetId);
-      targetName = targetAgent?.title || targetId;
-    }
+    const targetName =
+      targetId === 'user'
+        ? userName
+        : agents?.find((agent) => agent.id === targetId)?.title || targetId;
 
     return <Tag>{t('dm.visibleTo', { target: targetName })}</Tag>;
   }, [targetId, userName, agents, t]);

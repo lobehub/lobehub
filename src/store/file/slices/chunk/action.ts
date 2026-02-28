@@ -8,13 +8,12 @@ export const createFileChunkSlice = (set: Setter, get: () => FileStore, _api?: u
   new FileChunkActionImpl(set, get, _api);
 
 export class FileChunkActionImpl {
-  readonly #get: () => FileStore;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
     this.#set = set;
-    this.#get = get;
+    void get;
   }
 
   closeChunkDrawer = (): void => {

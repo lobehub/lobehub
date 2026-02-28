@@ -8,7 +8,6 @@ export enum PluginStoreTabs {
   Plugin = 'old',
 }
 
-/* eslint-disable typescript-sort-keys/string-enum */
 export enum PluginInstallStep {
   COMPLETED = 'COMPLETED',
   ERROR = 'ERROR',

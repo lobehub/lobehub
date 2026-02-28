@@ -145,6 +145,9 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
       <Popconfirm
         arrow={false}
         okButtonProps={{ type: 'primary' }}
+        open={confirmOpened}
+        placement="bottomRight"
+        title={t('marketPublish.validation.confirmPublish')}
         onCancel={() => setConfirmOpened(false)}
         onConfirm={handleConfirmPublish}
         onOpenChange={(open) => {
@@ -152,25 +155,22 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
             setConfirmOpened(false);
           }
         }}
-        open={confirmOpened}
-        placement="bottomRight"
-        title={t('marketPublish.validation.confirmPublish')}
       >
         <Button
           icon={ShapesUploadIcon}
           loading={loading}
-          onClick={handleButtonClick}
           title={buttonTitle}
+          onClick={handleButtonClick}
         >
           {t('publishToCommunity')}
         </Button>
       </Popconfirm>
       <GroupForkConfirmModal
         loading={isPublishing}
-        onCancel={handleForkCancel}
-        onConfirm={handleForkConfirm}
         open={showForkModal}
         originalGroup={originalGroupInfo}
+        onCancel={handleForkCancel}
+        onConfirm={handleForkConfirm}
       />
     </>
   );

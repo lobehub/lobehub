@@ -4,8 +4,8 @@ import {
   initialGenerationBatchState,
 } from './slices/generationBatch/initialState';
 import {
-  type VideoGenerationConfigState,
   initialGenerationConfigState,
+  type VideoGenerationConfigState,
 } from './slices/generationConfig/initialState';
 import {
   type GenerationTopicState,

@@ -17,7 +17,6 @@ const groupByType = (
   groupBy: GroupBy,
 ): { categories: string[]; data: BarChartProps['data'] } => {
   if (!data || data?.length === 0) return { categories: [], data: [] };
-  let formattedData: BarChartProps['data'] = [];
   const cate: Map<string, number> = data.reduce((acc, log) => {
     if (log.records) {
       for (const item of log.records) {
@@ -31,7 +30,7 @@ const groupByType = (
     return acc;
   }, new Map<string, number>());
   const categories: string[] = Array.from(cate.keys());
-  formattedData = data.map((log) => {
+  const formattedData = data.map((log) => {
     const totalObj = {
       day: log.day,
       total: type === 'spend' ? log.totalSpend : log.totalTokens,

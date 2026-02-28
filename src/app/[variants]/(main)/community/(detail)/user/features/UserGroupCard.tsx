@@ -6,12 +6,12 @@ import {
   DropdownMenu,
   Flexbox,
   Icon,
+  stopPropagation,
   Tag as AntTag,
   Tag,
   Text,
   Tooltip,
   TooltipGroup,
-  stopPropagation,
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import {
@@ -318,11 +318,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime
-                className={styles.secondaryDesc}
-                date={createdAt}
-               
-              />
+              <PublishedTime className={styles.secondaryDesc} date={createdAt} />
             </Flexbox>
             {category && t(`category.groupAgent.${category}` as any, { defaultValue: category })}
           </Flexbox>

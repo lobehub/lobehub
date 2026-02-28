@@ -14,11 +14,10 @@ export const chatTTS = (set: Setter, get: () => ChatStore, _api?: unknown) =>
 
 export class ChatTTSActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

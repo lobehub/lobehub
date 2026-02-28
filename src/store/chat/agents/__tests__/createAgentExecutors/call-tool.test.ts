@@ -1445,7 +1445,7 @@ describe('call_tool executor', () => {
       expect(payload).toMatchObject({
         data: { data: 'search results', error: null },
         isSuccess: true,
-        toolCall: toolCall,
+        toolCall,
         toolCallId: 'tool_context_test',
         parentMessageId: createdMessage.id,
         executionTime: expect.any(Number),

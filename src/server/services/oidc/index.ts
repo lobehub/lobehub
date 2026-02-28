@@ -70,8 +70,8 @@ export class OIDCService {
     if (!grant) {
       // If not found or no existingGrantId, create a new one
       grant = new this.provider.Grant({
-        accountId: accountId,
-        clientId: clientId,
+        accountId,
+        clientId,
       });
       log('Created new Grant for account %s and client %s', accountId, clientId);
     }

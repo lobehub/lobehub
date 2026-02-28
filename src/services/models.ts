@@ -149,7 +149,7 @@ export class ModelsService {
         }
 
         if (progress.status === 'canceled') {
-          console.log('progress:', progress);
+          console.info('progress:', progress);
         }
 
         if (progress.status === 'error') {

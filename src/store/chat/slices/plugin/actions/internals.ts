@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolArgumentsRepairer, ToolNameResolver } from '@lobechat/context-engine';
 import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
@@ -23,13 +22,10 @@ export const pluginInternals = (set: Setter, get: () => ChatStore, _api?: unknow
   new PluginInternalsActionImpl(set, get, _api);
 
 export class PluginInternalsActionImpl {
-  readonly #get: () => ChatStore;
-  readonly #set: Setter;
-
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
+    void set;
+    void get;
   }
 
   internal_transformToolCalls = (toolCalls: MessageToolCall[]): ChatToolPayload[] => {

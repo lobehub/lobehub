@@ -87,7 +87,6 @@ export async function buildSD35Workflow(
   const negativeConditioningNode: [string, number] = ['4', 0];
 
   // Build complete static JSON structure with conditional values
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const workflow = {
     '1': {
       _meta: { title: 'Load Checkpoint' },
@@ -190,7 +189,6 @@ export async function buildSD35Workflow(
       },
     },
   };
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 
   // Create PromptBuilder
   const builder = new PromptBuilder(

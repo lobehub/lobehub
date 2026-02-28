@@ -8,7 +8,6 @@
  * Style keyword configuration - organized by category for easy maintenance and extension
  */
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const STYLE_KEYWORDS = {
   // Artists and platforms
   ARTISTS: [
@@ -570,8 +569,6 @@ export const STYLE_ADJECTIVE_PATTERNS = {
   professional:
     /^(professional|amateur|masterful|skilled|expert|novice|polished|raw|finished|unfinished|complete|incomplete|refined|rough)$/i,
 } as const;
-
-/* eslint-enable sort-keys-fix/sort-keys-fix */
 
 /**
  * Get all style keywords as a flattened array

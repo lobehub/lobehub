@@ -63,6 +63,9 @@ const BenchmarkEditModal = memo<BenchmarkEditModalProps>(
         destroyOnHidden
         okButtonProps={{ loading }}
         okText={t('benchmark.edit.confirm')}
+        open={open}
+        title={t('benchmark.edit.title')}
+        width={480}
         onCancel={(e) => {
           form.resetFields();
           setIdentifierTouched(false);
@@ -92,9 +95,6 @@ const BenchmarkEditModal = memo<BenchmarkEditModalProps>(
             setLoading(false);
           }
         }}
-        open={open}
-        title={t('benchmark.edit.title')}
-        width={480}
       >
         <Form form={form} layout="vertical" style={{ paddingBlock: 16 }}>
           <Form.Item
@@ -111,8 +111,8 @@ const BenchmarkEditModal = memo<BenchmarkEditModalProps>(
             rules={[{ message: t('benchmark.create.identifierRequired'), required: true }]}
           >
             <Input
-              onChange={() => setIdentifierTouched(true)}
               placeholder={t('benchmark.create.identifier.placeholder')}
+              onChange={() => setIdentifierTouched(true)}
             />
           </Form.Item>
 
@@ -120,7 +120,11 @@ const BenchmarkEditModal = memo<BenchmarkEditModalProps>(
             <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
           </Form.Item>
 
-          <Form.Item label={t('benchmark.create.tags.label')} name="tags" style={{ marginBottom: 0 }}>
+          <Form.Item
+            label={t('benchmark.create.tags.label')}
+            name="tags"
+            style={{ marginBottom: 0 }}
+          >
             <Select
               mode="tags"
               open={false}

@@ -116,7 +116,6 @@ export async function buildSimpleSDWorkflow(
   // If no VAE found or it's SD3, use built-in VAE (selectedVAE remains undefined)
 
   // Base workflow for models with built-in CLIP/T5 encoders
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const workflow: any = {
     '1': {
       _meta: { title: 'Load Checkpoint' },
@@ -174,7 +173,6 @@ export async function buildSimpleSDWorkflow(
       },
     },
   };
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 
   // Add VAE Loader node if using external VAE
   if (selectedVAE) {

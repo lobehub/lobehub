@@ -6,7 +6,7 @@ import { ActionIcon, Flexbox, Tooltip } from '@lobehub/ui';
 import { Popover } from 'antd';
 import { createStyles, useTheme } from 'antd-style';
 import { PlusIcon, SmilePlus } from 'lucide-react';
-import { type FC, type ReactNode, memo, useState } from 'react';
+import { type FC, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
@@ -91,13 +91,13 @@ const ReactionPicker: FC<ReactionPickerProps> = memo(({ messageId, trigger }) =>
     <Picker
       data={data}
       locale={locale?.split('-')[0] || 'en'}
-      onEmojiSelect={(emoji: any) => handleSelect(emoji.native)}
       previewPosition="none"
       skinTonePosition="none"
       theme={theme.appearance === 'dark' ? 'dark' : 'light'}
+      onEmojiSelect={(emoji: any) => handleSelect(emoji.native)}
     />
   ) : (
-    <Flexbox className={styles.pickerContainer} gap={4} horizontal wrap="wrap">
+    <Flexbox horizontal className={styles.pickerContainer} gap={4} wrap="wrap">
       {QUICK_REACTIONS.map((emoji) => (
         <div className={styles.emojiButton} key={emoji} onClick={() => handleSelect(emoji)}>
           {emoji}
@@ -113,11 +113,11 @@ const ReactionPicker: FC<ReactionPickerProps> = memo(({ messageId, trigger }) =>
     <Popover
       arrow={false}
       content={content}
-      onOpenChange={handleOpenChange}
       open={open}
       overlayInnerStyle={{ padding: 0 }}
       placement="top"
       trigger="click"
+      onOpenChange={handleOpenChange}
     >
       {trigger || (
         <span {...(open ? { 'data-popup-open': '' } : {})}>

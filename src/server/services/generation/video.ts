@@ -213,7 +213,7 @@ export class VideoGenerationService {
     const ffmpegPath = getFfmpegPath();
 
     // ffmpeg -i exits with code 1 when no output is specified, but stderr contains metadata
-    let stderr = '';
+    let stderr: string;
     try {
       const result = await execFileAsync(ffmpegPath, ['-i', videoPath, '-hide_banner']);
       stderr = result.stderr;

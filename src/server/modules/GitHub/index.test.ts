@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   GitHub,
+  github,
   GitHubDownloadError,
   GitHubNotFoundError,
   GitHubParseError,
-  github,
 } from './index';
 
 describe('GitHub', () => {

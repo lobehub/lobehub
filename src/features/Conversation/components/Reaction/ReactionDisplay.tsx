@@ -71,7 +71,7 @@ const ReactionDisplay = memo<ReactionDisplayProps>(
     if (reactions.length === 0) return null;
 
     return (
-      <Flexbox align={'center'} className={styles.container} horizontal>
+      <Flexbox horizontal align={'center'} className={styles.container}>
         {reactions.map((reaction) => (
           <div
             className={cx(styles.reactionTag, isActive?.(reaction.emoji) && styles.active)}

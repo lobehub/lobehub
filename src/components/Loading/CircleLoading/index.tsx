@@ -4,7 +4,7 @@ import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-export default () => {
+const CircleLoading = () => {
   const { t } = useTranslation('common');
   return (
     <Center height={'100%'} width={'100%'}>
@@ -19,3 +19,5 @@ export default () => {
     </Center>
   );
 };
+
+export default CircleLoading;

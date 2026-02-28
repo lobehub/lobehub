@@ -7,9 +7,8 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { z } from 'zod';
-
 import mime from 'mime';
+import { z } from 'zod';
 
 import { fileEnv } from '@/envs/file';
 import { YEAR } from '@/utils/units';
@@ -53,10 +52,10 @@ export class S3 {
 
     this.client = new S3Client({
       credentials: {
-        accessKeyId: accessKeyId,
-        secretAccessKey: secretAccessKey,
+        accessKeyId,
+        secretAccessKey,
       },
-      endpoint: endpoint,
+      endpoint,
       forcePathStyle: options?.forcePathStyle,
       region: options?.region || DEFAULT_S3_REGION,
       // refs: https://github.com/lobehub/lobe-chat/pull/5479

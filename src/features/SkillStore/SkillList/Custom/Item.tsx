@@ -89,7 +89,7 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
         >
           <PluginAvatar avatar={avatar} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>
                 {title || identifier}
               </span>

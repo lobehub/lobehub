@@ -19,7 +19,7 @@ export class TraceClient {
 
     // when enabled langfuse, make sure the key are ready in envs
     if (!LANGFUSE_PUBLIC_KEY || !LANGFUSE_SECRET_KEY) {
-      console.log('-----');
+      console.info('-----');
       console.error(
         "You are enabling langfuse but don't set the `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY`. Please check your env",
       );

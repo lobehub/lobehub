@@ -69,7 +69,6 @@ export const aiChatRouter = router({
         if (!!context.sessionId) sessionId = context.sessionId;
       }
 
-      let messageId: string;
       let topicId = input.topicId!;
       let threadId = input.threadId;
       let createdThreadId: string | undefined;
@@ -139,7 +138,7 @@ export const aiChatRouter = router({
         topicId,
       });
 
-      messageId = userMessageItem.id;
+      const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);
 
       // create assistant message
