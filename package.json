@@ -229,6 +229,7 @@
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/observability-otel": "workspace:*",
+    "@lobechat/openapi": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/python-interpreter": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
