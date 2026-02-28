@@ -9,7 +9,7 @@ import {
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import type {CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
+import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
@@ -166,7 +166,12 @@ const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<Chat
     const modelsPage = (await client.models.list()) as any;
     const modelList: MoonshotModelCard[] = modelsPage.data || [];
 
-    return processModelList(modelList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
+    const processedList = modelList.map((model) => ({
+      contextWindowTokens: model.context_length,
+      id: model.id,
+    }));
+
+    return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
   } catch (error) {
     console.warn('Failed to fetch Moonshot models:', error);
     return [];
