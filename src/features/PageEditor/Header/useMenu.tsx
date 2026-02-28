@@ -49,10 +49,17 @@ export const useMenu = (): { menuItems: any[] } => {
     try {
       await duplicateDocument(documentId);
       message.success(t('pageEditor.duplicateSuccess'));
-      await fetchDocuments();
     } catch (error) {
       console.error('Failed to duplicate page:', error);
       message.error(t('pageEditor.duplicateError'));
+      return;
+    }
+
+    // Refresh list independently after successful duplication
+    try {
+      await fetchDocuments();
+    } catch (error) {
+      console.warn('Failed to refresh page list after duplication:', error);
     }
   };
 
