@@ -75,7 +75,6 @@ const zhipuChatModels: AIChatModelCard[] = [
     description:
       "GLM-4.7 is Zhipu's latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities, long-term task planning, and tool collaboration. It achieves leading performance among open-source models on multiple public benchmarks. General capabilities are improved with more concise and natural responses and more immersive writing. For complex agent tasks, instruction following during tool calls is stronger, and the frontend aesthetics and long-term task completion efficiency of Artifacts and Agentic Coding are further enhanced.",
     displayName: 'GLM-4.7',
-    enabled: true,
     id: 'glm-4.7',
     maxOutput: 131_072,
     pricing: {
@@ -167,7 +166,6 @@ const zhipuChatModels: AIChatModelCard[] = [
     description:
       'GLM-4.7-Flash, as a 30B-level SOTA model, offers a new choice that balances performance and efficiency. It enhances coding capabilities, long-term task planning, and tool collaboration for Agentic Coding scenarios, achieving leading performance among open-source models of the same size in multiple current benchmark leaderboards. In executing complex intelligent agent tasks, it has stronger instruction compliance during tool calls, and further improves the aesthetics of front-end and the efficiency of long-term task completion for Artifacts and Agentic Coding.',
     displayName: 'GLM-4.7-FlashX',
-    enabled: true,
     id: 'glm-4.7-flashx',
     maxOutput: 131_072,
     pricing: {
@@ -258,7 +256,6 @@ const zhipuChatModels: AIChatModelCard[] = [
     description:
       'The GLM-4.6V series represents a major iteration of the GLM family in the multimodal direction, comprising GLM-4.6V (flagship), GLM-4.6V-FlashX (lightweight and high-speed), and GLM-4.6V-Flash (fully free). It extends the training-time context window to 128k tokens, achieves state-of-the-art visual understanding accuracy at comparable parameter scales, and, for the first time, natively integrates Function Call (tool invocation) capabilities into the visual model architecture. This unifies the pipeline from “visual perception” to “executable actions,” providing a consistent technical foundation for multimodal agents in real-world production scenarios.',
     displayName: 'GLM-4.6V-FlashX',
-    enabled: true,
     id: 'glm-4.6v-flashx',
     maxOutput: 32_768,
     pricing: {
@@ -320,7 +317,6 @@ const zhipuChatModels: AIChatModelCard[] = [
     description:
       'The GLM-4.6V series represents a major iteration of the GLM family in the multimodal direction, comprising GLM-4.6V (flagship), GLM-4.6V-FlashX (lightweight and high-speed), and GLM-4.6V-Flash (fully free). It extends the training-time context window to 128k tokens, achieves state-of-the-art visual understanding accuracy at comparable parameter scales, and, for the first time, natively integrates Function Call (tool invocation) capabilities into the visual model architecture. This unifies the pipeline from “visual perception” to “executable actions,” providing a consistent technical foundation for multimodal agents in real-world production scenarios.',
     displayName: 'GLM-4.6V-Flash',
-    enabled: true,
     id: 'glm-4.6v-flash',
     maxOutput: 32_768,
     pricing: {
@@ -1122,7 +1118,6 @@ const zhipuImageModels: AIImageModelCard[] = [
     description:
       'GLM-Image is Zhipu’s new flagship image generation model. The model was trained end-to-end on domestically produced chips and adopts an original hybrid architecture that combines autoregressive modeling with a diffusion decoder. This design enables strong global instruction understanding alongside fine-grained local detail rendering, overcoming long-standing challenges in generating knowledge-dense content such as posters, presentations, and educational diagrams. It represents an important exploration toward a new generation of “cognitive generative” technology paradigms, exemplified by Nano Banana Pro.',
     displayName: 'GLM-Image',
-    enabled: true,
     id: 'glm-image',
     parameters: {
       prompt: {
@@ -1152,7 +1147,6 @@ const zhipuImageModels: AIImageModelCard[] = [
     description:
       'CogView-4 is Zhipu’s first open-source text-to-image model that can generate Chinese characters. It improves semantic understanding, image quality, and Chinese/English text rendering, supports arbitrary-length bilingual prompts, and can generate images at any resolution within specified ranges.',
     displayName: 'CogView-4',
-    enabled: true,
     id: 'cogview-4',
     parameters: {
       prompt: {
@@ -1174,7 +1168,6 @@ const zhipuImageModels: AIImageModelCard[] = [
     description:
       'CogView-3-Flash is a free image generation model launched by Zhipu. It generates images that align with user instructions while achieving higher aesthetic quality scores. CogView-3-Flash is primarily used in fields such as artistic creation, design reference, game development, and virtual reality, helping users rapidly convert text descriptions into images.',
     displayName: 'CogView-3-Flash',
-    enabled: true,
     id: 'cogview-3-flash',
     parameters: {
       prompt: {

@@ -15,7 +15,6 @@ const qwenChatModels: AIChatModelCard[] = [
     displayName: 'Kimi K2.5',
     id: 'kimi-k2.5',
     maxOutput: 32_768,
-    organization: 'Qwen',
     pricing: {
       currency: 'CNY',
       units: [

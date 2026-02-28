@@ -105,6 +105,19 @@ export default eslint(
       'perfectionist/sort-objects': 0,
     },
   },
+  // model-bank aiModels - enforce English-only descriptions
+  {
+    files: ['packages/model-bank/src/aiModels/**/*'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          message: 'Chinese characters are not allowed in aiModels files. Use English instead.',
+          selector: 'Literal[value=/[\\u4e00-\\u9fff]/]',
+        },
+      ],
+    },
+  },
   // CLI scripts
   {
     files: ['scripts/**/*'],
