@@ -1,4 +1,5 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import { LOADING_FLAT } from '@lobechat/const';
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
@@ -14,7 +15,6 @@ import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
-import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
 import { AiModelModel } from '@/database/models/aiModel';
 import { MessageModel } from '@/database/models/message';
@@ -26,7 +26,6 @@ import {
   type EvalContext,
   type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
-import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
