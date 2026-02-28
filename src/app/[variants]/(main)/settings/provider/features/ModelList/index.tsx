@@ -93,6 +93,12 @@ const Content = memo<ContentProps>(({ id }) => {
         label: formatTabLabel(t('providerModels.tabs.image'), modelCounts.image),
       },
       {
+        count: modelCounts.video,
+        icon: <Icon icon={VideoIcon} size={16} />,
+        key: 'video',
+        label: formatTabLabel(t('providerModels.tabs.video'), modelCounts.video),
+      },
+      {
         count: modelCounts.embedding,
         icon: <Icon icon={BoltIcon} size={16} />,
         key: 'embedding',
@@ -109,12 +115,6 @@ const Content = memo<ContentProps>(({ id }) => {
         icon: <Icon icon={AudioLines} size={16} />,
         key: 'tts',
         label: formatTabLabel(t('providerModels.tabs.tts'), modelCounts.tts),
-      },
-      {
-        count: modelCounts.video,
-        icon: <Icon icon={VideoIcon} size={16} />,
-        key: 'video',
-        label: formatTabLabel(t('providerModels.tabs.video'), modelCounts.video),
       },
     ];
 
