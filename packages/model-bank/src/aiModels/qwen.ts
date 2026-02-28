@@ -833,11 +833,11 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-{
+  {
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true
+      vision: true,
     },
     contextWindowTokens: 262_144,
     description:
@@ -881,11 +881,11 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-{
+  {
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true
+      vision: true,
     },
     contextWindowTokens: 262_144,
     description:
@@ -929,11 +929,11 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-{
+  {
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true
+      vision: true,
     },
     contextWindowTokens: 262_144,
     description:
@@ -1344,7 +1344,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-{
+  {
     abilities: {
       functionCall: true,
       reasoning: true,
@@ -2775,6 +2775,7 @@ const qwenImageModels: AIImageModelCard[] = [
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Max',
     id: 'qwen-image-edit-max',
+    enabled: true,
     organization: 'Qwen',
     parameters: {
       height: { default: 1536, max: 2048, min: 512, step: 1 },
@@ -2798,6 +2799,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Plus',
+    enabled: true,
     id: 'qwen-image-edit-plus',
     organization: 'Qwen',
     parameters: {
@@ -2822,6 +2824,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
     displayName: 'Qwen Image Edit',
+    enabled: true,
     id: 'qwen-image-edit',
     organization: 'Qwen',
     parameters: {
@@ -2844,6 +2847,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Generation Model (Max series) delivers enhanced realism and visual naturalness compared with the Plus series, effectively reducing AI-generated artifacts, and demonstrating outstanding performance in human appearance, texture details, and text rendering.',
     displayName: 'Qwen Image Max',
+    enabled: true,
     id: 'qwen-image-max',
     organization: 'Qwen',
     parameters: {
@@ -2867,6 +2871,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'It supports a wide range of artistic styles and is particularly proficient at rendering complex text within images, enabling integrated image–text layout design.',
     displayName: 'Qwen Image Plus',
+    enabled: true,
     id: 'qwen-image-plus',
     organization: 'Qwen',
     parameters: {
@@ -2890,6 +2895,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
     displayName: 'Qwen Image',
+    enabled: true,
     id: 'qwen-image',
     organization: 'Qwen',
     parameters: {
@@ -2912,6 +2918,7 @@ const qwenImageModels: AIImageModelCard[] = [
   {
     description: 'Wanxiang 2.6 Image supports image editing and mixed image–text layout output.',
     displayName: 'Wanxiang2.6 Image',
+    enabled: true,
     id: 'wan2.6-image',
     organization: 'Qwen',
     parameters: {
@@ -2936,6 +2943,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Wanxiang 2.6 T2I supports flexible selection of image dimensions within total pixel area and aspect ratio constraints (same as Wanxiang 2.5).',
     displayName: 'Wanxiang2.6 T2I',
+    enabled: true,
     id: 'wan2.6-t2i',
     organization: 'Qwen',
     parameters: {

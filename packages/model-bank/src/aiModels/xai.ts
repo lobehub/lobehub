@@ -373,23 +373,6 @@ const xaiImageModels: AIImageModelCard[] = [
     releasedAt: '2026-01-28',
     type: 'image',
   },
-  {
-    description:
-      'Our latest image generation model creates vivid, realistic images from prompts and excels in marketing, social media, and entertainment use cases.',
-    displayName: 'Grok 2 Image 1212',
-    enabled: true,
-    id: 'grok-2-image-1212',
-    parameters: {
-      prompt: {
-        default: '',
-      },
-    },
-    pricing: {
-      units: [{ name: 'imageGeneration', rate: 0.07, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-12-12',
-    type: 'image',
-  },
 ];
 
 export const allModels = [...xaiChatModels, ...xaiImageModels];
