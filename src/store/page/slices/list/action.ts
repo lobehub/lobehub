@@ -13,7 +13,20 @@ import { type PageStore } from '../../store';
 const n = setNamespace('page/list');
 
 const ALLOWED_PAGE_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
-const ALLOWED_PAGE_FILE_TYPES = new Set(['custom/document', 'application/pdf']);
+// Determine which fileTypes should be shown in the Page Explorer.
+// This includes both standard MIME types and internal application identifiers:
+// - 'custom/document': Standard newly created or uploaded pages
+// - 'application/pdf': Parsed PDF documents
+// - 'markdown': Pure markdown uploads
+// - 'article', 'note', 'report': Extended page types generated via Agent Skills
+const ALLOWED_PAGE_FILE_TYPES = new Set([
+  'custom/document',
+  'application/pdf',
+  'markdown',
+  'article',
+  'note',
+  'report',
+]);
 
 /**
  * Check if a page should be displayed in the page list

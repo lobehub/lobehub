@@ -13,6 +13,7 @@ import { editorSelectors } from '@/store/document/slices/editor';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { usePageStore } from '@/store/page';
 
 import { usePageEditorStore, useStoreApi } from '../store';
 
@@ -33,6 +34,7 @@ export const useMenu = (): { menuItems: any[] } => {
   );
 
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
+  const fetchDocuments = usePageStore((s) => s.fetchDocuments);
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
@@ -50,6 +52,14 @@ export const useMenu = (): { menuItems: any[] } => {
     } catch (error) {
       console.error('Failed to duplicate page:', error);
       message.error(t('pageEditor.duplicateError'));
+      return;
+    }
+
+    // Refresh list independently after successful duplication
+    try {
+      await fetchDocuments();
+    } catch (error) {
+      console.warn('Failed to refresh page list after duplication:', error);
     }
   };
 
