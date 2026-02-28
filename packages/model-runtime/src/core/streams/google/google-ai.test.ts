@@ -852,6 +852,195 @@ describe('GoogleGenerativeAIStream', () => {
         ].map((i) => i + '\n'),
       );
     });
+
+    it('should handle groundingMetadata with image search results', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const data = [
+        {
+          text: 'Here are some images',
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'Here are some images' }],
+                role: 'model',
+              },
+              finishReason: 'STOP',
+              index: 0,
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    web: {
+                      uri: 'https://example.com/article',
+                      title: 'example.com',
+                    },
+                  },
+                  {
+                    image: {
+                      imageUri: 'https://example.com/photo.jpg',
+                      sourceUri: 'https://example.com/page',
+                      title: 'Example Photo',
+                      domain: 'example.com',
+                    },
+                  },
+                  {
+                    image: {
+                      imageUri: 'https://another.com/img.png',
+                      sourceUri: 'https://another.com/gallery',
+                      title: 'Another Image',
+                      domain: 'another.com',
+                    },
+                  },
+                ],
+                webSearchQueries: ['example images'],
+                imageSearchQueries: ['example photo search'],
+              },
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 5,
+            candidatesTokenCount: 10,
+            totalTokenCount: 15,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 5 }],
+          },
+          modelVersion: 'gemini-3.1-flash-image-preview',
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => controller.enqueue(item));
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      expect(chunks).toEqual(
+        [
+          'id: chat_1',
+          'event: text',
+          'data: "Here are some images"\n',
+
+          'id: chat_1',
+          'event: grounding',
+          `data: ${JSON.stringify({
+            citations: [
+              {
+                favicon: 'example.com',
+                title: 'example.com',
+                url: 'https://example.com/article',
+              },
+            ],
+            imageResults: [
+              {
+                domain: 'example.com',
+                imageUri: 'https://example.com/photo.jpg',
+                sourceUri: 'https://example.com/page',
+                title: 'Example Photo',
+              },
+              {
+                domain: 'another.com',
+                imageUri: 'https://another.com/img.png',
+                sourceUri: 'https://another.com/gallery',
+                title: 'Another Image',
+              },
+            ],
+            imageSearchQueries: ['example photo search'],
+            searchQueries: ['example images'],
+          })}\n`,
+
+          'id: chat_1',
+          'event: stop',
+          `data: "STOP"\n`,
+
+          'id: chat_1',
+          'event: usage',
+          `data: {"inputTextTokens":5,"outputImageTokens":0,"outputTextTokens":10,"totalInputTokens":5,"totalOutputTokens":10,"totalTokens":15}\n`,
+        ].map((i) => i + '\n'),
+      );
+    });
+
+    it('should handle groundingMetadata with only image search results (no web)', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const data = [
+        {
+          text: 'Image only results',
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'Image only results' }],
+                role: 'model',
+              },
+              finishReason: 'STOP',
+              index: 0,
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    image: {
+                      imageUri: 'https://img.example.com/cat.jpg',
+                      sourceUri: 'https://example.com/cats',
+                      title: 'Cat Photo',
+                      domain: 'example.com',
+                    },
+                  },
+                ],
+                imageSearchQueries: ['cute cats'],
+              },
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 3,
+            candidatesTokenCount: 5,
+            totalTokenCount: 8,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
+          },
+          modelVersion: 'gemini-3.1-flash-image-preview',
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => controller.enqueue(item));
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      expect(chunks).toEqual(
+        [
+          'id: chat_1',
+          'event: text',
+          'data: "Image only results"\n',
+
+          'id: chat_1',
+          'event: grounding',
+          `data: ${JSON.stringify({
+            imageResults: [
+              {
+                domain: 'example.com',
+                imageUri: 'https://img.example.com/cat.jpg',
+                sourceUri: 'https://example.com/cats',
+                title: 'Cat Photo',
+              },
+            ],
+            imageSearchQueries: ['cute cats'],
+          })}\n`,
+
+          'id: chat_1',
+          'event: stop',
+          `data: "STOP"\n`,
+
+          'id: chat_1',
+          'event: usage',
+          `data: {"inputTextTokens":3,"outputImageTokens":0,"outputTextTokens":5,"totalInputTokens":3,"totalOutputTokens":5,"totalTokens":8}\n`,
+        ].map((i) => i + '\n'),
+      );
+    });
   });
 
   describe('Tool calls', () => {
