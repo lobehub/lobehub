@@ -230,12 +230,17 @@ export class ResourceActionImpl {
     if (ids.length === 0) return;
 
     // 1. Read sourceType from resourceMap for each ID (client-side, no API call)
-    const { resourceMap, resourceList } = this.#get();
+    const { resourceMap, resourceList, fileList } = this.#get();
+
+    // Build a Map from fileList once (O(n)) so the per-id fallback lookup is O(1)
+    // rather than O(n) via Array.find, keeping the overall loop O(n) instead of O(n²).
+    const fileListMap = new Map(fileList.map((f) => [f.id, f]));
+
     const fileIds: string[] = [];
     const documentIds: string[] = [];
 
     for (const id of ids) {
-      const resource = resourceMap.get(id);
+      const resource = resourceMap.get(id) ?? fileListMap.get(id);
       if (resource?.sourceType === 'document') {
         documentIds.push(id);
       } else {

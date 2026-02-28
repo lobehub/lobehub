@@ -176,7 +176,7 @@ export class KnowledgeRepo {
         'file' as source_type
       FROM ${files} f
       LEFT JOIN ${documents} d
-        ON f.id = d.file_id
+        ON f.id = d.file_id AND d.source_type = 'file'
       WHERE f.user_id = ${this.userId}
         AND NOT EXISTS (
           SELECT 1 FROM ${knowledgeBaseFiles}
@@ -387,7 +387,7 @@ export class KnowledgeRepo {
           ON f.id = kbf.file_id
           AND kbf.knowledge_base_id = ${knowledgeBaseId}
         LEFT JOIN ${documents} d
-          ON f.id = d.file_id
+          ON f.id = d.file_id AND d.source_type = 'file'
         WHERE ${sql.join(kbWhereConditions, sql` AND `)}
       `;
     }
@@ -422,7 +422,7 @@ export class KnowledgeRepo {
         'file' as source_type
       FROM ${files} f
       LEFT JOIN ${documents} d
-        ON f.id = d.file_id
+        ON f.id = d.file_id AND d.source_type = 'file'
       WHERE ${sql.join(whereConditions, sql` AND `)}
     `;
   }

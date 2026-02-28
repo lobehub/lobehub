@@ -172,7 +172,10 @@ export class DocumentService {
     }
 
     // Delete the associated file record if it exists
-    if (document.fileId) {
+    // Skip cascade deletion when sourceType === 'file': those fileIds point to the
+    // user's original upload (e.g. a Demo PDF), which must NOT be removed when only
+    // the derived document entry is deleted.
+    if (document.fileId && document.sourceType !== 'file') {
       await this.fileModel.delete(document.fileId);
     }
 
