@@ -104,7 +104,7 @@ export class CrudActionImpl {
       metadata: {},
       source: 'document',
       sourceType: DocumentSourceType.EDITOR,
-      title: title,
+      title,
       totalCharCount: 0,
       totalLineCount: 0,
       updatedAt: now,
@@ -199,6 +199,8 @@ export class CrudActionImpl {
     };
 
     this.#get().internal_dispatchDocuments({ document: editorPage, type: 'addDocument' });
+
+    await this.#get().refreshDocuments();
 
     return newPage;
   };
