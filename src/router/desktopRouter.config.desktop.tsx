@@ -4,9 +4,6 @@ import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
-import { type RouteConfig } from '@/utils/router';
-import { ErrorBoundary, redirectElement } from '@/utils/router';
-
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
 import DesktopMainLayout from '@/routes/(main)/_layout';
@@ -68,6 +65,8 @@ import VideoPage from '@/routes/(main)/video';
 import DesktopVideoLayout from '@/routes/(main)/video/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
+import { type RouteConfig } from '@/utils/router';
+import { ErrorBoundary, redirectElement } from '@/utils/router';
 
 // Desktop router configuration — all sync imports for Electron local build
 export const desktopRoutes: RouteConfig[] = [
