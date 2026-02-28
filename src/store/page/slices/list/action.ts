@@ -13,7 +13,14 @@ import { type PageStore } from '../../store';
 const n = setNamespace('page/list');
 
 const ALLOWED_PAGE_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
-const ALLOWED_PAGE_FILE_TYPES = new Set(['custom/document', 'application/pdf']);
+const ALLOWED_PAGE_FILE_TYPES = new Set([
+  'custom/document',
+  'application/pdf',
+  'markdown',
+  'article',
+  'note',
+  'report',
+]);
 
 /**
  * Check if a page should be displayed in the page list
