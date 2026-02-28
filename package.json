@@ -234,7 +234,7 @@
     "@lobehub/chat-plugins-gateway": "^1.9.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^3.16.1",
-    "@lobehub/icons": "^4.1.0",
+    "@lobehub/icons": "^4.9.0",
     "@lobehub/market-sdk": "^0.30.3",
     "@lobehub/tts": "^4.0.2",
     "@lobehub/ui": "^4.38.4",
