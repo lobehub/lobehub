@@ -9,6 +9,96 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'GLM-4.6V is an important iteration of the GLM series in the multimodal direction. It increases the training context window to 128k tokens, achieves SOTA in visual understanding accuracy among models of similar parameter scale, and for the first time natively integrates Function Call (tool calling) capability into a vision model within the model architecture, bridging the path from "visual perception" to "executable actions". It provides a unified technical foundation for multimodal Agents in real business scenarios.',
+    displayName: 'GLM-4.6V',
+    enabled: true,
+    id: 'glm-4.6v',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 0.2,
+              '[0.032, infinity]': 0.4,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1,
+              '[0.032, infinity]': 2,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 3,
+              '[0.032, infinity]': 6,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        { name: 'textInput_cacheWrite', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'GLM-4.6V-Flash is the free version of GLM-4.6V, an important iteration of the GLM series in the multimodal direction, supporting the toggle of thinking mode on or off.',
+    displayName: 'GLM-4.6V-Flash',
+    enabled: true,
+    id: 'glm-4.6v-flash',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     contextWindowTokens: 200_000,
     description:
@@ -1019,7 +1109,7 @@ const zhipuChatModels: AIChatModelCard[] = [
       'GLM-4V-Flash focuses on efficient single-image understanding for fast analysis scenarios such as real-time or batch image processing.',
     displayName: 'GLM-4V-Flash',
     id: 'glm-4v-flash',
-    maxOutput: 8192,
+    maxOutput: 1024,
     pricing: {
       currency: 'CNY',
       units: [
@@ -1039,6 +1129,7 @@ const zhipuChatModels: AIChatModelCard[] = [
       'GLM-4V-Plus understands video and multiple images, suitable for multimodal tasks.',
     displayName: 'GLM-4V-Plus-0111',
     id: 'glm-4v-plus-0111',
+    maxOutput: 8192,
     pricing: {
       currency: 'CNY',
       units: [

@@ -384,7 +384,7 @@ const giteeaiImageModels: AIImageModelCard[] = [
       'HiDream-E1-Full is an open-source multimodal image editing model from HiDream.ai, based on an advanced Diffusion Transformer architecture and strong language understanding (built-in LLaMA 3.1-8B-Instruct). It supports natural-language-driven image generation, style transfer, local edits, and repainting, with excellent image-text understanding and execution.',
     displayName: 'HiDream-E1-Full',
     enabled: true,
-    id: 'HiDream-I1-Full',
+    id: 'HiDream-E1-Full',
     parameters: {
       imageUrl: { default: null },
       prompt: {

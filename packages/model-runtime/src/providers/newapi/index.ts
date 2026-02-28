@@ -16,6 +16,7 @@ export interface NewAPIModelCard {
 
 export interface NewAPIPricing {
   completion_ratio?: number;
+  description?: string;
   enable_groups: string[];
   model_name: string;
   model_price?: number;
@@ -66,9 +67,10 @@ const fetchPricing = async (
 
       return await parsePricingResponse(proxyResponse);
     } else {
-      // In server environment, fetch directly
+      // In server environment, fetch directly with proper encoding headers
       const pricingResponse = await fetch(pricingUrl, {
         headers: {
+          Accept: 'application/json; charset=utf-8',
           Authorization: `Bearer ${apiKey}`,
         },
       });
@@ -96,15 +98,62 @@ export const params = {
     const modelsPage = (await openAIClient.models.list()) as any;
     const modelList: NewAPIModelCard[] = modelsPage.data || [];
 
+    // Create a set of existing model IDs for quick lookup
+    const existingModelIds = new Set(modelList.map((m) => m.id));
+
     // Try to get pricing information to enrich model details
     const pricingMap: Map<string, NewAPIPricing> = new Map();
 
     const pricingList = await fetchPricing(`${baseURL}/api/pricing`, openAIClient.apiKey || '');
-    if (pricingList) {
+    if (Array.isArray(pricingList)) {
       pricingList.forEach((pricing) => {
         pricingMap.set(pricing.model_name, pricing);
       });
     }
+
+    const calculatePricing = (pricing: NewAPIPricing) => {
+      let inputPrice: number | undefined;
+      let outputPrice: number | undefined;
+
+      if (pricing.quota_type === 0) {
+        // Pay-per-token
+        if (pricing.model_price && pricing.model_price > 0) {
+          // model_price is a direct price value; need to confirm its unit.
+          // Assumption: model_price is the price per 1,000 tokens (i.e., $/1K tokens).
+          // To convert to price per 1,000,000 tokens ($/1M tokens), multiply by 1,000,000 / 1,000 = 1,000.
+          // Since the base price is $0.002/1K tokens, multiplying by 2 gives $2/1M tokens.
+          // Therefore, inputPrice = model_price * 2 converts the price to $/1M tokens for LobeChat.
+          inputPrice = pricing.model_price * 2;
+        } else if (pricing.model_ratio) {
+          // model_ratio × $0.002/1K = model_ratio × $2/1M
+          inputPrice = pricing.model_ratio * 2; // Convert to $/1M tokens
+        }
+
+        if (inputPrice !== undefined) {
+          // Calculate output price
+          outputPrice = inputPrice * (pricing.completion_ratio || 1);
+
+          return {
+            units: [
+              {
+                name: 'textInput',
+                rate: inputPrice,
+                strategy: 'fixed',
+                unit: 'millionTokens',
+              },
+              {
+                name: 'textOutput',
+                rate: outputPrice,
+                strategy: 'fixed',
+                unit: 'millionTokens',
+              },
+            ],
+          };
+        }
+      }
+      // quota_type === 1 pay-per-call is not currently supported
+      return undefined;
+    };
 
     // Process the model list: determine the provider for each model based on priority rules
     const enrichedModelList = modelList.map((model) => {
@@ -121,52 +170,29 @@ export const params = {
         //
         // LobeChat required format: USD per million tokens
 
-        let inputPrice: number | undefined;
-        let outputPrice: number | undefined;
-
-        if (pricing.quota_type === 0) {
-          // Pay-per-token
-          if (pricing.model_price && pricing.model_price > 0) {
-            // model_price is a direct price value; need to confirm its unit.
-            // Assumption: model_price is the price per 1,000 tokens (i.e., $/1K tokens).
-            // To convert to price per 1,000,000 tokens ($/1M tokens), multiply by 1,000,000 / 1,000 = 1,000.
-            // Since the base price is $0.002/1K tokens, multiplying by 2 gives $2/1M tokens.
-            // Therefore, inputPrice = model_price * 2 converts the price to $/1M tokens for LobeChat.
-            inputPrice = pricing.model_price * 2;
-          } else if (pricing.model_ratio) {
-            // model_ratio × $0.002/1K = model_ratio × $2/1M
-            inputPrice = pricing.model_ratio * 2; // Convert to $/1M tokens
-          }
-
-          if (inputPrice !== undefined) {
-            // Calculate output price
-            outputPrice = inputPrice * (pricing.completion_ratio || 1);
-
-            enhancedModel.pricing = {
-              units: [
-                {
-                  name: 'textInput',
-                  rate: inputPrice,
-                  strategy: 'fixed',
-                  unit: 'millionTokens',
-                },
-                {
-                  name: 'textOutput',
-                  rate: outputPrice,
-                  strategy: 'fixed',
-                  unit: 'millionTokens',
-                },
-              ],
-            };
-          }
+        const pricingData = calculatePricing(pricing);
+        if (pricingData) {
+          enhancedModel.pricing = pricingData;
         }
-        // quota_type === 1 pay-per-call is not currently supported
       }
 
       return enhancedModel;
     });
 
-    return processMultiProviderModelList(enrichedModelList, 'newapi');
+    // Add models from pricing list that are not in the models list
+    const additionalModels: any[] = [];
+    pricingMap.forEach((pricing, modelName) => {
+      if (!existingModelIds.has(modelName)) {
+        const pricingData = calculatePricing(pricing);
+        additionalModels.push({
+          ...(pricing.description && { description: pricing.description }),
+          id: modelName,
+          ...(pricingData && { pricing: pricingData }),
+        });
+      }
+    });
+
+    return processMultiProviderModelList([...enrichedModelList, ...additionalModels], 'newapi');
   },
   routers: (options) => {
     const userBaseURL = options.baseURL?.replace(/\/v\d+[a-z]*\/?$/, '') || '';

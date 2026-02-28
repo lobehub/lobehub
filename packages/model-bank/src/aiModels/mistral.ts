@@ -8,9 +8,44 @@ const mistralChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 262_144,
     description:
-      'Mistral Medium 3 delivers state-of-the-art performance at 8× lower cost and simplifies enterprise deployment.',
+      'Devstral 2 is an enterprise-level text model that excels at using tools to explore codebases, edit multiple files, and power software engineering agents.',
+    displayName: 'Devstral 2',
+    id: 'devstral-2512',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-09',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 262_144,
+    description: 'Devstral Small 2 excels at using tools to explore code bases, edit multiple files, and power software engineering agents.',
+    displayName: 'Devstral Small 2',
+    id: 'labs-devstral-small-2512',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-09',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'Mistral Medium 3.1 delivers state-of-the-art performance at 8× lower cost and simplifies enterprise deployment.',
     displayName: 'Mistral Medium 3.1',
     enabled: true,
     id: 'mistral-medium-latest',
@@ -27,7 +62,7 @@ const mistralChatModels: AIChatModelCard[] = [
       reasoning: true,
       vision: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 131_072,
     description:
       'Magistral Medium 1.2 is a frontier reasoning model from Mistral AI (Sep 2025) with vision support.',
     displayName: 'Magistral Medium 1.2',
@@ -46,7 +81,7 @@ const mistralChatModels: AIChatModelCard[] = [
       reasoning: true,
       vision: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 131_072,
     description:
       'Magistral Small 1.2 is an open-source small reasoning model from Mistral AI (Sep 2025) with vision support.',
     displayName: 'Magistral Small 1.2',
@@ -64,7 +99,7 @@ const mistralChatModels: AIChatModelCard[] = [
       functionCall: true,
       vision: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 131_072,
     description:
       'Mistral Nemo is a 12B model co-developed with Nvidia, offering strong reasoning and coding performance with easy integration.',
     displayName: 'Mistral Nemo',
@@ -81,7 +116,7 @@ const mistralChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 131_072,
     description:
       'Mistral Small is a cost-effective, fast, and reliable option for translation, summarization, and sentiment analysis.',
     displayName: 'Mistral Small 3.2',
