@@ -1,5 +1,8 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
-import type { LobeAgentChatConfig, LobeAgentTTSConfig } from '@lobechat/types';
+import type {
+  LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
+  LobeAgentTTSConfig,
+} from '@lobechat/types';
 import { AgentChatConfigSchema } from '@lobechat/types';
 import {
   boolean,
@@ -47,6 +50,7 @@ export const agents = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
+    agencyConfig: jsonb('agency_config').$type<LobeAgentAgencyConfig>(),
     chatConfig: jsonb('chat_config').$type<LobeAgentChatConfig>(),
 
     fewShots: jsonb('few_shots'),

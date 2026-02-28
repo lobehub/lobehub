@@ -3,10 +3,15 @@ import type { LLMParams } from 'model-bank';
 import type { FileItem } from '../files';
 import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
+import type { LobeAgentAgencyConfig } from './agencyConfig';
 import type { LobeAgentChatConfig } from './chatConfig';
 import type { LobeAgentTTSConfig } from './tts';
 
 export interface LobeAgentConfig {
+  /**
+   * Agency configuration for external platform bot integrations (Discord, Slack, etc.)
+   */
+  agencyConfig?: LobeAgentAgencyConfig;
   avatar?: string;
   backgroundColor?: string;
 
@@ -82,6 +87,7 @@ export type LobeAgentConfigKeys =
 
 // Agent database item type (independent from schema)
 export interface AgentItem {
+  agencyConfig?: LobeAgentAgencyConfig | null;
   avatar?: string | null;
   backgroundColor?: string | null;
   chatConfig?: LobeAgentChatConfig | null;
