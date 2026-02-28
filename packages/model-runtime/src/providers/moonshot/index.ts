@@ -18,6 +18,7 @@ import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 export interface MoonshotModelCard {
   context_length?: number;
   id: string;
+  supports_image_in?: boolean;
 }
 
 const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
@@ -169,6 +170,7 @@ const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<Chat
     const processedList = modelList.map((model) => ({
       contextWindowTokens: model.context_length,
       id: model.id,
+      vision: model.supports_image_in,
     }));
 
     return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
