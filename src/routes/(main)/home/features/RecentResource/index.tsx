@@ -2,13 +2,13 @@
 
 import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { Clock, MoreHorizontal } from 'lucide-react';
-import { memo,Suspense } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useInitRecentResource } from '@/hooks/useInitRecentResource';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
 import { FilesTabs } from '@/types/files';

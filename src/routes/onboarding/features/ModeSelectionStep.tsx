@@ -7,8 +7,8 @@ import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import { useIsDark } from '@/hooks/useIsDark';
+import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import { useUserStore } from '@/store/user';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

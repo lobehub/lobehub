@@ -3,9 +3,9 @@
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo, useState } from 'react';
 
-import ShareButton from '@/routes/(main)/agent/features/Conversation/Header/ShareButton';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import ShareButton from '@/routes/(main)/agent/features/Conversation/Header/ShareButton';
 
 import ChatHeaderTitle from './ChatHeaderTitle';
 

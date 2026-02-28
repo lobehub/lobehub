@@ -2,10 +2,10 @@ import { Avatar, Block, Center, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 
-import Time from '@/routes/(main)/home/features/components/Time';
-import { RECENT_BLOCK_SIZE } from '@/routes/(main)/home/features/const';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
+import Time from '@/routes/(main)/home/features/components/Time';
+import { RECENT_BLOCK_SIZE } from '@/routes/(main)/home/features/const';
 import { type RecentTopic } from '@/types/topic';
 
 const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type }) => {

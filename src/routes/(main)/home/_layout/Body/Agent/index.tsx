@@ -5,9 +5,9 @@ import React, { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useCreateMenuItems } from '../../hooks';
 import Actions from './Actions';
 import List from './List';

@@ -4,9 +4,9 @@ import { Block, Center, Flexbox, Image, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
+import FileIcon from '@/components/FileIcon';
 import Time from '@/routes/(main)/home/features/components/Time';
 import { RECENT_BLOCK_SIZE } from '@/routes/(main)/home/features/const';
-import FileIcon from '@/components/FileIcon';
 import { type FileListItem } from '@/types/files';
 import { formatSize } from '@/utils/format';
 

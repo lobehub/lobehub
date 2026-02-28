@@ -6,6 +6,8 @@ import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { useQueryState } from '@/hooks/useQueryParam';
 import CateTag from '@/routes/(main)/memory/features/CateTag';
 import DetailLoading from '@/routes/(main)/memory/features/DetailLoading';
 import DetailPanel from '@/routes/(main)/memory/features/DetailPanel';
@@ -14,8 +16,6 @@ import HighlightedContent from '@/routes/(main)/memory/features/HighlightedConte
 import ProgressIcon from '@/routes/(main)/memory/features/ProgressIcon';
 import SourceLink from '@/routes/(main)/memory/features/SourceLink';
 import Time from '@/routes/(main)/memory/features/Time';
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
-import { useQueryState } from '@/hooks/useQueryParam';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { LayersEnum } from '@/types/userMemory';
 

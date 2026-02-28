@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
-import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { isDesktop } from '@/const/version';
+import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
 import Conversation from './features/Conversation';
 import Desktop from './features/Desktop';

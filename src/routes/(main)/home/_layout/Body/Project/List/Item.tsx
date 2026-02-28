@@ -1,9 +1,9 @@
 import { BoxIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { useKnowledgeBaseStore } from '@/store/library';
 
-import NavItem from '@/features/NavPanel/components/NavItem';
 import Actions from './Actions';
 import Editing from './Editing';
 import { useProjectItemDropdownMenu } from './useDropdownMenu';

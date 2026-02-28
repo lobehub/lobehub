@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import MemoryEmpty from '@/routes/(main)/memory/features/MemoryEmpty';
 import { useQueryState } from '@/hooks/useQueryParam';
+import MemoryEmpty from '@/routes/(main)/memory/features/MemoryEmpty';
 import { useGlobalStore } from '@/store/global';
 import { useUserMemoryStore } from '@/store/userMemory';
 

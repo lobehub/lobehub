@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useAddFilesToKnowledgeBaseModal } from '@/features/LibraryModal';
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
 import {
   useResourceManagerFetchFolderBreadcrumb,
@@ -10,7 +11,6 @@ import {
 } from '@/routes/(main)/resource/features/store';
 import { type MultiSelectActionType } from '@/routes/(main)/resource/features/store/action';
 import { selectors, sortFileList } from '@/routes/(main)/resource/features/store/selectors';
-import { useAddFilesToKnowledgeBaseModal } from '@/features/LibraryModal';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type FilesTabs } from '@/types/files';
 

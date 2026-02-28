@@ -9,8 +9,8 @@ import { Brain } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { useClientDataSWR } from '@/libs/swr';
+import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { usageService } from '@/services/usage';
 
 import {

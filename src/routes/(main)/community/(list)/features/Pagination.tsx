@@ -5,8 +5,8 @@ import { createStaticStyles, useResponsive } from 'antd-style';
 import { memo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useQuery } from '@/hooks/useQuery';
+import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { type DiscoverTab } from '@/types/discover';
 
 const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';

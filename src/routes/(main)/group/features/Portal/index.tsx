@@ -1,8 +1,8 @@
 import { Suspense } from 'react';
 
+import Loading from '@/components/Loading/BrandTextLoading';
 import Portal from '@/routes/(main)/agent/features/Portal/features/Portal';
 import PortalPanel from '@/routes/(main)/agent/features/Portal/features/PortalPanel';
-import Loading from '@/components/Loading/BrandTextLoading';
 
 const ChatPortal = () => {
   return (

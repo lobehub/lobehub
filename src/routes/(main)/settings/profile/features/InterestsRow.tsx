@@ -7,8 +7,8 @@ import { AnimatePresence, m as motion } from 'motion/react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
+import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 

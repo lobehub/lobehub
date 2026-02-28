@@ -5,8 +5,8 @@ import { Store } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { createSkillStoreModal } from '@/features/SkillStore';
+import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
 import SkillList from './features/SkillList';
 

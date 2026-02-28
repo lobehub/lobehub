@@ -5,9 +5,9 @@ import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import RepoIcon from '@/components/LibIcon';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useKnowledgeBaseStore } from '@/store/library';
 
 import Actions from './Actions';
@@ -23,76 +23,78 @@ interface KnowledgeBaseItemProps {
   style?: CSSProperties;
 }
 
-const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(({ id, name, description, active, style, className }) => {
-  const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
-  const navigate = useNavigate();
+const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
+  ({ id, name, description, active, style, className }) => {
+    const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
+    const navigate = useNavigate();
 
-  const [editing, isLoading] = useKnowledgeBaseStore((s) => [
-    s.knowledgeBaseRenamingId === id,
-    s.knowledgeBaseLoadingIds.includes(id),
-  ]);
+    const [editing, isLoading] = useKnowledgeBaseStore((s) => [
+      s.knowledgeBaseRenamingId === id,
+      s.knowledgeBaseLoadingIds.includes(id),
+    ]);
 
-  const toggleEditing = useCallback(
-    (visible?: boolean) => {
-      useKnowledgeBaseStore.setState(
-        { knowledgeBaseRenamingId: visible ? id : null },
-        false,
-        'toggleEditing',
-      );
-    },
-    [id],
-  );
+    const toggleEditing = useCallback(
+      (visible?: boolean) => {
+        useKnowledgeBaseStore.setState(
+          { knowledgeBaseRenamingId: visible ? id : null },
+          false,
+          'toggleEditing',
+        );
+      },
+      [id],
+    );
 
-  const handleClick = useCallback(() => {
-    if (!editing) {
-      navigate(`/resource/library/${id}`);
-      setLibraryId(id);
-    }
-  }, [editing, navigate, id]);
-
-  const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.altKey) {
-        toggleEditing(true);
+    const handleClick = useCallback(() => {
+      if (!editing) {
+        navigate(`/resource/library/${id}`);
+        setLibraryId(id);
       }
-    },
-    [toggleEditing],
-  );
+    }, [editing, navigate, id]);
 
-  // Icon (show loader when updating)
-  const icon = useMemo(() => {
-    if (isLoading) {
-      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
-    }
-    return <RepoIcon size={18} />;
-  }, [isLoading]);
+    const handleDoubleClick = useCallback(
+      (e: React.MouseEvent) => {
+        if (e.altKey) {
+          toggleEditing(true);
+        }
+      },
+      [toggleEditing],
+    );
 
-  const dropdownMenu = useDropdownMenu({
-    description,
-    id,
-    name,
-    toggleEditing,
-  });
+    // Icon (show loader when updating)
+    const icon = useMemo(() => {
+      if (isLoading) {
+        return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
+      }
+      return <RepoIcon size={18} />;
+    }, [isLoading]);
 
-  return (
-    <>
-      <NavItem
-        actions={<Actions dropdownMenu={dropdownMenu} />}
-        active={active}
-        className={className}
-        contextMenuItems={dropdownMenu}
-        disabled={editing}
-        icon={icon}
-        key={id}
-        loading={isLoading}
-        style={style}
-        title={name}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-      />
-      <Editing id={id} name={name} toggleEditing={toggleEditing} />
-    </>
-  );
-});
+    const dropdownMenu = useDropdownMenu({
+      description,
+      id,
+      name,
+      toggleEditing,
+    });
+
+    return (
+      <>
+        <NavItem
+          actions={<Actions dropdownMenu={dropdownMenu} />}
+          active={active}
+          className={className}
+          contextMenuItems={dropdownMenu}
+          disabled={editing}
+          icon={icon}
+          key={id}
+          loading={isLoading}
+          style={style}
+          title={name}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+        />
+        <Editing id={id} name={name} toggleEditing={toggleEditing} />
+      </>
+    );
+  },
+);
 
 export default KnowledgeBaseItem;

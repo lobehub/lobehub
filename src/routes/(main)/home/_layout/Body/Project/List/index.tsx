@@ -6,10 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { LIBRARY_URL } from '@/const/url';
-import { useKnowledgeBaseStore } from '@/store/library';
-
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useKnowledgeBaseStore } from '@/store/library';
+
 import { useProjectMenuItems } from '../../../hooks';
 import Item from './Item';
 

@@ -7,8 +7,8 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import ModelSelect from '@/features/ModelSelect';
+import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';

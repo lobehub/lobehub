@@ -5,9 +5,9 @@ import qs from 'query-string';
 import { memo, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { withSuspense } from '@/components/withSuspense';
 import { useQuery } from '@/hooks/useQuery';
+import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';

@@ -8,10 +8,10 @@ import { type FC } from 'react';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Image from '@/libs/next/Image';
 import { useDragAndDrop } from '@/routes/(main)/image/_layout/ConfigPanel/hooks/useDragAndDrop';
 import { useUploadFilesValidation } from '@/routes/(main)/image/_layout/ConfigPanel/hooks/useUploadFilesValidation';
 import { configPanelStyles } from '@/routes/(main)/image/_layout/ConfigPanel/style';
-import Image from '@/libs/next/Image';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
 

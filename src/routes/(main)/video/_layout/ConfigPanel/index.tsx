@@ -16,8 +16,8 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AspectRatioSelect from '@/routes/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
 import { useFetchAiVideoConfig } from '@/hooks/useFetchAiVideoConfig';
+import AspectRatioSelect from '@/routes/(main)/image/_layout/ConfigPanel/components/AspectRatioSelect';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
 import { useVideoStore } from '@/store/video/store';

@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { getRouteById } from '@/config/routes';
+import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
@@ -15,9 +17,6 @@ import {
   serverConfigSelectors,
   useServerConfigStore,
 } from '@/store/serverConfig';
-
-import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
-import NavItem from '@/features/NavPanel/components/NavItem';
 
 interface Item {
   hidden?: boolean | undefined;

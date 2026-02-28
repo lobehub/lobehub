@@ -5,8 +5,8 @@ import isEqual from 'fast-deep-equal';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { agentGroupSelectors, useAgentGroupStore } from '@/store/agentGroup';

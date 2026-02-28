@@ -6,9 +6,9 @@ import { startCase } from 'es-toolkit/compat';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useToc } from '@/routes/(main)/community/(detail)/features/Toc/useToc';
 import { useDetailContext } from '@/features/MCPPluginDetail/DetailProvider';
 import { useQuery } from '@/hooks/useQuery';
+import { useToc } from '@/routes/(main)/community/(detail)/features/Toc/useToc';
 import { McpNavKey } from '@/types/discover';
 
 import Title from '../../../../../features/Title';

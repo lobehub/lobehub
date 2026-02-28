@@ -3,10 +3,10 @@
 import { memo, useLayoutEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
-import Container from '@/routes/(main)/resource/library/features/Container';
 import NotFound from '@/components/404';
 import NProgress from '@/components/NProgress';
 import ResourceManager from '@/features/ResourceManager';
+import Container from '@/routes/(main)/resource/library/features/Container';
 
 import { useInitFileCheck } from '../features/hooks/useInitFileCheck';
 import { useKnowledgeBaseItem } from '../features/hooks/useKnowledgeItem';

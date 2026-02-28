@@ -4,9 +4,9 @@ import { type PropsWithChildren } from 'react';
 import { memo, Suspense, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import List from '@/routes/(main)/home/_layout/Body/Agent/List';
 import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 
 const styles = createStaticStyles(({ cssVar, css }) => ({
   trigger: css`

@@ -5,12 +5,12 @@ import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import MobileHeader from '@/routes/(mobile)/chat/settings/_layout/Header';
 import PageTitle from '@/components/PageTitle';
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 import { useCategory } from '@/features/AgentSetting/AgentCategory/useCategory';
 import AgentSettings from '@/features/AgentSetting/AgentSettings';
 import Footer from '@/features/Setting/Footer';
+import MobileHeader from '@/routes/(mobile)/chat/settings/_layout/Header';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';

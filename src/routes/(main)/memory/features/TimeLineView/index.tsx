@@ -6,8 +6,8 @@ import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
 
-import Loading from '@/routes/(main)/memory/features/Loading';
 import { useIsDark } from '@/hooks/useIsDark';
+import Loading from '@/routes/(main)/memory/features/Loading';
 
 import { useScrollParent } from './useScrollParent';
 

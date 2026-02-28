@@ -9,9 +9,9 @@ import { PaletteIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
+import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';

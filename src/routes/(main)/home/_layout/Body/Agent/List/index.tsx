@@ -2,12 +2,12 @@
 
 import { memo, useMemo } from 'react';
 
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { SessionDefaultGroup } from '@/types/index';
 
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AllAgentsDrawer from '../AllAgentsDrawer';
 import Group from './Group';
 import InboxItem from './InboxItem';

@@ -7,9 +7,9 @@ import { memo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import NavHeader from '@/features/NavHeader';
 import StoreSearchBar from '@/routes/(main)/community/features/Search';
 import UserAvatar from '@/routes/(main)/community/features/UserAvatar';
-import NavHeader from '@/features/NavHeader';
 
 import { styles } from './Header/style';
 

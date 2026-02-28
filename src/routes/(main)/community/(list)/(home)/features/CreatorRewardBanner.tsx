@@ -10,12 +10,15 @@ import { useIsDark } from '@/hooks/useIsDark';
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
     position: relative;
+
     width: 100%;
-    padding: 24px 32px;
+    padding-block: 24px;
+    padding-inline: 32px;
     border-radius: 12px;
 
     ${responsive.sm} {
-      padding: 16px 20px;
+      padding-block: 16px;
+      padding-inline: 20px;
     }
   `,
   banner_dark: css`
@@ -35,21 +38,24 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   subtitle_dark: css`
-    color: rgba(255, 255, 255, 0.65);
+    color: rgb(255 255 255 / 65%);
   `,
   subtitle_light: css`
-    color: rgba(0, 0, 0, 0.65);
+    color: rgb(0 0 0 / 65%);
   `,
   symbols: css`
+    pointer-events: none;
+
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    inset-block: 0;
+    inset-inline-end: 0;
+
     overflow: hidden;
+
     width: 50%;
     border-radius: 0 12px 12px 0;
+
     background: url('/images/banner_creator.png') right center / auto 100% no-repeat;
-    pointer-events: none;
 
     ${responsive.sm} {
       display: none;
@@ -66,10 +72,10 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   title_dark: css`
-    color: rgba(255, 255, 255, 0.88);
+    color: rgb(255 255 255 / 88%);
   `,
   title_light: css`
-    color: rgba(0, 0, 0, 0.88);
+    color: rgb(0 0 0 / 88%);
   `,
 }));
 

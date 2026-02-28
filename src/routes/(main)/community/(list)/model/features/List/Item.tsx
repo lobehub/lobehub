@@ -11,9 +11,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelInfoTags } from '@/components/ModelSelect';
+import PublishedTime from '@/components/PublishedTime';
 import { type DiscoverModelItem } from '@/types/discover';
 
-import PublishedTime from '@/components/PublishedTime';
 import ModelTypeIcon from './ModelTypeIcon';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
@@ -150,7 +150,6 @@ const ModelItem = memo<DiscoverModelItem>(
               <PublishedTime
                 className={styles.secondaryDesc}
                 date={releasedAt || dayjs().toISOString()}
-               
               />
             </Flexbox>
             <Popover

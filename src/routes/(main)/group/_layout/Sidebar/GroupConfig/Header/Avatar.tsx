@@ -3,8 +3,8 @@
 import { Block } from '@lobehub/ui';
 import { memo } from 'react';
 
-import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
+import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 
 const HeaderAvatar = memo<{ size?: number }>(() => {
   const openChatSettings = useOpenChatSettings();
