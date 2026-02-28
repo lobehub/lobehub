@@ -228,9 +228,15 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             // Replace optimistic with real document in the store
             replaceTempPageWithReal(tempPageId, realPage);
 
-            await fetchDocuments();
-
+            // Select parsed page before awaiting list refresh to ensure user is navigated
             setSelectedPageId(parsedDocument.id);
+
+            await fetchDocuments().catch((err) => {
+              console.warn(
+                '[PageExplorerPlaceholder] Failed to fetch documents after upload:',
+                err,
+              );
+            });
           } catch (error) {
             console.error('Failed to upload and parse file:', error);
             // Remove temp document on error
