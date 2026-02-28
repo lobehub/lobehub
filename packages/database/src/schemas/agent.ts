@@ -15,6 +15,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
@@ -83,6 +84,7 @@ export const agents = pgTable(
 );
 
 export const insertAgentSchema = createInsertSchema(agents, {
+  agencyConfig: z.custom<LobeAgentAgencyConfig>().nullable().optional(),
   // Override chatConfig type to use the proper schema
   chatConfig: AgentChatConfigSchema.nullable().optional(),
 });
