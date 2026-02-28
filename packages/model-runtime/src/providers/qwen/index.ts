@@ -47,16 +47,18 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
         ...rest,
         ...(model.includes('-thinking')
           ? {
-            enable_thinking: true,
-            thinking_budget:
-              thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
-          }
-          : thinking
-            ? {
-              enable_thinking: thinking.type === 'enabled',
+              enable_thinking: true,
               thinking_budget:
                 thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
             }
+          : thinking
+            ? {
+                ...(thinking.type !== undefined && {
+                  enable_thinking: thinking.type === 'enabled',
+                }),
+                thinking_budget:
+                  thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+              }
             : {}),
         frequency_penalty: undefined,
         model,

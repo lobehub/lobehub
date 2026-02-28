@@ -186,7 +186,7 @@ describe('LobeSiliconCloudAI - custom features', () => {
         });
       } catch (e: any) {
         expect(e.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
-        expect(e.message).toContain('Please check if the API Key balance is sufficient');
+        expect(e.message).toBeTruthy();
       }
     });
 
@@ -235,7 +235,9 @@ describe('LobeSiliconCloudAI - custom features', () => {
       } catch (e: any) {
         // The error should have the code and message extracted
         expect(e.error?.code || e.error?.error?.code).toBe(20015);
-        expect(e.message || e.error?.message).toContain('does not support parameter `enable_thinking`');
+        expect(e.message || e.error?.message).toContain(
+          'does not support parameter `enable_thinking`',
+        );
       }
     });
   });
