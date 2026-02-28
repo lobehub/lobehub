@@ -193,82 +193,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL 32K',
-    id: 'ernie-4.5-turbo-vl-32k',
-    maxOutput: 12_288,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL 32K Preview',
-    id: 'ernie-4.5-turbo-vl-32k-preview',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL',
-    id: 'ernie-4.5-turbo-vl-latest',
-    maxOutput: 12_288,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'The all-new version of the Wenxin Yiyan large model, with significantly enhanced capabilities in image understanding, creation, translation, and coding. It supports a 32K context length for the first time, with greatly reduced initial token latency.',
-    displayName: 'ERNIE 4.5 Turbo VL Preview',
-    id: 'ernie-4.5-turbo-vl-preview',
-    maxOutput: 12_288,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 131_072,
     description:
       'ERNIE Speed Pro 128K is a high-concurrency, high-value model for large-scale online services and enterprise apps.',
@@ -448,22 +372,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072,
-    description:
-      'Qianfan Lightning 128B A19B is a high-performance Chinese general model for complex QA and large-scale reasoning.',
-    displayName: 'Qianfan Lightning 128B A19B',
-    id: 'qianfan-lightning-128b-a19b',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
     },
     type: 'chat',
   },

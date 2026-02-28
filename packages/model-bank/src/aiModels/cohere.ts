@@ -99,24 +99,6 @@ const cohereChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Command R is an instruction-following chat model with higher quality, greater reliability, and a longer context window than earlier models. It supports complex workflows such as code generation, RAG, tool use, and agents.',
-    displayName: 'Command R 2403',
-    id: 'command-r-03-2024',
-    maxOutput: 4000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
       'command-r7b-12-2024 is a small, efficient update released in December 2024. It excels at RAG, tool use, and agent tasks that require complex, multi-step reasoning.',
     displayName: 'Command R7B 2412',
     id: 'command-r7b-12-2024',

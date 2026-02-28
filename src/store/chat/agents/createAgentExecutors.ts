@@ -92,13 +92,35 @@ export const createAgentExecutors = (context: {
   };
 
   /**
-   * Get effective agentId for message creation
-   * In Group Orchestration scenarios, subAgentId is the actual executing agent
-   * Falls back to agentId for normal scenarios
+   * Get effective agentId for message creation - depends on scope
+   * - scope: 'sub_agent': agentId stays unchanged (subAgentId only for config/display)
+   * - Other scopes with subAgentId: use subAgentId for message ownership (e.g., Group mode)
+   * - Default: use agentId
    */
   const getEffectiveAgentId = () => {
     const opContext = getOperationContext();
-    return opContext.subAgentId || opContext.agentId;
+
+    // Use subAgentId for message ownership except in sub_agent scope
+    // - sub_agent scope: callAgent scenario, message.agentId should stay unchanged
+    // - Other scopes with subAgentId: Group mode, message.agentId should be subAgentId
+    return opContext.subAgentId && opContext.scope !== 'sub_agent'
+      ? opContext.subAgentId
+      : opContext.agentId;
+  };
+
+  /**
+   * Get subAgentId and scope for metadata (when scope is 'sub_agent')
+   */
+  const getMetadataForSubAgent = () => {
+    const opContext = getOperationContext();
+
+    if (opContext.scope === 'sub_agent' && opContext.subAgentId) {
+      return {
+        subAgentId: opContext.subAgentId,
+        scope: opContext.scope,
+      };
+    }
+    return null;
   };
 
   const executors: Partial<Record<AgentInstruction['type'], InstructionExecutor>> = {
@@ -133,8 +155,10 @@ export const createAgentExecutors = (context: {
       } else {
         // Get context from operation
         const opContext = getOperationContext();
-        // Get effective agentId (subAgentId for group orchestration, agentId otherwise)
+        // Get effective agentId (depends on scope)
         const effectiveAgentId = getEffectiveAgentId();
+        // Get subAgentId metadata (for sub_agent scope)
+        const subAgentMetadata = getMetadataForSubAgent();
 
         // If this is the first regenerated creation of userMessage, llmPayload doesn't have parentMessageId
         // So we assign it this way
@@ -142,13 +166,24 @@ export const createAgentExecutors = (context: {
         if (!llmPayload.parentMessageId) {
           llmPayload.parentMessageId = context.parentId;
         }
+
+        // Build metadata
+        const metadata: Record<string, any> = {};
+        if (opContext.isSupervisor) {
+          metadata.isSupervisor = true;
+        }
+        if (subAgentMetadata) {
+          // Store subAgentId and scope in metadata for sub_agent mode
+          // This will be used by conversation-flow to transform agentId for display
+          Object.assign(metadata, subAgentMetadata);
+        }
+
         // Create assistant message (following server-side pattern)
-        // If isSupervisor is true, add metadata.isSupervisor for UI rendering
         const assistantMessageItem = await context.get().optimisticCreateMessage(
           {
             content: LOADING_FLAT,
             groupId: opContext.groupId,
-            metadata: opContext.isSupervisor ? { isSupervisor: true } : undefined,
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
             model: llmPayload.model,
             parentId: llmPayload.parentMessageId,
             provider: llmPayload.provider,
@@ -1142,7 +1177,11 @@ export const createAgentExecutors = (context: {
       const opContext = getOperationContext();
       const { agentId, topicId } = opContext;
 
-      if (!agentId || !topicId) {
+      // Check for targetAgentId (callAgent mode)
+      const targetAgentId = (task as any).targetAgentId;
+      const executionAgentId = targetAgentId || agentId;
+
+      if (!agentId || !topicId || !executionAgentId) {
         log('[%s][exec_task] No valid context, cannot execute task', sessionLogId);
         return {
           events,
@@ -1168,15 +1207,31 @@ export const createAgentExecutors = (context: {
         };
       }
 
+      if (targetAgentId) {
+        log(
+          '[%s][exec_task] callAgent mode - current agent: %s, target agent: %s',
+          sessionLogId,
+          agentId,
+          targetAgentId,
+        );
+      }
+
       const taskLogId = `${sessionLogId}:task`;
 
       try {
         // 1. Create task message as placeholder
+        // IMPORTANT: Use operation context's agentId (current agent) for message creation
+        // This ensures the task message appears in the current conversation
         const taskMessageResult = await context.get().optimisticCreateMessage(
           {
-            agentId,
+            agentId, // Use current agent's ID (not targetAgentId)
             content: '',
-            metadata: { instruction: task.instruction, taskTitle: task.description },
+            metadata: {
+              instruction: task.instruction,
+              taskTitle: task.description,
+              // Store targetAgentId in metadata for UI display
+              ...(targetAgentId && { targetAgentId }),
+            },
             parentId: parentMessageId,
             role: 'task',
             topicId,
@@ -1214,9 +1269,11 @@ export const createAgentExecutors = (context: {
         log('[%s] Created task message: %s', taskLogId, taskMessageId);
 
         // 2. Create and execute task on server
-        log('[%s] Using server-side execution', taskLogId);
+        // IMPORTANT: Use executionAgentId here (targetAgentId if in callAgent mode)
+        // This ensures the task executes with the correct agent's config
+        log('[%s] Using server-side execution with agentId: %s', taskLogId, executionAgentId);
         const createResult = await aiAgentService.execSubAgentTask({
-          agentId,
+          agentId: executionAgentId, // Use targetAgentId for callAgent, or current agentId for GTD
           instruction: task.instruction,
           parentMessageId: taskMessageId,
           title: task.description,

@@ -11,6 +11,55 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
+      'Qwen3.5 397B A17B is a large-scale open model in the Qwen series, delivering excellent performance in complex reasoning, knowledge QA, and coding. It supports thinking mode for highly complex tasks.',
+    displayName: 'Qwen3.5 397B A17B',
+    id: 'qwen3.5-397b-a17b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 1.2,
+              '[0.128, 0.256]': 3,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 7.2,
+              '[0.128, 0.256]': 18,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-15',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
       'Kimi K2.5 is the most capable Kimi model, delivering open-source SOTA in agent tasks, coding, and vision understanding. It supports multimodal inputs and both thinking and non-thinking modes.',
     displayName: 'Kimi K2.5',
     id: 'kimi-k2.5',
@@ -58,7 +107,7 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3-vl-plus-2025-12-19',
+      deploymentName: 'qwen3-vl-plus', // Supports context caching
     },
     contextWindowTokens: 262_144,
     description:
@@ -281,6 +330,51 @@ const qwenChatModels: AIChatModelCard[] = [
             prices: {
               '[0, 0.032]': 18,
               '[0.032, infinity]': 22,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 202_752,
+    description:
+      'The GLM series is a hybrid reasoning model from Zhipu AI built for agents, with thinking and non-thinking modes.',
+    displayName: 'GLM-4.7',
+    id: 'glm-4.7',
+    maxOutput: 16_384,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 3,
+              '[0.032, infinity]': 4,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 14,
+              '[0.032, infinity]': 16,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1113,7 +1207,7 @@ const qwenChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'qwen-flash',
+      deploymentName: 'qwen-flash', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
@@ -1200,14 +1294,14 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
-      vision: true
+      vision: true,
     },
     config: {
-      deploymentName: 'qwen3.5-plus-2026-02-15',
+      deploymentName: 'qwen3.5-plus', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Qwen3.5 Plus supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, while delivering better efficiency and lower cost. In terms of multimodal capabilities, it shows significant improvements over the Qwen3 VL series.',
+      'Qwen3.5 Plus supports text, image, and video input. Its performance on pure text tasks is comparable to Qwen3 Max, with better performance and lower cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.5 Plus',
     enabled: true,
     id: 'qwen3.5-plus',
@@ -1219,13 +1313,26 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8 * 0.5,
-              '[0.128, 0.256]': 2 * 0.5,
-              '[0.256, infinity]': 4 * 0.5,
+              '[0, 0.128]': 0.8 * 0.1,
+              '[0.128, 0.256]': 2 * 0.1,
+              '[0.256, infinity]': 4 * 0.1,
             },
             pricingParams: ['textInputRange'],
           },
           name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8 * 1.25,
+              '[0.128, 0.256]': 2 * 1.25,
+              '[0.256, infinity]': 4 * 1.25,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheWrite',
           strategy: 'lookup',
           unit: 'millionTokens',
         },
@@ -1249,7 +1356,7 @@ const qwenChatModels: AIChatModelCard[] = [
               '[0.128, 0.256]': 12,
               '[0.256, infinity]': 24,
             },
-            pricingParams: ['textInputRange', 'thinkingMode'],
+            pricingParams: ['textInputRange'],
           },
           name: 'textOutput',
           strategy: 'lookup',
@@ -1257,7 +1364,7 @@ const qwenChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    releasedAt: '2026-02-16',
+    releasedAt: '2026-02-15',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
       searchImpl: 'params',
@@ -1271,13 +1378,12 @@ const qwenChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'qwen-plus-2025-12-01',
+      deploymentName: 'qwen-plus', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description:
       'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
     displayName: 'Qwen Plus',
-    enabled: true,
     id: 'qwen-plus',
     maxOutput: 32_768,
     organization: 'Qwen',
@@ -1340,16 +1446,33 @@ const qwenChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
+    config: {
+      deploymentName: 'qwen3-max', // Supports context caching
+    },
     contextWindowTokens: 262_144,
     description:
       'Qwen3 Max models deliver large gains over the 2.5 series in general ability, Chinese/English understanding, complex instruction following, subjective open tasks, multilingual ability, and tool use, with fewer hallucinations. The latest qwen3-max improves agentic programming and tool use over qwen3-max-preview. This release reaches field SOTA and targets more complex agent needs.',
-    displayName: 'Qwen3 Max Thinking',
-    id: 'qwen3-max-2026-01-23',
+    displayName: 'Qwen3 Max',
+    enabled: true,
+    id: 'qwen3-max',
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
       currency: 'CNY',
       units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 2.5 * 0.2,
+              '[0.032, 0.128]': 4 * 0.2,
+              '[0.128, infinity]': 7 * 0.2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
         {
           lookup: {
             prices: {
@@ -1381,72 +1504,6 @@ const qwenChatModels: AIChatModelCard[] = [
     releasedAt: '2026-01-23',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    config: {
-      deploymentName: 'qwen3-max', // Supports context caching
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Qwen3 Max models deliver large gains over the 2.5 series in general ability, Chinese/English understanding, complex instruction following, subjective open tasks, multilingual ability, and tool use, with fewer hallucinations. The latest qwen3-max improves agentic programming and tool use over qwen3-max-preview. This release reaches field SOTA and targets more complex agent needs.',
-    displayName: 'Qwen3 Max',
-    enabled: true,
-    id: 'qwen3-max',
-    maxOutput: 65_536,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 3.2 * 0.2,
-              '[0.032, 0.128]': 6.4 * 0.2,
-              '[0.128, infinity]': 9.6 * 0.2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 3.2,
-              '[0.032, 0.128]': 6.4,
-              '[0.128, infinity]': 9.6,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 12.8,
-              '[0.032, 0.128]': 25.6,
-              '[0.128, infinity]': 38.4,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-09-23',
-    settings: {
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1575,7 +1632,7 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3-omni-flash-2025-09-15',
+      deploymentName: 'qwen3-omni-flash-2025-12-01',
     },
     contextWindowTokens: 65_536,
     description:
