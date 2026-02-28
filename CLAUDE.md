@@ -21,7 +21,17 @@ lobe-chat/
 │   ├── agent-runtime/      # Agent runtime
 │   └── ...
 ├── src/
-│   ├── app/                # Next.js app router
+│   ├── app/                # Next.js App Router (backend API + auth)
+│   │   ├── (backend)/     # API routes (trpc, webapi, etc.)
+│   │   ├── spa/            # SPA HTML template service
+│   │   └── [variants]/(auth)/  # Auth pages (SSR required)
+│   ├── routes/             # SPA page components (Vite)
+│   │   ├── (main)/         # Desktop pages
+│   │   ├── (mobile)/       # Mobile pages
+│   │   ├── (desktop)/      # Desktop-specific pages
+│   │   ├── onboarding/     # Onboarding pages
+│   │   └── share/          # Share pages
+│   ├── router/             # React Router configuration
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
 │   ├── server/             # Server services and routers

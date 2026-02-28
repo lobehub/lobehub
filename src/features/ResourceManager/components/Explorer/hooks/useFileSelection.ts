@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { type FileListItem } from '@/types/files';
 
 /**

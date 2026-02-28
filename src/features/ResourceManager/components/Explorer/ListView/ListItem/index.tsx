@@ -22,8 +22,8 @@ import {
   getTransparentDragImage,
   useDragActive,
   useDragState,
-} from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+} from '@/routes/(main)/resource/features/DndContextWrapper';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import FileIcon from '@/components/FileIcon';
 import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';

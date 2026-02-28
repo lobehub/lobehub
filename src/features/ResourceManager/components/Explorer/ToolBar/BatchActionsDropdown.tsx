@@ -11,7 +11,7 @@ import {
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseStore } from '@/store/library';
 

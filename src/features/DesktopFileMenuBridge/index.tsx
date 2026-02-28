@@ -5,7 +5,7 @@ import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useCreateMenuItems } from '@/app/[variants]/(main)/home/_layout/hooks/useCreateMenuItems';
+import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks/useCreateMenuItems';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 

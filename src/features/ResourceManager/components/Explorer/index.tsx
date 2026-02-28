@@ -3,10 +3,10 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo } from 'react';
 
-import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
-import { useResourceManagerUrlSync } from '@/app/[variants]/(main)/resource/features/hooks/useResourceManagerUrlSync';
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
-import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
+import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
+import { useResourceManagerUrlSync } from '@/routes/(main)/resource/features/hooks/useResourceManagerUrlSync';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
 import { useFetchResources, useResourceStore } from '@/store/file/slices/resource/hooks';
 
 import EmptyPlaceholder from './EmptyPlaceholder';

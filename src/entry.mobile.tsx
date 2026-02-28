@@ -6,7 +6,7 @@ import { RouterProvider } from 'react-router-dom';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { createAppRouter } from '@/utils/router';
 
-import { mobileRoutes } from './app/[variants]/(mobile)/router/mobileRouter.config';
+import { mobileRoutes } from './router/mobileRouter.config';
 
 const router = createAppRouter(mobileRoutes);
 

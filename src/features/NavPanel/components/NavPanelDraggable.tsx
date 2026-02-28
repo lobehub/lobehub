@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import  { type ReactNode } from 'react';
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 
-import { USER_DROPDOWN_ICON_ID } from '@/app/[variants]/(main)/home/_layout/Header/components/User';
+import { USER_DROPDOWN_ICON_ID } from '@/routes/(main)/home/_layout/Header/components/User';
 import { isDesktop } from '@/const/version';
 import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useGlobalStore } from '@/store/global';

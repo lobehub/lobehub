@@ -2,7 +2,7 @@ import { Flexbox, ScrollShadow, TooltipGroup } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, Suspense } from 'react';
 
-import Footer from '@/app/[variants]/(main)/home/_layout/Footer';
+import Footer from '@/routes/(main)/home/_layout/Footer';
 import SkeletonList, { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 
 interface SidebarLayoutProps {

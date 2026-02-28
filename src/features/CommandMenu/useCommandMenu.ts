@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
-import { useCreateMenuItems } from '@/app/[variants]/(main)/home/_layout/hooks';
+import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
 import { isDesktop } from '@/const/version';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCreateNewModal } from '@/features/LibraryModal';

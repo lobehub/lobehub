@@ -5,7 +5,7 @@ import { BookMinusIcon, BookPlusIcon, FileBoxIcon, Trash2Icon } from 'lucide-rea
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
 const styles = createStaticStyles(({ css }) => ({
   total: css`

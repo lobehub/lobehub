@@ -3,9 +3,9 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { Link } from 'react-router-dom';
 
-import { navigateToDesktopOnboarding } from '@/app/[variants]/(desktop)/desktop-onboarding/navigation';
-import { clearDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
-import { DesktopOnboardingScreen } from '@/app/[variants]/(desktop)/desktop-onboarding/types';
+import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
+import { clearDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
+import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
 import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';

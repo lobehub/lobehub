@@ -8,8 +8,8 @@ import { ArrowLeftIcon, DownloadIcon, InfoIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FileDetailComponent from '@/app/[variants]/(main)/resource/features/FileDetail';
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import FileDetailComponent from '@/routes/(main)/resource/features/FileDetail';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import PageAgentProvider from '@/features/PageEditor/PageAgentProvider';
