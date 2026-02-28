@@ -166,6 +166,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.imageAspectRatio = chatConfig.imageAspectRatio;
   }
 
+  if (modelExtendParams.includes('imageAspectRatio2') && chatConfig.imageAspectRatio2) {
+    extendParams.imageAspectRatio = chatConfig.imageAspectRatio2;
+  }
+
   if (modelExtendParams.includes('imageResolution') && chatConfig.imageResolution) {
     extendParams.imageResolution = chatConfig.imageResolution;
   }

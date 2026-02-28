@@ -135,9 +135,9 @@ const googleChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-12-18',
+    releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -934,7 +934,7 @@ const googleImageModels: AIImageModelCard[] = [
     enabled: true,
     description:
       "Gemini 3.1 Flash Image (Nano Banana 2) is Google's fastest native image generation model with thinking support, conversational image generation and editing.",
-    releasedAt: '2025-12-18',
+    releasedAt: '2026-02-26',
     parameters: nanoBanana2Parameters,
     pricing: {
       approximatePricePerImage: 0.067,

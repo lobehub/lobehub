@@ -25,9 +25,9 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-12-18',
+    releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
       searchImpl: 'params',
       searchProvider: 'google',
     },

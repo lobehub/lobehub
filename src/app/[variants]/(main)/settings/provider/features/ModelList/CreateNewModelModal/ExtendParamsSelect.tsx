@@ -10,6 +10,7 @@ import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/Co
 import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ReasoningEffortSlider';
+import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatio2Select';
 import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
 import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolution2Slider';
 import ImageResolutionSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolutionSlider';
@@ -106,6 +107,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'imageAspectRatio',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint',
+    key: 'imageAspectRatio2',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.imageResolution.hint',
     key: 'imageResolution',
   },
@@ -122,6 +127,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
   gpt5_2ReasoningEffort: 'reasoningEffort',
+  imageAspectRatio2: 'imageAspectRatio',
   thinkingLevel2: 'thinkingLevel',
   thinkingLevel3: 'thinkingLevel',
   thinkingLevel4: 'thinkingLevel',
@@ -152,6 +158,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   },
   gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
   imageAspectRatio: { labelSuffix: '', previewWidth: 350, tag: 'aspect_ratio' },
+  imageAspectRatio2: { labelSuffix: ' (Nano Banana 2)', previewWidth: 350, tag: 'aspect_ratio' },
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
@@ -255,6 +262,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
+      imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,
       imageResolution2: <ImageResolution2Slider value="1K" />,
       reasoningBudgetToken: <ReasoningTokenSlider defaultValue={1 * 1024} />,

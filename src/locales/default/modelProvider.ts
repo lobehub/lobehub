@@ -263,6 +263,8 @@ export default {
     'For GPT-5.2 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
+  'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':
+    'For Nano Banana 2; controls aspect ratio of generated images (supports extra-wide 1:4, 4:1, 1:8, 8:1).',
   'providerModels.item.modelConfig.extendParams.options.imageResolution.hint':
     'For Gemini 3 image generation models; controls resolution of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageResolution2.hint':

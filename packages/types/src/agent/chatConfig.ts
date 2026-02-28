@@ -80,6 +80,10 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    */
   imageAspectRatio?: string;
   /**
+   * Image aspect ratio for Nano Banana 2 (supports extra-wide 1:4, 4:1, 1:8, 8:1)
+   */
+  imageAspectRatio2?: string;
+  /**
    * Image resolution for image generation models
    */
   imageResolution?: '1K' | '2K' | '4K';
@@ -159,6 +163,7 @@ export const AgentChatConfigSchema = z
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
+    imageAspectRatio2: z.string().optional(),
     imageResolution: z.enum(['1K', '2K', '4K']).optional(),
     imageResolution2: z.enum(['512px', '1K', '2K', '4K']).optional(),
     localSystem: LocalSystemConfigSchema.optional(),

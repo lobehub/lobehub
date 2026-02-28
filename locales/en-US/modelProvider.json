@@ -224,6 +224,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "For GPT-5.2 Pro series; controls reasoning intensity.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "For GPT-5.2 series; controls reasoning intensity.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "For Gemini image generation models; controls aspect ratio of generated images.",
+  "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "For Nano Banana 2; controls aspect ratio of generated images (supports extra-wide 1:4, 4:1, 1:8, 8:1).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "For Gemini 3 image generation models; controls resolution of generated images.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "For Gemini 3.1 Flash Image model; controls resolution of generated images (supports 512px).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "For Claude, Qwen3 and similar; controls token budget for reasoning.",

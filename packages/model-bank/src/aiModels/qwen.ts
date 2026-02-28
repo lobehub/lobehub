@@ -11,55 +11,6 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Qwen3.5 397B A17B is a large-scale open model in the Qwen series, delivering excellent performance in complex reasoning, knowledge QA, and coding. It supports thinking mode for highly complex tasks.',
-    displayName: 'Qwen3.5 397B A17B',
-    id: 'qwen3.5-397b-a17b',
-    maxOutput: 65_536,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 1.2,
-              '[0.128, 0.256]': 3,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 7.2,
-              '[0.128, 0.256]': 18,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-02-15',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
       'Kimi K2.5 is the most capable Kimi model, delivering open-source SOTA in agent tasks, coding, and vision understanding. It supports multimodal inputs and both thinking and non-thinking modes.',
     displayName: 'Kimi K2.5',
     id: 'kimi-k2.5',

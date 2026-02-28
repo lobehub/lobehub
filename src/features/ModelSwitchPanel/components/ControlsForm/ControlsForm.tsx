@@ -17,6 +17,7 @@ import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
+import ImageAspectRatio2Select from './ImageAspectRatio2Select';
 import ImageAspectRatioSelect from './ImageAspectRatioSelect';
 import ImageResolution2Slider from './ImageResolution2Slider';
 import ImageResolutionSlider from './ImageResolutionSlider';
@@ -300,6 +301,17 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'horizontal',
       minWidth: undefined,
       name: 'imageAspectRatio',
+      style: {
+        paddingBottom: 0,
+      },
+      desc: 'aspectRatio',
+    },
+    {
+      children: <ImageAspectRatio2Select />,
+      label: t('extendParams.imageAspectRatio.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'imageAspectRatio2',
       style: {
         paddingBottom: 0,
       },
