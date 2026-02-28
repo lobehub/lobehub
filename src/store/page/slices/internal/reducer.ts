@@ -84,6 +84,8 @@ export const documentsReducer = (
         const index = draft.findIndex((doc) => doc.id === payload.oldId);
         if (index !== -1) {
           draft[index] = payload.document;
+        } else {
+          draft.unshift(payload.document);
         }
       });
     }
