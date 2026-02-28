@@ -6,6 +6,7 @@ import {
   type RedisConfig,
   type RedisKey,
   type RedisMSetArgument,
+  type RedisPipeline,
   type RedisSetResult,
   type RedisValue,
   type SetOptions,
@@ -117,4 +118,7 @@ export class IoRedisRedisProvider implements BaseRedisProvider {
     return this.ensureClient().eval(script, numkeys, ...args) as Promise<T>;
   }
 
+  pipeline(): RedisPipeline {
+    return this.ensureClient().pipeline() as unknown as RedisPipeline;
+  }
 }
