@@ -19,8 +19,6 @@ import {
 } from '@/types/spaServerConfig';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
-import { desktopHtmlTemplate, mobileHtmlTemplate } from './spaHtmlTemplates';
-
 export const dynamic = 'force-static';
 
 export function generateStaticParams() {
@@ -96,6 +94,8 @@ async function getTemplate(isMobile: boolean): Promise<string> {
     const html = await res.text();
     return await rewriteViteAssetUrls(html);
   }
+
+  const { desktopHtmlTemplate, mobileHtmlTemplate } = await import('./spaHtmlTemplates');
 
   return isMobile ? mobileHtmlTemplate : desktopHtmlTemplate;
 }

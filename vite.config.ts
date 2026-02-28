@@ -97,6 +97,7 @@ export default defineConfig({
   server: {
     cors: true,
     port: 9876,
+    host: true,
     proxy: {
       '/api': 'http://localhost:3010',
       '/oidc': 'http://localhost:3010',
