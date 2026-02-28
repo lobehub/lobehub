@@ -1333,11 +1333,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState({ operationId: context.operationId });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When

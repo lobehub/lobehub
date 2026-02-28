@@ -1,4 +1,5 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import { builtinTools } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
