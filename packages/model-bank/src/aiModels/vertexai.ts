@@ -213,6 +213,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-20',
     settings: {
+      extendParams: ['thinkingBudget'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
