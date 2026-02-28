@@ -200,7 +200,12 @@ export class CrudActionImpl {
 
     this.#get().internal_dispatchDocuments({ document: editorPage, type: 'addDocument' });
 
-    await this.#get().refreshDocuments();
+    // Best-effort list refresh without awaiting to avoid duplicatePage rejection
+    this.#get()
+      .refreshDocuments()
+      .catch((err) => {
+        console.warn('[duplicatePage] Failed to refresh documents:', err);
+      });
 
     return newPage;
   };
