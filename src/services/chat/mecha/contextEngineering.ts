@@ -4,26 +4,25 @@ import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import {
-  type AgentBuilderContext,
-  type AgentGroupConfig,
-  type AgentManagementContext,
-  type GTDConfig,
-  type GroupAgentBuilderContext,
-  type GroupOfficialToolItem,
-  type GTDConfig,
-  type LobeToolManifest,
-  type MemoryContext,
-  type ToolDiscoveryConfig,
-  type UserMemoryData,
+import type {
+  AgentBuilderContext,
+  AgentGroupConfig,
+  AgentManagementContext,
+  GroupAgentBuilderContext,
+  GroupOfficialToolItem,
+  GTDConfig,
+  LobeToolManifest,
+  MemoryContext,
+  ToolDiscoveryConfig,
+  UserMemoryData,
 } from '@lobechat/context-engine';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
-import {
-  type OpenAIChatMessage,
-  type RuntimeInitialContext,
-  type RuntimeStepContext,
-  type UIChatMessage,
+import type {
+  OpenAIChatMessage,
+  RuntimeInitialContext,
+  RuntimeStepContext,
+  UIChatMessage,
 } from '@lobechat/types';
 import debug from 'debug';
 
