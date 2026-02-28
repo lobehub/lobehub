@@ -294,13 +294,13 @@ describe('replyTemplate', () => {
           totalCost: 0.0312,
           totalTokens: 1234,
         }),
-      ).toBe('Here is the answer.\n\n---\n**1.2k** tokens · $0.0312 | llm×5 | tools×4');
+      ).toBe('Here is the answer.\n\n-# 1.2k tokens · $0.0312 | llm×5 | tools×4');
     });
 
     it('should handle zero usage', () => {
       expect(
         renderFinalReply('Done.', { llmCalls: 0, toolCalls: 0, totalCost: 0, totalTokens: 0 }),
-      ).toBe('Done.\n\n---\n**0** tokens · $0.0000 | llm×0 | tools×0');
+      ).toBe('Done.\n\n-# 0 tokens · $0.0000 | llm×0 | tools×0');
     });
 
     it('should format large token counts', () => {
@@ -311,7 +311,7 @@ describe('replyTemplate', () => {
           totalCost: 1.5,
           totalTokens: 1_234_567,
         }),
-      ).toBe('Result\n\n---\n**1.2m** tokens · $1.5000 | llm×10 | tools×20');
+      ).toBe('Result\n\n-# 1.2m tokens · $1.5000 | llm×10 | tools×20');
     });
   });
 
