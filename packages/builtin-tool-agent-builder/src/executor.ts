@@ -10,17 +10,13 @@ import { BaseExecutor } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
+
 import type {
   GetAvailableModelsParams,
   InstallPluginParams,
   SearchMarketToolsParams,
   UpdateAgentConfigParams,
-  UpdatePromptParams
-} from './types';
-
-import {
-  AgentBuilderApiName,
-  AgentBuilderIdentifier,
+  UpdatePromptParams,
 } from './types';
 import { AgentBuilderApiName, AgentBuilderIdentifier } from './types';
 
