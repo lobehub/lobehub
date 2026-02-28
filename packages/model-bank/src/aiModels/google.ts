@@ -526,7 +526,7 @@ const googleChatModels: AIChatModelCard[] = [
       imageOutput: true,
       vision: true,
     },
-    contextWindowTokens: 32_768 + 32_768,
+    contextWindowTokens: 65_536 + 32_768,
     description:
       'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     displayName: 'Nano Banana',

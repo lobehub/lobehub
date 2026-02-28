@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type {
   AiModelSortMap,
   AiProviderModelListItem,
@@ -221,8 +221,6 @@ export class AiModelModel {
       .onConflictDoUpdate({
         set: {
           enabled: sql`excluded.enabled`,
-          // Preserve existing type in database, only update if new type is provided
-          type: sql`COALESCE(excluded.type, ${aiModels.type})`,
           updatedAt: sql`excluded.updated_at`,
         },
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
