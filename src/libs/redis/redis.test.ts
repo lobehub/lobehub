@@ -206,6 +206,20 @@ describe('mocked', () => {
     await provider.disconnect();
   });
 
+  it('pipeline set converts SetOptions to ioredis token args', async () => {
+    const { mocks, provider } = await createMockedProvider();
+    const pipeMock = mocks.pipeline();
+
+    pipeMock.exec.mockResolvedValue([[null, 'OK']]);
+
+    const pipe = provider.pipeline();
+    pipe.set('key', 'value', { ex: 60, nx: true });
+    await pipe.exec();
+
+    expect(pipeMock.set).toHaveBeenCalledWith('key', 'value', 'EX', 60, 'NX');
+    await provider.disconnect();
+  });
+
   it('supports buffer keys for hashes and strings', async () => {
     const { mocks, provider } = await createMockedProvider();
 

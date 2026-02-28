@@ -39,7 +39,7 @@ export interface RedisPipeline {
   hgetall: (key: RedisKey) => RedisPipeline;
   hset: (key: RedisKey, field: RedisKey, value: RedisValue) => RedisPipeline;
   incr: (key: RedisKey) => RedisPipeline;
-  set: (key: RedisKey, value: RedisValue, ...args: any[]) => RedisPipeline;
+  set: (key: RedisKey, value: RedisValue, options?: SetOptions) => RedisPipeline;
   setex: (key: RedisKey, seconds: number, value: RedisValue) => RedisPipeline;
 }
 
