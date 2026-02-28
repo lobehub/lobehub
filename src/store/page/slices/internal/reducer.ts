@@ -85,7 +85,13 @@ export const documentsReducer = (
         if (index !== -1) {
           draft[index] = payload.document;
         } else {
-          draft.unshift(payload.document);
+          // Guard to prevent duplicates if real document already exists
+          const existingIndex = draft.findIndex((doc) => doc.id === payload.document.id);
+          if (existingIndex !== -1) {
+            draft[existingIndex] = payload.document;
+          } else {
+            draft.unshift(payload.document);
+          }
         }
       });
     }
