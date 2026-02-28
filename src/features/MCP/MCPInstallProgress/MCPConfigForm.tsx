@@ -65,7 +65,7 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
     if (onCancel) {
       onCancel();
     } else {
-      // 默认行为：清理安装进度
+      // Default behavior: clear installation progress
       useToolStore.getState().updateMCPInstallProgress(identifier, undefined);
     }
   };

@@ -5,7 +5,7 @@ import { type DiscoverMcpDetail } from '@/types/discover';
 export interface ScoreItem {
   check: boolean;
   required?: boolean;
-  weight?: number; // 权重，可选
+  weight?: number; // weight, optional
 }
 
 export interface ScoreResult {
@@ -18,14 +18,14 @@ export interface ScoreResult {
   totalScore: number;
 }
 
-// 扩展的评分项目接口，用于显示
+// Extended score item interface, used for display
 export interface ScoreListItem extends ScoreItem {
   desc: string;
   key: string;
   title: string;
 }
 
-// 原始数据接口
+// Raw data interface
 export interface ScoreDataInput {
   deploymentOptions?: Array<{
     installationMethod?: string;
@@ -33,7 +33,7 @@ export interface ScoreDataInput {
   github?: {
     license?: string;
   };
-  installationMethods?: string; // 列表页使用
+  installationMethods?: string; // Used by list page
   isClaimed?: boolean;
   isValidated?: boolean;
   overview?: {
@@ -44,7 +44,7 @@ export interface ScoreDataInput {
   toolsCount?: number;
 }
 
-// 计算后的布尔值结果
+// Calculated boolean result
 export interface ScoreFlags {
   hasClaimed: boolean;
   hasDeployment: boolean;
@@ -60,26 +60,26 @@ export interface ScoreFlags {
 export const DEFAULT_WEIGHTS = {
   claimed: 4,
 
-  // 必需项
+  // Required
   deployMoreThanManual: 12,
 
   deployment: 15,
 
-  // 必需项
+  // Required
   license: 8,
 
-  // 必需项
+  // Required
   prompts: 8,
 
   readme: 10,
 
   resources: 8,
-  // 必需项，权重最高
+  // Required, highest weight
   tools: 15,
   validated: 20,
 };
 
-// 评分计算输入数据类型
+// Score calculation input data type
 export interface ScoreCalculationInput extends Partial<
   Pick<
     DiscoverMcpDetail,
@@ -92,14 +92,14 @@ export interface ScoreCalculationInput extends Partial<
     | 'toolsCount'
   >
 > {
-  installationMethods?: string; // 列表页使用
-  isClaimed?: boolean; // 添加 isClaimed 属性
+  installationMethods?: string; // Used by list page
+  isClaimed?: boolean; // Add isClaimed property
 }
 
 /**
- * 根据原始数据计算所有的评分标志
- * @param data 原始数据
- * @returns 计算后的布尔值标志
+ * Calculates all score flags from raw data
+ * @param data Raw data
+ * @returns Calculated boolean flags
  */
 export function calculateScoreFlags(data: ScoreCalculationInput): ScoreFlags {
   const {
@@ -114,11 +114,11 @@ export function calculateScoreFlags(data: ScoreCalculationInput): ScoreFlags {
     isClaimed,
   } = data;
 
-  // 计算基础标志
+  // Calculate base flags
   const hasReadme = Boolean(overview?.readme);
   const hasLicense = Boolean(github?.license);
 
-  // 优先使用 deploymentOptions（详情页），然后使用 installationMethods（列表页）
+  // Prefer deploymentOptions (detail page), then fall back to installationMethods (list page)
   const effectiveDeploymentOptions: DeploymentOption[] =
     deploymentOptions ||
     (installationMethods ? [{ installationMethod: installationMethods } as DeploymentOption] : []);
@@ -151,10 +151,10 @@ export function calculateScoreFlags(data: ScoreCalculationInput): ScoreFlags {
 }
 
 /**
- * 获取评级对应的颜色
- * @param grade 评级
- * @param theme 主题对象（可选）
- * @returns 颜色值
+ * Gets the color corresponding to the grade
+ * @param grade Grade
+ * @param theme Theme object (optional)
+ * @returns Color value
  */
 export function getGradeColor(grade: string, theme?: any): string {
   if (theme) {
@@ -174,7 +174,7 @@ export function getGradeColor(grade: string, theme?: any): string {
     }
   }
 
-  // 默认颜色值（用于没有主题对象的情况）
+  // Default color values (for when no theme object is provided)
   switch (grade) {
     case 'a': {
       return '#52c41a';
@@ -192,10 +192,10 @@ export function getGradeColor(grade: string, theme?: any): string {
 }
 
 /**
- * 获取评级对应的样式类名映射
- * @param grade 评级
- * @param styles 样式对象
- * @returns 对应的样式类名
+ * Gets the style class name mapping corresponding to the grade
+ * @param grade Grade
+ * @param styles Styles object
+ * @returns Corresponding style class name
  */
 export function getGradeStyleClass(grade: string, styles: any): string {
   switch (grade) {
@@ -215,25 +215,25 @@ export function getGradeStyleClass(grade: string, styles: any): string {
 }
 
 /**
- * 按优先级排序评分项目
- * @param items 评分项目数组
- * @returns 排序后的项目数组
+ * Sorts score items by priority
+ * @param items Score item array
+ * @returns Sorted item array
  */
 export function sortItemsByPriority<T extends ScoreItem>(items: T[]): T[] {
   return items.sort((a, b) => {
-    // 1. 必需项优先
+    // 1. Required items first
     if (a.required !== b.required) {
       return a.required ? -1 : 1;
     }
 
-    // 2. 按权重从高到低
+    // 2. By weight from high to low
     const weightA = a.weight || 0;
     const weightB = b.weight || 0;
     if (weightA !== weightB) {
       return weightB - weightA;
     }
 
-    // 3. 已完成的在前
+    // 3. Completed items first
     if (a.check !== b.check) {
       return a.check ? -1 : 1;
     }
@@ -243,10 +243,10 @@ export function sortItemsByPriority<T extends ScoreItem>(items: T[]): T[] {
 }
 
 /**
- * 计算 MCP Server 的总分和评级
- * @param items 评分项目
- * @param weights 权重配置，默认使用 DEFAULT_WEIGHTS
- * @returns 包含总分、最高分、百分比和评级的结果
+ * Calculates the total score and grade for an MCP Server
+ * @param items Score items
+ * @param weights Weight configuration, defaults to DEFAULT_WEIGHTS
+ * @returns Result containing total score, max score, percentage, and grade
  */
 export function calculateScore(
   items: Record<string, ScoreItem>,
@@ -257,9 +257,9 @@ export function calculateScore(
   let requiredScore = 0;
   let maxRequiredScore = 0;
 
-  // 计算实际得分和最大可能得分
+  // Calculate actual score and maximum possible score
   Object.entries(items).forEach(([key, item]) => {
-    const weight = weights[key] || 5; // 默认权重为 5
+    const weight = weights[key] || 5; // Default weight is 5
     maxScore += weight;
 
     if (item.required) {
@@ -277,20 +277,20 @@ export function calculateScore(
   const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
   const requiredPercentage = maxRequiredScore > 0 ? (requiredScore / maxRequiredScore) * 100 : 0;
 
-  // 评级计算逻辑
+  // Grade calculation logic
   let grade: 'a' | 'b' | 'f';
 
-  // 如果必需项没有全部满足，直接评为 F
+  // If not all required items are met, grade as F directly
   if (requiredPercentage < 100) {
     grade = 'f';
   } else {
-    // 必需项全部满足的情况下，根据总分百分比评级
+    // When all required items are met, grade based on total score percentage
     if (percentage >= 80) {
-      grade = 'a'; // 80% 以上为 A
+      grade = 'a'; // 80% and above is A
     } else if (percentage >= 60) {
-      grade = 'b'; // 60-79% 为 B
+      grade = 'b'; // 60-79% is B
     } else {
-      grade = 'f'; // 60% 以下为 F
+      grade = 'f'; // Below 60% is F
     }
   }
 
@@ -306,7 +306,7 @@ export function calculateScore(
 }
 
 /**
- * 根据评分项目数据创建用于计算的对象
+ * Creates an object for calculation from score item data
  */
 export function createScoreItems(data: ScoreFlags): Record<string, ScoreItem> {
   return {

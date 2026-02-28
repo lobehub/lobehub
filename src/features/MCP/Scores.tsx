@@ -80,11 +80,11 @@ interface ScoresProps {
     license?: string;
   };
   identifier: string;
-  // 列表页支持
+  // List page support
   installationMethods?: string;
   isClaimed?: boolean;
   isValidated?: boolean;
-  // 原始数据属性
+  // Raw data properties
   overview?: {
     readme?: string;
   };
@@ -108,18 +108,18 @@ const Scores = memo<ScoresProps>(
   }) => {
     const { t } = useTranslation('discover');
 
-    // 使用工具函数计算所有的 has* 值，但需要处理类型转换
+    // Use utility function to calculate all has* values, but need to handle type conversion
     const scoreFlags = calculateScoreFlags({
-      // 只传递兼容的属性，或者进行类型转换
+      // Only pass compatible properties, or perform type conversion
       deploymentOptions: deploymentOptions?.map((item) => ({
-        // 确保不为 undefined
+        // Ensure not undefined
         connection: { type: 'stdio' as const },
-        installationMethod: item.installationMethod || 'manual', // 提供默认的 connection
+        installationMethod: item.installationMethod || 'manual', // Provide default connection
       })),
       github: github?.license
         ? {
             license: github.license,
-            url: '', // 提供默认的 url
+            url: '', // Provide default url
           }
         : undefined,
       installationMethods,
@@ -135,7 +135,7 @@ const Scores = memo<ScoresProps>(
       toolsCount,
     });
 
-    // 计算评分
+    // Calculate score
     const scoreItems = createScoreItems(scoreFlags);
     const scoreResult = calculateScore(scoreItems);
     const { grade, percentage } = scoreResult;

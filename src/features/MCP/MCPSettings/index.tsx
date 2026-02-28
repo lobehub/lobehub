@@ -186,7 +186,7 @@ const Settings = ({ ref, identifier, hideFooter }: SettingsProps & { ref?: React
     },
   }));
 
-  // 获取已安装插件信息
+  // Get installed plugin info
   const installedPlugin = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
   const pluginSettings = useToolStore(pluginSelectors.getPluginSettingsById(identifier));
 
@@ -251,7 +251,7 @@ const Settings = ({ ref, identifier, hideFooter }: SettingsProps & { ref?: React
           </div>
 
           {!isEditingConnection ? (
-            // 预览模式
+            // Preview mode
             <Flexbox paddingInline={8}>
               <div className={styles.previewItem}>
                 <span className={styles.previewLabel}>{t('settings.connection.type')}</span>
@@ -291,7 +291,7 @@ const Settings = ({ ref, identifier, hideFooter }: SettingsProps & { ref?: React
               )}
             </Flexbox>
           ) : (
-            // 编辑模式
+            // Edit mode
             <div className={styles.connectionForm}>
               <AForm
                 className={styles.compactForm}
@@ -340,7 +340,7 @@ const Settings = ({ ref, identifier, hideFooter }: SettingsProps & { ref?: React
           )}
         </Flexbox>
 
-        {/* 环境变量配置（仅 stdio 类型） */}
+        {/* Environment variable configuration (stdio type only) */}
         {isStdioType && (
           <Flexbox gap={12}>
             <div className={styles.sectionTitle}>
@@ -374,7 +374,7 @@ const Settings = ({ ref, identifier, hideFooter }: SettingsProps & { ref?: React
           </Flexbox>
         )}
 
-        {/* HTTP 类型提示 */}
+        {/* HTTP type notice */}
         {!isStdioType && (
           <div>
             <div className={styles.sectionTitle}>

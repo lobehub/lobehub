@@ -82,12 +82,12 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
     };
 
     const handleRetryCheck = async () => {
-      // 重新检查依赖，重新开始安装流程
+      // Re-check dependencies, restart the installation process
       await installMCPPlugin(identifier);
     };
 
     const handleSkipCheck = async () => {
-      // 跳过依赖检查，继续安装流程
+      // Skip dependency check, continue installation process
       await installMCPPlugin(identifier, { skipDepsCheck: true });
     };
 

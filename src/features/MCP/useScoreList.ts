@@ -7,8 +7,8 @@ import { calculateScoreFlags, DEFAULT_WEIGHTS } from './calculateScore';
 
 /**
  * Hook for creating score list items with translations
- * 直接从 DetailContext 获取数据，完全自包含
- * @returns 包含描述和标题的评分项目列表
+ * Directly fetches data from DetailContext, fully self-contained
+ * @returns Score item list with descriptions and titles
  */
 export function useScoreList(): ScoreListItem[] {
   const { t } = useTranslation('discover');
@@ -22,11 +22,11 @@ export function useScoreList(): ScoreListItem[] {
     deploymentOptions,
   } = useDetailContext();
 
-  // 计算评分标志
+  // Calculate score flags
   const scoreFlags = calculateScoreFlags({
     deploymentOptions,
     github,
-    isClaimed: false, // 详情页暂时没有 claimed 状态
+    isClaimed: false, // Detail page temporarily has no claimed status
     isValidated,
     overview,
     promptsCount,

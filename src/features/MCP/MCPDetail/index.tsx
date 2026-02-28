@@ -39,7 +39,7 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
   const { data, isLoading } = useMcpDetail({ identifier });
 
-  // 如果有明确传入的 identifier，跳过 isMcpListInit 检查
+  // If an explicit identifier is passed in, skip the isMcpListInit check
   const shouldWaitForInit = !defaultIdentifier && !isMcpListInit;
   if (shouldWaitForInit || isLoading) return <Loading />;
 
