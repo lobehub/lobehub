@@ -10,6 +10,7 @@ import {
   ImageIcon,
   MessageSquareTextIcon,
   MicIcon,
+  VideoIcon,
 } from 'lucide-react';
 import { memo, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +55,7 @@ const Content = memo<ContentProps>(({ id }) => {
       image: 0,
       stt: 0,
       tts: 0,
+      video: 0,
     };
 
     allModels.forEach((model) => {
@@ -107,6 +109,12 @@ const Content = memo<ContentProps>(({ id }) => {
         icon: <Icon icon={AudioLines} size={16} />,
         key: 'tts',
         label: formatTabLabel(t('providerModels.tabs.tts'), modelCounts.tts),
+      },
+      {
+        count: modelCounts.video,
+        icon: <Icon icon={VideoIcon} size={16} />,
+        key: 'video',
+        label: formatTabLabel(t('providerModels.tabs.video'), modelCounts.video),
       },
     ];
 

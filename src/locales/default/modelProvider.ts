@@ -380,6 +380,7 @@ export default {
   'providerModels.tabs.image': 'Image',
   'providerModels.tabs.stt': 'ASR',
   'providerModels.tabs.tts': 'TTS',
+  'providerModels.tabs.video': 'Video',
   'sortModal.success': 'Sort update successful',
   'sortModal.title': 'Custom Order',
   'sortModal.update': 'Update',

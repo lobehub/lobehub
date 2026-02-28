@@ -314,6 +314,7 @@
   "providerModels.tabs.image": "图片",
   "providerModels.tabs.stt": "ASR",
   "providerModels.tabs.tts": "TTS",
+  "providerModels.tabs.video": "视频",
   "sortModal.success": "排序更新成功",
   "sortModal.title": "自定义排序",
   "sortModal.update": "更新",
