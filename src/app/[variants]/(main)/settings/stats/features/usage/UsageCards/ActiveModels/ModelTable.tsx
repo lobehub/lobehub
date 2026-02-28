@@ -63,7 +63,7 @@ const formatData = (
       return {
         childrens: spendWithWeight.sort((a, b) => b.weight - a.weight),
         id: key,
-        totalSpend: totalSpend,
+        totalSpend,
       };
     })
     .sort((a, b) => b.totalSpend - a.totalSpend);

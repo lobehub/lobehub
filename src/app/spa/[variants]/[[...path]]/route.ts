@@ -92,7 +92,7 @@ async function getTemplate(isMobile: boolean): Promise<string> {
   if (isDev) {
     const res = await fetch(VITE_DEV_ORIGIN);
     const html = await res.text();
-    return await rewriteViteAssetUrls(html);
+    return rewriteViteAssetUrls(html);
   }
 
   const { desktopHtmlTemplate, mobileHtmlTemplate } = await import('./spaHtmlTemplates');

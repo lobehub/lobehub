@@ -3,7 +3,7 @@
 import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { type PropsWithChildren, memo, useEffect, useState } from 'react';
+import { memo, type PropsWithChildren, useEffect, useState } from 'react';
 
 export const styles = createStaticStyles(({ css }) => ({
   content: css`
@@ -53,19 +53,19 @@ const GenerationTopicPanel = memo<GenerationTopicPanelProps>(
 
     return (
       <DraggablePanel
-        classNames={{
-          content: styles.content,
-          handle: styles.handle,
-        }}
         defaultSize={{ width: tmpWidth }}
         expand={showPanel}
         maxWidth={320}
         minWidth={80}
         mode={md ? 'fixed' : 'float'}
-        onExpandChange={handleExpand}
-        onSizeChange={handleSizeChange}
         placement="right"
         size={{ height: '100%', width: panelWidth }}
+        classNames={{
+          content: styles.content,
+          handle: styles.handle,
+        }}
+        onExpandChange={handleExpand}
+        onSizeChange={handleSizeChange}
       >
         <DraggablePanelContainer
           style={{

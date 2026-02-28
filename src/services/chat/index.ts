@@ -423,7 +423,7 @@ class ChatService {
 
     return fetchSSE(API_ENDPOINTS.chat(provider), {
       body: JSON.stringify(payload),
-      fetcher: fetcher,
+      fetcher,
       headers,
       method: 'POST',
       onAbort: options?.onAbort,

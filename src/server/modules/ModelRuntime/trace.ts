@@ -105,6 +105,6 @@ export const createTraceOptions = (
         });
       },
     } as ChatStreamCallbacks,
-    headers: headers,
+    headers,
   };
 };

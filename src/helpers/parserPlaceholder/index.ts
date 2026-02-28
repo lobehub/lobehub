@@ -12,7 +12,6 @@ import { globalAgentContextManager } from '../GlobalAgentContextManager';
 
 const placeholderVariablesRegex = /\{\{(.*?)\}\}/g;
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const VARIABLE_GENERATORS = {
   /**
    * Time-related template variables

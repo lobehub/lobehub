@@ -263,8 +263,12 @@ export default {
     'For GPT-5.2 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
+  'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':
+    'For Nano Banana 2; controls aspect ratio of generated images (supports extra-wide 1:4, 4:1, 1:8, 8:1).',
   'providerModels.item.modelConfig.extendParams.options.imageResolution.hint':
     'For Gemini 3 image generation models; controls resolution of generated images.',
+  'providerModels.item.modelConfig.extendParams.options.imageResolution2.hint':
+    'For Gemini 3.1 Flash Image models; controls resolution of generated images (supports 512px).',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
     'For Claude, Qwen3 and similar; controls token budget for reasoning.',
   'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
@@ -281,6 +285,8 @@ export default {
     'For Gemini 3 Pro Preview models; controls thinking depth.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint':
     'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint':
+    'For Gemini 3.1 Flash Image models; toggle thinking on/off.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':
@@ -374,6 +380,7 @@ export default {
   'providerModels.tabs.image': 'Image',
   'providerModels.tabs.stt': 'ASR',
   'providerModels.tabs.tts': 'TTS',
+  'providerModels.tabs.video': 'Video',
   'sortModal.success': 'Sort update successful',
   'sortModal.title': 'Custom Order',
   'sortModal.update': 'Update',

@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
@@ -33,11 +32,10 @@ export const pluginTypes = (set: Setter, get: () => ChatStore, _api?: unknown) =
 
 export class PluginTypesActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

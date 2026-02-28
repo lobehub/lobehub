@@ -4,8 +4,8 @@ import type { Store as ConversationStore } from '../../../action';
 import { type MessageCRUDAction, messageCRUDSlice } from './crud';
 import { type MessageReactionAction, messageReactionSlice } from './reaction';
 import { sendMessage } from './sendMessage';
-import type {MessageStateAction} from './state';
-import {  messageStateSlice } from './state';
+import type { MessageStateAction } from './state';
+import { messageStateSlice } from './state';
 
 /**
  * Message Actions
@@ -16,7 +16,8 @@ import {  messageStateSlice } from './state';
  * - State management (loading, collapsed, editing)
  * - Sending messages
  */
-export interface MessageAction extends MessageCRUDAction, MessageReactionAction, MessageStateAction {
+export interface MessageAction
+  extends MessageCRUDAction, MessageReactionAction, MessageStateAction {
   /**
    * Add an AI message (convenience method)
    */
@@ -59,7 +60,7 @@ export const messageSlice: StateCreator<
     const parentId = displayMessages.length > 0 ? displayMessages.at(-1)?.id : undefined;
 
     const id = await state.createMessage({
-      agentId: agentId,
+      agentId,
       content,
       parentId,
       role: 'assistant',

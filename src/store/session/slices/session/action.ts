@@ -36,8 +36,6 @@ const n = setNamespace('session');
 const FETCH_SESSIONS_KEY = 'fetchSessions';
 const SEARCH_SESSIONS_KEY = 'searchSessions';
 
-/* eslint-disable typescript-sort-keys/interface */
-
 type Setter = StoreSetter<SessionStore>;
 export const createSessionSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
   new SessionActionImpl(set, get, _api);
@@ -108,7 +106,7 @@ export class SessionActionImpl {
     if (!session) return;
     const title = sessionMetaSelectors.getTitle(session.meta);
 
-    const newTitle = t('duplicateSession.title', { ns: 'chat', title: title });
+    const newTitle = t('duplicateSession.title', { ns: 'chat', title });
 
     const messageLoadingKey = 'duplicateSession.loading';
 

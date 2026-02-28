@@ -38,7 +38,7 @@ export const useHotkeyById = (
   const ref = useHotkeys(
     hotkey,
     (...props) => {
-      if (isDev) console.log('[Hotkey]', hotkeyId);
+      if (isDev) console.info('[Hotkey]', hotkeyId);
       return callback(...props);
     },
     {

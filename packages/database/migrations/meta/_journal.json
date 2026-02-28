@@ -616,6 +616,13 @@
       "when": 1771386090928,
       "tag": "0087_add_eval_benchmark",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1772277762014,
+      "tag": "0088_fix_benchmark_add_bot_provider",
+      "breakpoints": true
     }
   ],
   "version": "6"

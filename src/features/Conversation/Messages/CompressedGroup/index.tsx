@@ -148,26 +148,26 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
           <StreamingMarkdown>{content}</StreamingMarkdown>
         </>
       ) : (
-        <Flexbox align={'center'} distribution={'space-between'} horizontal width={'100%'}>
+        <Flexbox horizontal align={'center'} distribution={'space-between'} width={'100%'}>
           <Tabs
+            compact
             activeKey={isGeneratingSummary ? 'summary' : activeTab}
             className={styles.header}
-            compact
             items={tabItems}
-            onChange={handleTabChange}
             variant={'rounded'}
+            onChange={handleTabChange}
           />
-          <Flexbox gap={4} horizontal>
+          <Flexbox horizontal gap={4}>
             <ActionIcon
               icon={Undo2}
-              onClick={handleCancelCompression}
               size={'small'}
               title={t('compression.cancel')}
+              onClick={handleCancelCompression}
             />
             <ActionIcon
               icon={expanded ? ChevronUp : ChevronDown}
-              onClick={() => toggleCompressedGroupExpanded(id)}
               size={'small'}
+              onClick={() => toggleCompressedGroupExpanded(id)}
             />
           </Flexbox>
         </Flexbox>

@@ -30,7 +30,6 @@ export async function buildFluxKontextWorkflow(
   // Check if there's an input image
   const hasInputImage = Boolean(params.imageUrl || params.imageUrls?.[0]);
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const workflow: any = {
     '1': {
       _meta: {
@@ -172,7 +171,6 @@ export async function buildFluxKontextWorkflow(
       },
     },
   };
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 
   // If there's an input image, add image loading and encoding nodes
   if (hasInputImage) {

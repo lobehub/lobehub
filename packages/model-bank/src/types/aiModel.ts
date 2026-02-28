@@ -256,8 +256,11 @@ export type ExtendParamsType =
   | 'thinkingLevel'
   | 'thinkingLevel2'
   | 'thinkingLevel3'
+  | 'thinkingLevel4'
   | 'imageAspectRatio'
+  | 'imageAspectRatio2'
   | 'imageResolution'
+  | 'imageResolution2'
   | 'urlContext';
 
 export interface AiModelSettings {
@@ -286,8 +289,11 @@ export const ExtendParamsTypeSchema = z.enum([
   'thinkingLevel',
   'thinkingLevel2',
   'thinkingLevel3',
+  'thinkingLevel4',
   'imageAspectRatio',
+  'imageAspectRatio2',
   'imageResolution',
+  'imageResolution2',
   'urlContext',
 ]);
 

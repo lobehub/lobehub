@@ -256,7 +256,7 @@ export class MCPService {
 
         return {
           content: mcpError.message,
-          error: error,
+          error,
           state: {
             content: [{ text: mcpError.message, type: 'text' }],
             isError: true,

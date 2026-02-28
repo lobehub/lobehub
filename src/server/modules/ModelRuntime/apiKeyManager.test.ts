@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiKeyManager } from './apiKeyManager';
 
 function generateKeys(count: number = 1) {
-  return new Array(count)
+  return Array.from({ length: count })
     .fill('')
     .map(() => {
       return `sk-${nanoid()}`;

@@ -166,7 +166,7 @@ describe('imageValidation', () => {
         actualSize: maxSize + 1,
         error: 'fileSizeExceeded',
         fileName: 'over-limit.jpg',
-        maxSize: maxSize,
+        maxSize,
         valid: false,
       });
     });

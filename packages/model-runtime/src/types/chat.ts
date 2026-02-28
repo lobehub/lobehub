@@ -7,13 +7,13 @@ export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
 export type ChatResponseFormat =
   | { type: 'json_object' }
   | {
-      json_schema: {
-        name: string;
-        schema: Record<string, any>;
-        strict?: boolean;
-      };
-      type: 'json_schema';
+    json_schema: {
+      name: string;
+      schema: Record<string, any>;
+      strict?: boolean;
     };
+    type: 'json_schema';
+  };
 
 interface UserMessageContentPartThinking {
   signature: string;
@@ -144,7 +144,7 @@ export interface ChatStreamPayload {
    */
   thinking?: {
     budget_tokens: number;
-    type: 'enabled' | 'disabled' | 'adaptive';
+    type?: 'enabled' | 'disabled' | 'adaptive';
   };
   thinkingBudget?: number;
   /**

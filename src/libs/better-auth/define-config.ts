@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { expo } from '@better-auth/expo';
 import { passkey } from '@better-auth/passkey';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';

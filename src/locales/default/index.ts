@@ -9,9 +9,9 @@ import components from './components';
 import desktopOnboarding from './desktop-onboarding';
 import discover from './discover';
 import editor from './editor';
-import eval_ from './eval';
 import electron from './electron';
 import error from './error';
+import eval_ from './eval';
 import file from './file';
 import home from './home';
 import hotkey from './hotkey';
@@ -53,7 +53,7 @@ const resources = {
   'desktop-onboarding': desktopOnboarding,
   discover,
   editor,
-  eval: eval_,
+  'eval': eval_,
   electron,
   error,
   file,

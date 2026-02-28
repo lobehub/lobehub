@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type AgentState, type ExecutorResult } from '@lobechat/agent-runtime';
 import { GroupOrchestrationRuntime, GroupOrchestrationSupervisor } from '@lobechat/agent-runtime';
 import { type TaskStatusResult } from '@lobechat/types';
@@ -42,11 +41,10 @@ export const groupOrchestrationSlice = (set: Setter, get: () => ChatStore, _api?
 
 export class GroupOrchestrationActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

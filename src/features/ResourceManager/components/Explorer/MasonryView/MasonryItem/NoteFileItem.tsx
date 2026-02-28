@@ -1,4 +1,4 @@
-import { Button, Tooltip, stopPropagation } from '@lobehub/ui';
+import { Button, stopPropagation, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
@@ -90,6 +90,7 @@ const extractTitle = (content: string): string | null => {
   if (!content) return null;
 
   // Find first markdown header (# title)
+  // eslint-disable-next-line regexp/no-super-linear-backtracking
   const match = content.match(/^#\s+(.+)$/m);
   return match ? match[1].trim() : null;
 };

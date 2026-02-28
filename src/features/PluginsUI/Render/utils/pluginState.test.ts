@@ -12,6 +12,7 @@ describe('useOnPluginStateUpdate', () => {
     // Reset the mock callback after each test
     mockCallback.mockReset();
     // Ensure no event listeners are left hanging after each test
+    // eslint-disable-next-line unicorn/no-invalid-remove-event-listener
     window.removeEventListener('message', () => {});
   });
 

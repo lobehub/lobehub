@@ -95,13 +95,11 @@ export const lambdaRouter = router({
   userMemories: userMemoriesRouter,
   userMemory: userMemoryRouter,
   video: videoRouter,
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   accountDeletion: accountDeletionRouter,
   referral: referralRouter,
   spend: spendRouter,
   subscription: subscriptionRouter,
   topUp: topUpRouter,
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 });
 
 export type LambdaRouter = typeof lambdaRouter;

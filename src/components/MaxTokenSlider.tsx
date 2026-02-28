@@ -24,7 +24,7 @@ const MaxTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defaultValu
   const [token, setTokens] = useMergeState(0, {
     defaultValue,
     onChange,
-    value: value,
+    value,
   });
 
   const [powValue, setPowValue] = useMergeState(0, {

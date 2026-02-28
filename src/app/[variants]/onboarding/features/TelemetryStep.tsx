@@ -38,6 +38,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
     [updateGeneralConfig, onNext],
   );
 
+  // eslint-disable-next-line @eslint-react/no-nested-component-definitions
   const IconAvatar = useCallback(({ icon }: { icon: IconProps['icon'] }) => {
     return (
       <Block

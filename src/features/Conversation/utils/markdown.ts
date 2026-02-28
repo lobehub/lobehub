@@ -5,12 +5,14 @@ import { ARTIFACT_TAG_REGEX, ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const
  */
 export const processWithArtifact = (input: string = '') => {
   // First remove outer fenced code block if it exists
+  /* eslint-disable regexp/no-super-linear-backtracking */
   let output = input.replace(
     /^([\s\S]*?)\s*```[^\n]*\n((?:<lobeThinking>[\s\S]*?<\/lobeThinking>[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*)?<lobeArtifact[\s\S]*?<\/lobeArtifact>\s*)\n```\s*([\s\S]*)$/,
     (_, before = '', content, after = '') => {
       return [before.trim(), content.trim(), after.trim()].filter(Boolean).join('\n\n');
     },
   );
+  /* eslint-enable regexp/no-super-linear-backtracking */
 
   const thinkMatch = ARTIFACT_THINKING_TAG_REGEX.exec(output);
 

@@ -17,13 +17,12 @@ export const createHomeSlice = (set: Setter, get: () => UserMemoryStore, _api?: 
   new HomeActionImpl(set, get, _api);
 
 export class HomeActionImpl {
-  readonly #get: () => UserMemoryStore;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
     void _api;
     this.#set = set;
-    this.#get = get;
+    void get;
   }
 
   useFetchPersona = (): SWRResponse<PersonaData | null> => {

@@ -26,7 +26,7 @@ const VideoSuccessItem = memo<VideoSuccessItemProps>(({ generation, onDelete, on
         src={asset.url}
         style={{ display: 'block', maxHeight: '50vh', maxWidth: '100%' }}
       />
-      <ActionButtons onDelete={onDelete} onDownload={onDownload} showDownload />
+      <ActionButtons showDownload onDelete={onDelete} onDownload={onDownload} />
     </Block>
   );
 });

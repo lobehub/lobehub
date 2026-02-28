@@ -17,7 +17,6 @@ import {
  * - Add analytics/logging
  * - Implement custom approval flows
  */
-/* eslint-disable typescript-sort-keys/interface */
 export interface ConversationHooks {
   // ========================================
   // Message Lifecycle Hooks

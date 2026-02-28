@@ -16,6 +16,7 @@ const serverDB = await getTestDB();
 const userId = 'benchmark-test-user';
 const userId2 = 'benchmark-test-user-2';
 const benchmarkModel = new AgentEvalBenchmarkModel(serverDB, userId);
+const benchmarkModel2 = new AgentEvalBenchmarkModel(serverDB, userId2);
 
 beforeEach(async () => {
   await serverDB.delete(agentEvalRuns);
@@ -38,7 +39,7 @@ afterEach(async () => {
 
 describe('AgentEvalBenchmarkModel', () => {
   describe('create', () => {
-    it('should create a new benchmark', async () => {
+    it('should create a new benchmark with userId', async () => {
       const params = {
         identifier: 'test-benchmark',
         name: 'Test Benchmark',
@@ -68,6 +69,7 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(result.referenceUrl).toBe('https://example.com');
       expect(result.metadata).toEqual({ version: 1 });
       expect(result.isSystem).toBe(false);
+      expect(result.userId).toBe(userId);
       expect(result.createdAt).toBeDefined();
       expect(result.updatedAt).toBeDefined();
     });
@@ -84,6 +86,7 @@ describe('AgentEvalBenchmarkModel', () => {
 
       expect(result.isSystem).toBe(true);
       expect(result.identifier).toBe('system-benchmark');
+      expect(result.userId).toBe(userId);
     });
   });
 
@@ -95,7 +98,7 @@ describe('AgentEvalBenchmarkModel', () => {
           identifier: 'delete-test',
           name: 'Delete Test',
           rubrics: [],
-
+          userId,
           isSystem: false,
         })
         .returning();
@@ -115,7 +118,7 @@ describe('AgentEvalBenchmarkModel', () => {
           identifier: 'system-benchmark',
           name: 'System Benchmark',
           rubrics: [],
-
+          userId,
           isSystem: true,
         })
         .returning();
@@ -124,6 +127,26 @@ describe('AgentEvalBenchmarkModel', () => {
 
       const stillExists = await serverDB.query.agentEvalBenchmarks.findFirst({
         where: eq(agentEvalBenchmarks.id, systemBenchmark.id),
+      });
+      expect(stillExists).toBeDefined();
+    });
+
+    it("should not delete another user's benchmark", async () => {
+      const [benchmark] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({
+          identifier: 'other-user-benchmark',
+          name: 'Other User Benchmark',
+          rubrics: [],
+          userId: userId2,
+          isSystem: false,
+        })
+        .returning();
+
+      await benchmarkModel.delete(benchmark.id);
+
+      const stillExists = await serverDB.query.agentEvalBenchmarks.findFirst({
+        where: eq(agentEvalBenchmarks.id, benchmark.id),
       });
       expect(stillExists).toBeDefined();
     });
@@ -141,33 +164,41 @@ describe('AgentEvalBenchmarkModel', () => {
           identifier: 'system-1',
           name: 'System 1',
           rubrics: [],
-
+          userId: null,
           isSystem: true,
         },
         {
           identifier: 'user-1',
           name: 'User 1',
           rubrics: [],
-
+          userId,
           isSystem: false,
         },
         {
           identifier: 'system-2',
           name: 'System 2',
           rubrics: [],
-
+          userId: null,
           isSystem: true,
+        },
+        {
+          identifier: 'other-user-1',
+          name: 'Other User 1',
+          rubrics: [],
+          userId: userId2,
+          isSystem: false,
         },
       ]);
     });
 
-    it('should query all benchmarks including system', async () => {
+    it('should query own + system benchmarks including system', async () => {
       const results = await benchmarkModel.query(true);
 
       expect(results).toHaveLength(3);
       expect(results.map((r) => r.identifier)).toContain('system-1');
       expect(results.map((r) => r.identifier)).toContain('user-1');
       expect(results.map((r) => r.identifier)).toContain('system-2');
+      expect(results.map((r) => r.identifier)).not.toContain('other-user-1');
     });
 
     it('should query only user-created benchmarks', async () => {
@@ -182,6 +213,13 @@ describe('AgentEvalBenchmarkModel', () => {
       const results = await benchmarkModel.query();
 
       expect(results).toHaveLength(3);
+    });
+
+    it("should not return other user's benchmarks", async () => {
+      const results = await benchmarkModel.query(true);
+
+      const identifiers = results.map((r) => r.identifier);
+      expect(identifiers).not.toContain('other-user-1');
     });
 
     it('should order by createdAt descending', async () => {
@@ -347,14 +385,14 @@ describe('AgentEvalBenchmarkModel', () => {
   });
 
   describe('findById', () => {
-    it('should find a benchmark by id', async () => {
+    it('should find own benchmark by id', async () => {
       const [benchmark] = await serverDB
         .insert(agentEvalBenchmarks)
         .values({
           identifier: 'find-test',
           name: 'Find Test',
           rubrics: [],
-
+          userId,
           isSystem: false,
         })
         .returning();
@@ -366,6 +404,41 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(result?.identifier).toBe('find-test');
     });
 
+    it('should find system benchmark (null userId) by id', async () => {
+      const [benchmark] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({
+          identifier: 'system-find-test',
+          name: 'System Find Test',
+          rubrics: [],
+          userId: null,
+          isSystem: true,
+        })
+        .returning();
+
+      const result = await benchmarkModel.findById(benchmark.id);
+
+      expect(result).toBeDefined();
+      expect(result?.id).toBe(benchmark.id);
+    });
+
+    it("should not find another user's benchmark by id", async () => {
+      const [benchmark] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({
+          identifier: 'other-find-test',
+          name: 'Other Find Test',
+          rubrics: [],
+          userId: userId2,
+          isSystem: false,
+        })
+        .returning();
+
+      const result = await benchmarkModel.findById(benchmark.id);
+
+      expect(result).toBeUndefined();
+    });
+
     it('should return undefined when benchmark not found', async () => {
       const result = await benchmarkModel.findById('non-existent-id');
       expect(result).toBeUndefined();
@@ -373,11 +446,12 @@ describe('AgentEvalBenchmarkModel', () => {
   });
 
   describe('findByIdentifier', () => {
-    it('should find a benchmark by identifier', async () => {
+    it('should find own benchmark by identifier', async () => {
       await serverDB.insert(agentEvalBenchmarks).values({
         identifier: 'unique-identifier',
         name: 'Unique Test',
         rubrics: [],
+        userId,
         isSystem: false,
       });
 
@@ -386,6 +460,35 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(result).toBeDefined();
       expect(result?.identifier).toBe('unique-identifier');
       expect(result?.name).toBe('Unique Test');
+    });
+
+    it('should find system benchmark (null userId) by identifier', async () => {
+      await serverDB.insert(agentEvalBenchmarks).values({
+        identifier: 'system-identifier',
+        name: 'System Test',
+        rubrics: [],
+        userId: null,
+        isSystem: true,
+      });
+
+      const result = await benchmarkModel.findByIdentifier('system-identifier');
+
+      expect(result).toBeDefined();
+      expect(result?.identifier).toBe('system-identifier');
+    });
+
+    it("should not find another user's benchmark by identifier", async () => {
+      await serverDB.insert(agentEvalBenchmarks).values({
+        identifier: 'other-identifier',
+        name: 'Other Test',
+        rubrics: [],
+        userId: userId2,
+        isSystem: false,
+      });
+
+      const result = await benchmarkModel.findByIdentifier('other-identifier');
+
+      expect(result).toBeUndefined();
     });
 
     it('should return undefined when identifier not found', async () => {
@@ -402,7 +505,7 @@ describe('AgentEvalBenchmarkModel', () => {
           identifier: 'update-test',
           name: 'Original Name',
           rubrics: [],
-
+          userId,
           isSystem: false,
         })
         .returning();
@@ -426,7 +529,7 @@ describe('AgentEvalBenchmarkModel', () => {
           identifier: 'system-benchmark',
           name: 'System Benchmark',
           rubrics: [],
-
+          userId,
           isSystem: true,
         })
         .returning();
@@ -437,8 +540,34 @@ describe('AgentEvalBenchmarkModel', () => {
 
       expect(result).toBeUndefined();
 
-      const unchanged = await benchmarkModel.findById(systemBenchmark.id);
+      const unchanged = await serverDB.query.agentEvalBenchmarks.findFirst({
+        where: eq(agentEvalBenchmarks.id, systemBenchmark.id),
+      });
       expect(unchanged?.name).toBe('System Benchmark');
+    });
+
+    it("should not update another user's benchmark", async () => {
+      const [benchmark] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({
+          identifier: 'other-update-test',
+          name: 'Other User Benchmark',
+          rubrics: [],
+          userId: userId2,
+          isSystem: false,
+        })
+        .returning();
+
+      const result = await benchmarkModel.update(benchmark.id, {
+        name: 'Attempted Update',
+      });
+
+      expect(result).toBeUndefined();
+
+      const unchanged = await serverDB.query.agentEvalBenchmarks.findFirst({
+        where: eq(agentEvalBenchmarks.id, benchmark.id),
+      });
+      expect(unchanged?.name).toBe('Other User Benchmark');
     });
 
     it('should return undefined when benchmark not found', async () => {
@@ -457,7 +586,7 @@ describe('AgentEvalBenchmarkModel', () => {
           name: 'Original',
           description: 'Original Desc',
           rubrics: [],
-
+          userId,
           isSystem: false,
         })
         .returning();

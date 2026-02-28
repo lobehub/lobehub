@@ -212,7 +212,7 @@ export const agentRouter = router({
           if (!user) return DEFAULT_AGENT_CONFIG;
 
           const res = await ctx.agentService.createInbox();
-          console.log('create inbox session', res);
+          console.info('create inbox session', res);
         }
       }
 

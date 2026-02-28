@@ -29,6 +29,7 @@ const EmptyState = memo<EmptyStateProps>(({ onCreate }) => {
   return (
     <Card className={styles.emptyCard}>
       <Empty
+        icon={Activity}
         description={
           <Flexbox gap={4}>
             <p
@@ -52,9 +53,14 @@ const EmptyState = memo<EmptyStateProps>(({ onCreate }) => {
             </p>
           </Flexbox>
         }
-        icon={Activity}
       >
-        <Button icon={Plus} onClick={onCreate} size="small" style={{ marginTop: 16 }} type="primary">
+        <Button
+          icon={Plus}
+          size="small"
+          style={{ marginTop: 16 }}
+          type="primary"
+          onClick={onCreate}
+        >
           {t('run.actions.create')}
         </Button>
       </Empty>

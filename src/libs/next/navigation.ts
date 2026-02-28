@@ -6,8 +6,8 @@
 
 export {
   notFound,
-  redirect,
   type ReadonlyURLSearchParams,
+  redirect,
   useParams,
   usePathname,
   useRouter,

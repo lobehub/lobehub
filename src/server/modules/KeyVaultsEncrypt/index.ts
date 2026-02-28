@@ -41,7 +41,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
 
     const encryptedData = await crypto.subtle.encrypt(
       {
-        iv: iv,
+        iv,
         name: 'AES-GCM',
       },
       this.aesKey,
@@ -72,7 +72,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     try {
       const decryptedBuffer = await crypto.subtle.decrypt(
         {
-          iv: iv,
+          iv,
           name: 'AES-GCM',
         },
         this.aesKey,

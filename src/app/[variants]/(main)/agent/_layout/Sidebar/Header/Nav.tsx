@@ -46,26 +46,26 @@ const Nav = memo(() => {
     <Flexbox gap={1} paddingInline={4}>
       <NavItem
         icon={MessageSquarePlusIcon}
-        onClick={handleNewTopic}
         title={tTopic('actions.addNewTopic')}
+        onClick={handleNewTopic}
       />
       {!hideProfile && (
         <NavItem
           active={isProfileActive}
           icon={BotPromptIcon}
+          title={t('tab.profile')}
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
             router.push(urlJoin('/agent', agentId!, 'profile'));
           }}
-          title={t('tab.profile')}
         />
       )}
       <NavItem
         icon={SearchIcon}
+        title={t('tab.search')}
         onClick={() => {
           toggleCommandMenu(true);
         }}
-        title={t('tab.search')}
       />
     </Flexbox>
   );

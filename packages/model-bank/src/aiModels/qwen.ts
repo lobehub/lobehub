@@ -11,60 +11,10 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Qwen3.5 397B A17B is a large-scale open model in the Qwen series, delivering excellent performance in complex reasoning, knowledge QA, and coding. It supports thinking mode for highly complex tasks.',
-    displayName: 'Qwen3.5 397B A17B',
-    id: 'qwen3.5-397b-a17b',
-    maxOutput: 65_536,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 1.2,
-              '[0.128, 0.256]': 3,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 7.2,
-              '[0.128, 0.256]': 18,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-02-15',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
       'Kimi K2.5 is the most capable Kimi model, delivering open-source SOTA in agent tasks, coding, and vision understanding. It supports multimodal inputs and both thinking and non-thinking modes.',
     displayName: 'Kimi K2.5',
     id: 'kimi-k2.5',
     maxOutput: 32_768,
-    organization: 'Qwen',
     pricing: {
       currency: 'CNY',
       units: [
@@ -74,6 +24,30 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
+      'MiniMax-M2.5 is a flagship open-source large model from MiniMax, focusing on solving complex real-world tasks. Its core strengths are multi-language programming capabilities and the ability to solve complex tasks as an Agent.',
+    displayName: 'MiniMax-M2.5',
+    id: 'MiniMax-M2.5',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -206,6 +180,31 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'deepseek-v3.2 introduces sparse attention mechanism, aiming to improve training and inference efficiency when processing long texts, priced lower than deepseek-v3.1.',
+    displayName: 'DeepSeek V3.2',
+    id: 'deepseek-v3.2',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
       search: true,
     },
@@ -229,6 +228,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       search: true,
     },
@@ -789,7 +789,7 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true
+      vision: true,
     },
     contextWindowTokens: 262_144,
     description:
@@ -1847,10 +1847,11 @@ const qwenChatModels: AIChatModelCard[] = [
       currency: 'CNY',
       units: [
         { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 15.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 6.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-09-15',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -2773,7 +2774,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Max',
-    enabled: true,
     id: 'qwen-image-edit-max',
     organization: 'Qwen',
     parameters: {
@@ -2798,7 +2798,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Plus',
-    enabled: true,
     id: 'qwen-image-edit-plus',
     organization: 'Qwen',
     parameters: {
@@ -2823,7 +2822,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
     displayName: 'Qwen Image Edit',
-    enabled: true,
     id: 'qwen-image-edit',
     organization: 'Qwen',
     parameters: {
@@ -2846,7 +2844,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Generation Model (Max series) delivers enhanced realism and visual naturalness compared with the Plus series, effectively reducing AI-generated artifacts, and demonstrating outstanding performance in human appearance, texture details, and text rendering.',
     displayName: 'Qwen Image Max',
-    enabled: true,
     id: 'qwen-image-max',
     organization: 'Qwen',
     parameters: {
@@ -2870,7 +2867,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'It supports a wide range of artistic styles and is particularly proficient at rendering complex text within images, enabling integrated image–text layout design.',
     displayName: 'Qwen Image Plus',
-    enabled: true,
     id: 'qwen-image-plus',
     organization: 'Qwen',
     parameters: {
@@ -2894,7 +2890,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
     displayName: 'Qwen Image',
-    enabled: true,
     id: 'qwen-image',
     organization: 'Qwen',
     parameters: {
@@ -2917,7 +2912,6 @@ const qwenImageModels: AIImageModelCard[] = [
   {
     description: 'Wanxiang 2.6 Image supports image editing and mixed image–text layout output.',
     displayName: 'Wanxiang2.6 Image',
-    enabled: true,
     id: 'wan2.6-image',
     organization: 'Qwen',
     parameters: {
@@ -2942,7 +2936,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Wanxiang 2.6 T2I supports flexible selection of image dimensions within total pixel area and aspect ratio constraints (same as Wanxiang 2.5).',
     displayName: 'Wanxiang2.6 T2I',
-    enabled: true,
     id: 'wan2.6-t2i',
     organization: 'Qwen',
     parameters: {
@@ -3029,7 +3022,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Wanxiang 2.2 Plus is the latest model with upgrades in creativity, stability, and realism, producing richer details.',
     displayName: 'Wanxiang2.2 T2I Plus',
-    enabled: true,
     id: 'wan2.2-t2i-plus',
     organization: 'Qwen',
     parameters: {
@@ -3134,7 +3126,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'FLUX.1 [schnell] is the most advanced open-source few-step model, surpassing similar competitors and even strong non-distilled models like Midjourney v6.0 and DALL-E 3 (HD). It is finely tuned to preserve pretraining diversity, significantly improving visual quality, instruction following, size/aspect variation, font handling, and output diversity.',
     displayName: 'FLUX.1 [schnell]',
-    enabled: true,
     id: 'flux-schnell',
     organization: 'Qwen',
     parameters: {
@@ -3159,7 +3150,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'FLUX.1 [dev] is an open-weights distilled model for non-commercial use. It keeps near-pro image quality and instruction following while running more efficiently, using resources better than same-size standard models.',
     displayName: 'FLUX.1 [dev]',
-    enabled: true,
     id: 'flux-dev',
     organization: 'Qwen',
     parameters: {
@@ -3182,9 +3172,8 @@ const qwenImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'FLUX.1-merged combines the deep features explored in "DEV" with the high-speed advantages of "Schnell", extending performance limits and broadening applications.',
-    displayName: 'FLUX.1-merged',
-    enabled: true,
+      'FLUX.1 [merged] combines the deep features explored in "DEV" with the high-speed advantages of "Schnell", extending performance limits and broadening applications.',
+    displayName: 'FLUX.1 [merged]',
     id: 'flux-merged',
     organization: 'Qwen',
     parameters: {

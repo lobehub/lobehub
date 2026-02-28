@@ -316,13 +316,13 @@ const Placeholder: FC<PlaceholderProps> = memo(({ isDragOver, onClick, height })
     <Center
       gap={16}
       horizontal={false}
+      style={height ? { height } : undefined}
       className={cx(
         styles.placeholder,
         configStyles.dragTransition,
         isDragOver && configStyles.dragOver,
       )}
       onClick={onClick}
-      style={height ? { height } : undefined}
     >
       <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
       <div className={styles.placeholderText}>

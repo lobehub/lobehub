@@ -57,13 +57,11 @@ export enum SettingsTabs {
   Security = 'security',
   Skill = 'skill',
 
-  /* eslint-disable typescript-sort-keys/string-enum */
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
   TTS = 'tts',
   Usage = 'usage',
-  /* eslint-enable typescript-sort-keys/string-enum */
 }
 
 /**

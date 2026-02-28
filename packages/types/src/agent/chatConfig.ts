@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { type SearchMode } from '../search';
-import  { type UserMemoryEffort } from '../user/settings/memory';
+import { type UserMemoryEffort } from '../user/settings/memory';
 import { type LocalSystemConfig } from './agentConfig';
 
 export interface WorkingModel {
@@ -80,9 +80,17 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    */
   imageAspectRatio?: string;
   /**
+   * Image aspect ratio for Nano Banana 2 (supports extra-wide 1:4, 4:1, 1:8, 8:1)
+   */
+  imageAspectRatio2?: string;
+  /**
    * Image resolution for image generation models
    */
   imageResolution?: '1K' | '2K' | '4K';
+  /**
+   * Image resolution for image generation models (with 512px support)
+   */
+  imageResolution2?: '512px' | '1K' | '2K' | '4K';
   inputTemplate?: string;
   /**
    * Local System configuration (desktop only)
@@ -104,6 +112,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
+  thinkingLevel4?: 'minimal' | 'high';
   /**
    * Maximum length for tool execution result content (in characters)
    * This prevents context overflow when sending tool results back to LLM
@@ -154,7 +163,9 @@ export const AgentChatConfigSchema = z
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
+    imageAspectRatio2: z.string().optional(),
     imageResolution: z.enum(['1K', '2K', '4K']).optional(),
+    imageResolution2: z.enum(['512px', '1K', '2K', '4K']).optional(),
     localSystem: LocalSystemConfigSchema.optional(),
     reasoningBudgetToken: z.number().optional(),
     reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
@@ -171,6 +182,7 @@ export const AgentChatConfigSchema = z
     thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     thinkingLevel2: z.enum(['low', 'high']).optional(),
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
+    thinkingLevel4: z.enum(['minimal', 'high']).optional(),
     toolResultMaxLength: z.number().default(6000),
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),

@@ -1,4 +1,4 @@
-import { Button, Flexbox, Tooltip, stopPropagation } from '@lobehub/ui';
+import { Button, Flexbox, stopPropagation, Tooltip } from '@lobehub/ui';
 import { Image } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';

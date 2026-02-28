@@ -61,9 +61,6 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
 
       setLoading(true);
       try {
-        // 第三方市场和自定义插件：构建自定义插件数据
-        let customPlugin: LobeToolCustomPlugin;
-
         // 合并原始配置和用户更新的配置
         const finalConfig = {
           ...schema.config,
@@ -74,7 +71,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
         // 自定义插件：先测试连接获取真实的 manifest
         const testParams: McpConnectionParams = {
           connection: finalConfig,
-          identifier: identifier,
+          identifier,
           metadata: {
             avatar: schema.icon,
             description: schema.description,
@@ -91,8 +88,9 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           throw new Error(t('protocolInstall.messages.manifestNotFound'));
         }
 
+        // 第三方市场和自定义插件：构建自定义插件数据
         // 使用测试连接获取的真实 manifest
-        customPlugin = {
+        const customPlugin: LobeToolCustomPlugin = {
           customParams: {
             avatar: schema.icon,
             description: schema.description,

@@ -28,7 +28,7 @@ const verifyQStashSignature = async (request: NextRequest, rawBody: string): Pro
   }
 
   const { Receiver } = await import('@upstash/qstash');
-  const receiver = new Receiver({ currentSigningKey, nextSigningKey: nextSigningKey });
+  const receiver = new Receiver({ currentSigningKey, nextSigningKey });
 
   try {
     return await receiver.verify({ body: rawBody, signature });

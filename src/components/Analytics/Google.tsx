@@ -2,10 +2,11 @@
 
 import { memo, useEffect } from 'react';
 
-import { analyticsEnv } from '@/envs/analytics';
+interface GoogleAnalyticsProps {
+  gaId?: string;
+}
 
-const GoogleAnalytics = memo(() => {
-  const gaId = analyticsEnv.GOOGLE_ANALYTICS_MEASUREMENT_ID;
+const GoogleAnalytics = memo<GoogleAnalyticsProps>(({ gaId }) => {
   useEffect(() => {
     if (!gaId) return;
 

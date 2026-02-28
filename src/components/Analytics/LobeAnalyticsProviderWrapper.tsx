@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import { LobeAnalyticsProvider } from '@/components/Analytics/LobeAnalyticsProvider';
-import { analyticsEnv } from '@/envs/analytics';
+import type { SPAServerConfig } from '@/types/spaServerConfig';
 import { isDev } from '@/utils/env';
 
 type Props = {
@@ -10,21 +10,24 @@ type Props = {
 };
 
 export const LobeAnalyticsProviderWrapper = memo<Props>(({ children }) => {
+  const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
+  const analytics = serverConfig?.analyticsConfig;
+
   return (
     <LobeAnalyticsProvider
       ga4Config={{
         debug: isDev,
-        enabled: analyticsEnv.ENABLE_GOOGLE_ANALYTICS,
+        enabled: !!analytics?.google?.measurementId,
         gtagConfig: {
           debug_mode: isDev,
         },
-        measurementId: analyticsEnv.GOOGLE_ANALYTICS_MEASUREMENT_ID ?? '',
+        measurementId: analytics?.google?.measurementId ?? '',
       }}
       postHogConfig={{
-        debug: analyticsEnv.DEBUG_POSTHOG_ANALYTICS,
-        enabled: analyticsEnv.ENABLED_POSTHOG_ANALYTICS,
-        host: analyticsEnv.POSTHOG_HOST,
-        key: analyticsEnv.POSTHOG_KEY ?? '',
+        debug: analytics?.posthog?.debug ?? false,
+        enabled: !!analytics?.posthog?.key,
+        host: analytics?.posthog?.host ?? '',
+        key: analytics?.posthog?.key ?? '',
         person_profiles: 'always',
       }}
     >

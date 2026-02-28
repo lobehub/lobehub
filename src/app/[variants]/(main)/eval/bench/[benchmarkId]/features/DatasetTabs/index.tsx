@@ -20,9 +20,9 @@ const DatasetTabs = memo<DatasetTabsProps>(({ datasets, activeDatasetId, onChang
 
   return (
     <Segmented
-      onChange={(value) => onChange(value as string)}
       options={datasets.map((d: any) => ({ label: d.name, value: d.id }))}
       value={activeDatasetId || datasets[0]?.id}
+      onChange={(value) => onChange(value as string)}
     />
   );
 });

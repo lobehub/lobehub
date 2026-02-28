@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type CreateMessageParams } from '@lobechat/types';
 
 import { messageService } from '@/services/message';
@@ -19,11 +18,10 @@ export const pluginWorkflow = (set: Setter, get: () => ChatStore, _api?: unknown
 
 export class PluginWorkflowActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

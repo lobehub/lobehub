@@ -102,7 +102,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
             setIsWaitingAuth(false);
           }
         } catch {
-          console.log('[LobehubSkill] COOP blocked window.closed access, falling back to polling');
+          console.info('[LobehubSkill] COOP blocked window.closed access, falling back to polling');
           if (windowCheckIntervalRef.current) {
             clearInterval(windowCheckIntervalRef.current);
             windowCheckIntervalRef.current = null;

@@ -55,6 +55,7 @@ export const POST = checkAuth(
 
       const logMethod = AGENT_RUNTIME_ERROR_SET.has(errorType as string) ? 'warn' : 'error';
       // track the error at server side
+      // eslint-disable-next-line no-console
       console[logMethod](`Route: [${provider}] ${errorType}:`, error);
 
       return createErrorResponse(errorType, { error, ...res, provider });

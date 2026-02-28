@@ -15,7 +15,8 @@ import CreateBenchmarkModal from './features/CreateBenchmarkModal';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow-y: auto;
-    padding: 24px 32px;
+    padding-block: 24px;
+    padding-inline: 32px;
   `,
   subtitle: css`
     margin: 0;
@@ -24,6 +25,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     margin: 0;
+
     font-size: 22px;
     font-weight: 600;
     line-height: 1.3;
@@ -42,13 +44,13 @@ const EvalOverview = memo(() => {
   return (
     <Flexbox className={styles.container} gap={32} height="100%" width="100%">
       {/* Header */}
-      <Flexbox align="center" horizontal justify="space-between">
+      <Flexbox horizontal align="center" justify="space-between">
         <Flexbox gap={4}>
           <h1 className={styles.title}>{t('overview.title')}</h1>
           <p className={styles.subtitle}>{t('overview.subtitle')}</p>
         </Flexbox>
         {benchmarkList.length > 0 && (
-          <Button icon={Plus} onClick={() => setCreateModalOpen(true)} type="primary">
+          <Button icon={Plus} type="primary" onClick={() => setCreateModalOpen(true)}>
             {t('overview.createBenchmark')}
           </Button>
         )}
@@ -64,16 +66,22 @@ const EvalOverview = memo(() => {
           <Empty description={t('benchmark.empty')} icon={FlaskConical}>
             <Button
               icon={Plus}
-              onClick={() => setCreateModalOpen(true)}
               style={{ marginTop: 16 }}
               type="primary"
+              onClick={() => setCreateModalOpen(true)}
             >
               {t('overview.createBenchmark')}
             </Button>
           </Empty>
         </Flexbox>
       ) : (
-        <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))' }}>
+        <div
+          style={{
+            display: 'grid',
+            gap: 20,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))',
+          }}
+        >
           {benchmarkList.map((benchmark: any) => (
             <BenchmarkCard
               bestScore={benchmark.bestScore}
@@ -92,10 +100,7 @@ const EvalOverview = memo(() => {
         </div>
       )}
 
-      <CreateBenchmarkModal
-        onCancel={() => setCreateModalOpen(false)}
-        open={createModalOpen}
-      />
+      <CreateBenchmarkModal open={createModalOpen} onCancel={() => setCreateModalOpen(false)} />
     </Flexbox>
   );
 });

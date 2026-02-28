@@ -292,7 +292,8 @@ const ai360ChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_000,
-    description: '兼顾生成质量与响应速度，适合作为通用生产级模型',
+    description:
+      'Balances generation quality and response speed, suitable as a general-purpose production-grade model',
     displayName: 'Doubao Seed 2.0 Lite',
     id: 'volcengine/doubao-seed-2-0-lite',
     pricing: {
@@ -311,7 +312,7 @@ const ai360ChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_000,
-    description: '指向 doubao-seed-2-0-mini 最新版',
+    description: 'Points to the latest version of doubao-seed-2-0-mini',
     displayName: 'Doubao Seed 2.0 Mini',
     id: 'volcengine/doubao-seed-2-0-mini',
     pricing: {
@@ -330,7 +331,7 @@ const ai360ChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_000,
-    description: '指向 doubao-seed-2-0-pro 最新版',
+    description: 'Points to the latest version of doubao-seed-2-0-pro',
     displayName: 'Doubao Seed 2.0 Pro',
     id: 'volcengine/doubao-seed-2-0-pro',
     pricing: {
@@ -350,7 +351,7 @@ const ai360ChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'Doubao-Seed-2.0-Code 面向企业级编程需求优化，在 Seed 2.0 优秀的 Agent、VLM 能力基础上，特别增强了代码能力，不仅前端能力表现出众，也对企业常见的多语言编码需求做了特别优化，适合接入各种 AI 编程工具使用。',
+      'Doubao-Seed-2.0-Code is optimized for enterprise-level programming needs. Built on the excellent Agent and VLM capabilities of Seed 2.0, it specially enhances coding abilities with outstanding frontend performance and targeted optimization for common enterprise multi-language coding requirements, making it ideal for integration with various AI programming tools.',
     displayName: 'Doubao Seed 2.0 Code',
     id: 'volcengine/doubao-seed-2-0-code',
     pricing: {

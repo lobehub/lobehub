@@ -10,9 +10,9 @@ import {
   List,
   Modal,
   SearchBar,
+  stopPropagation,
   Text,
   Tooltip,
-  stopPropagation,
 } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';

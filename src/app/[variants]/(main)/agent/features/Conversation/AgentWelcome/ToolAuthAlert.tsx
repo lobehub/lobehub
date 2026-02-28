@@ -102,7 +102,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
         try {
           await refreshKlavisServerTools(identifier);
         } catch (error) {
-          console.debug('[Klavis] Polling check (expected during auth):', error);
+          console.info('[Klavis] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 

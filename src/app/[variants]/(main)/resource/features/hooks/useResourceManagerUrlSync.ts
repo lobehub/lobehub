@@ -29,7 +29,6 @@ export const useResourceManagerUrlSync = () => {
 
     setSorter(sorterParam);
     setSortType(sortTypeParam);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount
 
   // Sync store changes to URL (Store → URL)

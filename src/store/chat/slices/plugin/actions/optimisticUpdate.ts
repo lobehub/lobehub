@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
@@ -41,11 +40,10 @@ export const pluginOptimisticUpdate = (set: Setter, get: () => ChatStore, _api?:
 
 export class PluginOptimisticUpdateActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

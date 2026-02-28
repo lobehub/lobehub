@@ -15,12 +15,10 @@ export class ConfigError extends ComfyUIInternalError {
     this.name = 'ConfigError';
   }
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   static readonly Reasons = {
     CONFIG_PARSE_ERROR: 'CONFIG_PARSE_ERROR',
     INVALID_CONFIG: 'INVALID_CONFIG',
     MISSING_CONFIG: 'MISSING_CONFIG',
     REGISTRY_ERROR: 'REGISTRY_ERROR',
   } as const;
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 }

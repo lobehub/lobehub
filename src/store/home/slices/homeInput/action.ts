@@ -152,7 +152,7 @@ export class HomeInputActionImpl {
 
   sendAsResearch = async (message: string): Promise<void> => {
     // TODO: Implement DeepResearch mode
-    console.log('sendAsResearch:', message);
+    console.info('sendAsResearch:', message);
 
     // Clear mode
     this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));

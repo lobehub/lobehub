@@ -7,11 +7,10 @@ export const createGroupSlice = (set: Setter, get: () => HomeStore, _api?: unkno
 
 export class GroupActionImpl {
   readonly #get: () => HomeStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

@@ -44,6 +44,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
   }, [onBack]);
 
   const Message = useCallback(
+    // eslint-disable-next-line @eslint-react/no-nested-component-definitions
     () => (
       <LobeMessage
         sentences={[

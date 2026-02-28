@@ -1,8 +1,8 @@
 'use client';
 
 import { ActionIcon } from '@lobehub/ui';
-import { Input } from 'antd';
 import { useDebounce } from 'ahooks';
+import { Input } from 'antd';
 import { SearchIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,29 +60,33 @@ const SearchInput = memo(() => {
   return (
     <>
       <div
-        onTransitionEnd={handleTransitionEnd}
         style={{
           opacity: expanded ? 1 : 0,
           overflow: 'hidden',
           transition: 'width 240ms ease-out, opacity 200ms ease-out',
           width: expanded ? 200 : 0,
         }}
+        onTransitionEnd={handleTransitionEnd}
       >
         <Input
-          onBlur={handleBlur}
-          onChange={(e) => setLocalQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
           placeholder={t('FileManager.search.placeholder')}
           prefix={<SearchIcon size={14} />}
           ref={inputRef}
           size="small"
           style={{ width: 200 }}
-          suffix={localQuery ? <XIcon onClick={handleCollapse} size={14} style={{ cursor: 'pointer' }} /> : undefined}
           value={localQuery}
+          suffix={
+            localQuery ? (
+              <XIcon size={14} style={{ cursor: 'pointer' }} onClick={handleCollapse} />
+            ) : undefined
+          }
+          onBlur={handleBlur}
+          onChange={(e) => setLocalQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
         />
       </div>
       {showIcon && (
-        <ActionIcon icon={SearchIcon} onClick={handleExpand} style={{ marginRight: 4 }} />
+        <ActionIcon icon={SearchIcon} style={{ marginRight: 4 }} onClick={handleExpand} />
       )}
     </>
   );

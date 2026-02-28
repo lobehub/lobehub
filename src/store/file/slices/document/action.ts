@@ -123,7 +123,7 @@ export class DocumentActionImpl {
       metadata: {},
       source: 'document',
       sourceType: DocumentSourceType.EDITOR,
-      title: title,
+      title,
       totalCharCount: 0,
       totalLineCount: 0,
       updatedAt: now,

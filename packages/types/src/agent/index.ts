@@ -1,3 +1,4 @@
+export * from './agencyConfig';
 export * from './agentConfig';
 export * from './chatConfig';
 export * from './item';

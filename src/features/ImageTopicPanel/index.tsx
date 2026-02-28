@@ -16,10 +16,10 @@ const ImageTopicPanel = memo<PropsWithChildren>(({ children }) => {
 
   return (
     <GenerationTopicPanel
-      onExpandChange={(expand) => updateSystemStatus({ showImageTopicPanel: expand })}
-      onSizeChange={(width) => updateSystemStatus({ imageTopicPanelWidth: width })}
       panelWidth={imageTopicPanelWidth ?? 256}
       showPanel={showImageTopicPanel ?? true}
+      onExpandChange={(expand) => updateSystemStatus({ showImageTopicPanel: expand })}
+      onSizeChange={(width) => updateSystemStatus({ imageTopicPanelWidth: width })}
     >
       {children}
     </GenerationTopicPanel>

@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 

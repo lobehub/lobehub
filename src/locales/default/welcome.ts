@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 export default {
   'guide.agents.replaceBtn': 'Refresh',
   'guide.agents.title': 'New Agent Recommendations:',

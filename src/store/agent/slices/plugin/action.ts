@@ -16,11 +16,10 @@ export const createPluginSlice = (set: Setter, get: () => AgentStore, _api?: unk
 
 export class PluginSliceActionImpl {
   readonly #get: () => AgentStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

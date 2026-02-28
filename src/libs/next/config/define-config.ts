@@ -1,7 +1,6 @@
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
-import ReactComponentName from 'react-scan/react-component-name/webpack';
 
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
@@ -11,14 +10,12 @@ interface CustomNextConfig {
   redirects?: Redirect[];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
-  webpack?: NextConfig['webpack'];
 }
 
 export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
 
-  const enableReactScan = !!process.env.REACT_SCAN_MONITOR_API_KEY;
   const shouldUseCSP = process.env.ENABLED_CSP === '1';
 
   const isTest =
@@ -28,14 +25,23 @@ export function defineConfig(config: CustomNextConfig) {
 
   const standaloneConfig: NextConfig = {
     output: 'standalone',
+
     outputFileTracingIncludes: {
       '*': [
         'public/**/*',
         '.next/static/**/*',
+
         // Only needed for Docker standalone builds.
         // On Vercel (serverless), including native bindings can easily exceed function size limits.
         ...(buildWithDocker
           ? [
+              // Exclude SPA/desktop/mobile build artifacts from serverless functions
+              'public/spa/**',
+              'dist/desktop/**',
+              'dist/mobile/**',
+
+              'packages/database/migrations/**',
+
               // Ensure native bindings are included in standalone output.
               // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
               // which may not be picked up by Next.js output tracing.
@@ -369,62 +375,6 @@ export function defineConfig(config: CustomNextConfig) {
 
     typescript: {
       ignoreBuildErrors: true,
-    },
-
-    webpack(baseWebpackConfig, options) {
-      baseWebpackConfig.experiments = {
-        asyncWebAssembly: true,
-        layers: true,
-      };
-
-      // 开启该插件会导致 pglite 的 fs bundler 被改表
-      if (enableReactScan) {
-        baseWebpackConfig.plugins.push(ReactComponentName({}));
-      }
-
-      // to fix shikiji compile error
-      // refs: https://github.com/antfu/shikiji/issues/23
-      baseWebpackConfig.module.rules.push({
-        resolve: {
-          fullySpecified: false,
-        },
-        test: /\.m?js$/,
-        type: 'javascript/auto',
-      });
-
-      baseWebpackConfig.resolve.alias.canvas = false;
-
-      // to ignore epub2 compile error
-      // refs: https://github.com/lobehub/lobe-chat/discussions/6769
-      baseWebpackConfig.resolve.fallback = {
-        ...baseWebpackConfig.resolve.fallback,
-        zipfile: false,
-      };
-
-      if (
-        assetPrefix &&
-        (assetPrefix.startsWith('http://') || assetPrefix.startsWith('https://'))
-      ) {
-        // fix the Worker URL cross-origin issue
-        // refs: https://github.com/lobehub/lobe-chat/pull/9624
-        baseWebpackConfig.module.rules.push({
-          generator: {
-            // @see https://webpack.js.org/configuration/module/#rulegeneratorpublicpath
-            publicPath: '/_next/',
-          },
-          test: /worker\.ts$/,
-          // @see https://webpack.js.org/guides/asset-modules/
-          type: 'asset/resource',
-        });
-      }
-
-      const updatedConfig = baseWebpackConfig;
-
-      if (config.webpack) {
-        return config.webpack(updatedConfig, options);
-      }
-
-      return updatedConfig;
     },
   };
 

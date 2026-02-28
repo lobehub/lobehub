@@ -66,7 +66,7 @@ export class VideoGenerationService {
 
       const [metadata, videoBuffer] = await Promise.all([
         this.getVideoMetadata(tempVideoPath),
-        fs.readFile(tempVideoPath),
+        fs.readFile(String(tempVideoPath)),
       ]);
 
       log('Video metadata: %O', metadata);
@@ -91,7 +91,7 @@ export class VideoGenerationService {
 
       // Generate cover screenshot and thumbnail
       tempCoverPath = await this.generateScreenshot(tempVideoPath, metadata.width, metadata.height);
-      const coverBuffer = await fs.readFile(tempCoverPath);
+      const coverBuffer = await fs.readFile(String(tempCoverPath));
 
       // Convert cover to webp
       const coverWebpBuffer = await sharp(coverBuffer).webp({ quality: 100 }).toBuffer();
@@ -213,7 +213,7 @@ export class VideoGenerationService {
     const ffmpegPath = getFfmpegPath();
 
     // ffmpeg -i exits with code 1 when no output is specified, but stderr contains metadata
-    let stderr = '';
+    let stderr: string;
     try {
       const result = await execFileAsync(ffmpegPath, ['-i', videoPath, '-hide_banner']);
       stderr = result.stderr;

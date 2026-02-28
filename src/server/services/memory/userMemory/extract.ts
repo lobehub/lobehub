@@ -1223,7 +1223,7 @@ export class MemoryExtractionExecutor {
 
           const topicContextProvider = new LobeChatTopicContextProvider({
             conversations: extractorConversations,
-            topic: topic,
+            topic,
             topicId: topic.id,
           });
           const topicContext = await topicContextProvider.buildContext(extractionJob.userId);
@@ -1357,7 +1357,7 @@ export class MemoryExtractionExecutor {
               : undefined,
             contextProvider: topicContextProvider,
             gatekeeperLanguage: this.privateConfig.agentGateKeeper.language || 'English',
-            language: language,
+            language,
             resultRecorder: resultRecorder as any,
             retrievedContexts: trimmedRetrievedContexts,
             retrievedIdentitiesContext: trimmedRetrievedIdentitiesContext,
@@ -2006,7 +2006,7 @@ export class MemoryExtractionExecutor {
       async (span) => {
         const startTime = Date.now();
         let extractionJob: MemoryExtractionJob | null = null;
-        let extraction: MemoryExtractionResult | null = null;
+        let extraction: MemoryExtractionResult | null;
 
         try {
           const db = await this.db;

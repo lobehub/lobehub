@@ -72,13 +72,14 @@ export class GroupChatSupervisor {
       const response = await this.callLLMForDecision(context);
       const result = this.parseSupervisorResponse(response, availableAgents, context);
 
-      console.log('Supervisor TODO list:', result.todos);
+      console.info('Supervisor TODO list:', result.todos);
 
       return result;
     } catch (error) {
       // Re-throw the error so it can be caught and displayed to the user via toast
       throw new Error(
         `Supervisor decision failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
     }
   }
@@ -110,7 +111,7 @@ export class GroupChatSupervisor {
         context.abortController || new AbortController(),
       );
 
-      console.log('SUPERVISOR RESPONSE', JSON.stringify(response, null, 2));
+      console.info('SUPERVISOR RESPONSE', JSON.stringify(response, null, 2));
 
       // Parse the response to SupervisorToolCall[]
       if (Array.isArray(response)) {
@@ -170,7 +171,7 @@ export class GroupChatSupervisor {
     context: SupervisorContext,
   ): SupervisorDecisionResult {
     const previousTodos = (context.todoList || []).map((item) => ({ ...item }));
-    let primaryError: unknown = null;
+    let primaryError: unknown;
 
     try {
       const toolCalls = this.normalizeToolCalls(response);
@@ -193,7 +194,9 @@ export class GroupChatSupervisor {
       const legacyMessage =
         legacyError instanceof Error ? legacyError.message : String(legacyError);
 
-      throw new Error(`Failed to parse supervisor response: ${primaryMessage} | ${legacyMessage}`);
+      throw new Error(`Failed to parse supervisor response: ${primaryMessage} | ${legacyMessage}`, {
+        cause: legacyError,
+      });
     }
   }
 
@@ -263,13 +266,13 @@ export class GroupChatSupervisor {
         }
         case 'wait_for_user_input': {
           // Pause conversation - no action needed, just don't add any decisions
-          console.log('DEBUG: Supervisor paused conversation:', call.parameter);
+          console.info('DEBUG: Supervisor paused conversation:', call.parameter);
           break;
         }
         case 'trigger_agent':
         case 'trigger_agent_dm': {
           const decision = this.buildDecisionFromTool(call.parameter, availableAgents, context);
-          console.log('DEBUG: Built decision from tool:', {
+          console.info('DEBUG: Built decision from tool:', {
             decision,
             parameter: call.parameter,
             toolName: call.tool_name,
@@ -282,7 +285,7 @@ export class GroupChatSupervisor {
       }
     });
 
-    console.log('DEBUG: Final decisions:', decisions);
+    console.info('DEBUG: Final decisions:', decisions);
 
     return { decisions, todoUpdated, todos };
   }
@@ -491,6 +494,7 @@ export class GroupChatSupervisor {
     } catch (error) {
       throw new Error(
         `Failed to parse supervisor decision: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
     }
   }

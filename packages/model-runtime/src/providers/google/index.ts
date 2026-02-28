@@ -198,7 +198,9 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         systemInstruction: modelsDisableInstuction.has(model)
           ? undefined
           : (payload.system as string),
-        temperature: payload.temperature,
+        temperature: modelsWithModalities.has(model)
+          ? Math.min(payload.temperature ?? 1, 1)
+          : payload.temperature,
         thinkingConfig:
           modelsDisableInstuction.has(model) || model.toLowerCase().includes('learnlm')
             ? undefined

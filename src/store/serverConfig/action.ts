@@ -17,13 +17,12 @@ export const createServerConfigSlice = (
 ) => new ServerConfigActionImpl(set, get, _api);
 
 export class ServerConfigActionImpl {
-  readonly #get: () => ServerConfigStore;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => ServerConfigStore, _api?: unknown) {
     void _api;
     this.#set = set;
-    this.#get = get;
+    void get;
   }
 
   useInitServerConfig = (): SWRResponse<GlobalRuntimeConfig> => {

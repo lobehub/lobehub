@@ -19,7 +19,6 @@ type WorkflowBuilder = (
  * Variant to Workflow mapping
  * Based on actual model registry variant values
  */
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const VARIANT_WORKFLOW_MAP: Record<string, WorkflowBuilder> = {
   // FLUX variants
   'dev': buildFluxDevWorkflow,
@@ -47,7 +46,6 @@ export const ARCHITECTURE_DEFAULT_MAP: Record<string, WorkflowBuilder> = {
   SD1: buildSimpleSDWorkflow,
   SDXL: buildSimpleSDWorkflow,
 };
-/* eslint-enable sort-keys-fix/sort-keys-fix */
 
 /**
  * Get the appropriate workflow builder for a given architecture and variant

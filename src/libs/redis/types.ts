@@ -25,6 +25,24 @@ export interface SetOptions {
 export type RedisSetResult = 'OK' | null | string;
 export type RedisMSetArgument = Record<string, RedisValue> | Map<RedisKey, RedisValue>;
 
+/**
+ * Chainable pipeline builder. Commands are buffered and sent in a single round-trip on exec().
+ */
+export interface RedisPipeline {
+  decr: (key: RedisKey) => RedisPipeline;
+  del: (...keys: RedisKey[]) => RedisPipeline;
+  exec: () => Promise<[error: Error | null, result: unknown][] | null>;
+  expire: (key: RedisKey, seconds: number) => RedisPipeline;
+  get: (key: RedisKey) => RedisPipeline;
+  hdel: (key: RedisKey, ...fields: RedisKey[]) => RedisPipeline;
+  hget: (key: RedisKey, field: RedisKey) => RedisPipeline;
+  hgetall: (key: RedisKey) => RedisPipeline;
+  hset: (key: RedisKey, field: RedisKey, value: RedisValue) => RedisPipeline;
+  incr: (key: RedisKey) => RedisPipeline;
+  set: (key: RedisKey, value: RedisValue, options?: SetOptions) => RedisPipeline;
+  setex: (key: RedisKey, seconds: number, value: RedisValue) => RedisPipeline;
+}
+
 export interface RedisClient {
   decr: (key: RedisKey) => Promise<number>;
   del: (...keys: RedisKey[]) => Promise<number>;
@@ -39,6 +57,7 @@ export interface RedisClient {
   incr: (key: RedisKey) => Promise<number>;
   mget: (...keys: RedisKey[]) => Promise<(string | null)[]>;
   mset: (values: RedisMSetArgument) => Promise<'OK'>;
+  pipeline: () => RedisPipeline;
   set: (key: RedisKey, value: RedisValue, options?: SetOptions) => Promise<RedisSetResult>;
   setex: (key: RedisKey, seconds: number, value: RedisValue) => Promise<'OK'>;
   ttl: (key: RedisKey) => Promise<number>;

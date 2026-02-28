@@ -28,6 +28,7 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
     onNext();
   };
 
+  // eslint-disable-next-line @eslint-react/no-nested-component-definitions
   const IconAvatar = useCallback(({ icon }: { icon: IconProps['icon'] }) => {
     return (
       <Block

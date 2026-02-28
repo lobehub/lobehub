@@ -80,9 +80,7 @@
     "lint:md": "remark . --silent --output",
     "lint:mdx": "npm run workflow:mdx && remark \"docs/**/*.mdx\" -r ./.remarkrc.mdx.mjs --silent --output && eslint \"docs/**/*.mdx\" --quiet --fix",
     "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
-    "lint:ts": "bash scripts/lint-ts.sh",
-    "lint:ts:prune": "eslint \"{src,tests,packages}/**/*.{js,jsx,ts,tsx}\" --prune-suppressions --concurrency=auto",
-    "lint:ts:suppress": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --suppress-all --concurrency=auto",
+    "lint:ts": "eslint src/ tests/ --concurrency=auto",
     "lint:unused": "knip --include files,exports,types,enumMembers,duplicates",
     "prepare": "husky",
     "prettier": "prettier -c --write \"**/**\"",
@@ -125,27 +123,23 @@
     ],
     "*.mdx": [
       "remark -r ./.remarkrc.mdx.mjs --silent --output --",
-      "eslint --quiet --fix --prune-suppressions",
-      "git add eslint-suppressions.json"
+      "eslint --quiet --fix"
     ],
     "*.json": [
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.{mjs,cjs}": [
-      "eslint --fix --prune-suppressions",
-      "git add eslint-suppressions.json",
+      "eslint --fix",
       "prettier --write"
     ],
     "*.{js,jsx}": [
-      "eslint --fix --prune-suppressions",
-      "git add eslint-suppressions.json",
+      "eslint --fix",
       "stylelint --fix",
       "prettier --write"
     ],
     "*.{ts,tsx}": [
       "stylelint --fix",
-      "eslint --fix --prune-suppressions",
-      "git add eslint-suppressions.json",
+      "eslint --fix",
       "prettier --parser=typescript --write"
     ],
     "*.{yml,yaml}": [
@@ -400,7 +394,7 @@
     "@inquirer/prompts": "^8.2.0",
     "@lobechat/types": "workspace:*",
     "@lobehub/i18n-cli": "^1.26.0",
-    "@lobehub/lint": "2.1.3",
+    "@lobehub/lint": "2.1.5",
     "@lobehub/market-types": "^1.12.3",
     "@lobehub/seo-cli": "^1.7.0",
     "@peculiar/webcrypto": "^1.5.0",
@@ -449,8 +443,8 @@
     "dpdm-fast": "^1.0.14",
     "drizzle-dbml-generator": "^0.10.0",
     "drizzle-kit": "^0.31.8",
-    "eslint": "10.0.0",
-    "eslint-plugin-mdx": "^3.6.2",
+    "eslint": "10.0.2",
+    "eslint-plugin-mdx": "^3.7.0",
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.3.3",
     "glob": "^13.0.0",

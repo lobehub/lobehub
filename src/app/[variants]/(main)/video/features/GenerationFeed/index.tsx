@@ -30,7 +30,7 @@ const GenerationFeed = memo(() => {
     const scrollTop = scrollableParent.scrollTop + targetRect.bottom - scrollableRect.bottom + 999;
 
     scrollableParent.scrollTo({
-      behavior: behavior,
+      behavior,
       top: scrollTop,
     });
   };

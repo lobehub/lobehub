@@ -398,7 +398,9 @@ describe('createClientGroupAgentTaskThread Integration', () => {
 
       expect(thread.metadata?.startedAt).toBeDefined();
       expect(result.startedAt).toBe(thread.metadata?.startedAt);
+      // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
       expect(thread.metadata?.startedAt! >= beforeCall).toBe(true);
+      // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
       expect(thread.metadata?.startedAt! <= afterCall).toBe(true);
     });
   });

@@ -67,6 +67,7 @@ function GridViewInner<T extends { id: string }>({
         Footer: isLoading
           ? () => <Loading rows={defaultColumnCount} viewMode={'grid'} />
           : undefined,
+        // eslint-disable-next-line @eslint-react/no-nested-component-definitions
         List: (({ ref, ...props }: DivProps & { ref?: React.RefObject<HTMLDivElement | null> }) => (
           <Grid
             gap={8}

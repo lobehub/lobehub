@@ -19,13 +19,10 @@ export const createAssistantSlice = (set: Setter, get: () => DiscoverStore, _api
   new AssistantActionImpl(set, get, _api);
 
 export class AssistantActionImpl {
-  readonly #get: () => DiscoverStore;
-  readonly #set: Setter;
-
   constructor(set: Setter, get: () => DiscoverStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
+    void set;
+    void get;
   }
 
   useAssistantCategories = (

@@ -80,7 +80,7 @@ export class FileActionImpl {
       // Poll task status every 2 seconds
       await sleep(2000);
 
-      let fileItem: FileListItem | undefined = undefined;
+      let fileItem: FileListItem | undefined;
 
       try {
         const result = await fileService.getKnowledgeItem(id);
@@ -164,7 +164,7 @@ export class FileActionImpl {
       if (isChunkingUnsupported(file.type)) return;
 
       const data = await ragService.parseFileContent(fileResult.id);
-      console.log('parseFileContent data:', data);
+      console.info('parseFileContent data:', data);
     });
 
     await Promise.all(pools);

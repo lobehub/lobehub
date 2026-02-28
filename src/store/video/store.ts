@@ -4,19 +4,19 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { type VideoStoreState, initialState } from './initialState';
-import { type CreateVideoAction, createCreateVideoSlice } from './slices/createVideo/action';
+import { initialState, type VideoStoreState } from './initialState';
+import { createCreateVideoSlice, type CreateVideoAction } from './slices/createVideo/action';
 import {
-  type GenerationBatchAction,
   createGenerationBatchSlice,
+  type GenerationBatchAction,
 } from './slices/generationBatch/action';
 import {
-  type GenerationConfigAction,
   createGenerationConfigSlice,
+  type GenerationConfigAction,
 } from './slices/generationConfig/action';
 import {
-  type GenerationTopicAction,
   createGenerationTopicSlice,
+  type GenerationTopicAction,
 } from './slices/generationTopic/action';
 
 //  ===============  aggregate createStoreFn ============ //

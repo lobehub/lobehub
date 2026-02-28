@@ -21,12 +21,16 @@ export const getDetailsToken = (usage: ModelUsage, modelCard?: LobeDefaultAiMode
 
   const outputImageTokens = usage.outputImageTokens || (usage as any).imageTokens || 0;
 
-  const outputTextTokens = usage.outputTextTokens
-    ? usage.outputTextTokens
-    : totalOutputTokens -
-      outputReasoningTokens -
-      (usage.outputAudioTokens || 0) -
-      outputImageTokens;
+  const outputTextTokens =
+    typeof usage.outputTextTokens === 'number'
+      ? usage.outputTextTokens
+      : Math.max(
+          0,
+          totalOutputTokens -
+            outputReasoningTokens -
+            (usage.outputAudioTokens || 0) -
+            outputImageTokens,
+        );
 
   const inputWriteCacheTokens = usage.inputWriteCacheTokens || 0;
   const inputCacheTokens = usage.inputCachedTokens || (usage as any).cachedTokens || 0;

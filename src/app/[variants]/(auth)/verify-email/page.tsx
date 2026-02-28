@@ -2,10 +2,9 @@
 
 import { Button } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
-
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 
 import AuthCard from '../../../../features/AuthCard';
 import { VerifyEmailContent } from './VerifyEmailContent';

@@ -114,6 +114,6 @@ export const initBetterAuthSSOProviders = () => {
 
   return {
     genericOAuthProviders,
-    socialProviders: socialProviders,
+    socialProviders,
   };
 };

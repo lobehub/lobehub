@@ -1,7 +1,19 @@
 'use client';
 
 import { AccordionItem, Flexbox, Text } from '@lobehub/ui';
-import { Activity, Award, BarChart3, Gauge, LoaderPinwheel, Server, Target, TrendingUp, Trophy, Volleyball, Zap } from 'lucide-react';
+import {
+  Activity,
+  Award,
+  BarChart3,
+  Gauge,
+  LoaderPinwheel,
+  Server,
+  Target,
+  TrendingUp,
+  Trophy,
+  Volleyball,
+  Zap,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -10,7 +22,19 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useEvalStore } from '@/store/eval';
 
-const SYSTEM_ICONS = [LoaderPinwheel, Volleyball, Server, Target, Award, Trophy, Activity, BarChart3, TrendingUp, Gauge, Zap];
+const SYSTEM_ICONS = [
+  LoaderPinwheel,
+  Volleyball,
+  Server,
+  Target,
+  Award,
+  Trophy,
+  Activity,
+  BarChart3,
+  TrendingUp,
+  Gauge,
+  Zap,
+];
 
 const getSystemIcon = (id: string) => {
   const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -34,7 +58,7 @@ const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
       paddingBlock={4}
       paddingInline={'8px 4px'}
       title={
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t('sidebar.benchmarks')}
           </Text>
@@ -53,11 +77,11 @@ const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
           benchmarkList.map((b: any) => (
             <Link
               key={b.id}
+              to={`/eval/bench/${b.id}`}
               onClick={(e) => {
                 e.preventDefault();
                 navigate(`/eval/bench/${b.id}`);
               }}
-              to={`/eval/bench/${b.id}`}
             >
               <NavItem
                 active={activeKey === `bench-${b.id}`}
@@ -68,11 +92,7 @@ const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
             </Link>
           ))
         ) : (
-          <Text
-            fontSize={12}
-            style={{ padding: '8px 12px' }}
-            type="secondary"
-          >
+          <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
             {t('benchmark.empty')}
           </Text>
         )}

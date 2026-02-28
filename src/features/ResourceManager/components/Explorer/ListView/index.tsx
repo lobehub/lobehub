@@ -323,6 +323,7 @@ const ListView = memo(function ListView() {
   }, [clearScrollTimers]);
 
   // Memoize footer component to show skeleton loaders when loading more
+  // eslint-disable-next-line @eslint-react/no-nested-component-definitions
   const Footer = useCallback(() => {
     if (isLoadingMore && hasMore) return <ListViewSkeleton columnWidths={columnWidths} />;
 

@@ -11,6 +11,7 @@ table agents {
   plugins jsonb
   client_id text
   user_id text [not null]
+  agency_config jsonb
   chat_config jsonb
   few_shots jsonb
   model text
@@ -71,6 +72,26 @@ table agents_knowledge_bases {
   }
 }
 
+table agent_bot_providers {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  platform varchar(50) [not null]
+  application_id varchar(255) [not null]
+  credentials text
+  enabled boolean [not null, default: true]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (platform, application_id) [name: 'agent_bot_providers_platform_app_id_unique', unique]
+    platform [name: 'agent_bot_providers_platform_idx']
+    agent_id [name: 'agent_bot_providers_agent_id_idx']
+    user_id [name: 'agent_bot_providers_user_id_idx']
+  }
+}
+
 table agent_cron_jobs {
   id text [pk, not null]
   agent_id text [not null]
@@ -110,14 +131,16 @@ table agent_eval_benchmarks {
   rubrics jsonb [not null]
   reference_url text
   metadata jsonb
+  user_id text
   is_system boolean [not null, default: true]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    identifier [name: 'agent_eval_benchmarks_identifier_unique', unique]
+    (identifier, user_id) [name: 'agent_eval_benchmarks_identifier_user_id_unique', unique]
     is_system [name: 'agent_eval_benchmarks_is_system_idx']
+    user_id [name: 'agent_eval_benchmarks_user_id_idx']
   }
 }
 

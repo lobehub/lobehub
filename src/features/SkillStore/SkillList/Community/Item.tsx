@@ -139,7 +139,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
         >
           <PluginAvatar avatar={icon} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               <span className={styles.title}>{name}</span>
               <MCPTag showText={false} />
             </Flexbox>

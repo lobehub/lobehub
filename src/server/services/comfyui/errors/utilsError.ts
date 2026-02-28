@@ -15,7 +15,6 @@ export class UtilsError extends ComfyUIInternalError {
     super(message, reason, details);
     this.name = 'UtilsError';
   }
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   static readonly Reasons = {
     CONNECTION_ERROR: 'CONNECTION_ERROR',
     // Detector reasons
@@ -30,5 +29,4 @@ export class UtilsError extends ComfyUIInternalError {
     ROUTING_FAILED: 'ROUTING_FAILED',
     SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   } as const;
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 }

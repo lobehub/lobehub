@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
@@ -63,11 +62,10 @@ export const conversationLifecycle = (set: Setter, get: () => ChatStore, _api?: 
 
 export class ConversationLifecycleActionImpl {
   readonly #get: () => ChatStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
-    this.#set = set;
+    void set;
     this.#get = get;
   }
 

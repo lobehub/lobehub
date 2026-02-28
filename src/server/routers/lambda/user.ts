@@ -165,6 +165,7 @@ export const userRouter = router({
       } catch (error) {
         throw new Error(
           'Error uploading avatar: ' + (error instanceof Error ? error.message : String(error)),
+          { cause: error },
         );
       }
     }

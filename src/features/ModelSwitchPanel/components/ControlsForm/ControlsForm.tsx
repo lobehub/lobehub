@@ -17,7 +17,9 @@ import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
+import ImageAspectRatio2Select from './ImageAspectRatio2Select';
 import ImageAspectRatioSelect from './ImageAspectRatioSelect';
+import ImageResolution2Slider from './ImageResolution2Slider';
 import ImageResolutionSlider from './ImageResolutionSlider';
 import ReasoningEffortSlider from './ReasoningEffortSlider';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
@@ -25,6 +27,7 @@ import TextVerbositySlider from './TextVerbositySlider';
 import ThinkingBudgetSlider from './ThinkingBudgetSlider';
 import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevel3Slider from './ThinkingLevel3Slider';
+import ThinkingLevel4Slider from './ThinkingLevel4Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
@@ -282,6 +285,17 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       desc: 'thinkingLevel',
     },
     {
+      children: <ThinkingLevel4Slider />,
+      label: t('extendParams.thinkingLevel.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'thinkingLevel4',
+      style: {
+        paddingBottom: 0,
+      },
+      desc: 'thinkingLevel',
+    },
+    {
       children: <ImageAspectRatioSelect />,
       label: t('extendParams.imageAspectRatio.title'),
       layout: 'horizontal',
@@ -293,11 +307,33 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       desc: 'aspectRatio',
     },
     {
+      children: <ImageAspectRatio2Select />,
+      label: t('extendParams.imageAspectRatio.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'imageAspectRatio2',
+      style: {
+        paddingBottom: 0,
+      },
+      desc: 'aspectRatio',
+    },
+    {
       children: <ImageResolutionSlider />,
       label: t('extendParams.imageResolution.title'),
       layout: 'horizontal',
       minWidth: undefined,
       name: 'imageResolution',
+      style: {
+        paddingBottom: 0,
+      },
+      desc: 'imageSize',
+    },
+    {
+      children: <ImageResolution2Slider />,
+      label: t('extendParams.imageResolution.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'imageResolution2',
       style: {
         paddingBottom: 0,
       },

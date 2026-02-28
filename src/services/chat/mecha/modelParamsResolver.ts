@@ -152,6 +152,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingLevel = chatConfig.thinkingLevel3;
   }
 
+  if (modelExtendParams.includes('thinkingLevel4') && chatConfig.thinkingLevel4) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel4;
+  }
+
   // URL context
   if (modelExtendParams.includes('urlContext') && chatConfig.urlContext) {
     extendParams.urlContext = chatConfig.urlContext;
@@ -162,8 +166,16 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.imageAspectRatio = chatConfig.imageAspectRatio;
   }
 
+  if (modelExtendParams.includes('imageAspectRatio2') && chatConfig.imageAspectRatio2) {
+    extendParams.imageAspectRatio = chatConfig.imageAspectRatio2;
+  }
+
   if (modelExtendParams.includes('imageResolution') && chatConfig.imageResolution) {
     extendParams.imageResolution = chatConfig.imageResolution;
+  }
+
+  if (modelExtendParams.includes('imageResolution2') && chatConfig.imageResolution2) {
+    extendParams.imageResolution = chatConfig.imageResolution2;
   }
 
   return extendParams;

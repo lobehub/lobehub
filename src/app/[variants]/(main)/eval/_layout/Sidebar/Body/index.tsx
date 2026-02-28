@@ -33,13 +33,17 @@ const Body = memo(() => {
     <Flexbox gap={8} paddingInline={4}>
       <Flexbox gap={1}>
         <Link
+          to="/eval"
           onClick={(e) => {
             e.preventDefault();
             navigate('/eval');
           }}
-          to="/eval"
         >
-          <NavItem active={activeKey === 'dashboard'} icon={LayoutDashboardIcon} title={t('sidebar.dashboard')} />
+          <NavItem
+            active={activeKey === 'dashboard'}
+            icon={LayoutDashboardIcon}
+            title={t('sidebar.dashboard')}
+          />
         </Link>
       </Flexbox>
       <Accordion defaultExpandedKeys={['benchmarks']} gap={8}>

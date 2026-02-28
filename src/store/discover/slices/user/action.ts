@@ -12,13 +12,10 @@ export const createUserSlice = (set: Setter, get: () => DiscoverStore, _api?: un
   new UserActionImpl(set, get, _api);
 
 export class UserActionImpl {
-  readonly #get: () => DiscoverStore;
-  readonly #set: Setter;
-
   constructor(set: Setter, get: () => DiscoverStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
+    void set;
+    void get;
   }
 
   useUserProfile = (params: { username: string }): SWRResponse<DiscoverUserProfile | undefined> => {

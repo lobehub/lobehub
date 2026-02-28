@@ -105,14 +105,14 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
                 return null;
               }
             }) || [],
-          systemRole: systemRole,
+          systemRole,
         },
         description: meta?.description || '',
-        editorData: editorData,
-        identifier: identifier,
+        editorData,
+        identifier,
         name: meta?.title || '',
         tags: meta?.tags,
-        tokenUsage: tokenUsage,
+        tokenUsage,
       };
 
       try {

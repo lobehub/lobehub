@@ -116,8 +116,8 @@ const SearchResultsOverlay = memo(() => {
         <Flexbox height={'100%'}>
           <div style={{ flex: 1, overflow: 'auto hidden' }}>
             <Flexbox
-              align="center"
               horizontal
+              align="center"
               paddingInline={8}
               style={{
                 borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
@@ -129,7 +129,7 @@ const SearchResultsOverlay = memo(() => {
               }}
             >
               <Center height={40} style={{ paddingInline: 4 }}>
-                <Checkbox checked={false} disabled />
+                <Checkbox disabled checked={false} />
               </Center>
               <Flexbox
                 justify="center"
@@ -174,6 +174,7 @@ const SearchResultsOverlay = memo(() => {
               <Virtuoso
                 data={data}
                 defaultItemHeight={48}
+                style={{ height: '100%' }}
                 itemContent={(index, item) => {
                   if (!item) return null;
                   return (
@@ -195,7 +196,6 @@ const SearchResultsOverlay = memo(() => {
                     />
                   );
                 }}
-                style={{ height: '100%' }}
               />
             </div>
           </div>

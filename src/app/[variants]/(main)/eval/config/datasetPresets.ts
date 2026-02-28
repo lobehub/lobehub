@@ -4,20 +4,10 @@ import { Database, Globe } from 'lucide-react';
 export type PresetCategory = 'qa' | 'research' | 'tool-use' | 'memory' | 'reference' | 'custom';
 
 export interface DatasetPreset {
-  id: string;
   category: PresetCategory;
-  name: string;
   description: string;
-  icon: LucideIcon;
-
-  // 格式说明
-  formatDescription: string;
-  requiredFields: string[];
-  optionalFields: string[];
-
   // 示例文件
   exampleFileUrl?: string;
-
   // 自动推断配置
   fieldInference: {
     input: string[];
@@ -26,6 +16,16 @@ export interface DatasetPreset {
     category: string[];
     sortOrder?: string[];
   };
+  // 格式说明
+  formatDescription: string;
+
+  icon: LucideIcon;
+  id: string;
+  name: string;
+
+  optionalFields: string[];
+
+  requiredFields: string[];
 
   // 验证规则
   validation?: {
@@ -43,8 +43,7 @@ export const DATASET_PRESETS: Record<string, DatasetPreset> = {
     name: 'BrowseComp-ZH',
     description: 'Chinese web browsing: 289 multi-step reasoning questions',
     icon: Globe,
-    formatDescription:
-      'format: Topic (category/tags), Question (input), Answer (expected)',
+    formatDescription: 'format: Topic (category/tags), Question (input), Answer (expected)',
     requiredFields: ['Question', 'Answer'],
     optionalFields: ['Topic', 'canary'],
     fieldInference: {
@@ -59,7 +58,7 @@ export const DATASET_PRESETS: Record<string, DatasetPreset> = {
     },
   },
 
-  xbench: {
+  'xbench': {
     id: 'xbench',
     category: 'research',
     name: 'xbench',
@@ -83,7 +82,7 @@ export const DATASET_PRESETS: Record<string, DatasetPreset> = {
   },
 
   // === Reference Formats (low priority) ===
-  mmlu: {
+  'mmlu': {
     id: 'mmlu',
     category: 'reference',
     name: 'MMLU (Reference)',
@@ -107,7 +106,7 @@ export const DATASET_PRESETS: Record<string, DatasetPreset> = {
   },
 
   // === Custom ===
-  custom: {
+  'custom': {
     id: 'custom',
     category: 'custom',
     name: 'Custom',
@@ -133,11 +132,11 @@ export const getPresetById = (id?: string): DatasetPreset => {
 // 按 category 分组获取 Presets
 export const getPresetsByCategory = (): Record<PresetCategory, DatasetPreset[]> => {
   const grouped: Record<string, DatasetPreset[]> = {
-    research: [],
+    'research': [],
     'tool-use': [],
-    memory: [],
-    reference: [],
-    custom: [],
+    'memory': [],
+    'reference': [],
+    'custom': [],
   };
 
   Object.values(DATASET_PRESETS).forEach((preset) => {

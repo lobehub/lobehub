@@ -67,7 +67,7 @@ const QuickImportSection = ({
       // Update form fields even if duplicate, so user sees the pasted values
       form.setFieldsValue({
         customParams: { mcp: mcpConfig },
-        identifier: identifier,
+        identifier,
       });
       // Trigger validation to show Form.Item error
       form.validateFields(['identifier']);
@@ -79,7 +79,7 @@ const QuickImportSection = ({
     // All checks passed, fill the form
     form.setFieldsValue({
       customParams: { mcp: mcpConfig },
-      identifier: identifier,
+      identifier,
     });
 
     // Clear potential old validation error on identifier field

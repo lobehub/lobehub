@@ -16,7 +16,7 @@ export const GroupSkeleton = memo<{
       size={'large'}
       style={{
         borderRadius: cssVar.borderRadiusLG,
-        height: height,
+        height,
         maxHeight: height,
         maxWidth: width,
         minWidth: width,

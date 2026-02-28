@@ -56,7 +56,7 @@ const ModelSelect = memo(() => {
           {
             disabled: true,
             label: (
-              <Flexbox gap={8} horizontal style={{ color: cssVar.colorTextTertiary }}>
+              <Flexbox horizontal gap={8} style={{ color: cssVar.colorTextTertiary }}>
                 {t('ModelSwitchPanel.emptyModel')}
                 <Icon icon={LucideArrowRight} />
               </Flexbox>
@@ -77,7 +77,7 @@ const ModelSelect = memo(() => {
         {
           disabled: true,
           label: (
-            <Flexbox gap={8} horizontal style={{ color: cssVar.colorTextTertiary }}>
+            <Flexbox horizontal gap={8} style={{ color: cssVar.colorTextTertiary }}>
               {t('ModelSwitchPanel.emptyProvider')}
               <Icon icon={LucideArrowRight} />
             </Flexbox>
@@ -106,12 +106,12 @@ const ModelSelect = memo(() => {
           />
           <ActionIcon
             icon={LucideBolt}
+            size={'small'}
+            title={t('ModelSwitchPanel.goToSettings')}
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/settings/provider/${provider.id}`);
             }}
-            size={'small'}
-            title={t('ModelSwitchPanel.goToSettings')}
           />
         </Flexbox>
       ),
@@ -140,10 +140,17 @@ const ModelSelect = memo(() => {
 
   return (
     <Select
+      shadow
+      labelRender={labelRender}
+      options={options}
+      size={'large'}
+      value={currentProvider && currentModel ? `${currentProvider}/${currentModel}` : undefined}
       classNames={{
         root: styles.popup,
       }}
-      labelRender={labelRender}
+      style={{
+        width: '100%',
+      }}
       onChange={(value, option) => {
         if (value === 'no-provider' || value.includes('/empty')) return;
         const model = value.split('/').slice(1).join('/');
@@ -152,13 +159,6 @@ const ModelSelect = memo(() => {
           setModelAndProviderOnSelect(model, provider);
         }
       }}
-      options={options}
-      shadow
-      size={'large'}
-      style={{
-        width: '100%',
-      }}
-      value={currentProvider && currentModel ? `${currentProvider}/${currentModel}` : undefined}
     />
   );
 });

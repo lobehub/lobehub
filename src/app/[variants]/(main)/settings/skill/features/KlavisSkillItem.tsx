@@ -79,7 +79,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
         try {
           await refreshKlavisServerTools(serverName);
         } catch (error) {
-          console.debug('[Klavis] Polling check (expected during auth):', error);
+          console.info('[Klavis] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 
@@ -108,7 +108,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
             startFallbackPolling(serverName);
           }
         } catch {
-          console.log('[Klavis] COOP blocked window.closed access, falling back to polling');
+          console.info('[Klavis] COOP blocked window.closed access, falling back to polling');
           if (windowCheckIntervalRef.current) {
             clearInterval(windowCheckIntervalRef.current);
             windowCheckIntervalRef.current = null;

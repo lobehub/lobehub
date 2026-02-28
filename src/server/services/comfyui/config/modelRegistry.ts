@@ -26,7 +26,6 @@ export const MODEL_REGISTRY: Record<string, ModelConfig> = {
  * Maps actual frontend model IDs to their corresponding variants in registry
  * Based on src/config/aiModels/comfyui.ts definitions
  */
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const MODEL_ID_VARIANT_MAP: Record<string, string> = {
   // FLUX models
   'flux-schnell': 'schnell', // comfyui/flux-schnell
@@ -45,4 +44,3 @@ export const MODEL_ID_VARIANT_MAP: Record<string, string> = {
   'stable-diffusion-custom': 'custom-sd', // comfyui/stable-diffusion-custom
   'stable-diffusion-custom-refiner': 'custom-sd', // comfyui/stable-diffusion-custom-refiner
 };
-/* eslint-enable sort-keys-fix/sort-keys-fix */

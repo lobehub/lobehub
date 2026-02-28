@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-thenable */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserModel } from '@/database/models/user';
@@ -228,7 +229,11 @@ describe('WebhookUserService', () => {
 
   describe('getUserByAccount (via public methods)', () => {
     it('should prioritize Better Auth account over NextAuth account', async () => {
-      const betterAuthAccount = { userId: 'better-auth-user', providerId: 'logto', accountId: 'acc' };
+      const betterAuthAccount = {
+        userId: 'better-auth-user',
+        providerId: 'logto',
+        accountId: 'acc',
+      };
       const betterAuthUser = { ...mockUser, id: 'better-auth-user' };
 
       mockDb.query.account.findFirst.mockResolvedValue(betterAuthAccount);

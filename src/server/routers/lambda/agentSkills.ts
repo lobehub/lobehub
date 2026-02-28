@@ -1,4 +1,5 @@
-import { SkillManifest, skillManifestSchema } from '@lobechat/types';
+import type { SkillManifest } from '@lobechat/types';
+import { skillManifestSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -9,8 +10,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import {
-  SkillImportError,
   SkillImporter,
+  SkillImportError,
   SkillResourceError,
   SkillResourceService,
 } from '@/server/services/skill';
