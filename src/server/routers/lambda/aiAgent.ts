@@ -869,9 +869,7 @@ export const aiAgentRouter = router({
               updatedMetadata.duration = Date.now() - new Date(metadata.startedAt).getTime();
             }
 
-            // DEBUG: Log the original error and formatted error
-            console.log('[DEBUG] getSubAgentTaskStatus - error formatting:', {
-              threadId,
+            log('getSubAgentTaskStatus: error formatting for thread %s: %O', threadId, {
               originalError: redisState.error,
               formattedError,
             });
@@ -903,12 +901,10 @@ export const aiAgentRouter = router({
       const updatedStatus = updatedThread?.status ?? thread.status;
       const updatedTaskStatus = threadStatusToTaskStatus[updatedStatus] || 'processing';
 
-      // DEBUG: Log metadata for failed tasks
       if (updatedTaskStatus === 'failed') {
-        console.log('[DEBUG] getSubAgentTaskStatus - failed task metadata:', {
-          threadId,
+        console.error('getSubAgentTaskStatus: failed task metadata for thread %s: %O', threadId, {
           updatedMetadata,
-          'updatedMetadata?.error': updatedMetadata?.error,
+          error: updatedMetadata?.error,
           updatedStatus,
         });
       }

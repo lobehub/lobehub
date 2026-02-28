@@ -17,18 +17,16 @@ import debug from 'debug';
 import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
 import { AiModelModel } from '@/database/models/aiModel';
-import { AiProviderModel } from '@/database/models/aiProvider';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { type EvalContext, type ServerAgentToolsContext } from '@/server/modules/Mecha';
-import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import {
-  type ServerAgentToolsContext,
   createServerAgentToolsEngine,
-  serverMessagesEngine,
+  type EvalContext,
+  type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
+import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
@@ -175,15 +173,13 @@ export class AiAgentService {
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
 
-    log('execAgent: got agent config for %s (id: %s)', identifier, resolvedAgentId);
-    console.log('[DEBUG] execAgent - using agent config:', {
+    log(
+      'execAgent: got agent config for %s (id: %s), model: %s, provider: %s',
       identifier,
       resolvedAgentId,
-      agentTitle: agentConfig.title,
-      model: agentConfig.model,
-      provider: agentConfig.provider,
-      systemRolePreview: agentConfig.systemRole?.slice(0, 100),
-    });
+      agentConfig.model,
+      agentConfig.provider,
+    );
 
     // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
@@ -218,9 +214,6 @@ export class AiAgentService {
 
     // 4. Get model abilities from model-bank for function calling support check
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-    const modelInfo = LOBE_DEFAULT_MODEL_LIST.find(
-      (m) => m.id === model && m.providerId === provider,
-    );
     const isModelSupportToolUse = (m: string, p: string) => {
       const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
       return info?.abilities?.functionCall ?? true;
@@ -317,7 +310,11 @@ export class AiAgentService {
       // Filter only enabled chat models and group by provider
       const providerMap = new Map<
         string,
-        { id: string; models: Array<{ abilities?: any; description?: string; id: string; name: string }>; name: string }
+        {
+          id: string;
+          models: Array<{ abilities?: any; description?: string; id: string; name: string }>;
+          name: string;
+        }
       >();
 
       for (const userModel of allUserModels) {
@@ -649,19 +646,6 @@ export class AiAgentService {
       topicId,
       instruction.slice(0, 50),
     );
-
-    // DEBUG: Verify the agentId and get agent config to confirm
-    const agentConfig = await this.agentService.getAgentConfig(agentId);
-    if (!agentConfig) {
-      throw new Error(`Agent not found: ${agentId}`);
-    }
-    console.log('[DEBUG] execSubAgentTask - target agent info:', {
-      agentId,
-      resolvedAgentId: agentConfig.id,
-      agentTitle: agentConfig.title,
-      model: agentConfig.model,
-      provider: agentConfig.provider,
-    });
 
     // 1. Create Thread for isolated task execution
     const thread = await this.threadModel.create({

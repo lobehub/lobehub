@@ -324,11 +324,6 @@
       "count": 1
     }
   },
-  "src/server/routers/lambda/aiAgent.ts": {
-    "no-console": {
-      "count": 1
-    }
-  },
   "src/server/routers/lambda/aiChat.ts": {
     "prefer-const": {
       "count": 1
