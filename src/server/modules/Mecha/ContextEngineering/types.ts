@@ -1,6 +1,7 @@
 /* eslint-disable perfectionist/sort-interfaces */
 import type {
   AgentBuilderContext,
+  AgentManagementContext,
   EvalContext,
   FileContent,
   KnowledgeBaseInfo,
@@ -62,6 +63,8 @@ export interface ServerMessagesEngineParams {
   // ========== Extended contexts ==========
   /** Agent Builder context (optional, for editing agents) */
   agentBuilderContext?: AgentBuilderContext;
+  /** Agent Management context (optional, available models and plugins) */
+  agentManagementContext?: AgentManagementContext;
   // ========== Capability injection ==========
   /** Model capability checkers */
   capabilities?: ServerModelCapabilities;
@@ -116,6 +119,7 @@ export interface ServerMessagesEngineParams {
 export {
   type AgentBuilderContext,
   type EvalContext,
+  type AgentManagementContext,
   type FileContent,
   type KnowledgeBaseInfo,
   type UserMemoryData,

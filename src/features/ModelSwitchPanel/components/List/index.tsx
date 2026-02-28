@@ -1,8 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
-import { type FC, type ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { type FC } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso } from 'react-virtuoso';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 
@@ -16,7 +15,6 @@ import { menuKey } from '../../utils';
 import { ListItemRenderer } from './ListItemRenderer';
 
 interface ListProps {
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
   groupMode: GroupMode;
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
@@ -26,7 +24,6 @@ interface ListProps {
 }
 
 export const List: FC<ListProps> = ({
-  extraControls,
   groupMode,
   model: modelProp,
   onModelChange: onModelChangeProp,
@@ -37,7 +34,6 @@ export const List: FC<ListProps> = ({
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
 
-  const [isScrolling, setIsScrolling] = useState(false);
   const enabledList = useEnabledChatModels();
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
@@ -56,45 +52,68 @@ export const List: FC<ListProps> = ({
 
   const activeKey = menuKey(provider, model);
 
-  const handleScrollingStateChange = useCallback((scrolling: boolean) => {
-    setIsScrolling(scrolling);
-  }, []);
+  // Set initial scroll position to keep active model centered
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const activeNodeRef = useRef<HTMLDivElement | null>(null);
+  const hasInitializedPositionRef = useRef(false);
 
-  const itemContent = useCallback(
-    (index: number) => {
-      const item = listItems[index];
-      return (
-        <ListItemRenderer
-          activeKey={activeKey}
-          extraControls={extraControls}
-          isScrolling={isScrolling}
-          item={item}
-          newLabel={newLabel}
-          onClose={handleClose}
-          onModelChange={handleModelChange}
-        />
-      );
-    },
-    [activeKey, extraControls, handleClose, handleModelChange, isScrolling, listItems, newLabel],
-  );
+  const activeItemRef = useCallback((node: HTMLDivElement | null) => {
+    activeNodeRef.current = node;
+  }, []);
 
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;
 
+  useLayoutEffect(() => {
+    if (hasInitializedPositionRef.current) return;
+
+    const container = listRef.current;
+    const activeNode = activeNodeRef.current;
+    if (!container || !activeNode) return;
+
+    const targetScrollTop =
+      activeNode.offsetTop - (container.clientHeight - activeNode.offsetHeight) / 2;
+    container.scrollTop = Math.max(0, targetScrollTop);
+    hasInitializedPositionRef.current = true;
+  }, [listHeight, activeKey]);
+
   return (
-    <Flexbox
-      className={styles.list}
-      flex={1}
-      style={{
-        height: listHeight,
-      }}
-    >
-      <Virtuoso
-        isScrolling={handleScrollingStateChange}
-        itemContent={itemContent}
-        overscan={200}
-        style={{ height: listHeight }}
-        totalCount={listItems.length}
-      />
+    <Flexbox className={styles.list} flex={1} ref={listRef} style={{ height: listHeight }}>
+      {listItems.map((item, index) => {
+        const itemKey = menuKey(
+          'provider' in item && item.provider ? item.provider.id : '',
+          'model' in item && item.model
+            ? item.model.id
+            : 'data' in item && item.data
+              ? item.data.displayName
+              : `${item.type}-${index}`,
+        );
+        const isActive =
+          (item.type === 'provider-model-item' &&
+            menuKey(item.provider.id, item.model.id) === activeKey) ||
+          (item.type === 'model-item-single' &&
+            menuKey(item.data.providers[0].id, item.data.model.id) === activeKey) ||
+          (item.type === 'model-item-multiple' &&
+            item.data.providers.some((p) => menuKey(p.id, item.data.model.id) === activeKey));
+
+        const renderItem = (key?: string) => (
+          <ListItemRenderer
+            activeKey={activeKey}
+            item={item}
+            key={key}
+            newLabel={newLabel}
+            onClose={handleClose}
+            onModelChange={handleModelChange}
+          />
+        );
+
+        return isActive ? (
+          <div key={itemKey} ref={activeItemRef}>
+            {renderItem()}
+          </div>
+        ) : (
+          renderItem(itemKey)
+        );
+      })}
     </Flexbox>
   );
 };

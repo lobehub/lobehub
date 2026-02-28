@@ -12,8 +12,7 @@ import {
 } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
-import { type ReactNode } from 'react';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
@@ -29,8 +28,6 @@ import { SingleProviderModelItem } from './SingleProviderModelItem';
 
 interface ListItemRendererProps {
   activeKey: string;
-  extraControls?: (modelId: string, providerId: string) => ReactNode;
-  isScrolling: boolean;
   item: ListItem;
   newLabel: string;
   onClose: () => void;
@@ -38,16 +35,10 @@ interface ListItemRendererProps {
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ activeKey, extraControls, isScrolling, item, newLabel, onModelChange, onClose }) => {
+  ({ activeKey, item, newLabel, onModelChange, onClose }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [detailOpen, setDetailOpen] = useState(false);
-
-    useEffect(() => {
-      if (isScrolling) {
-        setDetailOpen(false);
-      }
-    }, [isScrolling]);
 
     switch (item.type) {
       case 'no-provider': {
@@ -144,12 +135,9 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
-                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
                   <DropdownMenuPopup className={styles.detailPopup}>
-                    <ModelDetailPanel
-                      extraControls={extraControls?.(item.model.id, item.provider.id)}
-                      model={item.model}
-                    />
+                    <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
               </DropdownMenuPortal>
@@ -178,12 +166,9 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 <SingleProviderModelItem data={item.data} newLabel={newLabel} />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
-                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={8}>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={16}>
                   <DropdownMenuPopup className={styles.detailPopup}>
-                    <ModelDetailPanel
-                      extraControls={extraControls?.(item.data.model.id, singleProvider.id)}
-                      model={item.data.model}
-                    />
+                    <ModelDetailPanel model={item.data.model.id} provider={singleProvider.id} />
                   </DropdownMenuPopup>
                 </DropdownMenuPositioner>
               </DropdownMenuPortal>
@@ -198,8 +183,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             <MultipleProvidersModelItem
               activeKey={activeKey}
               data={item.data}
-              extraControls={extraControls}
-              isScrolling={isScrolling}
               newLabel={newLabel}
               onClose={onClose}
               onModelChange={onModelChange}

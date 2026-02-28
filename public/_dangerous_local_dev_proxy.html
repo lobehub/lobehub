@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LobeHub Debug Proxy</title>
+    <script type="module">
+      globalThis['__DEBUG_PROXY__'] = true;
+
+      // --- 1. 解析 debug host ---
+      var searchParams = new URLSearchParams(window.location.search);
+      var debugHost = searchParams.get('debug-host');
+
+      if (searchParams.get('reset')) {
+        sessionStorage.removeItem('debug-host');
+      }
+
+      var storedHost = sessionStorage.getItem('debug-host');
+      var host = debugHost || storedHost || 'http://localhost:9876';
+
+      if (debugHost) {
+        sessionStorage.setItem('debug-host', debugHost);
+      }
+
+      // --- 2. Worker 跨域补丁（必须在任何模块加载前注入）---
+      var workerPatch = document.createElement('script');
+      workerPatch.textContent = '(function(){' +
+        'var O=globalThis.Worker;' +
+        'globalThis.Worker=function(u,o){' +
+          'var h=typeof u==="string"?u:u instanceof URL?u.href:"";' +
+          'if(h.startsWith("'+host+'")){' +
+            'var b=new Blob(["import \\\\""+h+"\\\\";"],{type:"application/javascript"});' +
+            'return new O(URL.createObjectURL(b),Object.assign({},o,{type:"module"}));' +
+          '}return new O(u,o)};' +
+        'globalThis.Worker.prototype=O.prototype;' +
+      '})();';
+      document.head.insertBefore(workerPatch, document.head.firstChild);
+
+      // --- 3. 注入 React Refresh runtime（HMR 前置条件）---
+      var refreshScript = document.createElement('script');
+      refreshScript.type = 'module';
+      refreshScript.textContent =
+        'import RefreshRuntime from "' + host + '/@react-refresh";' +
+        'RefreshRuntime.injectIntoGlobalHook(window);' +
+        'window.$RefreshReg$ = () => {};' +
+        'window.$RefreshSig$ = () => (type) => type;' +
+        'window.__vite_plugin_react_preamble_installed__ = true;';
+      document.head.append(refreshScript);
+
+      // --- 4. 注入 __SERVER_CONFIG__（从线上 SPA route 获取）---
+      var locale =
+        decodeURIComponent(
+          (document.cookie.match(/(?:^|;\s*)LOBE_LOCALE=([^;]*)/) || [])[1] || '',
+        ) || 'en-US';
+
+      var configReady = fetch('/spa/' + locale + '/chat')
+        .then(function(res) { return res.text(); })
+        .then(function(html) {
+          var match = html.match(
+            /window\.__SERVER_CONFIG__\s*=\s*(\{[\s\S]*?\});/,
+          );
+          if (match) {
+            var configScript = document.createElement('script');
+            configScript.textContent = 'window.__SERVER_CONFIG__ = ' + match[1] + ';';
+            document.head.insertBefore(configScript, document.head.firstChild);
+          }
+        });
+
+      // --- 5. Fetch dev server HTML 并注入 ---
+      var devHtmlReady = fetch(host)
+        .then(function(res) { return res.text(); })
+        .then(function(html) {
+          var parser = new DOMParser();
+          var doc = parser.parseFromString(html, 'text/html');
+
+          var scripts = doc.querySelectorAll('script');
+          scripts.forEach(function(s) { s.remove(); });
+
+          doc.head.querySelectorAll('meta').forEach(function(meta) {
+            document.head.append(meta);
+          });
+
+          doc.head
+            .querySelectorAll('style, link[rel="stylesheet"]')
+            .forEach(function(el) {
+              if (el.tagName === 'LINK') {
+                var href = el.getAttribute('href');
+                if (href && href.startsWith('/')) {
+                  el.setAttribute('href', new URL(href, host).toString());
+                }
+              }
+              document.head.append(el);
+            });
+
+          document.body.innerHTML = doc.body.innerHTML;
+
+          scripts.forEach(function(script) {
+            var s = document.createElement('script');
+            s.type = 'module';
+            if (script.crossOrigin) s.crossOrigin = script.crossOrigin;
+
+            if (script.src) {
+              var srcPath = script.src.startsWith('http')
+                ? new URL(script.src).pathname
+                : script.src;
+              s.src = new URL(srcPath, host).toString();
+            } else if (script.textContent) {
+              s.textContent = script.textContent.replace(
+                /from\s+["'](\/[@\w].*?)["']/g,
+                function(_, p) { return 'from "' + new URL(p, host).toString() + '"'; },
+              );
+            } else {
+              return;
+            }
+
+            document.body.append(s);
+          });
+        });
+
+      Promise.all([configReady, devHtmlReady]).then(function() {
+        console.log(
+          '%c[Debug Proxy] Loaded from ' + host,
+          'color: #52c41a; font-weight: bold;',
+        );
+      });
+    </script>
+  </head>
+  <body></body>
+</html>

@@ -6,18 +6,70 @@
 import { Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
+import { WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // Helper Functions
 // ============================================
 
 /**
- * Get the contenteditable editor element
+ * Get the page editor contenteditable element (exclude chat input)
  */
 async function getEditor(world: CustomWorld) {
-  const editor = world.page.locator('[contenteditable="true"]').first();
-  await expect(editor).toBeVisible({ timeout: 5000 });
+  const selectors = [
+    '.ProseMirror[contenteditable="true"]',
+    '[data-lexical-editor="true"][contenteditable="true"]',
+    '[contenteditable="true"]',
+  ];
+  const start = Date.now();
+  const viewportHeight = world.page.viewportSize()?.height ?? 720;
+
+  while (Date.now() - start < WAIT_TIMEOUT) {
+    for (const selector of selectors) {
+      const elements = world.page.locator(selector);
+      const count = await elements.count();
+
+      for (let i = 0; i < count; i++) {
+        const candidate = elements.nth(i);
+        if (!(await candidate.isVisible())) continue;
+
+        const isChatInput = await candidate.evaluate((el) => {
+          return (
+            el.closest('[class*="chat-input"]') !== null ||
+            el.closest('[data-testid*="chat-input"]') !== null ||
+            el.closest('[data-chat-input]') !== null
+          );
+        });
+        if (isChatInput) continue;
+
+        const box = await candidate.boundingBox();
+        if (!box || box.width < 180 || box.height < 24) continue;
+        if (box.y > viewportHeight * 0.75) continue;
+
+        return candidate;
+      }
+    }
+
+    await world.page.waitForTimeout(250);
+  }
+
+  throw new Error('Could not find page editor contenteditable element');
+}
+
+async function focusEditor(world: CustomWorld) {
+  const editor = await getEditor(world);
+  await editor.click({ position: { x: 24, y: 16 } });
+  await world.page.waitForTimeout(120);
+
+  const focused = await editor.evaluate(
+    (el) => el === document.activeElement || el.contains(document.activeElement),
+  );
+  if (!focused) {
+    await editor.focus();
+    await world.page.waitForTimeout(120);
+  }
+
   return editor;
 }
 
@@ -28,14 +80,8 @@ async function getEditor(world: CustomWorld) {
 When('用户点击编辑器内容区域', async function (this: CustomWorld) {
   console.log('   📍 Step: 点击编辑器内容区域...');
 
-  const editorContent = this.page.locator('[contenteditable="true"]').first();
-  if ((await editorContent.count()) > 0) {
-    await editorContent.click();
-  } else {
-    // Fallback: click somewhere else
-    await this.page.click('body', { position: { x: 400, y: 400 } });
-  }
-  await this.page.waitForTimeout(500);
+  await focusEditor(this);
+  await this.page.waitForTimeout(300);
 
   console.log('   ✅ 已点击编辑器内容区域');
 });
@@ -43,7 +89,8 @@ When('用户点击编辑器内容区域', async function (this: CustomWorld) {
 When('用户按下 Enter 键', async function (this: CustomWorld) {
   console.log('   📍 Step: 按下 Enter 键...');
 
-  await this.page.keyboard.press('Enter');
+  const editor = await focusEditor(this);
+  await editor.press('Enter');
   // Wait for debounce save (1000ms) + buffer
   await this.page.waitForTimeout(1500);
 
@@ -53,7 +100,8 @@ When('用户按下 Enter 键', async function (this: CustomWorld) {
 When('用户输入文本 {string}', async function (this: CustomWorld, text: string) {
   console.log(`   📍 Step: 输入文本 "${text}"...`);
 
-  await this.page.keyboard.type(text, { delay: 30 });
+  const editor = await focusEditor(this);
+  await editor.type(text, { delay: 30 });
   await this.page.waitForTimeout(300);
 
   // Store for later verification
@@ -65,10 +113,9 @@ When('用户输入文本 {string}', async function (this: CustomWorld, text: str
 When('用户在编辑器中输入内容 {string}', async function (this: CustomWorld, content: string) {
   console.log(`   📍 Step: 在编辑器中输入内容 "${content}"...`);
 
-  const editor = await getEditor(this);
-  await editor.click();
+  const editor = await focusEditor(this);
   await this.page.waitForTimeout(300);
-  await this.page.keyboard.type(content, { delay: 30 });
+  await editor.type(content, { delay: 30 });
   await this.page.waitForTimeout(300);
 
   this.testContext.inputText = content;
@@ -79,6 +126,7 @@ When('用户在编辑器中输入内容 {string}', async function (this: CustomW
 When('用户选中所有内容', async function (this: CustomWorld) {
   console.log('   📍 Step: 选中所有内容...');
 
+  await focusEditor(this);
   await this.page.keyboard.press(`${this.modKey}+A`);
   await this.page.waitForTimeout(300);
 
@@ -92,7 +140,8 @@ When('用户选中所有内容', async function (this: CustomWorld) {
 When('用户输入斜杠 {string}', async function (this: CustomWorld, slash: string) {
   console.log(`   📍 Step: 输入斜杠 "${slash}"...`);
 
-  await this.page.keyboard.type(slash, { delay: 50 });
+  const editor = await focusEditor(this);
+  await editor.type(slash, { delay: 50 });
   // Wait for slash menu to appear
   await this.page.waitForTimeout(500);
 
@@ -102,14 +151,16 @@ When('用户输入斜杠 {string}', async function (this: CustomWorld, slash: st
 When('用户输入斜杠命令 {string}', async function (this: CustomWorld, command: string) {
   console.log(`   📍 Step: 输入斜杠命令 "${command}"...`);
 
+  const editor = await focusEditor(this);
+
   // The command format is "/shortcut" (e.g., "/h1", "/codeblock")
   // First type the slash and wait for menu
-  await this.page.keyboard.type('/', { delay: 100 });
+  await editor.type('/', { delay: 100 });
   await this.page.waitForTimeout(800); // Wait for slash menu to appear
 
   // Then type the rest of the command (without the leading /)
   const shortcut = command.startsWith('/') ? command.slice(1) : command;
-  await this.page.keyboard.type(shortcut, { delay: 80 });
+  await editor.type(shortcut, { delay: 80 });
   await this.page.waitForTimeout(500); // Wait for menu to filter
 
   console.log(`   ✅ 已输入斜杠命令 "${command}"`);
@@ -140,9 +191,14 @@ Then('编辑器应该显示输入的文本', async function (this: CustomWorld) 
   const editor = await getEditor(this);
   const text = this.testContext.inputText;
 
-  // Check if the text is visible in the editor
-  const editorText = await editor.textContent();
-  expect(editorText).toContain(text);
+  await expect
+    .poll(
+      async () => {
+        return ((await editor.textContent()) || '').replaceAll(/\s+/g, ' ').trim();
+      },
+      { timeout: 8000 },
+    )
+    .toContain(text);
 
   console.log(`   ✅ 编辑器显示文本: "${text}"`);
 });
@@ -151,8 +207,14 @@ Then('编辑器应该显示 {string}', async function (this: CustomWorld, expect
   console.log(`   📍 Step: 验证编辑器显示 "${expectedText}"...`);
 
   const editor = await getEditor(this);
-  const editorText = await editor.textContent();
-  expect(editorText).toContain(expectedText);
+  await expect
+    .poll(
+      async () => {
+        return ((await editor.textContent()) || '').replaceAll(/\s+/g, ' ').trim();
+      },
+      { timeout: 8000 },
+    )
+    .toContain(expectedText);
 
   console.log(`   ✅ 编辑器显示 "${expectedText}"`);
 });
@@ -226,6 +288,10 @@ Then('编辑器应该包含任务列表', async function (this: CustomWorld) {
     '[role="checkbox"]',
     '[data-lexical-check-list]',
     'li[role="listitem"] input',
+    '.editor_listItemUnchecked',
+    '.editor_listItemChecked',
+    '[class*="editor_listItemUnchecked"]',
+    '[class*="editor_listItemChecked"]',
   ];
 
   let found = false;

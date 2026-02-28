@@ -26,7 +26,7 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
-  const { id, avatar, title, pinned } = item;
+  const { id, avatar, backgroundColor, title, pinned } = item;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -83,8 +83,13 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
       return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
     }
 
-    return <Avatar avatar={typeof avatar === 'string' ? avatar : undefined} />;
-  }, [isUpdating, avatar]);
+    return (
+      <Avatar
+        avatar={typeof avatar === 'string' ? avatar : undefined}
+        avatarBackground={backgroundColor || undefined}
+      />
+    );
+  }, [isUpdating, avatar, backgroundColor]);
 
   const dropdownMenu = useAgentDropdownMenu({
     anchor,

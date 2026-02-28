@@ -20,8 +20,6 @@ dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })
 
 const migrationsFolder = join(__dirname, '../../packages/database/migrations');
 
-const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
-
 const runMigrations = async () => {
   const { serverDB } = await import('../../packages/database/src/server');
 
@@ -40,7 +38,7 @@ const runMigrations = async () => {
 const connectionString = process.env.DATABASE_URL;
 
 // only migrate database if the connection string is available
-if (!isDesktop && connectionString) {
+if (connectionString) {
   runMigrations().catch((err) => {
     console.error('❌ Database migrate failed:', err);
 

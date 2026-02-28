@@ -1,7 +1,7 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css }) => ({
-  // 主容器
+  // Main container
   mainContainer: css`
     max-height: 100%;
   `,

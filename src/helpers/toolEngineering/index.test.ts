@@ -83,9 +83,13 @@ vi.mock('../isCanUseFC', () => ({
   isCanUseFC: () => true,
 }));
 
+let mockUseApplicationBuiltinSearchTool = true;
+
 vi.mock('@/helpers/getSearchConfig', () => ({
   getSearchConfig: () => ({
-    useApplicationBuiltinSearchTool: true,
+    get useApplicationBuiltinSearchTool() {
+      return mockUseApplicationBuiltinSearchTool;
+    },
   }),
 }));
 
@@ -93,6 +97,7 @@ describe('toolEngineering', () => {
   afterEach(() => {
     mockGetInstalledPluginById = () => () => undefined;
     mockInstalledPluginManifestList = () => [];
+    mockUseApplicationBuiltinSearchTool = true;
   });
 
   describe('createToolsEngine', () => {
@@ -180,6 +185,78 @@ describe('toolEngineering', () => {
 
       expect(result.enabledToolIds).toEqual(['search', 'lobe-web-browsing']);
       expect(result.enabledToolIds).toHaveLength(2);
+    });
+  });
+
+  describe('isExplicitActivation bypass', () => {
+    it('should disable web browsing when useApplicationBuiltinSearchTool is false', () => {
+      mockUseApplicationBuiltinSearchTool = false;
+
+      const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['lobe-web-browsing'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-web-browsing');
+      expect(result.filteredTools).toContainEqual({
+        id: 'lobe-web-browsing',
+        reason: 'disabled',
+      });
+    });
+
+    it('should enable web browsing with isExplicitActivation even when useApplicationBuiltinSearchTool is false', () => {
+      mockUseApplicationBuiltinSearchTool = false;
+
+      const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+      const result = toolsEngine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: ['lobe-web-browsing'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-web-browsing');
+      expect(result.filteredTools).toEqual([]);
+      expect(result.tools).toHaveLength(1);
+    });
+
+    it('should bypass all enableChecker filters with isExplicitActivation', () => {
+      mockUseApplicationBuiltinSearchTool = false;
+      mockInstalledPluginManifestList = () => [
+        {
+          api: [
+            {
+              description: 'Run stdio tool',
+              name: 'run',
+              parameters: { properties: {}, required: [], type: 'object' },
+            },
+          ],
+          identifier: 'stdio-mcp-plugin',
+          meta: { title: 'Stdio MCP', avatar: '🔧' },
+          type: 'default',
+        } as unknown as LobeChatPluginManifest,
+      ];
+      mockGetInstalledPluginById = (id: string) => () =>
+        id === 'stdio-mcp-plugin'
+          ? { customParams: { mcp: { type: 'stdio' } }, identifier: id }
+          : undefined;
+
+      const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+      const result = toolsEngine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: ['stdio-mcp-plugin', 'lobe-web-browsing'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Both should be enabled despite their normal filters
+      expect(result.enabledToolIds).toContain('stdio-mcp-plugin');
+      expect(result.enabledToolIds).toContain('lobe-web-browsing');
     });
   });
 

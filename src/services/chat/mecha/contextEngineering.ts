@@ -1,24 +1,28 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
+import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import {
-  type AgentBuilderContext,
-  type AgentGroupConfig,
-  type GroupAgentBuilderContext,
-  type GroupOfficialToolItem,
-  type GTDConfig,
-  type LobeToolManifest,
-  type MemoryContext,
-  type UserMemoryData,
+import type {
+  AgentBuilderContext,
+  AgentGroupConfig,
+  AgentManagementContext,
+  GroupAgentBuilderContext,
+  GroupOfficialToolItem,
+  GTDConfig,
+  LobeToolManifest,
+  MemoryContext,
+  ToolDiscoveryConfig,
+  UserMemoryData,
 } from '@lobechat/context-engine';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
-import {
-  type OpenAIChatMessage,
-  type RuntimeInitialContext,
-  type RuntimeStepContext,
-  type UIChatMessage,
+import type {
+  OpenAIChatMessage,
+  RuntimeInitialContext,
+  RuntimeStepContext,
+  UIChatMessage,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -29,12 +33,14 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
+  toolSelectors,
 } from '@/store/tool/selectors';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
@@ -113,9 +119,12 @@ export const contextEngineering = async ({
   const isAgentBuilderEnabled = tools?.includes(AgentBuilderIdentifier) ?? false;
   // Check if Group Agent Builder tool is enabled
   const isGroupAgentBuilderEnabled = tools?.includes(GroupAgentBuilderIdentifier) ?? false;
+  // Check if Agent Management tool is enabled
+  const isAgentManagementEnabled = tools?.includes(AgentManagementIdentifier) ?? false;
 
   log('isAgentBuilderEnabled: %s', isAgentBuilderEnabled);
   log('isGroupAgentBuilderEnabled: %s', isGroupAgentBuilderEnabled);
+  log('isAgentManagementEnabled: %s', isAgentManagementEnabled);
 
   // Build agent group configuration if groupId is provided
   let agentGroup: AgentGroupConfig | undefined;
@@ -348,6 +357,118 @@ export const contextEngineering = async ({
         }
       : undefined;
 
+  // Build tool discovery config if lobe-tools is enabled
+  const enabledToolSet = new Set(tools || []);
+  const isLobeToolsEnabled = enabledToolSet.has(LobeToolIdentifier);
+
+  let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
+  if (isLobeToolsEnabled) {
+    const toolState = getToolStoreState();
+    const availableTools = toolSelectors
+      .availableToolsForDiscovery(toolState)
+      .filter((tool) => !enabledToolSet.has(tool.identifier));
+
+    if (availableTools.length > 0) {
+      toolDiscoveryConfig = { availableTools };
+      log('Tool discovery config built, available tools count: %d', availableTools.length);
+    }
+  }
+
+  // Build Agent Management context if Agent Management tool is enabled
+  let agentManagementContext: AgentManagementContext | undefined;
+  if (isAgentManagementEnabled) {
+    // Get enabled providers and models from aiInfra store
+    const aiProviderState = getAiInfraStoreState();
+    const enabledChatModelList = aiProviderState.enabledChatModelList || [];
+
+    // Build availableProviders from enabled chat models (only user-enabled providers)
+    // Limit to first 5 providers to avoid context bloat
+    const availableProviders = enabledChatModelList.slice(0, 5).map((provider) => ({
+      id: provider.id,
+      models: provider.children.map((model) => ({
+        abilities: model.abilities,
+        description: model.description,
+        id: model.id,
+        name: model.displayName || model.id,
+      })),
+      name: provider.name,
+    }));
+
+    // Get tool state for plugins
+    const toolState = getToolStoreState();
+
+    // Build availablePlugins from all plugin sources
+    const availablePlugins = [];
+
+    // Builtin tools (use allMetaList to include hidden tools like web-browsing, cloud-sandbox, etc.)
+    // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
+    const allBuiltinTools = builtinToolSelectors.allMetaList(toolState);
+    const klavisIdentifiers = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
+    const INTERNAL_TOOLS = new Set([
+      'lobe-agent-management', // Don't show agent-management in its own context
+      'lobe-agent-builder', // Used for editing current agent, not for creating new agents
+      'lobe-group-agent-builder', // Used for editing current group, not for creating new agents
+      'lobe-page-agent', // Page-editor specific tool
+    ]);
+
+    for (const tool of allBuiltinTools) {
+      // Skip Klavis tools in builtin list (they'll be shown separately)
+      if (klavisIdentifiers.has(tool.identifier)) continue;
+      // Skip internal tools
+      if (INTERNAL_TOOLS.has(tool.identifier)) continue;
+
+      availablePlugins.push({
+        description: tool.meta?.description,
+        identifier: tool.identifier,
+        name: tool.meta?.title || tool.identifier,
+        type: 'builtin' as const,
+      });
+    }
+
+    // Klavis tools (if enabled)
+    const isKlavisEnabled =
+      typeof window !== 'undefined' &&
+      window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+
+    if (isKlavisEnabled) {
+      for (const klavisType of KLAVIS_SERVER_TYPES) {
+        availablePlugins.push({
+          description: klavisType.description,
+          identifier: klavisType.identifier,
+          name: klavisType.label,
+          type: 'klavis' as const,
+        });
+      }
+    }
+
+    // LobehubSkill providers (if enabled)
+    const isLobehubSkillEnabled =
+      typeof window !== 'undefined' &&
+      window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
+
+    if (isLobehubSkillEnabled) {
+      for (const provider of LOBEHUB_SKILL_PROVIDERS) {
+        availablePlugins.push({
+          description: provider.description,
+          identifier: provider.id,
+          name: provider.label,
+          type: 'lobehub-skill' as const,
+        });
+      }
+    }
+
+    agentManagementContext = {
+      availablePlugins,
+      availableProviders,
+    };
+
+    log(
+      'agentManagementContext built: %d providers, %d plugins',
+      agentManagementContext.availableProviders?.length ?? 0,
+      agentManagementContext.availablePlugins?.length ?? 0,
+    );
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -390,6 +511,9 @@ export const contextEngineering = async ({
       enabledSkills: plugins ? createSkillEngine().getEnabledSkills(plugins) : undefined,
     },
 
+    // Tool Discovery configuration
+    toolDiscoveryConfig,
+
     // Tools configuration
     toolsConfig: {
       manifests,
@@ -409,6 +533,7 @@ export const contextEngineering = async ({
     // Extended contexts - only pass when enabled
     ...(isAgentBuilderEnabled && { agentBuilderContext }),
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
+    ...(isAgentManagementEnabled && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
     ...(gtdConfig && { gtd: gtdConfig }),
   });

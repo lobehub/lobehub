@@ -2,8 +2,11 @@
  * Lobe Tools Executor
  *
  * Creates and exports the ToolsActivatorExecutor instance for registration.
- * Injects a stub service as dependency — actual tool manifest resolution
- * will be implemented in follow-up work when ToolDiscoveryProvider is ready.
+ * Resolves tool manifests from the tool store (installedPlugins + builtinTools).
+ *
+ * State tracking (getActivatedToolIds / markActivated) is intentionally a no-op
+ * because the activated state is persisted in message pluginState and accumulated
+ * by selectActivatedToolIdsFromMessages at each agentic loop step.
  */
 import {
   type ToolManifestInfo,
@@ -12,20 +15,61 @@ import {
 } from '@lobechat/builtin-tool-tools/executionRuntime';
 import { ToolsActivatorExecutor } from '@lobechat/builtin-tool-tools/executor';
 
-// Stub service — will be replaced with real implementation
-// when ToolDiscoveryProvider and state.tools mutations are ready
-const stubService: ToolsActivatorRuntimeService = {
+import { getToolStoreState } from '@/store/tool';
+import { toolSelectors } from '@/store/tool/selectors/tool';
+
+const service: ToolsActivatorRuntimeService = {
   getActivatedToolIds: () => [],
-  getToolManifests: async (_identifiers: string[]): Promise<ToolManifestInfo[]> => {
-    return [];
+  getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
+    const s = getToolStoreState();
+
+    // Only allow activation of tools that passed discovery filters
+    // (discoverable, platform-available, not internal/hidden)
+    const discoverable = new Set(
+      toolSelectors.availableToolsForDiscovery(s).map((t) => t.identifier),
+    );
+    const allowedIds = identifiers.filter((id) => discoverable.has(id));
+
+    const results: ToolManifestInfo[] = [];
+
+    for (const id of allowedIds) {
+      // Search builtin tools
+      const builtin = s.builtinTools.find((t) => t.identifier === id);
+      if (builtin) {
+        results.push({
+          apiDescriptions: builtin.manifest.api.map((a) => ({
+            description: a.description,
+            name: a.name,
+          })),
+          avatar: builtin.manifest.meta?.avatar,
+          identifier: builtin.identifier,
+          name: builtin.manifest.meta?.title ?? builtin.identifier,
+          systemRole: builtin.manifest.systemRole,
+        });
+        continue;
+      }
+
+      // Search installed plugins
+      const plugin = s.installedPlugins.find((p) => p.identifier === id);
+      if (plugin?.manifest) {
+        results.push({
+          apiDescriptions: (plugin.manifest.api || []).map((a) => ({
+            description: a.description,
+            name: a.name,
+          })),
+          avatar: plugin.manifest.meta?.avatar,
+          identifier: plugin.identifier,
+          name: plugin.manifest.meta?.title ?? plugin.identifier,
+          systemRole: plugin.manifest.systemRole,
+        });
+      }
+    }
+
+    return results;
   },
   markActivated: () => {},
 };
 
-// Create runtime with stub service
-const runtime = new ToolsActivatorExecutionRuntime({
-  service: stubService,
-});
+const runtime = new ToolsActivatorExecutionRuntime({ service });
 
-// Create executor instance with the runtime
 export const toolsActivatorExecutor = new ToolsActivatorExecutor(runtime);

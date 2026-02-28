@@ -1,19 +1,23 @@
 'use client';
 
-import Script from 'next/script';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import urlJoin from 'url-join';
 
-const DesktopAnalytics = memo(
-  () =>
-    process.env.NEXT_PUBLIC_DESKTOP_PROJECT_ID &&
-    process.env.NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL && (
-      <Script
-        defer
-        data-website-id={process.env.NEXT_PUBLIC_DESKTOP_PROJECT_ID}
-        src={urlJoin(process.env.NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL, 'script.js')}
-      />
-    ),
-);
+const DesktopAnalytics = memo(() => {
+  const projectId = process.env.NEXT_PUBLIC_DESKTOP_PROJECT_ID;
+  const baseUrl = process.env.NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL;
+
+  useEffect(() => {
+    if (!projectId || !baseUrl) return;
+
+    const script = document.createElement('script');
+    script.src = urlJoin(baseUrl, 'script.js');
+    script.defer = true;
+    script.dataset.websiteId = projectId;
+    document.head.appendChild(script);
+  }, [projectId, baseUrl]);
+
+  return null;
+});
 
 export default DesktopAnalytics;

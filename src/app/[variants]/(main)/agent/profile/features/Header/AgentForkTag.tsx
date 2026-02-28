@@ -40,7 +40,7 @@ const AgentForkTag = memo(() => {
         // If forkedFromAgentId exists, get fork source info
         if (agentDetail.forkedFromAgentId) {
           const forkSourceResponse = await marketApiService.getAgentForkSource(marketIdentifier);
-          console.log('forkSourceResponse', forkSourceResponse);
+
           setForkSource(forkSourceResponse.source);
         } else {
           setForkSource(null);

@@ -46,6 +46,24 @@ CRAWLER_IMPLS="naive,search1api"
 
 ---
 
+## `CRAWL_CONCURRENCY`
+
+控制单次网页抓取任务的并发数量，默认值为 `3`。在低配置服务器上建议设置为 `1` 以降低 CPU 峰值。
+
+```env
+CRAWL_CONCURRENCY=3
+```
+
+## `CRAWLER_RETRY`
+
+控制单个 URL 的抓取失败重试次数，默认值为 `1`（即最多尝试 2 次）。
+
+```env
+CRAWLER_RETRY=1
+```
+
+---
+
 ## `SEARCH_PROVIDERS`
 
 配置联网搜索使用的搜索引擎提供商。

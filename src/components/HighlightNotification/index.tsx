@@ -4,7 +4,6 @@ import { HeartFilled } from '@ant-design/icons';
 import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
-import Link from 'next/link';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -76,7 +75,7 @@ const HighlightNotification = memo<HighlightNotificationProps>(
             {title && <div className={styles.title}>{title}</div>}
             {description && <div className={styles.description}>{description}</div>}
             {actionLabel && (
-              <Link
+              <a
                 className={styles.action}
                 href={actionHref || '/'}
                 rel="noopener noreferrer"
@@ -86,7 +85,7 @@ const HighlightNotification = memo<HighlightNotificationProps>(
                 <Button block icon={HeartFilled} size="small" type="primary">
                   {actionLabel}
                 </Button>
-              </Link>
+              </a>
             )}
           </Flexbox>
         </Flexbox>

@@ -85,9 +85,10 @@ const toMessageMapContext = (input: MessageMapKeyInput): MessageMapContext => {
 
   // Default scope (main if not specified)
   // isNew can be used with any scope (main for new topic, thread for new thread with explicit scope)
+  // Note: sub_agent scope uses same key as main scope (same conversation, just different display)
   return {
     isNew,
-    scope: scope ?? 'main',
+    scope: scope === 'sub_agent' ? 'main' : (scope ?? 'main'),
     scopeId: agentId,
     topicId,
   };

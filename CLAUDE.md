@@ -31,8 +31,28 @@ lobe-chat/
 
 ## Development
 
+### Starting the Dev Environment
+
+```bash
+# SPA dev mode (frontend only, proxies API to localhost:3010)
+bun run dev:spa
+
+# Full-stack dev (Next.js + Vite SPA concurrently)
+bun run dev
+```
+
+After `dev:spa` starts, the terminal prints a **Debug Proxy** URL:
+
+```
+Debug Proxy: https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http%3A%2F%2Flocalhost%3A9876
+```
+
+Open this URL to develop locally against the production backend (app.lobehub.com). The proxy page loads your local Vite dev server's SPA into the online environment, enabling HMR with real server config.
+
 ### Git Workflow
 
+- **Branch strategy**: `canary` is the development branch (cloud production); `main` is the release branch (periodically cherry-picks from canary)
+- New branches should be created from `canary`; PRs should target `canary`
 - Use rebase for `git pull`
 - Commit messages: prefix with gitmoji
 - Branch format: `<type>/<feature-name>`

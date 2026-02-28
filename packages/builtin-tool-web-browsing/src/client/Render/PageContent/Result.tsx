@@ -1,11 +1,10 @@
 'use client';
 
 import type { CrawlErrorResult, CrawlSuccessResult } from '@lobechat/web-crawler';
-import { ActionIcon, Alert, Block, Flexbox, Text, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Alert, Block, Flexbox, stopPropagation, Text } from '@lobehub/ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -114,9 +113,9 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
       <Flexbox gap={8} paddingBlock={8} paddingInline={12}>
         <Flexbox horizontal align={'center'} className={styles.titleRow} justify={'space-between'}>
           <Text ellipsis>{title || originalUrl}</Text>
-          <Link href={url} target={'_blank'} onClick={stopPropagation}>
+          <a href={url} target={'_blank'} onClick={stopPropagation}>
             <ActionIcon icon={ExternalLink} size={'small'} />
-          </Link>
+          </a>
         </Flexbox>
         <Text ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
           {description || result.content?.slice(0, 40)}

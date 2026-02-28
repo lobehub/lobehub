@@ -44,15 +44,15 @@ const ProxyForm = () => {
     }
   }, [form, proxySettings]);
 
-  // 监听表单变化
+  // Listen for form value changes
   const handleValuesChange = useCallback(() => {
     setLoading(true);
     setHasUnsavedChanges(true);
-    setTestResult(null); // 清除之前的测试结果
+    setTestResult(null); // Clear the previous test result
     setLoading(false);
   }, []);
 
-  // 保存配置
+  // Save configuration
   const handleSave = useCallback(async () => {
     try {
       setIsSaving(true);
@@ -66,7 +66,7 @@ const ProxyForm = () => {
     }
   }, [form, setProxySettings]);
 
-  // 重置配置
+  // Reset configuration
   const handleReset = useCallback(() => {
     if (proxySettings) {
       form.setFieldsValue(proxySettings);
@@ -75,20 +75,20 @@ const ProxyForm = () => {
     }
   }, [form, proxySettings]);
 
-  // 测试代理配置
+  // Test proxy configuration
   const handleTest = useCallback(async () => {
     try {
       setIsTesting(true);
       setTestResult(null);
 
-      // 验证表单并获取当前配置
+      // Validate form and get current configuration
       const values = await form.validateFields();
       const config: NetworkProxySettings = {
         ...proxySettings,
         ...values,
       };
 
-      // 使用新的 testProxyConfig 方法测试用户正在配置的代理
+      // Use the new testProxyConfig method to test the proxy being configured by the user
       const result = await desktopSettingsService.testProxyConfig(config, testUrl);
 
       setTestResult(result);
@@ -199,7 +199,7 @@ const ProxyForm = () => {
                 {t('proxy.testButton')}
               </Button>
             </Space.Compact>
-            {/* 测试结果显示 */}
+            {/* Test result display */}
             {!testResult ? null : testResult.success ? (
               <Alert
                 closable

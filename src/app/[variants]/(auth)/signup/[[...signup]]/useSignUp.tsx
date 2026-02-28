@@ -1,5 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { form } from 'motion/react-m';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,10 +8,8 @@ import { type BusinessSignupFomData } from '@/business/client/hooks/useBusinessS
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import { message } from '@/components/AntdStaticMethods';
 import { signUp } from '@/libs/better-auth/auth-client';
-import { useRouter, useSearchParams } from '@/libs/next/navigation';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
+import { useAuthServerConfigStore } from '../../_layout/AuthServerConfigProvider';
 import { type BaseSignUpFormValues } from './types';
 
 export type SignUpFormValues = BaseSignUpFormValues & BusinessSignupFomData;
@@ -21,8 +20,8 @@ export const useSignUp = () => {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const { getFetchOptions, preSocialSignupCheck, businessElement } = useBusinessSignup(form);
-  const enableEmailVerification = useServerConfigStore(
-    serverConfigSelectors.enableEmailVerification,
+  const enableEmailVerification = useAuthServerConfigStore(
+    (s) => s.serverConfig.enableEmailVerification || false,
   );
 
   const handleSignUp = async (values: SignUpFormValues) => {

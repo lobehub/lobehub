@@ -14,6 +14,12 @@ const nextConfig = defineConfig({
           'node_modules/.pnpm/@img+sharp-libvips-*musl*',
           'node_modules/ffmpeg-static/**',
           'node_modules/.pnpm/ffmpeg-static*/**',
+          // Exclude SPA/desktop/mobile build artifacts from serverless functions
+          'public/spa/**',
+          'dist/desktop/**',
+          'dist/mobile/**',
+          'apps/desktop/**',
+          'packages/database/migrations/**',
         ],
       }
     : undefined,

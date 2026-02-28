@@ -12,24 +12,24 @@ import { useTranslation } from 'react-i18next';
 
 import ApiKeyDatePicker from '../ApiKeyDatePicker';
 
-// 内容类型定义
+// Content type definition
 export type ContentType = 'text' | 'date';
 
-// 组件Props接口定义
+// Component Props interface definition
 export interface EditableCellProps {
-  /** 是否禁用编辑 */
+  /** Whether editing is disabled */
   disabled?: boolean;
-  /** 提交回调函数 */
+  /** Submit callback function */
   onSubmit: (value: string | Date | null) => void;
-  /** 占位符文本 */
+  /** Placeholder text */
   placeholder?: string;
-  /** 内容类型 */
+  /** Content type */
   type: ContentType;
-  /** 从数据库中查出的值，不管是什么类型，存进去的都是字符串 */
+  /** Value retrieved from the database; regardless of type, it is stored as a string */
   value: string | null;
 }
 
-// 样式定义
+// Style definitions
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionButtons: css`
     display: flex;
@@ -77,19 +77,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-// 主组件实现
+// Main component implementation
 const EditableCell = memo<EditableCellProps>(
   ({ value, type, onSubmit, placeholder, disabled = false }) => {
     const { t } = useTranslation('auth');
     const { message } = App.useApp();
 
-    // 编辑状态管理
+    // Edit state management
     const [isEditing, setIsEditing] = useState(false);
 
-    // 用于Input的ref
+    // Ref for the Input element
     const inputRef = useRef<InputRef>(null);
 
-    // 格式化显示值
+    // Format display value
     const formatDisplayValue = (val: string | null) => {
       if (type === 'date' && val) {
         const date = dayjs(val);
@@ -100,14 +100,14 @@ const EditableCell = memo<EditableCellProps>(
       return val || placeholder || '';
     };
 
-    // 开始编辑
+    // Start editing
     const handleEdit = () => {
       if (disabled) return;
 
       setIsEditing(true);
     };
 
-    // 提交编辑
+    // Submit edit
     const handleSubmit = () => {
       if (type === 'text') {
         const inputValue = inputRef.current?.input?.value;
@@ -123,12 +123,12 @@ const EditableCell = memo<EditableCellProps>(
       setIsEditing(false);
     };
 
-    // 取消编辑
+    // Cancel edit
     const handleCancel = () => {
       setIsEditing(false);
     };
 
-    // 输入框组件的键盘事件处理
+    // Keyboard event handler for the input component
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -139,14 +139,14 @@ const EditableCell = memo<EditableCellProps>(
       }
     };
 
-    // 日期选择器提交
+    // Date picker submit handler
     const handleDatePickerSubmit = (date: Dayjs | null) => {
       onSubmit(date && dayjs(date).toISOString());
 
       setIsEditing(false);
     };
 
-    // 渲染编辑模式
+    // Render edit mode
     const renderEditMode = () => {
       switch (type) {
         case 'text': {
@@ -186,7 +186,7 @@ const EditableCell = memo<EditableCellProps>(
       }
     };
 
-    // 文本类型的编辑模式，展示保存和取消按钮
+    // Text type editing mode, showing save and cancel buttons
     if (type === 'text' && isEditing) {
       return (
         <div className={styles.editingContainer}>
@@ -199,12 +199,12 @@ const EditableCell = memo<EditableCellProps>(
       );
     }
 
-    // 日期类型的编辑模式，展示日期选择器
+    // Date type editing mode, showing date picker
     if (type === 'date' && isEditing) {
       return renderEditMode();
     }
 
-    // 展示模式
+    // Display mode
     return (
       <div className={styles.container}>
         <div className={styles.content}>{formatDisplayValue(value)}</div>

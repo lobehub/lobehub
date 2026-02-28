@@ -227,15 +227,15 @@ const ProviderConfig = memo<ProviderConfigProps>(
       lastInitializedIdRef.current = id;
     }, [isLoading, id, data, providerRuntimeConfig, form]);
 
-    // 标记是否正在进行连接测试
+    // Flag to indicate if a connection test is in progress
     const isCheckingConnection = useRef(false);
 
     const handleValueChange = useCallback(
       (...params: Parameters<typeof updateAiProviderConfig>) => {
-        // 虽然 debouncedHandleValueChange 早于 onBeforeCheck 执行，
-        // 但是由于 debouncedHandleValueChange 因为 debounce 的原因，本来就会晚 500ms 执行
-        // 所以 isCheckingConnection.current 这时候已经更新了
-        // 测试链接时已经出发一次了 updateAiProviderConfig ， 不应该重复更新
+        // Although debouncedHandleValueChange executes before onBeforeCheck,
+        // due to the debounce, debouncedHandleValueChange will actually execute 500ms later
+        // so isCheckingConnection.current has already been updated at this point
+        // updateAiProviderConfig has already been triggered once during the connection test, so it should not be updated again
         if (isCheckingConnection.current) return;
 
         updateAiProviderConfig(...params);
@@ -401,13 +401,13 @@ const ProviderConfig = memo<ProviderConfigProps>(
                 model={data?.checkModel || checkModel!}
                 provider={id}
                 onAfterCheck={async () => {
-                  // 重置连接测试状态，允许后续的 onValuesChange 更新
+                  // Reset connection test state to allow subsequent onValuesChange updates
                   isCheckingConnection.current = false;
                 }}
                 onBeforeCheck={async () => {
-                  // 设置连接测试状态，阻止 onValuesChange 的重复请求
+                  // Set connection test state to prevent duplicate requests from onValuesChange
                   isCheckingConnection.current = true;
-                  // 主动保存表单最新值，确保 fetchAiProviderRuntimeState 获取最新数据
+                  // Proactively save the latest form values to ensure fetchAiProviderRuntimeState retrieves up-to-date data
                   await updateAiProviderConfig(id, form.getFieldsValue());
                 }}
               />

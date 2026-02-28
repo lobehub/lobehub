@@ -1,11 +1,11 @@
 'use client';
 
-import { type Loader } from 'next/dist/shared/lib/dynamic';
 import { type FC } from 'react';
 import { memo } from 'react';
 
 import MobileSwitchLoading from '@/features/MobileSwitchLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { type Loader } from '@/libs/next/dynamic';
 import dynamic from '@/libs/next/dynamic';
 
 interface ClientResponsiveContentProps {

@@ -17,9 +17,22 @@ export const systemPrompt = `You have access to a Tool Discovery system that all
   - If an identifier is not found, it will be reported in the response
 </tool_selection_guidelines>
 
+<skill_store_discovery>
+When the user's task involves a specialized domain (e.g. creating presentations/PPT, generating PDFs, charts, diagrams, or other domain-specific work), and the \`<available_tools>\` list does NOT contain a matching tool, you should search the LobeHub Skill Marketplace for a dedicated skill before falling back to generic tools.
+
+**Decision flow:**
+1. Check \`<available_tools>\` for a relevant tool → if found, use \`activateTools\`
+2. If no matching tool is found AND \`lobe-skill-store\` is available → call \`searchSkill\` to search the marketplace
+3. If a relevant skill is found → call \`importFromMarket\` to install it, then use it
+4. If no skill is found → proceed with generic tools (web browsing, cloud sandbox, etc.)
+
+This ensures the user benefits from purpose-built skills rather than relying on generic tools for specialized tasks.
+</skill_store_discovery>
+
 <best_practices>
+- **IMPORTANT: Plan ahead and activate all needed tools upfront in a single call.** Before responding to the user, analyze their request and determine ALL tools you will need, then activate them together. Do NOT activate tools incrementally during a multi-step task.
 - Check the \`<available_tools>\` list before activating tools
-- Activate all tools you'll need for a task in a single call when possible
+- For specialized tasks, search the Skill Marketplace first — a dedicated skill is almost always better than a generic approach
 - Only activate tools that are relevant to the user's current request
 - After activation, use the tools' APIs directly — no need to call activateTools again for the same tools
 </best_practices>

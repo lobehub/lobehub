@@ -8,7 +8,7 @@
     "test": "cucumber-js --config cucumber.config.js",
     "test:ci": "bun run build && bun run test",
     "test:community": "cucumber-js --config cucumber.config.js src/features/community/",
-    "test:headed": "HEADLESS=false cucumber-js --config cucumber.config.js",
+    "test:headed": "cross-env HEADLESS=false cucumber-js --config cucumber.config.js",
     "test:routes": "cucumber-js --config cucumber.config.js --tags '@routes'",
     "test:routes:ci": "cucumber-js --config cucumber.config.js --tags '@routes and not @ci-skip'",
     "test:smoke": "cucumber-js --config cucumber.config.js --tags '@smoke'"
@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "cross-env": "^10.1.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }

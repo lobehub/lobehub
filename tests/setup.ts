@@ -1,4 +1,3 @@
-/* eslint-disable import/newline-after-import,import/first */
 import '@testing-library/jest-dom';
 // mock indexedDB to test with dexie
 // refs: https://github.com/dumbmatter/fakeIndexedDB#dexie-and-other-indexeddb-api-wrappers
@@ -6,6 +5,7 @@ import 'fake-indexeddb/auto';
 
 import { theme } from 'antd';
 import i18n from 'i18next';
+import { enableMapSet } from 'immer';
 import React from 'react';
 import { vi } from 'vitest';
 
@@ -14,6 +14,9 @@ import common from '@/locales/default/common';
 import discover from '@/locales/default/discover';
 import home from '@/locales/default/home';
 import oauth from '@/locales/default/oauth';
+
+// Enable Immer MapSet plugin so store code using Map/Set in produce() works in tests
+enableMapSet();
 
 // Global mock for @lobehub/analytics/react to avoid AnalyticsProvider dependency
 // This prevents tests from failing when components use useAnalytics hook

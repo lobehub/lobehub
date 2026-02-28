@@ -30,6 +30,7 @@ const EditingPopover = () => {
             ) : target ? (
               <GroupContent
                 avatar={target.avatar}
+                backgroundColor={target.backgroundColor}
                 id={target.id}
                 memberAvatars={target.memberAvatars}
                 title={target.title}

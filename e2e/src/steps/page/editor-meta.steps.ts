@@ -6,7 +6,74 @@
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
+import { WAIT_TIMEOUT } from '../../support/world';
+
+async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
+  const loadingSelectors = ['[aria-label="Loading"]', '.lobe-brand-loading'];
+  const start = Date.now();
+
+  while (Date.now() - start < WAIT_TIMEOUT) {
+    let loadingVisible = false;
+    for (const selector of loadingSelectors) {
+      const loading = world.page.locator(selector).first();
+      if ((await loading.count()) > 0 && (await loading.isVisible())) {
+        loadingVisible = true;
+        break;
+      }
+    }
+
+    if (loadingVisible) {
+      await world.page.waitForTimeout(300);
+      continue;
+    }
+
+    const readyCandidates = [
+      world.page.locator('button:has(svg.lucide-square-pen)').first(),
+      world.page.locator('input[placeholder*="Search"], input[placeholder*="搜索"]').first(),
+      world.page.locator('a[href^="/page/"]').first(),
+    ];
+
+    for (const candidate of readyCandidates) {
+      if ((await candidate.count()) > 0 && (await candidate.isVisible())) {
+        return;
+      }
+    }
+
+    await world.page.waitForTimeout(300);
+  }
+
+  throw new Error('Page workspace did not become ready in time');
+}
+
+async function clickNewPageButton(world: CustomWorld): Promise<void> {
+  await waitForPageWorkspaceReady(world);
+
+  const candidates = [
+    world.page.locator('button:has(svg.lucide-square-pen)').first(),
+    world.page
+      .locator('svg.lucide-square-pen')
+      .first()
+      .locator('xpath=ancestor::*[self::button or @role="button"][1]'),
+    world.page.getByRole('button', { name: /create page|new page|新建文稿|新建/i }).first(),
+    world.page
+      .locator(
+        'button[title*="Create"], button[title*="Page"], button[title*="new"], button[title*="新建"]',
+      )
+      .first(),
+  ];
+
+  for (const candidate of candidates) {
+    if ((await candidate.count()) === 0) continue;
+    if (!(await candidate.isVisible())) continue;
+
+    await candidate.click();
+    await world.page.waitForTimeout(500);
+    return;
+  }
+
+  throw new Error('Could not find new page button');
+}
 
 // ============================================
 // Given Steps
@@ -18,11 +85,10 @@ Given('用户打开一个文稿编辑器', async function (this: CustomWorld) {
   // Navigate to page module
   await this.page.goto('/page');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
-  await this.page.waitForTimeout(1000);
+  await waitForPageWorkspaceReady(this);
 
   // Create a new page via UI
-  const newPageButton = this.page.locator('svg.lucide-square-pen').first();
-  await newPageButton.click();
+  await clickNewPageButton(this);
   await this.page.waitForTimeout(1500);
 
   // Wait for navigation to page editor
@@ -39,10 +105,9 @@ Given('用户打开一个带有 Emoji 的文稿', async function (this: CustomWo
   // First create and open a page
   await this.page.goto('/page');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
-  await this.page.waitForTimeout(1000);
+  await waitForPageWorkspaceReady(this);
 
-  const newPageButton = this.page.locator('svg.lucide-square-pen').first();
-  await newPageButton.click();
+  await clickNewPageButton(this);
   await this.page.waitForTimeout(1500);
 
   await this.page.waitForURL(/\/page\/.+/, { timeout: WAIT_TIMEOUT });
@@ -189,7 +254,7 @@ When('用户选择一个 Emoji', async function (this: CustomWorld) {
     if ((await popover.count()) > 0) {
       // Find spans that look like emojis (single character with emoji range)
       const emojiSpans = popover.locator('span').filter({
-        hasText: /^[\p{Emoji}]$/u,
+        hasText: /^\p{Emoji}$/u,
       });
       const count = await emojiSpans.count();
       console.log(`   📍 Debug: Found ${count} emoji spans in popover`);

@@ -1,7 +1,9 @@
 import { type GeneralAgentCallLLMResultPayload } from '@lobechat/agent-runtime';
 import { LOADING_FLAT } from '@lobechat/const';
-import { type ChatToolPayload } from '@lobechat/types';
+import { type MessageToolCall } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
+
+import { chatService } from '@/services/chat';
 
 import {
   createAssistantMessage,
@@ -18,6 +20,77 @@ import {
   expectValidExecutorResult,
 } from './helpers';
 
+// Mock external services at module level
+vi.mock('@/services/chat', () => ({
+  chatService: {
+    createAssistantMessageStream: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/message', () => ({
+  messageService: {
+    updateMessage: vi.fn(),
+  },
+}));
+
+vi.mock('@/store/chat/selectors', () => ({
+  topicSelectors: {
+    currentActiveTopicSummary: vi.fn().mockReturnValue(undefined),
+  },
+}));
+
+vi.mock('@/store/file/store', () => ({
+  getFileStoreState: vi.fn().mockReturnValue({
+    uploadBase64FileWithProgress: vi.fn().mockResolvedValue(null),
+  }),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {},
+}));
+
+vi.mock('@/store/agent/store', () => ({
+  getAgentStoreState: vi.fn().mockReturnValue({}),
+}));
+
+/**
+ * Helper to mock chatService.createAssistantMessageStream
+ * Simulates streaming by calling onMessageHandle with chunks then onFinish
+ */
+const mockStreamResponse = (response: {
+  content?: string;
+  finishType?: string;
+  tool_calls?: MessageToolCall[];
+  usage?: any;
+}) => {
+  const { content = '', finishType = 'stop', tool_calls, usage } = response;
+
+  vi.mocked(chatService.createAssistantMessageStream).mockImplementation(async (params: any) => {
+    // Simulate text streaming
+    if (content && params.onMessageHandle) {
+      await params.onMessageHandle({ type: 'text', text: content });
+    }
+
+    // Simulate tool call streaming
+    if (tool_calls && params.onMessageHandle) {
+      await params.onMessageHandle({
+        isAnimationActives: tool_calls.map(() => true),
+        tool_calls,
+        type: 'tool_calls',
+      });
+    }
+
+    // Simulate finish
+    if (params.onFinish) {
+      await params.onFinish(content, {
+        toolCalls: tool_calls,
+        type: finishType,
+        usage,
+      });
+    }
+  });
+};
+
 describe('call_llm executor', () => {
   describe('Basic Behavior', () => {
     it('should create assistant message with LOADING_FLAT content', async () => {
@@ -31,15 +104,11 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState({ operationId: 'test-session' });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'call_llm',
         instruction,
         state,
@@ -64,7 +133,7 @@ describe('call_llm executor', () => {
       );
     });
 
-    it('should call internal_fetchAIChatMessage with correct params', async () => {
+    it('should call chatService.createAssistantMessageStream with correct params', async () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
@@ -76,11 +145,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -93,13 +158,12 @@ describe('call_llm executor', () => {
       });
 
       // Then
-      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          messageId: expect.any(String),
-          messages: [userMsg], // Should exclude assistant message
-          model: 'gpt-4',
-          provider: 'openai',
-          operationId: context.operationId,
+          params: expect.objectContaining({
+            model: 'gpt-4',
+            provider: 'openai',
+          }),
         }),
       );
     });
@@ -111,11 +175,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -141,11 +201,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -174,11 +230,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -193,11 +245,8 @@ describe('call_llm executor', () => {
 
       // Then
       expect(mockStore.optimisticCreateMessage).not.toHaveBeenCalled();
-      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messageId: parentId,
-        }),
-      );
+      // The stream should still be called (message reuse doesn't skip LLM call)
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalled();
     });
   });
 
@@ -211,11 +260,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -247,11 +292,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -309,10 +350,8 @@ describe('call_llm executor', () => {
         },
       });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
+      mockStreamResponse({
         content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
         usage: {
           totalInputTokens: 50,
           totalOutputTokens: 30,
@@ -371,10 +410,8 @@ describe('call_llm executor', () => {
         },
       });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
+      mockStreamResponse({
         content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
         usage: {
           totalInputTokens: 100,
           totalOutputTokens: 50,
@@ -405,12 +442,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-        usage: undefined,
-      });
+      mockStreamResponse({ content: 'AI response', usage: undefined });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -435,11 +467,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState({ stepCount: 3 });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'Partial response',
-        finishType: 'abort',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'Partial response', finishType: 'abort' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -464,12 +492,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'Partial response',
-        finishType: 'abort',
-        isFunctionCall: false,
-        tool_calls: undefined,
-      });
+      mockStreamResponse({ content: 'Partial response', finishType: 'abort' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -500,22 +523,21 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      const toolCalls: ChatToolPayload[] = [
+      const toolCallsRaw: MessageToolCall[] = [
         {
           id: 'tool_1',
-          identifier: 'lobe-web-browsing',
-          apiName: 'search',
-          arguments: JSON.stringify({ query: 'test' }),
-          type: 'default',
+          type: 'function',
+          function: {
+            name: 'lobe-web-browsing____search',
+            arguments: JSON.stringify({ query: 'test' }),
+          },
         },
       ];
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
+      mockStreamResponse({
         content: '',
         finishType: 'abort',
-        isFunctionCall: true,
-        tools: toolCalls,
-        tool_calls: [{ id: 'tool_1', type: 'function', function: { name: 'search' } }],
+        tool_calls: toolCallsRaw,
       });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
@@ -533,8 +555,8 @@ describe('call_llm executor', () => {
       expect(payload).toMatchObject({
         reason: 'user_cancelled',
         hasToolsCalling: true,
-        toolsCalling: toolCalls,
       });
+      expect(payload.toolsCalling.length).toBeGreaterThan(0);
     });
 
     it('should not throw error on abort', async () => {
@@ -544,11 +566,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'Partial',
-        finishType: 'abort',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'Partial', finishType: 'abort' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When & Then - should not throw
@@ -573,11 +591,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -600,12 +614,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'Here is the result',
-        finishType: 'stop',
-        isFunctionCall: false,
-        tool_calls: undefined,
-      });
+      mockStreamResponse({ content: 'Here is the result' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -635,22 +644,21 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      const toolCalls: ChatToolPayload[] = [
+      const toolCallsRaw: MessageToolCall[] = [
         {
           id: 'tool_1',
-          identifier: 'lobe-web-browsing',
-          apiName: 'search',
-          arguments: JSON.stringify({ query: 'AI news' }),
-          type: 'default',
+          type: 'function',
+          function: {
+            name: 'lobe-web-browsing____search',
+            arguments: JSON.stringify({ query: 'AI news' }),
+          },
         },
       ];
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
+      mockStreamResponse({
         content: '',
         finishType: 'tool_calls',
-        isFunctionCall: true,
-        tools: toolCalls,
-        tool_calls: [{ id: 'tool_1', type: 'function', function: { name: 'search' } }],
+        tool_calls: toolCallsRaw,
       });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
@@ -665,10 +673,8 @@ describe('call_llm executor', () => {
 
       // Then
       const payload = result.nextContext!.payload as GeneralAgentCallLLMResultPayload;
-      expect(payload).toMatchObject({
-        hasToolsCalling: true,
-        toolsCalling: toolCalls,
-      });
+      expect(payload.hasToolsCalling).toBe(true);
+      expect(payload.toolsCalling.length).toBeGreaterThan(0);
     });
 
     it('should increment stepCount', async () => {
@@ -678,11 +684,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState({ stepCount: 5 });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -734,12 +736,7 @@ describe('call_llm executor', () => {
         totalTokens: 150,
       };
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-        usage: stepUsage,
-      });
+      mockStreamResponse({ content: 'AI response', usage: stepUsage });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -769,11 +766,7 @@ describe('call_llm executor', () => {
         createAssistantMessage({ content: 'Hi there' }),
       ];
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'Hi there',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'Hi there' });
       mockStore.dbMessagesMap[context.messageKey] = updatedMessages;
 
       // When
@@ -800,11 +793,7 @@ describe('call_llm executor', () => {
         status: 'running',
       });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -830,13 +819,9 @@ describe('call_llm executor', () => {
       const state = createInitialState({
         messages: [createUserMessage()],
       });
-      const originalState = JSON.parse(JSON.stringify(state));
+      const originalState = structuredClone(state);
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [createUserMessage(), createAssistantMessage()];
 
       // When
@@ -885,11 +870,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -902,9 +883,11 @@ describe('call_llm executor', () => {
       });
 
       // Then
-      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          messages: [],
+          params: expect.objectContaining({
+            messages: [],
+          }),
         }),
       );
       expect(result).toBeDefined();
@@ -917,36 +900,37 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      const toolCalls: ChatToolPayload[] = [
+      const toolCallsRaw: MessageToolCall[] = [
         {
           id: 'tool_1',
-          identifier: 'lobe-web-browsing',
-          apiName: 'search',
-          arguments: JSON.stringify({ query: 'AI' }),
-          type: 'default',
+          type: 'function',
+          function: {
+            name: 'lobe-web-browsing____search',
+            arguments: JSON.stringify({ query: 'AI' }),
+          },
         },
         {
           id: 'tool_2',
-          identifier: 'lobe-web-browsing',
-          apiName: 'craw',
-          arguments: JSON.stringify({ url: 'https://example.com' }),
-          type: 'default',
+          type: 'function',
+          function: {
+            name: 'lobe-web-browsing____craw',
+            arguments: JSON.stringify({ url: 'https://example.com' }),
+          },
         },
         {
           id: 'tool_3',
-          identifier: 'lobe-image-generator',
-          apiName: 'generate',
-          arguments: JSON.stringify({ prompt: 'AI art' }),
-          type: 'default',
+          type: 'function',
+          function: {
+            name: 'lobe-image-generator____generate',
+            arguments: JSON.stringify({ prompt: 'AI art' }),
+          },
         },
       ];
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
+      mockStreamResponse({
         content: '',
         finishType: 'tool_calls',
-        isFunctionCall: true,
-        tools: toolCalls,
-        tool_calls: toolCalls.map((t) => ({ id: t.id, type: 'function' as const })),
+        tool_calls: toolCallsRaw,
       });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
@@ -972,11 +956,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState({ messages: [createUserMessage()] });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       // dbMessagesMap[messageKey] doesn't exist
 
       // When
@@ -1012,11 +992,7 @@ describe('call_llm executor', () => {
         role: 'assistant',
         content: LOADING_FLAT,
       });
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -1029,9 +1005,13 @@ describe('call_llm executor', () => {
       });
 
       // Then - should filter out the assistant message with matching ID
-      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          messages: expect.not.arrayContaining([expect.objectContaining({ id: 'msg_assistant' })]),
+          params: expect.objectContaining({
+            messages: expect.not.arrayContaining([
+              expect.objectContaining({ id: 'msg_assistant' }),
+            ]),
+          }),
         }),
       );
     });
@@ -1048,15 +1028,11 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'Claude response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'Claude response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'call_llm',
         instruction,
         state,
@@ -1074,10 +1050,12 @@ describe('call_llm executor', () => {
           operationId: expect.any(String),
         }),
       );
-      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-3-opus',
-          provider: 'anthropic',
+          params: expect.objectContaining({
+            model: 'claude-3-opus',
+            provider: 'anthropic',
+          }),
         }),
       );
     });
@@ -1098,11 +1076,7 @@ describe('call_llm executor', () => {
         createAssistantMessage(),
       ];
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = messages;
 
       // When
@@ -1125,11 +1099,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState({ operationId: 'custom-session-123' });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -1142,7 +1112,6 @@ describe('call_llm executor', () => {
       });
 
       // Then
-      // Note: AgentRuntimeContext.session uses sessionId for backward compatibility
       expect(result.nextContext!.session!.sessionId).toBe('custom-session-123');
     });
   });
@@ -1160,7 +1129,7 @@ describe('call_llm executor', () => {
         type: 'execAgentRuntime',
         status: 'running',
         context: {
-          sessionId: 'test-session',
+          agentId: 'test-session',
           topicId: 'test-topic',
           threadId,
         },
@@ -1172,15 +1141,11 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'call_llm',
         instruction,
         state,
@@ -1206,11 +1171,7 @@ describe('call_llm executor', () => {
       const instruction = createCallLLMInstruction();
       const state = createInitialState();
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -1236,10 +1197,11 @@ describe('call_llm executor', () => {
 
   describe('Group Orchestration: subAgentId Support', () => {
     it('should use subAgentId for message.agentId when present in operation context', async () => {
-      // Given - Group orchestration scenario where subAgentId is the actual executing agent
+      // Given
       const mockStore = createMockStore();
       const context = createTestContext({
         agentId: 'supervisor-agent', // Main agent (supervisor)
+        scope: 'group_agent',
         subAgentId: 'worker-agent', // Actual executing agent
         topicId: 'group-topic',
       });
@@ -1250,11 +1212,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState({ operationId: context.operationId });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response from worker agent',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response from worker agent' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -1266,10 +1224,10 @@ describe('call_llm executor', () => {
         context,
       });
 
-      // Then - message should be created with subAgentId as the agentId
+      // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          agentId: 'worker-agent', // Should use subAgentId, not agentId
+          agentId: 'worker-agent',
           role: 'assistant',
         }),
         expect.objectContaining({
@@ -1279,12 +1237,11 @@ describe('call_llm executor', () => {
     });
 
     it('should fall back to agentId when subAgentId is not present', async () => {
-      // Given - Normal scenario without subAgentId
+      // Given
       const mockStore = createMockStore();
       const context = createTestContext({
         agentId: 'normal-agent',
         topicId: 'normal-topic',
-        // No subAgentId
       });
       const instruction = createCallLLMInstruction({
         model: 'gpt-4',
@@ -1293,11 +1250,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState({ operationId: context.operationId });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -1309,10 +1262,10 @@ describe('call_llm executor', () => {
         context,
       });
 
-      // Then - message should be created with agentId
+      // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          agentId: 'normal-agent', // Should use agentId when no subAgentId
+          agentId: 'normal-agent',
           role: 'assistant',
         }),
         expect.objectContaining({
@@ -1322,10 +1275,11 @@ describe('call_llm executor', () => {
     });
 
     it('should pass groupId to message when present in operation context', async () => {
-      // Given - Group chat scenario
+      // Given
       const mockStore = createMockStore();
       const context = createTestContext({
         agentId: 'supervisor-agent',
+        scope: 'group_agent',
         subAgentId: 'worker-agent',
         groupId: 'group-123',
         topicId: 'group-topic',
@@ -1337,11 +1291,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState({ operationId: context.operationId });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -1353,7 +1303,7 @@ describe('call_llm executor', () => {
         context,
       });
 
-      // Then - message should be created with groupId
+      // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           groupId: 'group-123',
@@ -1366,13 +1316,15 @@ describe('call_llm executor', () => {
       );
     });
 
-    it('should not include groupId when not in group chat context', async () => {
-      // Given - Normal (non-group) scenario
+    it('should use subAgentId even without explicit scope when groupId is present (backward compatibility)', async () => {
+      // Given - Group scenario without explicit scope (backward compatibility test)
       const mockStore = createMockStore();
       const context = createTestContext({
-        agentId: 'normal-agent',
-        topicId: 'normal-topic',
-        // No groupId
+        agentId: 'supervisor-agent',
+        subAgentId: 'worker-agent',
+        groupId: 'group-123',
+        topicId: 'group-topic',
+        // No explicit scope - should infer from groupId
       });
       const instruction = createCallLLMInstruction({
         model: 'gpt-4',
@@ -1381,11 +1333,7 @@ describe('call_llm executor', () => {
       });
       const state = createInitialState({ operationId: context.operationId });
 
-      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
-        content: 'AI response',
-        finishType: 'stop',
-        isFunctionCall: false,
-      });
+      mockStreamResponse({ content: 'AI response' });
       mockStore.dbMessagesMap[context.messageKey] = [];
 
       // When
@@ -1397,10 +1345,48 @@ describe('call_llm executor', () => {
         context,
       });
 
-      // Then - message should be created without groupId (undefined)
+      // Then - should still use subAgentId for backward compatibility
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          groupId: undefined,
+          agentId: 'worker-agent', // Should use subAgentId even without explicit scope
+          groupId: 'group-123',
+          role: 'assistant',
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
+    });
+
+    it('should not include groupId when not in group chat context', async () => {
+      // Given
+      const mockStore = createMockStore();
+      const context = createTestContext({
+        agentId: 'normal-agent',
+        topicId: 'normal-topic',
+      });
+      const instruction = createCallLLMInstruction({
+        model: 'gpt-4',
+        provider: 'openai',
+        messages: [createUserMessage()],
+      });
+      const state = createInitialState({ operationId: context.operationId });
+
+      mockStreamResponse({ content: 'AI response' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
           agentId: 'normal-agent',
           role: 'assistant',
         }),
@@ -1408,6 +1394,194 @@ describe('call_llm executor', () => {
           operationId: expect.any(String),
         }),
       );
+      // Verify groupId is not in the call (undefined)
+      const callArgs = vi.mocked(mockStore.optimisticCreateMessage).mock.calls[0][0];
+      expect(callArgs.groupId).toBeUndefined();
+    });
+  });
+
+  describe('Supervisor Metadata', () => {
+    it('should add isSupervisor metadata when operation context indicates supervisor', async () => {
+      // Given
+      const mockStore = createMockStore();
+      const context = createTestContext({
+        agentId: 'supervisor-agent',
+        topicId: 'group-topic',
+      });
+
+      // Setup operation with isSupervisor flag
+      mockStore.operations[context.operationId] = {
+        id: context.operationId,
+        type: 'execAgentRuntime',
+        status: 'running',
+        context: {
+          agentId: 'supervisor-agent',
+          topicId: 'group-topic',
+          isSupervisor: true,
+        },
+        abortController: new AbortController(),
+        metadata: { startTime: Date.now() },
+        childOperationIds: [],
+      };
+
+      const instruction = createCallLLMInstruction({
+        model: 'gpt-4',
+        provider: 'openai',
+        messages: [createUserMessage()],
+      });
+      const state = createInitialState({ operationId: context.operationId });
+
+      mockStreamResponse({ content: 'Supervisor response' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { isSupervisor: true },
+          role: 'assistant',
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
+    });
+
+    it('should not add isSupervisor metadata for normal agents', async () => {
+      // Given
+      const mockStore = createMockStore();
+      const context = createTestContext({
+        agentId: 'normal-agent',
+        topicId: 'normal-topic',
+      });
+      const instruction = createCallLLMInstruction({
+        model: 'gpt-4',
+        provider: 'openai',
+        messages: [createUserMessage()],
+      });
+      const state = createInitialState({ operationId: context.operationId });
+
+      mockStreamResponse({ content: 'Normal response' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: undefined,
+          role: 'assistant',
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
+    });
+  });
+
+  describe('createAssistantMessage flag', () => {
+    it('should create message even when skipCreateFirstMessage is true if createAssistantMessage is explicitly true', async () => {
+      // Given - This scenario happens after compression, where a new assistant message is needed
+      const mockStore = createMockStore();
+      const context = createTestContext({ parentId: 'msg_parent' });
+      const instruction = createCallLLMInstruction({
+        createAssistantMessage: true,
+      });
+      const state = createInitialState();
+
+      mockStreamResponse({ content: 'Post-compression response' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+        skipCreateFirstMessage: true,
+      });
+
+      // Then - should still create a new assistant message
+      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: 'assistant',
+          content: LOADING_FLAT,
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
+    });
+
+    it('should skip message creation only on first call when skipCreateFirstMessage is true', async () => {
+      // Given
+      const mockStore = createMockStore();
+      const context = createTestContext({ parentId: 'msg_parent' });
+      const instruction1 = createCallLLMInstruction();
+      const instruction2 = createCallLLMInstruction({ createAssistantMessage: undefined });
+      const state = createInitialState();
+
+      mockStreamResponse({ content: 'AI response' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      // Ensure operation exists for the context
+      mockStore.operations[context.operationId] = {
+        id: context.operationId,
+        type: 'execAgentRuntime',
+        status: 'running',
+        context: {
+          agentId: context.agentId,
+          topicId: context.topicId,
+          messageId: context.parentId,
+        },
+        abortController: new AbortController(),
+        metadata: { startTime: Date.now() },
+        childOperationIds: [],
+      };
+
+      // When - First call should skip, second should create
+      const { createAgentExecutors } = await import('@/store/chat/agents/createAgentExecutors');
+      const executors = createAgentExecutors({
+        agentConfig: {
+          agentConfig: { model: 'gpt-4', provider: 'openai' } as any,
+          chatConfig: {} as any,
+          isBuiltinAgent: false,
+          plugins: [],
+        },
+        get: () => mockStore,
+        messageKey: context.messageKey,
+        operationId: context.operationId,
+        parentId: context.parentId,
+        skipCreateFirstMessage: true,
+      });
+
+      await executors.call_llm!(instruction1, state);
+
+      // Then - First call should NOT create message
+      expect(mockStore.optimisticCreateMessage).not.toHaveBeenCalled();
+
+      // When - Second call
+      mockStreamResponse({ content: 'Second response' });
+      await executors.call_llm!(instruction2, state);
+
+      // Then - Second call SHOULD create message
+      expect(mockStore.optimisticCreateMessage).toHaveBeenCalled();
     });
   });
 });

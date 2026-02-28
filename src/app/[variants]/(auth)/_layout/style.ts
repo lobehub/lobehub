@@ -1,7 +1,6 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Divider 样式
   divider: css`
     height: 24px;
   `,

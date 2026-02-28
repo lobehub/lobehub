@@ -1,7 +1,8 @@
-import { pathExistsSync } from 'fs-extra';
 import { extname, join } from 'node:path';
 
-import { nextExportDir } from '@/const/dir';
+import { pathExistsSync } from 'fs-extra';
+
+import { rendererDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
 import { createLogger } from '@/utils/logger';
@@ -9,7 +10,10 @@ import { createLogger } from '@/utils/logger';
 import { RendererProtocolManager } from './RendererProtocolManager';
 
 const logger = createLogger('core:RendererUrlManager');
-const devDefaultRendererUrl = 'http://localhost:3015';
+
+// Vite build with root=monorepo preserves input path structure,
+// so index.html ends up at apps/desktop/index.html in outDir.
+const SPA_ENTRY_HTML = join(rendererDir, 'apps', 'desktop', 'index.html');
 
 export class RendererUrlManager {
   private readonly rendererProtocolManager: RendererProtocolManager;
@@ -18,7 +22,7 @@ export class RendererUrlManager {
 
   constructor() {
     this.rendererProtocolManager = new RendererProtocolManager({
-      nextExportDir,
+      rendererDir,
       resolveRendererFilePath: this.resolveRendererFilePath,
     });
 
@@ -33,10 +37,16 @@ export class RendererUrlManager {
    * Configure renderer loading strategy for dev/prod
    */
   configureRendererLoader() {
-    if (isDev && !this.rendererStaticOverride) {
-      this.rendererLoadedUrl = devDefaultRendererUrl;
+    const electronRendererUrl = process.env['ELECTRON_RENDERER_URL'];
+
+    if (isDev && !this.rendererStaticOverride && electronRendererUrl) {
+      this.rendererLoadedUrl = electronRendererUrl;
       this.setupDevRenderer();
       return;
+    }
+
+    if (isDev && !this.rendererStaticOverride && !electronRendererUrl) {
+      logger.warn('Dev mode: ELECTRON_RENDERER_URL not set, falling back to protocol handler');
     }
 
     if (isDev && this.rendererStaticOverride) {
@@ -56,68 +66,32 @@ export class RendererUrlManager {
 
   /**
    * Resolve renderer file path in production.
-   * Static assets map directly; app routes fall back to index.html.
+   * Static assets map directly; all routes fall back to index.html (SPA).
    */
   resolveRendererFilePath = async (url: URL): Promise<string | null> => {
     const pathname = url.pathname;
-    const normalizedPathname = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 
-    // Static assets should be resolved from root
-    if (
-      pathname.startsWith('/_next/') ||
-      pathname.startsWith('/static/') ||
-      pathname === '/favicon.ico' ||
-      pathname === '/manifest.json'
-    ) {
-      return this.resolveExportFilePath(pathname);
+    // Static assets: direct file mapping
+    if (pathname.startsWith('/assets/') || extname(pathname)) {
+      const filePath = join(rendererDir, pathname);
+      return pathExistsSync(filePath) ? filePath : null;
     }
 
-    // If the incoming path already contains an extension (like .html or .ico),
-    // treat it as a direct asset lookup.
-    const extension = extname(normalizedPathname);
-    if (extension) {
-      return this.resolveExportFilePath(pathname);
-    }
-
-    return this.resolveExportFilePath('/');
+    // All routes fallback to index.html (SPA)
+    return SPA_ENTRY_HTML;
   };
 
-  private resolveExportFilePath(pathname: string) {
-    // Normalize by removing leading/trailing slashes so extname works as expected
-    const normalizedPath = decodeURIComponent(pathname).replace(/^\/+/, '').replace(/\/$/, '');
-
-    if (!normalizedPath) return join(nextExportDir, 'index.html');
-
-    const basePath = join(nextExportDir, normalizedPath);
-    const ext = extname(normalizedPath);
-
-    // If the request explicitly includes an extension (e.g. html, ico, txt),
-    // treat it as a direct asset.
-    if (ext) {
-      return pathExistsSync(basePath) ? basePath : null;
-    }
-
-    const candidates = [`${basePath}.html`, join(basePath, 'index.html'), basePath];
-
-    for (const candidate of candidates) {
-      if (pathExistsSync(candidate)) return candidate;
-    }
-
-    const fallback404 = join(nextExportDir, '404.html');
-    if (pathExistsSync(fallback404)) return fallback404;
-
-    return null;
-  }
-
   /**
-   * Development: use Next dev server directly
+   * Development: use electron-vite renderer dev server
    */
   private setupDevRenderer() {
-    logger.info('Development mode: renderer served from Next dev server, no protocol hook');
+    logger.info(
+      `Development mode: renderer served from electron-vite dev server at ${this.rendererLoadedUrl}`,
+    );
   }
 
   /**
-   * Production: serve static Next export assets
+   * Production: serve static renderer assets via protocol handler
    */
   private setupProdRenderer() {
     this.rendererLoadedUrl = this.rendererProtocolManager.getRendererUrl();

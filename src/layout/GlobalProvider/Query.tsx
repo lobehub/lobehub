@@ -1,37 +1,14 @@
 'use client';
 
-import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type PropsWithChildren } from 'react';
-import React, { useEffect, useState } from 'react';
-import { SWRConfig, useSWRConfig } from 'swr';
+import React, { useState } from 'react';
+import { SWRConfig } from 'swr';
 
-import { setScopedMutate } from '@/libs/swr';
 import { swrCacheProvider } from '@/libs/swr/localStorageProvider';
 import { lambdaQuery, lambdaQueryClient } from '@/libs/trpc/client';
 
-/**
- * Initialize scoped mutate for use outside React components (e.g., Zustand stores)
- * This component must be rendered inside SWRConfig to access the scoped mutate
- */
-const SWRMutateInitializer = ({ children }: PropsWithChildren) => {
-  const { mutate } = useSWRConfig();
-
-  useEffect(() => {
-    setScopedMutate(mutate);
-  }, [mutate]);
-
-  useWatchBroadcast('remoteServerConfigUpdated', () => {
-    try {
-      const result = mutate(() => true, undefined, { revalidate: true });
-      void result?.catch?.(() => {});
-    } catch {
-      // Ignore: SWR cache may not be ready yet in early boot.
-    }
-  });
-
-  return <>{children}</>;
-};
+import SWRMutateInitializer from './SWRMutateInitializer';
 
 const QueryProvider = ({ children }: PropsWithChildren) => {
   const [queryClient] = useState(() => new QueryClient());

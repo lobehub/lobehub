@@ -51,6 +51,24 @@ Supported crawler types are listed below:
 
 ---
 
+## `CRAWL_CONCURRENCY`
+
+Controls crawler concurrency per crawl task. The default is `3`. On low-resource servers, use `1` to reduce CPU spikes.
+
+```env
+CRAWL_CONCURRENCY=3
+```
+
+## `CRAWLER_RETRY`
+
+Controls retry attempts per URL on crawl failures. The default is `1` (up to 2 attempts total).
+
+```env
+CRAWLER_RETRY=1
+```
+
+---
+
 ## `SEARCH_PROVIDERS`
 
 Configure which search engine providers to use for web search.

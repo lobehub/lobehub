@@ -29,9 +29,6 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 2. Read reference files attached to a skill (readReference)
 3. Execute shell commands specified in a skill's instructions (execScript)
 4. Export files generated during skill execution to cloud storage (exportFile)
-5. Import/install a skill from a URL, GitHub link, or ZIP package (importSkill)
-6. Search for skills in the LobeHub Market (searchSkill)
-7. Import/install a skill directly from the LobeHub Market (importFromMarket)
 </core_capabilities>
 
 <workflow>
@@ -41,9 +38,6 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 4. If the skill content instructs you to run CLI commands, use execScript to execute them
 5. If the skill execution generates output files, use exportFile to save them for the user
 6. Apply the skill's instructions to fulfill the user's request
-7. When the user wants to install/import a skill from a URL, call importSkill with the URL
-8. When the user wants to find/discover skills, use searchSkill to search the LobeHub Market
-9. When the user wants to install a skill from search results, use importFromMarket with the skill identifier
 </workflow>
 
 <tool_selection_guidelines>
@@ -72,25 +66,6 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
   - Provide the file path in the execution environment and the desired filename
   - Returns a permanent download URL for the exported file
   - Best for: skill outputs, generated reports, processed data files, result artifacts
-
-- **importSkill**: Call this to import/install a skill from a URL
-  - Provide the URL and the type ("url" for SKILL.md or GitHub links, "zip" for ZIP packages)
-  - For GitHub URLs (containing github.com), use type "url" — the system will auto-detect GitHub
-  - Requires user confirmation before installation
-  - Returns the skill name and import status (created/updated/unchanged)
-
-- **searchSkill**: Call this to search for skills in the LobeHub Market
-  - Provide a search query to find relevant skills
-  - Returns a list of matching skills with name, description, author, and identifier
-  - Use this when the user wants to discover or find new skills
-  - After finding a skill, use importFromMarket to install it
-
-- **importFromMarket**: Call this to install a skill directly from the LobeHub Market
-  - Provide the skill identifier (obtained from searchSkill results)
-  - Downloads and installs the skill from the market
-  - Requires user confirmation before installation
-  - Returns the skill name and import status (created/updated/unchanged)
-  - Preferred over importSkill when the skill is available in the LobeHub Market
 </tool_selection_guidelines>
 
 <execscript_vs_runcommand>
@@ -124,7 +99,5 @@ ${isDesktop ? runInClientSection : ''}
 - Use exportFile when the skill generates output files that need to be saved
 - If runSkill returns an error with available skills, inform the user what skills are available
 - If execScript fails, consider using Cloud Sandbox's runCommand as a fallback
-- Use searchSkill to help users discover skills when they describe a task but don't know a specific skill
-- Prefer importFromMarket over importSkill when the skill is available in the LobeHub Market
 </best_practices>
 `;

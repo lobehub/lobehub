@@ -1,4 +1,5 @@
-import { type AgentInstruction, type AgentState } from '@lobechat/agent-runtime';
+import type { AgentInstruction, AgentState } from '@lobechat/agent-runtime';
+import type { MessageMapScope } from '@lobechat/types';
 
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
@@ -42,6 +43,7 @@ export const executeWithMockContext = async ({
     messageKey: string;
     operationId: string;
     parentId: string;
+    scope?: MessageMapScope;
     subAgentId?: string;
     topicId?: string | null;
   };
@@ -60,6 +62,7 @@ export const executeWithMockContext = async ({
         agentId: context.agentId || 'test-session',
         groupId: context.groupId,
         messageId: context.parentId,
+        scope: context.scope,
         subAgentId: context.subAgentId,
         topicId: context.topicId !== undefined ? context.topicId : 'test-topic',
       },
@@ -141,6 +144,7 @@ export const createTestContext = (
     messageKey?: string;
     operationId?: string;
     parentId?: string;
+    scope?: MessageMapScope;
     subAgentId?: string;
     topicId?: string | null;
   } = {},
@@ -153,6 +157,7 @@ export const createTestContext = (
       `${overrides.agentId || 'test-session'}_${overrides.topicId !== undefined ? overrides.topicId : 'test-topic'}`,
     operationId: overrides.operationId || 'op_test',
     parentId: overrides.parentId || 'msg_parent',
+    scope: overrides.scope,
     subAgentId: overrides.subAgentId,
     topicId: overrides.topicId !== undefined ? overrides.topicId : 'test-topic',
   };

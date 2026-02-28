@@ -17,7 +17,6 @@ import {
   WrenchIcon,
 } from 'lucide-react';
 import {
-  type AiModelForSelect,
   type FixedPricingUnit,
   type ModelPriceCurrency,
   type Pricing,
@@ -25,14 +24,33 @@ import {
   type PricingUnitName,
   type TieredPricingUnit,
 } from 'model-bank';
-import { type FC, type ReactNode } from 'react';
+import { type FC } from 'react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { formatTokenNumber } from '@/utils/format';
 import { formatPriceByCurrency, getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/index';
 
+import ControlsForm from './ControlsForm';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  extraControls: css`
+    padding: 8px;
+
+    .ant-form-item:first-child {
+      padding-block: 0 4px;
+    }
+
+    .ant-form-item:last-child {
+      padding-block: 4px 0;
+    }
+
+    .ant-divider {
+      display: none;
+    }
+  `,
   actionText: css`
     font-size: 14px;
     font-weight: 500;
@@ -206,25 +224,40 @@ const ABILITY_CONFIG: AbilityItem[] = [
 ];
 
 interface ModelDetailPanelProps {
-  extraControls?: ReactNode;
-  model: AiModelForSelect;
+  model?: string;
+  provider?: string;
 }
 
-const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ extraControls, model }) => {
+const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, provider }) => {
   const { t } = useTranslation('components');
   const { t: tModels } = useTranslation('models');
+
+  const enabledList = useEnabledChatModels();
+  const model = useMemo(() => {
+    if (!modelId || !provider) return undefined;
+    const providerData = enabledList.find((p) => p.id === provider);
+    return providerData?.children.find((m) => m.id === modelId);
+  }, [enabledList, modelId, provider]);
+
+  const hasExtendParams = useAiInfraStore(
+    aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
+  );
+
   const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
     const keys: string[] = [];
-    if (extraControls) keys.push('config');
+    if (hasExtendParams) keys.push('config');
     return keys;
   });
 
-  const hasPricing = !!model.pricing;
-  const formatPrice = hasPricing ? getPrice(model.pricing!) : null;
+  const hasPricing = !!model?.pricing;
+  const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;
   const pricingGroups = useMemo(
-    () => (hasPricing ? groupPricingUnits(model.pricing!.units) : []),
-    [hasPricing, model.pricing],
+    () => (hasPricing ? groupPricingUnits(model!.pricing!.units) : []),
+    [hasPricing, model?.pricing],
   );
+
+  if (!model) return null;
+
   const hasContext = typeof model.contextWindowTokens === 'number';
   const enabledAbilities = ABILITY_CONFIG.filter(
     (a) => model.abilities[a.key as keyof typeof model.abilities],
@@ -248,7 +281,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ extraControls, model
       <Divider size="small" />
 
       {/* Sections */}
-      {(hasPricing || hasContext || hasAbilities || extraControls) && (
+      {(hasPricing || hasContext || hasAbilities || hasExtendParams) && (
         <Accordion
           expandedKeys={expandedKeys}
           gap={8}
@@ -443,7 +476,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ extraControls, model
             </AccordionItem>
           )}
           {/* Model Config */}
-          {extraControls && (
+          {hasExtendParams && provider && (
             <AccordionItem
               itemKey="config"
               paddingBlock={6}
@@ -463,7 +496,9 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ extraControls, model
                 </Flexbox>
               }
             >
-              {extraControls}
+              <div className={styles.extraControls}>
+                <ControlsForm model={model.id} provider={provider} />
+              </div>
             </AccordionItem>
           )}
         </Accordion>

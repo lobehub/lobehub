@@ -11,6 +11,7 @@ export default {
   'starter.deepResearch': 'Deep Research',
   'starter.developing': 'Coming soon',
   'starter.image': 'Image',
+  'starter.nanoBanana2': 'Nano Banana 2',
   'starter.seedance': 'Seedance 2.0',
   'starter.write': 'Write',
 };

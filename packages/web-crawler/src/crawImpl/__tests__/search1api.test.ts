@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMockResponse } from '../../test-utils';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
 import * as withTimeoutModule from '../../utils/withTimeout';
 import { search1api } from '../search1api';
@@ -17,8 +18,10 @@ describe('search1api crawler', () => {
     originalEnv = { ...process.env };
     process.env.SEARCH1API_API_KEY = 'test-api-key';
 
-    // Mock withTimeout to directly return the promise
-    vi.spyOn(withTimeoutModule, 'withTimeout').mockImplementation((promise) => promise);
+    // Mock withTimeout to call the factory function directly (bypassing real timeout)
+    vi.spyOn(withTimeoutModule, 'withTimeout').mockImplementation((fn) =>
+      fn(new AbortController().signal),
+    );
   });
 
   afterEach(() => {
@@ -26,7 +29,7 @@ describe('search1api crawler', () => {
   });
 
   it('should throw NetworkConnectionError when fetch fails', async () => {
-    mockFetch.mockRejectedValue(new Error('fetch failed'));
+    mockFetch.mockRejectedValue(new TypeError('fetch failed'));
 
     await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toThrow(
       NetworkConnectionError,
@@ -48,11 +51,13 @@ describe('search1api crawler', () => {
   });
 
   it('should throw PageNotFoundError when status is 404', async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-    });
+    mockFetch.mockResolvedValue(
+      createMockResponse('Not Found', {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      }),
+    );
 
     await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toThrow(
       PageNotFoundError,
@@ -60,11 +65,13 @@ describe('search1api crawler', () => {
   });
 
   it('should throw error for other failed responses', async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
+    mockFetch.mockResolvedValue(
+      createMockResponse('', {
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      }),
+    );
 
     await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toThrow(
       'Search1API request failed with status 500: Internal Server Error',
@@ -72,18 +79,19 @@ describe('search1api crawler', () => {
   });
 
   it('should return undefined when content is too short', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
+    mockFetch.mockResolvedValue(
+      createMockResponse(
+        {
           crawlParameters: { url: 'https://example.com' },
           results: {
             title: 'Test Title',
             link: 'https://example.com',
             content: 'Short', // Less than 100 characters
           },
-        }),
-    });
+        },
+        { ok: true },
+      ),
+    );
 
     const result = await search1api('https://example.com', { filterOptions: {} });
     expect(result).toBeUndefined();
@@ -92,18 +100,19 @@ describe('search1api crawler', () => {
   it('should return crawl result on successful fetch', async () => {
     const mockContent = 'This is a test content that is longer than 100 characters. '.repeat(3);
 
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
+    mockFetch.mockResolvedValue(
+      createMockResponse(
+        {
           crawlParameters: { url: 'https://example.com' },
           results: {
             title: 'Test Title',
             link: 'https://example.com',
             content: mockContent,
           },
-        }),
-    });
+        },
+        { ok: true },
+      ),
+    );
 
     const result = await search1api('https://example.com', { filterOptions: {} });
 
@@ -116,6 +125,7 @@ describe('search1api crawler', () => {
       body: JSON.stringify({
         url: 'https://example.com',
       }),
+      signal: expect.any(AbortSignal),
     });
 
     expect(result).toEqual({
@@ -130,12 +140,18 @@ describe('search1api crawler', () => {
   });
 
   it('should handle JSON parse errors', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.reject(new Error('Invalid JSON')),
-    });
+    mockFetch.mockResolvedValue(createMockResponse('invalid json', { ok: true }));
+    // Override json to reject for this specific test
+    const response = createMockResponse('invalid json', { ok: true });
+    response.json = () => Promise.reject(new Error('Invalid JSON'));
+    // clone should also return a response whose text() works for error reporting
+    response.clone = () => {
+      const cloned = createMockResponse('invalid json', { ok: true });
+      cloned.json = () => Promise.reject(new Error('Invalid JSON'));
+      return cloned;
+    };
+    mockFetch.mockResolvedValue(response);
 
-    const result = await search1api('https://example.com', { filterOptions: {} });
-    expect(result).toBeUndefined();
+    await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toThrow();
   });
 });

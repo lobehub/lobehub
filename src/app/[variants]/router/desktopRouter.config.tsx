@@ -4,18 +4,8 @@ import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
-import { isDesktop } from '@/const/version';
 import { type RouteConfig } from '@/utils/router';
-import { dynamicElement, ErrorBoundary, redirectElement } from '@/utils/router';
-
-import DesktopOnboarding from '../(desktop)/desktop-onboarding';
-import DesktopMainLayout from '../(main)/_layout';
-import DesktopChatLayout from '../(main)/agent/_layout';
-import DesktopGroupLayout from '../(main)/group/_layout';
-import DesktopImageLayout from '../(main)/image/_layout';
-import DesktopMemoryLayout from '../(main)/memory/_layout';
-import DesktopPageLayout from '../(main)/page/_layout';
-import DesktopVideoLayout from '../(main)/video/_layout';
+import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 // Desktop router configuration (declarative mode)
 export const desktopRoutes: RouteConfig[] = [
@@ -49,7 +39,10 @@ export const desktopRoutes: RouteConfig[] = [
                 path: 'cron/:cronId',
               },
             ],
-            element: <DesktopChatLayout />,
+            element: dynamicLayout(
+              () => import('../(main)/agent/_layout'),
+              'Desktop > Chat > Layout',
+            ),
             errorElement: <ErrorBoundary resetPath="/agent" />,
             path: ':aid',
           },
@@ -78,7 +71,10 @@ export const desktopRoutes: RouteConfig[] = [
                 path: 'profile',
               },
             ],
-            element: <DesktopGroupLayout />,
+            element: dynamicLayout(
+              () => import('../(main)/group/_layout'),
+              'Desktop > Group > Layout',
+            ),
             errorElement: <ErrorBoundary resetPath="/group" />,
             path: ':gid',
           },
@@ -360,7 +356,10 @@ export const desktopRoutes: RouteConfig[] = [
             path: 'activities',
           },
         ],
-        element: <DesktopMemoryLayout />,
+        element: dynamicLayout(
+          () => import('../(main)/memory/_layout'),
+          'Desktop > Memory > Layout',
+        ),
         errorElement: <ErrorBoundary resetPath="/memory" />,
         path: 'memory',
       },
@@ -373,7 +372,7 @@ export const desktopRoutes: RouteConfig[] = [
             index: true,
           },
         ],
-        element: <DesktopVideoLayout />,
+        element: dynamicLayout(() => import('../(main)/video/_layout'), 'Desktop > Video > Layout'),
         errorElement: <ErrorBoundary resetPath="/video" />,
         path: 'video',
       },
@@ -386,7 +385,7 @@ export const desktopRoutes: RouteConfig[] = [
             index: true,
           },
         ],
-        element: <DesktopImageLayout />,
+        element: dynamicLayout(() => import('../(main)/image/_layout'), 'Desktop > Image > Layout'),
         errorElement: <ErrorBoundary resetPath="/image" />,
         path: 'image',
       },
@@ -474,7 +473,7 @@ export const desktopRoutes: RouteConfig[] = [
             path: ':id',
           },
         ],
-        element: <DesktopPageLayout />,
+        element: dynamicLayout(() => import('../(main)/page/_layout'), 'Desktop > Page > Layout'),
         errorElement: <ErrorBoundary resetPath="/page" />,
         path: 'page',
       },
@@ -489,7 +488,7 @@ export const desktopRoutes: RouteConfig[] = [
         path: '*',
       },
     ],
-    element: <DesktopMainLayout />,
+    element: dynamicLayout(() => import('../(main)/_layout'), 'Desktop > Main > Layout'),
     errorElement: <ErrorBoundary resetPath="/" />,
     path: '/',
   },
@@ -513,17 +512,8 @@ export const desktopRoutes: RouteConfig[] = [
   },
 ];
 
-// Desktop onboarding route (SPA-only)
-if (isDesktop) {
-  desktopRoutes.push({
-    element: <DesktopOnboarding />,
-    errorElement: <ErrorBoundary resetPath="/" />,
-    path: '/desktop-onboarding',
-  });
-} else {
-  desktopRoutes.push({
-    element: dynamicElement(() => import('../onboarding'), 'Desktop > Onboarding'),
-    errorElement: <ErrorBoundary resetPath="/" />,
-    path: '/onboarding',
-  });
-}
+desktopRoutes.push({
+  element: dynamicElement(() => import('../onboarding'), 'Desktop > Onboarding'),
+  errorElement: <ErrorBoundary resetPath="/" />,
+  path: '/onboarding',
+});

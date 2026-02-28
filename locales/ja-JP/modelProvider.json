@@ -232,6 +232,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint": "Geminiシリーズ向け；思考に使う予算を制御します。",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint": "Gemini 3 Flash Previewモデル向け；思考の深さを制御します。",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "Gemini 3 Pro Previewモデル向け；思考の深さを制御します。",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "Gemini 3.1 Proプレビューモデル用; 思考の深さを低/中/高レベルで制御します。",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "Geminiシリーズ向け；URLコンテキストの提供をサポートします。",
   "providerModels.item.modelConfig.extendParams.placeholder": "有効にする拡張パラメータを選択",
   "providerModels.item.modelConfig.extendParams.previewFallback": "プレビューを利用できません",

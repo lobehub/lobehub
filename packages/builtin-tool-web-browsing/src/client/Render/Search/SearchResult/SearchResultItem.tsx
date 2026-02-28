@@ -1,7 +1,6 @@
 import type { UniformSearchResult } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { memo } from 'react';
 
@@ -24,7 +23,7 @@ const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
     const urlObj = new URL(url);
     const host = urlObj.hostname;
     return (
-      <Link href={url} target={'_blank'}>
+      <a href={url} target={'_blank'}>
         <Block
           clickable
           className={styles.container}
@@ -41,7 +40,7 @@ const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
             </Text>
           </Flexbox>
         </Block>
-      </Link>
+      </a>
     );
   },
 );

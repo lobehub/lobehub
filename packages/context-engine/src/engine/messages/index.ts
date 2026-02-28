@@ -15,6 +15,8 @@ export type {
   MessagesEngineResult,
   ModelCapabilityChecker,
   OpenAIChatMessage,
+  ToolDiscoveryConfig,
+  ToolDiscoveryMeta,
   ToolsConfig,
   UIChatMessage,
   UserMemoryActivityItem,

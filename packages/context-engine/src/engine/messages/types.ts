@@ -9,9 +9,11 @@ import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInj
 import type { EvalContext } from '../../providers/EvalContextSystemInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
+import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
+import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -52,6 +54,13 @@ export interface ToolsConfig {
  */
 export interface SkillsConfig {
   enabledSkills?: SkillMeta[];
+}
+
+/**
+ * Tool Discovery configuration
+ */
+export interface ToolDiscoveryConfig {
+  availableTools?: ToolDiscoveryMeta[];
 }
 
 /**
@@ -186,6 +195,10 @@ export interface MessagesEngineParams {
   /** Provider ID */
   provider: string;
 
+  // ========== System date ==========
+  /** Whether to inject current date into system message (default: true) */
+  enableSystemDate?: boolean;
+
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
@@ -216,6 +229,10 @@ export interface MessagesEngineParams {
   /** Skills configuration */
   skillsConfig?: SkillsConfig;
 
+  // ========== Tool Discovery ==========
+  /** Tool Discovery configuration (available tools for dynamic activation) */
+  toolDiscoveryConfig?: ToolDiscoveryConfig;
+
   // ========== Tools ==========
   /** Tools configuration */
   toolsConfig?: ToolsConfig;
@@ -229,6 +246,8 @@ export interface MessagesEngineParams {
   agentBuilderContext?: AgentBuilderContext;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  /** Agent Management context */
+  agentManagementContext?: AgentManagementContext;
   /** Agent group configuration for multi-agent scenarios */
   agentGroup?: AgentGroupConfig;
   /** Group Agent Builder context */
@@ -284,9 +303,11 @@ export interface MessagesEngineResult {
 export { type AgentInfo } from '../../processors/GroupRoleTransform';
 export { type AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 export { type EvalContext } from '../../providers/EvalContextSystemInjector';
+export { type AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 export { type GTDPlan } from '../../providers/GTDPlanInjector';
 export { type GTDTodoItem, type GTDTodoList } from '../../providers/GTDTodoInjector';
 export { type SkillMeta } from '../../providers/SkillContextProvider';
+export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
 export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';

@@ -2,7 +2,6 @@
 
 import { CopyButton, Flexbox, Skeleton } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -44,9 +43,9 @@ const LoadingCard = memo<{ url: string }>(({ url }) => {
   return (
     <Flexbox className={styles.container}>
       <Flexbox horizontal className={styles.cardBody} justify={'space-between'}>
-        <Link href={url} rel={'nofollow'} target={'_blank'}>
+        <a href={url} rel={'nofollow'} target={'_blank'}>
           <div className={styles.text}>{url}</div>
-        </Link>
+        </a>
         <CopyButton content={url} size={'small'} />
       </Flexbox>
       <Flexbox gap={4} paddingInline={16}>

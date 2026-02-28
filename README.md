@@ -709,8 +709,13 @@ Or clone it for local development:
 $ git clone https://github.com/lobehub/lobe-chat.git
 $ cd lobe-chat
 $ pnpm install
-$ pnpm dev
+$ pnpm dev          # Full-stack (Next.js + Vite SPA)
+$ bun run dev:spa   # SPA frontend only (port 9876)
 ```
+
+> **Debug Proxy**: After running `dev:spa`, the terminal prints a proxy URL like
+> `https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http%3A%2F%2Flocalhost%3A9876`.
+> Open it to develop locally against the production backend with HMR.
 
 If you would like to learn more details, please feel free to look at our [📘 Development Guide][docs-dev-guide].
 

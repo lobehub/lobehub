@@ -1,9 +1,9 @@
-import { After, AfterAll, Before, BeforeAll, Status, setDefaultTimeout } from '@cucumber/cucumber';
-import { type Cookie, chromium } from 'playwright';
+import { After, AfterAll, Before, BeforeAll, setDefaultTimeout, Status } from '@cucumber/cucumber';
+import { chromium, type Cookie } from 'playwright';
 
-import { TEST_USER, seedTestUser } from '../support/seedTestUser';
+import { seedTestUser, TEST_USER } from '../support/seedTestUser';
 import { startWebServer, stopWebServer } from '../support/webServer';
-import { CustomWorld } from '../support/world';
+import type { CustomWorld } from '../support/world';
 
 process.env['E2E'] = '1';
 // Set default timeout for all steps to 10 seconds

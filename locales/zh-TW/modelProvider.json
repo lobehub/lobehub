@@ -232,6 +232,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint": "適用於 Gemini 系列；控制思考預算。",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint": "適用於 Gemini 3 Flash Preview 模型；控制思考深度。",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "適用於 Gemini 3 Pro Preview 模型；控制思考深度。",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "適用於 Gemini 3.1 Pro Preview 模型；通過低/中/高等級控制思考深度。",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "適用於 Gemini 系列；支援提供 URL 作為上下文。",
   "providerModels.item.modelConfig.extendParams.placeholder": "選擇要啟用的擴充參數",
   "providerModels.item.modelConfig.extendParams.previewFallback": "無法預覽",

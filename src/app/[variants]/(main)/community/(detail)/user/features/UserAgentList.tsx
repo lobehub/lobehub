@@ -17,7 +17,13 @@ interface UserAgentListProps {
 
 const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
   const { t } = useTranslation('discover');
-  const { agents, agentCount, forkedAgents = [], favoriteAgents = [], isOwner } = useUserDetailContext();
+  const {
+    agents,
+    agentCount,
+    forkedAgents = [],
+    favoriteAgents = [],
+    isOwner,
+  } = useUserDetailContext();
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>('published');
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,7 +49,6 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       allAgents = allAgents.filter((agent) => {
-        console.log('agent', agent);
         const name = agent?.title?.toLowerCase() || '';
         const description = agent?.description?.toLowerCase() || '';
         return name.includes(query) || description.includes(query);
@@ -69,26 +74,23 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
 
   return (
     <Flexbox gap={16}>
-      <Flexbox align={'center'} gap={8} horizontal justify={'space-between'}>
-        <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Text fontSize={16} weight={500}>
             {t('user.publishedAgents')}
           </Text>
           {agentCount > 0 && <Tag>{filteredAgents.length}</Tag>}
         </Flexbox>
         {isOwner && (
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             <Input.Search
               allowClear
-              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('user.searchPlaceholder')}
               style={{ width: 200 }}
               value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <StatusFilter
-              onChange={(value) => setStatusFilter(value)}
-              value={statusFilter}
-            />
+            <StatusFilter value={statusFilter} onChange={(value) => setStatusFilter(value)} />
           </Flexbox>
         )}
       </Flexbox>
@@ -101,10 +103,10 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
         <Flexbox align={'center'} justify={'center'}>
           <Pagination
             current={currentPage}
-            onChange={(page) => setCurrentPage(page)}
             pageSize={pageSize}
             showSizeChanger={false}
             total={filteredAgents.length}
+            onChange={(page) => setCurrentPage(page)}
           />
         </Flexbox>
       )}

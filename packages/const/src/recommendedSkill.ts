@@ -16,6 +16,7 @@ export const RECOMMENDED_SKILLS: RecommendedSkillItem[] = [
   { id: 'lobe-cloud-sandbox', type: RecommendedSkillType.Builtin },
   { id: 'lobe-gtd', type: RecommendedSkillType.Builtin },
   { id: 'lobe-notebook', type: RecommendedSkillType.Builtin },
+  { id: 'lobe-calculator', type: RecommendedSkillType.Builtin },
   // Klavis skills
   { id: 'gmail', type: RecommendedSkillType.Klavis },
   { id: 'notion', type: RecommendedSkillType.Klavis },

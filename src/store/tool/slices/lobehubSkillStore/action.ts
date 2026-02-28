@@ -1,5 +1,5 @@
 import { getLobehubSkillProviderById } from '@lobechat/const';
-import { enableMapSet, produce } from 'immer';
+import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
@@ -16,8 +16,6 @@ import {
   type LobehubSkillTool,
 } from './types';
 import { LobehubSkillStatus } from './types';
-
-enableMapSet();
 
 const n = setNamespace('lobehubSkillStore');
 

@@ -724,8 +724,13 @@ API Key 是使用 LobeHub 进行大语言模型会话的必要信息，本节以
 $ git clone https://github.com/lobehub/lobe-chat.git
 $ cd lobe-chat
 $ pnpm install
-$ pnpm run dev
+$ pnpm run dev          # 全栈开发（Next.js + Vite SPA）
+$ bun run dev:spa       # 仅 SPA 前端（端口 9876）
 ```
+
+> **Debug Proxy**：运行 `dev:spa` 后，终端会输出代理 URL，如
+> `https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http%3A%2F%2Flocalhost%3A9876`。
+> 打开此链接可在线上环境中加载本地开发服务器，支持 HMR 热更新。
 
 如果你希望了解更多详情，欢迎可以查阅我们的 [📘 开发指南][docs-dev-guide]
 

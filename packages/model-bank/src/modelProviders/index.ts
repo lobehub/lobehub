@@ -211,7 +211,9 @@ export const filterEnabledModels = (provider: ModelProviderCard) => {
 };
 
 export const isProviderDisableBrowserRequest = (id: string) => {
-  const provider = DEFAULT_MODEL_PROVIDER_LIST.find((v) => v.id === id && v.disableBrowserRequest);
+  const provider = DEFAULT_MODEL_PROVIDER_LIST.find(
+    (v) => v.id === id && (v.disableBrowserRequest || v.settings?.disableBrowserRequest),
+  );
   return !!provider;
 };
 

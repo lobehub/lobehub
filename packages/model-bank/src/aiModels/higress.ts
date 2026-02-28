@@ -1869,104 +1869,12 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'GPT-4 Turbo is a multimodal model with excellent language understanding and generation plus image input.',
-    displayName: 'GPT 4 Turbo',
-    enabled: true,
-    id: 'gpt-4',
-    type: 'chat',
-  },
-  {
-    abilities: {
       vision: true,
     },
     contextWindowTokens: 128_000,
     description: 'GPT-4 Vision preview, designed for image analysis and processing tasks.',
     displayName: 'GPT 4 Turbo with Vision Preview',
     id: 'gpt-4-vision-preview',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o Mini is a small, efficient model with performance comparable to GPT-4o.',
-    displayName: 'GPT 4o Mini',
-    enabled: true,
-    id: 'gpt-4o-mini',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o is the latest multimodal model with advanced text and image processing.',
-    displayName: 'GPT 4o',
-    enabled: true,
-    id: 'gpt-4o',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: false,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Smaller and faster than o1-preview, 80% lower cost, strong at code generation and short-context tasks.',
-    displayName: 'OpenAI o1-mini',
-    enabled: true,
-    id: 'o1-mini',
-    maxOutput: 65_536,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: false,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Focused on advanced reasoning and complex problem solving, including math and science. Ideal for applications needing deep context understanding and autonomous workflows.',
-    displayName: 'OpenAI o1-preview',
-    enabled: true,
-    id: 'o1-preview',
-    maxOutput: 32_768,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'A cost-effective AI solution for a wide range of text and image tasks.',
-    displayName: 'OpenAI GPT-4o mini',
-    enabled: true,
-    id: 'gpt-4o-mini',
-    maxOutput: 4096,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'The most advanced multimodal model in the GPT-4 family, handling text and image inputs.',
-    displayName: 'OpenAI GPT-4o',
-    enabled: true,
-    id: 'gpt-4o',
-    maxOutput: 4096,
     type: 'chat',
   },
   {

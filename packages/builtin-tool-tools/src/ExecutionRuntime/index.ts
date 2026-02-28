@@ -4,6 +4,7 @@ import type { ActivatedToolInfo, ActivateToolsParams } from '../types';
 
 export interface ToolManifestInfo {
   apiDescriptions: Array<{ description: string; name: string }>;
+  avatar?: string;
   identifier: string;
   name: string;
   systemRole?: string;
@@ -57,6 +58,7 @@ export class ToolsActivatorExecutionRuntime {
 
       const activatedTools: ActivatedToolInfo[] = manifests.map((m) => ({
         apiCount: m.apiDescriptions.length,
+        avatar: m.avatar,
         identifier: m.identifier,
         name: m.name,
       }));

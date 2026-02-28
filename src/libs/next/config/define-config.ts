@@ -1,5 +1,3 @@
-import analyzer from '@next/bundle-analyzer';
-import withSerwistInit from '@serwist/next';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
@@ -354,6 +352,8 @@ export function defineConfig(config: CustomNextConfig) {
       'pdfkit',
       '@napi-rs/canvas',
       'pdfjs-dist',
+
+      'ajv',
     ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
@@ -428,17 +428,5 @@ export function defineConfig(config: CustomNextConfig) {
     },
   };
 
-  const noWrapper = (config: NextConfig) => config;
-
-  const withBundleAnalyzer = process.env.ANALYZE === 'true' ? analyzer() : noWrapper;
-
-  const withPWA = isProd
-    ? withSerwistInit({
-        register: false,
-        swDest: 'public/sw.js',
-        swSrc: 'src/app/sw.ts',
-      })
-    : noWrapper;
-
-  return withBundleAnalyzer(withPWA(nextConfig as NextConfig));
+  return nextConfig;
 }

@@ -8,13 +8,12 @@ import {
   Icon,
   Markdown,
   Segmented,
-  Text,
   stopPropagation,
+  Text,
 } from '@lobehub/ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
-import Link from 'next/link';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -163,7 +162,7 @@ const PageContent = memo<PageContentProps>(({ result }) => {
         )}
         <Flexbox horizontal align={'center'} className={styles.url} gap={4}>
           {siteName && <div>{siteName} · </div>}
-          <Link
+          <a
             className={styles.url}
             href={url}
             rel={'nofollow'}
@@ -173,7 +172,7 @@ const PageContent = memo<PageContentProps>(({ result }) => {
           >
             {result.originalUrl}
             <Icon icon={ExternalLink} />
-          </Link>
+          </a>
         </Flexbox>
 
         <div className={styles.footer}>

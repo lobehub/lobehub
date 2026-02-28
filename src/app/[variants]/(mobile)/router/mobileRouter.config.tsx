@@ -1,21 +1,11 @@
 'use client';
 
-import MobileMainLayout from '@/app/[variants]/(mobile)/_layout';
-import MobileHome from '@/app/[variants]/(mobile)/(home)/';
-import MobileHomeLayout from '@/app/[variants]/(mobile)/(home)/_layout';
-import MobileChatLayout from '@/app/[variants]/(mobile)/chat/_layout';
-import MobileMeHomeLayout from '@/app/[variants]/(mobile)/me/(home)/layout';
-import MobileMeProfileLayout from '@/app/[variants]/(mobile)/me/profile/layout';
-import MobileMeSettingsLayout from '@/app/[variants]/(mobile)/me/settings/layout';
-import MobileSettingsProviderLayout from '@/app/[variants]/(mobile)/settings/provider/_layout';
 import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
 import { type RouteConfig } from '@/utils/router';
-import { dynamicElement, ErrorBoundary, redirectElement } from '@/utils/router';
-
-import MobileSettingsLayout from '../settings/_layout';
+import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 // Mobile router configuration (declarative mode)
 export const mobileRoutes: RouteConfig[] = [
@@ -42,7 +32,7 @@ export const mobileRoutes: RouteConfig[] = [
                 path: 'settings',
               },
             ],
-            element: <MobileChatLayout />,
+            element: dynamicLayout(() => import('../chat/_layout'), 'Mobile > Chat > Layout'),
             errorElement: <ErrorBoundary resetPath="/agent" />,
             path: ':aid',
           },
@@ -191,7 +181,10 @@ export const mobileRoutes: RouteConfig[] = [
                 path: ':providerId',
               },
             ],
-            element: <MobileSettingsProviderLayout />,
+            element: dynamicLayout(
+              () => import('../settings/provider/_layout'),
+              'Mobile > Settings > Provider > Layout',
+            ),
             path: 'provider',
           },
           // Other settings tabs (common, agent, memory, tts, about, etc.)
@@ -203,7 +196,7 @@ export const mobileRoutes: RouteConfig[] = [
             path: ':tab',
           },
         ],
-        element: <MobileSettingsLayout />,
+        element: dynamicLayout(() => import('../settings/_layout'), 'Mobile > Settings > Layout'),
         errorElement: <ErrorBoundary resetPath="/settings" />,
         path: 'settings',
       },
@@ -223,7 +216,10 @@ export const mobileRoutes: RouteConfig[] = [
                 index: true,
               },
             ],
-            element: <MobileMeHomeLayout />,
+            element: dynamicLayout(
+              () => import('../me/(home)/layout'),
+              'Mobile > Me > Home > Layout',
+            ),
           },
           {
             children: [
@@ -235,7 +231,10 @@ export const mobileRoutes: RouteConfig[] = [
                 path: 'profile',
               },
             ],
-            element: <MobileMeProfileLayout />,
+            element: dynamicLayout(
+              () => import('../me/profile/layout'),
+              'Mobile > Me > Profile > Layout',
+            ),
           },
           {
             children: [
@@ -247,7 +246,10 @@ export const mobileRoutes: RouteConfig[] = [
                 path: 'settings',
               },
             ],
-            element: <MobileMeSettingsLayout />,
+            element: dynamicLayout(
+              () => import('../me/settings/layout'),
+              'Mobile > Me > Settings > Layout',
+            ),
           },
         ],
         errorElement: <ErrorBoundary resetPath="/me" />,
@@ -258,11 +260,11 @@ export const mobileRoutes: RouteConfig[] = [
       {
         children: [
           {
-            element: <MobileHome />,
+            element: dynamicElement(() => import('../(home)/'), 'Mobile > Home'),
             index: true,
           },
         ],
-        element: <MobileHomeLayout />,
+        element: dynamicLayout(() => import('../(home)/_layout'), 'Mobile > Home > Layout'),
       },
 
       // Catch-all route
@@ -271,7 +273,7 @@ export const mobileRoutes: RouteConfig[] = [
         path: '*',
       },
     ],
-    element: <MobileMainLayout />,
+    element: dynamicLayout(() => import('../_layout'), 'Mobile > Main > Layout'),
     errorElement: <ErrorBoundary resetPath="/" />,
     path: '/',
   },

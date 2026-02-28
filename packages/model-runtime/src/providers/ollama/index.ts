@@ -231,44 +231,44 @@ export class LobeOllamaAI implements LobeRuntimeAI {
 
   async pullModel(params: PullModelParams, options?: ModelRequestOptions): Promise<Response> {
     const { model, insecure } = params;
-    const signal = options?.signal; // 获取传入的 AbortSignal
+    const signal = options?.signal; // Get the passed-in AbortSignal
 
     const abortOllama = () => {
-      // 假设 this.client.abort() 是幂等的或者可以安全地多次调用
+      // Assume this.client.abort() is idempotent or can be safely called multiple times
       this.client.abort();
     };
 
-    // 如果有 AbortSignal，监听 abort 事件
-    // 使用 { once: true } 确保监听器只触发一次
+    // If an AbortSignal is present, listen for the abort event
+    // Use { once: true } to ensure the listener only fires once
     signal?.addEventListener('abort', abortOllama, { once: true });
 
     try {
-      // 获取 Ollama pull 的迭代器
+      // Get the iterable for the Ollama pull operation
       const iterable = await this.client.pull({
         insecure: insecure ?? false,
         model,
         stream: true,
       });
 
-      // 使用专门的模型下载流转换方法
+      // Use the dedicated model download stream conversion method
       const progressStream = createModelPullStream(iterable, model, {
         onCancel: () => {
-          // 当流被取消时，调用 abortOllama
-          // 移除 signal 的监听器，避免重复调用（如果 abortOllama 不是幂等的）
+          // When the stream is cancelled, call abortOllama
+          // Remove the signal's event listener to avoid duplicate calls (if abortOllama is not idempotent)
           signal?.removeEventListener('abort', abortOllama);
-          abortOllama(); // 执行中止逻辑
+          abortOllama(); // Execute the abort logic
         },
       });
 
-      // 返回标准响应
+      // Return the standard response
       return new Response(progressStream, {
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {
-      // 如果在调用 client.pull 或创建流的初始阶段出错，需要移除监听器
+      // If an error occurs during the initial call to client.pull or stream creation, remove the listener
       signal?.removeEventListener('abort', abortOllama);
 
-      // 处理错误
+      // Handle errors
       if ((error as Error).message === 'fetch failed') {
         return createErrorResponse(AgentRuntimeErrorType.OllamaServiceUnavailable, {
           message: 'please check whether your ollama service is available',
@@ -278,7 +278,7 @@ export class LobeOllamaAI implements LobeRuntimeAI {
 
       console.error('model download error:', error);
 
-      // 检查是否是取消操作
+      // Check if the operation was cancelled
       if ((error as Error).name === 'AbortError') {
         return new Response(
           JSON.stringify({
@@ -292,7 +292,7 @@ export class LobeOllamaAI implements LobeRuntimeAI {
         );
       }
 
-      // 返回错误响应
+      // Return an error response
       const errorMessage = error instanceof Error ? error.message : String(error);
       return new Response(
         JSON.stringify({

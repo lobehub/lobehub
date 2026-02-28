@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--SEO_META-->
+    <style>
+      html body {
+        background: #f8f8f8;
+      }
+      html[data-theme='dark'] body {
+        background-color: #000;
+      }
+    </style>
+    <script>
+      (function(){
+        var O=globalThis.Worker;
+        globalThis.Worker=function(u,o){
+          var h=typeof u==='string'?u:u instanceof URL?u.href:'';
+          if(h.startsWith('http')&&!h.startsWith(location.origin)){
+            var b=new Blob(['import "'+h+'";'],{type:'application/javascript'});
+            return new O(URL.createObjectURL(b),Object.assign({},o,{type:'module'}));
+          }return new O(u,o)};
+        globalThis.Worker.prototype=O.prototype;
+      })();
+    </script>
+    <script>
+      (function () {
+        var theme = 'system';
+        try {
+          theme = localStorage.getItem('theme') || 'system';
+        } catch (_) {}
+        var systemTheme =
+          window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        var resolvedTheme = theme === 'system' ? systemTheme : theme;
+        if (resolvedTheme === 'dark' || resolvedTheme === 'light') {
+          document.documentElement.setAttribute('data-theme', resolvedTheme);
+        }
+
+        var hl = new URLSearchParams(location.search).get('hl');
+        var m = document.cookie.match(/(?:^|;\s*)LOBE_LOCALE=([^;]*)/);
+        var cookie = m ? decodeURIComponent(m[1]) : '';
+        var locale = hl || cookie || navigator.language || 'en-US';
+        if (locale === 'auto') locale = navigator.language || 'en-US';
+        if (hl && !cookie) {
+          document.cookie =
+            'LOBE_LOCALE=' + encodeURIComponent(hl) + ';path=/;max-age=7776000;SameSite=Lax';
+        }
+        document.documentElement.lang = locale;
+        var rtl = ['ar', 'arc', 'dv', 'fa', 'ha', 'he', 'khw', 'ks', 'ku', 'ps', 'ur', 'yi'];
+        document.documentElement.dir =
+          rtl.indexOf(locale.split('-')[0].toLowerCase()) >= 0 ? 'rtl' : 'ltr';
+      })();
+    </script>
+    <script>
+      window.__SERVER_CONFIG__ = undefined; /* SERVER_CONFIG */
+    </script>
+  </head>
+
+  <body>
+    <div id="root" style="height: 100%"></div>
+
+    <!--ANALYTICS_SCRIPTS-->
+    <script type="module" src="/src/entry.mobile.tsx"></script>
+  </body>
+</html>

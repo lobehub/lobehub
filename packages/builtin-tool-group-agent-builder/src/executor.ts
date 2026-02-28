@@ -4,14 +4,17 @@
  * Handles all group agent builder tool calls for configuring groups and their agents.
  * Extends AgentBuilder functionality with group-specific operations.
  */
+import { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
 import type {
   GetAvailableModelsParams,
   InstallPluginParams,
   SearchMarketToolsParams,
 } from '@lobechat/builtin-tool-agent-builder';
-import { AgentBuilderExecutionRuntime } from '@lobechat/builtin-tool-agent-builder/executionRuntime';
 import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
+
+import { agentService } from '@/services/agent';
+import { discoverService } from '@/services/discover';
 
 import { GroupAgentBuilderExecutionRuntime } from './ExecutionRuntime';
 import type {
@@ -28,7 +31,10 @@ import type {
 } from './types';
 import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
-const agentBuilderRuntime = new AgentBuilderExecutionRuntime();
+const agentManagerRuntime = new AgentManagerRuntime({
+  agentService,
+  discoverService,
+});
 const groupAgentBuilderRuntime = new GroupAgentBuilderExecutionRuntime();
 
 class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApiName> {
@@ -41,29 +47,13 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: GetAgentInfoParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const result = await groupAgentBuilderRuntime.getAgentInfo(ctx.groupId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.getAgentInfo(ctx.groupId, params);
   };
 
   // ==================== Group Member Management ====================
 
   searchAgent = async (params: SearchAgentParams): Promise<BuiltinToolResult> => {
-    const result = await groupAgentBuilderRuntime.searchAgent(params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.searchAgent(params);
   };
 
   createAgent = async (
@@ -80,15 +70,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    const result = await groupAgentBuilderRuntime.createAgent(groupId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.createAgent(groupId, params);
   };
 
   batchCreateAgents = async (
@@ -105,15 +87,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    const result = await groupAgentBuilderRuntime.batchCreateAgents(groupId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.batchCreateAgents(groupId, params);
   };
 
   inviteAgent = async (
@@ -130,15 +104,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    const result = await groupAgentBuilderRuntime.inviteAgent(groupId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.inviteAgent(groupId, params);
   };
 
   removeAgent = async (
@@ -155,15 +121,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    const result = await groupAgentBuilderRuntime.removeAgent(groupId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.removeAgent(groupId, params);
   };
 
   // ==================== Group Configuration ====================
@@ -182,68 +140,28 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    const result = await groupAgentBuilderRuntime.updateAgentPrompt(groupId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.updateAgentPrompt(groupId, params);
   };
 
   updateGroup = async (params: UpdateGroupParams): Promise<BuiltinToolResult> => {
-    const result = await groupAgentBuilderRuntime.updateGroup(params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return groupAgentBuilderRuntime.updateGroup(params);
   };
 
   updateGroupPrompt = async (params: UpdateGroupPromptParams): Promise<BuiltinToolResult> => {
-    const result = await groupAgentBuilderRuntime.updateGroupPrompt({
+    return groupAgentBuilderRuntime.updateGroupPrompt({
       streaming: true,
       ...params,
     });
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
   };
 
   // ==================== Inherited Operations (for supervisor agent) ====================
 
   getAvailableModels = async (params: GetAvailableModelsParams): Promise<BuiltinToolResult> => {
-    const result = await agentBuilderRuntime.getAvailableModels(params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return agentManagerRuntime.getAvailableModels(params);
   };
 
   searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
-    const result = await agentBuilderRuntime.searchMarketTools(params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return agentManagerRuntime.searchMarketTools(params);
   };
 
   updateConfig = async (
@@ -263,15 +181,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    const result = await agentBuilderRuntime.updateAgentConfig(agentId, restParams);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return agentManagerRuntime.updateAgentConfig(agentId, restParams);
   };
 
   installPlugin = async (
@@ -288,15 +198,7 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
       };
     }
 
-    const result = await agentBuilderRuntime.installPlugin(agentId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return agentManagerRuntime.installPlugin(agentId, params);
   };
 }
 

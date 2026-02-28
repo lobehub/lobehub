@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMockResponse } from '../../test-utils';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
 import { tavily } from '../tavily';
 
@@ -19,21 +20,18 @@ describe('tavily crawler', () => {
   it('should successfully crawl content with API key', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 1.5,
-        results: [
-          {
-            url: 'https://example.com',
-            raw_content:
-              'This is a test raw content with sufficient length to pass validation. '.repeat(3),
-            images: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 1.5,
+      results: [
+        {
+          url: 'https://example.com',
+          raw_content:
+            'This is a test raw content with sufficient length to pass validation. '.repeat(3),
+          images: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -50,69 +48,60 @@ describe('tavily crawler', () => {
       url: 'https://example.com',
     });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 30000);
   });
 
   it('should use custom extract depth when provided', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
     process.env.TAVILY_EXTRACT_DEPTH = 'advanced';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 2.1,
-        results: [
-          {
-            url: 'https://example.com',
-            raw_content: 'Advanced extraction content with more details. '.repeat(5),
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 2.1,
+      results: [
+        {
+          url: 'https://example.com',
+          raw_content: 'Advanced extraction content with more details. '.repeat(5),
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
 
     await tavily('https://example.com', { filterOptions: {} });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 30000);
   });
 
   it('should handle missing API key', async () => {
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 1.2,
-        results: [
-          {
-            url: 'https://example.com',
-            raw_content: 'Test content with sufficient length. '.repeat(5),
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 1.2,
+      results: [
+        {
+          url: 'https://example.com',
+          raw_content: 'Test content with sufficient length. '.repeat(5),
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
 
     await tavily('https://example.com', { filterOptions: {} });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Function), 30000);
   });
 
   it('should return undefined when no results are returned', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 0.8,
-        results: [],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 0.8,
+      results: [],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -133,19 +122,16 @@ describe('tavily crawler', () => {
   it('should return undefined for short content', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 1.1,
-        results: [
-          {
-            url: 'https://example.com',
-            raw_content: 'Short', // Content too short
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 1.1,
+      results: [
+        {
+          url: 'https://example.com',
+          raw_content: 'Short', // Content too short
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -158,20 +144,17 @@ describe('tavily crawler', () => {
   it('should return undefined when raw_content is missing', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 1,
-        results: [
-          {
-            url: 'https://example.com',
-            // raw_content is missing
-            images: ['https://example.com/image.jpg'],
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 1,
+      results: [
+        {
+          url: 'https://example.com',
+          // raw_content is missing
+          images: ['https://example.com/image.jpg'],
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -184,11 +167,11 @@ describe('tavily crawler', () => {
   it('should throw PageNotFoundError for 404 status', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
+    const mockResponse = createMockResponse('Not Found', {
       ok: false,
       status: 404,
       statusText: 'Not Found',
-    };
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -201,11 +184,11 @@ describe('tavily crawler', () => {
   it('should throw error for other HTTP errors', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
+    const mockResponse = createMockResponse('', {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
-    };
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -219,7 +202,7 @@ describe('tavily crawler', () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
     const { withTimeout } = await import('../../utils/withTimeout');
-    vi.mocked(withTimeout).mockRejectedValue(new Error('fetch failed'));
+    vi.mocked(withTimeout).mockRejectedValue(new TypeError('fetch failed'));
 
     await expect(tavily('https://example.com', { filterOptions: {} })).rejects.toThrow(
       NetworkConnectionError,
@@ -252,43 +235,38 @@ describe('tavily crawler', () => {
     );
   });
 
-  it('should return undefined when JSON parsing fails', async () => {
+  it('should throw ResponseBodyParseError when JSON parsing fails', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
+    const mockResponse = createMockResponse('not json', { ok: true });
+    mockResponse.json = vi.fn().mockRejectedValue(new Error('Invalid JSON'));
+    mockResponse.clone.mockReturnValue({
+      ...mockResponse,
       json: vi.fn().mockRejectedValue(new Error('Invalid JSON')),
-    };
+      text: vi.fn().mockResolvedValue('not json'),
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const result = await tavily('https://example.com', { filterOptions: {} });
-
-    expect(result).toBeUndefined();
-    expect(consoleSpy).toHaveBeenCalled();
-
-    consoleSpy.mockRestore();
+    await expect(tavily('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      'Tavily returned non-JSON response: not json',
+    );
   });
 
   it('should use result URL when available', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 1.3,
-        results: [
-          {
-            url: 'https://redirected.example.com',
-            raw_content: 'Test content with sufficient length. '.repeat(5),
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 1.3,
+      results: [
+        {
+          url: 'https://redirected.example.com',
+          raw_content: 'Test content with sufficient length. '.repeat(5),
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -301,19 +279,16 @@ describe('tavily crawler', () => {
   it('should fallback to original URL when result URL is missing', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 1.4,
-        results: [
-          {
-            raw_content: 'Test content with sufficient length. '.repeat(5),
-            // url is missing
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 1.4,
+      results: [
+        {
+          raw_content: 'Test content with sufficient length. '.repeat(5),
+          // url is missing
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
@@ -326,20 +301,17 @@ describe('tavily crawler', () => {
   it('should handle failed results in response', async () => {
     process.env.TAVILY_API_KEY = 'test-api-key';
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        base_url: 'https://api.tavily.com',
-        response_time: 1.6,
-        results: [],
-        failed_results: [
-          {
-            url: 'https://example.com',
-            error: 'Page not accessible',
-          },
-        ],
-      }),
-    };
+    const mockResponse = createMockResponse({
+      base_url: 'https://api.tavily.com',
+      response_time: 1.6,
+      results: [],
+      failed_results: [
+        {
+          url: 'https://example.com',
+          error: 'Page not accessible',
+        },
+      ],
+    });
 
     const { withTimeout } = await import('../../utils/withTimeout');
     vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);

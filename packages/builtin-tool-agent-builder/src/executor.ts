@@ -2,11 +2,15 @@
  * Agent Builder Executor
  *
  * Handles all agent builder tool calls for configuring and customizing agents.
+ * Delegates to AgentManagerRuntime for actual implementation.
  */
+import { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
 import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
-import { AgentBuilderExecutionRuntime } from './ExecutionRuntime';
+import { agentService } from '@/services/agent';
+import { discoverService } from '@/services/discover';
+
 import type {
   GetAvailableModelsParams,
   InstallPluginParams,
@@ -16,7 +20,10 @@ import type {
 } from './types';
 import { AgentBuilderApiName, AgentBuilderIdentifier } from './types';
 
-const runtime = new AgentBuilderExecutionRuntime();
+const runtime = new AgentManagerRuntime({
+  agentService,
+  discoverService,
+});
 
 class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
   readonly identifier = AgentBuilderIdentifier;
@@ -25,27 +32,11 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
   // ==================== Read Operations ====================
 
   getAvailableModels = async (params: GetAvailableModelsParams): Promise<BuiltinToolResult> => {
-    const result = await runtime.getAvailableModels(params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return runtime.getAvailableModels(params);
   };
 
   searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
-    const result = await runtime.searchMarketTools(params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return runtime.searchMarketTools(params);
   };
 
   // ==================== Write Operations ====================
@@ -64,15 +55,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    const result = await runtime.updateAgentConfig(agentId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return runtime.updateAgentConfig(agentId, params);
   };
 
   updatePrompt = async (
@@ -89,18 +72,10 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    const result = await runtime.updatePrompt(agentId, {
+    return runtime.updatePrompt(agentId, {
       streaming: true,
       ...params,
     });
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
   };
 
   installPlugin = async (
@@ -117,15 +92,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    const result = await runtime.installPlugin(agentId, params);
-    return {
-      content: result.content,
-      error: result.error
-        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
-        : undefined,
-      state: result.state,
-      success: result.success,
-    };
+    return runtime.installPlugin(agentId, params);
   };
 }
 

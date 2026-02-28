@@ -9,13 +9,12 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
-import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';
 import { createImageSelectors } from '@/store/image/selectors';
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
-import { imageGenerationConfigSelectors } from '@/store/image/slices/generationConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -47,30 +46,45 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { value, setValue } = useGenerationConfigParam('prompt');
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
-  const currentModel = useImageStore(imageGenerationConfigSelectors.model);
+  const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
+  const isInit = useImageStore((s) => s.isInit);
   const isLogin = useUserStore(authSelectors.isLogin);
-  const checkGeminiChineseWarning = useGeminiChineseWarning();
+  const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
 
   // Read prompt from query parameter
   const [promptParam, setPromptParam] = useQueryState('prompt');
+  // Read model from query parameter
+  const [modelParam, setModelParam] = useQueryState('model');
   const hasProcessedPrompt = useRef(false);
+  const hasProcessedModel = useRef(false);
 
   const handleGenerate = async () => {
     if (!isLogin) {
       loginRequired.redirect({ timeout: 2000 });
       return;
     }
-    // Check for Chinese text warning with Gemini model
-    const shouldContinue = await checkGeminiChineseWarning({
-      model: currentModel,
-      prompt: value,
-      scenario: 'image',
-    });
-
-    if (!shouldContinue) return;
 
     await createImage();
   };
+
+  // Auto-select model when model query parameter is present
+  useEffect(() => {
+    if (modelParam && !hasProcessedModel.current && isInit) {
+      const targetModel = modelParam;
+
+      // Find the provider for this model from enabledImageModelList
+      for (const providerGroup of enabledImageModelList) {
+        const found = providerGroup.children.some((m) => m.id === targetModel);
+        if (found) {
+          setModelAndProviderOnSelect(targetModel, providerGroup.id);
+          break;
+        }
+      }
+
+      hasProcessedModel.current = true;
+      setModelParam(null);
+    }
+  }, [modelParam, isInit, enabledImageModelList, setModelAndProviderOnSelect, setModelParam]);
 
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
@@ -89,26 +103,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
       // Auto-trigger generation after a short delay to ensure state is updated
       setTimeout(async () => {
-        const shouldContinue = await checkGeminiChineseWarning({
-          model: currentModel,
-          prompt: decodedPrompt,
-          scenario: 'image',
-        });
-
-        if (shouldContinue) {
-          await createImage();
-        }
+        await createImage();
       }, 100);
     }
-  }, [
-    promptParam,
-    isLogin,
-    setValue,
-    setPromptParam,
-    checkGeminiChineseWarning,
-    currentModel,
-    createImage,
-  ]);
+  }, [promptParam, isLogin, setValue, setPromptParam, createImage]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {

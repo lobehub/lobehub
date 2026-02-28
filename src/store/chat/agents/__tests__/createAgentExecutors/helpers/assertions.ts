@@ -115,20 +115,6 @@ export const expectMessagePluginUpdated = (
 };
 
 /**
- * Assert that internal_fetchAIChatMessage was called with correct params
- */
-export const expectFetchAIChatMessageCalled = (mockStore: ChatStore, messageId?: string) => {
-  if (messageId) {
-    expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
-      messageId,
-      expect.anything(),
-    );
-  } else {
-    expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalled();
-  }
-};
-
-/**
  * Assert that internal_invokeDifferentTypePlugin was called
  */
 export const expectInvokePluginCalled = (mockStore: ChatStore, messageId?: string) => {

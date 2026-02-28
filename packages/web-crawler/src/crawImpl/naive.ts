@@ -1,8 +1,9 @@
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
+import { PageNotFoundError, toFetchError } from '../utils/errorType';
 import { htmlToMarkdown } from '../utils/htmlToMarkdown';
+import { createHTTPStatusError } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 const mixinHeaders = {
@@ -39,28 +40,25 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
 
   try {
     res = await withTimeout(
-      ssrfSafeFetch(url, {
-        headers: mixinHeaders,
-        signal: new AbortController().signal,
-      }),
+      (signal) =>
+        ssrfSafeFetch(url, {
+          headers: mixinHeaders,
+          signal,
+        }),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {
-    const error = e as Error;
-    if (error.message === 'fetch failed') {
-      throw new NetworkConnectionError();
-    }
-
-    if (error instanceof TimeoutError) {
-      throw error;
-    }
-
-    throw e;
+    throw toFetchError(e);
   }
 
   if (res.status === 404) {
     throw new PageNotFoundError(res.statusText);
   }
+
+  if (!res.ok) {
+    throw await createHTTPStatusError(res, 'Naive');
+  }
+
   const type = res.headers.get('content-type');
 
   if (type?.includes('application/json')) {
@@ -74,7 +72,7 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
     }
 
     return {
-      content: content,
+      content,
       contentType: 'json',
       length: content.length,
       url,
@@ -91,8 +89,8 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
       return;
     }
 
-    // it's blocked by cloudflare
-    if (result.title !== 'Just a moment...') {
+    // It's blocked by Cloudflare.
+    if (result.title === 'Just a moment...') {
       return;
     }
 

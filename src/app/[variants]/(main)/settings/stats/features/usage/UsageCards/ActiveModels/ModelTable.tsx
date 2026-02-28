@@ -40,8 +40,8 @@ const formatData = (
 
   return Array.from(groupedLogs.entries())
     .map(([key, logs]) => {
-      // 此处的 logs 为多日的 log，需要进行 sum
-      // 如果当前的 groupBy 是 Model，则 logs 应该按照 Provider 进行分组
+      // The logs here span multiple days and need to be summed
+      // If the current groupBy is Model, logs should be grouped by Provider
       const spend = logs.reduce((acc, log) => {
         const key = groupBy === GroupBy.Model ? log.provider : log.model;
         acc.set(key, (acc.get(key) || 0) + log.spend);

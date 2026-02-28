@@ -1,5 +1,5 @@
 import { authEnv } from '@/envs/auth';
-import { notFound } from '@/libs/next/navigation';
+import { notFound } from 'next/navigation';
 import { defaultClients } from '@/libs/oidc-provider/config';
 import { OIDCService } from '@/server/services/oidc';
 

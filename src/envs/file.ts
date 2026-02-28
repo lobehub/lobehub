@@ -1,4 +1,4 @@
-import { createEnv } from '@t3-oss/env-nextjs';
+import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 
 const DEFAULT_S3_FILE_PATH = 'files';
@@ -13,6 +13,7 @@ export const getFileConfig = () => {
   const S3_PUBLIC_DOMAIN = process.env.S3_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_S3_DOMAIN;
 
   return createEnv({
+    clientPrefix: 'NEXT_PUBLIC_',
     client: {
       /**
        * @deprecated

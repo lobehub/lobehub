@@ -7,10 +7,10 @@ import { cx } from 'antd-style';
 import { type FC, type PropsWithChildren } from 'react';
 
 import { ProductLogo } from '@/components/Branding';
-import LangButton from '@/features/User/UserPanel/LangButton';
-import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useIsDark } from '@/hooks/useIsDark';
 
+import AuthLangButton from './AuthLangButton';
+import AuthThemeButton from './AuthThemeButton';
 import { styles } from './style';
 
 const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
@@ -32,9 +32,9 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
         >
           <ProductLogo size={40} />
           <Flexbox horizontal align={'center'}>
-            <LangButton placement={'bottomRight'} size={18} />
+            <AuthLangButton size={18} />
             <Divider className={styles.divider} orientation={'vertical'} />
-            <ThemeButton placement={'bottomRight'} size={18} />
+            <AuthThemeButton size={18} />
           </Flexbox>
         </Flexbox>
         <Center height={'100%'} padding={16} width={'100%'}>

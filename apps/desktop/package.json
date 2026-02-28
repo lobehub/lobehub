@@ -11,7 +11,7 @@
   "author": "LobeHub",
   "main": "./dist/main/index.js",
   "scripts": {
-    "build:main": "electron-vite build",
+    "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 electron-vite build",
     "build:run-unpack": "electron .",
     "dev": "electron-vite dev",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run dev",
@@ -30,7 +30,7 @@
     "package:local": "npm run build:main && electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "package:local:reuse": "electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "package:mac": "npm run build:main && electron-builder --mac --config electron-builder.mjs  --publish never",
-    "package:mac:local": "npm run build:main && UPDATE_CHANNEL=nightly electron-builder --mac --config electron-builder.mjs --publish never",
+    "package:mac:local": "npm run build:main && cross-env UPDATE_CHANNEL=nightly electron-builder --mac --config electron-builder.mjs --publish never",
     "package:win": "npm run build:main && electron-builder --win --config electron-builder.mjs  --publish never",
     "start": "electron-vite preview",
     "stylelint": "stylelint \"src/**/*.{js,jsx,ts,tsx}\" --fix",
@@ -41,12 +41,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.70",
-    "electron-liquid-glass": "^1.1.1",
-    "electron-updater": "^6.6.2",
-    "electron-window-state": "^5.0.3",
-    "fetch-socks": "^1.3.2",
-    "get-port-please": "^3.2.0",
-    "superjson": "^2.2.6"
+    "electron-liquid-glass": "^1.1.1"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -69,6 +64,7 @@
     "async-retry": "^1.3.3",
     "consola": "^3.4.2",
     "cookie": "^1.1.1",
+    "cross-env": "^10.1.0",
     "diff": "^8.0.2",
     "electron": "^38.7.2",
     "electron-builder": "^26.0.12",
@@ -76,12 +72,16 @@
     "electron-is": "^3.0.0",
     "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",
-    "electron-vite": "^4.0.1",
+    "electron-updater": "^6.6.2",
+    "electron-vite": "^5.0.0",
+    "electron-window-state": "^5.0.3",
     "es-toolkit": "^1.43.0",
     "eslint": "10.0.0",
     "execa": "^9.6.1",
     "fast-glob": "^3.3.3",
+    "fetch-socks": "^1.3.2",
     "fix-path": "^5.0.0",
+    "get-port-please": "^3.2.0",
     "happy-dom": "^20.0.11",
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
@@ -93,11 +93,12 @@
     "semver": "^7.7.3",
     "set-cookie-parser": "^2.7.2",
     "stylelint": "^15.11.0",
+    "superjson": "^2.2.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "undici": "^7.16.0",
     "uuid": "^13.0.0",
-    "vite": "^7.2.7",
+    "vite": "^7.3.1",
     "vitest": "^3.2.4",
     "zod": "^3.25.76"
   },
@@ -110,6 +111,10 @@
       "electron",
       "electron-builder",
       "node-mac-permissions"
-    ]
+    ],
+    "overrides": {
+      "react": "19.2.4",
+      "react-dom": "19.2.4"
+    }
   }
 }

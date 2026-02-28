@@ -1,4 +1,6 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import { builtinTools } from '@lobechat/builtin-tools';
+import { LOADING_FLAT } from '@lobechat/const';
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
@@ -14,14 +16,17 @@ import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
-import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
+import { AiModelModel } from '@/database/models/aiModel';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { type EvalContext, type ServerAgentToolsContext } from '@/server/modules/Mecha';
-import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import {
+  createServerAgentToolsEngine,
+  type EvalContext,
+  type ServerAgentToolsContext,
+} from '@/server/modules/Mecha';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
@@ -168,7 +173,13 @@ export class AiAgentService {
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
 
-    log('execAgent: got agent config for %s (id: %s)', identifier, resolvedAgentId);
+    log(
+      'execAgent: got agent config for %s (id: %s), model: %s, provider: %s',
+      identifier,
+      resolvedAgentId,
+      agentConfig.model,
+      agentConfig.provider,
+    );
 
     // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
@@ -203,9 +214,6 @@ export class AiAgentService {
 
     // 4. Get model abilities from model-bank for function calling support check
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-    const modelInfo = LOBE_DEFAULT_MODEL_LIST.find(
-      (m) => m.id === model && m.providerId === provider,
-    );
     const isModelSupportToolUse = (m: string, p: string) => {
       const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
       return info?.abilities?.functionCall ?? true;
@@ -243,7 +251,7 @@ export class AiAgentService {
       additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
       agentConfig: {
         chatConfig: agentConfig.chatConfig ?? undefined,
-        plugins: agentConfig.plugins ?? undefined,
+        plugins: agentConfig?.plugins ?? undefined,
       },
       hasEnabledKnowledgeBases,
       model,
@@ -290,6 +298,98 @@ export class AiAgentService {
       lobehubSkillManifests.length,
       klavisManifests.length,
     );
+
+    // 7.5. Build Agent Management context if agent-management tool is enabled
+    const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
+    let agentManagementContext;
+    if (isAgentManagementEnabled) {
+      // Query user's enabled models from database
+      const aiModelModel = new AiModelModel(this.db, this.userId);
+      const allUserModels = await aiModelModel.getAllModels();
+
+      // Filter only enabled chat models and group by provider
+      const providerMap = new Map<
+        string,
+        {
+          id: string;
+          models: Array<{ abilities?: any; description?: string; id: string; name: string }>;
+          name: string;
+        }
+      >();
+
+      for (const userModel of allUserModels) {
+        // Only include enabled chat models
+        if (!userModel.enabled || userModel.type !== 'chat') continue;
+
+        // Get model info from LOBE_DEFAULT_MODEL_LIST for full metadata
+        const modelInfo = LOBE_DEFAULT_MODEL_LIST.find(
+          (m) => m.id === userModel.id && m.providerId === userModel.providerId,
+        );
+
+        if (!providerMap.has(userModel.providerId)) {
+          providerMap.set(userModel.providerId, {
+            id: userModel.providerId,
+            models: [],
+            name: userModel.providerId, // TODO: Map to friendly provider name
+          });
+        }
+
+        const provider = providerMap.get(userModel.providerId)!;
+        provider.models.push({
+          abilities: userModel.abilities || modelInfo?.abilities,
+          description: modelInfo?.description,
+          id: userModel.id,
+          name: userModel.displayName || modelInfo?.displayName || userModel.id,
+        });
+      }
+
+      // Build availablePlugins from all plugin sources
+      // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
+      const INTERNAL_TOOLS = new Set([
+        'lobe-agent-management', // Don't show agent-management in its own context
+        'lobe-agent-builder', // Used for editing current agent, not for creating new agents
+        'lobe-group-agent-builder', // Used for editing current group, not for creating new agents
+        'lobe-page-agent', // Page-editor specific tool
+      ]);
+
+      const availablePlugins = [
+        // All builtin tools (including hidden ones like web-browsing, cloud-sandbox)
+        ...builtinTools
+          .filter((tool) => !INTERNAL_TOOLS.has(tool.identifier))
+          .map((tool) => ({
+            description: tool.manifest.meta?.description,
+            identifier: tool.identifier,
+            name: tool.manifest.meta?.title || tool.identifier,
+            type: 'builtin' as const,
+          })),
+        // Lobehub Skills
+        ...lobehubSkillManifests.map((manifest) => ({
+          description: manifest.meta?.description,
+          identifier: manifest.identifier,
+          name: manifest.meta?.title || manifest.identifier,
+          type: 'lobehub-skill' as const,
+        })),
+        // Klavis tools
+        ...klavisManifests.map((manifest) => ({
+          description: manifest.meta?.description,
+          identifier: manifest.identifier,
+          name: manifest.meta?.title || manifest.identifier,
+          type: 'klavis' as const,
+        })),
+      ];
+
+      agentManagementContext = {
+        availablePlugins,
+        // Limit to first 5 providers to avoid context bloat
+        availableProviders: Array.from(providerMap.values()).slice(0, 5),
+      };
+
+      log(
+        'execAgent: built agentManagementContext with %d providers and %d plugins',
+        agentManagementContext.availableProviders.length,
+        agentManagementContext.availablePlugins.length,
+      );
+    }
 
     // 8. Get existing messages if provided
     let historyMessages: any[] = [];

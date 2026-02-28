@@ -2,8 +2,17 @@
 
 import { type ComponentType, type ReactElement } from 'react';
 import { createElement, lazy, memo, Suspense, useCallback, useEffect } from 'react';
-import { Navigate, Route, useNavigate, useRouteError } from 'react-router-dom';
+import type { RouteObject } from 'react-router-dom';
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+  useNavigate,
+  useRouteError,
+} from 'react-router-dom';
 
+import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
+import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useGlobalStore } from '@/store/global';
 
@@ -45,6 +54,35 @@ export function dynamicElement<P = NonNullable<unknown>>(
 }
 
 /**
+ * Helper function to create a lazy-loaded layout element for router configuration.
+ * Unlike dynamicElement (for pages), layouts use Outlet so children are rendered inside.
+ */
+export function dynamicLayout<P = NonNullable<unknown>>(
+  importFn: () => Promise<{ default: ComponentType<P> } | ComponentType<P>>,
+  debugId?: string,
+): ReactElement {
+  const LazyComponent = lazy(async () => {
+    // eslint-disable-next-line @next/next/no-assign-module-variable
+    const module = await importFn();
+    if (typeof module === 'function') {
+      return { default: module };
+    }
+    if ('default' in module) {
+      return module as { default: ComponentType<P> };
+    }
+    return { default: module as unknown as ComponentType<P> };
+  });
+
+  // @ts-ignore
+  return (
+    <Suspense fallback={<Loading debugId={debugId || 'dynamicLayout'} />}>
+      {/* @ts-ignore */}
+      <LazyComponent {...({} as P)} />
+    </Suspense>
+  );
+}
+
+/**
  * Error boundary component for React Router
  * Displays an error page and provides a reset function to navigate to a specific path
  *
@@ -62,8 +100,6 @@ export interface ErrorBoundaryProps {
 }
 
 export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
-  const ErrorCapture = require('@/components/Error').default;
-
   const error = useRouteError() as Error;
   const navigate = useNavigate();
 
@@ -103,7 +139,7 @@ export const NavigatorRegistrar = memo(() => {
 });
 
 /**
- * Route configuration object type (compatible with createBrowserRouter format)
+ * Route configuration object type (RouteObject-style for createBrowserRouter)
  */
 export interface RouteConfig {
   children?: RouteConfig[];
@@ -116,41 +152,38 @@ export interface RouteConfig {
   path?: string;
 }
 
+export interface CreateAppRouterOptions {
+  basename?: string;
+}
+
 /**
- * Convert route config objects to declarative Route elements
- * This allows using createBrowserRouter-style config with BrowserRouter
+ * Create a React Router data router with root error boundary.
+ * Use with <RouterProvider router={router} />.
  *
  * @example
- * const routes: RouteConfig[] = [
- *   {
- *     path: '/',
- *     element: <Layout />,
- *     children: [
- *       { path: 'chat', element: <Chat /> }
- *     ]
- *   }
- * ];
- *
- * <BrowserRouter>
- *   <Routes>{renderRoutes(routes)}</Routes>
- * </BrowserRouter>
+ * const router = createAppRouter(desktopRoutes, { basename: '/app' });
+ * createRoot(document.getElementById('root')!).render(
+ *   <SPAGlobalProvider>
+ *     <RouterProvider router={router} />
+ *   </SPAGlobalProvider>
+ * );
  */
-export function renderRoutes(routes: RouteConfig[]): ReactElement[] {
-  return routes.map((route, index) => {
-    const { path, element, children, index: isIndex } = route;
-
-    const childRoutes = children ? renderRoutes(children) : undefined;
-
-    if (isIndex) {
-      return <Route index element={element} key={`index-${index}`} />;
-    }
-
-    return (
-      <Route element={element} key={path || index} path={path}>
-        {childRoutes}
-      </Route>
-    );
-  });
+export function createAppRouter(routes: RouteConfig[], options?: CreateAppRouterOptions) {
+  return createBrowserRouter(
+    [
+      {
+        children: routes as RouteObject[],
+        element: (
+          <BusinessGlobalProvider>
+            <Outlet />
+          </BusinessGlobalProvider>
+        ),
+        errorElement: <ErrorBoundary resetPath="/" />,
+        path: '/',
+      },
+    ],
+    { basename: options?.basename },
+  );
 }
 
 /**

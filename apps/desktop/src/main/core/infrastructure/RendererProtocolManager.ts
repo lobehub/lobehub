@@ -19,25 +19,25 @@ const RENDERER_PROTOCOL_PRIVILEGES = {
 
 interface RendererProtocolManagerOptions {
   host?: string;
-  nextExportDir: string;
+  rendererDir: string;
   resolveRendererFilePath: ResolveRendererFilePath;
   scheme?: string;
 }
 
-const RENDERER_DIR = 'next';
+const RENDERER_DIR = 'renderer';
 export class RendererProtocolManager {
   private readonly scheme: string;
   private readonly host: string;
-  private readonly nextExportDir: string;
+  private readonly rendererDir: string;
   private readonly resolveRendererFilePath: ResolveRendererFilePath;
   private handlerRegistered = false;
 
   constructor(options: RendererProtocolManagerOptions) {
-    const { nextExportDir, resolveRendererFilePath } = options;
+    const { rendererDir, resolveRendererFilePath } = options;
 
     this.scheme = 'app';
     this.host = RENDERER_DIR;
-    this.nextExportDir = nextExportDir;
+    this.rendererDir = rendererDir;
     this.resolveRendererFilePath = resolveRendererFilePath;
   }
 
@@ -57,9 +57,9 @@ export class RendererProtocolManager {
   registerHandler() {
     if (this.handlerRegistered) return;
 
-    if (!pathExistsSync(this.nextExportDir)) {
+    if (!pathExistsSync(this.rendererDir)) {
       createLogger('core:RendererProtocolManager').warn(
-        `Next export directory not found, skip static handler: ${this.nextExportDir}`,
+        `Renderer directory not found, skip static handler: ${this.rendererDir}`,
       );
       return;
     }
@@ -236,7 +236,7 @@ export class RendererProtocolManager {
     const ext = extname(normalizedPathname);
 
     return (
-      pathname.startsWith('/_next/') ||
+      pathname.startsWith('/assets/') ||
       pathname.startsWith('/static/') ||
       pathname === '/favicon.ico' ||
       pathname === '/manifest.json' ||

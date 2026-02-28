@@ -94,6 +94,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
   const dropdownMenu = useGroupDropdownMenu({
     anchor,
     avatar: customAvatar,
+    backgroundColor: backgroundColor || undefined,
     id,
     memberAvatars,
     pinned: pinned ?? false,

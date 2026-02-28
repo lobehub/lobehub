@@ -59,13 +59,18 @@ export class Crawler {
       try {
         const res = await crawlImpls[impl](transformedUrl, { filterOptions: mergedFilterOptions });
 
-        if (res && res.content && res.content?.length > 100)
+        if (res && res.content && res.content.length > 100) {
           return {
             crawler: impl,
             data: res,
             originalUrl: url,
             transformedUrl: transformedUrl !== url ? transformedUrl : undefined,
           };
+        }
+
+        finalError = new Error(`${impl} returned empty or short content`);
+        finalError.name = 'EmptyCrawlResultError';
+        finalCrawler = impl;
       } catch (error) {
         console.error(error);
         finalError = error as Error;
@@ -77,10 +82,10 @@ export class Crawler {
     const errorMessage = finalError?.message;
 
     return {
-      crawler: finalCrawler!,
+      crawler: finalCrawler || finalImpls.at(-1) || 'unknown',
       data: {
         content: `Fail to crawl the page. Error type: ${errorType}, error message: ${errorMessage}`,
-        errorMessage: errorMessage,
+        errorMessage,
         errorType,
       },
       originalUrl: url,

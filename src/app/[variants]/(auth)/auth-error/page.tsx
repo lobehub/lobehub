@@ -9,7 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthCard from '@/features/AuthCard';
-import Link from '@/libs/next/Link';
+import Link from 'next/link';
 
 const normalizeErrorCode = (code?: string | null) =>
   (code || 'UNKNOWN').trim().toUpperCase().replaceAll('-', '_');

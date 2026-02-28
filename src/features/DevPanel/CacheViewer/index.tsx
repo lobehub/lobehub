@@ -7,6 +7,7 @@ import DataTable from './DataTable';
 import { getCacheFiles } from './getCacheEntries';
 
 const CacheViewer = async () => {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const { t } = useTranslation('components');
   const files = await getCacheFiles();
 

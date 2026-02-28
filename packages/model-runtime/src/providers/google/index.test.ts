@@ -679,3 +679,24 @@ describe('thinkingConfig includeThoughts logic', () => {
     expect(config.thinkingConfig?.thinkingLevel).toBe('high');
   });
 });
+
+describe('models', () => {
+  it('should pass API Key via x-goog-api-key header instead of URL parameter', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ models: [] }),
+      ok: true,
+    });
+    global.fetch = mockFetch;
+
+    const apiKey = 'test-google-key';
+    const localInstance = new LobeGoogleAI({ apiKey });
+
+    await localInstance.models();
+    const [url, options] = mockFetch.mock.calls[0];
+
+    expect(url).not.toContain('key=');
+    expect(options.headers).toMatchObject({
+      'x-goog-api-key': apiKey,
+    });
+  });
+});

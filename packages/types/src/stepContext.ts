@@ -82,6 +82,11 @@ export interface InitialPageEditorContext {
  */
 export interface RuntimeStepContext {
   /**
+   * Activated tool identifiers accumulated from lobe-tools messages
+   * Tools once activated remain active for the rest of the conversation
+   */
+  activatedToolIds?: string[];
+  /**
    * Page Editor context for current step
    * Contains the latest XML structure fetched at each step
    */

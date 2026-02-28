@@ -219,14 +219,9 @@ const config = {
   files: [
     'dist',
     'resources',
-    // Ensure Next export assets are packaged
-    'dist/next/**/*',
+    'dist/renderer/**/*',
     '!resources/locales',
     '!resources/dmg.png',
-    '!dist/next/docs',
-    '!dist/next/packages',
-    '!dist/next/.next/server/app/sitemap',
-    '!dist/next/.next/static/media',
     // Exclude all node_modules first
     '!node_modules',
     // Then explicitly include native modules using object form (handles pnpm symlinks)

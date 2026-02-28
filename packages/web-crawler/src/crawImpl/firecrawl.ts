@@ -1,5 +1,6 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
+import { PageNotFoundError, toFetchError } from '../utils/errorType';
+import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 interface FirecrawlMetadata {
@@ -57,30 +58,23 @@ export const firecrawl: CrawlImpl = async (url) => {
 
   try {
     res = await withTimeout(
-      fetch(`${baseUrl}/scrape`, {
-        body: JSON.stringify({
-          formats: ['markdown'], // ["markdown", "html"]
-          url,
+      (signal) =>
+        fetch(`${baseUrl}/scrape`, {
+          body: JSON.stringify({
+            formats: ['markdown'], // ["markdown", "html"]
+            url,
+          }),
+          headers: {
+            'Authorization': !apiKey ? '' : `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+          signal,
         }),
-        headers: {
-          'Authorization': !apiKey ? '' : `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      }),
       DEFAULT_TIMEOUT,
     );
   } catch (e) {
-    const error = e as Error;
-    if (error.message === 'fetch failed') {
-      throw new NetworkConnectionError();
-    }
-
-    if (error instanceof TimeoutError) {
-      throw error;
-    }
-
-    throw e;
+    throw toFetchError(e);
   }
 
   if (!res.ok) {
@@ -88,37 +82,34 @@ export const firecrawl: CrawlImpl = async (url) => {
       throw new PageNotFoundError(res.statusText);
     }
 
-    throw new Error(`Firecrawl request failed with status ${res.status}: ${res.statusText}`);
+    throw await createHTTPStatusError(res, 'Firecrawl');
   }
 
-  try {
-    const data = (await res.json()) as FirecrawlResponse;
-
-    if (data.data.warning) {
-      console.warn('[Firecrawl] Warning:', data.data.warning);
-    }
-
-    if (data.data.metadata.error) {
-      console.error('[Firecrawl] Metadata error:', data.data.metadata.error);
-    }
-
-    // Check if content is empty or too short
-    if (!data.data.markdown || data.data.markdown.length < 100) {
-      return;
-    }
-
-    return {
-      content: data.data.markdown,
-      contentType: 'text',
-      description: data.data.metadata.description || '',
-      length: data.data.markdown.length,
-      siteName: new URL(url).hostname,
-      title: data.data.metadata.title || '',
-      url: url,
-    } satisfies CrawlSuccessResult;
-  } catch (error) {
-    console.error('[Firecrawl] Parse error:', error);
+  const data = await parseJSONResponse<FirecrawlResponse>(res, 'Firecrawl');
+  if (!data.data) {
+    throw new Error('Firecrawl response missing data field');
   }
 
-  return;
+  if (data.data.warning) {
+    console.warn('[Firecrawl] Warning:', data.data.warning);
+  }
+
+  if (data.data.metadata.error) {
+    console.error('[Firecrawl] Metadata error:', data.data.metadata.error);
+  }
+
+  // Check if content is empty or too short
+  if (!data.data.markdown || data.data.markdown.length < 100) {
+    return;
+  }
+
+  return {
+    content: data.data.markdown,
+    contentType: 'text',
+    description: data.data.metadata.description || '',
+    length: data.data.markdown.length,
+    siteName: new URL(url).hostname,
+    title: data.data.metadata.title || '',
+    url,
+  } satisfies CrawlSuccessResult;
 };

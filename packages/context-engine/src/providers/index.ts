@@ -2,6 +2,7 @@
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export { EvalContextSystemInjector } from './EvalContextSystemInjector';
 export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
+export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { GroupAgentBuilderContextInjector } from './GroupAgentBuilderContextInjector';
 export { GroupContextInjector } from './GroupContextInjector';
 export { GTDPlanInjector } from './GTDPlanInjector';
@@ -11,7 +12,9 @@ export { KnowledgeInjector } from './KnowledgeInjector';
 export { PageEditorContextInjector } from './PageEditorContextInjector';
 export { PageSelectionsInjector } from './PageSelectionsInjector';
 export { SkillContextProvider } from './SkillContextProvider';
+export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
+export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
 export { ToolSystemRoleProvider } from './ToolSystemRole';
 export { UserMemoryInjector } from './UserMemoryInjector';
 
@@ -23,6 +26,13 @@ export type {
 } from './AgentBuilderContextInjector';
 export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
 export type { ForceFinishSummaryInjectorConfig } from './ForceFinishSummaryInjector';
+export type {
+  AgentManagementContext,
+  AgentManagementContextInjectorConfig,
+  AvailableModelInfo,
+  AvailablePluginInfo,
+  AvailableProviderInfo,
+} from './AgentManagementContextInjector';
 export type {
   GroupAgentBuilderContext,
   GroupAgentBuilderContextInjectorConfig,
@@ -40,6 +50,8 @@ export type { KnowledgeInjectorConfig } from './KnowledgeInjector';
 export type { PageEditorContextInjectorConfig } from './PageEditorContextInjector';
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
+export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
+export type { ToolDiscoveryMeta, ToolDiscoveryProviderConfig } from './ToolDiscoveryProvider';
 export type { ToolSystemRoleConfig } from './ToolSystemRole';
 export type { MemoryContext, UserMemoryInjectorConfig } from './UserMemoryInjector';

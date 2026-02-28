@@ -52,6 +52,7 @@ bun.lockb
 
 # Build outputs
 dist/
+public/spa/
 es/
 lib/
 .next/
@@ -83,6 +84,7 @@ public/sw*
 public/swe-worker*
 
 # Generated files
+src/app/spa/[variants]/[[...path]]/spaHtmlTemplates.ts
 public/*.js
 public/sitemap.xml
 public/sitemap-index.xml
@@ -128,3 +130,5 @@ i18n-unused-keys-report.json
 .vitest-reports
 
 pnpm-lock.yaml
+.turbo
+spaHtmlTemplates.ts
