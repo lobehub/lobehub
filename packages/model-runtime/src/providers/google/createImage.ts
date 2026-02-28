@@ -143,7 +143,7 @@ async function generateImageByChatModel(
 
   const config: GenerateContentConfig = {
     responseModalities: ['Image'],
-    ...(params.aspectRatio
+    ...(params.aspectRatio && params.aspectRatio !== 'auto'
       ? {
           imageConfig: {
             aspectRatio: params.aspectRatio,
