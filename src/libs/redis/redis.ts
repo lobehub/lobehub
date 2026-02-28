@@ -119,6 +119,6 @@ export class IoRedisRedisProvider implements BaseRedisProvider {
   }
 
   pipeline(): RedisPipeline {
-    return this.ensureClient().pipeline() as unknown as RedisPipeline;
+    return this.ensureClient().pipeline() as RedisPipeline;
   }
 }

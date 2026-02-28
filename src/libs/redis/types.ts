@@ -31,7 +31,7 @@ export type RedisMSetArgument = Record<string, RedisValue> | Map<RedisKey, Redis
 export interface RedisPipeline {
   decr: (key: RedisKey) => RedisPipeline;
   del: (...keys: RedisKey[]) => RedisPipeline;
-  exec: () => Promise<[error: Error | null, result: unknown][]>;
+  exec: () => Promise<[error: Error | null, result: unknown][] | null>;
   expire: (key: RedisKey, seconds: number) => RedisPipeline;
   get: (key: RedisKey) => RedisPipeline;
   hdel: (key: RedisKey, ...fields: RedisKey[]) => RedisPipeline;
