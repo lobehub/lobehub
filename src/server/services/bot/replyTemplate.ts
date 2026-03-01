@@ -1,7 +1,7 @@
 import { emoji } from 'chat';
 
 import type { StepPresentationData } from '../agentRuntime/types';
-import { randomAck } from './ackPhrases';
+import { getExtremeAck } from './ackPhrases';
 
 // ==================== Message Splitting ====================
 
@@ -139,8 +139,8 @@ function renderInlineStats(params: {
 
 // ==================== 1. Start ====================
 
-export function renderStart(): string {
-  return randomAck();
+export function renderStart(content?: string): string {
+  return getExtremeAck(content);
 }
 
 // ==================== 2. LLM Generating ====================

@@ -208,7 +208,7 @@ export class AgentBridgeService {
     // Post initial progress message to get the message ID
     let progressMessage: SentMessage | undefined;
     try {
-      progressMessage = await thread.post(renderStart());
+      progressMessage = await thread.post(renderStart(userMessage.text));
     } catch (error) {
       log('executeWithWebhooks: failed to post progress message: %O', error);
     }
@@ -285,7 +285,7 @@ export class AgentBridgeService {
     // Post initial progress message
     let progressMessage: SentMessage | undefined;
     try {
-      progressMessage = await thread.post(renderStart());
+      progressMessage = await thread.post(renderStart(userMessage.text));
     } catch (error) {
       log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
     }
