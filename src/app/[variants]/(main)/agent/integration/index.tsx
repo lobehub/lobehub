@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -13,7 +13,7 @@ import { INTEGRATION_PROVIDERS } from './const';
 import PlatformDetail from './PlatformDetail';
 import PlatformList from './PlatformList';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow: hidden;
     display: flex;
@@ -26,8 +26,6 @@ const useStyles = createStyles(({ css }) => ({
 
 const IntegrationPage = memo(() => {
   const { aid } = useParams<{ aid?: string }>();
-  const { styles } = useStyles();
-
   const [activeProviderId, setActiveProviderId] = useState(INTEGRATION_PROVIDERS[0].id);
 
   const { data: providers, isLoading } = useAgentStore((s) => s.useFetchBotProviders(aid));

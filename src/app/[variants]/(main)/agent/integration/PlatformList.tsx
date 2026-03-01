@@ -1,21 +1,21 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { Info } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { IntegrationProvider } from './const';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
 
     width: 260px;
-    border-inline-end: 1px solid ${token.colorBorder};
+    border-inline-end: 1px solid ${cssVar.colorBorder};
   `,
   item: css`
     cursor: pointer;
@@ -28,9 +28,9 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 10px;
     padding-inline: 12px;
     border: none;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-align: start;
 
     background: transparent;
@@ -38,14 +38,14 @@ const useStyles = createStyles(({ css, token }) => ({
     transition: all 0.2s;
 
     &:hover {
-      color: ${token.colorText};
-      background: ${token.colorFillTertiary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
     }
 
     &.active {
       font-weight: 500;
-      color: ${token.colorText};
-      background: ${token.colorFillSecondary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   list: css`
@@ -63,14 +63,14 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 8px;
     border-radius: 50%;
 
-    background: ${token.colorSuccess};
-    box-shadow: 0 0 0 1px ${token.colorBgContainer};
+    background: ${cssVar.colorSuccess};
+    box-shadow: 0 0 0 1px ${cssVar.colorBgContainer};
   `,
   title: css`
     padding-inline: 4px;
     font-size: 12px;
     font-weight: 600;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
 }));
 
@@ -84,7 +84,7 @@ interface PlatformListProps {
 const PlatformList = memo<PlatformListProps>(
   ({ providers, activeId, connectedPlatforms, onSelect }) => {
     const { t } = useTranslation('agent');
-    const { styles, cx, theme } = useStyles();
+    const theme = useTheme();
 
     return (
       <aside className={styles.root}>

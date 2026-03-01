@@ -2,7 +2,7 @@
 
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Switch, Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,7 +10,7 @@ import { type IntegrationProvider } from '../const';
 
 const { Title, Text } = Typography;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
     position: sticky;
     z-index: 10;
@@ -23,7 +23,7 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 16px;
     padding-inline: 0;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   headerContent: css`
     display: flex;
@@ -45,7 +45,7 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 40px;
     border-radius: 10px;
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
     fill: white;
   `,
@@ -61,8 +61,6 @@ interface HeaderProps {
 
 const Header = memo<HeaderProps>(({ provider, currentConfig, onToggleEnable }) => {
   const { t } = useTranslation('agent');
-  const { styles } = useStyles();
-
   const ProviderIcon = provider.icon;
 
   return (

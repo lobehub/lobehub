@@ -1,8 +1,8 @@
 'use client';
 
-import { Alert, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { Button, Form, type FormInstance, Input, Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { Alert, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Button, Form, type FormInstance, Input } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { ExternalLink, Info, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -12,9 +12,7 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { type IntegrationProvider } from '../const';
 import type { IntegrationFormValues, TestResult } from './index';
 
-const { Text } = Typography;
-
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBar: css`
     display: flex;
     align-items: center;
@@ -45,7 +43,7 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
 
     font-size: 12px;
-    color: ${token.colorPrimary};
+    color: ${cssVar.colorPrimary};
     text-decoration: none;
 
     &:hover {
@@ -59,7 +57,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 14px;
     font-weight: 600;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   labelLeft: css`
     display: flex;
@@ -78,7 +76,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 12px;
     font-weight: 700;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
 
     &::before {
       content: '';
@@ -89,26 +87,26 @@ const useStyles = createStyles(({ css, token }) => ({
       height: 6px;
       border-radius: 50%;
 
-      background: ${token.colorPrimary};
+      background: ${cssVar.colorPrimary};
     }
   `,
   webhookBox: css`
     overflow: hidden;
     flex: 1;
 
-    height: ${token.controlHeight}px;
+    height: ${cssVar.controlHeight};
     padding-inline: 12px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadius}px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius};
 
     font-family: monospace;
     font-size: 13px;
-    line-height: ${token.controlHeight}px;
-    color: ${token.colorTextSecondary};
+    line-height: ${cssVar.controlHeight};
+    color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
 }));
 
@@ -120,6 +118,8 @@ interface BodyProps {
   onSave: () => void;
   onTestConnection: () => void;
   provider: IntegrationProvider;
+  saveResult?: TestResult;
+  saving: boolean;
   testing: boolean;
   testResult?: TestResult;
 }
@@ -129,6 +129,8 @@ const Body = memo<BodyProps>(
     provider,
     form,
     hasConfig,
+    saveResult,
+    saving,
     testing,
     testResult,
     onSave,
@@ -137,7 +139,6 @@ const Body = memo<BodyProps>(
     onCopied,
   }) => {
     const { t } = useTranslation('agent');
-    const { styles } = useStyles();
     const origin = useAppOrigin();
 
     return (
@@ -213,7 +214,58 @@ const Body = memo<BodyProps>(
                 </Form.Item>
               </div>
             )}
+          </div>
 
+          {/* Action Bar */}
+          <div className={styles.actionBar}>
+            {hasConfig ? (
+              <Button danger icon={<Trash2 size={16} />} type="text" onClick={onDelete}>
+                {t('integration.removeIntegration')}
+              </Button>
+            ) : (
+              <div />
+            )}
+
+            <Flexbox horizontal gap={12}>
+              {hasConfig && (
+                <Button icon={<RefreshCw size={16} />} loading={testing} onClick={onTestConnection}>
+                  {t('integration.testConnection')}
+                </Button>
+              )}
+              <Button icon={<Save size={16} />} loading={saving} type="primary" onClick={onSave}>
+                {t('integration.save')}
+              </Button>
+            </Flexbox>
+          </div>
+
+          {saveResult && (
+            <Alert
+              closable
+              showIcon
+              description={saveResult.type === 'error' ? saveResult.errorDetail : undefined}
+              type={saveResult.type}
+              title={
+                saveResult.type === 'success' ? t('integration.saved') : t('integration.saveFailed')
+              }
+            />
+          )}
+
+          {testResult && (
+            <Alert
+              closable
+              showIcon
+              description={testResult.type === 'error' ? testResult.errorDetail : undefined}
+              type={testResult.type}
+              title={
+                testResult.type === 'success'
+                  ? t('integration.testSuccess')
+                  : t('integration.testFailed')
+              }
+            />
+          )}
+
+          {/* Endpoint URL - only shown after config is saved */}
+          {hasConfig && (
             <div className={styles.field}>
               <div className={styles.label}>
                 <div className={styles.labelLeft}>
@@ -247,40 +299,6 @@ const Body = memo<BodyProps>(
                 }
               />
             </div>
-          </div>
-
-          {/* Action Bar */}
-          <div className={styles.actionBar}>
-            {hasConfig ? (
-              <Button danger icon={<Trash2 size={16} />} type="text" onClick={onDelete}>
-                {t('integration.removeIntegration')}
-              </Button>
-            ) : (
-              <div />
-            )}
-
-            <Flexbox horizontal gap={12}>
-              <Button icon={<RefreshCw size={16} />} loading={testing} onClick={onTestConnection}>
-                {t('integration.testConnection')}
-              </Button>
-              <Button icon={<Save size={16} />} type="primary" onClick={onSave}>
-                {t('integration.save')}
-              </Button>
-            </Flexbox>
-          </div>
-
-          {testResult && (
-            <Alert
-              closable
-              showIcon
-              description={testResult.type === 'error' ? testResult.errorDetail : undefined}
-              type={testResult.type}
-              title={
-                testResult.type === 'success'
-                  ? t('integration.testSuccess')
-                  : t('integration.testFailed')
-              }
-            />
           )}
         </div>
       </Form>

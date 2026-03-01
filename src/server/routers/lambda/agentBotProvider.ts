@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -29,7 +30,17 @@ export const agentBotProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.agentBotProviderModel.create(input);
+      try {
+        return await ctx.agentBotProviderModel.create(input);
+      } catch (e: any) {
+        if (e?.cause?.code === '23505') {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `A bot with application ID "${input.applicationId}" is already registered on ${input.platform}. Each application ID can only be used once.`,
+          });
+        }
+        throw e;
+      }
     }),
 
   delete: agentBotProviderProcedure
