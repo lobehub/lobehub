@@ -17,7 +17,7 @@ export default {
   'integration.enabled': 'Enabled',
   'integration.endpointUrl': 'Interaction Endpoint URL',
   'integration.endpointUrlHint':
-    'Please copy this URL and paste it into the <strong>"Interactions Endpoint URL"</strong> field in the {{name}} Developer Portal.',
+    'Please copy this URL and paste it into the <bold>"Interactions Endpoint URL"</bold> field in the {{name}} Developer Portal.',
   'integration.platforms': 'Platforms',
   'integration.publicKey': 'Public Key',
   'integration.publicKeyPlaceholder': 'Required for interaction verification',

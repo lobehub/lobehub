@@ -15,7 +15,7 @@
   "integration.documentation": "文档",
   "integration.enabled": "已启用",
   "integration.endpointUrl": "交互端点 URL",
-  "integration.endpointUrlHint": "请复制此 URL 并粘贴到 {{name}} 开发者门户的 <strong>\"Interactions Endpoint URL\"</strong> 字段中。",
+  "integration.endpointUrlHint": "请复制此 URL 并粘贴到 {{name}} 开发者门户的 <bold>\"Interactions Endpoint URL\"</bold> 字段中。",
   "integration.platforms": "平台",
   "integration.publicKey": "公钥",
   "integration.publicKeyPlaceholder": "用于交互验证",
