@@ -656,7 +656,7 @@ export class AgentRuntimeService {
         stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
         stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
         stepTotalTokens: stepUsage?.totalTokens ?? undefined,
-        stepType: isToolPhase ? 'call_tool' : 'call_llm',
+        stepType: isToolPhase ? ('call_tool' as const) : ('call_llm' as const),
         thinking: !isToolPhase,
         toolsCalling,
         toolsResult,
