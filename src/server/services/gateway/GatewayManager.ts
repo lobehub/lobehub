@@ -10,7 +10,6 @@ const log = debug('lobe-server:bot-gateway');
 
 export interface GatewayManagerConfig {
   registry: Record<string, PlatformBotClass>;
-  webhookUrl: string;
 }
 
 export class GatewayManager {
@@ -36,7 +35,7 @@ export class GatewayManager {
       return;
     }
 
-    log('Starting GatewayManager, webhookUrl=%s', this.config.webhookUrl);
+    log('Starting GatewayManager');
 
     await this.sync().catch((err) => {
       console.error('[GatewayManager] Initial sync failed:', err);
@@ -191,7 +190,6 @@ export class GatewayManager {
     return new BotClass({
       ...provider.credentials,
       applicationId: provider.applicationId,
-      webhookUrl: this.config.webhookUrl,
     });
   }
 }

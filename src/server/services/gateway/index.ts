@@ -13,14 +13,10 @@ export class GatewayService {
       return;
     }
 
-    const { appEnv } = await import('@/envs/app');
-
-    const webhookUrl = `${appEnv.APP_URL}/api/agent/webhooks/discord`;
-
-    const manager = createGatewayManager({ registry: platformBotRegistry, webhookUrl });
+    const manager = createGatewayManager({ registry: platformBotRegistry });
     await manager.start();
 
-    log('GatewayManager started, webhookUrl=%s', webhookUrl);
+    log('GatewayManager started');
   }
 
   async stop(): Promise<void> {
