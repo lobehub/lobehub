@@ -57,6 +57,7 @@
     "desktop:package:local:reuse": "npm run package:local:reuse --prefix=./apps/desktop",
     "dev": "tsx scripts/devStartupSequence.mts",
     "dev:bun": "bun --bun next dev -p 3010",
+    "dev:desktop": "cd apps/desktop && pnpm run dev",
     "dev:docker": "docker compose -f docker-compose/dev/docker-compose.yml up -d --wait postgresql redis rustfs searxng",
     "dev:docker:down": "docker compose -f docker-compose/dev/docker-compose.yml down",
     "dev:docker:reset": "docker compose -f docker-compose/dev/docker-compose.yml down -v && rm -rf docker-compose/dev/data && npm run dev:docker && pnpm db:migrate",

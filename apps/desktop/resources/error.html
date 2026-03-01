@@ -5,10 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LobeHub - 连接错误</title>
     <style>
-      body {
+      .drag-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 32px;
         -webkit-app-region: drag;
+      }
+
+      body {
         margin: 0;
-        padding: 0;
+        padding: 32px 0 0;
         height: 100vh;
         display: flex;
         justify-content: center;
@@ -72,7 +80,6 @@
       }
 
       .retry-button {
-        -webkit-app-region: no-drag;
         padding: 0.75rem 1.5rem;
         background-color: #f5f5f5;
         color: #1f1f1f;
@@ -89,6 +96,7 @@
     </style>
   </head>
   <body>
+    <div class="drag-bar"></div>
     <div class="container">
       <div class="error-icon">⚠️</div>
       <h1 class="error-title">Connection Error</h1>
