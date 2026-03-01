@@ -608,7 +608,11 @@ export class AgentRuntimeService {
           const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
           parts.push(`"${preview}"`);
         }
-        stepSummary = `[llm] ${parts.join(' | ') || '(empty)'}`;
+        if (parts.length > 0) {
+          stepSummary = `[llm] ${parts.join(' | ')}`;
+        } else {
+          stepSummary = `[llm] (empty) result: ${JSON.stringify(stepResult, null, 2)}`;
+        }
       }
 
       // --- Step-level usage from nextContext.stepUsage ---

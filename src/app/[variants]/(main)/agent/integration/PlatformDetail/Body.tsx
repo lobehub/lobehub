@@ -10,7 +10,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 
 import { type IntegrationProvider } from '../const';
-import type { IntegrationFormValues } from './index';
+import type { IntegrationFormValues, TestResult } from './index';
 
 const { Text } = Typography;
 
@@ -121,12 +121,23 @@ interface BodyProps {
   onTestConnection: () => void;
   provider: IntegrationProvider;
   testing: boolean;
+  testResult?: TestResult;
 }
 
 const Body = memo<BodyProps>(
-  ({ provider, form, hasConfig, testing, onSave, onDelete, onTestConnection, onCopied }) => {
+  ({
+    provider,
+    form,
+    hasConfig,
+    testing,
+    testResult,
+    onSave,
+    onDelete,
+    onTestConnection,
+    onCopied,
+  }) => {
     const { t } = useTranslation('agent');
-    const { styles, theme } = useStyles();
+    const { styles } = useStyles();
     const origin = useAppOrigin();
 
     return (
@@ -238,8 +249,6 @@ const Body = memo<BodyProps>(
             </div>
           </div>
 
-          <div style={{ background: theme.colorBorder, height: 1 }} />
-
           {/* Action Bar */}
           <div className={styles.actionBar}>
             {hasConfig ? (
@@ -259,6 +268,20 @@ const Body = memo<BodyProps>(
               </Button>
             </Flexbox>
           </div>
+
+          {testResult && (
+            <Alert
+              closable
+              showIcon
+              description={testResult.type === 'error' ? testResult.errorDetail : undefined}
+              type={testResult.type}
+              title={
+                testResult.type === 'success'
+                  ? t('integration.testSuccess')
+                  : t('integration.testFailed')
+              }
+            />
+          )}
         </div>
       </Form>
     );

@@ -42,12 +42,14 @@ export class GatewayService {
       return 'queued';
     }
 
-    const manager = getGatewayManager();
+    let manager = getGatewayManager();
     if (!manager?.isRunning) {
-      throw new Error('GatewayManager is not running. Call ensureRunning() first.');
+      log('GatewayManager not running, starting automatically...');
+      await this.ensureRunning();
+      manager = getGatewayManager();
     }
 
-    await manager.startBot(platform, applicationId, userId);
+    await manager!.startBot(platform, applicationId, userId);
     log('Started bot %s:%s', platform, applicationId);
     return 'started';
   }

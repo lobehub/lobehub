@@ -5,7 +5,7 @@ import { createStyles } from 'antd-style';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { agentBotProviderService } from '@/services/agentBotProvider';
+import { useAgentStore } from '@/store/agent';
 
 import { type IntegrationProvider } from '../const';
 import Body from './Body';
@@ -38,132 +38,141 @@ export interface IntegrationFormValues {
   publicKey: string;
 }
 
+export interface TestResult {
+  errorDetail?: string;
+  type: 'success' | 'error';
+}
+
 interface PlatformDetailProps {
   agentId: string;
   currentConfig?: CurrentConfig;
-  onMutate: () => void;
   provider: IntegrationProvider;
 }
 
-const PlatformDetail = memo<PlatformDetailProps>(
-  ({ provider, agentId, currentConfig, onMutate }) => {
-    const { t } = useTranslation('agent');
-    const { message: msg, modal } = App.useApp();
-    const { styles } = useStyles();
-    const [form] = Form.useForm<IntegrationFormValues>();
+const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentConfig }) => {
+  const { t } = useTranslation('agent');
+  const { message: msg, modal } = App.useApp();
+  const { styles } = useStyles();
+  const [form] = Form.useForm<IntegrationFormValues>();
 
-    const [testing, setTesting] = useState(false);
+  const [createBotProvider, deleteBotProvider, updateBotProvider, connectBot] = useAgentStore(
+    (s) => [s.createBotProvider, s.deleteBotProvider, s.updateBotProvider, s.connectBot],
+  );
 
-    useEffect(() => {
-      if (currentConfig) {
-        form.setFieldsValue({
-          applicationId: currentConfig.applicationId || '',
-          botToken: currentConfig.credentials?.botToken || '',
-          publicKey: currentConfig.credentials?.publicKey || '',
-        });
-      } else {
-        form.resetFields();
-      }
-    }, [currentConfig, provider.id, form]);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult>();
 
-    const handleSave = useCallback(async () => {
-      try {
-        const values = await form.validateFields();
-
-        await agentBotProviderService.create({
-          agentId,
-          applicationId: values.applicationId,
-          credentials: {
-            botToken: values.botToken,
-            publicKey: values.publicKey || 'default',
-          },
-          platform: provider.id,
-        });
-
-        onMutate();
-        msg.success(t('integration.saved'));
-      } catch (e: any) {
-        if (e?.errorFields) {
-          msg.error(t('integration.validationError'));
-          return;
-        }
-        console.error(e);
-        msg.error(t('integration.saveFailed'));
-      }
-    }, [agentId, provider.id, form, onMutate, msg, t]);
-
-    const handleDelete = useCallback(async () => {
-      if (!currentConfig) return;
-
-      modal.confirm({
-        okButtonProps: { danger: true },
-        onOk: async () => {
-          try {
-            await agentBotProviderService.delete(currentConfig.id);
-            onMutate();
-            msg.success(t('integration.removed'));
-            form.resetFields();
-          } catch {
-            msg.error(t('integration.removeFailed'));
-          }
-        },
-        title: t('integration.deleteConfirm'),
+  useEffect(() => {
+    if (currentConfig) {
+      form.setFieldsValue({
+        applicationId: currentConfig.applicationId || '',
+        botToken: currentConfig.credentials?.botToken || '',
+        publicKey: currentConfig.credentials?.publicKey || '',
       });
-    }, [currentConfig, onMutate, msg, t, modal, form]);
+    } else {
+      form.resetFields();
+    }
+  }, [currentConfig, provider.id, form]);
 
-    const handleToggleEnable = useCallback(
-      async (enabled: boolean) => {
-        if (!currentConfig) return;
-        try {
-          await agentBotProviderService.update(currentConfig.id, { enabled });
-          onMutate();
-        } catch {
-          msg.error(t('integration.updateFailed'));
-        }
-      },
-      [currentConfig, onMutate, msg, t],
-    );
+  const handleSave = useCallback(async () => {
+    try {
+      const values = await form.validateFields();
 
-    const handleTestConnection = useCallback(async () => {
-      if (!currentConfig) {
-        msg.warning(t('integration.saveFirstWarning'));
+      await createBotProvider({
+        agentId,
+        applicationId: values.applicationId,
+        credentials: {
+          botToken: values.botToken,
+          publicKey: values.publicKey || 'default',
+        },
+        platform: provider.id,
+      });
+
+      msg.success(t('integration.saved'));
+    } catch (e: any) {
+      if (e?.errorFields) {
+        msg.error(t('integration.validationError'));
         return;
       }
+      console.error(e);
+      msg.error(t('integration.saveFailed'));
+    }
+  }, [agentId, provider.id, form, createBotProvider, msg, t]);
 
-      setTesting(true);
+  const handleDelete = useCallback(async () => {
+    if (!currentConfig) return;
+
+    modal.confirm({
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await deleteBotProvider(currentConfig.id, agentId);
+          msg.success(t('integration.removed'));
+          form.resetFields();
+        } catch {
+          msg.error(t('integration.removeFailed'));
+        }
+      },
+      title: t('integration.deleteConfirm'),
+    });
+  }, [currentConfig, agentId, deleteBotProvider, msg, t, modal, form]);
+
+  const handleToggleEnable = useCallback(
+    async (enabled: boolean) => {
+      if (!currentConfig) return;
       try {
-        await agentBotProviderService.connectBot({
-          applicationId: currentConfig.applicationId,
-          platform: provider.id,
-        });
-        msg.success(t('integration.testSuccess'));
+        await updateBotProvider(currentConfig.id, agentId, { enabled });
       } catch {
-        msg.error(t('integration.testFailed'));
-      } finally {
-        setTesting(false);
+        msg.error(t('integration.updateFailed'));
       }
-    }, [currentConfig, provider.id, msg, t]);
+    },
+    [currentConfig, agentId, updateBotProvider, msg, t],
+  );
 
-    return (
-      <main className={styles.main}>
-        <Header
-          currentConfig={currentConfig}
-          provider={provider}
-          onToggleEnable={handleToggleEnable}
-        />
-        <Body
-          form={form}
-          hasConfig={!!currentConfig}
-          provider={provider}
-          testing={testing}
-          onCopied={() => msg.success(t('integration.copied'))}
-          onDelete={handleDelete}
-          onSave={handleSave}
-          onTestConnection={handleTestConnection}
-        />
-      </main>
-    );
-  },
-);
+  const handleTestConnection = useCallback(async () => {
+    if (!currentConfig) {
+      msg.warning(t('integration.saveFirstWarning'));
+      return;
+    }
+
+    setTesting(true);
+    setTestResult(undefined);
+    try {
+      await connectBot({
+        applicationId: currentConfig.applicationId,
+        platform: provider.id,
+      });
+      setTestResult({ type: 'success' });
+    } catch (e: any) {
+      setTestResult({
+        errorDetail: e?.message || String(e),
+        type: 'error',
+      });
+    } finally {
+      setTesting(false);
+    }
+  }, [currentConfig, provider.id, connectBot, msg, t]);
+
+  return (
+    <main className={styles.main}>
+      <Header
+        currentConfig={currentConfig}
+        provider={provider}
+        onToggleEnable={handleToggleEnable}
+      />
+      <Body
+        form={form}
+        hasConfig={!!currentConfig}
+        provider={provider}
+        testResult={testResult}
+        testing={testing}
+        onCopied={() => msg.success(t('integration.copied'))}
+        onDelete={handleDelete}
+        onSave={handleSave}
+        onTestConnection={handleTestConnection}
+      />
+    </main>
+  );
+});
 
 export default PlatformDetail;

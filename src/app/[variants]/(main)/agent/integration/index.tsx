@@ -4,11 +4,10 @@ import { Flexbox } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import useSWR from 'swr';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
-import { agentBotProviderService } from '@/services/agentBotProvider';
+import { useAgentStore } from '@/store/agent';
 
 import { INTEGRATION_PROVIDERS } from './const';
 import PlatformDetail from './PlatformDetail';
@@ -31,13 +30,7 @@ const IntegrationPage = memo(() => {
 
   const [activeProviderId, setActiveProviderId] = useState(INTEGRATION_PROVIDERS[0].id);
 
-  const {
-    data: providers,
-    isLoading,
-    mutate,
-  } = useSWR(aid ? ['agentBotProviders', aid] : null, () =>
-    agentBotProviderService.getByAgentId(aid!),
-  );
+  const { data: providers, isLoading } = useAgentStore((s) => s.useFetchBotProviders(aid));
 
   const connectedPlatforms = useMemo(
     () => new Set(providers?.map((p) => p.platform) ?? []),
@@ -70,12 +63,7 @@ const IntegrationPage = memo(() => {
               providers={INTEGRATION_PROVIDERS}
               onSelect={setActiveProviderId}
             />
-            <PlatformDetail
-              agentId={aid}
-              currentConfig={currentConfig}
-              provider={activeProvider}
-              onMutate={() => mutate()}
-            />
+            <PlatformDetail agentId={aid} currentConfig={currentConfig} provider={activeProvider} />
           </div>
         )}
       </Flexbox>
