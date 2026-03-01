@@ -31,6 +31,7 @@ import {
   type StartExecutionResult,
   type StepCompletionReason,
   type StepLifecycleCallbacks,
+  type StepPresentationData,
 } from './types';
 
 if (process.env.VERCEL) {
@@ -646,7 +647,7 @@ export class AgentRuntimeService {
       );
 
       // Build presentation data object for callbacks and webhooks
-      const stepPresentationData = {
+      const stepPresentationData: StepPresentationData = {
         content,
         executionTimeMs: Date.now() - startAt,
         reasoning,

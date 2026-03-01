@@ -5,11 +5,39 @@ import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
-import { insertAgentSchema } from '@/database/schemas';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
+
+/**
+ * Custom schema for agent member input, replacing drizzle-generated insertAgentSchema
+ * to avoid Json type inference issues with jsonb columns.
+ */
+const agentMemberInputSchema = z
+  .object({
+    agencyConfig: z.any().nullish(),
+    avatar: z.string().nullish(),
+    backgroundColor: z.string().nullish(),
+    clientId: z.string().nullish(),
+    description: z.string().nullish(),
+    editorData: z.any().nullish(),
+    fewShots: z.any().nullish(),
+    id: z.string().optional(),
+    marketIdentifier: z.string().nullish(),
+    model: z.string().nullish(),
+    params: z.any().nullish(),
+    pinned: z.boolean().nullish(),
+    plugins: z.array(z.string()).nullish(),
+    provider: z.string().nullish(),
+    sessionGroupId: z.string().nullish(),
+    slug: z.string().nullish(),
+    systemRole: z.string().nullish(),
+    tags: z.array(z.string()).nullish(),
+    title: z.string().nullish(),
+    virtual: z.boolean().nullish(),
+  })
+  .partial();
 
 const agentGroupProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -44,17 +72,7 @@ export const agentGroupRouter = router({
   batchCreateAgentsInGroup: agentGroupProcedure
     .input(
       z.object({
-        agents: z.array(
-          insertAgentSchema
-            .omit({
-              chatConfig: true,
-              openingMessage: true,
-              openingQuestions: true,
-              tts: true,
-              userId: true,
-            })
-            .partial(),
-        ),
+        agents: z.array(agentMemberInputSchema),
         groupId: z.string(),
       }),
     )
@@ -118,17 +136,7 @@ export const agentGroupRouter = router({
     .input(
       z.object({
         groupConfig: InsertChatGroupSchema,
-        members: z.array(
-          insertAgentSchema
-            .omit({
-              chatConfig: true,
-              openingMessage: true,
-              openingQuestions: true,
-              tts: true,
-              userId: true,
-            })
-            .partial(),
-        ),
+        members: z.array(agentMemberInputSchema),
         supervisorConfig: z
           .object({
             avatar: z.string().nullish(),

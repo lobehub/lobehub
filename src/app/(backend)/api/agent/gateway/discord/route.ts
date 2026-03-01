@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     const { applicationId, credentials } = provider;
 
     try {
-      const bot = new Discord({ ...credentials, applicationId });
+      const bot = new Discord({ ...credentials, applicationId } as DiscordBotConfig);
 
       await bot.start({
         durationMs: GATEWAY_DURATION_MS,
