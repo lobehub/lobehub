@@ -1,5 +1,11 @@
 {
   "buildCommand": "bun run build",
+  "crons": [
+    {
+      "path": "/api/agent/gateway/discord",
+      "schedule": "*/9 * * * *"
+    }
+  ],
   "installCommand": "npx pnpm@10.26.2 install",
   "rewrites": [
     {
