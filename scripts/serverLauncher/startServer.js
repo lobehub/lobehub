@@ -126,6 +126,43 @@ const runScript = (scriptPath, useProxy = false) => {
   });
 };
 
+// Function to start the bot gateway by calling the local API endpoint
+const startGateway = async () => {
+  const KEY_VAULTS_SECRET = process.env.KEY_VAULTS_SECRET;
+  if (!KEY_VAULTS_SECRET) return;
+
+  const port = process.env.PORT || 3210;
+  const url = `http://localhost:${port}/api/agent/gateway/start`;
+  const maxRetries = 10;
+  const retryDelay = 3000;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${KEY_VAULTS_SECRET}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (res.ok) {
+        console.log('✅ Gateway: Started successfully.');
+        return;
+      }
+
+      console.warn(`⚠️ Gateway: Received status ${res.status}, retrying...`);
+    } catch {
+      if (i < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, retryDelay));
+      }
+    }
+  }
+
+  console.error('❌ Gateway: Failed to start after retries.');
+};
+
 // Main function to run the server with optional proxy
 const runServer = async () => {
   const PROXY_URL = process.env.PROXY_URL || ''; // Default empty string to avoid undefined errors
@@ -163,6 +200,9 @@ const runServer = async () => {
       }
     }
   }
+
+  // Start gateway in background after server is ready
+  startGateway();
 
   // Run the server in either database or non-database mode
   await runServer();

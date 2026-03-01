@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
 
+import { getServerDBConfig } from '@/config/db';
 import { GatewayService } from '@/server/services/gateway';
 
 export const POST = async (req: Request): Promise<Response> => {
+  const { KEY_VAULTS_SECRET } = getServerDBConfig();
+
+  const authHeader = req.headers.get('authorization');
+  if (authHeader !== `Bearer ${KEY_VAULTS_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const service = new GatewayService();
 
