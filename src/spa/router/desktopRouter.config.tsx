@@ -40,7 +40,7 @@ export const desktopRoutes: RouteConfig[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('../(main)/agent/integration'),
+                  () => import('@/routes/(main)/agent/integration'),
                   'Desktop > Chat > Integration',
                 ),
                 path: 'integration',
