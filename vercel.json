@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bun run build && bun run db:migrate",
+  "buildCommand": "bun run build:vercel",
   "installCommand": "npx pnpm@10.26.2 install",
   "rewrites": [
     {
