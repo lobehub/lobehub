@@ -936,4 +936,88 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       ].map((i) => i + '\n'),
     );
   });
+
+  it('should filter empty strings from searchQueries in groundingMetadata', async () => {
+    vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+    const rawChunks = [
+      {
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [{ text: 'result' }],
+            },
+            finishReason: 'STOP',
+            index: 0,
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  web: {
+                    uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+                    title: 'example.com',
+                  },
+                },
+              ],
+              webSearchQueries: ['', '杭州天气', 'Hangzhou weather'],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5,
+          candidatesTokenCount: 3,
+          totalTokenCount: 8,
+          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 5 }],
+          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
+        },
+        modelVersion: 'gemini-3.1-flash-image-preview',
+      },
+    ];
+
+    const mockGoogleStream = new ReadableStream({
+      start(controller) {
+        rawChunks.forEach((chunk) => controller.enqueue(chunk));
+        controller.close();
+      },
+    });
+
+    const protocolStream = VertexAIStream(mockGoogleStream);
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual(
+      [
+        'id: chat_1',
+        'event: text',
+        'data: "result"\n',
+
+        'id: chat_1',
+        'event: grounding',
+        `data: ${JSON.stringify({
+          citations: [
+            {
+              favicon: 'example.com',
+              title: 'example.com',
+              url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+            },
+          ],
+          searchQueries: ['杭州天气', 'Hangzhou weather'],
+        })}\n`,
+
+        'id: chat_1',
+        'event: stop',
+        `data: "STOP"\n`,
+
+        'id: chat_1',
+        'event: usage',
+        `data: {"inputTextTokens":5,"outputImageTokens":0,"outputTextTokens":3,"totalInputTokens":5,"totalOutputTokens":3,"totalTokens":8}\n`,
+      ].map((i) => i + '\n'),
+    );
+  });
 });

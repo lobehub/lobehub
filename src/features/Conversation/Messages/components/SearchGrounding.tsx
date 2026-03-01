@@ -82,7 +82,7 @@ const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => 
                   alt={item.title || item.url}
                   height={16}
                   key={`${item.url}-${index}`}
-                  src={`https://icons.duckduckgo.com/ip3/${new URL(item.url).host}.ico`}
+                  src={`https://icons.duckduckgo.com/ip3/${item.favicon || new URL(item.url).host}.ico`}
                   width={16}
                   style={{
                     background: cssVar.colorBgContainer,
