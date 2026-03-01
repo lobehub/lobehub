@@ -244,7 +244,8 @@ export function renderFinalReply(
 ): string {
   const { totalTokens, totalCost, llmCalls, toolCalls, elapsedMs } = params;
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
-  const footer = `-# ${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time} | llm×${llmCalls} | tools×${toolCalls}`;
+  const calls = llmCalls > 1 || toolCalls > 0 ? ` | llm×${llmCalls} | tools×${toolCalls}` : '';
+  const footer = `-# ${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
   return `${content}\n\n${footer}`;
 }
 

@@ -260,6 +260,8 @@ export class AgentRuntimeService {
       stepCallbacks,
       userInterventionConfig,
       completionWebhook,
+      stepWebhook,
+      webhookDelivery,
       evalContext,
       maxSteps,
     } = params;
@@ -281,8 +283,10 @@ export class AgentRuntimeService {
           evalContext,
           // need be removed
           modelRuntimeConfig,
+          stepWebhook,
           stream,
           userId,
+          webhookDelivery,
           workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
         },
@@ -637,35 +641,66 @@ export class AgentRuntimeService {
         toolCallCount,
       );
 
+      // Build presentation data object for callbacks and webhooks
+      const stepPresentationData = {
+        content,
+        executionTimeMs: Date.now() - startAt,
+        reasoning,
+        shouldContinue,
+        stepCost: stepUsage?.cost ?? undefined,
+        stepIndex,
+        stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
+        stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
+        stepTotalTokens: stepUsage?.totalTokens ?? undefined,
+        stepType: isToolPhase ? 'call_tool' : 'call_llm',
+        thinking: !isToolPhase,
+        toolsCalling,
+        toolsResult,
+        totalCost: totalCostNum,
+        totalInputTokens,
+        totalOutputTokens,
+        totalSteps: stepResult.newState.stepCount ?? 0,
+        totalTokens: totalTokensNum,
+      };
+
       // Call onAfterStep callback with presentation data
       if (callbacks?.onAfterStep) {
         try {
           await callbacks.onAfterStep({
-            content,
-            executionTimeMs: Date.now() - startAt,
+            ...stepPresentationData,
             operationId,
-            reasoning,
-            shouldContinue,
             state: stepResult.newState,
-            stepCost: stepUsage?.cost ?? undefined,
-            stepIndex,
-            stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
-            stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
             stepResult,
-            stepTotalTokens: stepUsage?.totalTokens ?? undefined,
-            stepType: isToolPhase ? 'call_tool' : 'call_llm',
-            thinking: !isToolPhase,
-            toolsCalling,
-            toolsResult,
-            totalCost: totalCostNum,
-            totalInputTokens,
-            totalOutputTokens,
-            totalSteps: stepResult.newState.stepCount ?? 0,
-            totalTokens: totalTokensNum,
           });
         } catch (callbackError) {
           log('[%s] onAfterStep callback error: %O', operationId, callbackError);
         }
+      }
+
+      // Update step tracking in state metadata and trigger step webhook
+      if (stepResult.newState.metadata?.stepWebhook) {
+        const prevTracking = stepResult.newState.metadata._stepTracking || {};
+        const newTotalToolCalls = (prevTracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0);
+
+        // Truncate content to 1800 chars to match Discord message limits
+        const truncatedContent = content
+          ? content.length > 1800
+            ? content.slice(0, 1800) + '...'
+            : content
+          : prevTracking.lastLLMContent;
+
+        const updatedTracking = {
+          lastLLMContent: truncatedContent,
+          lastToolsCalling: toolsCalling || prevTracking.lastToolsCalling,
+          totalToolCalls: newTotalToolCalls,
+        };
+
+        // Persist tracking state for next step
+        stepResult.newState.metadata._stepTracking = updatedTracking;
+        await this.coordinator.saveAgentState(operationId, stepResult.newState);
+
+        // Fire step webhook
+        await this.triggerStepWebhook(stepResult.newState, operationId, stepPresentationData);
       }
 
       if (shouldContinue && stepResult.nextContext && this.queueService) {
@@ -1158,6 +1193,41 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Deliver a webhook payload via fetch or QStash.
+   * Fire-and-forget: errors are logged but never thrown.
+   */
+  private async deliverWebhook(
+    url: string,
+    payload: Record<string, unknown>,
+    delivery: 'fetch' | 'qstash' = 'fetch',
+    operationId: string,
+  ): Promise<void> {
+    try {
+      if (delivery === 'qstash') {
+        const { Client } = await import('@upstash/qstash');
+        const client = new Client({ token: process.env.QSTASH_TOKEN! });
+        await client.publishJSON({
+          body: payload,
+          headers: {
+            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
+              'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+            }),
+          },
+          url,
+        });
+      } else {
+        await fetch(url, {
+          body: JSON.stringify(payload),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        });
+      }
+    } catch (error) {
+      console.error('[%s] Webhook delivery failed (%s → %s):', operationId, delivery, url, error);
+    }
+  }
+
+  /**
    * Trigger completion webhook if configured in state metadata.
    * Fire-and-forget: errors are logged but never thrown.
    */
@@ -1169,34 +1239,79 @@ export class AgentRuntimeService {
     const webhook = state.metadata?.completionWebhook;
     if (!webhook?.url) return;
 
-    try {
-      log('[%s] Triggering completion webhook: %s', operationId, webhook.url);
+    log('[%s] Triggering completion webhook: %s', operationId, webhook.url);
 
-      const duration = state.createdAt
-        ? Date.now() - new Date(state.createdAt).getTime()
-        : undefined;
+    const duration = state.createdAt ? Date.now() - new Date(state.createdAt).getTime() : undefined;
 
-      await fetch(webhook.url, {
-        body: JSON.stringify({
-          ...webhook.body,
-          cost: state.cost?.total,
-          duration,
-          errorDetail: state.error,
-          errorMessage: this.extractErrorMessage(state.error),
-          llmCalls: state.usage?.llm?.apiCalls,
-          operationId,
-          reason,
-          status: state.status,
-          steps: state.stepCount,
-          toolCalls: state.usage?.tools?.totalCalls,
-          totalTokens: state.usage?.llm?.tokens?.total,
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-    } catch (error) {
-      console.error('[%s] Completion webhook failed:', operationId, error);
-    }
+    // Extract last assistant content from state messages
+    const lastAssistantContent = state.messages
+      ?.slice()
+      .reverse()
+      .find(
+        (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
+      )?.content;
+
+    const delivery = state.metadata?.webhookDelivery || 'fetch';
+
+    await this.deliverWebhook(
+      webhook.url,
+      {
+        ...webhook.body,
+        cost: state.cost?.total,
+        duration,
+        errorDetail: state.error,
+        errorMessage: this.extractErrorMessage(state.error),
+        lastAssistantContent,
+        llmCalls: state.usage?.llm?.apiCalls,
+        operationId,
+        reason,
+        status: state.status,
+        steps: state.stepCount,
+        toolCalls: state.usage?.tools?.totalCalls,
+        totalTokens: state.usage?.llm?.tokens?.total,
+        type: 'completion',
+      },
+      delivery,
+      operationId,
+    );
+  }
+
+  /**
+   * Trigger step webhook if configured in state metadata.
+   * Reads accumulated step tracking data and fires webhook with step presentation data.
+   * Fire-and-forget: errors are logged but never thrown.
+   */
+  private async triggerStepWebhook(
+    state: any,
+    operationId: string,
+    presentationData: Record<string, unknown>,
+  ): Promise<void> {
+    const webhook = state.metadata?.stepWebhook;
+    if (!webhook?.url) return;
+
+    log('[%s] Triggering step webhook: %s', operationId, webhook.url);
+
+    const tracking = state.metadata?._stepTracking || {};
+    const delivery = state.metadata?.webhookDelivery || 'fetch';
+    const elapsedMs = state.createdAt
+      ? Date.now() - new Date(state.createdAt).getTime()
+      : undefined;
+
+    await this.deliverWebhook(
+      webhook.url,
+      {
+        ...webhook.body,
+        ...presentationData,
+        elapsedMs,
+        lastLLMContent: tracking.lastLLMContent,
+        lastToolsCalling: tracking.lastToolsCalling,
+        operationId,
+        totalToolCalls: tracking.totalToolCalls ?? 0,
+        type: 'step',
+      },
+      delivery,
+      operationId,
+    );
   }
 
   /**

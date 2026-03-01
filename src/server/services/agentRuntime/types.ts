@@ -141,6 +141,15 @@ export interface OperationCreationParams {
    */
   stepCallbacks?: StepLifecycleCallbacks;
   /**
+   * Step webhook configuration
+   * When set, an HTTP POST will be fired after each step completes.
+   * Persisted in Redis state so it survives across QStash step boundaries.
+   */
+  stepWebhook?: {
+    body?: Record<string, unknown>;
+    url: string;
+  };
+  /**
    * Whether the LLM call should use streaming.
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
@@ -155,6 +164,12 @@ export interface OperationCreationParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /**
+   * Webhook delivery method.
+   * - 'fetch': plain HTTP POST (default)
+   * - 'qstash': deliver via QStash publishJSON for guaranteed delivery
+   */
+  webhookDelivery?: 'fetch' | 'qstash';
 }
 
 export interface OperationCreationResult {

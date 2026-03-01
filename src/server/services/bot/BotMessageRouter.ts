@@ -153,13 +153,27 @@ export class BotMessageRouter {
   // Initialisation
   // ------------------------------------------------------------------
 
+  private static REFRESH_INTERVAL_MS = 5 * 60_000;
+
   private initPromise: Promise<void> | null = null;
+  private lastLoadedAt = 0;
+  private refreshPromise: Promise<void> | null = null;
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = this.initialize();
     }
     await this.initPromise;
+
+    // Periodically refresh bot mappings in the background so newly added bots are discovered
+    if (
+      Date.now() - this.lastLoadedAt > BotMessageRouter.REFRESH_INTERVAL_MS &&
+      !this.refreshPromise
+    ) {
+      this.refreshPromise = this.loadAgentBots().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
   }
 
   async initialize(): Promise<void> {
@@ -184,6 +198,8 @@ export class BotMessageRouter {
         'discord',
         gateKeeper,
       );
+
+      this.lastLoadedAt = Date.now();
 
       log('Found %d Discord bot providers in DB', providers.length);
 

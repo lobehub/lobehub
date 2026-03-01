@@ -2,9 +2,12 @@ import type { ChatTopicBotContext } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import { emoji } from 'chat';
 import debug from 'debug';
+import urlJoin from 'url-join';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { appEnv } from '@/envs/app';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
 import {
   renderError,
@@ -161,10 +164,108 @@ export class AgentBridgeService {
   }
 
   /**
-   * Trigger agent execution and wait for completion via onComplete callback.
-   * Posts an editable progress message and updates it at each step.
+   * Dispatch to queue-mode webhooks or local in-memory callbacks based on runtime mode.
    */
   private async executeWithCallback(
+    thread: Thread<{ topicId?: string }>,
+    userMessage: Message,
+    opts: {
+      agentId: string;
+      botContext?: ChatTopicBotContext;
+      topicId?: string;
+      trigger?: string;
+      userId: string;
+    },
+  ): Promise<{ reply: string; topicId: string }> {
+    if (isQueueAgentRuntimeEnabled()) {
+      return this.executeWithWebhooks(thread, userMessage, opts);
+    }
+    return this.executeWithInMemoryCallbacks(thread, userMessage, opts);
+  }
+
+  /**
+   * Queue mode: post initial message, configure step/completion webhooks,
+   * then return immediately. Progress updates and final reply are handled
+   * by the bot-callback webhook endpoint.
+   */
+  private async executeWithWebhooks(
+    thread: Thread<{ topicId?: string }>,
+    userMessage: Message,
+    opts: {
+      agentId: string;
+      botContext?: ChatTopicBotContext;
+      topicId?: string;
+      trigger?: string;
+      userId: string;
+    },
+  ): Promise<{ reply: string; topicId: string }> {
+    const { agentId, botContext, userId, topicId, trigger } = opts;
+
+    const serverDB = await getServerDB();
+    const aiAgentService = new AiAgentService(serverDB, userId);
+
+    // Post initial progress message to get the message ID
+    let progressMessage: SentMessage | undefined;
+    try {
+      progressMessage = await thread.post(renderStart());
+    } catch (error) {
+      log('executeWithWebhooks: failed to post progress message: %O', error);
+    }
+
+    const progressMessageId = progressMessage?.id;
+    if (!progressMessageId) {
+      throw new Error('Failed to post initial progress message');
+    }
+
+    // Build webhook URL for bot-callback endpoint
+    // Prefer INTERNAL_APP_URL for server-to-server calls (bypasses CDN/proxy)
+    const baseURL = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
+    if (!baseURL) {
+      throw new Error('APP_URL is required for queue mode bot webhooks');
+    }
+    const callbackUrl = urlJoin(baseURL, '/api/agent/webhooks/bot-callback');
+
+    // Shared webhook body with bot context
+    const webhookBody = {
+      applicationId: botContext?.applicationId,
+      platformThreadId: botContext?.platformThreadId,
+      progressMessageId,
+    };
+
+    log(
+      'executeWithWebhooks: agentId=%s, callbackUrl=%s, progressMessageId=%s',
+      agentId,
+      callbackUrl,
+      progressMessageId,
+    );
+
+    const result = await aiAgentService.execAgent({
+      agentId,
+      appContext: topicId ? { topicId } : undefined,
+      autoStart: true,
+      botContext,
+      completionWebhook: { body: webhookBody, url: callbackUrl },
+      prompt: userMessage.text,
+      stepWebhook: { body: webhookBody, url: callbackUrl },
+      trigger,
+      userInterventionConfig: { approvalMode: 'headless' },
+      webhookDelivery: 'qstash',
+    });
+
+    log(
+      'executeWithWebhooks: operationId=%s, topicId=%s (webhook mode, returning immediately)',
+      result.operationId,
+      result.topicId,
+    );
+
+    // Return immediately — progress/completion handled by webhooks
+    return { reply: '', topicId: result.topicId };
+  }
+
+  /**
+   * Local mode: use in-memory step callbacks and wait for completion via Promise.
+   */
+  private async executeWithInMemoryCallbacks(
     thread: Thread<{ topicId?: string }>,
     userMessage: Message,
     opts: {
@@ -185,7 +286,7 @@ export class AgentBridgeService {
     try {
       progressMessage = await thread.post(renderStart());
     } catch (error) {
-      log('executeWithCallback: failed to post progress message: %O', error);
+      log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
     }
 
     // Track the last LLM content and tool calls for showing during tool execution
@@ -234,7 +335,7 @@ export class AgentBridgeService {
               try {
                 progressMessage = await progressMessage.edit(progressText);
               } catch (error) {
-                log('executeWithCallback: failed to edit progress message: %O', error);
+                log('executeWithInMemoryCallbacks: failed to edit progress message: %O', error);
               }
             },
 
@@ -284,12 +385,15 @@ export class AgentBridgeService {
                         await thread.post(chunks[i]);
                       }
                     } catch (error) {
-                      log('executeWithCallback: failed to edit final progress message: %O', error);
+                      log(
+                        'executeWithInMemoryCallbacks: failed to edit final progress message: %O',
+                        error,
+                      );
                     }
                   }
 
                   log(
-                    'executeWithCallback: got response from finalState (%d chars, %d chunks)',
+                    'executeWithInMemoryCallbacks: got response from finalState (%d chars, %d chunks)',
                     lastAssistantContent.length,
                     chunks.length,
                   );
@@ -312,7 +416,7 @@ export class AgentBridgeService {
           operationStartTime = new Date(result.createdAt).getTime();
 
           log(
-            'executeWithCallback: operationId=%s, assistantMessageId=%s, topicId=%s',
+            'executeWithInMemoryCallbacks: operationId=%s, assistantMessageId=%s, topicId=%s',
             result.operationId,
             result.assistantMessageId,
             result.topicId,

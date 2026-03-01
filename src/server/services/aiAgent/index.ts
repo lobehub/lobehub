@@ -84,6 +84,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
   /** Step lifecycle callbacks for operation tracking (server-side only) */
   stepCallbacks?: StepLifecycleCallbacks;
   /**
+   * Step webhook configuration
+   * Persisted in Redis state, triggered via HTTP POST after each step completes.
+   */
+  stepWebhook?: {
+    body?: Record<string, unknown>;
+    url: string;
+  };
+  /**
    * Whether the LLM call should use streaming.
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
@@ -95,6 +103,12 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /**
+   * Webhook delivery method.
+   * - 'fetch': plain HTTP POST (default)
+   * - 'qstash': deliver via QStash publishJSON for guaranteed delivery
+   */
+  webhookDelivery?: 'fetch' | 'qstash';
 }
 
 /**
@@ -162,6 +176,8 @@ export class AiAgentService {
       maxSteps,
       userInterventionConfig,
       completionWebhook,
+      stepWebhook,
+      webhookDelivery,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -504,6 +520,7 @@ export class AiAgentService {
         initialContext,
         initialMessages: allMessages,
         maxSteps,
+        stepWebhook,
         modelRuntimeConfig: { model, provider },
         operationId,
         stepCallbacks,
@@ -513,6 +530,7 @@ export class AiAgentService {
         tools,
         userId: this.userId,
         userInterventionConfig,
+        webhookDelivery,
       });
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
