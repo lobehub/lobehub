@@ -60,6 +60,7 @@ export class BotSliceActionImpl {
     id: string,
     agentId: string,
     params: {
+      applicationId?: string;
       credentials?: Record<string, string>;
       enabled?: boolean;
     },
