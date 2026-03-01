@@ -26,6 +26,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
 interface CurrentConfig {
   applicationId: string;
+  credentials: Record<string, string>;
   enabled: boolean;
   id: string;
   platform: string;
@@ -57,8 +58,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
       if (currentConfig) {
         form.setFieldsValue({
           applicationId: currentConfig.applicationId || '',
-          botToken: '',
-          publicKey: '',
+          botToken: currentConfig.credentials?.botToken || '',
+          publicKey: currentConfig.credentials?.publicKey || '',
         });
       } else {
         form.resetFields();

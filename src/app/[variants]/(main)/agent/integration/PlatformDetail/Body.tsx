@@ -96,13 +96,14 @@ const useStyles = createStyles(({ css, token }) => ({
     overflow: hidden;
     flex: 1;
 
-    padding-block: 10px;
+    height: ${token.controlHeight}px;
     padding-inline: 12px;
     border: 1px solid ${token.colorBorder};
     border-radius: ${token.borderRadius}px;
 
     font-family: monospace;
     font-size: 13px;
+    line-height: ${token.controlHeight}px;
     color: ${token.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
