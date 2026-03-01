@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, FormGroup, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, FormGroup, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import AvatarRow from './features/AvatarRow';
+import EmailRow from './features/EmailRow';
 import FullNameRow from './features/FullNameRow';
 import InterestsRow from './features/InterestsRow';
 import KlavisAuthorizationList from './features/KlavisAuthorizationList';
@@ -121,13 +122,11 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
             </>
           )}
 
-          {/* Email Row - Read Only */}
+          {/* Email Row - Editable */}
           {isLogin && userProfile?.email && (
             <>
               <Divider style={{ margin: 0 }} />
-              <ProfileRow label={t('profile.email')} mobile={mobile}>
-                <Text>{userProfile.email}</Text>
-              </ProfileRow>
+              <EmailRow mobile={mobile} />
             </>
           )}
 
