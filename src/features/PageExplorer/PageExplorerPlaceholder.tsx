@@ -14,7 +14,6 @@ import useNotionImport from '@/features/ResourceManager/components/Header/hooks/
 import { useFileStore } from '@/store/file';
 import { usePageStore } from '@/store/page';
 import { DocumentSourceType } from '@/types/document';
-import { standardizeIdentifier } from '@/utils/identifier';
 
 const ICON_SIZE = 80;
 
@@ -229,13 +228,15 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             // Replace optimistic with real document in the store
             replaceTempPageWithReal(tempPageId, realPage);
 
-            // Update selected page ID in store (with full ID including prefix)
-            setSelectedPageId(parsedDocument.id, false);
+            // Select parsed page before awaiting list refresh to ensure user is navigated
+            setSelectedPageId(parsedDocument.id);
 
-            // Update URL with stripped ID (without prefix)
-            const cleanId = standardizeIdentifier(parsedDocument.id);
-            const newPath = cleanId ? `/page/${cleanId}` : '/page';
-            window.history.replaceState({}, '', newPath);
+            await fetchDocuments().catch((err) => {
+              console.warn(
+                '[PageExplorerPlaceholder] Failed to fetch documents after upload:',
+                err,
+              );
+            });
           } catch (error) {
             console.error('Failed to upload and parse file:', error);
             // Remove temp document on error

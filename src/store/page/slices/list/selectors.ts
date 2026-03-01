@@ -15,8 +15,8 @@ const getFilteredDocuments = (s: PageState): LobeDocument[] => {
 
   let result = docs;
 
-  // Filter out documents with sourceType='file'
-  result = result.filter((doc: LobeDocument) => doc.sourceType !== 'file');
+  // Note: We no longer filter out sourceType='file', so uploaded documents appear in the sidebar
+  // result = result.filter((doc: LobeDocument) => doc.sourceType !== 'file');
 
   // Filter by library membership
   if (showOnlyPagesNotInLibrary) {
@@ -38,7 +38,7 @@ const getFilteredDocuments = (s: PageState): LobeDocument[] => {
   }
 
   // Sort by creation date (newest first)
-  return result.sort((a: LobeDocument, b: LobeDocument) => {
+  return [...result].sort((a: LobeDocument, b: LobeDocument) => {
     const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return dateB - dateA;

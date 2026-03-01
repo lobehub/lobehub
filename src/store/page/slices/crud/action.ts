@@ -200,6 +200,13 @@ export class CrudActionImpl {
 
     this.#get().internal_dispatchDocuments({ document: editorPage, type: 'addDocument' });
 
+    // refresh without awaiting to avoid duplicatePage rejection
+    this.#get()
+      .refreshDocuments()
+      .catch((err) => {
+        console.warn('[duplicatePage] Failed to refresh documents:', err);
+      });
+
     return newPage;
   };
 
@@ -397,6 +404,11 @@ export class CrudActionImpl {
               document,
               id: pageId,
               type: 'updateDocument',
+            });
+          } else {
+            this.#get().internal_dispatchDocuments({
+              document,
+              type: 'addDocument',
             });
           }
         },

@@ -16,7 +16,10 @@ interface PageExplorerProps {
  */
 const PageExplorer = memo<PageExplorerProps>(({ pageId }) => {
   const updatePageOptimistically = usePageStore((s) => s.updatePageOptimistically);
+  const useFetchPageDetail = usePageStore((s) => s.useFetchPageDetail);
 
+  // Independently fetch page detail to handle deeply paginated or freshly created pages on refresh
+  useFetchPageDetail(pageId);
   // Get document title and emoji from PageStore
   const document = usePageStore(pageSelectors.getDocumentById(pageId));
   const title = document?.title;
