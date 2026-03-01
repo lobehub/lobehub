@@ -135,7 +135,6 @@ export async function POST(request: NextRequest) {
       status: 303,
     });
   } catch (error) {
-    log('Error processing consent: %s', error instanceof Error ? error.message : 'unknown error');
     console.error('Error processing consent:', error);
     return NextResponse.json(
       {

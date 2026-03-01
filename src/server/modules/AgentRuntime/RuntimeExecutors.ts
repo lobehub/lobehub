@@ -106,11 +106,7 @@ export const createRuntimeExecutors = (
 
     // Publish stream start event
     await streamManager.publishStreamEvent(operationId, {
-      data: {
-        assistantMessage: assistantMessageItem,
-        model,
-        provider,
-      },
+      data: { assistantMessage: assistantMessageItem, model, provider },
       stepIndex,
       type: 'stream_start',
     });
