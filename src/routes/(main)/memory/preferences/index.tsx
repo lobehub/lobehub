@@ -42,17 +42,17 @@ const PreferencesArea = memo(() => {
     { label: t('filter.sort.scorePriority'), value: 'scorePriority' },
   ];
 
-  // 转换 sort：capturedAt 转为 undefined（后端默认）
+  // Convert sort: capturedAt becomes undefined (backend default)
   const apiSort = sortValue === 'capturedAt' ? undefined : (sortValue as 'scorePriority');
 
-  // 当搜索或排序变化时重置列表
+  // Reset list when search or sort changes
   useEffect(() => {
     if (!apiSort) return;
     const sort = viewMode === 'grid' ? apiSort : undefined;
     resetPreferencesList({ q: searchValue || undefined, sort });
   }, [searchValue, apiSort, viewMode]);
 
-  // 调用 SWR hook 获取数据
+  // Call SWR hook to fetch data
   const { isLoading } = useFetchPreferences({
     page: preferencesPage,
     pageSize: 12,
@@ -75,7 +75,7 @@ const PreferencesArea = memo(() => {
     [setSortValueRaw],
   );
 
-  // 显示 loading：搜索/重置中 或 首次加载中
+  // Show loading: during search/reset or initial load
   const showLoading = preferencesSearchLoading || !preferencesInit;
 
   return (
