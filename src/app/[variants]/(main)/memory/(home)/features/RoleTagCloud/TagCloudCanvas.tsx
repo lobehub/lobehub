@@ -7,22 +7,22 @@ import * as THREE from 'three';
 import { type QueryTagsResult } from '@/database/models/userMemory';
 import UserAvatar from '@/features/User/UserAvatar';
 
-// 配置常量
+// Configuration constants
 const CONFIG = {
-  // 连接线数量系数 (实际数量 = 标签数 * 系数)
+  // Connection line count ratio (actual count = tag count * ratio)
   CONNECTION_RATIO: 0.8,
-  // 最大连接线数量
+  // Maximum number of connection lines
   MAX_CONNECTIONS: 40,
 
   MAX_DURATION: 8,
 
-  // 连接线生命周期范围（秒）
+  // Connection line lifetime range (seconds)
   MIN_DURATION: 2,
-  // 流动粒子数量（每条线）
+  // Number of flowing particles (per line)
   PARTICLES_PER_LINE: 3,
-  // 新连接线生成概率（每次检查）
+  // Probability of generating new connection lines (per check)
   SPAWN_PROBABILITY: 0.3,
-  // 检查间隔（秒）
+  // Check interval (seconds)
   UPDATE_INTERVAL: 0.1,
 } as const;
 
@@ -77,7 +77,7 @@ const Word = memo<WordProps>(
     );
   },
   (prevProps, nextProps) => {
-    // 只在 position、text、size 改变时才重新渲染
+    // Only re-render when position, text, or size changes
     return (
       prevProps.position === nextProps.position &&
       prevProps.text === nextProps.text &&
@@ -92,7 +92,7 @@ interface ParticleProps {
   start: THREE.Vector3;
 }
 
-// 流动的光点粒子
+// Flowing light point particles
 const FlowingParticle = memo<ParticleProps>(
   ({ start, end, index }) => {
     const theme = useTheme();
@@ -105,14 +105,14 @@ const FlowingParticle = memo<ParticleProps>(
         const speed = 0.5 + index * 0.1;
         const progress = ((time * speed + offset) % (Math.PI * 2)) / (Math.PI * 2);
 
-        // 沿着线条移动
+        // Move along the line
         ref.current.position.lerpVectors(start, end, progress);
 
-        // 脉冲效果
+        // Pulse effect
         const pulse = Math.sin(time * 3 + offset) * 0.5 + 1;
         ref.current.scale.setScalar(pulse * 0.3);
 
-        // 渐变透明度（两端透明，中间明亮）
+        // Gradient opacity (transparent at both ends, bright in the middle)
         const alpha = Math.sin(progress * Math.PI) * 0.8;
         if (ref.current.material instanceof THREE.MeshBasicMaterial) {
           ref.current.material.opacity = alpha;
@@ -128,7 +128,7 @@ const FlowingParticle = memo<ParticleProps>(
     );
   },
   (prevProps, nextProps) => {
-    // 只在 start、end 引用改变时才重新渲染
+    // Only re-render when start or end reference changes
     return (
       prevProps.start === nextProps.start &&
       prevProps.end === nextProps.end &&
@@ -151,34 +151,34 @@ const ConnectionLine = memo<ConnectionLineProps>(
     const lineRef = useRef<THREE.Line>(null);
     const glowRef = useRef<THREE.Line>(null);
 
-    // 为每条线生成独特的相位偏移
+    // Generate unique phase offset for each line
     const phaseOffset = useMemo(() => Math.random() * Math.PI * 2, []);
 
     useFrame((state) => {
       const time = state.clock.getElapsedTime();
 
-      // 在内部计算 lifeProgress
+      // Calculate lifeProgress internally
       const elapsed = time - birthTime;
       const lifeProgress = Math.min(Math.max(elapsed / duration, 0), 1);
 
       if (lineRef.current) {
-        // 淡入淡出效果：基于生命周期进度
+        // Fade in/out effect: based on lifecycle progress
         let lifeCycleOpacity = 1;
         if (lifeProgress < 0.15) {
-          // 淡入阶段 (0-15%)
+          // Fade-in phase (0-15%)
           lifeCycleOpacity = lifeProgress / 0.15;
         } else if (lifeProgress > 0.85) {
-          // 淡出阶段 (85%-100%)
+          // Fade-out phase (85%-100%)
           lifeCycleOpacity = (1 - lifeProgress) / 0.15;
         }
 
-        // 主线条：波动透明度 * 生命周期透明度
+        // Main line: oscillating opacity * lifecycle opacity
         const baseOpacity = (Math.sin(time * 1.5 + phaseOffset) * 0.2 + 0.4) * lifeCycleOpacity;
         (lineRef.current.material as THREE.LineBasicMaterial).opacity = baseOpacity;
       }
 
       if (glowRef.current) {
-        // 光晕效果
+        // Glow effect
         let lifeCycleOpacity = 1;
         const elapsed = time - birthTime;
         const lifeProgress = Math.min(Math.max(elapsed / duration, 0), 1);
@@ -194,12 +194,12 @@ const ConnectionLine = memo<ConnectionLineProps>(
       }
     });
 
-    // 创建渐变色线条
+    // Create gradient color lines
     const { mainLine, glowLine } = useMemo(() => {
       const points = [start, end];
       const geom = new THREE.BufferGeometry().setFromPoints(points);
 
-      // 创建颜色渐变
+      // Create color gradient
       const colorArray = new Float32Array(6); // 2 points * 3 (RGB)
       const color1 = new THREE.Color(theme.colorPrimary);
       const color2 = new THREE.Color(theme.colorInfo);
@@ -213,7 +213,7 @@ const ConnectionLine = memo<ConnectionLineProps>(
 
       geom.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
 
-      // 创建主线条
+      // Create main line
       const mainMaterial = new THREE.LineBasicMaterial({
         color: theme.colorPrimary,
         opacity: 0.4,
@@ -222,7 +222,7 @@ const ConnectionLine = memo<ConnectionLineProps>(
       });
       const main = new THREE.Line(geom, mainMaterial);
 
-      // 创建光晕线条
+      // Create glow line
       const glowMaterial = new THREE.LineBasicMaterial({
         blending: THREE.AdditiveBlending,
         color: theme.colorInfo,
@@ -234,7 +234,7 @@ const ConnectionLine = memo<ConnectionLineProps>(
       return { geometry: geom, glowLine: glow, mainLine: main };
     }, [start, end, theme.colorPrimary, theme.colorInfo]);
 
-    // 生成流动粒子
+    // Generate flowing particles
     const particles = useMemo(() => {
       return Array.from({ length: CONFIG.PARTICLES_PER_LINE }, (_, i) => (
         <FlowingParticle end={end} index={i} key={`particle-${index}-${i}`} start={start} />
@@ -243,20 +243,20 @@ const ConnectionLine = memo<ConnectionLineProps>(
 
     return (
       <group>
-        {/* 主线条 */}
+        {/* Main line */}
         <primitive object={mainLine} ref={lineRef} />
 
-        {/* 光晕层 - 更粗更透明 */}
+        {/* Glow layer - thicker and more transparent */}
         <primitive object={glowLine} ref={glowRef} />
 
-        {/* 流动粒子 */}
+        {/* Flowing particles */}
         {particles}
       </group>
     );
   },
   (prevProps, nextProps) => {
-    // 只在 start、end 引用改变时才重新渲染
-    // birthTime 和 duration 对于同一个连接应该是不变的
+    // Only re-render when start or end reference changes
+    // birthTime and duration should be unchanged for the same connection
     return (
       prevProps.start === nextProps.start &&
       prevProps.end === nextProps.end &&
@@ -266,7 +266,7 @@ const ConnectionLine = memo<ConnectionLineProps>(
   },
 );
 
-// 中心头像组件
+// Center avatar component
 const CenterAvatar = memo(() => {
   return (
     <Html
@@ -289,7 +289,7 @@ interface CloudProps {
 const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
   const groupRef = useRef<THREE.Group>(null);
 
-  // 计算标签位置和大小
+  // Calculate tag positions and sizes
   const wordsData = useMemo(() => {
     if (!tags.length) return [];
 
@@ -299,13 +299,13 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
 
     const spherical = new THREE.Spherical();
     const data = tags.map((tag, i) => {
-      // 使用黄金角螺旋分布算法，使标签在球面上均匀分布
+      // Use golden angle spiral distribution algorithm to evenly distribute tags on a sphere
       const phi = Math.acos(1 - (2 * (i + 0.5)) / tags.length);
       const theta = Math.PI * (1 + Math.sqrt(5)) * i;
 
       const position = new THREE.Vector3().setFromSpherical(spherical.set(radius, phi, theta));
 
-      // 根据 count 计算字体大小 (范围: 1.5 - 4)
+      // Calculate font size based on count (range: 1.5 - 4)
       const normalizedCount = (tag.count - minCount) / countRange;
       const size = 1.5 + normalizedCount * 2.5;
 
@@ -319,13 +319,13 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
     return data;
   }, [tags, radius]);
 
-  // 连接线数量
+  // Number of connection lines
   const connectionCount = useMemo(() => {
     if (wordsData.length < 2) return 0;
     return Math.min(Math.floor(wordsData.length * CONFIG.CONNECTION_RATIO), CONFIG.MAX_CONNECTIONS);
   }, [wordsData.length]);
 
-  // 动态连接线状态
+  // Dynamic connection line state
   interface ConnectionState {
     birthTime: number;
     duration: number;
@@ -340,7 +340,7 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
   const currentTime = useRef(0);
   const connectionIdCounter = useRef(0);
 
-  // 生成一个随机连接
+  // Generate a random connection
   const generateRandomConnection = useMemo(
     () => (currentTime: number) => {
       if (wordsData.length < 2) return null;
@@ -356,11 +356,11 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
 
       if (attempts >= 50) return null;
 
-      // 随机持续时间
+      // Random duration
       const duration =
         CONFIG.MIN_DURATION + Math.random() * (CONFIG.MAX_DURATION - CONFIG.MIN_DURATION);
 
-      // 生成唯一 ID
+      // Generate unique ID
       connectionIdCounter.current += 1;
       const id = `conn-${connectionIdCounter.current}`;
 
@@ -375,24 +375,24 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
     [wordsData],
   );
 
-  // 当 wordsData 或 connectionCount 变化时重置初始化状态
+  // Reset initialization state when wordsData or connectionCount changes
   useEffect(() => {
     isInitialized.current = false;
     setConnections([]);
   }, [connectionCount]);
 
-  // 动态更新连接线
+  // Dynamically update connection lines
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
     currentTime.current = time;
 
-    // 初始化连接线（在第一帧）
+    // Initialize connection lines (on first frame)
     if (!isInitialized.current && connectionCount > 0) {
       isInitialized.current = true;
       const initialConnections: ConnectionState[] = [];
 
       for (let i = 0; i < connectionCount; i++) {
-        // 给初始连接线随机的起始时间，制造交错效果
+        // Give initial connection lines random start times to create a staggered effect
         const connection = generateRandomConnection(time - Math.random() * 2);
         if (connection) {
           initialConnections.push(connection);
@@ -404,18 +404,18 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
       return;
     }
 
-    // 定期检查
+    // Periodic check
     if (time - lastUpdateTime.current > CONFIG.UPDATE_INTERVAL) {
       lastUpdateTime.current = time;
 
       setConnections((prev) => {
-        // 过滤掉已经过期的连接
+        // Filter out expired connections
         const active = prev.filter((conn) => time - conn.birthTime < conn.duration);
 
-        // 如果连接数量不足，随机添加新连接
+        // If there are not enough connections, randomly add new ones
         const needed = connectionCount - active.length;
         if (
-          needed > 0 && // 随机决定这次是否添加新连接
+          needed > 0 && // Randomly decide whether to add a new connection this time
           Math.random() < CONFIG.SPAWN_PROBABILITY
         ) {
           const newConnection = generateRandomConnection(time);
@@ -428,7 +428,7 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
       });
     }
 
-    // 自动旋转动画
+    // Auto-rotation animation
     if (groupRef.current) {
       groupRef.current.rotation.y += 0.001;
       groupRef.current.rotation.x += 0.0005;
@@ -437,10 +437,10 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
 
   return (
     <group ref={groupRef} rotation={[0.3, 0.5, 0.1]}>
-      {/* 中心用户头像 */}
+      {/* Center user avatar */}
       <CenterAvatar />
 
-      {/* 渲染连线 */}
+      {/* Render connection lines */}
       {connections.map((connection, index) => (
         <ConnectionLine
           birthTime={connection.birthTime}
@@ -451,7 +451,7 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
           start={connection.start}
         />
       ))}
-      {/* 渲染标签 */}
+      {/* Render tags */}
       {wordsData.map((word, index) => (
         <Word key={`word-${index}`} {...word} />
       ))}

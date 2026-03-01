@@ -37,13 +37,13 @@ const IdentitiesArea = memo(() => {
   const useFetchIdentities = useUserMemoryStore((s) => s.useFetchIdentities);
   const resetIdentitiesList = useUserMemoryStore((s) => s.resetIdentitiesList);
 
-  // 当搜索或类型变化时重置列表
+  // Reset list when search or type filter changes
   useEffect(() => {
     const types = typeFilter === 'all' ? undefined : [typeFilter as TypesEnum];
     resetIdentitiesList({ q: searchValue || undefined, types });
   }, [searchValue, typeFilter]);
 
-  // 调用 SWR hook 获取数据
+  // Call SWR hook to fetch data
   const { isLoading } = useFetchIdentities({
     page: identitiesPage,
     pageSize: 12,
@@ -66,7 +66,7 @@ const IdentitiesArea = memo(() => {
     [setTypeFilterRaw],
   );
 
-  // 显示 loading：搜索/重置中 或 首次加载中
+  // Show loading: during search/reset or initial load
   const showLoading = identitiesSearchLoading || !identitiesInit;
 
   return (
