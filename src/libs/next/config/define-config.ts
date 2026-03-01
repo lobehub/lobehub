@@ -81,8 +81,6 @@ export function defineConfig(config: CustomNextConfig) {
       // refs: https://github.com/lobehub/lobe-chat/pull/7430
       serverMinification: false,
       webVitalsAttribution: ['CLS', 'LCP'],
-      webpackBuildWorker: true,
-      webpackMemoryOptimizations: true,
       ...config.experimental,
     },
     async headers() {
@@ -358,8 +356,8 @@ export function defineConfig(config: CustomNextConfig) {
       'pdfkit',
       '@napi-rs/canvas',
       'pdfjs-dist',
-
       'ajv',
+      'oidc-provider',
     ],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
