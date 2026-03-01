@@ -170,6 +170,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         enabled: true,
         maxAge: 10 * 60, // Cache duration in seconds
       },
+      // Keep a DB-backed fallback when Redis secondary storage entries are unexpectedly missing.
+      storeSessionInDatabase: true,
     },
     database: drizzleAdapter(serverDB, {
       provider: 'pg',
