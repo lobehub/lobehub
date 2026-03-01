@@ -651,9 +651,7 @@ export class AgentRuntimeService {
         content,
         executionTimeMs: Date.now() - startAt,
         reasoning,
-        shouldContinue,
         stepCost: stepUsage?.cost ?? undefined,
-        stepIndex,
         stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
         stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
         stepTotalTokens: stepUsage?.totalTokens ?? undefined,
@@ -674,7 +672,9 @@ export class AgentRuntimeService {
           await callbacks.onAfterStep({
             ...stepPresentationData,
             operationId,
+            shouldContinue,
             state: stepResult.newState,
+            stepIndex,
             stepResult,
           });
         } catch (callbackError) {
@@ -705,7 +705,11 @@ export class AgentRuntimeService {
         await this.coordinator.saveAgentState(operationId, stepResult.newState);
 
         // Fire step webhook
-        await this.triggerStepWebhook(stepResult.newState, operationId, stepPresentationData);
+        await this.triggerStepWebhook(
+          stepResult.newState,
+          operationId,
+          stepPresentationData as unknown as Record<string, unknown>,
+        );
       }
 
       if (shouldContinue && stepResult.nextContext && this.queueService) {
