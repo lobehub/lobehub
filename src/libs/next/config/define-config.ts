@@ -355,6 +355,7 @@ export function defineConfig(config: CustomNextConfig) {
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
       '@napi-rs/canvas',
+      'discord.js',
       'pdfjs-dist',
       'ajv',
       'oidc-provider',

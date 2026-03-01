@@ -539,7 +539,7 @@ export class AgentRuntimeService {
         const toolCall = toolPayload?.toolCall;
         const identifier = toolCall?.identifier || 'unknown';
         const apiName = toolCall?.apiName || 'unknown';
-        const output = toolPayload?.result;
+        const output = toolPayload?.data;
         toolsResult = [
           {
             apiName,
@@ -560,7 +560,7 @@ export class AgentRuntimeService {
         const mappedResults: Array<{ apiName: string; identifier: string; output?: string }> =
           rawToolResults.map((r: any) => {
             const tc = r.toolCall;
-            const output = r.result;
+            const output = r.data;
             return {
               apiName: tc?.apiName || 'unknown',
               identifier: tc?.identifier || 'unknown',
