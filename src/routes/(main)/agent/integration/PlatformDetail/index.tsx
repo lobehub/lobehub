@@ -85,15 +85,25 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
 
       setSaving(true);
       setSaveResult(undefined);
-      await createBotProvider({
-        agentId,
-        applicationId: values.applicationId,
-        credentials: {
-          botToken: values.botToken,
-          publicKey: values.publicKey || 'default',
-        },
-        platform: provider.id,
-      });
+
+      const credentials = {
+        botToken: values.botToken,
+        publicKey: values.publicKey || 'default',
+      };
+
+      if (currentConfig) {
+        await updateBotProvider(currentConfig.id, agentId, {
+          applicationId: values.applicationId,
+          credentials,
+        });
+      } else {
+        await createBotProvider({
+          agentId,
+          applicationId: values.applicationId,
+          credentials,
+          platform: provider.id,
+        });
+      }
 
       setSaveResult({ type: 'success' });
     } catch (e: any) {
@@ -103,7 +113,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
     } finally {
       setSaving(false);
     }
-  }, [agentId, provider.id, form, createBotProvider]);
+  }, [agentId, provider.id, form, currentConfig, createBotProvider, updateBotProvider]);
 
   const handleDelete = useCallback(async () => {
     if (!currentConfig) return;
