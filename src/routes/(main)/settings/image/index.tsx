@@ -1,0 +1,17 @@
+import { useTranslation } from 'react-i18next';
+
+import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
+
+import Image from './features/Image';
+
+const Page = () => {
+  const { t } = useTranslation('setting');
+  return (
+    <>
+      <SettingHeader title={t('tab.image')} />
+      <Image />
+    </>
+  );
+};
+
+export default Page;

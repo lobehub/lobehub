@@ -6,7 +6,7 @@ import {
   getTransparentDragImage,
   useDragActive,
   useDragState,
-} from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
+} from '@/routes/(main)/resource/features/DndContextWrapper';
 import { documentService } from '@/services/document';
 import { type FileListItem } from '@/types/files';
 

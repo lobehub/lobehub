@@ -1,21 +1,24 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 
-import { CreateRouterRuntimeOptions, createRouterRuntime } from '../../core/RouterRuntime';
 import {
   buildDefaultAnthropicPayload,
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { ChatStreamPayload } from '../../types';
+import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
+import { createRouterRuntime } from '../../core/RouterRuntime';
+import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface MoonshotModelCard {
+  context_length?: number;
   id: string;
+  supports_image_in?: boolean;
 }
 
 const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
@@ -164,7 +167,13 @@ const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<Chat
     const modelsPage = (await client.models.list()) as any;
     const modelList: MoonshotModelCard[] = modelsPage.data || [];
 
-    return processModelList(modelList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
+    const processedList = modelList.map((model) => ({
+      contextWindowTokens: model.context_length,
+      id: model.id,
+      vision: model.supports_image_in,
+    }));
+
+    return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
   } catch (error) {
     console.warn('Failed to fetch Moonshot models:', error);
     return [];

@@ -837,6 +837,150 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
+    displayName: 'Qwen3.5-122B-A10B',
+    id: 'qwen3.5-122b-a10b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8,
+              '[0.128, infinity]': 2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 6.4,
+              '[0.128, infinity]': 16,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
+    displayName: 'Qwen3.5-27B',
+    id: 'qwen3.5-27b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.6,
+              '[0.128, infinity]': 1.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 4.8,
+              '[0.128, infinity]': 14.4,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
+    displayName: 'Qwen3.5-35B-A3B',
+    id: 'qwen3.5-35b-a3b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.4,
+              '[0.128, infinity]': 1.6,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 3.2,
+              '[0.128, infinity]': 12.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -1205,6 +1349,65 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'qwen3.5-flash-2026-02-23',
+    },
+    contextWindowTokens: 1_000_000,
+    description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
+    displayName: 'Qwen3.5 Flash',
+    enabled: true,
+    id: 'qwen3.5-flash',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2, upTo: 0.128 },
+            { rate: 0.8, upTo: 0.256 },
+            { rate: 1.2, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 0.128 },
+            { rate: 8, upTo: 0.256 },
+            { rate: 12, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2 * 0.2, upTo: 0.128 },
+            { rate: 0.8 * 0.2, upTo: 0.256 },
+            { rate: 1.2 * 0.2, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-24',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     config: {
       deploymentName: 'qwen-flash', // Supports context caching
@@ -1212,7 +1415,6 @@ const qwenChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_000_000,
     description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
     displayName: 'Qwen Flash',
-    enabled: true,
     id: 'qwen-flash',
     maxOutput: 32_768,
     organization: 'Qwen',
@@ -2573,6 +2775,7 @@ const qwenImageModels: AIImageModelCard[] = [
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Max',
     id: 'qwen-image-edit-max',
+    enabled: true,
     organization: 'Qwen',
     parameters: {
       height: { default: 1536, max: 2048, min: 512, step: 1 },
@@ -2596,6 +2799,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Plus',
+    enabled: true,
     id: 'qwen-image-edit-plus',
     organization: 'Qwen',
     parameters: {
@@ -2620,6 +2824,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
     displayName: 'Qwen Image Edit',
+    enabled: true,
     id: 'qwen-image-edit',
     organization: 'Qwen',
     parameters: {
@@ -2642,6 +2847,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Generation Model (Max series) delivers enhanced realism and visual naturalness compared with the Plus series, effectively reducing AI-generated artifacts, and demonstrating outstanding performance in human appearance, texture details, and text rendering.',
     displayName: 'Qwen Image Max',
+    enabled: true,
     id: 'qwen-image-max',
     organization: 'Qwen',
     parameters: {
@@ -2665,6 +2871,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'It supports a wide range of artistic styles and is particularly proficient at rendering complex text within images, enabling integrated image–text layout design.',
     displayName: 'Qwen Image Plus',
+    enabled: true,
     id: 'qwen-image-plus',
     organization: 'Qwen',
     parameters: {
@@ -2688,6 +2895,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
     displayName: 'Qwen Image',
+    enabled: true,
     id: 'qwen-image',
     organization: 'Qwen',
     parameters: {
@@ -2710,6 +2918,7 @@ const qwenImageModels: AIImageModelCard[] = [
   {
     description: 'Wanxiang 2.6 Image supports image editing and mixed image–text layout output.',
     displayName: 'Wanxiang2.6 Image',
+    enabled: true,
     id: 'wan2.6-image',
     organization: 'Qwen',
     parameters: {
@@ -2734,6 +2943,7 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Wanxiang 2.6 T2I supports flexible selection of image dimensions within total pixel area and aspect ratio constraints (same as Wanxiang 2.5).',
     displayName: 'Wanxiang2.6 T2I',
+    enabled: true,
     id: 'wan2.6-t2i',
     organization: 'Qwen',
     parameters: {

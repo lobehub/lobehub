@@ -3,41 +3,11 @@ import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { verifyQStashSignature } from '@/libs/qstash';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 const log = debug('api-route:agent:execute-step');
-
-/**
- * Verify QStash signature using Receiver
- * Returns true if verification is disabled or signature is valid
- */
-async function verifyQStashSignature(request: NextRequest, rawBody: string): Promise<boolean> {
-  const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
-  const nextSigningKey = process.env.QSTASH_NEXT_SIGNING_KEY;
-
-  // If no signing keys configured, skip verification
-  if (!currentSigningKey || !nextSigningKey) {
-    log('QStash signature verification disabled (no signing keys configured)');
-    return false;
-  }
-
-  const signature = request.headers.get('Upstash-Signature');
-  if (!signature) {
-    log('Missing Upstash-Signature header');
-    return false;
-  }
-
-  const { Receiver } = await import('@upstash/qstash');
-  const receiver = new Receiver({ currentSigningKey, nextSigningKey });
-
-  try {
-    return await receiver.verify({ body: rawBody, signature });
-  } catch (error) {
-    log('QStash signature verification failed: %O', error);
-    return false;
-  }
-}
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();

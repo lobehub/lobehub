@@ -172,7 +172,7 @@ export class AgentBotProviderModel {
           ? JSON.parse((await gateKeeper.decrypt(r.credentials)).plaintext)
           : JSON.parse(r.credentials);
 
-        if (!credentials.botToken || !credentials.publicKey) continue;
+        if (!credentials.botToken) continue;
 
         decrypted.push({ ...r, credentials });
       } catch {

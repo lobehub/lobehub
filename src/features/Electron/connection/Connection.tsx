@@ -3,8 +3,8 @@ import { Drawer } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Suspense, useCallback } from 'react';
 
-import LoginStep from '@/app/[variants]/(desktop)/desktop-onboarding/features/LoginStep';
 import { BrandTextLoading } from '@/components/Loading';
+import LoginStep from '@/routes/(desktop)/desktop-onboarding/features/LoginStep';
 import { useElectronStore } from '@/store/electron';
 import { isMacOS } from '@/utils/platform';
 

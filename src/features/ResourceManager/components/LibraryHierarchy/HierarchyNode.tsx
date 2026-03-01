@@ -9,14 +9,14 @@ import * as motion from 'motion/react-m';
 import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import FileIcon from '@/components/FileIcon';
+import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
   getTransparentDragImage,
   useDragActive,
   useDragState,
-} from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
-import FileIcon from '@/components/FileIcon';
-import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+} from '@/routes/(main)/resource/features/DndContextWrapper';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';

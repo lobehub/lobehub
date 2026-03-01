@@ -8,9 +8,9 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
 import { INITIAL_STATUS } from '@/store/global/initialState';

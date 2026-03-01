@@ -10,10 +10,10 @@ import { type ChangeEvent } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { message } from '@/components/AntdStaticMethods';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
 

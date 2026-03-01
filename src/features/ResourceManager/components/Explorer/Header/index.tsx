@@ -7,8 +7,8 @@ import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import NavHeader from '@/features/NavHeader';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { FilesTabs } from '@/types/files';
 
 import AddButton from '../../Header/AddButton';

@@ -1118,6 +1118,7 @@ const zhipuImageModels: AIImageModelCard[] = [
     description:
       'GLM-Image is Zhipu’s new flagship image generation model. The model was trained end-to-end on domestically produced chips and adopts an original hybrid architecture that combines autoregressive modeling with a diffusion decoder. This design enables strong global instruction understanding alongside fine-grained local detail rendering, overcoming long-standing challenges in generating knowledge-dense content such as posters, presentations, and educational diagrams. It represents an important exploration toward a new generation of “cognitive generative” technology paradigms, exemplified by Nano Banana Pro.',
     displayName: 'GLM-Image',
+    enabled: true,
     id: 'glm-image',
     parameters: {
       prompt: {
@@ -1147,6 +1148,7 @@ const zhipuImageModels: AIImageModelCard[] = [
     description:
       'CogView-4 is Zhipu’s first open-source text-to-image model that can generate Chinese characters. It improves semantic understanding, image quality, and Chinese/English text rendering, supports arbitrary-length bilingual prompts, and can generate images at any resolution within specified ranges.',
     displayName: 'CogView-4',
+    enabled: true,
     id: 'cogview-4',
     parameters: {
       prompt: {
@@ -1168,6 +1170,7 @@ const zhipuImageModels: AIImageModelCard[] = [
     description:
       'CogView-3-Flash is a free image generation model launched by Zhipu. It generates images that align with user instructions while achieving higher aesthetic quality scores. CogView-3-Flash is primarily used in fields such as artistic creation, design reference, game development, and virtual reality, helping users rapidly convert text descriptions into images.',
     displayName: 'CogView-3-Flash',
+    enabled: true,
     id: 'cogview-3-flash',
     parameters: {
       prompt: {

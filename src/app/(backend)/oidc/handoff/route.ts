@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: result, success: true });
   } catch (error) {
-    log('Error fetching handoff record: %O', error);
+    console.error('Error fetching handoff record: %O', error);
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

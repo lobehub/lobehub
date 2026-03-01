@@ -1514,6 +1514,72 @@ describe('RuntimeExecutors', () => {
       // The next call_llm step needs messages to work properly
       expect(result.newState.messages.length).toBeGreaterThan(0);
     });
+
+    it('should accumulate tool usage in newState after batch execution', async () => {
+      mockToolExecutionService.executeTool
+        .mockResolvedValueOnce({
+          content: 'Search result',
+          error: null,
+          executionTime: 150,
+          state: {},
+          success: true,
+        })
+        .mockResolvedValueOnce({
+          content: 'Crawl result',
+          error: null,
+          executionTime: 250,
+          state: {},
+          success: true,
+        });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{"query": "test"}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+            {
+              apiName: 'crawl',
+              arguments: '{"url": "https://example.com"}',
+              id: 'tool-call-2',
+              identifier: 'web-browsing',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      const result = await executors.call_tools_batch!(instruction, state);
+
+      // Tool usage must be accumulated in newState
+      expect(result.newState.usage.tools.totalCalls).toBe(2);
+      expect(result.newState.usage.tools.totalTimeMs).toBe(400);
+      expect(result.newState.usage.tools.byTool).toHaveLength(2);
+
+      // Verify per-tool breakdown
+      const searchTool = result.newState.usage.tools.byTool.find(
+        (t: any) => t.name === 'web-search/search',
+      );
+      const crawlTool = result.newState.usage.tools.byTool.find(
+        (t: any) => t.name === 'web-browsing/crawl',
+      );
+      expect(searchTool).toEqual(
+        expect.objectContaining({ calls: 1, errors: 0, totalTimeMs: 150 }),
+      );
+      expect(crawlTool).toEqual(expect.objectContaining({ calls: 1, errors: 0, totalTimeMs: 250 }));
+
+      // Original state must not be mutated
+      expect(state.usage.tools.totalCalls).toBe(0);
+    });
   });
 
   describe('resolve_aborted_tools executor', () => {

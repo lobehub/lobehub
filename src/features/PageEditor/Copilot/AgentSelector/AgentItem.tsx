@@ -2,8 +2,8 @@ import { type GroupMemberAvatar } from '@lobechat/types';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/app/[variants]/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
 
 interface AgentItemProps {
   active: boolean;

@@ -11,7 +11,6 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
-/* eslint-disable typescript-sort-keys/string-enum */
 export enum TopicDisplayMode {
   ByTime = 'byTime',
   Flat = 'flat',
@@ -34,7 +33,14 @@ export interface TopicUserMemoryExtractRunState {
   traceId?: string;
 }
 
+export interface ChatTopicBotContext {
+  applicationId: string;
+  platform: string;
+  platformThreadId: string;
+}
+
 export interface ChatTopicMetadata {
+  bot?: ChatTopicBotContext;
   /**
    * Cron job ID that triggered this topic creation (if created by scheduled task)
    */

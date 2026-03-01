@@ -101,13 +101,20 @@ lobe-chat/
 │   │   │   ├── oidc/
 │   │   │   ├── trpc/
 │   │   │   └── webapi/
-│   │   ├── [variants]/
-│   │   │   ├── (auth)/
-│   │   │   ├── (main)/
-│   │   │   ├── (mobile)/
-│   │   │   ├── onboarding/
-│   │   │   └── router/
-│   │   └── desktop/
+│   │   ├── spa/                  # SPA HTML template service
+│   │   └── [variants]/
+│   │       └── (auth)/           # Auth pages (SSR required)
+│   ├── routes/                  # SPA page components (Vite)
+│   │   ├── (main)/
+│   │   ├── (mobile)/
+│   │   ├── (desktop)/
+│   │   ├── onboarding/
+│   │   └── share/
+│   ├── spa/                     # SPA entry points and router config
+│   │   ├── entry.web.tsx
+│   │   ├── entry.mobile.tsx
+│   │   ├── entry.desktop.tsx
+│   │   └── router/
 │   ├── business/                # Cloud-only (client/server)
 │   │   ├── client/
 │   │   ├── locales/
@@ -155,6 +162,8 @@ lobe-chat/
 | Layer            | Location                                            |
 | ---------------- | --------------------------------------------------- |
 | UI Components    | `src/components`, `src/features`                    |
+| SPA Pages        | `src/routes/`                                       |
+| React Router     | `src/spa/router/`                                   |
 | Global Providers | `src/layout`                                        |
 | Zustand Stores   | `src/store`                                         |
 | Client Services  | `src/services/`                                     |

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
 export interface UseFileItemClickOptions {
   id: string;

@@ -4,8 +4,8 @@ import { ArrowDownAZ, CalendarIcon, Check, HardDriveIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { type MenuProps } from '@/components/Menu';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
 

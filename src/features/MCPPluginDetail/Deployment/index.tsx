@@ -28,9 +28,9 @@ import { useTranslation } from 'react-i18next';
 
 import Descriptions from '@/components/Descriptions';
 import InlineTable from '@/components/InlineTable';
+import Title from '@/routes/(main)/community/features/Title';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
-import Title from '../../../app/[variants]/(main)/community/features/Title';
 import InstallationIcon from '../../../components/MCPDepsIcon';
 import CollapseDesc from '../CollapseDesc';
 import CollapseLayout from '../CollapseLayout';

@@ -7,7 +7,7 @@ import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
+import { getDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
 import { useElectronStore } from '@/store/electron';
 
 interface AuthRequiredModalContentProps {

@@ -105,7 +105,9 @@ export default defineConfig({
       '/webapi': 'http://localhost:3010',
     },
     warmup: {
-      clientFiles: ['./src/entry.web.tsx', './src/entry.desktop.tsx', './src/entry.mobile.tsx'],
+      clientFiles: [
+        platform === 'mobile' ? './src/spa/entry.mobile.tsx' : './src/spa/entry.web.tsx',
+      ],
     },
   },
 });

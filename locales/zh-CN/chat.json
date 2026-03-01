@@ -336,6 +336,7 @@
   "supervisor.todoList.allComplete": "所有任务已完成",
   "supervisor.todoList.title": "任务完成",
   "tab.groupProfile": "群组档案",
+  "tab.integration": "集成",
   "tab.profile": "助理档案",
   "tab.search": "搜索",
   "task.activity.calling": "正在调用技能…",

@@ -7,8 +7,7 @@ import { Fragment, isValidElement, memo } from 'react';
 
 export const toolsListStyles = createStaticStyles(({ css }) => ({
   groupLabel: css`
-    padding-block-start: 12px;
-    padding-block-end: 4px;
+    padding-block: 12px 4px;
     padding-inline: 12px;
   `,
   item: css`

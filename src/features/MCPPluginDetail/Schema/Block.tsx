@@ -3,7 +3,8 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Title from '../../../app/[variants]/(main)/community/features/Title';
+import Title from '@/routes/(main)/community/features/Title';
+
 import { ModeType } from './types';
 
 interface BlockProps {

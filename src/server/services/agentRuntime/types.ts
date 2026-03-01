@@ -8,17 +8,54 @@ import { type UserInterventionConfig } from '@lobechat/types';
  * Step execution lifecycle callbacks
  * Used to inject custom logic at different stages of step execution
  */
+export interface StepPresentationData {
+  /** LLM text output (undefined if this was a tool step) */
+  content?: string;
+  /** This step's execution time in ms */
+  executionTimeMs: number;
+  /** LLM reasoning / thinking content (undefined if none) */
+  reasoning?: string;
+  /** This step's cost (LLM steps only) */
+  stepCost?: number;
+  /** This step's input tokens (LLM steps only) */
+  stepInputTokens?: number;
+  /** This step's output tokens (LLM steps only) */
+  stepOutputTokens?: number;
+  /** This step's total tokens (LLM steps only) */
+  stepTotalTokens?: number;
+  /** What this step executed */
+  stepType: 'call_llm' | 'call_tool';
+  /** true = next step is LLM thinking; false = next step is tool execution */
+  thinking: boolean;
+  /** Tools the LLM decided to call (undefined if no tool calls) */
+  toolsCalling?: Array<{ apiName: string; arguments?: string; identifier: string }>;
+  /** Results from tool execution (only for call_tool steps) */
+  toolsResult?: Array<{ apiName: string; identifier: string; output?: string }>;
+  /** Cumulative total cost */
+  totalCost: number;
+  /** Cumulative input tokens */
+  totalInputTokens: number;
+  /** Cumulative output tokens */
+  totalOutputTokens: number;
+  /** Total steps executed so far */
+  totalSteps: number;
+  /** Cumulative total tokens */
+  totalTokens: number;
+}
+
 export interface StepLifecycleCallbacks {
   /**
    * Called after step execution
    */
-  onAfterStep?: (params: {
-    operationId: string;
-    shouldContinue: boolean;
-    state: AgentState;
-    stepIndex: number;
-    stepResult: any;
-  }) => Promise<void>;
+  onAfterStep?: (
+    params: StepPresentationData & {
+      operationId: string;
+      shouldContinue: boolean;
+      state: AgentState;
+      stepIndex: number;
+      stepResult: any;
+    },
+  ) => Promise<void>;
 
   /**
    * Called before step execution
@@ -103,6 +140,20 @@ export interface OperationCreationParams {
    * Used to inject custom logic at different stages of step execution
    */
   stepCallbacks?: StepLifecycleCallbacks;
+  /**
+   * Step webhook configuration
+   * When set, an HTTP POST will be fired after each step completes.
+   * Persisted in Redis state so it survives across QStash step boundaries.
+   */
+  stepWebhook?: {
+    body?: Record<string, unknown>;
+    url: string;
+  };
+  /**
+   * Whether the LLM call should use streaming.
+   * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
+   */
+  stream?: boolean;
   toolManifestMap: Record<string, LobeToolManifest>;
   tools?: any[];
   toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
@@ -113,6 +164,12 @@ export interface OperationCreationParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /**
+   * Webhook delivery method.
+   * - 'fetch': plain HTTP POST (default)
+   * - 'qstash': deliver via QStash publishJSON for guaranteed delivery
+   */
+  webhookDelivery?: 'fetch' | 'qstash';
 }
 
 export interface OperationCreationResult {

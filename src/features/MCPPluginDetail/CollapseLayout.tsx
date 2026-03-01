@@ -2,8 +2,8 @@ import { Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-import { type TitleProps } from '../../app/[variants]/(main)/community/features/Title';
-import Title from '../../app/[variants]/(main)/community/features/Title';
+import { type TitleProps } from '@/routes/(main)/community/features/Title';
+import Title from '@/routes/(main)/community/features/Title';
 
 export type CollapseItemType = {
   children: ReactNode;

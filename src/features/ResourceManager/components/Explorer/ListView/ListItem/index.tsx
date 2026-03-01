@@ -18,15 +18,15 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import FileIcon from '@/components/FileIcon';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
+import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
   getTransparentDragImage,
   useDragActive,
   useDragState,
-} from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
-import FileIcon from '@/components/FileIcon';
-import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
-import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+} from '@/routes/(main)/resource/features/DndContextWrapper';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';

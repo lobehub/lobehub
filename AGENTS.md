@@ -26,6 +26,9 @@ lobe-chat/
 │   └── ...
 ├── src/
 │   ├── app/                # Next.js app router
+│   ├── spa/                # SPA entry points (entry.*.tsx) and router config
+│   ├── routes/             # SPA page components (roots)
+│   ├── features/           # Business components by domain
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
 │   ├── server/             # Server services and routers
@@ -87,19 +90,26 @@ cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path
 
 Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-not-installed-linear-mcp) when working with Linear issues.
 
+## SPA Routes and Features
+
+- **`src/routes/`** holds only page segments (layout + page entry files). Keep route files thin; they should import from `@/features/*` and compose.
+- **`src/features/`** holds business components by domain. Put layout pieces, hooks, and domain UI here.
+- See [CLAUDE.md – SPA Routes and Features](CLAUDE.md#spa-routes-and-features) and the **spa-routes** skill for how to add new routes and how to split files.
+
 ## Skills (Auto-loaded)
 
 All AI development skills are available in `.agents/skills/` directory:
 
-| Category    | Skills                                     |
-| ----------- | ------------------------------------------ |
-| Frontend    | `react`, `typescript`, `i18n`, `microcopy` |
-| State       | `zustand`                                  |
-| Backend     | `drizzle`                                  |
-| Desktop     | `desktop`                                  |
-| Testing     | `testing`                                  |
-| UI          | `modal`, `hotkey`, `recent-data`           |
-| Config      | `add-provider-doc`, `add-setting-env`      |
-| Workflow    | `linear`, `debug`                          |
-| Performance | `vercel-react-best-practices`              |
-| Overview    | `project-overview`                         |
+| Category     | Skills                                     |
+| ------------ | ------------------------------------------ |
+| Frontend     | `react`, `typescript`, `i18n`, `microcopy` |
+| State        | `zustand`                                  |
+| Backend      | `drizzle`                                  |
+| Desktop      | `desktop`                                  |
+| Testing      | `testing`                                  |
+| UI           | `modal`, `hotkey`, `recent-data`           |
+| Config       | `add-provider-doc`, `add-setting-env`      |
+| Workflow     | `linear`, `debug`                          |
+| Architecture | `spa-routes`                               |
+| Performance  | `vercel-react-best-practices`              |
+| Overview     | `project-overview`                         |
