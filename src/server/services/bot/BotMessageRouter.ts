@@ -5,6 +5,7 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
@@ -28,8 +29,6 @@ interface DiscordCredentials {
  * and triggers message processing via AgentBridgeService.
  */
 export class BotMessageRouter {
-  private bridge = new AgentBridgeService();
-
   /** botToken → Chat instance (for webhook routing via x-discord-gateway-token) */
   private botInstancesByToken = new Map<string, Chat<any>>();
 
@@ -221,7 +220,12 @@ export class BotMessageRouter {
         };
 
         const bot = this.createBot(adapters, `agent-${agentId}`);
-        this.registerHandlers(bot, { agentId, applicationId, platform: 'discord', userId });
+        this.registerHandlers(bot, serverDB, {
+          agentId,
+          applicationId,
+          platform: 'discord',
+          userId,
+        });
         await bot.initialize();
 
         this.botInstances.set(applicationId, bot);
@@ -256,16 +260,17 @@ export class BotMessageRouter {
 
   private registerHandlers(
     bot: Chat<any>,
+    serverDB: LobeChatDatabase,
     info: ResolvedAgentInfo & { applicationId: string; platform: string },
   ): void {
     const { agentId, applicationId, platform, userId } = info;
+    const bridge = new AgentBridgeService(serverDB, userId);
 
     bot.onNewMention(async (thread, message) => {
       log('onNewMention: agent=%s, author=%s', agentId, message.author.userName);
-      await this.bridge.handleMention(thread, message, {
+      await bridge.handleMention(thread, message, {
         agentId,
         botContext: { applicationId, platform, platformThreadId: thread.id },
-        userId,
       });
     });
 
@@ -274,10 +279,9 @@ export class BotMessageRouter {
 
       log('onSubscribedMessage: agent=%s, author=%s', agentId, message.author.userName);
 
-      await this.bridge.handleSubscribedMessage(thread, message, {
+      await bridge.handleSubscribedMessage(thread, message, {
         agentId,
         botContext: { applicationId, platform, platformThreadId: thread.id },
-        userId,
       });
     });
   }

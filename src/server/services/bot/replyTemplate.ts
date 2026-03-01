@@ -139,9 +139,7 @@ function renderInlineStats(params: {
 
 // ==================== 1. Start ====================
 
-export function renderStart(content?: string): string {
-  return getExtremeAck(content);
-}
+export const renderStart = getExtremeAck;
 
 // ==================== 2. LLM Generating ====================
 

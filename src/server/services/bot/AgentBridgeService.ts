@@ -4,7 +4,8 @@ import { emoji } from 'chat';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { getServerDB } from '@/database/core/db-adaptor';
+import { UserModel } from '@/database/models/user';
+import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
@@ -65,16 +66,28 @@ async function safeReaction(fn: () => Promise<void>, label: string): Promise<voi
 interface BridgeHandlerOpts {
   agentId: string;
   botContext?: ChatTopicBotContext;
-  userId: string;
 }
 
 /**
  * Platform-agnostic bridge between Chat SDK events and Agent Runtime.
  *
- * Uses in-process onComplete callback to get agent execution results.
+ * Each instance is bound to a specific (serverDB, userId) pair,
+ * following the same pattern as other server services (AiAgentService, UserModel, etc.).
+ *
  * Provides real-time feedback via emoji reactions and editable progress messages.
  */
 export class AgentBridgeService {
+  private readonly db: LobeChatDatabase;
+  private readonly userId: string;
+
+  private timezone: string | undefined;
+  private timezoneLoaded = false;
+
+  constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
+    this.userId = userId;
+  }
+
   /**
    * Handle a new @mention — start a fresh conversation.
    */
@@ -83,9 +96,14 @@ export class AgentBridgeService {
     message: Message,
     opts: BridgeHandlerOpts,
   ): Promise<void> {
-    const { agentId, botContext, userId } = opts;
+    const { agentId, botContext } = opts;
 
-    log('handleMention: agentId=%s, user=%s, text=%s', agentId, userId, message.text.slice(0, 80));
+    log(
+      'handleMention: agentId=%s, user=%s, text=%s',
+      agentId,
+      this.userId,
+      message.text.slice(0, 80),
+    );
 
     // Immediate feedback: mark as received + show typing
     await safeReaction(
@@ -102,7 +120,6 @@ export class AgentBridgeService {
         agentId,
         botContext,
         trigger: 'bot',
-        userId,
       });
 
       // Persist topic mapping in thread state for follow-up messages
@@ -128,7 +145,7 @@ export class AgentBridgeService {
     message: Message,
     opts: BridgeHandlerOpts,
   ): Promise<void> {
-    const { agentId, botContext, userId } = opts;
+    const { agentId, botContext } = opts;
     const threadState = await thread.state;
     const topicId = threadState?.topicId;
 
@@ -136,7 +153,7 @@ export class AgentBridgeService {
 
     if (!topicId) {
       log('handleSubscribedMessage: no topicId in thread state, treating as new mention');
-      return this.handleMention(thread, message, { agentId, botContext, userId });
+      return this.handleMention(thread, message, { agentId, botContext });
     }
 
     // Immediate feedback: mark as received + show typing
@@ -153,7 +170,6 @@ export class AgentBridgeService {
         botContext,
         topicId,
         trigger: 'bot',
-        userId,
       });
     } catch (error) {
       log('handleSubscribedMessage error: %O', error);
@@ -175,7 +191,6 @@ export class AgentBridgeService {
       botContext?: ChatTopicBotContext;
       topicId?: string;
       trigger?: string;
-      userId: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
     if (isQueueAgentRuntimeEnabled()) {
@@ -197,18 +212,17 @@ export class AgentBridgeService {
       botContext?: ChatTopicBotContext;
       topicId?: string;
       trigger?: string;
-      userId: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    const { agentId, botContext, userId, topicId, trigger } = opts;
+    const { agentId, botContext, topicId, trigger } = opts;
 
-    const serverDB = await getServerDB();
-    const aiAgentService = new AiAgentService(serverDB, userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const timezone = await this.loadTimezone();
 
     // Post initial progress message to get the message ID
     let progressMessage: SentMessage | undefined;
     try {
-      progressMessage = await thread.post(renderStart(userMessage.text));
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
     } catch (error) {
       log('executeWithWebhooks: failed to post progress message: %O', error);
     }
@@ -274,18 +288,17 @@ export class AgentBridgeService {
       botContext?: ChatTopicBotContext;
       topicId?: string;
       trigger?: string;
-      userId: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    const { agentId, botContext, userId, topicId, trigger } = opts;
+    const { agentId, botContext, topicId, trigger } = opts;
 
-    const serverDB = await getServerDB();
-    const aiAgentService = new AiAgentService(serverDB, userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const timezone = await this.loadTimezone();
 
     // Post initial progress message
     let progressMessage: SentMessage | undefined;
     try {
-      progressMessage = await thread.post(renderStart(userMessage.text));
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
     } catch (error) {
       log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
     }
@@ -428,6 +441,26 @@ export class AgentBridgeService {
           reject(error);
         });
     });
+  }
+
+  /**
+   * Lazily load and cache user timezone from settings.
+   */
+  private async loadTimezone(): Promise<string | undefined> {
+    if (this.timezoneLoaded) return this.timezone;
+
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      this.timezone = (settings?.general as Record<string, unknown>)?.timezone as
+        | string
+        | undefined;
+    } catch {
+      // Fall back to server time if settings can't be loaded
+    }
+
+    this.timezoneLoaded = true;
+    return this.timezone;
   }
 
   /**
