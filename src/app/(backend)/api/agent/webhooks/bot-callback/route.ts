@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { verifyQStashSignature } from '@/libs/qstash';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { DiscordRestApi } from '@/server/services/bot/discordRestApi';
 import {
@@ -13,36 +14,6 @@ import {
 } from '@/server/services/bot/replyTemplate';
 
 const log = debug('api-route:agent:bot-callback');
-
-/**
- * Verify QStash signature.
- * Returns true if valid or verification is disabled.
- */
-async function verifyQStashSignature(request: Request, rawBody: string): Promise<boolean> {
-  const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
-  const nextSigningKey = process.env.QSTASH_NEXT_SIGNING_KEY;
-
-  if (!currentSigningKey || !nextSigningKey) {
-    log('QStash signature verification disabled (no signing keys configured)');
-    return false;
-  }
-
-  const signature = request.headers.get('Upstash-Signature');
-  if (!signature) {
-    log('Missing Upstash-Signature header');
-    return false;
-  }
-
-  const { Receiver } = await import('@upstash/qstash');
-  const receiver = new Receiver({ currentSigningKey, nextSigningKey });
-
-  try {
-    return await receiver.verify({ body: rawBody, signature });
-  } catch (error) {
-    log('QStash signature verification failed: %O', error);
-    return false;
-  }
-}
 
 /**
  * Parse a Chat SDK platformThreadId (e.g. "discord:guildId:channelId[:threadId]")
@@ -75,6 +46,15 @@ export async function POST(request: Request): Promise<Response> {
   const body = JSON.parse(rawBody);
 
   const { type, applicationId, platformThreadId, progressMessageId } = body;
+
+  log(
+    'bot-callback: parsed body keys=%s, type=%s, applicationId=%s, platformThreadId=%s, progressMessageId=%s',
+    Object.keys(body).join(','),
+    type,
+    applicationId,
+    platformThreadId,
+    progressMessageId,
+  );
 
   if (!type || !applicationId || !platformThreadId || !progressMessageId) {
     return NextResponse.json(

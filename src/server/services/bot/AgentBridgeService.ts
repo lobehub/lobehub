@@ -150,6 +150,7 @@ export class AgentBridgeService {
       // executeWithCallback handles progress message (post + edit at each step)
       await this.executeWithCallback(thread, message, {
         agentId,
+        botContext,
         topicId,
         trigger: 'bot',
         userId,
