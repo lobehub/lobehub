@@ -4,6 +4,7 @@ import type { PluginOption, ViteDevServer } from 'vite';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
 import {
   sharedOptimizeDeps,
   sharedRendererDefine,
@@ -31,6 +32,7 @@ export default defineConfig({
   define: sharedRendererDefine({ isMobile, isElectron: false }),
   optimizeDeps: sharedOptimizeDeps,
   plugins: [
+    viteEnvRestartKeys(['APP_URL']),
     ...sharedRendererPlugins({ platform }),
 
     isDev && {
