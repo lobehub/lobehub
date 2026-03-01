@@ -1,6 +1,6 @@
 import { SiDiscord } from '@icons-pack/react-simple-icons';
 import type { LucideIcon } from 'lucide-react';
-import type { ComponentType } from 'react';
+import type { FC } from 'react';
 
 export interface IntegrationProvider {
   color: string;
@@ -12,7 +12,7 @@ export interface IntegrationProvider {
     token: string;
     webhook: string;
   };
-  icon: ComponentType<any> | LucideIcon;
+  icon: FC<any> | LucideIcon;
   id: string;
   name: string;
 }

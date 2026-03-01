@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { Discord } from '@/server/services/bot/platforms/discord';
+import { Discord, type DiscordBotConfig } from '@/server/services/bot/platforms/discord';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
 const log = debug('lobe-server:bot:gateway:cron:discord');
@@ -41,7 +41,10 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
         continue;
       }
 
-      const bot = new Discord({ ...provider.credentials, applicationId: provider.applicationId });
+      const bot = new Discord({
+        ...provider.credentials,
+        applicationId: provider.applicationId,
+      } as DiscordBotConfig);
 
       await bot.start({
         durationMs: remainingMs,
