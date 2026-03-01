@@ -5,6 +5,12 @@ description: SPA route and feature structure. Use when adding or modifying SPA r
 
 # SPA Routes and Features Guide
 
+SPA structure:
+
+- **`src/spa/`** – Entry points (`entry.web.tsx`, `entry.mobile.tsx`, `entry.desktop.tsx`) and router config (`router/`). Router lives here to avoid confusion with `src/routes/`.
+- **`src/routes/`** – Page segments only (roots).
+- **`src/features/`** – Business logic and UI by domain.
+
 This project uses a **roots vs features** split: `src/routes/` only holds page segments; business logic and UI live in `src/features/` by domain.
 
 ## When to Use This Skill
@@ -68,7 +74,7 @@ Each feature should:
    - Page: import from `@/features/MyFeature` (or a specific subpath) and render; no business logic in the route file.
 
 5. **Register the route**
-   - Add the segment to `src/router/desktopRouter.config.tsx` (or the right router config) with `dynamicElement` / `dynamicLayout` pointing at the new route paths (e.g. `@/routes/(main)/my-feature`).
+   - Add the segment to `src/spa/router/desktopRouter.config.tsx` (or the right router config) with `dynamicElement` / `dynamicLayout` pointing at the new route paths (e.g. `@/routes/(main)/my-feature`).
 
 ---
 

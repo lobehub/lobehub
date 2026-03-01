@@ -1,4 +1,4 @@
-import './initialize';
+import '../initialize';
 
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
@@ -6,9 +6,9 @@ import { RouterProvider } from 'react-router-dom';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { createAppRouter } from '@/utils/router';
 
-import { mobileRoutes } from './router/mobileRouter.config';
+import { desktopRoutes } from './router/desktopRouter.config';
 
-const router = createAppRouter(mobileRoutes);
+const router = createAppRouter(desktopRoutes);
 
 createRoot(document.getElementById('root')!).render(
   <SPAGlobalProvider>

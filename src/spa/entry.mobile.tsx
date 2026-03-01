@@ -1,4 +1,4 @@
-import './initialize';
+import '../initialize';
 
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
@@ -6,15 +6,9 @@ import { RouterProvider } from 'react-router-dom';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { createAppRouter } from '@/utils/router';
 
-import { desktopRoutes } from './router/desktopRouter.config';
+import { mobileRoutes } from './router/mobileRouter.config';
 
-const debugProxyBase = '/_dangerous_local_dev_proxy';
-const basename =
-  window.__DEBUG_PROXY__ || window.location.pathname.startsWith(debugProxyBase)
-    ? debugProxyBase
-    : undefined;
-
-const router = createAppRouter(desktopRoutes, { basename });
+const router = createAppRouter(mobileRoutes);
 
 createRoot(document.getElementById('root')!).render(
   <SPAGlobalProvider>

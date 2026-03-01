@@ -36,9 +36,9 @@ Hybrid routing: Next.js App Router (static pages) + React Router DOM (main SPA).
 
 ### Key Files
 
-- Entry: `src/app/[variants]/page.tsx`
-- Desktop router: `src/app/[variants]/router/desktopRouter.config.tsx`
-- Mobile router: `src/app/[variants]/(mobile)/router/mobileRouter.config.tsx`
+- Entry: `src/spa/entry.web.tsx` (web), `src/spa/entry.mobile.tsx`, `src/spa/entry.desktop.tsx`
+- Desktop router: `src/spa/router/desktopRouter.config.tsx`
+- Mobile router: `src/spa/router/mobileRouter.config.tsx`
 - Router utilities: `src/utils/router.tsx`
 
 ### Router Utilities

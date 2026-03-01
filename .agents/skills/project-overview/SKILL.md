@@ -110,7 +110,11 @@ lobe-chat/
 │   │   ├── (desktop)/
 │   │   ├── onboarding/
 │   │   └── share/
-│   ├── router/                  # React Router configuration
+│   ├── spa/                     # SPA entry points and router config
+│   │   ├── entry.web.tsx
+│   │   ├── entry.mobile.tsx
+│   │   ├── entry.desktop.tsx
+│   │   └── router/
 │   ├── business/                # Cloud-only (client/server)
 │   │   ├── client/
 │   │   ├── locales/
@@ -159,7 +163,7 @@ lobe-chat/
 | ---------------- | --------------------------------------------------- |
 | UI Components    | `src/components`, `src/features`                    |
 | SPA Pages        | `src/routes/`                                       |
-| React Router      | `src/router/`                                       |
+| React Router     | `src/spa/router/`                                   |
 | Global Providers | `src/layout`                                        |
 | Zustand Stores   | `src/store`                                         |
 | Client Services  | `src/services/`                                     |

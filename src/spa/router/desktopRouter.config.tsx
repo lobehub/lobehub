@@ -60,7 +60,10 @@ export const desktopRoutes: RouteConfig[] = [
           {
             children: [
               {
-                element: dynamicElement(() => import('@/routes/(main)/group'), 'Desktop > Agent Group'),
+                element: dynamicElement(
+                  () => import('@/routes/(main)/group'),
+                  'Desktop > Agent Group',
+                ),
                 index: true,
               },
               {
@@ -284,7 +287,8 @@ export const desktopRoutes: RouteConfig[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/settings/provider').then((m) => m.ProviderDetailPage),
+                  () =>
+                    import('@/routes/(main)/settings/provider').then((m) => m.ProviderDetailPage),
                   'Desktop > Settings > Provider > Detail',
                 ),
                 path: ':providerId',
@@ -298,7 +302,10 @@ export const desktopRoutes: RouteConfig[] = [
           },
           // Other settings tabs
           {
-            element: dynamicElement(() => import('@/routes/(main)/settings'), 'Desktop > Settings > Tab'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/settings'),
+              'Desktop > Settings > Tab',
+            ),
             path: ':tab',
           },
         ],
@@ -372,7 +379,10 @@ export const desktopRoutes: RouteConfig[] = [
             index: true,
           },
         ],
-        element: dynamicLayout(() => import('@/routes/(main)/video/_layout'), 'Desktop > Video > Layout'),
+        element: dynamicLayout(
+          () => import('@/routes/(main)/video/_layout'),
+          'Desktop > Video > Layout',
+        ),
         errorElement: <ErrorBoundary resetPath="/video" />,
         path: 'video',
       },
@@ -385,7 +395,10 @@ export const desktopRoutes: RouteConfig[] = [
             index: true,
           },
         ],
-        element: dynamicLayout(() => import('@/routes/(main)/image/_layout'), 'Desktop > Image > Layout'),
+        element: dynamicLayout(
+          () => import('@/routes/(main)/image/_layout'),
+          'Desktop > Image > Layout',
+        ),
         errorElement: <ErrorBoundary resetPath="/image" />,
         path: 'image',
       },
@@ -456,7 +469,10 @@ export const desktopRoutes: RouteConfig[] = [
             path: 'bench/:benchmarkId',
           },
         ],
-        element: dynamicElement(() => import('@/routes/(main)/eval/_layout'), 'Desktop > Eval > Layout'),
+        element: dynamicElement(
+          () => import('@/routes/(main)/eval/_layout'),
+          'Desktop > Eval > Layout',
+        ),
         errorElement: <ErrorBoundary resetPath="/eval" />,
         path: 'eval',
       },
@@ -469,11 +485,17 @@ export const desktopRoutes: RouteConfig[] = [
             index: true,
           },
           {
-            element: dynamicElement(() => import('@/routes/(main)/page/[id]'), 'Desktop > Page > Detail'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/page/[id]'),
+              'Desktop > Page > Detail',
+            ),
             path: ':id',
           },
         ],
-        element: dynamicLayout(() => import('@/routes/(main)/page/_layout'), 'Desktop > Page > Layout'),
+        element: dynamicLayout(
+          () => import('@/routes/(main)/page/_layout'),
+          'Desktop > Page > Layout',
+        ),
         errorElement: <ErrorBoundary resetPath="/page" />,
         path: 'page',
       },

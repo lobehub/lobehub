@@ -26,6 +26,9 @@ lobe-chat/
 │   └── ...
 ├── src/
 │   ├── app/                # Next.js app router
+│   ├── spa/                # SPA entry points (entry.*.tsx) and router config
+│   ├── routes/             # SPA page components (roots)
+│   ├── features/           # Business components by domain
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
 │   ├── server/             # Server services and routers

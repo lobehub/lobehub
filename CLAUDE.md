@@ -31,7 +31,11 @@ lobe-chat/
 │   │   ├── (desktop)/      # Desktop-specific pages
 │   │   ├── onboarding/     # Onboarding pages
 │   │   └── share/          # Share pages
-│   ├── router/             # React Router configuration
+│   ├── spa/                # SPA entry points and router config
+│   │   ├── entry.web.tsx   # Web entry
+│   │   ├── entry.mobile.tsx
+│   │   ├── entry.desktop.tsx
+│   │   └── router/         # React Router configuration
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
 │   ├── server/             # Server services and routers
@@ -41,10 +45,13 @@ lobe-chat/
 
 ## SPA Routes and Features
 
-We use a **roots vs features** split: route trees only hold page segments; business logic and UI live in features.
+SPA-related code is grouped under `src/spa/` (entries + router) and `src/routes/` (page segments). We use a **roots vs features** split: route trees only hold page segments; business logic and UI live in features.
+
+- **`src/spa/`** – SPA entry points (`entry.web.tsx`, `entry.mobile.tsx`, `entry.desktop.tsx`) and React Router config (`router/`). Keeps router config next to entries to avoid confusion with `src/routes/`.
 
 - **`src/routes/` (roots)**\
   Only page-segment files: `_layout/index.tsx`, `index.tsx` (or `page.tsx`), and dynamic segments like `[id]/index.tsx`. Keep these **thin**: they should only import from `@/features/*` and compose layout/page, with no business logic or heavy UI.
+
 - **`src/features/`**\
   Business components by **domain** (e.g. `Pages`, `PageEditor`, `Home`). Put layout chunks (sidebar, header, body), hooks, and domain-specific UI here. Each feature exposes an `index.ts` (or `index.tsx`) with clear exports.
 
