@@ -78,7 +78,7 @@ describe('createCommonSlice', () => {
           telemetry: true,
         },
         settings: {
-          general: { fontSize: 14 },
+          general: { fontSize: 14, timezone: 'America/New_York' },
         },
         email: 'test@example.com',
       };
@@ -194,7 +194,10 @@ describe('createCommonSlice', () => {
         expect(result.current.isUserStateInit).toBeTruthy();
         // 验证状态未被错误更新
         expect(result.current.user?.avatar).toEqual('abc');
-        expect(result.current.settings).toEqual({});
+        // When settings is null, auto-detect timezone will set it
+        expect(result.current.settings).toEqual({
+          general: { timezone: expect.any(String) },
+        });
       });
     });
 
