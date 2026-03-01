@@ -104,6 +104,75 @@ describe('LobeDeepSeekAI - custom features', () => {
 
       expect(result.stream).toBe(false);
     });
+
+    it('should add empty reasoning_content for assistant messages in deepseek-reasoner', () => {
+      const payload = {
+        messages: [
+          { role: 'user', content: 'Search weather' },
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: 'call_1',
+                type: 'function',
+                function: {
+                  name: 'search',
+                  arguments: '{"q":"weather"}',
+                },
+              },
+            ],
+          },
+          { role: 'tool', content: '{"result":"sunny"}', tool_call_id: 'call_1' },
+        ],
+        model: 'deepseek-reasoner',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { role: 'user', content: 'Search weather' },
+        {
+          role: 'assistant',
+          content: '',
+          reasoning_content: '',
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'search',
+                arguments: '{"q":"weather"}',
+              },
+            },
+          ],
+        },
+        { role: 'tool', content: '{"result":"sunny"}', tool_call_id: 'call_1' },
+      ]);
+    });
+
+    it('should preserve existing reasoning_content for deepseek-reasoner assistant messages', () => {
+      const payload = {
+        messages: [
+          {
+            role: 'assistant',
+            content: 'Previous answer',
+            reasoning_content: 'existing reasoning',
+          },
+        ],
+        model: 'deepseek-reasoner',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        {
+          role: 'assistant',
+          content: 'Previous answer',
+          reasoning_content: 'existing reasoning',
+        },
+      ]);
+    });
   });
 
   describe('Debug Configuration', () => {
