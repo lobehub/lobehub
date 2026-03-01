@@ -36,6 +36,7 @@ import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import MinimaxProvider from './minimax';
 import MistralProvider from './mistral';
+import ModelsLabProvider from './modelslab';
 import ModelScopeProvider from './modelscope';
 import MoonshotProvider from './moonshot';
 import NebiusProvider from './nebius';
@@ -164,6 +165,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   GroqProvider,
   PerplexityProvider,
   MistralProvider,
+  ModelsLabProvider,
   ModelScopeProvider,
   Ai21Provider,
   UpstageProvider,
@@ -231,6 +233,7 @@ export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
 export { default as FalProviderCard } from './fal';
+export { default as ModelsLabProviderCard } from './modelslab';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';

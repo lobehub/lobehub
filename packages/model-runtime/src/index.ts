@@ -21,6 +21,7 @@ export { LobeGroq } from './providers/groq';
 export { LobeHubAI } from './providers/lobehub';
 export { LobeMinimaxAI } from './providers/minimax';
 export { LobeMistralAI } from './providers/mistral';
+export { LobeModelsLabAI } from './providers/modelslab';
 export { LobeMoonshotAI } from './providers/moonshot';
 export { LobeNebiusAI } from './providers/nebius';
 export { LobeNewAPIAI } from './providers/newapi';
