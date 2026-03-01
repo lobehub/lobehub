@@ -30,7 +30,8 @@ function getClient() {
 }
 
 function lazyProp(key: string): any {
-  return new Proxy(Object.create(null), {
+  // Target must be a function for the Proxy apply trap to work
+  return new Proxy(function () {}, {
     apply(_t, thisArg, args) {
       return Reflect.apply(getClient()[key], thisArg, args);
     },
