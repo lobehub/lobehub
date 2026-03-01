@@ -39,6 +39,23 @@ lobe-chat/
 └── e2e/                    # E2E tests (Cucumber + Playwright)
 ```
 
+## SPA Routes and Features
+
+We use a **roots vs features** split: route trees only hold page segments; business logic and UI live in features.
+
+- **`src/routes/` (roots)**\
+  Only page-segment files: `_layout/index.tsx`, `index.tsx` (or `page.tsx`), and dynamic segments like `[id]/index.tsx`. Keep these **thin**: they should only import from `@/features/*` and compose layout/page, with no business logic or heavy UI.
+- **`src/features/`**\
+  Business components by **domain** (e.g. `Pages`, `PageEditor`, `Home`). Put layout chunks (sidebar, header, body), hooks, and domain-specific UI here. Each feature exposes an `index.ts` (or `index.tsx`) with clear exports.
+
+When adding or changing SPA routes:
+
+1. In `src/routes/`, add only the route segment files (layout + page) that delegate to features.
+2. Implement layout and page content under `src/features/<Domain>/` and export from there.
+3. In route files, use `import { X } from '@/features/<Domain>'` (or `import Y from '@/features/<Domain>/...'`). Do not add new `features/` folders inside `src/routes/`.
+
+See the **spa-routes** skill (`.agents/skills/spa-routes/SKILL.md`) for the full convention and file-division rules.
+
 ## Development
 
 ### Starting the Dev Environment

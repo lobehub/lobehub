@@ -1,16 +1,15 @@
 'use client';
 
 import { useUnmount } from 'ahooks';
-import { memo,Suspense } from 'react';
+import { memo, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import PageExplorer from '@/features/PageExplorer';
+import { PageTitle } from '@/features/Pages';
 import { usePageStore } from '@/store/page';
 import { getIdFromIdentifier } from '@/utils/identifier';
-
-import PageTitle from '../PageTitle';
 
 /**
  * Pages route - dedicated page for managing documents/pages
