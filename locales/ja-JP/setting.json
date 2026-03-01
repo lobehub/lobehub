@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "中",
   "memory.effort.low": "低 — 最小限の記憶操作",
   "memory.effort.medium": "中 — バランスの取れた動作",
-  "memory.effort.title": "記憶の努力",
+  "memory.effort.title": "積極性",
   "memory.enabled.desc": "LobeHub が会話から好みや情報を抽出し、後で使用できるようにします。メモリはいつでも表示、編集、または消去できます。",
   "memory.enabled.title": "記憶機能を有効にする",
   "memory.title": "記憶設定",

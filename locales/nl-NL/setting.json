@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "Gemiddeld",
   "memory.effort.low": "Laag — Minimale geheugenbewerkingen",
   "memory.effort.medium": "Gemiddeld — Gebalanceerd gedrag",
-  "memory.effort.title": "Geheugeninspanning",
+  "memory.effort.title": "Agressiviteit",
   "memory.enabled.desc": "Sta LobeHub toe om voorkeuren en informatie uit gesprekken te halen en later te gebruiken. Je kunt het geheugen op elk moment bekijken, bewerken of wissen.",
   "memory.enabled.title": "Geheugen inschakelen",
   "memory.title": "Geheugeninstellingen",

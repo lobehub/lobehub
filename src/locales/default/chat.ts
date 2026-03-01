@@ -264,7 +264,7 @@ export default {
   'memory.effort.high.title': 'High',
   'memory.effort.low.title': 'Low',
   'memory.effort.medium.title': 'Medium',
-  'memory.effort.title': 'Effort Level',
+  'memory.effort.title': 'Aggressiveness',
   'memory.off.desc': 'Disable memory for this conversation.',
   'memory.off.title': 'Disable Memory',
   'memory.on.desc': 'Remember preferences and info from conversations.',

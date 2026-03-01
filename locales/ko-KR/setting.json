@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "중간",
   "memory.effort.low": "낮음 — 최소한의 메모리 작업",
   "memory.effort.medium": "중간 — 균형 잡힌 동작",
-  "memory.effort.title": "메모리 노력",
+  "memory.effort.title": "공격성",
   "memory.enabled.desc": "LobeHub이 대화에서 선호도와 정보를 추출하여 이후에 활용할 수 있도록 허용합니다. 언제든지 메모리를 확인, 수정 또는 삭제할 수 있습니다.",
   "memory.enabled.title": "기억 기능 활성화",
   "memory.title": "기억 설정",

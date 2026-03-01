@@ -163,7 +163,7 @@
   "memory.effort.high.title": "高",
   "memory.effort.low.title": "低",
   "memory.effort.medium.title": "中",
-  "memory.effort.title": "努力レベル",
+  "memory.effort.title": "積極性",
   "memory.off.desc": "この会話の記憶を無効にします。",
   "memory.off.title": "記憶を無効化",
   "memory.on.desc": "会話からの設定や情報を記憶します。",

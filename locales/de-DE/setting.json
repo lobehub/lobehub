@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "Mittel",
   "memory.effort.low": "Niedrig — Minimale Speicheroperationen",
   "memory.effort.medium": "Mittel — Ausgewogenes Verhalten",
-  "memory.effort.title": "Speicheraufwand",
+  "memory.effort.title": "Aggressivität",
   "memory.enabled.desc": "Erlauben Sie LobeHub, Vorlieben und Informationen aus Gesprächen zu extrahieren und später zu verwenden. Sie können den Speicher jederzeit einsehen, bearbeiten oder löschen.",
   "memory.enabled.title": "Speicher aktivieren",
   "memory.title": "Speichereinstellungen",

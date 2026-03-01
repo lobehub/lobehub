@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "Moyen",
   "memory.effort.low": "Faible — Opérations mémoire minimales",
   "memory.effort.medium": "Moyen — Comportement équilibré",
-  "memory.effort.title": "Effort de Mémoire",
+  "memory.effort.title": "Agressivité",
   "memory.enabled.desc": "Autoriser LobeHub à extraire les préférences et informations des conversations pour les réutiliser ultérieurement. Vous pouvez consulter, modifier ou effacer la mémoire à tout moment.",
   "memory.enabled.title": "Activer la mémoire",
   "memory.title": "Paramètres de mémoire",

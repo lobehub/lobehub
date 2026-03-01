@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "Orta",
   "memory.effort.low": "Düşük — Minimal hafıza işlemleri",
   "memory.effort.medium": "Orta — Dengeli davranış",
-  "memory.effort.title": "Hafıza Çabası",
+  "memory.effort.title": "Atılganlık",
   "memory.enabled.desc": "LobeHub'un konuşmalardan tercihleri ve bilgileri çıkarmasına ve bunları daha sonra kullanmasına izin verin. Hafızayı istediğiniz zaman görüntüleyebilir, düzenleyebilir veya temizleyebilirsiniz.",
   "memory.enabled.title": "Hafızayı Etkinleştir",
   "memory.title": "Hafıza Ayarları",

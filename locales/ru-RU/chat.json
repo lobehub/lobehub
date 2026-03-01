@@ -163,7 +163,7 @@
   "memory.effort.high.title": "Высокий",
   "memory.effort.low.title": "Низкий",
   "memory.effort.medium.title": "Средний",
-  "memory.effort.title": "Уровень усилий",
+  "memory.effort.title": "Агрессивность",
   "memory.off.desc": "Отключить память для этого разговора.",
   "memory.off.title": "Отключить память",
   "memory.on.desc": "Запоминать предпочтения и информацию из разговоров.",

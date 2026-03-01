@@ -163,7 +163,7 @@
   "memory.effort.high.title": "Alto",
   "memory.effort.low.title": "Baixo",
   "memory.effort.medium.title": "Médio",
-  "memory.effort.title": "Nível de Esforço",
+  "memory.effort.title": "Agressividade",
   "memory.off.desc": "Desative a memória para esta conversa.",
   "memory.off.title": "Desativar Memória",
   "memory.on.desc": "Lembre-se de preferências e informações das conversas.",

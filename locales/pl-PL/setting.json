@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "Średni",
   "memory.effort.low": "Niski — Minimalne operacje pamięciowe",
   "memory.effort.medium": "Średni — Zrównoważone działanie",
-  "memory.effort.title": "Wysiłek Pamięci",
+  "memory.effort.title": "Agresywność",
   "memory.enabled.desc": "Pozwól LobeHub zapamiętywać preferencje i informacje z rozmów, aby wykorzystać je później. Możesz w każdej chwili przeglądać, edytować lub usuwać pamięć.",
   "memory.enabled.title": "Włącz pamięć",
   "memory.title": "Ustawienia pamięci",

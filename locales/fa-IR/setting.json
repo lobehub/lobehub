@@ -322,7 +322,7 @@
   "memory.effort.level.medium": "متوسط",
   "memory.effort.low": "کم — عملیات حافظه‌ای حداقلی",
   "memory.effort.medium": "متوسط — رفتار متعادل",
-  "memory.effort.title": "تلاش حافظه",
+  "memory.effort.title": "پرخاشگری",
   "memory.enabled.desc": "به LobeHub اجازه دهید ترجیحات و اطلاعات را از مکالمات استخراج کرده و بعداً از آن‌ها استفاده کند. شما می‌توانید حافظه را در هر زمان مشاهده، ویرایش یا پاک کنید.",
   "memory.enabled.title": "فعال‌سازی حافظه",
   "memory.title": "تنظیمات حافظه",

@@ -163,7 +163,7 @@
   "memory.effort.high.title": "높음",
   "memory.effort.low.title": "낮음",
   "memory.effort.medium.title": "중간",
-  "memory.effort.title": "노력 수준",
+  "memory.effort.title": "공격성",
   "memory.off.desc": "이 대화에 대한 메모리를 비활성화합니다.",
   "memory.off.title": "메모리 비활성화",
   "memory.on.desc": "대화에서 선호 사항과 정보를 기억합니다.",

@@ -355,7 +355,7 @@ export default {
   'memory.effort.level.medium': 'Medium',
   'memory.effort.low': 'Low — Minimal memory operations',
   'memory.effort.medium': 'Medium — Balanced behavior',
-  'memory.effort.title': 'Memory Effort',
+  'memory.effort.title': 'Aggressiveness',
   'memory.enabled.desc':
     'Allow LobeHub to extract preferences and info from conversations and use them later. You can view, edit, or clear memory anytime.',
   'memory.enabled.title': 'Enable Memory',
