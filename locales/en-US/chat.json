@@ -195,6 +195,7 @@
   "messages.tokenDetails.inputCitation": "Input citation",
   "messages.tokenDetails.inputText": "Text Input",
   "messages.tokenDetails.inputTitle": "Input Details",
+  "messages.tokenDetails.inputTool": "Tool Use Input",
   "messages.tokenDetails.inputUncached": "Uncached Input",
   "messages.tokenDetails.inputWriteCached": "Input cache write",
   "messages.tokenDetails.output": "Output",

@@ -108,6 +108,12 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
         ? detailTokens.inputCachedWrite.credit
         : detailTokens.inputCachedWrite.token,
     },
+    !!detailTokens.inputTool && {
+      color: cssVar.geekblue,
+      id: 'inputTool',
+      title: t('messages.tokenDetails.inputTool'),
+      value: isShowCredit ? detailTokens.inputTool.credit : detailTokens.inputTool.token,
+    },
     !!detailTokens.totalOutput && {
       color: cssVar.colorSuccess,
       id: 'output',

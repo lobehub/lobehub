@@ -195,6 +195,7 @@
   "messages.tokenDetails.inputCitation": "引用输入",
   "messages.tokenDetails.inputText": "文本输入",
   "messages.tokenDetails.inputTitle": "输入明细",
+  "messages.tokenDetails.inputTool": "工具调用",
   "messages.tokenDetails.inputUncached": "未缓存输入",
   "messages.tokenDetails.inputWriteCached": "缓存写入",
   "messages.tokenDetails.output": "输出",

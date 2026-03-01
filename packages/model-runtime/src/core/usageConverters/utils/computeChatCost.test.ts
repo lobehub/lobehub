@@ -292,6 +292,75 @@ describe('computeChatPricing', () => {
       expect(totalCredits).toBe(184_919); // 161222 + 6257 + 17440 = 184919
       expect(totalCost).toBeCloseTo(0.184919, 6); // 184919 credits = $0.184919
     });
+
+    it('bills tool-use (grounding) tokens at textInput rate when no explicit cache', () => {
+      // Simulates Google Search grounding: promptTokenCount=50 (user text),
+      // toolUsePromptTokenCount=7596 (search results fed back to model).
+      // The converter sets inputToolTokens=7596 and totalInputTokens=7646.
+      // inputTextTokens=50 represents ONLY the text modality from promptTokensDetails.
+      // textInput billing must use totalInputTokens (7646), not inputTextTokens (50).
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      const usage: ModelTokensUsage = {
+        inputTextTokens: 50,       // Text modality from promptTokensDetails (user text only)
+        inputToolTokens: 7596,     // toolUsePromptTokenCount from Google API (grounding results)
+        totalInputTokens: 7646,    // promptTokenCount(50) + toolUsePromptTokenCount(7596)
+        outputTextTokens: 367,
+        totalOutputTokens: 367,
+        totalTokens: 8013,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+
+      const textInput = result?.breakdown.find((item) => item.unit.name === 'textInput');
+      // Must bill on totalInputTokens (7646) NOT inputTextTokens (50)
+      expect(textInput?.quantity).toBe(7646);
+      // rate=1 credit/token (representing $1/million tokens * millionTokens unit),
+      // ceil(7646 * 1) = 7646 credits
+      expect(textInput?.credits).toBe(7646);
+    });
+
+    it('bills tool-use tokens correctly when also using cache', () => {
+      // Simulates a scenario where both caching AND grounding are active.
+      // inputCacheMissTokens=50 (uncached user text),
+      // inputCachedTokens=7596 (cached grounding context),
+      // inputToolTokens=200 (explicit function call results)
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      const usage: ModelTokensUsage = {
+        inputCacheMissTokens: 50,
+        inputCachedTokens: 7596,
+        inputToolTokens: 200,
+        totalInputTokens: 7846,
+        outputTextTokens: 100,
+        totalOutputTokens: 100,
+        totalTokens: 7946,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+
+      const textInput = result?.breakdown.find((item) => item.unit.name === 'textInput');
+      // inputCacheMissTokens(50) + inputToolTokens(200) = 250
+      expect(textInput?.quantity).toBe(250);
+
+      const cached = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+      expect(cached?.quantity).toBe(7596);
+    });
   });
 
   describe('Anthropic', () => {

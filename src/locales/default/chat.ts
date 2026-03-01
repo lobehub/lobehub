@@ -214,6 +214,7 @@ export default {
   'messages.tokenDetails.inputTitle': 'Input Details',
   'messages.tokenDetails.inputUncached': 'Uncached Input',
   'messages.tokenDetails.inputWriteCached': 'Input cache write',
+  'messages.tokenDetails.inputTool': 'Tool Use Input',
   'messages.tokenDetails.output': 'Output',
   'messages.tokenDetails.outputAudio': 'Audio Output',
   'messages.tokenDetails.outputImage': 'Image Output',

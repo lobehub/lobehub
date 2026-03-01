@@ -129,7 +129,17 @@ const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => 
                   </Flexbox>
                 </Flexbox>
               )}
-              {citations && <SearchResultCards dataSource={citations} />}
+              {citations && (
+                <SearchResultCards
+                  dataSource={citations.map((c) => ({
+                    ...c,
+                    // Pass the original redirect URL as href to preserve the actual link
+                    href: c.url,
+                    // Override url with favicon domain so SearchResultCard derives the correct favicon host
+                    url: c.favicon ? `https://${c.favicon}` : c.url,
+                  }))}
+                />
+              )}
             </Flexbox>
           </motion.div>
         )}

@@ -86,4 +86,43 @@ describe('convertGoogleAIUsage', () => {
 
     expect(result.cost).toBeCloseTo(0.4, 10);
   });
+
+  it('should handle toolUsePromptTokenCount (e.g. grounding/search tool return tokens)', () => {
+    const usage: GenerateContentResponseUsageMetadata = {
+      candidatesTokenCount: 367,
+      promptTokenCount: 50,
+      toolUsePromptTokenCount: 7596,
+      totalTokenCount: 8013,
+    };
+
+    const result = convertGoogleAIUsage(usage);
+
+    expect(result).toEqual({
+      inputAudioTokens: undefined,
+      inputCacheMissTokens: undefined,
+      inputCachedTokens: undefined,
+      inputImageTokens: undefined,
+      inputTextTokens: undefined,
+      inputToolTokens: 7596,
+      outputImageTokens: 0,
+      outputReasoningTokens: undefined,
+      outputTextTokens: 367,
+      totalInputTokens: 7646,  // promptTokenCount (50) + toolUsePromptTokenCount (7596)
+      totalOutputTokens: 367,
+      totalTokens: 8013,
+    });
+  });
+
+  it('should not set inputToolTokens when toolUsePromptTokenCount is absent', () => {
+    const usage: GenerateContentResponseUsageMetadata = {
+      candidatesTokenCount: 367,
+      promptTokenCount: 7646,
+      totalTokenCount: 8013,
+    };
+
+    const result = convertGoogleAIUsage(usage);
+
+    expect(result.inputToolTokens).toBeUndefined();
+    expect(result.totalInputTokens).toBe(7646);
+  });
 });

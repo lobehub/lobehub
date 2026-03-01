@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { PageSelection} from './pageSelection';
+import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
 export interface ModelTokensUsage {
@@ -25,6 +25,10 @@ export interface ModelTokensUsage {
   inputImageTokens?: number;
   inputTextTokens?: number;
 
+  /**
+   * tool use prompt tokens (Google AI / Vertex AI)
+   */
+  inputToolTokens?: number;
   inputWriteCacheTokens?: number;
   outputAudioTokens?: number;
   outputImageTokens?: number;
@@ -50,6 +54,7 @@ export const ModelUsageSchema = z.object({
   inputImageTokens: z.number().optional(),
   inputAudioTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
+  inputToolTokens: z.number().optional(),
 
   // Output tokens breakdown
   outputTextTokens: z.number().optional(),
