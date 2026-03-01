@@ -48,9 +48,9 @@ export const agentBotProviderRouter = router({
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const service = new GatewayService();
-      await service.startBot(input.platform, input.applicationId, ctx.userId);
+      const status = await service.startBot(input.platform, input.applicationId, ctx.userId);
 
-      return { status: 'started' };
+      return { status };
     }),
 
   update: agentBotProviderProcedure

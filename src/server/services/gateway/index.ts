@@ -1,9 +1,12 @@
 import debug from 'debug';
 
 import { platformBotRegistry } from '../bot/platforms';
+import { BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
 
 const log = debug('lobe-server:service:gateway');
+
+const isVercel = !!process.env.VERCEL_ENV;
 
 export class GatewayService {
   async ensureRunning(): Promise<void> {
@@ -27,7 +30,18 @@ export class GatewayService {
     log('GatewayManager stopped');
   }
 
-  async startBot(platform: string, applicationId: string, userId: string): Promise<void> {
+  async startBot(
+    platform: string,
+    applicationId: string,
+    userId: string,
+  ): Promise<'started' | 'queued'> {
+    if (isVercel) {
+      const queue = new BotConnectQueue();
+      await queue.push(platform, applicationId, userId);
+      log('Queued bot connect %s:%s', platform, applicationId);
+      return 'queued';
+    }
+
     const manager = getGatewayManager();
     if (!manager?.isRunning) {
       throw new Error('GatewayManager is not running. Call ensureRunning() first.');
@@ -35,6 +49,7 @@ export class GatewayService {
 
     await manager.startBot(platform, applicationId, userId);
     log('Started bot %s:%s', platform, applicationId);
+    return 'started';
   }
 
   async stopBot(platform: string, applicationId: string): Promise<void> {
