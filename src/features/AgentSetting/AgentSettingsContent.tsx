@@ -9,6 +9,7 @@ import AgentChat from './AgentChat';
 import AgentMeta from './AgentMeta';
 import AgentModal from './AgentModal';
 import AgentOpening from './AgentOpening';
+import AgentTTS from './AgentTTS';
 
 export interface AgentSettingsContentProps {
   loadingSkeleton: ReactNode;
@@ -26,6 +27,7 @@ const AgentSettingsContent = memo<AgentSettingsContentProps>(({ tab, loadingSkel
       {tab === ChatSettingsTabs.Opening && <AgentOpening />}
       {tab === ChatSettingsTabs.Chat && <AgentChat />}
       {tab === ChatSettingsTabs.Modal && <AgentModal />}
+      {tab === ChatSettingsTabs.TTS && <AgentTTS />}
     </>
   );
 });

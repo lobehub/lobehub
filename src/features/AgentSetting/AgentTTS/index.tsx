@@ -3,7 +3,7 @@
 import { VoiceList } from '@lobehub/tts';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, Select } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Form as AntdForm, Input, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Mic } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -23,12 +23,15 @@ const { openaiVoiceOptions, localeOptions } = VoiceList;
 const AgentTTS = memo(() => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
+  const ttsService = AntdForm.useWatch([TTS_SETTING_KEY, 'ttsService'], form);
   const voiceList = useGlobalStore((s) => {
     const locale = globalGeneralSelectors.currentLanguage(s);
     return (all?: boolean) => new VoiceList(all ? undefined : locale);
   });
   const config = useStore(selectors.currentTtsConfig, isEqual);
   const updateConfig = useStore((s) => s.setAgentConfig);
+
+  const activeService = ttsService ?? config.ttsService;
 
   const { edgeVoiceOptions, microsoftVoiceOptions } = useMemo(
     () => voiceList(config.showAllLocaleVoice),
@@ -46,7 +49,7 @@ const AgentTTS = memo(() => {
       {
         children: <Switch />,
         desc: t('settingTTS.showAllLocaleVoice.desc'),
-        hidden: config.ttsService === 'openai',
+        hidden: activeService === 'openai' || activeService === 'cambai',
         label: t('settingTTS.showAllLocaleVoice.title'),
         layout: 'horizontal',
         minWidth: undefined,
@@ -56,7 +59,7 @@ const AgentTTS = memo(() => {
       {
         children: <SelectWithTTSPreview options={openaiVoiceOptions} server={'openai'} />,
         desc: t('settingTTS.voice.desc'),
-        hidden: config.ttsService !== 'openai',
+        hidden: activeService !== 'openai',
         label: t('settingTTS.voice.title'),
         name: [TTS_SETTING_KEY, 'voice', 'openai'],
       },
@@ -64,7 +67,7 @@ const AgentTTS = memo(() => {
         children: <SelectWithTTSPreview options={edgeVoiceOptions} server={'edge'} />,
         desc: t('settingTTS.voice.desc'),
         divider: false,
-        hidden: config.ttsService !== 'edge',
+        hidden: activeService !== 'edge',
         label: t('settingTTS.voice.title'),
         name: [TTS_SETTING_KEY, 'voice', 'edge'],
       },
@@ -72,9 +75,17 @@ const AgentTTS = memo(() => {
         children: <SelectWithTTSPreview options={microsoftVoiceOptions} server={'microsoft'} />,
         desc: t('settingTTS.voice.desc'),
         divider: false,
-        hidden: config.ttsService !== 'microsoft',
+        hidden: activeService !== 'microsoft',
         label: t('settingTTS.voice.title'),
         name: [TTS_SETTING_KEY, 'voice', 'microsoft'],
+      },
+      {
+        children: <Input placeholder={'147320'} />,
+        desc: t('settingTTS.voice.desc'),
+        divider: false,
+        hidden: activeService !== 'cambai',
+        label: t('settingTTS.voice.title'),
+        name: [TTS_SETTING_KEY, 'voice', 'cambai'],
       },
       {
         children: (

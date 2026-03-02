@@ -6,6 +6,8 @@ export const USE_AZURE_OPENAI = 'X-use-azure-openai';
 
 export const AZURE_OPENAI_API_VERSION = 'X-azure-openai-api-version';
 
+export const CAMBAI_API_KEY_HEADER_KEY = 'X-cambai-api-key';
+
 export const OAUTH_AUTHORIZED = 'X-oauth-authorized';
 
 /**

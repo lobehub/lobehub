@@ -161,6 +161,10 @@ const currentAgentTTSVoice =
         currentVoice = voice.microsoft || (voiceList.microsoftVoiceOptions?.[0].value as string);
         break;
       }
+      case 'cambai': {
+        currentVoice = voice.cambai || '147320';
+        break;
+      }
     }
     return currentVoice || 'alloy';
   };

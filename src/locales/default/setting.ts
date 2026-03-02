@@ -648,6 +648,8 @@ export default {
   'settingSystemTools.tools.grep.desc': 'GNU grep - standard text search tool',
   'settingSystemTools.tools.mdfind.desc': 'macOS Spotlight search (fast indexed search)',
   'settingSystemTools.tools.rg.desc': 'ripgrep - extremely fast text search tool',
+  'settingTTS.cambai.title': 'CAMB AI',
+  'settingTTS.cambai.ttsModel': 'CAMB AI Text-to-Speech Model',
   'settingTTS.openai.sttModel': 'OpenAI Speech-to-Text Model',
   'settingTTS.openai.title': 'OpenAI',
   'settingTTS.openai.ttsModel': 'OpenAI Text-to-Speech Model',

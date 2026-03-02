@@ -9,7 +9,9 @@ import { useEdgeSpeech, useMicrosoftSpeech, useOpenAITTS } from '@lobehub/tts/re
 import isEqual from 'fast-deep-equal';
 
 import { useBusinessTTSProvider } from '@/business/client/hooks/useBusinessTTSProvider';
+import { useCambAITTS } from '@/hooks/useCambAITTS';
 import { createHeaderWithOpenAI } from '@/services/_header';
+import { createHeaderWithCambAI } from '@/services/_headerCambai';
 import { API_ENDPOINTS } from '@/services/_url';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -31,7 +33,7 @@ export const useTTS = (content: string, config?: TTSConfig) => {
   const lang = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const voice = useAgentStore(agentSelectors.currentAgentTTSVoice(lang));
   const businessTTSProvider = useBusinessTTSProvider();
-  let useSelectedTTS;
+  let useSelectedTTS: any;
   let options: any = {};
   switch (config?.server || ttsAgentSettings.ttsService) {
     case 'openai': {
@@ -75,12 +77,27 @@ export const useTTS = (content: string, config?: TTSConfig) => {
       } as MicrosoftSpeechOptions;
       break;
     }
+    case 'cambai': {
+      useSelectedTTS = useCambAITTS;
+      options = {
+        api: {
+          headers: createHeaderWithCambAI(),
+          serviceUrl: API_ENDPOINTS.tts('cambai'),
+        },
+        options: {
+          language: lang,
+          model: ttsSettings.cambAI?.ttsModel || 'mars-flash',
+          voice: config?.voice || voice,
+        },
+      };
+      break;
+    }
   }
 
   return useSelectedTTS(content, {
     ...config,
     ...options,
-    onFinish: (arraybuffers) => {
+    onFinish: (arraybuffers: ArrayBuffer[]) => {
       config?.onUpload?.(options.voice || 'alloy', arraybuffers);
     },
   });

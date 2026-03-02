@@ -25,6 +25,17 @@ export const opeanaiSTTOptions: SelectProps['options'] = [
   },
 ];
 
+export const cambaiTTSModelOptions: SelectProps['options'] = [
+  {
+    label: 'MARS Flash',
+    value: 'mars-flash',
+  },
+  {
+    label: 'MARS Pro',
+    value: 'mars-pro',
+  },
+];
+
 export const sttOptions: SelectProps['options'] = [
   {
     label: 'OpenAI',

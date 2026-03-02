@@ -16,4 +16,8 @@ export const ttsOptions: SelectProps['options'] = [
     label: <LabelRenderer Icon={Azure.Avatar} label={'Microsoft Speech'} />,
     value: 'microsoft',
   },
+  {
+    label: 'CAMB AI',
+    value: 'cambai',
+  },
 ];

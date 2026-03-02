@@ -23,11 +23,13 @@ export const API_ENDPOINTS = {
 
   // STT
   stt: withElectronProtocolIfElectron('/webapi/stt/openai'),
-
   // TTS
   tts: (provider: string) => withElectronProtocolIfElectron(`/webapi/tts/${provider}`),
   edge: withElectronProtocolIfElectron('/webapi/tts/edge'),
   microsoft: withElectronProtocolIfElectron('/webapi/tts/microsoft'),
+
+  // Voices
+  voicesCambai: withElectronProtocolIfElectron('/webapi/voices/cambai'),
 };
 
 export const MARKET_OIDC_ENDPOINTS = {

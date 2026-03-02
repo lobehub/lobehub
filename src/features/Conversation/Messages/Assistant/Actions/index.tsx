@@ -1,14 +1,14 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { ActionIconGroup, Flexbox, createRawModal } from '@lobehub/ui';
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
+import { ActionIconGroup, createRawModal, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
 import { ReactionPicker } from '../../../components/Reaction';
 import ShareMessageModal, { type ShareModalProps } from '../../../components/ShareMessageModal';
 import {
-  Provider,
   createStore,
   messageStateSelectors,
+  Provider,
   useConversationStore,
   useConversationStoreApi,
 } from '../../../store';
@@ -128,8 +128,8 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
       const base =
         actionsConfig?.bar ??
         (hasTools
-          ? [defaultActions.delAndRegenerate, defaultActions.copy]
-          : [defaultActions.edit, defaultActions.copy]);
+          ? [defaultActions.delAndRegenerate, defaultActions.copy, defaultActions.tts]
+          : [defaultActions.edit, defaultActions.copy, defaultActions.tts]);
       return [...base, ...extraBarItems];
     }, [
       actionsConfig?.bar,
@@ -137,6 +137,7 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
       defaultActions.delAndRegenerate,
       defaultActions.copy,
       defaultActions.edit,
+      defaultActions.tts,
       extraBarItems,
     ]);
 
@@ -211,7 +212,7 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
     if (error) return <ErrorActionsBar actions={defaultActions} onActionClick={handleAction} />;
 
     return (
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <ReactionPicker messageId={id} />
         <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />
       </Flexbox>

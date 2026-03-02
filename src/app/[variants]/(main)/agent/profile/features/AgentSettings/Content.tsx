@@ -4,7 +4,13 @@ import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { BrainIcon, MessageSquareHeartIcon, MessagesSquareIcon, UserIcon } from 'lucide-react';
+import {
+  BrainIcon,
+  MessageSquareHeartIcon,
+  MessagesSquareIcon,
+  Mic2Icon,
+  UserIcon,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -62,6 +68,11 @@ const Content = memo(() => {
           icon: <Icon icon={BrainIcon} />,
           key: ChatSettingsTabs.Modal,
           label: t('agentTab.modal'),
+        },
+        {
+          icon: <Icon icon={Mic2Icon} />,
+          key: ChatSettingsTabs.TTS,
+          label: t('agentTab.tts'),
         },
       ].filter(Boolean) as ItemType[],
     [t, isInbox],

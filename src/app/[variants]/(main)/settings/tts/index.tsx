@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 
+import CambAI from './features/CambAI';
 import OpenAI from './features/OpenAI';
 import STT from './features/STT';
 
@@ -12,6 +13,7 @@ const Page = () => {
       <SettingHeader title={t('tab.tts')} />
       <STT />
       <OpenAI />
+      <CambAI />
     </>
   );
 };

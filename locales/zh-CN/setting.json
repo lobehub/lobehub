@@ -574,6 +574,8 @@
   "settingSystemTools.tools.grep.desc": "GNU grep - 标准文本搜索工具",
   "settingSystemTools.tools.mdfind.desc": "macOS 聚焦搜索（快速索引搜索）",
   "settingSystemTools.tools.rg.desc": "ripgrep - 极快的文本搜索工具",
+  "settingTTS.cambai.title": "CAMB AI",
+  "settingTTS.cambai.ttsModel": "CAMB AI 语音合成模型",
   "settingTTS.openai.sttModel": "OpenAI 语音识别模型",
   "settingTTS.openai.title": "OpenAI",
   "settingTTS.openai.ttsModel": "OpenAI 语音合成模型",
