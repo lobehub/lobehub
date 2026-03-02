@@ -1,12 +1,14 @@
-import { type LobeSelectProps } from '@lobehub/ui';
-import { LobeSelect, TooltipGroup } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { TooltipGroup } from '@lobehub/ui';
+import { Select, type SelectProps } from '@lobehub/ui/base-ui';
+import { createStaticStyles, createStyles } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
-import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
+
+const prefixCls = 'ant';
 
 const useStyles = createStyles(({ css }, { popupWidth }: { popupWidth?: number | string }) => ({
   popup: css`
@@ -18,25 +20,36 @@ const useStyles = createStyles(({ css }, { popupWidth }: { popupWidth?: number |
   `,
 }));
 
-type ModelAbilities = EnabledProviderWithModels['children'][number]['abilities'];
+const styles = createStaticStyles(({ css }) => ({
+  popup: css`
+    &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
+      padding-inline-start: 12px;
+    }
+  `,
+  select: css`
+    .${prefixCls}-select-selection-item {
+      .${TAG_CLASSNAME} {
+        display: none;
+      }
+    }
+  `,
+}));
 
 interface ModelOption {
-  abilities?: ModelAbilities;
-  displayName?: string;
+  abilities?: Record<string, boolean>;
   id: string;
   label: ReactNode;
   provider: string;
   value: string;
 }
 
-interface ModelSelectProps extends Pick<LobeSelectProps, 'loading' | 'size' | 'style' | 'variant'> {
+interface ModelSelectProps extends Pick<SelectProps, 'loading' | 'size' | 'style' | 'variant'> {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
   onChange?: (props: { model: string; provider: string }) => void;
   popupWidth?: number | string;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
   showAbility?: boolean;
-
   value?: { model: string; provider?: string };
 }
 
@@ -44,19 +57,19 @@ const ModelSelect = memo<ModelSelectProps>(
   ({
     value,
     onChange,
-    initialWidth = false,
     showAbility = true,
     requiredAbilities,
     loading,
-    popupWidth,
     size,
     style,
     variant,
+    initialWidth = false,
+    popupWidth,
   }) => {
-    const { styles } = useStyles({ popupWidth });
+    const { styles: dynamicStyles } = useStyles({ popupWidth });
     const enabledList = useEnabledChatModels();
 
-    const options = useMemo<LobeSelectProps['options']>(() => {
+    const options = useMemo<SelectProps['options']>(() => {
       const getChatModels = (provider: EnabledProviderWithModels) => {
         const models =
           requiredAbilities && requiredAbilities.length > 0
@@ -96,41 +109,35 @@ const ModelSelect = memo<ModelSelectProps>(
             options: opts,
           };
         })
-        .filter(Boolean) as LobeSelectProps['options'];
+        .filter(Boolean) as SelectProps['options'];
     }, [enabledList, requiredAbilities, showAbility]);
 
     return (
       <TooltipGroup>
-        <LobeSelect
-          virtual
+        <Select
+          className={styles.select}
           defaultValue={`${value?.provider}/${value?.model}`}
           loading={loading}
           options={options}
-          popupClassName={styles.popup}
+          popupClassName={popupWidth ? `${styles.popup} ${dynamicStyles.popup}` : styles.popup}
           popupMatchSelectWidth={false}
-          selectedIndicatorVariant="bold"
           size={size}
           value={`${value?.provider}/${value?.model}`}
           variant={variant}
-          optionRender={(option) => {
-            const data = option as unknown as ModelOption;
-            return (
-              <ModelItemRender
-                displayName={data.displayName}
-                id={data.id}
-                showInfoTag={false}
-                {...data.abilities}
-              />
-            );
-          }}
+          optionRender={(option) => (
+            <ModelItemRender
+              {...(option as ModelOption)}
+              {...(option as ModelOption).abilities}
+              showInfoTag
+            />
+          )}
           style={{
             minWidth: 200,
             width: initialWidth ? 'initial' : undefined,
             ...style,
           }}
           onChange={(value, option) => {
-            if (!value) return;
-            const model = (value as string).split('/').slice(1).join('/');
+            const model = value.split('/').slice(1).join('/');
             onChange?.({ model, provider: (option as unknown as ModelOption).provider });
           }}
         />

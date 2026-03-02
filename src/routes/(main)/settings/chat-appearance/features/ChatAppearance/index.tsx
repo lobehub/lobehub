@@ -5,13 +5,12 @@ import {
   FormGroup,
   highlighterThemes,
   Icon,
-  LobeSwitch as Switch,
   mermaidThemes,
   Segmented,
-  Select,
   Skeleton,
   SliderWithInput,
 } from '@lobehub/ui';
+import { Select, Switch } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';

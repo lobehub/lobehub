@@ -1,6 +1,7 @@
 'use client';
 
-import { Checkbox, Flexbox, FormGroup, LobeSelect as Select, Text } from '@lobehub/ui';
+import { Checkbox, Flexbox, FormGroup, Text } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { Divider, InputNumber, TimePicker } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { type Dayjs } from 'dayjs';
