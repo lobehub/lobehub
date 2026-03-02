@@ -17,14 +17,14 @@ export const extract = (output: string, extractor: AnswerExtractor): string => {
       if (parts.length < 2) return output;
       const segment =
         extractor.position === 'first' ? parts[1] : parts.at(-1);
-      return segment.trim();
+      return segment!.trim();
     }
 
     case 'last-line': {
       const lines = output.split('\n').filter((l) => l.trim());
       if (lines.length === 0) return output;
       const last = lines.at(-1);
-      return extractor.trim !== false ? last.trim() : last;
+      return extractor.trim !== false ? last!.trim() : last!;
     }
 
     case 'choice-index': {
