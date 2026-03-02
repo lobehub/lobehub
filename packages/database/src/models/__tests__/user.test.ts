@@ -151,6 +151,54 @@ describe('UserModel', () => {
       expect(updated?.fullName).toBe('Updated Name');
       expect(updated?.avatar).toBe('https://example.com/avatar.jpg');
     });
+
+    it('should normalize empty string email to null', async () => {
+      await userModel.updateUser({
+        email: '',
+      });
+
+      const updated = await serverDB.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      expect(updated?.email).toBeNull();
+    });
+
+    it('should normalize empty string phone to null', async () => {
+      await userModel.updateUser({
+        phone: '',
+      });
+
+      const updated = await serverDB.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      expect(updated?.phone).toBeNull();
+    });
+
+    it('should normalize empty string username to null', async () => {
+      await userModel.updateUser({
+        username: '  ',
+      });
+
+      const updated = await serverDB.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      expect(updated?.username).toBeNull();
+    });
+
+    it('should trim username when updating', async () => {
+      await userModel.updateUser({
+        username: '  myuser  ',
+      });
+
+      const updated = await serverDB.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      expect(updated?.username).toBe('myuser');
+    });
   });
 
   describe('deleteSetting', () => {
@@ -256,12 +304,47 @@ describe('UserModel', () => {
       expect(preference?.guide?.moveSettingsToAvatar).toBe(true);
     });
 
+    it('should handle user with null preference (preference || {} fallback)', async () => {
+      // Ensure user has null preference
+      await serverDB.update(users).set({ preference: null }).where(eq(users.id, userId));
+
+      await userModel.updateGuide({
+        moveSettingsToAvatar: true,
+      });
+
+      const user = await serverDB.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      const preference = user?.preference as UserPreference;
+      expect(preference?.guide?.moveSettingsToAvatar).toBe(true);
+    });
+
     it('should do nothing for non-existent user', async () => {
       const nonExistentUserModel = new UserModel(serverDB, 'non-existent');
 
       await expect(
         nonExistentUserModel.updateGuide({ moveSettingsToAvatar: true }),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getUserSettingsDefaultAgentConfig', () => {
+    it('should return defaultAgent config when settings exist', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        defaultAgent: { model: 'gpt-4' } as any,
+      });
+
+      const result = await userModel.getUserSettingsDefaultAgentConfig();
+
+      expect(result).toEqual({ model: 'gpt-4' });
+    });
+
+    it('should return undefined when no settings exist', async () => {
+      const result = await userModel.getUserSettingsDefaultAgentConfig();
+
+      expect(result).toBeUndefined();
     });
   });
 
@@ -326,6 +409,38 @@ describe('UserModel', () => {
 
       it('should return undefined for non-existent user', async () => {
         const user = await UserModel.findById(serverDB, 'non-existent');
+
+        expect(user).toBeUndefined();
+      });
+    });
+
+    describe('findByUsername', () => {
+      it('should find user by username', async () => {
+        await serverDB.update(users).set({ username: 'testuser' }).where(eq(users.id, userId));
+
+        const user = await UserModel.findByUsername(serverDB, 'testuser');
+
+        expect(user).toBeDefined();
+        expect(user?.id).toBe(userId);
+      });
+
+      it('should return null for empty/whitespace username', async () => {
+        const result = await UserModel.findByUsername(serverDB, '   ');
+
+        expect(result).toBeNull();
+      });
+
+      it('should trim username before searching', async () => {
+        await serverDB.update(users).set({ username: 'testuser' }).where(eq(users.id, userId));
+
+        const user = await UserModel.findByUsername(serverDB, '  testuser  ');
+
+        expect(user).toBeDefined();
+        expect(user?.id).toBe(userId);
+      });
+
+      it('should return undefined for non-existent username', async () => {
+        const user = await UserModel.findByUsername(serverDB, 'nonexistent');
 
         expect(user).toBeUndefined();
       });

@@ -498,6 +498,27 @@ describe('AiProviderModel', () => {
 
       expect(provider?.keyVaults).toEqual({});
     });
+
+    it('should handle keyVaults decryption failure gracefully', async () => {
+      const providerId = 'aihubmix';
+      await serverDB.insert(aiProviders).values({
+        id: providerId,
+        keyVaults: 'invalid-encrypted-data',
+        name: 'AiHubMix',
+        source: 'custom',
+        userId,
+      });
+
+      const failingDecryptor = vi.fn().mockImplementation(() => {
+        throw new Error('Decryption failed');
+      });
+
+      const provider = await aiProviderModel.getAiProviderById(providerId, failingDecryptor);
+
+      expect(provider).toBeDefined();
+      expect(provider?.keyVaults).toEqual({});
+      expect(failingDecryptor).toHaveBeenCalledWith('invalid-encrypted-data');
+    });
   });
 
   describe('getAiProviderRuntimeConfig', () => {

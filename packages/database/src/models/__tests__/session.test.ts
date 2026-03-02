@@ -1131,6 +1131,109 @@ describe('SessionModel', () => {
       expect(result3).toBeUndefined();
     });
 
+    it('should clean out undefined values from params during final cleanup', async () => {
+      // This test covers the final cleanup logic that removes undefined values from params
+      const sessionId = 'test-session-cleanup-undefined';
+      const agentId = 'test-agent-cleanup-undefined';
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({
+          id: sessionId,
+          userId,
+          type: 'agent',
+        });
+
+        await trx.insert(agents).values({
+          id: agentId,
+          userId,
+          model: 'gpt-3.5-turbo',
+          title: 'Test Agent',
+          params: {
+            temperature: 0.7,
+            top_p: 1,
+            presence_penalty: 0,
+          },
+        });
+
+        await trx.insert(agentsToSessions).values({
+          sessionId,
+          agentId,
+          userId,
+        });
+      });
+
+      // Update with some params set to undefined (delete them) and some set to new values
+      await sessionModel.updateConfig(sessionId, {
+        params: {
+          temperature: undefined,
+          presence_penalty: undefined,
+          top_p: 0.9,
+        },
+      });
+
+      // Verify: temperature and presence_penalty should be removed, top_p updated
+      const updatedAgent = await serverDB
+        .select()
+        .from(agents)
+        .where(and(eq(agents.id, agentId), eq(agents.userId, userId)));
+
+      expect(updatedAgent[0].params).toEqual({ top_p: 0.9 });
+      expect(updatedAgent[0].params).not.toHaveProperty('temperature');
+      expect(updatedAgent[0].params).not.toHaveProperty('presence_penalty');
+    });
+
+    it('should set params to undefined when all param values are removed', async () => {
+      // This test covers the branch where after cleanup, params object becomes empty
+      // and mergedValue.params is set to undefined.
+      // Note: when mergedValue.params is undefined, drizzle ORM does not update the column,
+      // so the database retains the original params value.
+      const sessionId = 'test-session-all-params-removed';
+      const agentId = 'test-agent-all-params-removed';
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({
+          id: sessionId,
+          userId,
+          type: 'agent',
+        });
+
+        await trx.insert(agents).values({
+          id: agentId,
+          userId,
+          model: 'gpt-3.5-turbo',
+          title: 'Test Agent',
+          params: {
+            temperature: 0.7,
+            top_p: 1,
+          },
+        });
+
+        await trx.insert(agentsToSessions).values({
+          sessionId,
+          agentId,
+          userId,
+        });
+      });
+
+      // Delete ALL params by setting them to undefined
+      await sessionModel.updateConfig(sessionId, {
+        params: {
+          temperature: undefined,
+          top_p: undefined,
+        },
+      });
+
+      // When all params are removed, mergedValue.params is set to undefined.
+      // Drizzle ORM skips undefined fields in .set(), so the DB column is not modified.
+      // The original params value is retained.
+      const updatedAgent = await serverDB
+        .select()
+        .from(agents)
+        .where(and(eq(agents.id, agentId), eq(agents.userId, userId)));
+
+      expect(updatedAgent[0].params).toEqual({ temperature: 0.7, top_p: 1 });
+    });
+
     it('should not update config for other users sessions', async () => {
       // Create agent for another user
       const sessionId = 'other-session';
