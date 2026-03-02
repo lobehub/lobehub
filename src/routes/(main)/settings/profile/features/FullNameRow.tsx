@@ -1,8 +1,8 @@
 'use client';
 
 import { LoadingOutlined } from '@ant-design/icons';
-import { Flexbox, Flexbox, Input, Text } from '@lobehub/ui';
-import { Spin } from 'antd';
+import { Flexbox, Input, Text } from '@lobehub/ui';
+import { InputRef, type InputRef, Spin } from 'antd';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,10 +21,10 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
   const fullName = useUserStore(userProfileSelectors.fullName);
   const updateFullName = useUserStore((s) => s.updateFullName);
   const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<InputRef>(null);
 
   const handleSave = useCallback(async () => {
-    const value = inputRef.current?.value?.trim();
+    const value = inputRef.current?.input?.value?.trim();
     if (!value || value === fullName) return;
 
     try {
@@ -43,6 +43,7 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
 
   const input = (
     <Flexbox horizontal align="center" gap={8}>
+      {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
       <Input
         defaultValue={fullName || ''}
         disabled={saving}
@@ -54,7 +55,6 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
         onBlur={handleSave}
         onPressEnter={handleSave}
       />
-      {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
     </Flexbox>
   );
 

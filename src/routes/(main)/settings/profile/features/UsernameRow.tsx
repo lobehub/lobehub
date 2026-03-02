@@ -2,7 +2,7 @@
 
 import { LoadingOutlined } from '@ant-design/icons';
 import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Spin } from 'antd';
+import { type InputRef, Spin } from 'antd';
 import { type ChangeEvent } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +22,7 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
   const updateUsername = useUserStore((s) => s.updateUsername);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<InputRef>(null);
 
   const usernameRegex = /^\w+$/;
 
@@ -35,7 +35,7 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
   };
 
   const handleSave = useCallback(async () => {
-    const value = inputRef.current?.value?.trim();
+    const value = inputRef.current?.input?.value?.trim();
     if (!value || value === username) {
       setError('');
       return;
@@ -79,6 +79,7 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
   const input = (
     <Flexbox gap={4}>
       <Flexbox horizontal align="center" gap={8}>
+        {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
         <Input
           defaultValue={username || ''}
           disabled={saving}
@@ -92,7 +93,6 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
           onChange={handleChange}
           onPressEnter={handleSave}
         />
-        {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
       </Flexbox>
       {error && (
         <Text style={{ fontSize: 12, textAlign: 'right' }} type="danger">
