@@ -1,4 +1,3 @@
-import { formatSpeakerMessage } from '@lobechat/prompts';
 import type { ChatTopicBotContext } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import { emoji } from 'chat';
@@ -11,6 +10,7 @@ import { appEnv } from '@/envs/app';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
+import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import {
   renderError,
   renderFinalReply,
@@ -534,28 +534,11 @@ export class AgentBridgeService {
   }
 
   /**
-   * Format user message into agent prompt:
-   * 1. Strip bot's own @mention (Discord format: <@botId>)
-   * 2. Add speaker tag with user identity
+   * Format user message into agent prompt.
+   * Delegates to the standalone formatPrompt utility.
    */
   private formatPrompt(message: Message, botContext?: ChatTopicBotContext): string {
-    let text = message.text;
-
-    if (botContext?.applicationId) {
-      text = text.replaceAll(new RegExp(`<@!?${botContext.applicationId}>\\s*`, 'g'), '').trim();
-    }
-
-    const { userId, userName, fullName } = message.author;
-    const raw = (message as any).raw?.author as
-      | { avatar?: string | null; global_name?: string | null }
-      | undefined;
-    const avatar = raw?.avatar ?? '';
-    const globalName = raw?.global_name ?? fullName;
-
-    return formatSpeakerMessage(
-      { avatar, id: userId, nickname: globalName, username: userName },
-      text,
-    );
+    return formatPromptUtil(message as any, botContext);
   }
 
   /**
