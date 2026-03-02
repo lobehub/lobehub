@@ -187,9 +187,28 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
   const contents = await Promise.all(pools);
 
   // Filter out empty messages: contents.parts must not be empty.
-  const filteredContents = contents.filter(
+  const nonEmptyContents = contents.filter(
     (content: Content) => content.parts && content.parts.length > 0,
   );
+
+  // Merge consecutive functionResponse contents into a single Content.
+  // Vertex AI requires the number of functionResponse parts to equal
+  // the number of functionCall parts in the preceding model turn.
+  const filteredContents: Content[] = [];
+  for (const content of nonEmptyContents) {
+    const isFunctionResponse =
+      content.role === 'user' && content.parts?.every((p) => p.functionResponse);
+
+    const last = filteredContents.at(-1);
+    const lastIsFunctionResponse =
+      last?.role === 'user' && last.parts?.every((p) => p.functionResponse);
+
+    if (isFunctionResponse && lastIsFunctionResponse) {
+      last!.parts = [...(last!.parts || []), ...(content.parts || [])];
+    } else {
+      filteredContents.push(content);
+    }
+  }
 
   // Check if the last message is a tool message
   const lastMessage = messages.at(-1);
