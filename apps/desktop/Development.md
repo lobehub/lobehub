@@ -6,56 +6,96 @@
 apps/desktop/src/main/
 ├── core/                     // 核心功能
 │   ├── App.ts                // 应用核心类，整合所有管理器
-│   ├── Browser.ts            // 浏览器窗口类
-│   ├── BrowserManager.ts     // 浏览器窗口管理
-│   ├── I18nManager.ts        // 国际化管理
-│   ├── IoCContainer.ts       // 依赖注入容器
-│   ├── MenuManager.ts        // 菜单管理核心类，负责选择和协调平台实现
-│   ├── ShortcutManager.ts    // 快捷键管理
-│   ├── StoreManager.ts       // 存储管理
-│   └── UpdaterManager.ts     // 更新管理
+│   ├── browser/              // 浏览器窗口相关
+│   │   ├── Browser.ts            // 浏览器窗口类
+│   │   ├── BrowserManager.ts     // 浏览器窗口管理
+│   │   ├── WindowStateManager.ts // 窗口状态管理
+│   │   └── WindowThemeManager.ts // 窗口主题管理
+│   ├── ui/                   // UI 相关管理
+│   │   ├── MenuManager.ts        // 菜单管理核心类，负责选择和协调平台实现
+│   │   ├── ShortcutManager.ts    // 快捷键管理
+│   │   ├── TrayManager.ts        // 系统托盘管理
+│   │   └── Tray.ts               // 托盘实例
+│   └── infrastructure/       // 基础设施层
+│       ├── IoCContainer.ts       // 依赖注入容器
+│       ├── StoreManager.ts       // 存储管理
+│       ├── I18nManager.ts        // 国际化管理
+│       ├── UpdaterManager.ts     // 更新管理
+│       ├── ProtocolManager.ts   // 协议处理管理（基类）
+│       ├── RendererUrlManager.ts // 渲染进程 URL 管理
+│       ├── RendererProtocolManager.ts    // 渲染进程协议管理
+│       ├── BackendProxyProtocolManager.ts // 后端代理协议管理
+│       ├── StaticFileServerManager.ts    // 静态文件服务管理
+│       └── ToolDetectorManager.ts        // 工具检测器管理
 ├── controllers/              // 控制器层，处理渲染进程调用
 │   ├── AuthCtr.ts            // 认证控制器
 │   ├── BrowserWindowsCtr.ts  // 浏览器窗口控制器
 │   ├── DevtoolsCtr.ts        // 开发工具控制器
 │   ├── LocalFileCtr.ts       // 本地文件控制器
+│   ├── McpCtr.ts             // MCP 控制器
+│   ├── McpInstallCtr.ts      // MCP 安装控制器
 │   ├── MenuCtr.ts            // 菜单控制器
+│   ├── NetworkProxyCtr.ts    // 网络代理控制器
+│   ├── NotificationCtr.ts   // 通知控制器
 │   ├── RemoteServerConfigCtr.ts // 远程服务器配置控制器
 │   ├── RemoteServerSyncCtr.ts   // 远程服务器同步控制器
+│   ├── ShellCommandCtr.ts    // Shell 命令控制器
 │   ├── ShortcutCtr.ts        // 快捷键控制器
 │   ├── SystemCtr.ts          // 系统控制器
+│   ├── ToolDetectorCtr.ts    // 工具检测器控制器
+│   ├── TrayMenuCtr.ts        // 托盘菜单控制器
 │   ├── UpdaterCtr.ts         // 更新控制器
 │   ├── UploadFileCtr.ts      // 文件上传控制器
+│   ├── registry.ts           // 控制器注册表
 │   └── index.ts              // 控制器导出
 ├── services/                 // 服务层
 │   ├── fileSearchSrv.ts      // 文件搜索服务
+│   ├── contentSearchSrv.ts   // 内容搜索服务
 │   ├── fileSrv.ts            // 文件服务
 │   └── index.ts              // 服务导出
 ├── modules/                  // 功能模块
-│   ├── fileSearch/           // 文件搜索模块
+│   ├── fileSearch/           // 文件搜索模块（Spotlight/mdfind/fd 等）
+│   ├── contentSearch/        // 内容搜索模块
+│   ├── networkProxy/         // 网络代理模块
+│   ├── toolDetectors/        // 工具检测器（fileSearch、contentSearch、astSearch）
 │   └── updater/              // 更新模块
 ├── menus/                    // 菜单实现目录
 │   ├── index.ts              // 导出平台实现和接口
 │   ├── types.ts              // 定义菜单平台接口 IMenuPlatform
-│   └── impl/                 // 平台特定实现目录
+│   └── impls/                // 平台特定实现目录
 │       ├── BaseMenuPlatform.ts // 基础平台类，注入App
-│       ├── DarwinMenu.ts       // macOS 充血模型实现
-│       ├── WindowsMenu.ts      // Windows 充血模型实现
-│       └── LinuxMenu.ts        // Linux 充血模型实现
+│       ├── macOS.ts             // macOS 充血模型实现
+│       ├── windows.ts           // Windows 充血模型实现
+│       └── linux.ts             // Linux 充血模型实现
 ├── shortcuts/                // 快捷键实现
 │   ├── config.ts             // 快捷键配置
 │   └── index.ts              // 快捷键导出
 ├── utils/                    // 工具函数
 │   ├── file-system.ts        // 文件系统工具
 │   ├── logger.ts             // 日志工具
-│   └── next-electron-rsc.ts  // Next.js Electron RSC 工具
+│   ├── path.ts               // 路径工具
+│   ├── permissions.ts        // 权限工具
+│   ├── mime.ts               // MIME 类型工具
+│   ├── http-headers.ts       // HTTP 头工具
+│   ├── protocol.ts           // 协议工具
+│   ├── ipc/                  // IPC 工具
+│   │   ├── base.ts           // IPC 基类
+│   │   ├── index.ts          // IPC 导出
+│   │   └── utility.ts        // IPC 工具函数
+│   └── ...
+├── libs/                     // 主进程第三方库封装
+│   └── mcp/                  // MCP 客户端
+│       ├── types.ts          // MCP 类型定义
+│       └── client.ts         // MCP 客户端实现
 ├── types/                    // 类型定义
-│   ├── fileSearch.ts         // 文件搜索类型
-│   └── store.ts              // 存储类型
+│   ├── store.ts              // 存储类型
+│   └── protocol.ts           // 协议类型
 ├── const/                    // 常量定义
 │   ├── dir.ts                // 目录常量
 │   ├── env.ts                // 环境常量
-│   └── store.ts              // 存储常量
+│   ├── store.ts              // 存储常量
+│   ├── protocol.ts           // 协议常量
+│   └── theme.ts              // 主题常量
 ├── locales/                  // 国际化资源
 │   ├── index.ts              // 导出 i18n 相关功能
 │   ├── resources.ts          // 资源加载逻辑
@@ -64,25 +104,29 @@ apps/desktop/src/main/
 │       ├── menu.ts           // 菜单翻译
 │       ├── dialog.ts         // 对话框翻译
 │       └── common.ts         // 通用翻译
+├── appBrowsers.ts            // 应用浏览器窗口配置
+├── exports.ts                // 主进程导出
 └── index.ts                  // 主进程入口文件
 ```
+
+> **注意**：文件搜索类型 (`FileResult`, `SearchOptions` 等) 已移至 `modules/fileSearch/types.ts`。
 
 ### 预加载脚本
 
 ```
 apps/desktop/src/preload/
-├── index.ts                  // 预加载脚本入口
-└── apis/                     // 预加载 API
-    └── ...                   // 各种 API 实现
+├── index.ts          // 预加载脚本入口，初始化 electronApi 和路由拦截
+├── electronApi.ts    // Electron API 暴露到渲染进程
+├── invoke.ts         // IPC 调用封装
+├── routeInterceptor.ts // 路由拦截逻辑（如 /settings 打开设置窗口）
+└── streamer.ts       // 流式数据传输
 ```
 
 ### 共享代码
 
 ```
 apps/desktop/src/common/
-├── constants/                // 共享常量
-├── types/                    // 共享类型
-└── utils/                    // 共享工具函数
+└── routes.ts         // 路由拦截配置类型 (RouteInterceptConfig)
 ```
 
 ## 功能模块实现
@@ -93,16 +137,16 @@ apps/desktop/src/common/
 apps/desktop/src/main/
 ├── core/
 │   ├── App.ts                // 应用核心类
-│   ├── BrowserManager.ts     // 浏览器窗口管理
-│   └── MenuManager.ts        // 菜单管理核心类，负责选择和协调平台实现
+│   ├── browser/BrowserManager.ts  // 浏览器窗口管理
+│   └── ui/MenuManager.ts     // 菜单管理核心类，负责选择和协调平台实现
 ├── menus/                    // 菜单实现目录
 │   ├── index.ts              // 导出平台实现和接口
 │   ├── types.ts              // 定义菜单平台接口 IMenuPlatform
-│   └── impl/                 // 平台特定实现目录
+│   └── impls/                // 平台特定实现目录
 │       ├── BaseMenuPlatform.ts // 基础平台类，注入App
-│       ├── DarwinMenu.ts       // macOS 充血模型实现
-│       ├── WindowsMenu.ts      // Windows 充血模型实现
-│       └── LinuxMenu.ts        // Linux 充血模型实现
+│       ├── macOS.ts            // macOS 充血模型实现
+│       ├── windows.ts          // Windows 充血模型实现
+│       └── linux.ts            // Linux 充血模型实现
 ├── controllers/
 │   └── MenuCtr.ts            // 菜单控制器，处理渲染进程调用
 ```
@@ -112,7 +156,7 @@ apps/desktop/src/main/
 ```
 apps/desktop/src/main/
 ├── core/
-│   ├── I18nManager.ts        // i18n 管理器
+│   ├── infrastructure/I18nManager.ts  // i18n 管理器
 │   └── App.ts                // 应用主类，集成 i18n
 ├── locales/
 │   ├── index.ts              // 导出 i18n 相关功能
@@ -288,9 +332,11 @@ export class BrowserWindowsCtr extends ControllerModule {
 ```
 
 2. **IoC 容器**：
-   - 依赖注入容器管理控制器实例
+   - 依赖注入容器 (`core/infrastructure/IoCContainer.ts`) 管理控制器实例
    - 注册和解析 IPC 事件处理程序
    - 管理快捷键和控制器方法的映射
+
+3. **控制器注册**：新控制器需加入 `controllers/registry.ts` 的 `controllerIpcConstructors` 数组
 
 ### 服务逻辑 (Service Logic)
 
@@ -312,6 +358,7 @@ export class ServiceModule {
 
 2. **服务实现**：
    - fileSearchSrv：文件搜索服务
+   - contentSearchSrv：内容搜索服务
    - fileSrv：文件操作服务
 
 ### 数据存储 (Electron Settings)
@@ -459,8 +506,7 @@ export class UpdaterManager {
 │  │                 │           │                          │    │
 │  │  ┌─────────────┐│           │  ┌────────────────────┐  │    │
 │  │  │    Core     ││           │  │                    │  │    │
-│  │  │  Managers   ││           │  │                    │  │    │
-│  │  └─────────────┘│           │  │     Next.js App    │  │    │
+│  │  │  Managers   ││           │  │   Vite SPA (React)  │  │    │
 │  │        │        │           │  │                    │  │    │
 │  │  ┌─────▼─────┐  │           │  │                    │  │    │
 │  │  │Controllers│  │◄──────────┼──┤                    │  │    │
