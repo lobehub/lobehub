@@ -7,7 +7,7 @@ services:
     ports:
       - '${RUSTFS_PORT}:9000' # RustFS API
       - '9001:9001' # RustFS Console
-      - '${LOBE_PORT}:3210' # LobeChat
+      - '3211:3210' # LobeChat
     command: tail -f /dev/null
     networks:
       - lobe-network
@@ -93,6 +93,20 @@ services:
     env_file:
       - .env
 
+  qstash:
+    image: public.ecr.aws/upstash/qstash:latest
+    container_name: lobe-qstash
+    environment:
+      - QSTASH_CURRENT_SIGNING_KEY=${QSTASH_CURRENT_SIGNING_KEY}
+      - QSTASH_NEXT_SIGNING_KEY=${QSTASH_NEXT_SIGNING_KEY}
+      - QSTASH_TOKEN=${QSTASH_TOKEN}
+    command: qstash dev
+    restart: always
+    networks:
+      - lobe-network
+    env_file:
+      - .env
+
   lobe:
     image: lobehub/lobehub
     container_name: lobehub
@@ -123,6 +137,11 @@ services:
       - 'REDIS_URL=redis://redis:6379'
       - 'REDIS_PREFIX=lobechat'
       - 'REDIS_TLS=0'
+      - 'AGENT_RUNTIME_MODE=queue'
+      - 'QSTASH_URL=http://qstash:8080'
+      - 'QSTASH_TOKEN=${QSTASH_TOKEN}'
+      - 'QSTASH_CURRENT_SIGNING_KEY=${QSTASH_CURRENT_SIGNING_KEY}'
+      - 'QSTASH_NEXT_SIGNING_KEY=${QSTASH_NEXT_SIGNING_KEY}'
     env_file:
       - .env
     restart: always
