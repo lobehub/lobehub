@@ -336,6 +336,7 @@
   "supervisor.todoList.allComplete": "Все задачи выполнены",
   "supervisor.todoList.title": "Задачи выполнены",
   "tab.groupProfile": "Профиль группы",
+  "tab.integration": "Интеграция",
   "tab.profile": "Профиль агента",
   "tab.search": "Поиск",
   "task.activity.calling": "Вызов навыка...",

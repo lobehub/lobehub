@@ -336,6 +336,7 @@
   "supervisor.todoList.allComplete": "모든 작업 완료",
   "supervisor.todoList.title": "작업 완료",
   "tab.groupProfile": "그룹 프로필",
+  "tab.integration": "통합",
   "tab.profile": "도우미 프로필",
   "tab.search": "검색",
   "task.activity.calling": "기능 호출 중…",

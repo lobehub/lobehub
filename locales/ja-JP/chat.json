@@ -336,6 +336,7 @@
   "supervisor.todoList.allComplete": "すべてのタスクが完了しました",
   "supervisor.todoList.title": "タスク完了",
   "tab.groupProfile": "グループプロフィール",
+  "tab.integration": "統合",
   "tab.profile": "アシスタントプロフィール",
   "tab.search": "検索",
   "task.activity.calling": "スキルを呼び出し中…",

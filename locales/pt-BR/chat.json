@@ -336,6 +336,7 @@
   "supervisor.todoList.allComplete": "Todas as tarefas concluídas",
   "supervisor.todoList.title": "Tarefas Concluídas",
   "tab.groupProfile": "Perfil do Grupo",
+  "tab.integration": "Integração",
   "tab.profile": "Perfil do Agente",
   "tab.search": "Buscar",
   "task.activity.calling": "Chamando Habilidade...",
