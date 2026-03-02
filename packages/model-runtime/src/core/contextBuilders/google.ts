@@ -246,10 +246,10 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 };
 
 /**
- * JSON Schema keywords not supported by Google GenAI / Vertex AI.
- * These are silently stripped during sanitization.
+ * JSON Schema keywords that cause Google GenAI / Vertex AI SDK validation errors.
+ * Other unsupported keywords are silently ignored by the API, so only strip these.
  */
-const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default', '$schema', '$id', '$comment']);
+const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default']);
 
 /**
  * Sanitize JSON Schema for Google GenAI compatibility

@@ -1345,7 +1345,7 @@ describe('google contextBuilders', () => {
 
       const result = buildGoogleTool(tool);
 
-      // examples, default, $comment should be stripped
+      // examples, default should be stripped; $comment is silently ignored by the API
       expect(result.parameters?.properties).toEqual({
         query: {
           description: 'Search query',
@@ -1354,6 +1354,7 @@ describe('google contextBuilders', () => {
         nested: {
           properties: {
             format: {
+              $comment: 'internal note',
               type: 'string',
             },
           },
