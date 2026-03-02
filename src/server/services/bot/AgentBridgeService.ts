@@ -282,11 +282,16 @@ export class AgentBridgeService {
       userMessageId: userMessage.id,
     };
 
+    const files = this.extractFiles(userMessage);
+    const prompt = this.formatPrompt(userMessage, botContext);
+
     log(
-      'executeWithWebhooks: agentId=%s, callbackUrl=%s, progressMessageId=%s',
+      'executeWithWebhooks: agentId=%s, callbackUrl=%s, progressMessageId=%s, prompt=%s, files=%d',
       agentId,
       callbackUrl,
       progressMessageId,
+      prompt.slice(0, 100),
+      files?.length ?? 0,
     );
 
     const result = await aiAgentService.execAgent({
@@ -298,8 +303,8 @@ export class AgentBridgeService {
       discordContext: channelContext
         ? { channel: channelContext.channel, guild: channelContext.guild }
         : undefined,
-      files: this.extractFiles(userMessage),
-      prompt: this.formatPrompt(userMessage, botContext),
+      files,
+      prompt,
       stepWebhook: { body: webhookBody, url: callbackUrl },
       trigger,
       userInterventionConfig: { approvalMode: 'headless' },
@@ -361,6 +366,16 @@ export class AgentBridgeService {
 
       const getElapsedMs = () => (operationStartTime > 0 ? Date.now() - operationStartTime : 0);
 
+      const files = this.extractFiles(userMessage);
+      const prompt = this.formatPrompt(userMessage, botContext);
+
+      log(
+        'executeWithInMemoryCallbacks: agentId=%s, prompt=%s, files=%d',
+        agentId,
+        prompt.slice(0, 100),
+        files?.length ?? 0,
+      );
+
       aiAgentService
         .execAgent({
           agentId,
@@ -370,8 +385,8 @@ export class AgentBridgeService {
           discordContext: channelContext
             ? { channel: channelContext.channel, guild: channelContext.guild }
             : undefined,
-          files: this.extractFiles(userMessage),
-          prompt: this.formatPrompt(userMessage, botContext),
+          files,
+          prompt,
           stepCallbacks: {
             onAfterStep: async (stepData) => {
               const { content, shouldContinue, toolsCalling } = stepData;
@@ -537,24 +552,53 @@ export class AgentBridgeService {
 
   /**
    * Extract file attachment metadata from Chat SDK message for passing to execAgent.
+   * Includes attachments from both the message itself and any referenced (quoted) message.
    */
   private extractFiles(
     message: Message,
   ): Array<{ mimeType?: string; name?: string; size?: number; url: string }> | undefined {
-    const attachments = (message as any).attachments as
-      | Array<{ mimeType?: string; name?: string; size?: number; type?: string; url?: string }>
-      | undefined;
+    type AttachmentLike = {
+      content_type?: string;
+      filename?: string;
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      type?: string;
+      url?: string;
+    };
 
-    if (!attachments?.length) return undefined;
+    const files: Array<{ mimeType?: string; name?: string; size?: number; url: string }> = [];
 
-    const files = attachments
-      .filter((att) => att.url)
-      .map((att) => ({
-        mimeType: att.mimeType,
-        name: att.name,
-        size: att.size,
-        url: att.url!,
-      }));
+    // 1. Direct attachments from the message (parsed by Chat SDK)
+    const directAttachments = (message as any).attachments as AttachmentLike[] | undefined;
+    if (directAttachments?.length) {
+      for (const att of directAttachments) {
+        if (att.url) {
+          files.push({
+            mimeType: att.mimeType,
+            name: att.name,
+            size: att.size,
+            url: att.url,
+          });
+        }
+      }
+    }
+
+    // 2. Attachments from referenced (quoted/replied-to) message (Discord raw payload)
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    const refAttachments = raw?.referenced_message?.attachments as AttachmentLike[] | undefined;
+    if (refAttachments?.length) {
+      for (const att of refAttachments) {
+        if (att.url) {
+          files.push({
+            mimeType: att.content_type,
+            name: att.filename,
+            size: att.size,
+            url: att.url,
+          });
+        }
+      }
+    }
 
     return files.length > 0 ? files : undefined;
   }
