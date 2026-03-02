@@ -532,7 +532,9 @@ export class AgentRuntimeService {
       let toolsCalling:
         | Array<{ apiName: string; arguments?: string; identifier: string }>
         | undefined;
-      let toolsResult: Array<{ apiName: string; identifier: string; output?: string }> | undefined;
+      let toolsResult:
+        | Array<{ apiName: string; identifier: string; isSuccess?: boolean; output?: string }>
+        | undefined;
       let stepSummary: string;
 
       if (phase === 'tool_result') {

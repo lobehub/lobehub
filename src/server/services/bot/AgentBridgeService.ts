@@ -274,7 +274,7 @@ export class AgentBridgeService {
       autoStart: true,
       botContext,
       completionWebhook: { body: webhookBody, url: callbackUrl },
-      prompt: userMessage.text,
+      prompt: this.formatPrompt(userMessage, botContext),
       stepWebhook: { body: webhookBody, url: callbackUrl },
       trigger,
       userInterventionConfig: { approvalMode: 'headless' },
@@ -341,7 +341,7 @@ export class AgentBridgeService {
           appContext: topicId ? { topicId } : undefined,
           autoStart: true,
           botContext,
-          prompt: userMessage.text,
+          prompt: this.formatPrompt(userMessage, botContext),
           stepCallbacks: {
             onAfterStep: async (stepData) => {
               const { content, shouldContinue, toolsCalling } = stepData;
@@ -455,6 +455,22 @@ export class AgentBridgeService {
           reject(error);
         });
     });
+  }
+
+  /**
+   * Format user message into agent prompt:
+   * 1. Strip bot's own @mention (Discord format: <@botId>)
+   * 2. Add speaker tag with user identity
+   */
+  private formatPrompt(message: Message, botContext?: ChatTopicBotContext): string {
+    let text = message.text;
+
+    if (botContext?.applicationId) {
+      text = text.replaceAll(new RegExp(`<@!?${botContext.applicationId}>\\s*`, 'g'), '').trim();
+    }
+
+    const { userId, fullName } = message.author;
+    return `<speaker id="${userId}" nickname="${fullName}" />\n${text}`;
   }
 
   /**
