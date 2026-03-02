@@ -31,7 +31,9 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
-        <span>{t('builtins.lobe-web-browsing.apiName.search')}: </span>
+        <span>
+          {t('builtins.lobe-web-browsing.apiName.search')}:{'\u00A0'}
+        </span>
         {query && <span className={highlightTextStyles.primary}>{query}</span>}
         {!isLoading &&
           !isArgumentsStreaming &&
