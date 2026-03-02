@@ -227,11 +227,16 @@ const shouldIncludeThoughts = (
 ): boolean | undefined => {
   const { thinkingBudget, thinkingLevel } = options;
 
-  // Conditions that enable thinking:
-  // 1. thinkingBudget is explicitly set (and not 0)
-  // 2. thinkingLevel is explicitly set
-  // 3. Model is in the thinking-enabled list
-  const hasExplicitThinking = !!thinkingBudget || !!thinkingLevel;
+  // thinkingLevel explicitly enables thinking, always include thoughts
+  if (thinkingLevel) return true;
+
+  // When resolvedBudget is undefined and no thinkingLevel is set,
+  // thinking is not actually enabled, so don't set includeThoughts.
+  // This prevents Vertex AI error:
+  // "include_thoughts is only enabled when thinking is enabled"
+  if (resolvedBudget === undefined) return undefined;
+
+  const hasExplicitThinking = !!thinkingBudget;
   const isThinkingModel = isThinkingEnabledModel(model);
 
   // If thinking is requested AND budget is not 0, enable includeThoughts
