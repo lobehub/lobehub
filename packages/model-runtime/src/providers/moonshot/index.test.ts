@@ -1,12 +1,13 @@
 // @vitest-environment node
-import OpenAI from 'openai';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type OpenAI from 'openai';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  anthropicParams,
   LobeMoonshotAI,
   LobeMoonshotAnthropicAI,
   LobeMoonshotOpenAI,
-  anthropicParams,
   params,
 } from './index';
 
@@ -70,7 +71,7 @@ describe('LobeMoonshotOpenAI', () => {
 
   const getLastRequestPayload = () => {
     const calls = ((instance as any).client.chat.completions.create as Mock).mock.calls;
-    return calls[calls.length - 1]?.[0];
+    return calls.at(-1)?.[0];
   };
 
   beforeEach(() => {
@@ -280,7 +281,7 @@ describe('LobeMoonshotAnthropicAI', () => {
 
   const getLastRequestPayload = () => {
     const calls = ((instance as any).client.messages.create as Mock).mock.calls;
-    return calls[calls.length - 1]?.[0];
+    return calls.at(-1)?.[0];
   };
 
   beforeEach(() => {
@@ -468,12 +469,14 @@ describe('LobeMoonshotAnthropicAI', () => {
           (message: any) => message.role === 'assistant',
         );
 
+        // forceThinking adds a text placeholder for empty content
         expect(assistantMessage?.content).toEqual([
           { type: 'thinking', thinking: 'My reasoning process' },
+          { type: 'text', text: ' ' },
         ]);
       });
 
-      it('should not add thinking block when reasoning has signature', async () => {
+      it('should add placeholder thinking block when reasoning has signature', async () => {
         await instance.chat({
           messages: [
             { content: 'Hello', role: 'user' },
@@ -492,8 +495,11 @@ describe('LobeMoonshotAnthropicAI', () => {
           (message: any) => message.role === 'assistant',
         );
 
-        // Should not have thinking block, just text
-        expect(assistantMessage?.content).toBe('Response');
+        // forceThinking: even with invalid reasoning (has signature), a placeholder thinking block is added
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: 'Response' },
+        ]);
       });
 
       it('should handle assistant message with tool_calls and reasoning', async () => {
