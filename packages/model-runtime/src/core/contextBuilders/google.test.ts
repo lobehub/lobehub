@@ -911,6 +911,92 @@ describe('google contextBuilders', () => {
       ]);
     });
 
+    it('should merge consecutive functionResponse contents into a single Content for multi-tool-call turns', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: 'What is the weather in London and Tokyo?', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: JSON.stringify({ location: 'London' }),
+                name: 'get_weather',
+              },
+              id: 'call_1',
+              type: 'function',
+            },
+            {
+              function: {
+                arguments: JSON.stringify({ location: 'Tokyo' }),
+                name: 'get_weather',
+              },
+              id: 'call_2',
+              type: 'function',
+            },
+          ],
+        },
+        {
+          content: '{"temperature":"14°C"}',
+          name: 'get_weather',
+          role: 'tool',
+          tool_call_id: 'call_1',
+        },
+        {
+          content: '{"temperature":"22°C"}',
+          name: 'get_weather',
+          role: 'tool',
+          tool_call_id: 'call_2',
+        },
+      ];
+
+      const contents = await buildGoogleMessages(messages);
+
+      // Function calls should be in one Content, function responses merged into one Content
+      expect(contents).toHaveLength(3);
+      expect(contents).toEqual([
+        {
+          parts: [
+            {
+              text: 'What is the weather in London and Tokyo?',
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+          ],
+          role: 'user',
+        },
+        {
+          parts: [
+            {
+              functionCall: { args: { location: 'London' }, name: 'get_weather' },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+            {
+              functionCall: { args: { location: 'Tokyo' }, name: 'get_weather' },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                name: 'get_weather',
+                response: { result: '{"temperature":"14°C"}' },
+              },
+            },
+            {
+              functionResponse: {
+                name: 'get_weather',
+                response: { result: '{"temperature":"22°C"}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+
     it('should correctly convert full conversation with thoughtSignature', async () => {
       const messages: OpenAIChatMessage[] = [
         { content: 'system prompt', role: 'system' },
