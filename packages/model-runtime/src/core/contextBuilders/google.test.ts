@@ -1312,6 +1312,55 @@ describe('google contextBuilders', () => {
         type: 'string',
       });
     });
+
+    it('should strip unsupported JSON Schema keywords like examples and default', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with unsupported schema keywords',
+          name: 'mcp_tool',
+          parameters: {
+            properties: {
+              query: {
+                default: 'hello',
+                description: 'Search query',
+                examples: ['weather in London', 'latest news'],
+                type: 'string',
+              },
+              nested: {
+                properties: {
+                  format: {
+                    $comment: 'internal note',
+                    examples: ['json', 'xml'],
+                    type: 'string',
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // examples, default, $comment should be stripped
+      expect(result.parameters?.properties).toEqual({
+        query: {
+          description: 'Search query',
+          type: 'string',
+        },
+        nested: {
+          properties: {
+            format: {
+              type: 'string',
+            },
+          },
+          type: 'object',
+        },
+      });
+    });
   });
 
   describe('buildGoogleTools', () => {

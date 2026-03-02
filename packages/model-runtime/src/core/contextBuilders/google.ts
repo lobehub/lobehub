@@ -246,6 +246,12 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 };
 
 /**
+ * JSON Schema keywords not supported by Google GenAI / Vertex AI.
+ * These are silently stripped during sanitization.
+ */
+const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default', '$schema', '$id', '$comment']);
+
+/**
  * Sanitize JSON Schema for Google GenAI compatibility
  * Google's API doesn't support certain JSON Schema keywords like 'const'
  * This function recursively processes the schema and converts unsupported keywords
@@ -261,6 +267,9 @@ const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, an
   const result: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(schema)) {
+    // Strip unsupported JSON Schema keywords (e.g. examples, default, $schema)
+    if (UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
+
     // Convert 'const' to 'enum' with single value (Google doesn't support 'const')
     if (key === 'const') {
       result['enum'] = [value];
