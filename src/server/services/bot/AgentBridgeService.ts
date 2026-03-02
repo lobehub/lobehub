@@ -298,6 +298,7 @@ export class AgentBridgeService {
       discordContext: channelContext
         ? { channel: channelContext.channel, guild: channelContext.guild }
         : undefined,
+      files: this.extractFiles(userMessage),
       prompt: this.formatPrompt(userMessage, botContext),
       stepWebhook: { body: webhookBody, url: callbackUrl },
       trigger,
@@ -369,6 +370,7 @@ export class AgentBridgeService {
           discordContext: channelContext
             ? { channel: channelContext.channel, guild: channelContext.guild }
             : undefined,
+          files: this.extractFiles(userMessage),
           prompt: this.formatPrompt(userMessage, botContext),
           stepCallbacks: {
             onAfterStep: async (stepData) => {
@@ -531,6 +533,30 @@ export class AgentBridgeService {
       log('fetchChannelContext: failed to fetch channel context: %O', error);
       return undefined;
     }
+  }
+
+  /**
+   * Extract file attachment metadata from Chat SDK message for passing to execAgent.
+   */
+  private extractFiles(
+    message: Message,
+  ): Array<{ mimeType?: string; name?: string; size?: number; url: string }> | undefined {
+    const attachments = (message as any).attachments as
+      | Array<{ mimeType?: string; name?: string; size?: number; type?: string; url?: string }>
+      | undefined;
+
+    if (!attachments?.length) return undefined;
+
+    const files = attachments
+      .filter((att) => att.url)
+      .map((att) => ({
+        mimeType: att.mimeType,
+        name: att.name,
+        size: att.size,
+        url: att.url!,
+      }));
+
+    return files.length > 0 ? files : undefined;
   }
 
   /**
