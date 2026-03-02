@@ -64,6 +64,24 @@ async function safeReaction(fn: () => Promise<void>, label: string): Promise<voi
   }
 }
 
+/**
+ * Workaround for Chat SDK adapter bug: addReaction/removeReaction only use
+ * `channelId` (parts[2]) from the decoded thread ID, ignoring `threadId` (parts[3]).
+ * In Discord threads, the correct channel for API calls is the thread ID itself.
+ *
+ * This function rewrites the encoded thread ID so that the adapter picks up
+ * the thread channel ID in the `channelId` position.
+ *
+ * e.g. "discord:guild:parentChannel:thread" → "discord:guild:thread"
+ */
+function rewriteThreadIdForReaction(threadId: string): string {
+  const parts = threadId.split(':');
+  if (parts.length >= 4 && parts[0] === 'discord' && parts[3]) {
+    return `discord:${parts[1]}:${parts[3]}`;
+  }
+  return threadId;
+}
+
 interface DiscordChannelContext {
   channel: { id: string; name?: string; topic?: string; type?: number };
   guild: { id: string };
@@ -118,7 +136,12 @@ export class AgentBridgeService {
 
     // Immediate feedback: mark as received + show typing
     await safeReaction(
-      () => thread.adapter.addReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () =>
+        thread.adapter.addReaction(
+          rewriteThreadIdForReaction(thread.id),
+          message.id,
+          RECEIVED_EMOJI,
+        ),
       'add eyes',
     );
     await thread.subscribe();
@@ -182,7 +205,12 @@ export class AgentBridgeService {
 
     // Immediate feedback: mark as received + show typing
     await safeReaction(
-      () => thread.adapter.addReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () =>
+        thread.adapter.addReaction(
+          rewriteThreadIdForReaction(thread.id),
+          message.id,
+          RECEIVED_EMOJI,
+        ),
       'add eyes',
     );
     await thread.startTyping();
@@ -639,7 +667,12 @@ export class AgentBridgeService {
     message: Message,
   ): Promise<void> {
     await safeReaction(
-      () => thread.adapter.removeReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () =>
+        thread.adapter.removeReaction(
+          rewriteThreadIdForReaction(thread.id),
+          message.id,
+          RECEIVED_EMOJI,
+        ),
       'remove eyes',
     );
   }
