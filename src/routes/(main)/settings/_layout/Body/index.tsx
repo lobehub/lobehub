@@ -2,10 +2,11 @@
 
 import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { SettingsTabs } from '@/store/global/initialState';
+import { isModifierClick } from '@/utils/navigation';
 
 import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
 
@@ -24,12 +25,8 @@ const Body = memo(() => {
     return SettingsTabs.Profile;
   }, [location.pathname]);
 
-  const handleTabClick = (tab: SettingsTabs) => {
-    if (tab === SettingsTabs.Provider) {
-      navigate('/settings/provider/all');
-    } else {
-      navigate(`/settings/${tab}`);
-    }
+  const getTabUrl = (tab: SettingsTabs) => {
+    return tab === SettingsTabs.Provider ? '/settings/provider/all' : `/settings/${tab}`;
   };
 
   return (
@@ -57,15 +54,22 @@ const Body = memo(() => {
             }
           >
             <Flexbox gap={1} paddingBlock={1}>
-              {group.items.map((item) => (
-                <NavItem
-                  active={activeTab === item.key}
-                  icon={item.icon}
-                  key={item.key}
-                  title={item.label}
-                  onClick={() => handleTabClick(item.key)}
-                />
-              ))}
+              {group.items.map((item) => {
+                const url = getTabUrl(item.key);
+                return (
+                  <Link
+                    key={item.key}
+                    to={url}
+                    onClick={(e) => {
+                      if (isModifierClick(e)) return;
+                      e.preventDefault();
+                      navigate(url);
+                    }}
+                  >
+                    <NavItem active={activeTab === item.key} icon={item.icon} title={item.label} />
+                  </Link>
+                );
+              })}
             </Flexbox>
           </AccordionItem>
         ))}

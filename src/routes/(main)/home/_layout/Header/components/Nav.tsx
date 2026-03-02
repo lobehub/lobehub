@@ -17,6 +17,7 @@ import {
   serverConfigSelectors,
   useServerConfigStore,
 } from '@/store/serverConfig';
+import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
   hidden?: boolean | undefined;
@@ -111,6 +112,7 @@ const Nav = memo(() => {
             key={item.key}
             to={item.url}
             onClick={(e) => {
+              if (isModifierClick(e)) return;
               e.preventDefault();
               item?.onClick?.();
               if (item.url) {

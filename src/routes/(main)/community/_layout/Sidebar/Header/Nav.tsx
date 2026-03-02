@@ -11,6 +11,7 @@ import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePathname } from '@/libs/router/navigation';
 import { DiscoverTab } from '@/types/discover';
+import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
   icon: NavItemProps['icon'];
@@ -86,6 +87,7 @@ const Nav = memo(() => {
             key={item.key}
             to={item.url}
             onClick={(e) => {
+              if (isModifierClick(e)) return;
               e.preventDefault();
               item?.onClick?.();
               if (item.url) {
