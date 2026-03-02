@@ -20,7 +20,7 @@ testProvider({
 });
 
 // Mock the console.error to avoid polluting test output
-vi.spyOn(console, 'error').mockImplementation(() => { });
+vi.spyOn(console, 'error').mockImplementation(() => {});
 
 let instance: LobeOpenAICompatibleRuntime;
 
@@ -402,6 +402,72 @@ describe('LobeOpenRouterAI - custom features', () => {
           expect.objectContaining({
             modalities: ['image', 'text'],
             image_config: { aspect_ratio: '16:9' },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should add image_config with image_size for image model', async () => {
+        await instance.chat({
+          messages: [{ content: 'Generate an image', role: 'user' }],
+          model: 'openai/dall-e-3-image',
+          imageResolution: '4K',
+        } as any);
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+            image_config: { image_size: '4K' },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should map 512px to 0.5K in image_config.image_size', async () => {
+        await instance.chat({
+          messages: [{ content: 'Generate an image', role: 'user' }],
+          model: 'openai/dall-e-3-image',
+          imageResolution: '512px',
+        } as any);
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+            image_config: { image_size: '0.5K' },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should combine aspect_ratio and image_size in image_config', async () => {
+        await instance.chat({
+          messages: [{ content: 'Generate an image', role: 'user' }],
+          model: 'openai/dall-e-3-image',
+          imageAspectRatio: '16:9',
+          imageResolution: '2K',
+        } as any);
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+            image_config: { aspect_ratio: '16:9', image_size: '2K' },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should omit aspect_ratio when imageAspectRatio is auto', async () => {
+        await instance.chat({
+          messages: [{ content: 'Generate an image', role: 'user' }],
+          model: 'openai/dall-e-3-image',
+          imageAspectRatio: 'auto',
+          imageResolution: '2K',
+        } as any);
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+            image_config: { image_size: '2K' },
           }),
           expect.anything(),
         );

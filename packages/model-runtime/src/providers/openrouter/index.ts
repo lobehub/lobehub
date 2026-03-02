@@ -14,7 +14,16 @@ export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { reasoning_effort, thinking, reasoning: _reasoning, thinkingLevel, imageAspectRatio, model, ...rest } = payload;
+      const {
+        reasoning_effort,
+        thinking,
+        reasoning: _reasoning,
+        thinkingLevel,
+        imageAspectRatio,
+        imageResolution,
+        model,
+        ...rest
+      } = payload;
 
       let reasoning: OpenRouterReasoning | undefined;
 
@@ -41,9 +50,26 @@ export const params = {
       const isImageModel = model.includes('-image') || model.includes('flux');
       const modalities =
         (payload as any).modalities ?? (isImageModel ? ['image', 'text'] : undefined);
+
+      // Map imageResolution to image_size: '512px' → '0.5K', others pass through
+      const imageSizeValue = imageResolution
+        ? imageResolution === '512px'
+          ? '0.5K'
+          : imageResolution
+        : undefined;
+
+      // 'auto' means use model default — omit the parameter
+      const aspectRatioValue =
+        imageAspectRatio && imageAspectRatio !== 'auto' ? imageAspectRatio : undefined;
+
       const image_config =
         (payload as any).image_config ??
-        (isImageModel && imageAspectRatio ? { aspect_ratio: imageAspectRatio } : undefined);
+        (isImageModel && (aspectRatioValue || imageSizeValue)
+          ? {
+              ...(aspectRatioValue && { aspect_ratio: aspectRatioValue }),
+              ...(imageSizeValue && { image_size: imageSizeValue }),
+            }
+          : undefined);
 
       return {
         ...rest,
