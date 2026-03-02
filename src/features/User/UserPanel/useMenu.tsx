@@ -78,13 +78,13 @@ export const useMenu = () => {
     },
   ];
 
-  const downloadClient: MenuProps['items'] = [
+  const getDesktopApp: MenuProps['items'] = [
     {
       icon: <Icon icon={Download} />,
-      key: 'download-client',
+      key: 'get-desktop-app',
       label: (
         <a href={downloadUrl} rel="noopener noreferrer" target="_blank">
-          {t('downloadClient')}
+          {t('getDesktopApp')}
         </a>
       ),
     },
@@ -129,7 +129,7 @@ export const useMenu = () => {
 
     ...(isLogin ? settings : []),
     ...businessMenuItems,
-    ...(!isDesktop ? downloadClient : []),
+    ...(!isDesktop ? getDesktopApp : []),
     ...data,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as MenuProps['items'];

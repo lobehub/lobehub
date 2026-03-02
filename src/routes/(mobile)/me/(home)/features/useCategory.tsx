@@ -54,11 +54,11 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
     },
   ];
 
-  const downloadClient: CellProps[] = [
+  const getDesktopApp: CellProps[] = [
     {
       icon: Download,
-      key: 'download-client',
-      label: t('downloadClient'),
+      key: 'get-desktop-app',
+      label: t('getDesktopApp'),
       onClick: () => window.open(downloadUrl, '__blank'),
     },
     {
@@ -103,7 +103,7 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
     /* ↓ cloud slot ↓ */
 
     /* ↑ cloud slot ↑ */
-    ...downloadClient,
+    ...getDesktopApp,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as CellProps[];
 

@@ -50,13 +50,11 @@ const PluginTag = memo<PluginTagProps>(({ plugins }) => {
 
   return (
     <DropdownMenu items={items}>
-      <div>
-        <Tag>
-          {<Icon icon={LucideToyBrick} />}
-          {pluginHelpers.getPluginTitle(displayPlugin) || plugins[0]}
-          {count > 1 && <div>({plugins.length - 1}+)</div>}
-        </Tag>
-      </div>
+      <Tag style={{ cursor: 'pointer' }}>
+        {<Icon icon={LucideToyBrick} />}
+        {pluginHelpers.getPluginTitle(displayPlugin) || plugins[0]}
+        {count > 1 && <div>({plugins.length - 1}+)</div>}
+      </Tag>
     </DropdownMenu>
   );
 });
