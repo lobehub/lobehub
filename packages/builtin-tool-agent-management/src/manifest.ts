@@ -4,7 +4,6 @@ import { systemPrompt } from './systemRole';
 import { AgentManagementApiName, AgentManagementIdentifier } from './types';
 
 export const AgentManagementManifest: BuiltinToolManifest = {
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   api: [
     // ==================== Agent CRUD ====================
     {

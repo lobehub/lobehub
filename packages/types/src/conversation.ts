@@ -75,7 +75,6 @@ export interface MessageMapContext {
   topicId?: string | null;
 }
 
-/* eslint-disable typescript-sort-keys/interface */
 /**
  * Context for identifying a conversation or message list
  * This is the standard type for all conversation-related context passing

@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { env } from 'node:process';
 
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';

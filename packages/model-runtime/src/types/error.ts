@@ -3,7 +3,6 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 
 export const AGENT_RUNTIME_ERROR_SET = new Set<string>(Object.values(AgentRuntimeErrorType));
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const StandardErrorType = {
   // ******* Client Error ******* //
   BadRequest: 400,

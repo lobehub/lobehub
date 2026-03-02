@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { index, integer, jsonb, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 
 import { timestamps } from './_helpers';

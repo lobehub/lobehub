@@ -1,4 +1,3 @@
-/* eslint-disable typescript-sort-keys/interface */
 import { RuntimeVideoGenParams } from 'model-bank';
 
 export type CreateVideoPayload = {
