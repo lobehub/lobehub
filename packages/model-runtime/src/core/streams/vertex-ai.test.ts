@@ -394,6 +394,270 @@ describe('VertexAIStream', () => {
     );
   });
 
+  it('should handle image generation (text + inlineData)', async () => {
+    vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+    const data = [
+      {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: 'Here is the generated image:' }],
+              role: 'model',
+            },
+            index: 0,
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 10,
+          totalTokenCount: 10,
+          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10 }],
+        },
+        modelVersion: 'gemini-3-pro-image-preview',
+      },
+      {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: 'iVBORw0KGgoAAAANSUhEUg==',
+                  },
+                },
+              ],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            index: 0,
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 10,
+          candidatesTokenCount: 1120,
+          totalTokenCount: 1130,
+          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10 }],
+          candidatesTokensDetails: [{ modality: 'IMAGE', tokenCount: 1120 }],
+        },
+        modelVersion: 'gemini-3-pro-image-preview',
+      },
+    ];
+
+    const mockStream = new ReadableStream({
+      start(controller) {
+        data.forEach((item) => controller.enqueue(item));
+        controller.close();
+      },
+    });
+
+    const protocolStream = VertexAIStream(mockStream);
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual(
+      [
+        'id: chat_1',
+        'event: text',
+        'data: "Here is the generated image:"\n',
+
+        'id: chat_1',
+        'event: content_part',
+        'data: {"content":"iVBORw0KGgoAAAANSUhEUg==","mimeType":"image/png","partType":"image"}\n',
+
+        'id: chat_1',
+        'event: stop',
+        'data: "STOP"\n',
+
+        'id: chat_1',
+        'event: usage',
+        'data: {"inputTextTokens":10,"outputImageTokens":1120,"outputTextTokens":0,"totalInputTokens":10,"totalOutputTokens":1120,"totalTokens":1130}\n',
+      ].map((i) => i + '\n'),
+    );
+  });
+
+  it('should handle reasoning with image parts', async () => {
+    vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+    const data = [
+      {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: 'Thinking about the image...', thought: true }],
+              role: 'model',
+            },
+            index: 0,
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5,
+          totalTokenCount: 5,
+        },
+        modelVersion: 'gemini-3-pro-image-preview',
+      },
+      {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: { mimeType: 'image/jpeg', data: '/9j/4AAQ==' },
+                  thought: true,
+                },
+              ],
+              role: 'model',
+            },
+            index: 0,
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5,
+          totalTokenCount: 5,
+        },
+        modelVersion: 'gemini-3-pro-image-preview',
+      },
+      {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: { mimeType: 'image/png', data: 'finalImageData==' },
+                },
+              ],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            index: 0,
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5,
+          candidatesTokenCount: 1120,
+          totalTokenCount: 1425,
+          candidatesTokensDetails: [{ modality: 'IMAGE', tokenCount: 1120 }],
+          thoughtsTokenCount: 300,
+        },
+        modelVersion: 'gemini-3-pro-image-preview',
+      },
+    ];
+
+    const mockStream = new ReadableStream({
+      start(controller) {
+        data.forEach((item) => controller.enqueue(item));
+        controller.close();
+      },
+    });
+
+    const protocolStream = VertexAIStream(mockStream);
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual(
+      [
+        // Reasoning text
+        'id: chat_1',
+        'event: reasoning_part',
+        'data: {"content":"Thinking about the image...","inReasoning":true,"partType":"text"}\n',
+
+        // Reasoning image
+        'id: chat_1',
+        'event: reasoning_part',
+        'data: {"content":"/9j/4AAQ==","inReasoning":true,"mimeType":"image/jpeg","partType":"image"}\n',
+
+        // Content image
+        'id: chat_1',
+        'event: content_part',
+        'data: {"content":"finalImageData==","mimeType":"image/png","partType":"image"}\n',
+
+        // stop + usage
+        'id: chat_1',
+        'event: stop',
+        'data: "STOP"\n',
+
+        'id: chat_1',
+        'event: usage',
+        'data: {"outputImageTokens":1120,"outputReasoningTokens":300,"outputTextTokens":0,"totalInputTokens":5,"totalOutputTokens":1420,"totalTokens":1425}\n',
+      ].map((i) => i + '\n'),
+    );
+  });
+
+  it('should handle mixed text and image in single chunk', async () => {
+    vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+    const data = [
+      {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: 'Here is your cat picture: ' },
+                { inlineData: { mimeType: 'image/png', data: 'catImageBase64==' } },
+              ],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            index: 0,
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 8,
+          candidatesTokenCount: 1130,
+          totalTokenCount: 1138,
+          candidatesTokensDetails: [{ modality: 'IMAGE', tokenCount: 1120 }],
+        },
+        modelVersion: 'gemini-3-pro-image-preview',
+      },
+    ];
+
+    const mockStream = new ReadableStream({
+      start(controller) {
+        data.forEach((item) => controller.enqueue(item));
+        controller.close();
+      },
+    });
+
+    const protocolStream = VertexAIStream(mockStream);
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual(
+      [
+        'id: chat_1',
+        'event: content_part',
+        'data: {"content":"Here is your cat picture: ","partType":"text"}\n',
+
+        'id: chat_1',
+        'event: content_part',
+        'data: {"content":"catImageBase64==","mimeType":"image/png","partType":"image"}\n',
+
+        'id: chat_1',
+        'event: stop',
+        'data: "STOP"\n',
+
+        'id: chat_1',
+        'event: usage',
+        'data: {"outputImageTokens":1120,"outputTextTokens":10,"totalInputTokens":8,"totalOutputTokens":1130,"totalTokens":1138}\n',
+      ].map((i) => i + '\n'),
+    );
+  });
+
   it('should return stop chunk with empty content candidates', async () => {
     vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 

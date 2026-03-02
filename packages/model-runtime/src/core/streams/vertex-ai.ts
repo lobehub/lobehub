@@ -4,7 +4,12 @@ import type { GroundingSearch } from '@lobechat/types';
 import { nanoid } from '../../utils/uuid';
 import { convertGoogleAIUsage } from '../usageConverters/google-ai';
 import type { GoogleAIStreamOptions } from './google';
-import type { ChatPayloadForTransformStream, StreamContext, StreamProtocolChunk } from './protocol';
+import type {
+  ChatPayloadForTransformStream,
+  StreamContext,
+  StreamPartChunkData,
+  StreamProtocolChunk,
+} from './protocol';
 import {
   createCallbacksTransformer,
   createSSEProtocolTransformer,
@@ -32,24 +37,61 @@ const transformVertexAIStream = (
     );
   }
 
-  if (
-    candidate && // First check if this is reasoning content (thought: true)
-    Array.isArray(candidate.content?.parts) &&
-    candidate.content.parts.length > 0
-  ) {
-    for (const part of candidate.content.parts) {
-      if (part && part.text && part.thought === true) {
-        return { data: part.text, id: context.id, type: 'reasoning' };
-      }
-    }
+  if (!candidate) {
+    return { data: '', id: context?.id, type: 'text' };
   }
 
-  if (!candidate) {
-    return {
-      data: '',
-      id: context?.id,
-      type: 'text',
-    };
+  const parts = candidate.content?.parts || [];
+  const hasReasoningParts = parts.some((p: any) => p.thought === true);
+  const hasImageParts = parts.some((p: any) => p.inlineData);
+
+  // Process multimodal parts (reasoning, text + image mixed content)
+  if (parts.length > 0 && (hasReasoningParts || hasImageParts)) {
+    const results: StreamProtocolChunk[] = [];
+
+    for (const part of parts) {
+      if (part && part.text && part.thought === true) {
+        results.push({
+          data: { content: part.text, inReasoning: true, partType: 'text' } as StreamPartChunkData,
+          id: context.id,
+          type: 'reasoning_part',
+        });
+      } else if (part && part.inlineData && part.thought === true) {
+        results.push({
+          data: {
+            content: part.inlineData.data,
+            inReasoning: true,
+            mimeType: part.inlineData.mimeType,
+            partType: 'image',
+          } as StreamPartChunkData,
+          id: context.id,
+          type: 'reasoning_part',
+        });
+      } else if (part && part.text && !part.thought) {
+        results.push({
+          data: { content: part.text, partType: 'text' } as StreamPartChunkData,
+          id: context.id,
+          type: 'content_part',
+        });
+      } else if (part && part.inlineData && !part.thought) {
+        results.push({
+          data: {
+            content: part.inlineData.data,
+            mimeType: part.inlineData.mimeType,
+            partType: 'image',
+          } as StreamPartChunkData,
+          id: context.id,
+          type: 'content_part',
+        });
+      }
+    }
+
+    if (results.length > 0) {
+      if (candidate.finishReason && usageMetadata) {
+        results.push(...usageChunks);
+      }
+      return results;
+    }
   }
 
   if (candidate.content) {
@@ -137,7 +179,7 @@ export const VertexAIStream = (
   return rawStream
     .pipeThrough(
       createTokenSpeedCalculator(transformWithPayload, {
-        enableStreaming: enableStreaming,
+        enableStreaming,
         inputStartAt,
         streamStack,
       }),
