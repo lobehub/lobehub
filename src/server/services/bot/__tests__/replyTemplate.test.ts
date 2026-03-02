@@ -144,7 +144,7 @@ describe('replyTemplate', () => {
             thinking: false,
           }),
         ),
-      ).toBe(`Here is my response\n\n`);
+      ).toBe(`Here is my response`);
     });
 
     it('should show processing fallback when no content at all', () => {

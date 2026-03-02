@@ -469,8 +469,14 @@ export class AgentBridgeService {
       text = text.replaceAll(new RegExp(`<@!?${botContext.applicationId}>\\s*`, 'g'), '').trim();
     }
 
-    const { userId, fullName } = message.author;
-    return `<speaker id="${userId}" nickname="${fullName}" />\n${text}`;
+    const { userId, userName, fullName } = message.author;
+    const raw = (message as any).raw?.author as
+      | { avatar?: string | null; global_name?: string | null }
+      | undefined;
+    const avatar = raw?.avatar ?? '';
+    const globalName = raw?.global_name ?? fullName;
+
+    return `<speaker id="${userId}" username="${userName}" nickname="${globalName}" avatar="${avatar}" />\n${text}`;
   }
 
   /**

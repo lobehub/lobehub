@@ -188,7 +188,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
 
   // Sub-state: pure text content (waiting for next step)
   if (displayContent) {
-    return `${header}${displayContent}\n\n${footer}`;
+    return `${header}${displayContent}${footer}`;
   }
 
   return `${header}${EMOJI_THINKING} Processing...${footer}`;
@@ -249,7 +249,7 @@ export function renderFinalReply(
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
   const calls = llmCalls > 1 || toolCalls > 0 ? ` | llm×${llmCalls} | tools×${toolCalls}` : '';
   const footer = `-# ${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
-  return `${content}\n\n${footer}`;
+  return `${content.trimEnd()}\n\n${footer}`;
 }
 
 export function renderError(errorMessage: string): string {
