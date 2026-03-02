@@ -406,6 +406,17 @@ describe('thinkingResolver', () => {
 
         expect(result.includeThoughts).toBeUndefined();
       });
+
+      it('should not enable includeThoughts when thinkingLevel is set but budget defaults to 0', () => {
+        // flash-lite ignores thinkingLevel (not Gemini 3) and defaults to budget=0.
+        // Must not emit includeThoughts:true with thinkingBudget:0 — Vertex AI rejects this.
+        const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'high' });
+
+        expect(result).toEqual({
+          includeThoughts: undefined,
+          thinkingBudget: 0,
+        });
+      });
     });
 
     describe('nano-banana-pro-preview (thinking-enabled model)', () => {

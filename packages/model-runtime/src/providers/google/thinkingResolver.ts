@@ -227,8 +227,10 @@ const shouldIncludeThoughts = (
 ): boolean | undefined => {
   const { thinkingBudget, thinkingLevel } = options;
 
-  // thinkingLevel explicitly enables thinking, always include thoughts
-  if (thinkingLevel) return true;
+  // thinkingLevel explicitly enables thinking, but still respect budget-zero guard.
+  // Non-Gemini-3 models ignore thinkingLevel and may default to budget=0 (e.g. flash-lite),
+  // so we must not emit includeThoughts:true when budget is explicitly 0.
+  if (thinkingLevel && resolvedBudget !== 0) return true;
 
   // When resolvedBudget is undefined and no thinkingLevel is set,
   // thinking is not actually enabled, so don't set includeThoughts.
