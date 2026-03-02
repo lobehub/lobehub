@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import * as uuidModule from '../../utils/uuid';
-import { VertexAIStream } from './vertex-ai';
+import { GoogleGenerativeAIStream } from './google';
 
-describe('VertexAIStream', () => {
+describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
   it('should transform Vertex AI stream to protocol stream', async () => {
     vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
     const rawChunks = [
@@ -101,7 +101,7 @@ describe('VertexAIStream', () => {
     const onToolCallMock = vi.fn();
     const onCompletionMock = vi.fn();
 
-    const protocolStream = VertexAIStream(mockGoogleStream, {
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
       callbacks: {
         onStart: onStartMock,
         onText: onTextMock,
@@ -128,6 +128,11 @@ describe('VertexAIStream', () => {
       'id: chat_1\n',
       'event: text\n',
       `data: "！ 😊"\n\n`,
+
+      // requireTerminalEvent: no finishReason → stream parsing error
+      'id: chat_1\n',
+      'event: error\n',
+      `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n\n`,
     ]);
 
     expect(onStartMock).toHaveBeenCalledTimes(1);
@@ -205,7 +210,7 @@ describe('VertexAIStream', () => {
     const onToolCallMock = vi.fn();
     const onCompletionMock = vi.fn();
 
-    const protocolStream = VertexAIStream(mockGoogleStream, {
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
       callbacks: {
         onStart: onStartMock,
         onText: onTextMock,
@@ -299,7 +304,7 @@ describe('VertexAIStream', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockGoogleStream);
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
     const decoder = new TextDecoder();
     const chunks = [];
@@ -377,7 +382,7 @@ describe('VertexAIStream', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockGoogleStream);
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
     const decoder = new TextDecoder();
     const chunks = [];
@@ -388,9 +393,18 @@ describe('VertexAIStream', () => {
     }
 
     expect(chunks).toEqual(
-      ['id: chat_1', 'event: text', 'data: "234"\n', 'id: chat_1', 'event: text', `data: ""\n`].map(
-        (i) => i + '\n',
-      ),
+      [
+        'id: chat_1',
+        'event: text',
+        'data: "234"\n',
+        'id: chat_1',
+        'event: text',
+        `data: ""\n`,
+        // requireTerminalEvent: no finishReason → stream parsing error
+        'id: chat_1',
+        'event: error',
+        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n`,
+      ].map((i) => i + '\n'),
     );
   });
 
@@ -451,7 +465,7 @@ describe('VertexAIStream', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockStream);
+    const protocolStream = GoogleGenerativeAIStream(mockStream);
     const decoder = new TextDecoder();
     const chunks = [];
 
@@ -462,9 +476,10 @@ describe('VertexAIStream', () => {
 
     expect(chunks).toEqual(
       [
+        // Gemini 3 model: text-only chunk also uses content_part format
         'id: chat_1',
-        'event: text',
-        'data: "Here is the generated image:"\n',
+        'event: content_part',
+        'data: {"content":"Here is the generated image:","partType":"text"}\n',
 
         'id: chat_1',
         'event: content_part',
@@ -555,7 +570,7 @@ describe('VertexAIStream', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockStream);
+    const protocolStream = GoogleGenerativeAIStream(mockStream);
     const decoder = new TextDecoder();
     const chunks = [];
 
@@ -628,7 +643,7 @@ describe('VertexAIStream', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockStream);
+    const protocolStream = GoogleGenerativeAIStream(mockStream);
     const decoder = new TextDecoder();
     const chunks = [];
 
@@ -706,7 +721,7 @@ describe('VertexAIStream', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockGoogleStream);
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
     const decoder = new TextDecoder();
     const chunks = [];
@@ -717,9 +732,19 @@ describe('VertexAIStream', () => {
     }
 
     expect(chunks).toEqual(
-      ['id: chat_1', 'event: text', 'data: "234"\n', 'id: chat_1', 'event: stop', `data: ""\n`].map(
-        (i) => i + '\n',
-      ),
+      [
+        'id: chat_1',
+        'event: text',
+        'data: "234"\n',
+        // empty candidate content → empty text (not stop)
+        'id: chat_1',
+        'event: text',
+        `data: ""\n`,
+        // requireTerminalEvent: no finishReason → stream parsing error
+        'id: chat_1',
+        'event: error',
+        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n`,
+      ].map((i) => i + '\n'),
     );
   });
 });
