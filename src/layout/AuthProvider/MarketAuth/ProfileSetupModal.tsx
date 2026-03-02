@@ -70,12 +70,12 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     const [loading, setLoading] = useState(false);
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
-    // 检查是否是自动授权模式
+    // Check if it's in automatic authorization mode
     const enableMarketTrustedClient = useServerConfigStore(
       serverConfigSelectors.enableMarketTrustedClient,
     );
 
-    // 获取当前用户头像作为默认值
+    // Get the current user's avatar as the default value
     const currentUserAvatar = useUserStore(userProfileSelectors.userAvatar);
 
     // Avatar state
@@ -111,7 +111,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         });
 
         // Reset avatar and banner
-        // 如果 userProfile 有 avatarUrl 就用它，否则用当前用户头像作为默认值
+        // Use avatarUrl from userProfile if available, otherwise use the current user's avatar as default
         setAvatarUrl(userProfile?.avatarUrl || currentUserAvatar || null);
         setBannerUrl(userProfile?.bannerUrl || null);
       }
@@ -186,7 +186,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     }, []);
 
     const doSubmit = useCallback(async () => {
-      // 如果不是自动授权模式，需要校验 accessToken
+      // If not in automatic authorization mode, need to validate accessToken
       if (!enableMarketTrustedClient && !accessToken) {
         message.error(t('profileSetup.errors.notAuthenticated'));
         return;
