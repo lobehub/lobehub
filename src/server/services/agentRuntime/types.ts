@@ -30,7 +30,12 @@ export interface StepPresentationData {
   /** Tools the LLM decided to call (undefined if no tool calls) */
   toolsCalling?: Array<{ apiName: string; arguments?: string; identifier: string }>;
   /** Results from tool execution (only for call_tool steps) */
-  toolsResult?: Array<{ apiName: string; identifier: string; output?: string }>;
+  toolsResult?: Array<{
+    apiName: string;
+    identifier: string;
+    isSuccess?: boolean;
+    output?: string;
+  }>;
   /** Cumulative total cost */
   totalCost: number;
   /** Cumulative input tokens */

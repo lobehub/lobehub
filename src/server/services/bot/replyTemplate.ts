@@ -40,7 +40,7 @@ export function splitMessage(text: string, limit = DEFAULT_CHAR_LIMIT): string[]
 // ==================== Params ====================
 
 type ToolCallItem = { apiName: string; arguments?: string; identifier: string };
-type ToolResultItem = { apiName: string; identifier: string; output?: string };
+type ToolResultItem = { apiName: string; identifier: string; isSuccess?: boolean; output?: string };
 
 export interface RenderStepParams extends StepPresentationData {
   elapsedMs?: number;
@@ -72,13 +72,17 @@ function formatToolCall(tc: ToolCallItem): string {
   return formatToolName(tc);
 }
 
-export function summarizeOutput(output: string | undefined): string | undefined {
+export function summarizeOutput(
+  output: string | undefined,
+  isSuccess?: boolean,
+): string | undefined {
   if (!output) return undefined;
   const trimmed = output.trim();
   if (trimmed.length === 0) return undefined;
 
   const chars = trimmed.length;
-  return `success: ${chars.toLocaleString()} chars`;
+  const status = isSuccess === false ? 'error' : 'success';
+  return `${status}: ${chars.toLocaleString()} chars`;
 }
 
 function formatPendingTools(toolsCalling: ToolCallItem[]): string {
@@ -92,9 +96,10 @@ function formatCompletedTools(
   return toolsCalling
     .map((tc, i) => {
       const callStr = `⏺ ${formatToolCall(tc)}`;
-      const summary = summarizeOutput(toolsResult?.[i]?.output);
+      const result = toolsResult?.[i];
+      const summary = summarizeOutput(result?.output, result?.isSuccess);
       if (summary) {
-        return `${callStr}\n  ⎿  ${summary}`;
+        return `${callStr}\n⎿  ${summary}`;
       }
       return callStr;
     })
@@ -160,7 +165,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
     totalTokens,
     totalToolCalls,
   } = params;
-  const displayContent = content || lastContent;
+  const displayContent = (content || lastContent)?.trim();
   const { header, footer } = renderInlineStats({
     elapsedMs,
     totalCost,
@@ -178,7 +183,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
 
   // Sub-state: has reasoning (thinking)
   if (reasoning && !content) {
-    return `${header}${EMOJI_THINKING} ${reasoning}${footer}`;
+    return `${header}${EMOJI_THINKING} ${reasoning?.trim()}${footer}`;
   }
 
   // Sub-state: pure text content (waiting for next step)
@@ -216,7 +221,7 @@ export function renderToolExecuting(params: RenderStepParams): string {
 
   if (header) parts.push(header.trimEnd());
 
-  if (lastContent) parts.push(lastContent);
+  if (lastContent) parts.push(lastContent.trim());
 
   if (lastToolsCalling && lastToolsCalling.length > 0) {
     parts.push(formatCompletedTools(lastToolsCalling, toolsResult));
