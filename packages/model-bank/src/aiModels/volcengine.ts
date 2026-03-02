@@ -514,6 +514,30 @@ const doubaoChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+    },
+    config: {
+      deploymentName: 'kimi-k2-thinking-251104',
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi-K2 is a MoE architecture basic model launched by Moonshot AI with super strong code and agent capabilities. It has a total parameter of 1T and an activation parameter of 32B.In benchmark performance tests in major categories such as general knowledge reasoning, programming, mathematics, and agents, the performance of the K2 model exceeds that of other mainstream open source models.',
+    displayName: 'Kimi K2 Thinking',
+    id: 'kimi-k2-thinking',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
     },
     config: {
       deploymentName: 'kimi-k2-250905',
