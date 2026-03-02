@@ -218,7 +218,10 @@ export const resolveGoogleThinkingBudget = (
 };
 
 /**
- * Determines if includeThoughts should be enabled
+ * Determines if includeThoughts should be enabled.
+ *
+ * Vertex AI rejects includeThoughts:true when thinking is not actually
+ * enabled, so we must only return true when thinking is genuinely active.
  */
 const shouldIncludeThoughts = (
   model: string,
@@ -227,26 +230,15 @@ const shouldIncludeThoughts = (
 ): boolean | undefined => {
   const { thinkingBudget, thinkingLevel } = options;
 
-  // thinkingLevel explicitly enables thinking, but still respect budget-zero guard.
-  // Non-Gemini-3 models ignore thinkingLevel and may default to budget=0 (e.g. flash-lite),
-  // so we must not emit includeThoughts:true when budget is explicitly 0.
-  if (thinkingLevel && resolvedBudget !== 0) return true;
+  // 1. No thinking signal at all → not applicable
+  if (!thinkingBudget && !thinkingLevel && !isThinkingEnabledModel(model)) return undefined;
 
-  // When resolvedBudget is undefined and no thinkingLevel is set,
-  // thinking is not actually enabled, so don't set includeThoughts.
-  // This prevents Vertex AI error:
-  // "include_thoughts is only enabled when thinking is enabled"
-  if (resolvedBudget === undefined) return undefined;
+  // 2. Budget resolved to a number → active only when non-zero
+  if (typeof resolvedBudget === 'number') return resolvedBudget !== 0 ? true : undefined;
 
-  const hasExplicitThinking = !!thinkingBudget;
-  const isThinkingModel = isThinkingEnabledModel(model);
-
-  // If thinking is requested AND budget is not 0, enable includeThoughts
-  if ((hasExplicitThinking || isThinkingModel) && resolvedBudget !== 0) {
-    return true;
-  }
-
-  return undefined;
+  // 3. Budget is undefined (Gemini 3 default / "other" category) →
+  //    only thinkingLevel can activate thinking without a numeric budget
+  return thinkingLevel ? true : undefined;
 };
 
 /**
