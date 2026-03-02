@@ -44,10 +44,10 @@ export const CreateAgentInspector = memo<BuiltinInspectorProps<CreateAgentParams
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
         gap={8}
-        horizontal
       >
         <span className={styles.title}>
           {t('builtins.lobe-agent-management.inspector.createAgent.title')}

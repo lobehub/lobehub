@@ -64,12 +64,12 @@ const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReference
 
     return (
       <Flexbox className={styles.container} gap={8}>
-        <Flexbox align={'center'} horizontal justify={'space-between'}>
-          <Text as={'span'} code ellipsis fontSize={12}>
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
+          <Text code ellipsis as={'span'} fontSize={12}>
             {path}
           </Text>
           {sizeText && (
-            <Text as={'span'} code fontSize={12} type={'secondary'}>
+            <Text code as={'span'} fontSize={12} type={'secondary'}>
               {sizeText}
             </Text>
           )}
@@ -90,11 +90,11 @@ const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReference
         ) : (
           <Block padding={0} variant={'outlined'}>
             <Highlighter
-              language={getLanguage(ext)}
               showLanguage
+              wrap
+              language={getLanguage(ext)}
               style={{ maxHeight: 400, overflow: 'auto' }}
               variant={'borderless'}
-              wrap
             >
               {content}
             </Highlighter>

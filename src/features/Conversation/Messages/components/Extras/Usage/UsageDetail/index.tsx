@@ -230,6 +230,10 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
         <Icon icon={isShowCredit ? BadgeCent : CoinsIcon} />
         <AnimatedNumber
           duration={1500}
+          // Force remount when switching between token/credit to prevent unwanted animation
+          // See: https://github.com/lobehub/lobe-chat/pull/10098
+          key={isShowCredit ? 'credit' : 'token'}
+          value={totalCount}
           formatter={(value) => {
             const roundedValue = Math.round(value);
             if (isShortFormat) {
@@ -237,10 +241,6 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
             }
             return new Intl.NumberFormat('en-US').format(roundedValue);
           }}
-          // Force remount when switching between token/credit to prevent unwanted animation
-          // See: https://github.com/lobehub/lobe-chat/pull/10098
-          key={isShowCredit ? 'credit' : 'token'}
-          value={totalCount}
         />
       </Center>
     </Popover>
