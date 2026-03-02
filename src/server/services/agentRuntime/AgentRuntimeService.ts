@@ -263,6 +263,7 @@ export class AgentRuntimeService {
       completionWebhook,
       stepWebhook,
       webhookDelivery,
+      discordContext,
       evalContext,
       maxSteps,
     } = params;
@@ -281,6 +282,7 @@ export class AgentRuntimeService {
         metadata: {
           agentConfig,
           completionWebhook,
+          discordContext,
           evalContext,
           // need be removed
           modelRuntimeConfig,
@@ -1174,6 +1176,7 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      discordContext: metadata?.discordContext,
       evalContext: metadata?.evalContext,
       messageModel: this.messageModel,
       operationId,

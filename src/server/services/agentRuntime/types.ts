@@ -134,6 +134,8 @@ export interface OperationCreationParams {
     body?: Record<string, unknown>;
     url: string;
   };
+  /** Discord context for injecting channel/guild info into agent system message */
+  discordContext?: any;
   evalContext?: any;
   initialContext: AgentRuntimeContext;
   initialMessages?: any[];

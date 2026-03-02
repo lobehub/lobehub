@@ -77,6 +77,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
   };
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
+  /** Discord context for injecting channel/guild info into agent system message */
+  discordContext?: any;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
   /** Maximum steps for the agent operation */
@@ -167,6 +169,7 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      discordContext,
       existingMessageIds = [],
       stepCallbacks,
       stream,
@@ -516,6 +519,7 @@ export class AiAgentService {
         },
         autoStart,
         completionWebhook,
+        discordContext,
         evalContext,
         initialContext,
         initialMessages: allMessages,

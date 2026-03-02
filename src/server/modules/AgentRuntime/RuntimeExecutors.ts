@@ -33,6 +33,7 @@ const TOOL_PRICING: Record<string, number> = {
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
+  discordContext?: any;
   evalContext?: EvalContext;
   fileService?: any;
   messageModel: MessageModel;
@@ -155,6 +156,7 @@ export const createRuntimeExecutors = (
               return info?.abilities?.vision ?? true;
             },
           },
+          discordContext: ctx.discordContext,
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,
           forceFinish: state.forceFinish,
