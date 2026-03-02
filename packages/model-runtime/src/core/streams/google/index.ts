@@ -246,32 +246,32 @@ const transformGoogleGenerativeAIStream = (
             citations:
               webChunks.length > 0
                 ? webChunks.map((chunk) => {
-                  // Fall back to hostname when title is empty
-                  let displayTitle = chunk.web?.title;
-                  if (!displayTitle) {
-                    try {
-                      displayTitle = new URL(chunk.web?.uri || '').hostname.replace('www.', '');
-                    } catch {
-                      displayTitle = chunk.web?.uri;
+                    // Fall back to hostname when title is empty
+                    let displayTitle = chunk.web?.title?.replaceAll(/<[^>]*>/g, '');
+                    if (!displayTitle) {
+                      try {
+                        displayTitle = new URL(chunk.web?.uri || '').hostname.replace('www.', '');
+                      } catch {
+                        displayTitle = chunk.web?.uri;
+                      }
                     }
-                  }
-                  return {
-                    // Google returns a uri processed by Google itself, so it cannot display the real favicon
-                    // Need to use title (or derived hostname) as a replacement
-                    favicon: displayTitle,
-                    title: displayTitle,
-                    url: chunk.web?.uri,
-                  };
-                })
+                    return {
+                      // Google returns a uri processed by Google itself, so it cannot display the real favicon
+                      // Need to use title (or derived hostname) as a replacement
+                      favicon: displayTitle,
+                      title: displayTitle,
+                      url: chunk.web?.uri,
+                    };
+                  })
                 : undefined,
             imageResults:
               imageChunks.length > 0
                 ? imageChunks.map((chunk) => ({
-                  domain: chunk.image?.domain,
-                  imageUri: chunk.image?.imageUri,
-                  sourceUri: chunk.image?.sourceUri,
-                  title: chunk.image?.title,
-                }))
+                    domain: chunk.image?.domain,
+                    imageUri: chunk.image?.imageUri,
+                    sourceUri: chunk.image?.sourceUri,
+                    title: chunk.image?.title,
+                  }))
                 : undefined,
             imageSearchQueries:
               imageSearchQueries && imageSearchQueries.length > 0 ? imageSearchQueries : undefined,

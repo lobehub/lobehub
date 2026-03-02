@@ -241,6 +241,8 @@
   "rag.userQuery.actions.regenerate": "重新生成 Query",
   "regenerate": "重新生成",
   "roleAndArchive": "助理档案与记录",
+  "search.grounding.imageSearchQueries": "图片搜索关键词",
+  "search.grounding.imageTitle": "找到 {{count}} 张图片",
   "search.grounding.searchQueries": "搜索关键词",
   "search.grounding.title": "找到 {{count}} 条结果",
   "search.mode.auto.desc": "在需要时自动搜索网络。",

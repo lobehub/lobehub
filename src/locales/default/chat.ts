@@ -271,6 +271,8 @@ export default {
   'memory.on.desc': 'Remember preferences and info from conversations.',
   'memory.on.title': 'Enable Memory',
   'memory.title': 'Memory',
+  'search.grounding.imageSearchQueries': 'Image Search Keywords',
+  'search.grounding.imageTitle': 'Found {{count}} images',
   'search.grounding.searchQueries': 'Search Keywords',
   'search.grounding.title': 'Found {{count}} results',
   'search.mode.auto.desc': 'Search the web automatically when needed.',
