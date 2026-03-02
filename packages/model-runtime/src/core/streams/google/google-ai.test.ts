@@ -840,7 +840,7 @@ describe('GoogleGenerativeAIStream', () => {
 
           'id: chat_1',
           'event: grounding',
-          `data: {\"citations\":[{\"favicon\":\"npmjs.com\",\"title\":\"npmjs.com\",\"url\":\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXG1234545\"},{\"favicon\":\"google.dev\",\"title\":\"google.dev\",\"url\":\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXE9288334\"}],\"searchQueries\":[\"sdk latest version\"]}\n`,
+          `data: {"citations":[{"favicon":"npmjs.com","title":"npmjs.com","url":"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXG1234545"},{"favicon":"google.dev","title":"google.dev","url":"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXE9288334"}],"searchQueries":["sdk latest version"]}\n`,
           // stop
           'id: chat_1',
           'event: stop',
@@ -928,7 +928,7 @@ describe('GoogleGenerativeAIStream', () => {
         [
           'id: chat_1',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"grep____searchGitHub____mcp_0_abcd1234","index":0,"thoughtSignature":"123","type":"function"}]\n',
+          'data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"grep____searchGitHub____mcp_0_abcd1234","index":0,"thoughtSignature":"123","type":"function"}]\n',
 
           'id: chat_1',
           'event: stop',

@@ -1,6 +1,6 @@
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
-import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';

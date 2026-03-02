@@ -88,11 +88,11 @@ export class SkillResourceService {
 
       return {
         content,
-        encoding: 'utf-8',
+        encoding: 'utf8',
         fileHash: meta.fileHash,
         fileType,
         path: virtualPath,
-        size: Buffer.byteLength(content, 'utf-8'),
+        size: Buffer.byteLength(content, 'utf8'),
       };
     }
 

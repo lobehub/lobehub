@@ -62,7 +62,9 @@ export class ToolNameResolver {
   ): ChatToolPayload[] {
     return toolCalls
       .map((toolCall): ChatToolPayload | null => {
-        let [identifier, apiName, type] = toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+        const [initialIdentifier, apiName, type] =
+          toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+        let identifier = initialIdentifier;
 
         if (!apiName) return null;
 

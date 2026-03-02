@@ -1,11 +1,11 @@
 // @vitest-environment node
-import { SkillManifest } from '@lobechat/types';
+import type { SkillManifest } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { agentSkills, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { AgentSkillModel } from '../agentSkill';
 
 const serverDB: LobeChatDatabase = await getTestDB();
