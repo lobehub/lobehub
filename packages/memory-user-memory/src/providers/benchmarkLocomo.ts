@@ -64,7 +64,7 @@ export class BenchmarkLocomoContextProvider implements MemoryContextProvider<
       context: toXml(root),
       metadata: {},
       sourceId: this.options.sourceId,
-      userId: userId,
+      userId,
     };
   }
 }

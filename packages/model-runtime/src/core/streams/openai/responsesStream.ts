@@ -219,7 +219,7 @@ export const OpenAIResponsesStream = (
       .pipeThrough(createFirstErrorHandleTransformer(bizErrorTypeTransformer, payload?.provider))
       .pipeThrough(
         createTokenSpeedCalculator(transformWithPayload, {
-          enableStreaming: enableStreaming,
+          enableStreaming,
           inputStartAt,
           streamStack,
         }),

@@ -73,13 +73,13 @@ export function extractStatusCodeFromError(message: string): {
         // Create JSON containing status code and message
         const resultJson = {
           message: messageContent,
-          statusCode: statusCode,
+          statusCode,
           statusCodeText: `[${statusCode} ${statusText}]`,
         };
 
         return {
           errorDetails: resultJson,
-          prefix: prefix,
+          prefix,
         };
       }
     }

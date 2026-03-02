@@ -251,8 +251,8 @@ export class MemoryExtractionService<RO> {
         layers: layersToExtract,
         outputs,
         processedCounts: processedCount,
-        processedErrorsCount: processedErrorsCount,
-        processedLayersCount: processedLayersCount,
+        processedErrorsCount,
+        processedLayersCount,
       };
     } catch (error) {
       await options?.resultRecorder?.recordFail?.(job, error as Error);

@@ -96,7 +96,7 @@ const transformGoogleGenerativeAIStream = (
               name: value.name,
             },
             id: generateToolCallId(index, value.name),
-            index: index,
+            index,
             thoughtSignature: value.thoughtSignature,
             type: 'function',
           }),
@@ -328,7 +328,7 @@ export const GoogleGenerativeAIStream = (
   return rawStream
     .pipeThrough(
       createTokenSpeedCalculator(transformWithPayload, {
-        enableStreaming: enableStreaming,
+        enableStreaming,
         inputStartAt,
         streamStack,
       }),

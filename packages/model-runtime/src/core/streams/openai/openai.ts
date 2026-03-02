@@ -45,7 +45,7 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
   if (!text) return { cleanedText: text, urls: [] };
 
   const urls: string[] = [];
-  const mdRegex = /!\[[^\]]*]\(\s*(data:image\/[\d+.A-Za-z-]+;base64,[^\s)]+)\s*\)/g;
+  const mdRegex = /!\[[^\]]*\]\(\s*(data:image\/[\d+.A-Za-z-]+;base64,[^\s)]+)\s*\)/g;
   let cleanedText = text;
   let m: RegExpExecArray | null;
 
@@ -605,7 +605,7 @@ export const OpenAIStream = (
       .pipeThrough(createFirstErrorHandleTransformer(bizErrorTypeTransformer, payload?.provider))
       .pipeThrough(
         createTokenSpeedCalculator(transformWithProvider, {
-          enableStreaming: enableStreaming,
+          enableStreaming,
           inputStartAt,
           streamStack,
         }),

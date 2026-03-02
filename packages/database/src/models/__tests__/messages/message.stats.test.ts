@@ -27,7 +27,7 @@ beforeEach(async () => {
     await trx.insert(sessions).values([{ id: '1', userId }]);
     await trx.insert(files).values({
       id: 'f1',
-      userId: userId,
+      userId,
       url: 'abc',
       name: 'file-1',
       fileType: 'image/png',

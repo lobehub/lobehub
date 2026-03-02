@@ -317,7 +317,7 @@ export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration =
     name: functionDeclaration.name,
     parameters: {
       description: parameters?.description,
-      properties: properties,
+      properties,
       required: parameters?.required,
       type: SchemaType.OBJECT,
     },

@@ -237,7 +237,7 @@ export const testProvider = ({
               // Expect the chat method to throw an error with InvalidHunyuanAPIKey
               expect(e).toEqual({
                 endpoint: defaultBaseURL,
-                error: error,
+                error,
                 errorType: invalidErrorType,
                 provider,
               });
