@@ -1,3 +1,8 @@
+---
+name: db-migrations
+description: Database migration guide. Use when generating migrations, writing migration SQL, or modifying database schemas. Triggers on migration generation, schema changes, or idempotent SQL questions.
+---
+
 # Database Migrations Guide
 
 ## Step 1: Generate Migrations
@@ -77,4 +82,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS "users_email_unique" ON "users" USING btree ("
 -- ❌ Bad
 DROP TABLE "old_table";
 CREATE INDEX "users_email_idx" ON "users" ("email");
+```
+
+## Step 4: Regenerate Client After SQL Edits
+
+After modifying the generated SQL (e.g., adding `IF NOT EXISTS`), regenerate the client:
+
+```bash
+bun run db:generate:client
 ```
