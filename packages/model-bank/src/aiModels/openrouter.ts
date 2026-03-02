@@ -52,7 +52,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
     },
     type: 'chat',
   },
