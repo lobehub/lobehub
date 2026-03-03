@@ -2,7 +2,7 @@
 
 import { LoadingOutlined } from '@ant-design/icons';
 import { Flexbox, Input, Text } from '@lobehub/ui';
-import { InputRef, type InputRef, Spin } from 'antd';
+import { type InputRef, Spin } from 'antd';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
