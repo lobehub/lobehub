@@ -24,7 +24,9 @@
   },
   "license": "MIT",
   "author": "LobeHub <i@lobehub.com>",
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/initialize.ts"
+  ],
   "workspaces": [
     "packages/*",
     "packages/business/*",
