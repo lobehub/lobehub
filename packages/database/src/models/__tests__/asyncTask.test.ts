@@ -390,7 +390,7 @@ describe('AsyncTaskModel.findByInferenceId', () => {
         status: AsyncTaskStatus.Processing,
         userId,
         inferenceId: 'inference-123',
-        type: AsyncTaskType.UserMemoryExtraction,
+        type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
       })
       .returning();
 

@@ -373,7 +373,6 @@ export class AgentRuntimeService {
     const { operationId, stepIndex, context, humanInput, approvedToolCall, rejectionReason } =
       params;
 
-    // Get registered callbacks
     const callbacks = this.getStepCallbacks(operationId);
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
@@ -716,6 +715,55 @@ export class AgentRuntimeService {
         }
       }
 
+      // Dev mode: record step snapshot to disk for agent-tracing CLI
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
+          const store = new FileSnapshotStore();
+
+          const partial = (await store.loadPartial(operationId)) ?? { steps: [] };
+
+          if (!partial.startedAt) {
+            partial.startedAt = Date.now();
+            partial.model =
+              (agentState?.metadata as any)?.agentConfig?.model ??
+              agentState?.modelRuntimeConfig?.model;
+            partial.provider =
+              (agentState?.metadata as any)?.agentConfig?.provider ??
+              agentState?.modelRuntimeConfig?.provider;
+          }
+
+          if (!partial.steps) partial.steps = [];
+          partial.steps.push({
+            completedAt: Date.now(),
+            content: stepPresentationData.content,
+            context: {
+              payload: currentContext?.payload,
+              phase: currentContext?.phase ?? 'unknown',
+              stepContext: currentContext?.stepContext,
+            },
+            events: stepResult.events as any,
+            executionTimeMs: stepPresentationData.executionTimeMs,
+            inputTokens: stepPresentationData.stepInputTokens,
+            messages: agentState?.messages,
+            messagesAfter: stepResult.newState.messages,
+            outputTokens: stepPresentationData.stepOutputTokens,
+            reasoning: stepPresentationData.reasoning,
+            startedAt: startAt,
+            stepIndex,
+            stepType: stepPresentationData.stepType,
+            toolsCalling: stepPresentationData.toolsCalling,
+            toolsResult: stepPresentationData.toolsResult,
+            totalCost: stepPresentationData.totalCost,
+            totalTokens: stepPresentationData.totalTokens,
+          });
+
+          await store.savePartial(operationId, partial);
+        } catch {
+          // agent-tracing not available, skip silently
+        }
+      }
+
       // Update step tracking in state metadata and trigger step webhook
       if (stepResult.newState.metadata?.stepWebhook) {
         const prevTracking = stepResult.newState.metadata._stepTracking || {};
@@ -783,6 +831,44 @@ export class AgentRuntimeService {
             this.unregisterStepCallbacks(operationId);
           } catch (callbackError) {
             log('[%s] onComplete callback error: %O', operationId, callbackError);
+          }
+        }
+
+        // Dev mode: finalize tracing snapshot
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
+            const store = new FileSnapshotStore();
+            const partial = await store.loadPartial(operationId);
+
+            if (partial) {
+              const snapshot = {
+                completedAt: Date.now(),
+                completionReason: reason,
+                error: stepResult.newState.error
+                  ? {
+                      message: String(
+                        stepResult.newState.error.message ?? stepResult.newState.error,
+                      ),
+                      type: String(stepResult.newState.error.type ?? 'unknown'),
+                    }
+                  : undefined,
+                model: partial.model,
+                operationId,
+                provider: partial.provider,
+                startedAt: partial.startedAt ?? Date.now(),
+                steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
+                totalCost: stepResult.newState.cost?.total ?? 0,
+                totalSteps: stepResult.newState.stepCount,
+                totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                traceId: operationId,
+              };
+
+              await store.save(snapshot as any);
+              await store.removePartial(operationId);
+            }
+          } catch {
+            // agent-tracing not available, skip silently
           }
         }
       }

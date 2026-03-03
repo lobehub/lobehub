@@ -653,7 +653,7 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.context).toBeDefined();
+      expect((result as any)?.context).toBeDefined();
       expect(result?.memory).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Context);
     });
@@ -667,7 +667,7 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.activity).toBeDefined();
+      expect((result as any)?.activity).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Activity);
     });
 
@@ -680,7 +680,7 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.experience).toBeDefined();
+      expect((result as any)?.experience).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Experience);
     });
 
@@ -693,7 +693,7 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.identity).toBeDefined();
+      expect((result as any)?.identity).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Identity);
     });
 
@@ -706,7 +706,7 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.preference).toBeDefined();
+      expect((result as any)?.preference).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Preference);
     });
 
@@ -1217,7 +1217,9 @@ describe('UserMemoryModel', () => {
 
       expect(result).toHaveLength(2);
       // Most recent first
-      expect(result[0].capturedAt.getTime()).toBeGreaterThanOrEqual(result[1].capturedAt.getTime());
+      expect((result[0] as any).capturedAt.getTime()).toBeGreaterThanOrEqual(
+        (result[1] as any).capturedAt.getTime(),
+      );
     });
 
     it('should return empty array when no identities', async () => {
@@ -1364,7 +1366,7 @@ describe('UserMemoryModel', () => {
           tags: ['test-tag'],
           startsAt: new Date('2025-01-01'),
           endsAt: new Date('2025-01-02'),
-        },
+        } as any,
       });
 
       expect(result.memory).toBeDefined();
@@ -1391,7 +1393,7 @@ describe('UserMemoryModel', () => {
           tags: ['learn'],
           reasoning: 'because reasons',
           possibleOutcome: 'better outcomes',
-        },
+        } as any,
       });
 
       expect(result.memory).toBeDefined();
@@ -1417,7 +1419,7 @@ describe('UserMemoryModel', () => {
           tags: ['ctx-tag'],
           associatedObjects: [],
           associatedSubjects: [],
-        },
+        } as any,
       });
 
       expect(result.memory).toBeDefined();
@@ -1580,7 +1582,6 @@ describe('UserMemoryModel', () => {
 
       const result = await memoryModel.updateIdentityEntry({
         identityId: identity.id,
-        memoryId: memory.id,
         identity: {
           capturedAt: capturedDate,
         },
