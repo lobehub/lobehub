@@ -2,6 +2,7 @@
   "error.backHome": "Retour à l'accueil",
   "error.desc": "Réessayez plus tard ou revenez dans un territoire connu.",
   "error.retry": "Recharger",
+  "error.stack": "Pile d'erreurs",
   "error.title": "Oups, une erreur s'est produite...",
   "fetchError.detail": "Détails de l'erreur",
   "fetchError.title": "Échec de la requête",

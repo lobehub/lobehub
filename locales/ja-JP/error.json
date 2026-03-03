@@ -2,6 +2,7 @@
   "error.backHome": "ホームに戻る",
   "error.desc": "ページが一時的に利用できません。ホームに戻るか、時間を置いて再試行してください（設定は失われません）",
   "error.retry": "再読み込み",
+  "error.stack": "エラースタック",
   "error.title": "ページが一時的に利用できません",
   "fetchError.detail": "詳細を見る",
   "fetchError.title": "リクエストが完了できませんでした",

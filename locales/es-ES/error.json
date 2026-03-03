@@ -2,6 +2,7 @@
   "error.backHome": "Volver al inicio",
   "error.desc": "Inténtalo más tarde o regresa al mundo conocido.",
   "error.retry": "Recargar",
+  "error.stack": "Pila de errores",
   "error.title": "Vaya, algo salió mal...",
   "fetchError.detail": "Detalles del error",
   "fetchError.title": "La solicitud falló",

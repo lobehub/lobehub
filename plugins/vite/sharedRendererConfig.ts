@@ -145,6 +145,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
   );
 
   return {
+    '__CI__': process.env.CI === 'true' ? 'true' : 'false',
     '__ELECTRON__': JSON.stringify(options.isElectron),
     '__MOBILE__': JSON.stringify(options.isMobile),
     ...nextPublicDefine,

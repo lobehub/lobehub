@@ -2,6 +2,7 @@
   "error.backHome": "返回首頁",
   "error.desc": "待會再試試，或者回到已知的世界",
   "error.retry": "重新加載",
+  "error.stack": "錯誤堆疊",
   "error.title": "頁面遇到一點問題..",
   "fetchError.detail": "錯誤詳情",
   "fetchError.title": "請求失敗",
