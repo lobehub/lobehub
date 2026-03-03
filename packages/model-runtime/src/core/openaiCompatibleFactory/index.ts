@@ -367,7 +367,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
         if ((postPayload as any).apiMode === 'responses') {
-          return this.handleResponseAPIMode(processedPayload, options);
+          return await this.handleResponseAPIMode(processedPayload, options);
         }
 
         const computedBaseURL =
@@ -452,7 +452,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           log('sending chat completion request with %d messages', messages.length);
 
           if (debugParams?.chatCompletion?.()) {
+            // eslint-disable-next-line no-console
             console.log('[requestPayload]');
+            // eslint-disable-next-line no-console
             console.log(JSON.stringify(finalPayload), '\n');
           }
 
@@ -564,7 +566,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const log = debug(`${this.logPrefix}:models`);
       log('fetching available models');
 
-      let resultModels: ChatModelCard[] = [];
+      let resultModels: ChatModelCard[];
       if (typeof models === 'function') {
         log('using custom models function');
         resultModels = await models({ client: this.client });
@@ -957,7 +959,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
 
       if (debugParams?.responses?.()) {
+        // eslint-disable-next-line no-console
         console.log('[requestPayload]');
+        // eslint-disable-next-line no-console
         console.log(JSON.stringify(postPayload), '\n');
       }
 
