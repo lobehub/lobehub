@@ -3,6 +3,7 @@ import '../initialize';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
+import BootErrorBoundary from '@/components/BootErrorBoundary';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { createAppRouter } from '@/utils/router';
 
@@ -17,7 +18,9 @@ const basename =
 const router = createAppRouter(desktopRoutes, { basename });
 
 createRoot(document.getElementById('root')!).render(
-  <SPAGlobalProvider>
-    <RouterProvider router={router} />
-  </SPAGlobalProvider>,
+  <BootErrorBoundary>
+    <SPAGlobalProvider>
+      <RouterProvider router={router} />
+    </SPAGlobalProvider>
+  </BootErrorBoundary>,
 );

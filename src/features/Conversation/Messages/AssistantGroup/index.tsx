@@ -68,12 +68,14 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
     dataSelectors.getGroupLatestMessageWithoutTools(id),
   );
 
-  const contentId = lastAssistantMsg?.id;
+  const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
+  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+
+  // Streaming 时不可编辑，不设 contentId，避免 tools 到达时 contentId 突变导致子树 remount
+  const contentId = creating || generating ? undefined : lastAssistantMsg?.id;
 
   // Get editing state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
-  const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const { minHeight } = useNewScreen({
     creating: creating || generating,
     isLatestItem,

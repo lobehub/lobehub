@@ -16,6 +16,35 @@ import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useGlobalStore } from '@/store/global';
+import { isChunkLoadError, tryChunkErrorReload } from '@/utils/chunkError';
+
+const MAX_IMPORT_RETRIES = 2;
+
+async function importWithRetry<T>(
+  importFn: () => Promise<T>,
+  retries = MAX_IMPORT_RETRIES,
+): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await importFn();
+    } catch (error) {
+      if (attempt === retries || !isChunkLoadError(error)) throw error;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  // unreachable, but keeps TS happy
+  throw new Error('importWithRetry exhausted');
+}
+
+function resolveLazyModule<P>(module: { default: ComponentType<P> } | ComponentType<P>) {
+  if (typeof module === 'function') {
+    return { default: module };
+  }
+  if ('default' in module) {
+    return module as { default: ComponentType<P> };
+  }
+  return { default: module as unknown as ComponentType<P> };
+}
 
 /**
  * Helper function to create a dynamic page element directly for router configuration
@@ -34,15 +63,8 @@ export function dynamicElement<P = NonNullable<unknown>>(
   debugId?: string,
 ): ReactElement {
   const LazyComponent = lazy(async () => {
-    // eslint-disable-next-line @next/next/no-assign-module-variable
-    const module = await importFn();
-    if (typeof module === 'function') {
-      return { default: module };
-    }
-    if ('default' in module) {
-      return module as { default: ComponentType<P> };
-    }
-    return { default: module as unknown as ComponentType<P> };
+    const mod = await importWithRetry(importFn);
+    return resolveLazyModule(mod);
   });
 
   // @ts-ignore
@@ -63,15 +85,8 @@ export function dynamicLayout<P = NonNullable<unknown>>(
   debugId?: string,
 ): ReactElement {
   const LazyComponent = lazy(async () => {
-    // eslint-disable-next-line @next/next/no-assign-module-variable
-    const module = await importFn();
-    if (typeof module === 'function') {
-      return { default: module };
-    }
-    if ('default' in module) {
-      return module as { default: ComponentType<P> };
-    }
-    return { default: module as unknown as ComponentType<P> };
+    const mod = await importWithRetry(importFn);
+    return resolveLazyModule(mod);
   });
 
   // @ts-ignore
@@ -107,29 +122,11 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const reset = useCallback(() => {
     navigate(resetPath);
   }, [navigate, resetPath]);
-  let message = '';
 
-  if (error instanceof Error) {
-    message = error.message;
-  } else if (typeof error === 'string') {
-    message = error;
-  } else if (error && typeof error === 'object' && 'statusText' in error) {
-    const statusText = (error as { statusText?: unknown }).statusText;
-    if (typeof statusText === 'string') message = statusText;
-  }
-
-  if (
-    typeof window !== 'undefined' &&
-    message?.startsWith('Failed to fetch dynamically imported module') &&
-    window.sessionStorage.getItem('reload') !== '1'
-  ) {
-    if (reloadRef.current) return null;
-
-    toast.info('Web app has been updated so it needs to be reloaded.');
-    window.sessionStorage.setItem('reload', '1');
-    window.location.reload();
+  if (typeof window !== 'undefined' && isChunkLoadError(error) && !reloadRef.current) {
     reloadRef.current = true;
-
+    toast.info('Web app has been updated so it needs to be reloaded.');
+    tryChunkErrorReload();
     return null;
   }
 
