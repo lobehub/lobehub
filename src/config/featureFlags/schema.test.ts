@@ -5,7 +5,6 @@ import { evaluateFeatureFlag, FeatureFlagsSchema, mapFeatureFlagsEnvToState } fr
 describe('FeatureFlagsSchema', () => {
   it('should validate correct feature flags with boolean values', () => {
     const result = FeatureFlagsSchema.safeParse({
-      provider_settings: false,
       openai_api_key: true,
       openai_proxy_url: false,
       create_session: true,
@@ -98,7 +97,6 @@ describe('evaluateFeatureFlag', () => {
 describe('mapFeatureFlagsEnvToState', () => {
   it('should correctly map boolean feature flags to state', () => {
     const config = {
-      provider_settings: true,
       openai_api_key: true,
       openai_proxy_url: false,
       edit_agent: false,
@@ -120,7 +118,6 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState).toMatchObject({
       isAgentEditable: false,
-      showProvider: true,
       showOpenAIApiKey: true,
       showOpenAIProxyUrl: false,
       showApiKeyManage: false,

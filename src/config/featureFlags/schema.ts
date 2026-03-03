@@ -7,8 +7,6 @@ export const FeatureFlagsSchema = z.object({
   check_updates: FeatureFlagValue.optional(),
 
   // settings
-  provider_settings: FeatureFlagValue.optional(),
-
   openai_api_key: FeatureFlagValue.optional(),
   openai_proxy_url: FeatureFlagValue.optional(),
 
@@ -58,8 +56,6 @@ export const evaluateFeatureFlag = (
 };
 
 export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
-  provider_settings: true,
-
   openai_api_key: true,
   openai_proxy_url: true,
 
@@ -91,7 +87,6 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string) => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
-    showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),
     showOpenAIProxyUrl: evaluateFeatureFlag(config.openai_proxy_url, userId),
