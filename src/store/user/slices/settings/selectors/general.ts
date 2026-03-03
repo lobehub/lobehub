@@ -17,6 +17,7 @@ const contextMenuMode = (s: UserStore) => {
   if (config !== undefined) return config;
   return isDesktop ? 'default' : 'disabled';
 };
+const responseLanguage = (s: UserStore) => generalConfig(s).responseLanguage;
 const telemetry = (s: UserStore) => generalConfig(s).telemetry;
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
@@ -31,6 +32,7 @@ export const userGeneralSettingsSelectors = {
   mermaidTheme,
   neutralColor,
   primaryColor,
+  responseLanguage,
   telemetry,
   transitionMode,
 };
