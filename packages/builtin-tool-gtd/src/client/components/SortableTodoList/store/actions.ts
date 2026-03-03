@@ -64,7 +64,6 @@ export const createActions = (
     ...initialState,
     items: defaultItems.map((item) => ({ ...item, id: generateId() })),
 
-    /* eslint-disable sort-keys-fix/sort-keys-fix */
     addItem: () => {
       const { items, newItemText } = get();
       if (!newItemText.trim()) return;

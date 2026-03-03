@@ -1,6 +1,6 @@
 # Prompt Engineering Guide for @lobechat/prompts
 
-本文档提供使用 Claude Code 优化 LobeChat 提示词的指南和最佳实践。
+本文档提供使用 Claude Code 优化 LobeHub 提示词的指南和最佳实践。
 
 ## 项目结构
 

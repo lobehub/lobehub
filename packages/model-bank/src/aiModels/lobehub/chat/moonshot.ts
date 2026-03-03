@@ -35,12 +35,12 @@ export const moonshotChatModels: AIChatModelCard[] = [
       functionCall: true,
       search: true,
     },
-    contextWindowTokens: 131_072,
+    contextWindowTokens: 262_144,
     description:
-      'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
+      'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active). Based on kimi-k2-0711-preview, with enhanced agentic coding abilities and better context understanding.',
     displayName: 'Kimi K2',
     enabled: true,
-    id: 'kimi-k2-0711-preview',
+    id: 'kimi-k2-0905-preview',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
@@ -48,7 +48,81 @@ export const moonshotChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-07-11',
+    releasedAt: '2025-09-05',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      search: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'High-speed version of kimi-k2, always aligned with the latest kimi-k2. Same model parameters, output speed up to 60–100 tokens/sec.',
+    displayName: 'Kimi K2 Turbo',
+    enabled: true,
+    id: 'kimi-k2-turbo-preview',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-05',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'K2 thinking model with general agentic and reasoning capabilities, specializing in deep reasoning tasks via multi-step tool use.',
+    displayName: 'Kimi K2 Thinking',
+    enabled: true,
+    id: 'kimi-k2-thinking',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-06',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'High-speed version of kimi-k2-thinking, suitable for scenarios requiring both deep reasoning and extremely fast responses.',
+    displayName: 'Kimi K2 Thinking Turbo',
+    enabled: true,
+    id: 'kimi-k2-thinking-turbo',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-06',
     settings: {
       searchImpl: 'params',
     },

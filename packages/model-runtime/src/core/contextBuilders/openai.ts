@@ -1,8 +1,9 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI, { toFile } from 'openai';
+import type OpenAI from 'openai';
+import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../const/models';
-import { ChatStreamPayload, OpenAIChatMessage } from '../../types';
+import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
 type ConvertMessageContentOptions = {
@@ -74,7 +75,7 @@ export const convertOpenAIResponseInputs = async (
   messages: OpenAIChatMessage[],
   options?: ConvertMessageContentOptions,
 ) => {
-  let input: OpenAI.Responses.ResponseInputItem[] = [];
+  const input: OpenAI.Responses.ResponseInputItem[] = [];
   await Promise.all(
     messages.map(async (message) => {
       // if message has reasoning, add it as a separate reasoning item
@@ -116,27 +117,37 @@ export const convertOpenAIResponseInputs = async (
 
       // default item
       // also need handle image
+
+      const processedContent =
+        typeof message.content === 'string'
+          ? message.content
+          : await Promise.all(
+              (message.content || []).map(async (c) => {
+                if (c.type === 'text') {
+                  // if assistant message, set type to output_text
+                  // https://platform.openai.com/docs/guides/text
+                  if (message.role === 'assistant') {
+                    return { ...c, type: 'output_text' };
+                  }
+                  return { ...c, type: 'input_text' };
+                }
+                const image = await convertMessageContent(c as OpenAI.ChatCompletionContentPart);
+                if (!(image as OpenAI.ChatCompletionContentPartImage).image_url?.url) {
+                  return undefined;
+                }
+                return {
+                  image_url: (image as OpenAI.ChatCompletionContentPartImage).image_url?.url,
+                  type: 'input_image',
+                };
+              }),
+            );
+
       const item = {
         ...message,
         content:
-          typeof message.content === 'string'
-            ? message.content
-            : await Promise.all(
-                (message.content || []).map(async (c) => {
-                  if (c.type === 'text') {
-                    return { ...c, type: 'input_text' };
-                  }
-
-                  const image = await convertMessageContent(
-                    c as OpenAI.ChatCompletionContentPart,
-                    options,
-                  );
-                  return {
-                    image_url: (image as OpenAI.ChatCompletionContentPartImage).image_url?.url,
-                    type: 'input_image',
-                  };
-                }),
-              ),
+          typeof processedContent === 'string'
+            ? processedContent
+            : processedContent.filter((m) => m !== undefined),
       } as OpenAI.Responses.ResponseInputItem;
 
       // remove reasoning field from the message item

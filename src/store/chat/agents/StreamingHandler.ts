@@ -287,12 +287,10 @@ export class StreamingHandler {
   }
 
   private handleGroundingChunk(chunk: { grounding?: GroundingData; type: 'grounding' }): void {
-    if (!chunk.grounding?.citations?.length) return;
+    const { grounding } = chunk;
+    if (!grounding?.citations?.length && !grounding?.imageResults?.length) return;
 
-    this.callbacks.onGroundingUpdate({
-      citations: chunk.grounding.citations,
-      searchQueries: chunk.grounding.searchQueries,
-    });
+    this.callbacks.onGroundingUpdate(grounding);
   }
 
   private handleBase64ImageChunk(chunk: {
@@ -526,7 +524,10 @@ export class StreamingHandler {
         isMultimodal: hasContentImages || undefined,
         performance: finishData.speed,
         reasoning: finalReasoning,
-        search: finishData.grounding?.citations ? finishData.grounding : undefined,
+        search:
+          finishData.grounding?.citations?.length || finishData.grounding?.imageResults?.length
+            ? finishData.grounding
+            : undefined,
         usage: finishData.usage,
       },
       toolCalls: finishData.toolCalls,

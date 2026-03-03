@@ -23,25 +23,25 @@ tags:
 
   First, we need to visit `https://one.dash.cloudflare.com/` and navigate to `Access - Applications`.
 
-  ![image](/blog/assetsc74cf5c8daee1515c37a85bce087f0d6.webp)
+  ![Cloudflare Zero Trust Access - Applications](/blog/assetsc74cf5c8daee1515c37a85bce087f0d6.webp)
 
   Now, on the current page, click `Add an application` and select `SaaS`.
 
-  ![image](/blog/assetse717764a3618df4e56212e447a6c20cd.webp)
+  ![Add Application - Select SaaS](/blog/assetse717764a3618df4e56212e447a6c20cd.webp)
 
   In the `Application` text box, enter the application name, such as `LobeHub SSO`. Then click `Select OIDC`, followed by clicking `Add application`.
 
-  ![image](/blog/assets0ceb7e446f9a850df283093563ba7803.webp)
+  ![Add LobeHub SSO Application](/blog/assets0ceb7e446f9a850df283093563ba7803.webp)
 
   At this point, you have successfully created a SaaS application named `LobeHub SSO` in Cloudflare Zero Trust.
 
   Next, we need to enter `https://chat.example.com/api/auth/callback/cloudflare-zero-trust` in the `Redirect URLs` field (note that `chat.example.com` should be replaced with your instance's address).
 
-  ![image](/blog/assets4aaf8d5d092608b649230e0e6fc92df6.webp)
+  ![Configure Redirect URLs](/blog/assets4aaf8d5d092608b649230e0e6fc92df6.webp)
 
   Finally, scroll down the page and record the following three values: `Client secret`, `Client ID`, and `Issuer`. You will need these for setting the environment variables when deploying LobeHub.
 
-  ![image](/blog/assets66b0dfa56c1f5b3063b5ba740dd3ef8d.webp)
+  ![Client ID, Client Secret and Issuer](/blog/assets66b0dfa56c1f5b3063b5ba740dd3ef8d.webp)
 
   ### Configure Environment Variables
 

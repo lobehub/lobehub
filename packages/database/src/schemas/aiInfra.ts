@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
 import type { AiProviderConfig, AiProviderSettings } from '@lobechat/types';
 import {
   boolean,

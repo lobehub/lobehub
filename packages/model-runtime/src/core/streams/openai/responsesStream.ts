@@ -179,7 +179,6 @@ const transformOpenAIStream = (
 
     const err = e as Error;
 
-    /* eslint-disable sort-keys-fix/sort-keys-fix */
     const errorData = {
       body: {
         message:
@@ -220,7 +219,7 @@ export const OpenAIResponsesStream = (
       .pipeThrough(createFirstErrorHandleTransformer(bizErrorTypeTransformer, payload?.provider))
       .pipeThrough(
         createTokenSpeedCalculator(transformWithPayload, {
-          enableStreaming: enableStreaming,
+          enableStreaming,
           inputStartAt,
           streamStack,
         }),

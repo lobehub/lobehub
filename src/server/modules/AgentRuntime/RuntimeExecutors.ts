@@ -4,8 +4,8 @@ import {
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
   type InstructionExecutor,
+  UsageCounter,
 } from '@lobechat/agent-runtime';
-import { UsageCounter } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
@@ -33,6 +33,7 @@ const TOOL_PRICING: Record<string, number> = {
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
+  discordContext?: any;
   evalContext?: EvalContext;
   fileService?: any;
   messageModel: MessageModel;
@@ -134,7 +135,8 @@ export const createRuntimeExecutors = (
       let processedMessages;
       if (agentConfig) {
         const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
-        const processedResult = await serverMessagesEngine({
+
+        const contextEngineInput = {
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
               const info = LOBE_DEFAULT_MODEL_LIST.find(
@@ -155,6 +157,7 @@ export const createRuntimeExecutors = (
               return info?.abilities?.vision ?? true;
             },
           },
+          discordContext: ctx.discordContext,
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,
           forceFinish: state.forceFinish,
@@ -181,8 +184,17 @@ export const createRuntimeExecutors = (
           toolsConfig: {
             tools: agentConfig.plugins ?? [],
           },
-        });
-        processedMessages = processedResult;
+          userMemory: state.metadata?.userMemory,
+        };
+
+        processedMessages = await serverMessagesEngine(contextEngineInput);
+
+        // Emit context engine event for tracing (captures input params and final LLM messages)
+        events.push({
+          input: contextEngineInput,
+          output: processedMessages,
+          type: 'context_engine_result',
+        } as any);
       } else {
         processedMessages = llmPayload.messages;
       }

@@ -1,7 +1,7 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { type DropdownItem } from '@lobehub/ui/es/DropdownMenu/type';
+import { type DropdownItem } from '@lobehub/ui';
 import { Maximize2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -23,9 +23,46 @@ tags:
 
 <Image alt={'Multi-Model Provider Support'} borderless cover src={'/blog/assets17870709/1148639c-2687-4a9c-9950-8ca8672f34b6.webp'} />
 
-As LobeHub continues to evolve, we’ve come to deeply understand the importance of supporting a diverse range of model providers to meet the needs of our community. Rather than relying on a single provider, we’ve expanded our support to include multiple AI model services, offering users a richer and more versatile chat experience.
+As LobeHub continues to evolve, we've come to deeply understand the importance of supporting a diverse range of model providers to meet the needs of our community. Rather than relying on a single provider, we've expanded our support to include multiple AI model services, offering users a richer and more versatile chat experience.
 
-This approach allows LobeHub to better adapt to the varying needs of users while also giving developers a broader range of options to work with.
+## Why Multi-Provider Support?
+
+LobeHub's multi-provider architecture offers several key advantages:
+
+- **Unified intelligence** — Access any model and any modality from a single interface
+- **Cost optimization** — Switch between providers to optimize for performance and budget
+- **Vendor independence** — Avoid lock-in and maintain service continuity if one provider has downtime
+- **Flexibility** — Mix and match models for different agents and use cases
+- **Local option** — Use Ollama or LM Studio for complete data privacy and no API costs
+
+## Provider Categories
+
+LobeHub integrates with 70+ AI model providers:
+
+- **Major commercial** — OpenAI (GPT-4o, o1), Anthropic (Claude), Google (Gemini), Microsoft Azure OpenAI, AWS Bedrock
+- **Inference platforms** — OpenRouter, Together AI, Groq, Fireworks AI, SambaNova
+- **Chinese providers** — Zhipu, Moonshot, DeepSeek, Baichuan, Qwen (Alibaba), Wenxin (Baidu), Spark (iFlytek)
+- **Local models** — Ollama, LM Studio (no API costs, complete privacy, offline capability)
+- **Image generation** — DALL-E 3, fal.ai, BFL, ComfyUI
+
+## Setting Up Providers
+
+Each provider is configured in **Settings → Language Model**:
+
+1. Select the provider from the list
+2. Enter your API key (from the provider's developer console)
+3. Optionally set a custom base URL if using a proxy or self-hosted endpoint
+4. Save and select a model to start chatting
+
+For environment variable configuration in self-hosted deployments, see the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider) reference.
+
+## Troubleshooting
+
+**Connection error / API key invalid** — Double-check your API key for extra spaces. Ensure you're using the correct key type for the provider.
+
+**Model not available** — The model may not be included in your account tier or may have been deprecated. Check the provider's model availability page.
+
+**Rate limit errors** — You've hit the provider's request rate limit. Consider distributing requests across multiple providers, or upgrade your account tier.
 
 ## How to Use Model Providers
 

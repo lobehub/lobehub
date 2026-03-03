@@ -1,8 +1,8 @@
 ---
 title: Architecture Design
 description: >-
-  Explore the architecture of LobeHub, an open-source AI Agent platform
-  built on Next.js, covering frontend, backend, runtime, and data storage.
+  Explore the architecture of LobeHub, an open-source AI Agent platform built on
+  Next.js, covering frontend, backend, runtime, and data storage.
 tags:
   - LobeHub
   - Architecture Design
@@ -35,6 +35,13 @@ The overall architecture of LobeHub consists of the following core layers:
 
 The frontend uses the Next.js framework with a **Next.js RSC + React Router DOM hybrid routing** approach: Next.js App Router handles server-rendered pages (e.g., auth pages), while React Router DOM powers the main SPA.
 
+| Router                 | Use Case                        | Location                   |
+| ---------------------- | ------------------------------- | -------------------------- |
+| **Next.js App Router** | Auth pages, SSR, static routes  | `src/app/(backend)/`       |
+| **React Router DOM**   | Main chat SPA, agent interfaces | `src/spa/` + `src/routes/` |
+
+**Why hybrid?** SSR delivers auth page security, SEO, and static page performance; SPA delivers instant navigation and reactive state for interactive chat and agent interfaces — the best of both worlds.
+
 Key tech stack:
 
 - **UI Components**: `@lobehub/ui`, antd
@@ -42,6 +49,8 @@ Key tech stack:
 - **State Management**: zustand (slice pattern)
 - **Data Fetching**: SWR + tRPC
 - **i18n**: react-i18next
+
+**Component priority** when building UI: project components (`src/components/`) → `@lobehub/ui` → Ant Design (`antd`). Always prefer project-level components for consistency.
 
 Frontend code is organized by responsibility under `src/`. See [Directory Structure](/docs/development/basic/folder-structure) for details.
 
@@ -75,6 +84,15 @@ The backend provides two API styles:
 
 In short: Model Runtime handles "how to communicate with an LLM provider"; Agent Runtime handles "how to run a complete agent using LLMs, tools, and human approvals."
 
+**Agent execution flow:**
+
+1. Parse user input
+2. LLM decides: respond directly or use a tool
+3. Execute tools (single or batch)
+4. Human-in-the-loop approval (if needed)
+5. Feed results back to LLM
+6. Loop until final response is produced
+
 ## Authentication
 
 LobeHub uses [Better Auth](https://www.better-auth.com/) as the authentication framework, supporting:
@@ -104,6 +122,24 @@ Database operations use Drizzle ORM, with schemas defined in `packages/database/
 
 - **Agent Market**: Provides AI agents for various scenarios; users can discover, use, and share agents
 - **MCP Tool Market**: Discover and integrate MCP tools to extend agent capabilities
+
+## Performance Optimizations
+
+- **Code splitting**: Route-based chunking keeps initial bundle size small
+- **Lazy loading**: Heavy components and routes load on demand
+- **SWR caching**: Client-side data is cached and revalidated in the background
+- **Edge caching**: Static and CDN-cacheable responses are edge-distributed
+- **Streaming**: Chat responses stream incrementally via SSE for perceived speed
+- **Virtualization**: Long message lists and agent lists use virtual scroll
+
+## Security Measures
+
+- **CSRF protection**: SameSite cookies and token validation
+- **XSS prevention**: Content Security Policy headers and output sanitization
+- **Rate limiting**: API rate limits enforced at the edge
+- **SSRF prevention**: Outbound request allowlisting for plugin and MCP calls
+- **SQL injection prevention**: Parameterized queries via Drizzle ORM
+- **Secret management**: API keys and credentials stored as environment variables, never in code or client bundles
 
 ## Development and Deployment
 

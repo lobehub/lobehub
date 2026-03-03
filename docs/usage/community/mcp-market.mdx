@@ -1,23 +1,34 @@
 ---
 title: MCP Marketplace
 description: >-
-  The MCP Marketplace is LobeHub's official hub, featuring a wide range of
-  meticulously crafted MCPs designed to enhance productivity in both work and
-  learning environments. You're welcome to submit your own MCP creations and
-  help build a more innovative, practical, and engaging ecosystem.
+  Connect Agents to 10,000+ tools — databases, APIs, file systems, and more. One
+  protocol, endless integrations.
 tags:
   - LobeHub
-  - MCP Marketplace
-  - Innovation Community
-  - Collaborative Space
-  - MCP Creations
-  - Automated Internationalization
-  - Multilingual Support
+  - MCP
+  - Model Context Protocol
+  - Skills
+  - Integrations
 ---
 
 # MCP Marketplace
 
-The MCP Marketplace by LobeHub brings together high-quality MCPs from creators around the world.
+The **Model Context Protocol (MCP)** is an open standard that connects Agents to external tools, data sources, and services. Think of it as a universal adapter — your Agents can interact with databases, APIs, file systems, development tools, business applications, and virtually any external service.
+
+The LobeHub MCP Marketplace brings together high-quality MCPs from creators worldwide, with 10,000+ tools ready to extend your Agents.
+
+## What is MCP?
+
+Traditional Agents are limited — they can only chat, and they can't interact with your tools or access real-time data. MCP breaks down these barriers:
+
+| Before MCP                         | With MCP                               |
+| ---------------------------------- | -------------------------------------- |
+| Isolated chatbots                  | Connected teammates                    |
+| Static knowledge only              | Real-time data access                  |
+| Manual copy/paste between tools    | Direct action on external systems      |
+| Each tool needs custom integration | One protocol for thousands of services |
+
+MCP transforms Agents from isolated chatbots into connected teammates that can actually do work.
 
 ## Explore the MCP Marketplace
 
@@ -25,8 +36,193 @@ Click on "Community" → "MCP" in the left sidebar to access the MCP Marketplace
 
 ![MCP Marketplace](/blog/assetsb811f2aae8e8346aef16793d6bd10f88.webp)
 
-The assistant marketplace is organized by category, making it easy to quickly find the type of assistant you need.
+The marketplace is organized by category, making it easy to quickly find the type of MCP you need:
+
+- **Development** — GitHub, GitLab, Linear, Jira, VS Code
+- **Productivity** — Google Drive, Notion, Slack, Trello, Asana
+- **Data & Analytics** — PostgreSQL, MongoDB, Redis, Elasticsearch
+- **Cloud Services** — AWS, Google Cloud, Azure, Cloudflare
+- **File Systems** — Local files, Dropbox, OneDrive, S3
+- **Communication** — Email, SMS, Discord, Telegram
+- **Search & Knowledge** — Web search, Wikipedia, documentation sites
 
 ## Installing an MCP
 
 <Callout type={'info'}>Please exercise caution when using MCPs from unknown sources. LobeHub cannot guarantee the safety of all MCPs.</Callout>
+
+### One-Click Installation (Desktop App)
+
+The LobeHub Desktop application provides the easiest way to install MCP plugins:
+
+1. Open the **MCP Marketplace** from the sidebar
+2. Browse or search for the plugin you need
+3. Click **Install** on your desired plugin
+4. Configure any required settings (API keys, permissions)
+5. The plugin is immediately available to all agents
+
+### Manual Installation (Self-Hosted)
+
+For self-hosted deployments, install MCP servers by configuring your connection settings.
+
+**Example: STDIO server (local process)**
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"],
+      "type": "stdio"
+    }
+  }
+}
+```
+
+**Example: HTTP server (remote service)**
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "url": "https://mcp-server-github.example.com",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer YOUR_GITHUB_TOKEN"
+      }
+    }
+  }
+}
+```
+
+## Connection Types
+
+MCP supports two connection methods:
+
+**STDIO (Standard Input/Output)** — The MCP server runs as a local process, communicating via stdin/stdout. Best for local tools, scripts, file system access, and desktop applications.
+
+**HTTP/HTTPS** — The MCP server runs as a web service over HTTP. Best for cloud services, remote APIs, multi-user tools, and web applications.
+
+## Popular MCP Plugins
+
+### File System Access
+
+Read, write, search, and manage files in specified directories.
+
+```bash
+npm install -g @modelcontextprotocol/server-filesystem
+```
+
+Use cases: code review, documentation search, log analysis, project file management.
+
+### GitHub Integration
+
+Interact with repositories, issues, pull requests, and GitHub workflows. Requires a GitHub personal access token.
+
+Use cases: project management, code review automation, issue triage, release management.
+
+### Database Access
+
+Query PostgreSQL, MySQL, and other databases. Analyze schemas, generate reports, explain query plans.
+
+Use cases: data analysis, schema exploration, report generation.
+
+### Web Search
+
+Real-time web search, news, and fact verification via Brave Search, Google Search, and others.
+
+Use cases: up-to-date information, research, news monitoring, competitive analysis.
+
+### Slack Integration
+
+Send messages, read conversation history, search messages, and manage notifications.
+
+Use cases: team notifications, automated reporting, incident management.
+
+## Using MCP with Agents
+
+Once installed, MCP plugins automatically expose their tools to your agents. Agents select and invoke tools as needed during conversation:
+
+```
+You: Search my project files for the authentication code
+
+Agent: I'll search your files now.
+       [Uses filesystem MCP — executes search tool]
+
+Agent: I found authentication-related code in src/auth/login.ts and
+       src/middleware/auth.ts. Here's what I found...
+```
+
+You can enable **Chain of Thought** to see exactly which MCP tools are being called and what parameters are used.
+
+### Enabling MCP for an Agent
+
+1. Open **Agent Settings**
+2. Navigate to **Skills**
+3. Select which MCP servers this Agent can access
+4. Save configuration
+
+## Security & Permissions
+
+MCP plugins operate with controlled permissions:
+
+- **Explicit approval** — Users approve tool access per agent
+- **Scoped access** — Plugins only access specified resources (e.g., a specific directory)
+- **Audit logging** — Track all tool invocations
+- **Revocable** — Disable plugins at any time
+
+Security best practices:
+
+- Only install MCP plugins from trusted sources
+- Review what access each MCP server requests before approving
+- Start with read-only access and upgrade only if needed
+- Regularly rotate API keys and tokens
+- Test new MCP servers with non-production data first
+
+## Troubleshooting
+
+**Plugin not appearing after installation**
+
+- Verify the MCP server is running (for STDIO type, check if the command is available via `which npx` or `which python`)
+- Check configuration file syntax
+- Review server logs for startup errors
+- Ensure all required dependencies are installed, then restart LobeHub
+
+**Tools not showing up in conversation**
+
+- Reconnect to the MCP server in Settings
+- Confirm the agent has the plugin enabled in its Tools & Plugins settings
+- Verify the server implements the MCP protocol correctly
+
+**Authentication / connection errors**
+
+- Verify your API key or token is correct and hasn't expired
+- Check that the authentication type matches what the server requires
+- For HTTP servers, confirm the URL is reachable and CORS is configured
+- Enable debug logging: `DEBUG_MCP=1` to see detailed MCP communication in self-hosted deployments
+
+## Environment Configuration
+
+For self-hosted deployments, configure MCP behavior with environment variables:
+
+```bash
+# Plugin timeout (milliseconds)
+MCP_TOOL_TIMEOUT=30000
+
+# Enable MCP debug logging
+DEBUG_MCP=1
+
+# MCP configuration file path
+MCP_CONFIG=/path/to/mcp-config.json
+```
+
+## Developing Custom MCP Plugins
+
+You can add any MCP-compatible server directly to LobeHub without going through the marketplace. See the [Custom MCP](/docs/usage/community/custom-mcp) guide for a step-by-step walkthrough, or the [Skill Management](/docs/usage/community/skill-management) guide for an overview of all skill types and how to manage them.
+
+<Cards>
+  <Card href={'/docs/usage/agent/web-search'} title={'Web Search'} />
+
+  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+</Cards>

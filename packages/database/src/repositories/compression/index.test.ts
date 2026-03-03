@@ -176,6 +176,88 @@ describe('CompressionRepository', () => {
     });
   });
 
+  describe('updateMetadata', () => {
+    it('should update metadata jsonb column on a compression group', async () => {
+      const groupId = await compressionRepo.createCompressionGroup({
+        content: 'Summary',
+        messageIds: [],
+        metadata: {},
+        topicId,
+      });
+
+      await compressionRepo.updateMetadata(groupId, { expanded: true } as any);
+
+      // Query metadata column directly since getCompressionGroups returns description-based metadata
+      const { eq, and } = await import('drizzle-orm');
+      const [group] = await serverDB
+        .select({ metadata: messageGroups.metadata })
+        .from(messageGroups)
+        .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, userId)));
+      expect((group.metadata as any)?.expanded).toBe(true);
+    });
+
+    it('should merge with existing metadata', async () => {
+      const groupId = await compressionRepo.createCompressionGroup({
+        content: 'Summary',
+        messageIds: [],
+        metadata: {},
+        topicId,
+      });
+
+      await compressionRepo.updateMetadata(groupId, { expanded: true } as any);
+      await compressionRepo.updateMetadata(groupId, { collapsed: false } as any);
+
+      const { eq, and } = await import('drizzle-orm');
+      const [group] = await serverDB
+        .select({ metadata: messageGroups.metadata })
+        .from(messageGroups)
+        .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, userId)));
+      const meta = group.metadata as any;
+      expect(meta?.expanded).toBe(true);
+      expect(meta?.collapsed).toBe(false);
+    });
+
+    it('should handle updating metadata on non-existent group gracefully', async () => {
+      // Should not throw
+      await compressionRepo.updateMetadata('non-existent-group-id', { expanded: true } as any);
+    });
+  });
+
+  describe('updateCompressionContent with metadata merge', () => {
+    it('should merge description metadata when updating content', async () => {
+      const groupId = await compressionRepo.createCompressionGroup({
+        content: 'Original summary',
+        messageIds: [],
+        metadata: { originalTokenCount: 1000 },
+        topicId,
+      });
+
+      await compressionRepo.updateCompressionContent(groupId, 'Updated summary', {
+        compressedTokenCount: 100,
+      });
+
+      const groups = await compressionRepo.getCompressionGroups(topicId);
+      expect(groups[0].content).toBe('Updated summary');
+      // Verify the description-based metadata was merged
+      expect((groups[0].metadata as any)?.originalTokenCount).toBe(1000);
+      expect((groups[0].metadata as any)?.compressedTokenCount).toBe(100);
+    });
+
+    it('should update content without metadata', async () => {
+      const groupId = await compressionRepo.createCompressionGroup({
+        content: 'Original',
+        messageIds: [],
+        metadata: {},
+        topicId,
+      });
+
+      await compressionRepo.updateCompressionContent(groupId, 'New content');
+
+      const groups = await compressionRepo.getCompressionGroups(topicId);
+      expect(groups[0].content).toBe('New content');
+    });
+  });
+
   describe('toggleMessagePin', () => {
     it('should pin a message', async () => {
       await serverDB.insert(messages).values({

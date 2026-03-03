@@ -263,12 +263,27 @@ export class AgentRuntimeService {
       completionWebhook,
       stepWebhook,
       webhookDelivery,
+      discordContext,
       evalContext,
       maxSteps,
+      userMemory,
     } = params;
 
     try {
-      log('[%s] Creating new operation (autoStart: %s)', operationId, autoStart);
+      const memories = userMemory?.memories;
+      log(
+        '[%s] Creating new operation (autoStart: %s) with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d, memory=%s',
+        operationId,
+        autoStart,
+        agentConfig?.model,
+        agentConfig?.provider,
+        tools?.length ?? 0,
+        initialMessages.length,
+        toolManifestMap ? Object.keys(toolManifestMap).length : 0,
+        memories
+          ? `{contexts:${memories.contexts?.length ?? 0},experiences:${memories.experiences?.length ?? 0},preferences:${memories.preferences?.length ?? 0},identities:${memories.identities?.length ?? 0},activities:${memories.activities?.length ?? 0},persona:${memories.persona ? 'yes' : 'no'}}`
+          : 'none',
+      );
 
       // Initialize operation state - create state before saving
       const initialState = {
@@ -281,12 +296,14 @@ export class AgentRuntimeService {
         metadata: {
           agentConfig,
           completionWebhook,
+          discordContext,
           evalContext,
           // need be removed
           modelRuntimeConfig,
           stepWebhook,
           stream,
           userId,
+          userMemory,
           webhookDelivery,
           workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
@@ -356,7 +373,6 @@ export class AgentRuntimeService {
     const { operationId, stepIndex, context, humanInput, approvedToolCall, rejectionReason } =
       params;
 
-    // Get registered callbacks
     const callbacks = this.getStepCallbacks(operationId);
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
@@ -532,7 +548,9 @@ export class AgentRuntimeService {
       let toolsCalling:
         | Array<{ apiName: string; arguments?: string; identifier: string }>
         | undefined;
-      let toolsResult: Array<{ apiName: string; identifier: string; output?: string }> | undefined;
+      let toolsResult:
+        | Array<{ apiName: string; identifier: string; isSuccess?: boolean; output?: string }>
+        | undefined;
       let stepSummary: string;
 
       if (phase === 'tool_result') {
@@ -545,6 +563,7 @@ export class AgentRuntimeService {
           {
             apiName,
             identifier,
+            isSuccess: toolPayload?.isSuccess !== false,
             output:
               typeof output === 'string'
                 ? output
@@ -558,61 +577,75 @@ export class AgentRuntimeService {
         const nextPayload = stepResult.nextContext?.payload as any;
         const toolCount = nextPayload?.toolCount || 0;
         const rawToolResults = nextPayload?.toolResults || [];
-        const mappedResults: Array<{ apiName: string; identifier: string; output?: string }> =
-          rawToolResults.map((r: any) => {
-            const tc = r.toolCall;
-            const output = r.data;
-            return {
-              apiName: tc?.apiName || 'unknown',
-              identifier: tc?.identifier || 'unknown',
-              output:
-                typeof output === 'string'
-                  ? output
-                  : output != null
-                    ? JSON.stringify(output)
-                    : undefined,
-            };
-          });
+        const mappedResults: Array<{
+          apiName: string;
+          identifier: string;
+          isSuccess?: boolean;
+          output?: string;
+        }> = rawToolResults.map((r: any) => {
+          const tc = r.toolCall;
+          const output = r.data;
+          return {
+            apiName: tc?.apiName || 'unknown',
+            identifier: tc?.identifier || 'unknown',
+            isSuccess: r?.isSuccess !== false,
+            output:
+              typeof output === 'string'
+                ? output
+                : output != null
+                  ? JSON.stringify(output)
+                  : undefined,
+          };
+        });
         toolsResult = mappedResults;
         const toolNames = mappedResults.map((r) => `${r.identifier}/${r.apiName}`);
         stepSummary = `[tools×${toolCount}] ${toolNames.join(', ')}`;
       } else {
-        // LLM result
-        const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
-        content = (llmEvent as any)?.result?.content || undefined;
-        reasoning = (llmEvent as any)?.result?.reasoning || undefined;
-
-        // Use parsed ChatToolPayload from payload (has identifier + apiName)
-        const payloadToolsCalling = (stepResult.nextContext?.payload as any)?.toolsCalling as
-          | Array<{ apiName: string; arguments: string; identifier: string }>
+        // Check for done event first (finish step with no next context)
+        const doneEvent = stepResult.events?.find((e) => e.type === 'done') as
+          | { reason?: string; reasonDetail?: string; type: 'done' }
           | undefined;
-        const hasToolCalls = Array.isArray(payloadToolsCalling) && payloadToolsCalling.length > 0;
 
-        if (hasToolCalls) {
-          toolsCalling = payloadToolsCalling.map((tc) => ({
-            apiName: tc.apiName,
-            arguments: tc.arguments,
-            identifier: tc.identifier,
-          }));
-        }
-
-        const parts: string[] = [];
-        if (reasoning) {
-          const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
-          parts.push(`💭 "${thinkPreview}"`);
-        }
-        if (!content && hasToolCalls) {
-          parts.push(
-            `→ call tools: ${toolsCalling!.map((tc) => `${tc.identifier}|${tc.apiName}`).join(', ')}`,
-          );
-        } else if (content) {
-          const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
-          parts.push(`"${preview}"`);
-        }
-        if (parts.length > 0) {
-          stepSummary = `[llm] ${parts.join(' | ')}`;
+        if (doneEvent) {
+          stepSummary = `[done] reason=${doneEvent.reason ?? 'unknown'}`;
         } else {
-          stepSummary = `[llm] (empty) result: ${JSON.stringify(stepResult, null, 2)}`;
+          // LLM result
+          const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
+          content = (llmEvent as any)?.result?.content || undefined;
+          reasoning = (llmEvent as any)?.result?.reasoning || undefined;
+
+          // Use parsed ChatToolPayload from payload (has identifier + apiName)
+          const payloadToolsCalling = (stepResult.nextContext?.payload as any)?.toolsCalling as
+            | Array<{ apiName: string; arguments: string; identifier: string }>
+            | undefined;
+          const hasToolCalls = Array.isArray(payloadToolsCalling) && payloadToolsCalling.length > 0;
+
+          if (hasToolCalls) {
+            toolsCalling = payloadToolsCalling.map((tc) => ({
+              apiName: tc.apiName,
+              arguments: tc.arguments,
+              identifier: tc.identifier,
+            }));
+          }
+
+          const parts: string[] = [];
+          if (reasoning) {
+            const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
+            parts.push(`💭 "${thinkPreview}"`);
+          }
+          if (!content && hasToolCalls) {
+            parts.push(
+              `→ call tools: ${toolsCalling!.map((tc) => `${tc.identifier}|${tc.apiName}`).join(', ')}`,
+            );
+          } else if (content) {
+            const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
+            parts.push(`"${preview}"`);
+          }
+          if (parts.length > 0) {
+            stepSummary = `[llm] ${parts.join(' | ')}`;
+          } else {
+            stepSummary = `[llm] (empty) phase=${stepResult.nextContext?.phase ?? 'none'} events=${stepResult.events?.length ?? 0}`;
+          }
         }
       }
 
@@ -682,6 +715,55 @@ export class AgentRuntimeService {
         }
       }
 
+      // Dev mode: record step snapshot to disk for agent-tracing CLI
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
+          const store = new FileSnapshotStore();
+
+          const partial = (await store.loadPartial(operationId)) ?? { steps: [] };
+
+          if (!partial.startedAt) {
+            partial.startedAt = Date.now();
+            partial.model =
+              (agentState?.metadata as any)?.agentConfig?.model ??
+              agentState?.modelRuntimeConfig?.model;
+            partial.provider =
+              (agentState?.metadata as any)?.agentConfig?.provider ??
+              agentState?.modelRuntimeConfig?.provider;
+          }
+
+          if (!partial.steps) partial.steps = [];
+          partial.steps.push({
+            completedAt: Date.now(),
+            content: stepPresentationData.content,
+            context: {
+              payload: currentContext?.payload,
+              phase: currentContext?.phase ?? 'unknown',
+              stepContext: currentContext?.stepContext,
+            },
+            events: stepResult.events as any,
+            executionTimeMs: stepPresentationData.executionTimeMs,
+            inputTokens: stepPresentationData.stepInputTokens,
+            messages: agentState?.messages,
+            messagesAfter: stepResult.newState.messages,
+            outputTokens: stepPresentationData.stepOutputTokens,
+            reasoning: stepPresentationData.reasoning,
+            startedAt: startAt,
+            stepIndex,
+            stepType: stepPresentationData.stepType,
+            toolsCalling: stepPresentationData.toolsCalling,
+            toolsResult: stepPresentationData.toolsResult,
+            totalCost: stepPresentationData.totalCost,
+            totalTokens: stepPresentationData.totalTokens,
+          });
+
+          await store.savePartial(operationId, partial);
+        } catch {
+          // agent-tracing not available, skip silently
+        }
+      }
+
       // Update step tracking in state metadata and trigger step webhook
       if (stepResult.newState.metadata?.stepWebhook) {
         const prevTracking = stepResult.newState.metadata._stepTracking || {};
@@ -704,12 +786,12 @@ export class AgentRuntimeService {
         stepResult.newState.metadata._stepTracking = updatedTracking;
         await this.coordinator.saveAgentState(operationId, stepResult.newState);
 
-        // Fire step webhook
-        await this.triggerStepWebhook(
-          stepResult.newState,
-          operationId,
-          stepPresentationData as unknown as Record<string, unknown>,
-        );
+        // Fire step webhook (include shouldContinue so the callback knows
+        // whether the agent is still running or about to complete)
+        await this.triggerStepWebhook(stepResult.newState, operationId, {
+          ...stepPresentationData,
+          shouldContinue,
+        } as unknown as Record<string, unknown>);
       }
 
       if (shouldContinue && stepResult.nextContext && this.queueService) {
@@ -749,6 +831,44 @@ export class AgentRuntimeService {
             this.unregisterStepCallbacks(operationId);
           } catch (callbackError) {
             log('[%s] onComplete callback error: %O', operationId, callbackError);
+          }
+        }
+
+        // Dev mode: finalize tracing snapshot
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
+            const store = new FileSnapshotStore();
+            const partial = await store.loadPartial(operationId);
+
+            if (partial) {
+              const snapshot = {
+                completedAt: Date.now(),
+                completionReason: reason,
+                error: stepResult.newState.error
+                  ? {
+                      message: String(
+                        stepResult.newState.error.message ?? stepResult.newState.error,
+                      ),
+                      type: String(stepResult.newState.error.type ?? 'unknown'),
+                    }
+                  : undefined,
+                model: partial.model,
+                operationId,
+                provider: partial.provider,
+                startedAt: partial.startedAt ?? Date.now(),
+                steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
+                totalCost: stepResult.newState.cost?.total ?? 0,
+                totalSteps: stepResult.newState.stepCount,
+                totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                traceId: operationId,
+              };
+
+              await store.save(snapshot as any);
+              await store.removePartial(operationId);
+            }
+          } catch {
+            // agent-tracing not available, skip silently
           }
         }
       }
@@ -1157,6 +1277,7 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      discordContext: metadata?.discordContext,
       evalContext: metadata?.evalContext,
       messageModel: this.messageModel,
       operationId,
@@ -1260,6 +1381,11 @@ export class AgentRuntimeService {
         (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
       )?.content;
 
+    // Extract first user prompt for downstream consumers (e.g., topic title summarization)
+    const userPrompt = state.messages?.find(
+      (m: { content?: string; role: string }) => m.role === 'user',
+    )?.content;
+
     const delivery = state.metadata?.webhookDelivery || 'fetch';
 
     await this.deliverWebhook(
@@ -1277,8 +1403,11 @@ export class AgentRuntimeService {
         status: state.status,
         steps: state.stepCount,
         toolCalls: state.usage?.tools?.totalCalls,
+        topicId: state.metadata?.topicId,
         totalTokens: state.usage?.llm?.tokens?.total,
         type: 'completion',
+        userId: state.metadata?.userId,
+        userPrompt,
       },
       delivery,
       operationId,

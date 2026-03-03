@@ -88,6 +88,33 @@ describe('UserPersonaModel', () => {
     expect(latest?.version).toBe(2);
   });
 
+  describe('appendDiff', () => {
+    it('should insert a diff record directly', async () => {
+      // First create a persona document to reference
+      const { document } = await personaModel.upsertPersona({ persona: '# v1' });
+
+      const diff = await personaModel.appendDiff({
+        diffPersona: '- manual change',
+        memoryIds: ['mem-manual'],
+        nextVersion: 2,
+        personaId: document.id,
+        previousVersion: 1,
+        reasoning: 'Manual diff',
+        snapshot: '# v2',
+        sourceIds: ['src-manual'],
+      });
+
+      expect(diff).toBeDefined();
+      expect(diff.personaId).toBe(document.id);
+      expect(diff.userId).toBe(userId);
+      expect(diff.diffPersona).toBe('- manual change');
+      expect(diff.previousVersion).toBe(1);
+      expect(diff.nextVersion).toBe(2);
+      expect(diff.memoryIds).toEqual(['mem-manual']);
+      expect(diff.sourceIds).toEqual(['src-manual']);
+    });
+  });
+
   it('lists diffs ordered by createdAt desc', async () => {
     await personaModel.upsertPersona({
       diffPersona: '- change',

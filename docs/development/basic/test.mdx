@@ -1,92 +1,560 @@
 ---
 title: Testing Guide
 description: >-
-  Explore LobeHub's testing strategy, including unit and end-to-end testing
-  methods.
+  Explore LobeHub's testing strategy, including unit testing with Vitest and
+  end-to-end testing with Playwright + Cucumber.
 tags:
   - LobeHub
   - Testing
   - Unit Testing
   - End-to-End Testing
   - vitest
+  - Playwright
 ---
 
 # Testing Guide
 
-LobeHub's testing strategy includes unit testing and end-to-end (E2E) testing. Below are detailed explanations of each type of testing:
+LobeHub's testing strategy includes unit testing with [Vitest][vitest-url] and end-to-end (E2E) testing with Playwright + Cucumber. This guide covers how to write and run tests effectively.
 
-## Unit Testing
+## Overview
 
-Unit testing is used to test the functionality of independent units in the application, such as components, functions, utility functions, etc. We use [vitest][vitest-url] for unit testing.
+Our testing strategy includes:
 
-To run unit tests, you can use the following command:
+- **Unit Tests** — Vitest for functions, components, and stores
+- **E2E Tests** — Playwright + Cucumber for user flows
+- **Type Checking** — TypeScript compiler (`bun run type-check`)
+- **Linting** — ESLint, Stylelint
+
+## Quick Reference
+
+### Commands
 
 ```bash
-npm run test
+# Run a specific unit test (RECOMMENDED)
+bunx vitest run --silent='passed-only' 'path/to/test.test.ts'
+
+# Run tests in a package (e.g., database)
+cd packages/database && bunx vitest run --silent='passed-only' 'src/models/user.test.ts'
+
+# Type checking
+bun run type-check
+
+# E2E tests
+pnpm e2e
 ```
 
-This will run all unit tests and generate a test report.
+<Callout type={'warning'}>
+  **Never run the full test suite** with `bun run test` — it runs all tests and takes \~10 minutes.
+  Always target a specific file with `bunx vitest run --silent='passed-only' '[file-path]'`.
+</Callout>
 
-We encourage developers to write corresponding unit tests while writing code to ensure the quality and stability of the code.
+## Unit Testing with Vitest
 
-## 🚧 End-to-End Testing
+### Test File Structure
 
-End-to-end testing is used to test the functionality and performance of the application in a real environment. It simulates real user operations and verifies the application's performance in different scenarios.
+Create test files alongside the code being tested, named `<filename>.test.ts`:
 
-Currently, there is no integrated end-to-end testing in LobeHub. We will gradually introduce end-to-end testing in subsequent iterations.
+```
+src/utils/
+├── formatDate.ts
+└── formatDate.test.ts
+```
 
-## Development Testing
+### Writing Test Cases
 
-### 1. Unit Testing
+Use `describe` and `it` to organize test cases. Use `beforeEach`/`afterEach` to manage setup and teardown:
 
-Unit testing is conducted on the smallest testable units in the application, usually functions, components, or modules. In LobeHub, we use [vitest][vitest-url] for unit testing.
+```typescript
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { formatDate } from './formatDate';
 
-#### Writing Test Cases
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
-Before writing unit tests, you need to create a directory with the same name as the file to be tested and name the test file `<filename>.test.ts`. For example, if you want to test the `src/utils/formatDate.ts` file, the test file should be named `src/utils/formatDate.test.ts`.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-In the test file, you can use the `describe` and `it` functions to organize and write test cases. The `describe` function is used to create a test suite, and the `it` function is used to write specific test cases.
-
-```ts
-import { formatNumber } from './formatNumber';
-
-describe('formatNumber', () => {
-  it('should format number with comma separator', () => {
-    const result = formatNumber(1000);
-    expect(result).toBe('1,000');
+describe('formatDate', () => {
+  describe('with default format', () => {
+    it('should format date correctly', () => {
+      const date = new Date('2024-03-15');
+      const result = formatDate(date);
+      expect(result).toBe('Mar 15, 2024');
+    });
   });
 
-  it('should return the same number if it is less than 1000', () => {
-    const result = formatNumber(500);
-    expect(result).toBe('500');
+  describe('with custom format', () => {
+    it('should use custom format', () => {
+      const date = new Date('2024-03-15');
+      const result = formatDate(date, 'YYYY-MM-DD');
+      expect(result).toBe('2024-03-15');
+    });
   });
 });
 ```
 
-In test cases, you can use the `expect` function to assert whether the test results meet expectations. The `expect` function can be used with various matchers, such as `toBe`, `toEqual`, `toBeTruthy`, etc.
+### Testing React Components
 
-#### Running Unit Tests
+Use `@testing-library/react` to test component behavior:
 
-Execute unit tests by running the following command:
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { UserProfile } from './UserProfile';
 
-```bash
-npm run test
+describe('UserProfile', () => {
+  it('should render user name', () => {
+    render(<UserProfile name="Alice" />);
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+  });
+
+  it('should call onClick when button clicked', () => {
+    const onClick = vi.fn();
+    render(<UserProfile name="Alice" onClick={onClick} />);
+
+    fireEvent.click(screen.getByRole('button'));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('should handle async data loading', async () => {
+    render(<UserProfile userId="123" />);
+
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+    });
+  });
+});
 ```
 
-This will run all unit tests and output the test results.
+### Testing Zustand Stores
 
-## Testing Strategy
+Reset store state in `beforeEach` to keep tests independent:
 
-To write effective test cases, you can consider the following testing strategies:
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { act } from '@testing-library/react';
+import { useUserStore } from './index';
 
-- **Boundary Testing**: Test the boundary conditions of inputs, such as minimum value, maximum value, empty value, etc.
-- **Exception Testing**: Test the code handling exceptional cases, such as error handling, fallback in exceptional situations, etc.
-- **Functional Testing**: Test whether various functional modules of the application work properly, including user interaction, data processing, etc.
-- **Compatibility Testing**: Test the compatibility of the application on different browsers and devices.
-- **Performance Testing**: Test the performance of the application under different loads, such as response time, resource utilization, etc.
+beforeEach(() => {
+  useUserStore.setState({
+    users: {},
+    currentUserId: null,
+  });
+});
 
-Also, ensure that your test cases have good coverage, covering critical code and functionality in the application.
+describe('useUserStore', () => {
+  describe('addUser', () => {
+    it('should add user to store', () => {
+      const user = { id: '1', name: 'Alice' };
 
-By properly writing and executing unit tests, integration tests, and end-to-end tests, you can improve the quality and stability of the application and promptly identify and fix potential issues.
+      act(() => {
+        useUserStore.getState().addUser(user);
+      });
+
+      const state = useUserStore.getState();
+      expect(state.users['1']).toEqual(user);
+    });
+  });
+
+  describe('setCurrentUser', () => {
+    it('should update current user ID', () => {
+      act(() => {
+        useUserStore.getState().setCurrentUser('123');
+      });
+
+      expect(useUserStore.getState().currentUserId).toBe('123');
+    });
+  });
+});
+```
+
+### Mocking
+
+#### Prefer `vi.spyOn` Over `vi.mock`
+
+```typescript
+// ✅ Good — spyOn is scoped and auto-restores
+vi.spyOn(messageService, 'createMessage').mockResolvedValue('msg_123');
+
+// ❌ Avoid — global mocks are fragile and leak between tests
+vi.mock('@/services/message');
+```
+
+#### Mock Browser APIs
+
+```typescript
+// Mock Image
+const mockImage = vi.fn(() => ({
+  addEventListener: vi.fn((event, handler) => {
+    if (event === 'load') setTimeout(handler, 0);
+  }),
+  removeEventListener: vi.fn(),
+}));
+vi.stubGlobal('Image', mockImage);
+
+// Mock URL.createObjectURL
+vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
+
+// Mock fetch
+global.fetch = vi.fn(() =>
+  Promise.resolve({
+    json: () => Promise.resolve({ data: 'test' }),
+    ok: true,
+  }),
+);
+```
+
+#### Mock Modules
+
+```typescript
+// Mock external library
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(() => Promise.resolve({ data: {} })),
+  },
+}));
+
+// Mock internal module
+vi.mock('@/utils/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+```
+
+### Testing Async Code
+
+```typescript
+import { waitFor } from '@testing-library/react';
+
+it('should load data asynchronously', async () => {
+  await expect(fetchUser('123')).resolves.toEqual({ id: '123', name: 'Alice' });
+});
+
+it('should handle errors', async () => {
+  await expect(fetchUser('invalid')).rejects.toThrow('User not found');
+});
+```
+
+### Testing Database Code
+
+For database and ORM tests in packages:
+
+```bash
+# Client DB tests
+cd packages/database
+bunx vitest run --silent='passed-only' 'src/models/user.test.ts'
+
+# Server DB tests
+cd packages/database
+TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 'src/models/user.test.ts'
+```
+
+## E2E Testing with Playwright
+
+### Running E2E Tests
+
+```bash
+# Run all E2E tests
+pnpm e2e
+
+# Run in UI mode (interactive)
+pnpm e2e:ui
+
+# Smoke tests only (quick validation)
+pnpm test:e2e:smoke
+```
+
+### E2E Test Structure
+
+E2E tests live in the `e2e/` directory:
+
+```
+e2e/
+├── features/             # Cucumber feature files (.feature)
+│   ├── auth.feature
+│   └── chat.feature
+├── step-definitions/     # Step implementations
+│   ├── auth.steps.ts
+│   └── chat.steps.ts
+├── support/              # Shared helpers and hooks
+└── playwright.config.ts
+```
+
+### Writing E2E Tests
+
+**Feature file** (`e2e/features/chat.feature`):
+
+```gherkin
+Feature: Chat Functionality
+
+  Scenario: User sends a message
+    Given I am logged in
+    And I am on the chat page
+    When I type "Hello, AI!"
+    And I click the send button
+    Then I should see my message in the chat
+    And I should see a response from the AI
+```
+
+**Step definitions** (`e2e/step-definitions/chat.steps.ts`):
+
+```typescript
+import { Given, When, Then } from '@cucumber/cucumber';
+import { expect } from '@playwright/test';
+
+Given('I am on the chat page', async function () {
+  await this.page.goto('/chat');
+});
+
+When('I type {string}', async function (message: string) {
+  await this.page.fill('[data-testid="chat-input"]', message);
+});
+
+When('I click the send button', async function () {
+  await this.page.click('[data-testid="send-button"]');
+});
+
+Then('I should see my message in the chat', async function () {
+  await expect(this.page.locator('.user-message').last()).toBeVisible();
+});
+```
+
+## Best Practices
+
+### 1. Test Behavior, Not Implementation
+
+```typescript
+// ✅ Good — tests what the user experiences
+it('should allow user to submit form', () => {
+  render(<ContactForm />);
+
+  fireEvent.change(screen.getByLabelText('Name'), {
+    target: { value: 'Alice' },
+  });
+  fireEvent.click(screen.getByText('Submit'));
+
+  expect(screen.getByText('Form submitted')).toBeInTheDocument();
+});
+
+// ❌ Bad — tests internal implementation details
+it('should call setState when input changes', () => {
+  const setState = vi.fn();
+  render(<ContactForm setState={setState} />);
+
+  fireEvent.change(screen.getByLabelText('Name'), {
+    target: { value: 'Alice' },
+  });
+
+  expect(setState).toHaveBeenCalled();
+});
+```
+
+### 2. Use Semantic Queries
+
+```typescript
+// ✅ Good — accessible queries match what users see
+screen.getByRole('button', { name: 'Submit' });
+screen.getByLabelText('Email address');
+screen.getByText('Welcome back');
+
+// ❌ Bad — test IDs should be a last resort
+screen.getByTestId('submit-button');
+```
+
+### 3. Clean Up After Each Test
+
+```typescript
+import { beforeEach, afterEach, vi } from 'vitest';
+
+beforeEach(() => {
+  vi.clearAllMocks();   // Clear mock call history
+  vi.clearAllTimers();  // Clear timers if using fake timers
+});
+
+afterEach(() => {
+  vi.restoreAllMocks(); // Restore original implementations
+});
+```
+
+### 4. Test Edge Cases
+
+```typescript
+describe('validateEmail', () => {
+  it('should accept valid email', () => {
+    expect(validateEmail('user@example.com')).toBe(true);
+  });
+
+  it('should reject empty string', () => {
+    expect(validateEmail('')).toBe(false);
+  });
+
+  it('should reject email without @', () => {
+    expect(validateEmail('user.example.com')).toBe(false);
+  });
+
+  it('should reject email without domain', () => {
+    expect(validateEmail('user@')).toBe(false);
+  });
+});
+```
+
+### 5. Keep Tests Independent
+
+```typescript
+// ❌ Bad — tests share state and depend on execution order
+let userId: string;
+
+it('should create user', () => {
+  userId = createUser('Alice');
+  expect(userId).toBeDefined();
+});
+
+it('should fetch user', () => {
+  const user = getUser(userId); // depends on previous test
+  expect(user.name).toBe('Alice');
+});
+
+// ✅ Good — each test sets up its own data
+it('should create user', () => {
+  const userId = createUser('Alice');
+  expect(userId).toBeDefined();
+});
+
+it('should fetch user', () => {
+  const userId = createUser('Bob');
+  const user = getUser(userId);
+  expect(user.name).toBe('Bob');
+});
+```
+
+## Common Patterns
+
+### Testing Hooks
+
+```typescript
+import { renderHook, act } from '@testing-library/react';
+import { useCounter } from './useCounter';
+
+it('should increment counter', () => {
+  const { result } = renderHook(() => useCounter());
+
+  expect(result.current.count).toBe(0);
+
+  act(() => {
+    result.current.increment();
+  });
+
+  expect(result.current.count).toBe(1);
+});
+```
+
+### Testing Context Providers
+
+```typescript
+import { render, screen } from '@testing-library/react';
+import { ThemeProvider } from './ThemeProvider';
+import { MyComponent } from './MyComponent';
+
+function renderWithTheme(component: React.ReactElement) {
+  return render(<ThemeProvider theme="dark">{component}</ThemeProvider>);
+}
+
+it('should use theme', () => {
+  renderWithTheme(<MyComponent />);
+  expect(screen.getByRole('main')).toHaveClass('dark-theme');
+});
+```
+
+### Testing API Calls with MSW
+
+```typescript
+import { rest } from 'msw';
+import { setupServer } from 'msw/node';
+
+const server = setupServer(
+  rest.get('/api/user', (req, res, ctx) => {
+    return res(ctx.json({ id: '1', name: 'Alice' }));
+  }),
+);
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+it('should fetch user data', async () => {
+  const user = await fetchUser('1');
+  expect(user.name).toBe('Alice');
+});
+```
+
+## Coverage
+
+### Generate Coverage Report
+
+```bash
+bun run test-app:coverage
+```
+
+Then open `coverage/index.html` to view the report.
+
+### Coverage Goals
+
+| Area           | Target |
+| -------------- | ------ |
+| Critical paths | 80%+   |
+| Utilities      | 90%+   |
+| UI components  | 70%+   |
+
+## Debugging Tests
+
+### VS Code Debugging
+
+Add to `.vscode/launch.json`:
+
+```json
+{
+  "type": "node",
+  "request": "launch",
+  "name": "Debug Vitest",
+  "runtimeExecutable": "bun",
+  "runtimeArgs": ["x", "vitest", "run", "${file}"],
+  "console": "integratedTerminal"
+}
+```
+
+### Vitest UI
+
+```bash
+bunx vitest --ui
+```
+
+Opens an interactive test explorer in the browser.
+
+### Console Logging
+
+```typescript
+it('should work', () => {
+  console.log('Debug:', value); // appears in test output
+  expect(value).toBe(expected);
+});
+```
+
+## CI/CD Integration
+
+GitHub Actions automatically runs on every PR:
+
+1. Linting (ESLint, Stylelint)
+2. Type checking
+3. Unit tests
+4. E2E tests
+5. Build verification
+
+All checks must pass before a PR can merge.
 
 [vitest-url]: https://vitest.dev/

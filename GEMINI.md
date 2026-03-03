@@ -1,6 +1,6 @@
 # GEMINI.md
 
-Guidelines for using Gemini CLI in this LobeChat repository.
+Guidelines for using Gemini CLI in this LobeHub repository.
 
 ## Tech Stack
 

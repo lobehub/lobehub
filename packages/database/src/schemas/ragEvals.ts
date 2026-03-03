@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { DEFAULT_MODEL } from '@lobechat/const';
 import { EvalEvaluationStatus } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uuid } from 'drizzle-orm/pg-core';

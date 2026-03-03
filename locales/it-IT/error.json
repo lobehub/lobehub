@@ -2,6 +2,7 @@
   "error.backHome": "Torna alla Home",
   "error.desc": "Riprova più tardi o torna al mondo conosciuto.",
   "error.retry": "Ricarica",
+  "error.stack": "Stack degli errori",
   "error.title": "Ops, qualcosa è andato storto...",
   "fetchError.detail": "Dettagli dell'errore",
   "fetchError.title": "Richiesta fallita",

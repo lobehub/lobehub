@@ -16,6 +16,24 @@ import InternalEditor from './InternalEditor';
  */
 type EditorPlugins = Parameters<typeof Editor>[0]['plugins'];
 
+interface UnsavedChangesGuardOptions {
+  /**
+   * Whether to enable unsaved-changes guard for route navigation and browser unload.
+   * Defaults to false.
+   */
+  enabled?: boolean;
+
+  /**
+   * Custom message shown in leave confirmation.
+   */
+  message?: string;
+
+  /**
+   * Custom title shown in leave confirmation.
+   */
+  title?: string;
+}
+
 export interface EditorCanvasProps {
   /**
    * Whether to enable auto-save in DocumentStore. Defaults to true.
@@ -96,6 +114,11 @@ export interface EditorCanvasProps {
    * Extra items to add to the floating toolbar (e.g., "Ask Copilot" button)
    */
   toolbarExtraItems?: ChatInputActionsProps['items'];
+
+  /**
+   * Unsaved changes guard for documentId mode.
+   */
+  unsavedChangesGuard?: UnsavedChangesGuardOptions;
 }
 
 export interface EditorCanvasWithEditorProps extends EditorCanvasProps {

@@ -1,92 +1,114 @@
 ---
 title: Share Conversations
 description: >-
-  Learn how to share conversation records using LobeHub's sharing features,
-  including screenshot sharing and ShareGPT links. Easily share your dialogues
-  with others.
+  Export and share your conversations — screenshot, text, PDF, or JSON. One
+  click to copy or download.
 tags:
   - LobeHub
-  - Share Conversation Records
-  - Screenshot Sharing
-  - Conversation Sharing
+  - Share
+  - Export
+  - Screenshot
+  - PDF
+  - JSON
+  - Link
 ---
 
-# Share Conversation Records
+# Share Conversations
 
-You can share your current conversation with others by clicking the Share button in the top-right corner of the chat window. LobeHub supports two sharing methods: Screenshot Sharing and Shareable Link Generation.
-
-LobeHub allows you to export and share your conversations in various formats, including screenshots, plain text, PDF, or JSON, making it easy to save and share your dialogues.
+Click the **Share** button in the top-right corner of the chat window to export and share your current conversation. LobeHub supports multiple formats — choose the one that fits how you want to use it.
 
 ## Screenshot Sharing
 
-Export your conversation as an image. Available display modes:
+Export your conversation as an image. Great for social media or messaging apps — visually intuitive and easy to read.
 
-- Wide Screen Mode: Optimized for desktop viewing
-- Narrow Screen Mode: Optimized for mobile viewing
+**Display modes:**
 
-Optional content settings:
+- **Wide screen** — Optimized for desktop viewing
+- **Narrow screen** — Optimized for mobile viewing
 
-- Include Assistant Role Settings: Display system prompts and configuration for the assistant
-- Include Footer: Show information at the bottom of the page
-- Image Format Options: JPG / PNG / SVG / WEBP
-- Sharing Options:
-  - Copy Image: Copy to clipboard for direct pasting into other apps
-  - Download Screenshot: Save the image file locally
+**Optional content:**
+
+- Include Agent role settings (system prompt and configuration)
+- Include footer (page bottom information)
+
+**Format:** JPG / PNG / SVG / WEBP
+
+**Actions:** Copy to clipboard for pasting into other apps, or download the image file.
 
 <Image alt={'Screenshot Sharing'} src={'/blog/assets196d679bc7071abbf71f2a8566f05aa3.webp'} />
 
 ## Text Sharing
 
-Export your conversation as plain text. Optional content settings:
+Export as plain text. Ideal for editing or quoting — small file size.
 
-- Include Assistant Role Settings: Include system prompts and assistant configuration
-- Include Message Roles: Show the sender of each message
-- Include User Info: Include user-related information
-- Include Plugin Info: Include details of plugin calls
-- Sharing Options:
-  - Copy Text: Copy to clipboard
-  - Download File: Save as a text file
+**Optional content:**
 
-![clipboard-1769056077960-cac34bc157a65.png](/blog/assetsa8e173bec038d1d21d413f6fa0ace342.webp)
+- Include Agent role settings
+- Include message roles (who sent each message)
+- Include user info
+- Include Skill/plugin call details
+
+**Actions:** Copy to clipboard, or download as a text file.
+
+![Text Sharing Export Options](/blog/assetsa8e173bec038d1d21d413f6fa0ace342.webp)
 
 ## PDF Sharing
 
-Export your conversation as a PDF document. Optional content settings:
+Export as a PDF document. Suitable for formal use — work reports, study notes, archival.
 
-- Include Assistant Role Settings: Include system prompts and assistant configuration
-- Include Message Roles: Show the sender of each message
-- Include User Info: Include user-related information
-- Include Plugin Info: Include details of plugin calls
+**Optional content:**
 
-Generation Method: After selecting your options, click the Generate button to create and download the PDF file.
+- Include Agent role settings
+- Include message roles
+- Include user info
+- Include Skill/plugin call details
+
+**Actions:** Click **Generate** to create and download the PDF.
 
 <Image alt={'PDF Sharing'} src={'/blog/assets7dccdd4df55aede71001da649639437f.webp'} />
 
 ## JSON Sharing
 
-Export your conversation in JSON format, ideal for developers or integration with other systems.
+Export in JSON format — ideal for developers or integration with other systems.
 
-Available export modes:
+**Export modes:**
 
-- Default: LobeHub's standard JSON format
-- OpenAI Compatible: JSON format compatible with the OpenAI API
+- **Default** — LobeHub's standard JSON format
+- **OpenAI Compatible** — JSON format compatible with the OpenAI API
 
-Optional content settings:
+**Optional content:**
 
-- Include Role Settings: Include assistant role configuration
+- Include Agent role configuration
 
-Sharing Options:
-
-- Copy: Copy JSON content to clipboard
-- Download File: Save as a JSON file
+**Actions:** Copy JSON to clipboard, or download as a file.
 
 ## Use Cases
 
-- Screenshot Sharing: Great for sharing conversations on social media or messaging apps—visually intuitive and easy to read.
-- Text Sharing: Ideal for editing or quoting conversations; small file size.
-- PDF Sharing: Suitable for formal use cases like work reports, study notes, or archival.
-- JSON Sharing: Best for developers—can be imported into other systems or used for data analysis.
+| Format         | Best For                                              |
+| -------------- | ----------------------------------------------------- |
+| **Screenshot** | Social media, messaging apps — visually intuitive     |
+| **Text**       | Editing, quoting — small file size                    |
+| **PDF**        | Work reports, study notes, archival                   |
+| **JSON**       | Developers — import into other systems, data analysis |
 
 ## Shareable Link
 
-Coming soon...
+Generate a link to share your conversation publicly. Click the **Share** button in the top-right corner — if link sharing is available in your workspace, a popover appears instead of the modal directly.
+
+**Visibility options:**
+
+- **Private** — Only you can access the link. The conversation is not visible to others even if they have the URL.
+- **Anyone with the link** — Anyone who has the link can view the full conversation. A privacy notice appears the first time you switch to this mode.
+
+**Actions:**
+
+- **Copy Link** — Copies the share URL to your clipboard. Share it via any channel.
+- **More share options** — Opens the full share modal for screenshot, text, PDF, or JSON export.
+
+When someone opens the link, they see the full conversation in a clean read-only view. A bottom bar shows the Agent name and avatar, with quick links to explore the Agent Market or try the same agent themselves.
+
+<Cards>
+  <Card href={'/docs/usage/agent/topic'} title={'Topics'} />
+
+  <Card href={'/docs/usage/community/agent-market'} title={'Agent Marketplace'} />
+</Cards>

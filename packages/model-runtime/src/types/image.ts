@@ -1,4 +1,3 @@
-/* eslint-disable typescript-sort-keys/interface */
 import type { ModelUsage } from '@lobechat/types';
 import type { RuntimeImageGenParams } from 'model-bank';
 

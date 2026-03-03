@@ -30,6 +30,7 @@ import {
   type ModelUsage,
   TraceNameMap,
 } from '@lobechat/types';
+import { dedupeBy } from '@lobechat/utils';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -349,17 +350,26 @@ export const createAgentExecutors = (context: {
         });
 
         if (additional.tools?.length) {
-          resolvedAgentConfig = {
-            ...context.agentConfig,
-            enabledManifests: [
-              ...(context.agentConfig.enabledManifests || []),
-              ...additional.enabledManifests,
-            ],
-            enabledToolIds: [
+          const mergedEnabledManifests = dedupeBy(
+            [...(context.agentConfig.enabledManifests || []), ...additional.enabledManifests],
+            (manifest) => manifest.identifier,
+          );
+          const mergedEnabledToolIds = [
+            ...new Set([
               ...(context.agentConfig.enabledToolIds || []),
               ...additional.enabledToolIds,
-            ],
-            tools: [...(context.agentConfig.tools || []), ...additional.tools],
+            ]),
+          ];
+          const mergedTools = dedupeBy(
+            [...(context.agentConfig.tools || []), ...additional.tools],
+            (tool) => tool.function.name,
+          );
+
+          resolvedAgentConfig = {
+            ...context.agentConfig,
+            enabledManifests: mergedEnabledManifests,
+            enabledToolIds: mergedEnabledToolIds,
+            tools: mergedTools,
           };
 
           log(

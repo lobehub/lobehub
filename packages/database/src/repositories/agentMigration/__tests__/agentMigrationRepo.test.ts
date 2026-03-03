@@ -2,7 +2,15 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messages, sessions, topics, users } from '../../../schemas';
+import {
+  agents,
+  agentsToSessions,
+  messages,
+  sessionGroups,
+  sessions,
+  topics,
+  users,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { AgentMigrationRepo } from '../index';
 
@@ -757,6 +765,135 @@ describe('AgentMigrationRepo', () => {
       const result = await agentMigrationRepo.getSessionIdByAgentId('non-existent-agent');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('migrateSessionGroupId', () => {
+    it('should backfill sessionGroupId from session groupId', async () => {
+      // Create session group
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ id: 'test-group', name: 'Test Group', userId })
+        .returning();
+
+      // Create a session with groupId
+      const groupedSessionId = 'grouped-session';
+      await serverDB.insert(sessions).values({ id: groupedSessionId, userId, groupId: group.id });
+
+      // Create an agent with null sessionGroupId
+      const agentId = 'migrate-group-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId, sessionGroupId: null });
+
+      // Link agent to session
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId, sessionId: groupedSessionId, userId });
+
+      // Run migration
+      await agentMigrationRepo.migrateSessionGroupId();
+
+      // Verify agent's sessionGroupId was updated
+      const updatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agentId),
+      });
+      expect(updatedAgent?.sessionGroupId).toBe(group.id);
+    });
+
+    it('should not modify agents that already have sessionGroupId', async () => {
+      const [group1] = await serverDB
+        .insert(sessionGroups)
+        .values({ id: 'group-1', name: 'Group 1', userId })
+        .returning();
+
+      const [group2] = await serverDB
+        .insert(sessionGroups)
+        .values({ id: 'group-2', name: 'Group 2', userId })
+        .returning();
+
+      const groupedSessionId = 'session-with-group2';
+      await serverDB.insert(sessions).values({ id: groupedSessionId, userId, groupId: group2.id });
+
+      // Agent already has a sessionGroupId set
+      const agentId = 'already-grouped-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId, sessionGroupId: group1.id });
+
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId, sessionId: groupedSessionId, userId });
+
+      await agentMigrationRepo.migrateSessionGroupId();
+
+      // Should still have the original group
+      const agent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agentId),
+      });
+      expect(agent?.sessionGroupId).toBe(group1.id);
+    });
+
+    it('should do nothing when no agents need migration', async () => {
+      // No agents at all - should not throw
+      await agentMigrationRepo.migrateSessionGroupId();
+    });
+
+    it('should not modify other user agents', async () => {
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ id: 'user2-group', name: 'User2 Group', userId: userId2 })
+        .returning();
+
+      const user2Session = 'user2-session-grouped';
+      await serverDB
+        .insert(sessions)
+        .values({ id: user2Session, userId: userId2, groupId: group.id });
+
+      const agentId = 'user2-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId: userId2, sessionGroupId: null });
+
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId, sessionId: user2Session, userId: userId2 });
+
+      // Run migration for user1
+      await agentMigrationRepo.migrateSessionGroupId();
+
+      // User2's agent should not be affected
+      const agent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agentId),
+      });
+      expect(agent?.sessionGroupId).toBeNull();
+    });
+
+    it('should handle multiple agents needing migration', async () => {
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ id: 'multi-group', name: 'Multi Group', userId })
+        .returning();
+
+      const session1 = 'multi-session-1';
+      const session2 = 'multi-session-2';
+      await serverDB.insert(sessions).values([
+        { id: session1, userId, groupId: group.id },
+        { id: session2, userId, groupId: group.id },
+      ]);
+
+      const agent1 = 'multi-agent-1';
+      const agent2 = 'multi-agent-2';
+      await serverDB.insert(agents).values([
+        { id: agent1, userId, sessionGroupId: null },
+        { id: agent2, userId, sessionGroupId: null },
+      ]);
+
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: agent1, sessionId: session1, userId },
+        { agentId: agent2, sessionId: session2, userId },
+      ]);
+
+      await agentMigrationRepo.migrateSessionGroupId();
+
+      const updatedAgents = await serverDB.query.agents.findMany({
+        where: inArray(agents.id, [agent1, agent2]),
+      });
+      expect(updatedAgents.every((a) => a.sessionGroupId === group.id)).toBe(true);
     });
   });
 });

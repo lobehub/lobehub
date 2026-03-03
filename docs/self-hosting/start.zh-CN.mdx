@@ -18,6 +18,138 @@ tags:
 
 # 构建属于自己的 LobeHub
 
-LobeHub 支持多种部署平台，包括 Vercel、Docker、 Docker Compose 、阿里云计算巢 和腾讯轻量云 等，你可以选择适合自己的部署平台进行部署，构建属于自己的 LobeHub。
+LobeHub 支持私有化部署，让你完全掌控自己的数据、自定义选项和部署环境。无论是为团队、组织还是个人使用，LobeHub 都提供多种部署方式。
 
 <PlatformCards urlPrefix={'platform'} />
+
+## 架构概述
+
+LobeHub 由以下几个关键组件组成：
+
+### 核心服务
+
+- **Next.js 应用** — 混合 SSR/SPA 前端，包含 API 路由
+- **PostgreSQL 数据库** — 存储对话、Agent、文件和用户数据
+- **Redis**（可选）— 会话存储与缓存
+- **S3 兼容存储** — 文件上传和知识库文档
+
+### 可选服务
+
+- **RustFS / MinIO** — 自托管的 S3 兼容存储
+- **Langfuse** — LLM 可观测性与追踪
+- **OpenTelemetry** — 分布式追踪
+- **Searxng** — 注重隐私的网络搜索
+
+## 选择部署方式
+
+### Docker Compose（推荐）
+
+**适用场景：** 私有化部署、完整基础设施控制、团队使用。
+
+**优点：**
+
+- 一条命令启动完整服务栈
+- 通过 `docker compose pull` 轻松更新
+- 内置 PostgreSQL、Redis、RustFS、Searxng
+- 功能完整 — 无超时限制，支持 WebSocket
+
+**缺点：**
+
+- 需要管理服务器
+- 需要自行处理备份与监控
+
+### Vercel
+
+**适用场景：** 快速部署、Serverless 弹性伸缩、低运维成本。
+
+**优点：**
+
+- 一键部署
+- 自动 HTTPS 与 CDN
+- 自动弹性伸缩
+- 提供免费套餐
+
+**缺点：**
+
+- 需要外部 PostgreSQL 数据库
+- Serverless 函数 10 秒超时限制
+- 不支持 WebSocket
+- 对基础设施控制有限
+
+### 云平台（Zeabur、Sealos、Dokploy）
+
+与 Vercel 类似，提供区域化部署选项。适合有特定地理位置要求的场景，各平台在定价和功能上有所不同。
+
+## 功能对比
+
+| 功能           | Docker      | Vercel | 云平台 |
+| ------------ | ----------- | ------ | --- |
+| 完整控制         | ✅           | ❌      | ⚠️  |
+| 自定义域名        | ✅           | ✅      | ✅   |
+| 一键部署         | ❌           | ✅      | ✅   |
+| 自动扩缩容        | ❌           | ✅      | ✅   |
+| 免费套餐         | ✅           | ✅      | 不一  |
+| 函数超时         | 无限制         | 10 秒   | 不一  |
+| WebSocket 支持 | ✅           | ❌      | 不一  |
+| 文件存储         | 本地 / RustFS | 外部 S3  | 不一  |
+| 数据库          | 已内置         | 外部     | 不一  |
+
+## 前置条件
+
+部署 LobeHub 前，请准备以下内容：
+
+### 必需
+
+**AI 提供商 API Key** — 至少需要一个 AI 提供商的 API Key：
+
+- **OpenAI** — 在 [platform.openai.com](https://platform.openai.com/account/api-keys) 获取 `OPENAI_API_KEY`
+- **Anthropic** — 在 [console.anthropic.com](https://console.anthropic.com/) 获取 `ANTHROPIC_API_KEY`
+- **Google** — 在 [aistudio.google.com](https://aistudio.google.com/app/apikey) 获取 `GOOGLE_API_KEY`
+
+完整支持的提供商列表请参见 [AI 提供商配置](/docs/self-hosting/environment-variables/model-provider)。
+
+**数据库（服务端部署必需）** — 需要 PostgreSQL 14+：
+
+- **托管选项**：Neon、Supabase、Railway、Vercel Postgres
+- **自托管**：Docker（Docker Compose 已内置）、AWS RDS、Google Cloud SQL
+
+### 可选但推荐
+
+**Redis** — 提升会话存储、限流和缓存性能。可使用 Upstash、Redis Cloud 或自托管 Redis。
+
+**S3 兼容存储** — 文件上传和知识库功能所需：
+
+- **AWS S3** — 生产就绪，可扩展
+- **Cloudflare R2** — 无出口流量费用
+- **RustFS / MinIO** — 自托管 S3 替代方案（Docker Compose 已内置）
+
+**认证提供商** — 支持 SSO 和团队功能（Google OAuth、GitHub OAuth、Microsoft Azure AD、Auth0、Keycloak）。配置详见 [认证设置](/docs/self-hosting/auth)。
+
+## 安全注意事项
+
+<Callout type={'warning'}>
+  切勿将 API Key 或密钥提交到版本控制系统。请始终使用环境变量管理敏感信息。
+</Callout>
+
+基本安全措施：
+
+1. **使用 HTTPS** — 始终通过 SSL/TLS 证书部署
+2. **保护数据库** — 使用强密码并限制网络访问
+3. **环境变量** — 安全存储密钥（绝不写入代码）
+4. **认证** — 多用户部署时启用 Better Auth
+5. **定期更新** — 保持 LobeHub 及依赖项的版本最新
+
+认证选项：
+
+- **开放访问** — 不需要认证（仅适合单用户部署）
+- **Better Auth** — 内置认证，支持邮箱密码、OAuth、Magic Links
+- **反向代理** — 使用 Authelia、Authentik 等
+
+## 下一步
+
+1. **选择部署方式** — 追求最大控制力选 Docker，追求简便选 Vercel
+2. **获取 API Key** — 向你选择的 AI 提供商申请 API Key
+3. **配置基础设施** — 按需准备数据库、Redis 和存储
+4. **配置环境变量** — 参见 [环境变量参考](/docs/self-hosting/environment-variables)
+5. **部署** — 按照上方对应平台的指南操作
+6. **配置认证** — 多用户场景下配置 [Better Auth](/docs/self-hosting/auth)

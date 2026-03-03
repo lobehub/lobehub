@@ -22,7 +22,7 @@ const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): Strea
           name: value.function?.name ?? null,
         },
         id: generateToolCallId(index, value.function?.name),
-        index: index,
+        index,
         type: 'function',
       })),
       id: stack.id,

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { ImageGenerationAsset } from '@lobechat/types';
+import type { ImageGenerationAsset, VideoGenerationAsset } from '@lobechat/types';
 import { AsyncTaskStatus, FileSource } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -659,6 +659,143 @@ describe('GenerationModel', () => {
         'FileService error',
       );
     });
+
+    it('should include async task error when present', async () => {
+      const asyncTaskError = { body: { message: 'Generation failed' }, type: 'ProviderError' };
+
+      const generationWithError = {
+        id: 'test-gen-id',
+        userId,
+        generationBatchId: 'batch-id',
+        asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
+        fileId: null,
+        seed: 12345,
+        asset: null,
+        accessedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        asyncTask: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          status: AsyncTaskStatus.Error,
+          type: 'imageGeneration',
+          params: {},
+          error: asyncTaskError,
+          duration: null,
+          inferenceId: null,
+          accessedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          userId,
+        },
+      };
+
+      const result = await generationModel.transformGeneration(generationWithError as any);
+
+      expect(result.task.error).toEqual(asyncTaskError);
+      expect(result.task.status).toBe(AsyncTaskStatus.Error);
+    });
+
+    it('should set task.error to undefined when asyncTask.error is null', async () => {
+      const generationWithNullError = {
+        id: 'test-gen-id',
+        userId,
+        generationBatchId: 'batch-id',
+        asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
+        fileId: null,
+        seed: 12345,
+        asset: null,
+        accessedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        asyncTask: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          status: AsyncTaskStatus.Success,
+          type: 'imageGeneration',
+          params: {},
+          error: null,
+          duration: null,
+          inferenceId: null,
+          accessedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          userId,
+        },
+      };
+
+      const result = await generationModel.transformGeneration(generationWithNullError as any);
+
+      expect(result.task.error).toBeUndefined();
+    });
+
+    it('should convert coverUrl for video assets', async () => {
+      const videoAsset = {
+        url: 'video-url.mp4',
+        thumbnailUrl: 'video-thumbnail.jpg',
+        coverUrl: 'video-cover.jpg',
+        width: 1920,
+        height: 1080,
+        duration: 10,
+      } as VideoGenerationAsset;
+
+      const generationWithVideo = {
+        id: 'test-gen-id',
+        userId,
+        generationBatchId: 'batch-id',
+        asyncTaskId: null,
+        fileId: null,
+        seed: 12345,
+        asset: videoAsset,
+        accessedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        asyncTask: undefined,
+      };
+
+      const result = await generationModel.transformGeneration(generationWithVideo as any);
+
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('video-url.mp4');
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('video-thumbnail.jpg');
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('video-cover.jpg');
+      expect(mockGetFullFileUrl).toHaveBeenCalledTimes(3);
+
+      const resultAsset = result.asset as VideoGenerationAsset;
+      expect(resultAsset.url).toBe('https://example.com/video-url.mp4');
+      expect(resultAsset.thumbnailUrl).toBe('https://example.com/video-thumbnail.jpg');
+      expect(resultAsset.coverUrl).toBe('https://example.com/video-cover.jpg');
+    });
+
+    it('should not convert coverUrl when video asset has no coverUrl', async () => {
+      const videoAssetNoCover = {
+        url: 'video-url.mp4',
+        thumbnailUrl: 'video-thumbnail.jpg',
+        width: 1920,
+        height: 1080,
+        duration: 10,
+      } as VideoGenerationAsset;
+
+      const generationWithVideo = {
+        id: 'test-gen-id',
+        userId,
+        generationBatchId: 'batch-id',
+        asyncTaskId: null,
+        fileId: null,
+        seed: 12345,
+        asset: videoAssetNoCover,
+        accessedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        asyncTask: undefined,
+      };
+
+      const result = await generationModel.transformGeneration(generationWithVideo as any);
+
+      expect(mockGetFullFileUrl).toHaveBeenCalledTimes(2);
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('video-url.mp4');
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('video-thumbnail.jpg');
+
+      const resultAsset = result.asset as VideoGenerationAsset;
+      expect(resultAsset.coverUrl).toBeUndefined();
+    });
   });
 
   describe('user isolation security tests', () => {
@@ -780,6 +917,32 @@ describe('GenerationModel', () => {
       await expect(generationModel.findByIdAndTransform(createdGeneration.id)).rejects.toThrow(
         'FileService error',
       );
+    });
+  });
+
+  describe('findByAsyncTaskId', () => {
+    it('should find generation by asyncTaskId', async () => {
+      const [task] = await serverDB
+        .insert(asyncTasks)
+        .values({ status: 'processing', userId })
+        .returning();
+
+      await serverDB.insert(generations).values({
+        ...testGeneration,
+        userId,
+        asyncTaskId: task.id,
+      });
+
+      const result = await generationModel.findByAsyncTaskId(task.id);
+      expect(result).toBeDefined();
+      expect(result?.asyncTaskId).toBe(task.id);
+    });
+
+    it('should return undefined for non-existent asyncTaskId', async () => {
+      const result = await generationModel.findByAsyncTaskId(
+        '00000000-0000-0000-0000-000000000000',
+      );
+      expect(result).toBeUndefined();
     });
   });
 });

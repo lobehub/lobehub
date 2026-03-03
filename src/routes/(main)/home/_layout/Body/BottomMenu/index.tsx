@@ -7,6 +7,7 @@ import { getRouteById } from '@/config/routes';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { SidebarTabKey } from '@/store/global/initialState';
+import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
   icon: any;
@@ -59,6 +60,7 @@ const BottomMenu = memo(() => {
           key={item.key}
           to={item.url}
           onClick={(e) => {
+            if (isModifierClick(e)) return;
             e.preventDefault();
             navigate(item.url);
           }}

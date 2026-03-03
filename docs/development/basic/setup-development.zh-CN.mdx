@@ -132,6 +132,23 @@ bun run dev
 - **SearXNG**：`http://localhost:8180`
 - **应用程序**：`http://localhost:3010`
 
+## 其他开发模式
+
+**桌面端开发** — 开发 Electron 桌面应用：
+
+```bash
+cd apps/desktop
+pnpm run dev
+```
+
+**移动端 SPA 开发** — 开发移动端 Web 应用：
+
+```bash
+bun run dev:spa:mobile
+```
+
+访问地址：[http://localhost:3012](http://localhost:3012)
+
 ## 故障排除
 
 ### 重置服务
@@ -162,6 +179,14 @@ lsof -i :8180  # SearXNG
 
 ```bash
 pnpm db:migrate
+```
+
+### 清洁安装
+
+如遇到依赖问题，删除所有 `node_modules` 并重新安装：
+
+```bash
+bun run clean:node_modules && pnpm install
 ```
 
 ---

@@ -2,6 +2,8 @@ import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runti
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type UserInterventionConfig } from '@lobechat/types';
 
+import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+
 // ==================== Step Lifecycle Callbacks ====================
 
 /**
@@ -30,7 +32,12 @@ export interface StepPresentationData {
   /** Tools the LLM decided to call (undefined if no tool calls) */
   toolsCalling?: Array<{ apiName: string; arguments?: string; identifier: string }>;
   /** Results from tool execution (only for call_tool steps) */
-  toolsResult?: Array<{ apiName: string; identifier: string; output?: string }>;
+  toolsResult?: Array<{
+    apiName: string;
+    identifier: string;
+    isSuccess?: boolean;
+    output?: string;
+  }>;
   /** Cumulative total cost */
   totalCost: number;
   /** Cumulative input tokens */
@@ -129,6 +136,8 @@ export interface OperationCreationParams {
     body?: Record<string, unknown>;
     url: string;
   };
+  /** Discord context for injecting channel/guild info into agent system message */
+  discordContext?: any;
   evalContext?: any;
   initialContext: AgentRuntimeContext;
   initialMessages?: any[];
@@ -164,6 +173,8 @@ export interface OperationCreationParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /** User memory (persona) for injection into LLM context */
+  userMemory?: ServerUserMemoryConfig;
   /**
    * Webhook delivery method.
    * - 'fetch': plain HTTP POST (default)

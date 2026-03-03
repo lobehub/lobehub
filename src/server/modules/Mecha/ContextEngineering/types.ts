@@ -2,6 +2,7 @@
 import type {
   AgentBuilderContext,
   AgentManagementContext,
+  DiscordContext,
   EvalContext,
   FileContent,
   KnowledgeBaseInfo,
@@ -68,6 +69,8 @@ export interface ServerMessagesEngineParams {
   // ========== Capability injection ==========
   /** Model capability checkers */
   capabilities?: ServerModelCapabilities;
+  /** Discord context for injecting channel/guild info */
+  discordContext?: DiscordContext;
   // ========== Eval context ==========
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
@@ -119,6 +122,7 @@ export interface ServerMessagesEngineParams {
 export {
   type AgentBuilderContext,
   type AgentManagementContext,
+  type DiscordContext,
   type EvalContext,
   type FileContent,
   type KnowledgeBaseInfo,

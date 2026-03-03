@@ -20,7 +20,7 @@ import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { systemAgentSelectors } from '@/store/user/selectors';
+import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
@@ -221,7 +221,14 @@ export class ChatTopicActionImpl {
 
         internal_updateTopicTitleInSummary(topicId, output);
       },
-      params: merge(topicConfig, chainSummaryTitle(messages, globalHelpers.getCurrentLanguage())),
+      params: merge(
+        topicConfig,
+        chainSummaryTitle(
+          messages,
+          userGeneralSettingsSelectors.responseLanguage(useUserStore.getState()) ||
+            globalHelpers.getCurrentLanguage(),
+        ),
+      ),
       trace: this.#get().getCurrentTracePayload({
         traceName: TraceNameMap.SummaryTopicTitle,
         topicId,

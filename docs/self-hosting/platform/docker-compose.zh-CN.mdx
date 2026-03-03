@@ -344,6 +344,161 @@ environment:
   对于使用 `network_mode: 'service:network-service'` 的 Docker Compose 部署，请使用 `http://localhost:3210` 作为 `INTERNAL_APP_URL`。
 </Callout>
 
+## 反向代理配置
+
+在生产环境中，如需使用自定义域名和 HTTPS，需在 LobeHub 前面配置反向代理。
+
+**Nginx：**
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name lobehub.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:3210;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**Caddy**（自动通过 Let's Encrypt 处理 HTTPS）：
+
+```caddyfile
+lobehub.example.com {
+    reverse_proxy localhost:3210
+}
+```
+
+**Traefik** — 在 `docker-compose.yml` 的 `lobe` 服务中添加标签：
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.lobehub.rule=Host(`lobehub.example.com`)"
+  - "traefik.http.routers.lobehub.entrypoints=websecure"
+  - "traefik.http.routers.lobehub.tls.certresolver=letsencrypt"
+```
+
+## 管理命令
+
+```sh
+# 查看所有服务日志
+docker compose logs -f
+
+# 查看指定服务日志
+docker compose logs -f lobehub
+
+# 重启所有服务
+docker compose restart
+
+# 重启指定服务
+docker compose restart lobehub
+
+# 停止所有服务
+docker compose stop
+
+# 更新到最新版本
+docker compose pull && docker compose up -d
+```
+
+## 备份与恢复
+
+**数据库备份：**
+
+```sh
+docker compose exec postgresql pg_dump -U postgres lobechat > backup.sql
+```
+
+从备份恢复：
+
+```sh
+docker compose exec -T postgresql psql -U postgres lobechat < backup.sql
+```
+
+**文件存储（RustFS）备份：**
+
+```sh
+docker compose exec rustfs tar czf /tmp/backup.tar.gz /data
+docker cp lobe-rustfs:/tmp/backup.tar.gz ./rustfs-backup.tar.gz
+```
+
+**Redis** — Redis 通过 AOF 自动持久化数据。手动保存：
+
+```sh
+docker compose exec redis redis-cli BGSAVE
+```
+
+## 资源要求
+
+**最低配置（轻量使用）：**
+
+- CPU：2 核
+- 内存：4 GB
+- 存储：20 GB
+
+**推荐配置（生产环境）：**
+
+- CPU：4 核 +
+- 内存：8 GB+
+- 存储：50 GB+（取决于文件上传量）
+
+对于高流量部署，建议使用托管数据库（Neon、Supabase、RDS）、Redis 集群以及 CDN 加速静态资源。
+
+## 故障排查
+
+**服务无法启动**
+
+检查服务状态和日志：
+
+```sh
+docker compose ps
+docker compose logs [service-name]
+```
+
+常见原因：端口被占用（在 `.env` 中修改 `LOBE_PORT`）、磁盘空间不足、数据库连接失败。
+
+**数据库连接错误**
+
+检查 PostgreSQL 是否健康：
+
+```sh
+docker compose exec postgresql pg_isready -U postgres
+```
+
+如果不健康，查看日志：`docker compose logs postgresql`
+
+**文件上传失败**
+
+检查 RustFS 服务：
+
+```sh
+docker compose logs rustfs
+docker compose logs rustfs-init
+```
+
+确认 bucket 是否已创建：`docker compose exec rustfs ls /data/lobe`
+
+**磁盘空间不足**
+
+检查使用情况：`docker system df`
+
+清理未使用的资源（请先做好备份）：
+
+```sh
+docker system prune -a --volumes
+```
+
 ## 配置身份验证
 
 如需配置 SSO 登录鉴权服务（如 Casdoor、Logto 等），请参考 [身份验证服务](/zh/docs/self-hosting/auth) 文档。

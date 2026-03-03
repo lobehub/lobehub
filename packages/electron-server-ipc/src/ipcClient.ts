@@ -196,8 +196,6 @@ export class ElectronIpcClient {
       const request = { id, method, params };
       log('Created request with ID: %s', id);
 
-      let requestTimeoutId: NodeJS.Timeout;
-
       const cleanupAndResolve = (value: T) => {
         clearTimeout(requestTimeoutId);
         this.requestQueue.delete(id);
@@ -222,7 +220,7 @@ export class ElectronIpcClient {
       this.requestQueue.set(id, { reject: cleanupAndReject, resolve: cleanupAndResolve });
       log('Added request to queue, current queue size: %d', this.requestQueue.size);
 
-      requestTimeoutId = setTimeout(() => {
+      const requestTimeoutId: NodeJS.Timeout = setTimeout(() => {
         const pendingRequest = this.requestQueue.get(id);
         if (pendingRequest) {
           // Request is still in queue, indicating timeout

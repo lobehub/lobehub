@@ -6,7 +6,6 @@ import { ActionIconGroup, Block, Flexbox, Grid, Markdown, Tag, Text } from '@lob
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { omit } from 'es-toolkit/compat';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
 import { type RuntimeImageGenParams } from 'model-bank';
@@ -54,9 +53,6 @@ const styles = createStaticStyles(({ css, cssVar, cx }) => ({
     }
   `,
 }));
-
-// 扩展 dayjs 插件
-dayjs.extend(relativeTime);
 
 interface GenerationBatchItemProps {
   batch: GenerationBatch;

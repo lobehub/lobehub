@@ -11,6 +11,7 @@ import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
+import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
@@ -103,6 +104,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           ].map((item) => ({
             ...item,
             onClick: (event) => {
+              if (isModifierClick(event)) return;
               const href = item.href;
               if (href) {
                 event.preventDefault();

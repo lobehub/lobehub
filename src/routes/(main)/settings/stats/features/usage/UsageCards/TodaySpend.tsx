@@ -1,9 +1,6 @@
 'use client';
 
 import dayjs from 'dayjs';
-import isToday from 'dayjs/plugin/isToday';
-import isYesterday from 'dayjs/plugin/isYesterday';
-import utc from 'dayjs/plugin/utc';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,10 +11,6 @@ import { type UsageLog } from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 
 import { type UsageChartProps } from '../../../types';
-
-dayjs.extend(utc);
-dayjs.extend(isToday);
-dayjs.extend(isYesterday);
 
 const computeSpend = (
   data: UsageLog[],

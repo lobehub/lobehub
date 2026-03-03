@@ -62,8 +62,9 @@ export class EditorActionImpl {
       const markdown = (editor.getDocument('markdown') as unknown as string) || '';
       const editorData = editor.getDocument('json');
 
-      // Check if content actually changed
-      const contentChanged = markdown !== doc.lastSavedContent;
+      const markdownChanged = markdown !== doc.lastSavedContent;
+      const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
+      const contentChanged = markdownChanged || editorDataChanged;
 
       internal_dispatchDocument(
         {
@@ -177,6 +178,7 @@ export class EditorActionImpl {
           editorData: structuredClone(currentEditorData),
           isDirty: false,
           lastSavedContent: currentContent,
+          lastSavedEditorData: structuredClone(currentEditorData),
           lastUpdatedTime: new Date(),
           saveStatus: 'saved',
         },

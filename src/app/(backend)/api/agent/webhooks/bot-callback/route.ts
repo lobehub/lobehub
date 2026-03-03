@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { TopicModel } from '@/database/models/topic';
 import { verifyQStashSignature } from '@/libs/qstash';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { DiscordRestApi } from '@/server/services/bot/discordRestApi';
@@ -12,6 +13,7 @@ import {
   renderStepProgress,
   splitMessage,
 } from '@/server/services/bot/replyTemplate';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
 const log = debug('api-route:agent:bot-callback');
 
@@ -45,7 +47,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = JSON.parse(rawBody);
 
-  const { type, applicationId, platformThreadId, progressMessageId } = body;
+  const { type, applicationId, platformThreadId, progressMessageId, userMessageId } = body;
 
   log(
     'bot-callback: parsed body keys=%s, type=%s, applicationId=%s, platformThreadId=%s, progressMessageId=%s',
@@ -103,6 +105,48 @@ export async function POST(request: Request): Promise<Response> {
       await handleStepCallback(body, discord, channelId, progressMessageId);
     } else if (type === 'completion') {
       await handleCompletionCallback(body, discord, channelId, progressMessageId);
+
+      // Remove eyes reaction from the original user message
+      if (userMessageId) {
+        try {
+          await discord.removeOwnReaction(channelId, userMessageId, '👀');
+        } catch (error) {
+          log('bot-callback: failed to remove eyes reaction: %O', error);
+        }
+      }
+
+      // Fire-and-forget: summarize topic title and update Discord thread name
+      const { reason, topicId, userId, userPrompt, lastAssistantContent } = body;
+      if (reason !== 'error' && topicId && userId && userPrompt && lastAssistantContent) {
+        const topicModel = new TopicModel(serverDB, userId);
+        topicModel
+          .findById(topicId)
+          .then(async (topic) => {
+            // Only generate when topic has an empty title
+            if (topic?.title) return;
+
+            const systemAgent = new SystemAgentService(serverDB, userId);
+            const title = await systemAgent.generateTopicTitle({
+              lastAssistantContent,
+              userPrompt,
+            });
+            if (!title) return;
+
+            await topicModel.update(topicId, { title });
+
+            // Update Discord thread name if there's a thread ID
+            const parts = platformThreadId.split(':');
+            const threadId = parts[3];
+            if (threadId) {
+              discord.updateChannelName(threadId, title).catch((error) => {
+                log('bot-callback: failed to update Discord thread name: %O', error);
+              });
+            }
+          })
+          .catch((error) => {
+            log('bot-callback: topic title summarization failed: %O', error);
+          });
+      }
     } else {
       return NextResponse.json({ error: `Unknown callback type: ${type}` }, { status: 400 });
     }
@@ -145,8 +189,15 @@ async function handleStepCallback(
     totalToolCalls: body.totalToolCalls,
   });
 
+  // If the LLM returned text without tool calls, the next step is 'finish' — skip typing
+  const isLlmFinalResponse =
+    body.stepType === 'call_llm' && !body.toolsCalling?.length && body.content;
+
   try {
     await discord.editMessage(channelId, progressMessageId, progressText);
+    if (!isLlmFinalResponse) {
+      await discord.triggerTyping(channelId);
+    }
   } catch (error) {
     log('handleStepCallback: failed to edit progress message: %O', error);
   }

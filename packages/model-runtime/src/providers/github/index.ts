@@ -25,7 +25,6 @@ export interface GithubModelCard {
   version: string;
 }
 
-/* eslint-enable typescript-sort-keys/interface */
 
 export const params = {
   baseURL: 'https://models.github.ai/inference',

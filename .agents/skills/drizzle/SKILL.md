@@ -202,39 +202,4 @@ return { ...dataset, testCases };
 
 ## Database Migrations
 
-See `references/db-migrations.md` for detailed migration guide.
-
-```bash
-# Generate migrations
-bun run db:generate
-
-# After modifying SQL (e.g., adding IF NOT EXISTS)
-bun run db:generate:client
-```
-
-### Migration Best Practices
-
-All migration SQL must be **idempotent** (safe to re-run):
-
-```sql
--- ✅ Tables: IF NOT EXISTS
-CREATE TABLE IF NOT EXISTS "agent_eval_runs" (...);
-
--- ✅ Columns: IF NOT EXISTS / IF EXISTS
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "avatar" text;
-ALTER TABLE "users" DROP COLUMN IF EXISTS "old_field";
-
--- ✅ Foreign keys: DROP IF EXISTS + ADD (no IF NOT EXISTS for constraints)
-ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "t_fk";
-ALTER TABLE "t" ADD CONSTRAINT "t_fk" FOREIGN KEY ("col") REFERENCES "ref"("id") ON DELETE cascade;
-
--- ✅ Indexes: IF NOT EXISTS
-CREATE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");
-
--- ❌ Non-idempotent (will fail on re-run)
-CREATE TABLE "agent_eval_runs" (...);
-ALTER TABLE "users" ADD COLUMN "avatar" text;
-ALTER TABLE "t" ADD CONSTRAINT "t_fk" FOREIGN KEY ...;
-```
-
-Rename migration files meaningfully: `0046_meaningless.sql` → `0046_user_add_avatar.sql`
+See the `db-migrations` skill for the detailed migration guide.

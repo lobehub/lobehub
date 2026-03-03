@@ -16,7 +16,7 @@ interface EditorCanvasProps {
 }
 
 const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
-  const { t } = useTranslation(['file', 'editor']);
+  const { t } = useTranslation(['file', 'ui']);
 
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
@@ -32,6 +32,11 @@ const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
       slashItems={slashItems}
       style={style}
       toolbarExtraItems={askCopilotItem}
+      unsavedChangesGuard={{
+        enabled: true,
+        message: t('form.unsavedWarning', { ns: 'ui' }),
+        title: t('form.unsavedChanges', { ns: 'ui' }),
+      }}
     />
   );
 });

@@ -80,9 +80,6 @@ function sharedManualChunks(id: string): string | undefined {
     if (locale) return `i18n-${locale}`;
   }
 
-  // dayjs core — keep out of locale chunks so entry doesn't statically pull i18n-ar
-  if (id.includes('/dayjs/') && !id.includes('/dayjs/locale/')) return 'vendor-dayjs';
-
   // dayjs locale → merge into i18n-{locale}
   const dayjsMatch = id.match(/dayjs\/locale\/([^/.]+)\.js/);
   if (dayjsMatch) {
@@ -104,6 +101,12 @@ function sharedManualChunks(id: string): string | undefined {
 }
 
 export const sharedRollupOutput = {
+  chunkFileNames: (chunkInfo: { name: string }) => {
+    const { name } = chunkInfo;
+    if (name.startsWith('i18n-')) return 'i18n/[name]-[hash].js';
+    if (name.startsWith('vendor-')) return 'vendor/[name]-[hash].js';
+    return 'assets/[name]-[hash].js';
+  },
   manualChunks: sharedManualChunks,
 };
 
@@ -142,6 +145,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
   );
 
   return {
+    '__CI__': process.env.CI === 'true' ? 'true' : 'false',
     '__ELECTRON__': JSON.stringify(options.isElectron),
     '__MOBILE__': JSON.stringify(options.isMobile),
     ...nextPublicDefine,

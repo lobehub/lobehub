@@ -30,6 +30,7 @@ const usernameSchema = z
   .string()
   .trim()
   .min(1, { message: 'USERNAME_REQUIRED' })
+  .max(64, { message: 'USERNAME_TOO_LONG' })
   .regex(/^\w+$/, { message: 'USERNAME_INVALID' });
 
 const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -174,9 +175,11 @@ export const userRouter = router({
     return ctx.userModel.updateUser({ avatar: input });
   }),
 
-  updateFullName: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {
-    return ctx.userModel.updateUser({ fullName: input });
-  }),
+  updateFullName: userProcedure
+    .input(z.string().trim().max(64, { message: 'FULLNAME_TOO_LONG' }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.userModel.updateUser({ fullName: input });
+    }),
 
   updateGuide: userProcedure.input(UserGuideSchema).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updateGuide(input);
@@ -214,14 +217,12 @@ export const userRouter = router({
   }),
 
   updateUsername: userProcedure.input(usernameSchema).mutation(async ({ ctx, input }) => {
-    const username = input.trim();
-
-    const existedUser = await UserModel.findByUsername(ctx.serverDB, username);
+    const existedUser = await UserModel.findByUsername(ctx.serverDB, input);
     if (existedUser && existedUser.id !== ctx.userId) {
       throw new TRPCError({ code: 'CONFLICT', message: 'USERNAME_TAKEN' });
     }
 
-    return ctx.userModel.updateUser({ username });
+    return ctx.userModel.updateUser({ username: input });
   }),
 });
 

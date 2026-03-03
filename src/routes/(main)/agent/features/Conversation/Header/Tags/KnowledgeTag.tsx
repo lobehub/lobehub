@@ -26,15 +26,13 @@ const PluginTag = memo<PluginTagProps>(({ data }) => {
 
   return (
     <DropdownMenu items={items}>
-      <div>
-        <Tag>
-          {<Icon icon={LibraryBig} />}
-          <div className={oneLineEllipsis} style={{ maxWidth: 140 }}>
-            {data[0].name}
-          </div>
-          {count > 1 && <div>({data.length - 1}+)</div>}
-        </Tag>
-      </div>
+      <Tag style={{ cursor: 'pointer' }}>
+        {<Icon icon={LibraryBig} />}
+        <div className={oneLineEllipsis} style={{ maxWidth: 140 }}>
+          {data[0].name}
+        </div>
+        {count > 1 && <div>({data.length - 1}+)</div>}
+      </Tag>
     </DropdownMenu>
   );
 });

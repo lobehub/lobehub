@@ -2,6 +2,7 @@
   "error.backHome": "Ana Sayfaya Dön",
   "error.desc": "Daha sonra tekrar deneyin ya da bilinen dünyaya geri dönün.",
   "error.retry": "Yeniden Yükle",
+  "error.stack": "Hata Yığını",
   "error.title": "Hata oluştu..",
   "fetchError.detail": "Hata detayları",
   "fetchError.title": "İstek başarısız oldu",

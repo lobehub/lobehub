@@ -27,6 +27,7 @@ const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.ai/anthropic';
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
 const isKimiK25Model = (model: string) => model === 'kimi-k2.5';
+const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-thinking');
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
@@ -48,32 +49,54 @@ const buildThinkingBlock = (reasoning: any) =>
 const toContentArray = (content: any) =>
   Array.isArray(content) ? content : [{ text: content, type: 'text' as const }];
 
-const normalizeMessagesForAnthropic = (messages: ChatStreamPayload['messages']) =>
+/**
+ * Normalize assistant messages for Anthropic format.
+ * When forceThinking is true (kimi-k2.5 with thinking enabled), every assistant
+ * message must carry a thinking block, otherwise Moonshot rejects with:
+ * "thinking is enabled but reasoning_content is missing in assistant tool call message"
+ */
+const normalizeMessagesForAnthropic = (
+  messages: ChatStreamPayload['messages'],
+  forceThinking = false,
+) =>
   messages.map((message: any) => {
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
     const thinkingBlock = buildThinkingBlock(reasoning);
+    const effectiveBlock =
+      thinkingBlock || (forceThinking ? { thinking: ' ', type: 'thinking' as const } : null);
 
     if (isEmptyContent(message.content)) {
       const placeholder = { text: ' ', type: 'text' as const };
-      return { ...rest, content: thinkingBlock ? [thinkingBlock] : [placeholder] };
+      return { ...rest, content: effectiveBlock ? [effectiveBlock, placeholder] : [placeholder] };
     }
 
-    if (!thinkingBlock) return rest;
-    return { ...rest, content: [thinkingBlock, ...toContentArray(message.content)] };
+    if (!effectiveBlock) return rest;
+    return { ...rest, content: [effectiveBlock, ...toContentArray(message.content)] };
   });
 
-// OpenAI format helpers
-const normalizeMessagesForOpenAI = (messages: ChatStreamPayload['messages']) =>
+/**
+ * Normalize assistant messages for OpenAI format.
+ * When forceReasoning is true (kimi-k2.5 with thinking enabled), every assistant
+ * message must carry reasoning_content (even as empty string), similar to DeepSeek.
+ */
+const normalizeMessagesForOpenAI = (
+  messages: ChatStreamPayload['messages'],
+  forceReasoning = false,
+) =>
   messages.map((message: any) => {
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
     const normalized = isEmptyContent(message.content) ? { ...rest, content: ' ' } : rest;
+    const reasoningContent = hasValidReasoning(reasoning) ? reasoning.content : undefined;
 
-    if (hasValidReasoning(reasoning)) {
-      return { ...normalized, reasoning_content: reasoning.content };
+    if (forceReasoning) {
+      return { ...normalized, reasoning_content: reasoningContent ?? '' };
+    }
+    if (reasoningContent !== undefined) {
+      return { ...normalized, reasoning_content: reasoningContent };
     }
     return normalized;
   });
@@ -93,25 +116,29 @@ const buildMoonshotAnthropicPayload = async (
     )) ??
     8192;
 
+  const isK25 = isKimiK25Model(payload.model);
+  const isNativeThinking = isKimiNativeThinkingModel(payload.model);
+  const isThinkingEnabled = isNativeThinking || (isK25 && payload.thinking?.type !== 'disabled');
+
   const basePayload = await buildDefaultAnthropicPayload({
     ...payload,
     enabledSearch: false,
     max_tokens: resolvedMaxTokens,
-    messages: normalizeMessagesForAnthropic(payload.messages),
+    messages: normalizeMessagesForAnthropic(payload.messages, isThinkingEnabled),
   });
 
   const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
   const basePayloadWithSearch = { ...basePayload, tools };
 
-  if (!isKimiK25Model(payload.model)) return basePayloadWithSearch;
+  if (!isK25 && !isNativeThinking) return basePayloadWithSearch;
 
   const resolvedThinkingBudget = payload.thinking?.budget_tokens
     ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)
     : 1024;
   const thinkingParam =
-    payload.thinking?.type === 'disabled'
-      ? ({ type: 'disabled' } as const)
-      : ({ budget_tokens: resolvedThinkingBudget, type: 'enabled' } as const);
+    isNativeThinking || payload.thinking?.type !== 'disabled'
+      ? ({ budget_tokens: resolvedThinkingBudget, type: 'enabled' } as const)
+      : ({ type: 'disabled' } as const);
 
   return {
     ...basePayloadWithSearch,
@@ -128,12 +155,17 @@ const buildMoonshotOpenAIPayload = (
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
   const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
 
-  const normalizedMessages = normalizeMessagesForOpenAI(messages);
+  const isK25 = isKimiK25Model(model);
+  const isNativeThinking = isKimiNativeThinkingModel(model);
+  const isThinkingEnabled = isNativeThinking || (isK25 && thinking?.type !== 'disabled');
+  const normalizedMessages = normalizeMessagesForOpenAI(messages, isThinkingEnabled);
   const moonshotTools = appendSearchTool(tools, enabledSearch);
 
-  if (isKimiK25Model(model)) {
+  if (isK25 || isNativeThinking) {
     const thinkingParam =
-      thinking?.type === 'disabled' ? { type: 'disabled' } : { type: 'enabled' };
+      isNativeThinking || thinking?.type !== 'disabled'
+        ? { type: 'enabled' }
+        : { type: 'disabled' };
 
     return {
       ...rest,

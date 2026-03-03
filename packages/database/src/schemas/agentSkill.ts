@@ -1,5 +1,4 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { SkillManifest, SkillResourceMeta } from '@lobechat/types';
+import type { SkillManifest, SkillResourceMeta } from '@lobechat/types';
 import { relations } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 

@@ -1,5 +1,3 @@
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,8 +6,6 @@ import GridCard from '@/routes/(main)/memory/features/GridView/GridCard';
 import ProgressIcon from '@/routes/(main)/memory/features/ProgressIcon';
 
 import PreferenceDropdown from '../../PreferenceDropdown';
-
-dayjs.extend(relativeTime);
 
 interface PreferenceCardProps {
   onClick?: () => void;

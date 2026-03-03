@@ -2,6 +2,7 @@
   "error.backHome": "홈으로 돌아가기",
   "error.desc": "페이지를 일시적으로 사용할 수 없습니다. 홈으로 돌아가거나 잠시 후 다시 시도하세요(설정은 손실되지 않습니다)",
   "error.retry": "다시 로드",
+  "error.stack": "오류 스택",
   "error.title": "페이지를 일시적으로 사용할 수 없습니다",
   "fetchError.detail": "자세히 보기",
   "fetchError.title": "요청을 완료할 수 없습니다",

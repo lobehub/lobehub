@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 
 /**
  * Message group type

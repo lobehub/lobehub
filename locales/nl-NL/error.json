@@ -2,6 +2,7 @@
   "error.backHome": "Terug naar home",
   "error.desc": "Probeer het later opnieuw of keer terug naar de bekende wereld.",
   "error.retry": "Opnieuw laden",
+  "error.stack": "Foutstack",
   "error.title": "Oeps, er ging iets mis..",
   "fetchError.detail": "Foutdetails",
   "fetchError.title": "Verzoek mislukt",

@@ -1,0 +1,39 @@
+name: Deploy Device Gateway
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [canary]
+    paths:
+      - 'apps/device-gateway/**'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: cd apps/device-gateway && bun i
+
+      - name: Type check
+        run: cd apps/device-gateway && npx tsc --noEmit
+
+      - name: Deploy
+        run: cd apps/device-gateway && npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

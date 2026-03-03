@@ -2,6 +2,7 @@
   "error.backHome": "العودة إلى الصفحة الرئيسية",
   "error.desc": "حاول مرة أخرى لاحقًا، أو عد إلى العالم المعروف.",
   "error.retry": "إعادة التحميل",
+  "error.stack": "مكدس الأخطاء",
   "error.title": "عذرًا، حدث خطأ ما..",
   "fetchError.detail": "تفاصيل الخطأ",
   "fetchError.title": "فشل الطلب",

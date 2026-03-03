@@ -33,6 +33,13 @@ LobeHub 的整体架构由以下核心层组成：
 
 前端采用 Next.js 框架，使用 **Next.js RSC + React Router DOM 混合路由**方案：Next.js App Router 处理服务端渲染页面（如认证页），React Router DOM 承载主应用 SPA。
 
+| 路由方式                   | 使用场景             | 位置                         |
+| ---------------------- | ---------------- | -------------------------- |
+| **Next.js App Router** | 认证页、SSR、静态路由     | `src/app/(backend)/`       |
+| **React Router DOM**   | 主聊天 SPA、Agent 界面 | `src/spa/` + `src/routes/` |
+
+**为什么使用混合路由？** SSR 为认证页提供安全性、SEO 和静态页性能；SPA 为交互式聊天和 Agent 界面提供即时导航和响应式状态管理 —— 两者各取所长。
+
 主要技术栈：
 
 - **UI 组件**：`@lobehub/ui`、antd
@@ -40,6 +47,8 @@ LobeHub 的整体架构由以下核心层组成：
 - **状态管理**：zustand（slice 模式）
 - **数据请求**：SWR + tRPC
 - **国际化**：react-i18next
+
+**组件使用优先级**：项目组件（`src/components/`）→ `@lobehub/ui` → Ant Design（`antd`）。始终优先使用项目级组件以保持一致性。
 
 前端代码按职责分层在 `src/` 目录下，详见 [目录架构](/zh/docs/development/basic/folder-structure)。
 
@@ -73,6 +82,15 @@ LobeHub 的整体架构由以下核心层组成：
 
 简言之：Model Runtime 解决 "如何与 LLM Provider 通信"，Agent Runtime 解决 "如何运行一个使用 LLM、工具、人工审批的完整 Agent"。
 
+**Agent 执行流程：**
+
+1. 解析用户输入
+2. LLM 决策：直接回复还是调用工具
+3. 执行工具（单工具或批量）
+4. Human-in-the-Loop 人工审批（如需要）
+5. 将执行结果反馈给 LLM
+6. 循环直至生成最终回复
+
 ## 认证鉴权
 
 LobeHub 使用 [Better Auth](https://www.better-auth.com/) 作为认证框架，支持：
@@ -100,6 +118,24 @@ LobeHub 使用 [Better Auth](https://www.better-auth.com/) 作为认证框架，
 
 - **Agent 市场**：提供各种场景的 AI Agent，用户可以发现、使用和分享 Agent
 - **MCP 工具市场**：发现和集成 MCP 工具，扩展 Agent 的能力
+
+## 性能优化
+
+- **代码拆分**：基于路由的按需分块，保持初始包体积小
+- **懒加载**：重型组件和路由按需加载
+- **SWR 缓存**：客户端数据缓存并在后台自动重新验证
+- **边缘缓存**：静态和可缓存响应分发至 CDN 边缘节点
+- **流式响应**：聊天回复通过 SSE 增量流式传输，提升感知速度
+- **虚拟滚动**：长消息列表和 Agent 列表使用虚拟滚动优化渲染
+
+## 安全措施
+
+- **CSRF 防护**：SameSite Cookie 和 Token 验证
+- **XSS 防护**：Content Security Policy 请求头和输出内容净化
+- **速率限制**：API 请求限流在边缘层执行
+- **SSRF 防护**：插件和 MCP 调用的出站请求白名单
+- **SQL 注入防护**：通过 Drizzle ORM 使用参数化查询
+- **密钥管理**：API Key 和凭据以环境变量方式存储，绝不写入代码或客户端包
 
 ## 开发和部署
 

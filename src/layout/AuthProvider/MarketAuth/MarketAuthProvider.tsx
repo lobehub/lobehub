@@ -34,8 +34,8 @@ interface MarketAuthProviderProps {
 }
 
 /**
- * 获取用户信息（通过 tRPC OIDC endpoint）
- * @param accessToken - 可选的 access token，如果不传则后端会尝试使用 trustedClientToken
+ * Fetch user info (via tRPC OIDC endpoint)
+ * @param accessToken - Optional access token; if not provided, the backend will attempt to use trustedClientToken
  */
 const fetchUserInfo = async (accessToken?: string): Promise<MarketUserInfo | null> => {
   try {
@@ -51,7 +51,7 @@ const fetchUserInfo = async (accessToken?: string): Promise<MarketUserInfo | nul
 };
 
 /**
- * 从 DB 获取 market tokens
+ * Get market tokens from DB
  */
 const getMarketTokensFromDB = () => {
   const settings = settingsSelectors.currentSettings(useUserStore.getState());
@@ -59,7 +59,7 @@ const getMarketTokensFromDB = () => {
 };
 
 /**
- * 存储 market tokens 到 DB
+ * Store market tokens to DB
  */
 const saveMarketTokensToDB = async (
   accessToken: string,
@@ -80,10 +80,10 @@ const saveMarketTokensToDB = async (
 };
 
 /**
- * 清除 DB 中的 market tokens
+ * Clear market tokens from DB
  */
 const clearMarketTokensFromDB = async () => {
-  // 如果已经没有 tokens，不需要调用 setSettings
+  // If there are no tokens, no need to call setSettings
   const currentTokens = getMarketTokensFromDB();
   if (!currentTokens?.accessToken && !currentTokens?.refreshToken && !currentTokens?.expiresAt) {
     return;
@@ -99,10 +99,10 @@ const clearMarketTokensFromDB = async () => {
 };
 
 /**
- * 获取 refresh token（优先从 DB 获取）
+ * Get refresh token (prioritize DB)
  */
 const getRefreshToken = (): string | null => {
-  // 优先从 DB 获取
+  // Prioritize fetching from DB
   const dbTokens = getMarketTokensFromDB();
   if (dbTokens?.refreshToken) {
     return dbTokens.refreshToken;
@@ -112,14 +112,14 @@ const getRefreshToken = (): string | null => {
 };
 
 /**
- * 刷新令牌（暂时简化，后续可以实现 refresh token 逻辑）
+ * Refresh token (simplified for now; refresh token logic can be implemented later)
  */
 const refreshToken = async (): Promise<boolean> => {
   return false;
 };
 
 /**
- * 检查用户是否需要设置用户名（首次登录）
+ * Check if the user needs to set up a username (first-time login)
  */
 const checkNeedsProfileSetup = async (username: string): Promise<boolean> => {
   try {
@@ -133,7 +133,7 @@ const checkNeedsProfileSetup = async (username: string): Promise<boolean> => {
 };
 
 /**
- * Market 授权上下文提供者
+ * Market authorization context provider
  */
 export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderProps) => {
   const { message } = App.useApp();
@@ -155,21 +155,21 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     ((_profile: MarketUserProfile) => void) | null
   >(null);
 
-  // 订阅 user store 的初始化状态，当 isUserStateInit 为 true 时，settings 数据已加载完成
+  // Subscribe to user store init state; when isUserStateInit is true, settings data is fully loaded
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
 
-  // 检查是否启用了 Market Trusted Client 认证
+  // Check if Market Trusted Client authentication is enabled
   const enableMarketTrustedClient = useServerConfigStore(
     serverConfigSelectors.enableMarketTrustedClient,
   );
 
-  // 初始化 OIDC 客户端（仅在客户端）
+  // Initialize OIDC client (client-side only)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const baseUrl = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
       const desktopRedirectUri = new URL(MARKET_OIDC_ENDPOINTS.desktopCallback, baseUrl).toString();
 
-      // 桌面端使用 Market 手动维护的 Web 回调，Web 端使用当前域名
+      // Desktop uses Market's manually maintained Web callback; Web uses the current domain
       const redirectUri = isDesktop
         ? desktopRedirectUri
         : `${window.location.origin}/market-auth-callback`;
@@ -185,20 +185,20 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   }, [isDesktop]);
 
   /**
-   * 初始化：检查并恢复会话，获取用户信息
+   * Initialize: check and restore session, fetch user info
    */
   const initializeSession = async () => {
     setStatus('loading');
 
-    // 如果启用了 Trusted Client 认证，直接通过后端获取用户信息（不传 token）
+    // If Trusted Client authentication is enabled, fetch user info directly from backend (without token)
     if (enableMarketTrustedClient) {
       const userInfo = await fetchUserInfo();
 
       if (userInfo) {
-        // 使用 Trusted Client 时，创建一个虚拟的 session（无需真实 token）
+        // When using Trusted Client, create a virtual session (no real token needed)
         const trustedSession: MarketAuthSession = {
-          accessToken: '', // Trusted Client 不需要前端 token
-          expiresAt: Number.MAX_SAFE_INTEGER, // 不过期
+          accessToken: '', // Trusted Client does not require a frontend token
+          expiresAt: Number.MAX_SAFE_INTEGER, // never expires
           expiresIn: Number.MAX_SAFE_INTEGER,
           scope: 'openid profile email',
           tokenType: 'Bearer',
@@ -210,33 +210,33 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         return;
       }
 
-      // 如果获取失败，设置为未认证状态
+      // If fetch fails, set to unauthenticated
       setStatus('unauthenticated');
       return;
     }
 
-    // 原有的 OIDC token 认证流程
+    // Original OIDC token authentication flow
     const dbTokens = getMarketTokensFromDB();
 
-    // 检查 DB 中是否有 token
+    // Check if token exists in DB
     if (!dbTokens?.accessToken) {
       setStatus('unauthenticated');
       return;
     }
 
-    // 检查 token 是否过期
+    // Check if token is expired
     if (!dbTokens.expiresAt || dbTokens.expiresAt <= Date.now()) {
-      // 清理过期的 DB tokens
+      // Clear expired DB tokens
       await clearMarketTokensFromDB();
       setStatus('unauthenticated');
       return;
     }
 
-    // 获取用户信息
+    // Fetch user info
     const userInfo = await fetchUserInfo(dbTokens.accessToken);
 
     if (!userInfo) {
-      // 清理无效的 token
+      // Clear invalid token
       await clearMarketTokensFromDB();
       setStatus('unauthenticated');
       return;
@@ -256,7 +256,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   };
 
   /**
-   * 实际执行登录的方法（内部使用）
+   * The actual sign-in method (internal use)
    */
   const handleActualSignIn = async (): Promise<number | null> => {
     if (!oidcClient) {
@@ -267,19 +267,19 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     try {
       setStatus('loading');
 
-      // 启动 OIDC 授权流程并获取授权码
+      // Start OIDC authorization flow and get authorization code
       const authResult = await oidcClient.startAuthorization();
 
-      // 用授权码换取访问令牌
+      // Exchange authorization code for access token
       const tokenResponse = await oidcClient.exchangeCodeForToken(
         authResult.code,
         authResult.state,
       );
 
-      // 获取用户信息
+      // Fetch user info
       const userInfo = await fetchUserInfo(tokenResponse.accessToken);
 
-      // 创建会话对象
+      // Create session object
       const expiresAt = Date.now() + tokenResponse.expiresIn * 1000;
       const newSession: MarketAuthSession = {
         accessToken: tokenResponse.accessToken,
@@ -290,7 +290,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         userInfo: userInfo || undefined,
       };
 
-      // 存储 tokens 到 DB
+      // Store tokens to DB
       await saveMarketTokensToDB(tokenResponse.accessToken, tokenResponse.refreshToken, expiresAt);
 
       setSession(newSession);
@@ -313,7 +313,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     } catch (error) {
       setStatus('unauthenticated');
 
-      // 根据错误类型显示不同的错误消息
+      // Display different error messages based on error type
       if (error instanceof MarketAuthError) {
         message.error(t(`errors.${error.code}`) || t('errors.general'));
       } else {
@@ -325,7 +325,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   };
 
   /**
-   * 登录方法（会先弹出确认对话框）
+   * Sign-in method (shows confirmation dialog first)
    */
   const signIn = async (): Promise<number | null> => {
     return new Promise<number | null>((resolve, reject) => {
@@ -336,12 +336,12 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   };
 
   /**
-   * 处理确认授权
+   * Handle authorization confirmation
    */
   const handleConfirmAuth = async () => {
     setShowConfirmModal(false);
 
-    // 如果是 trustedClient 模式，直接打开 ProfileSetupModal 完善资料
+    // If in trustedClient mode, open ProfileSetupModal directly to complete profile
     if (enableMarketTrustedClient) {
       setIsFirstTimeSetup(true);
       setShowProfileSetupModal(true);
@@ -353,7 +353,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       return;
     }
 
-    // 原有的 OIDC 流程
+    // Original OIDC flow
     try {
       const result = await handleActualSignIn();
       if (pendingSignInResolve) {
@@ -371,7 +371,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   };
 
   /**
-   * 处理取消授权
+   * Handle authorization cancellation
    */
   const handleCancelAuth = () => {
     setShowConfirmModal(false);
@@ -383,7 +383,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   };
 
   /**
-   * 登出方法
+   * Sign-out method
    */
   const signOut = async () => {
     setSession(null);
@@ -392,28 +392,28 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   };
 
   /**
-   * 获取当前用户信息
+   * Get current user info
    */
   const getCurrentUserInfo = (): MarketUserInfo | null => {
     return session?.userInfo ?? null;
   };
 
   /**
-   * 获取 access token（优先从 session 获取，否则从 DB 获取）
+   * Get access token (prioritize session, fallback to DB)
    */
   const getAccessToken = (): string | null => {
-    // 优先从 session 获取（内存中的状态）
+    // Prioritize fetching from session (in-memory state)
     if (session?.accessToken) {
       return session.accessToken;
     }
 
-    // 备选从 DB 获取
+    // Fallback to fetching from DB
     const dbTokens = getMarketTokensFromDB();
     return dbTokens?.accessToken ?? null;
   };
 
   /**
-   * 打开个人资料设置模态框（用于用户手动编辑）
+   * Open profile setup modal (for manual user editing)
    */
   const openProfileSetup = useCallback((onSuccess?: (profile: MarketUserProfile) => void) => {
     setIsFirstTimeSetup(false);
@@ -422,7 +422,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   }, []);
 
   /**
-   * 关闭个人资料设置模态框
+   * Close profile setup modal
    */
   const handleCloseProfileSetup = useCallback(() => {
     setShowProfileSetupModal(false);
@@ -431,15 +431,15 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   }, []);
 
   /**
-   * 个人资料更新成功回调
+   * Profile update success callback
    */
   const handleProfileUpdateSuccess = useCallback(() => {
     // Profile is updated, modal will close automatically
   }, []);
 
   /**
-   * 初始化时恢复会话并获取用户信息
-   * 等待 isUserStateInit 为 true，此时 useInitUserState 的 SWR 请求已完成，settings 数据已加载
+   * Restore session and fetch user info on initialization
+   * Wait for isUserStateInit to be true, at which point the SWR request from useInitUserState is complete and settings data is loaded
    */
   useEffect(() => {
     if (isUserStateInit) {
@@ -451,7 +451,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     getAccessToken,
     getCurrentUserInfo,
     getRefreshToken,
-    // 当启用 Trusted Client 认证时，自动视为已认证（后端会自动使用 trustedClientToken）
+    // When Trusted Client authentication is enabled, automatically treat as authenticated (backend uses trustedClientToken)
     isAuthenticated: enableMarketTrustedClient || status === 'authenticated',
     isLoading: status === 'loading',
     openProfileSetup,
@@ -518,7 +518,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 };
 
 /**
- * 使用 Market 授权的 Hook
+ * Hook for using Market authorization
  */
 export const useMarketAuth = (): MarketAuthContextType => {
   const context = use(MarketAuthContext);

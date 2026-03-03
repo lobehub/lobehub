@@ -8,8 +8,8 @@ import {
   Avatar,
   Flexbox,
   Icon,
-  Tooltip,
   stopPropagation,
+  Tooltip,
 } from '@lobehub/ui';
 import { Input, InputNumber } from 'antd';
 import { createStaticStyles, useTheme } from 'antd-style';

@@ -21,7 +21,7 @@ const RenameLocalFile = memo<BuiltinInterventionProps<RenameLocalFileParams>>(({
         <Icon icon={ChevronRight} />
         <LocalFile name={base} path={filePath} />
       </Flexbox>
-      <Flexbox align="center" gap={8} horizontal>
+      <Flexbox horizontal align="center" gap={8}>
         <Text type="secondary">{base}</Text>
         <Icon icon={ArrowRight} />
         <Text>{newName}</Text>

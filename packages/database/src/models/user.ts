@@ -8,14 +8,14 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { and, eq, gt, inArray, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { nextauthAccounts, users, userSettings } from '../schemas';
+import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 type DecryptUserKeyVaults = (
@@ -39,6 +39,8 @@ export type ListUsersForMemoryExtractorOptions = {
   limit?: number;
   whitelist?: string[];
 };
+
+export type ListUsersForHourlyMemoryExtractorOptions = ListUsersForMemoryExtractorOptions;
 
 export interface UserInfoForAIGeneration {
   responseLanguage: string;
@@ -338,6 +340,52 @@ export class UserModel {
       orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
       where,
     });
+  };
+
+  static listUsersForHourlyMemoryExtractor = (
+    db: LobeChatDatabase,
+    options: ListUsersForHourlyMemoryExtractorOptions = {},
+  ) => {
+    const cursorCondition = options.cursor
+      ? or(
+          gt(users.createdAt, options.cursor.createdAt),
+          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
+        )
+      : undefined;
+
+    const whitelistCondition =
+      options.whitelist && options.whitelist.length > 0
+        ? inArray(users.id, options.whitelist)
+        : undefined;
+
+    // User memory defaults to enabled=true when user settings are missing.
+    const memoryEnabledCondition = sql`COALESCE((${userSettings.memory} ->> 'enabled')::boolean, true) = true`;
+    // Eligible users must have at least one topic with at least one user message.
+    const hasChattedTopicCondition = sql`
+      EXISTS (
+        SELECT 1
+        FROM ${topics}
+        INNER JOIN ${messages}
+          ON ${messages.topicId} = ${topics.id}
+          AND ${messages.userId} = ${users.id}
+          AND ${messages.role} = 'user'
+        WHERE ${topics.userId} = ${users.id}
+      )
+    `;
+
+    const query = db
+      .select({
+        createdAt: users.createdAt,
+        id: users.id,
+      })
+      .from(users)
+      .leftJoin(userSettings, eq(users.id, userSettings.id))
+      .where(
+        and(cursorCondition, whitelistCondition, memoryEnabledCondition, hasChattedTopicCondition),
+      )
+      .orderBy(asc(users.createdAt), asc(users.id));
+
+    return options.limit !== undefined ? query.limit(options.limit) : query;
   };
 
   /**

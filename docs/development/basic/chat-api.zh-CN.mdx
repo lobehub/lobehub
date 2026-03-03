@@ -1,6 +1,6 @@
 ---
 title: Chat API 前后端交互逻辑
-description: 深入了解 LobeChat Chat API 的前后端交互实现逻辑和核心组件。
+description: 深入了解 LobeHub Chat API 的前后端交互实现逻辑和核心组件。
 tags:
   - Chat API
   - 前后端交互
@@ -11,7 +11,7 @@ tags:
 
 # Chat API 前后端交互逻辑
 
-本文档说明了 LobeChat Chat API 在前后端交互中的实现逻辑，
+本文档说明了 LobeHub Chat API 在前后端交互中的实现逻辑，
 包括事件序列和涉及的核心组件。
 
 ## 交互时序图
@@ -139,7 +139,7 @@ while (state.status !== 'done' && state.status !== 'error') {
 ### 6. 工具调用场景
 
 当 AI 模型在响应中返回 `tool_calls` 字段时，Agent 会发出
-`call_tool` 指令。LobeChat 支持三种工具类型：
+`call_tool` 指令。LobeHub 支持三种工具类型：
 
 **Builtin 工具**：内置在应用中的工具，通过本地执行器直接运行。
 
@@ -304,7 +304,7 @@ Agent Runtime 循环的执行位置取决于场景：
 
 ## Model Runtime
 
-Model Runtime（`packages/model-runtime/`）是 LobeChat 中
+Model Runtime（`packages/model-runtime/`）是 LobeHub 中
 与 LLM 模型提供商交互的核心抽象层，
 负责将不同提供商的 API 适配为统一接口。
 
@@ -360,7 +360,7 @@ export interface LobeRuntimeAI {
 ## Agent Runtime
 
 Agent Runtime（`packages/agent-runtime/`）是
-LobeChat 的 Agent 编排引擎。
+LobeHub 的 Agent 编排引擎。
 如上文所述，它是驱动整个 chat 流程的核心执行引擎。
 
 **核心组件**：

@@ -344,6 +344,42 @@ describe('AiModelModel', () => {
     });
   });
 
+  describe('clearModelsByProvider', () => {
+    it('should delete ALL models for a given provider regardless of source', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'remote1', providerId: 'openai', source: 'remote', userId },
+        { id: 'custom1', providerId: 'openai', source: 'custom', userId },
+        { id: 'model1', providerId: 'anthropic', source: 'remote', userId },
+        { id: 'model2', providerId: 'anthropic', source: 'custom', userId },
+      ]);
+
+      await aiProviderModel.clearModelsByProvider('openai');
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(2);
+      expect(remainingModels.every((m) => m.providerId === 'anthropic')).toBe(true);
+    });
+
+    it('should only delete models for the current user', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'user1-model', providerId: 'openai', source: 'custom', userId },
+        { id: 'user2-model', providerId: 'openai', source: 'custom', userId: 'user2' },
+      ]);
+
+      await aiProviderModel.clearModelsByProvider('openai');
+
+      const userModels = await serverDB.query.aiModels.findMany({
+        where: eq(aiModels.userId, userId),
+      });
+      const otherUserModels = await serverDB.query.aiModels.findMany({
+        where: eq(aiModels.userId, 'user2'),
+      });
+
+      expect(userModels).toHaveLength(0);
+      expect(otherUserModels).toHaveLength(1);
+    });
+  });
+
   describe('updateModelsOrder', () => {
     it('should update the sort order of models', async () => {
       await aiProviderModel.create({

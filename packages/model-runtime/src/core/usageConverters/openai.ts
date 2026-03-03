@@ -41,14 +41,14 @@ export const convertOpenAIUsage = (
   const data = {
     acceptedPredictionTokens: usage.completion_tokens_details?.accepted_prediction_tokens,
     inputAudioTokens: usage.prompt_tokens_details?.audio_tokens,
-    inputCacheMissTokens: inputCacheMissTokens,
+    inputCacheMissTokens,
     inputCachedTokens: cachedTokens,
-    inputCitationTokens: inputCitationTokens,
-    inputTextTokens: inputTextTokens,
-    outputAudioTokens: outputAudioTokens,
-    outputImageTokens: outputImageTokens,
+    inputCitationTokens,
+    inputTextTokens,
+    outputAudioTokens,
+    outputImageTokens,
     outputReasoningTokens: outputReasoning,
-    outputTextTokens: outputTextTokens,
+    outputTextTokens,
     rejectedPredictionTokens: usage.completion_tokens_details?.rejected_prediction_tokens,
     totalInputTokens,
     totalOutputTokens: totalOutputTokensNormalized,
@@ -98,17 +98,17 @@ export const convertOpenAIResponseUsage = (
     // and potentially filtered out later.
     acceptedPredictionTokens: undefined, // Not in ResponseUsage
     inputAudioTokens: undefined, // Not in ResponseUsage
-    inputCacheMissTokens: inputCacheMissTokens,
-    inputCachedTokens: inputCachedTokens,
+    inputCacheMissTokens,
+    inputCachedTokens,
     inputCitationTokens: undefined, // Not in ResponseUsage
-    inputTextTokens: inputTextTokens,
+    inputTextTokens,
     outputAudioTokens: undefined, // Not in ResponseUsage
-    outputImageTokens: outputImageTokens,
-    outputReasoningTokens: outputReasoningTokens,
-    outputTextTokens: outputTextTokens,
+    outputImageTokens,
+    outputReasoningTokens,
+    outputTextTokens,
     rejectedPredictionTokens: undefined, // Not in ResponseUsage
-    totalInputTokens: totalInputTokens,
-    totalOutputTokens: totalOutputTokens,
+    totalInputTokens,
+    totalOutputTokens,
     totalTokens: overallTotalTokens,
   } satisfies ModelTokensUsage; // This helps ensure all keys of ModelTokensUsage are considered
 

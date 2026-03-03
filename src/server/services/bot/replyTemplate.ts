@@ -1,7 +1,11 @@
-import { emoji } from 'chat';
-
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
+
+// Use raw Unicode emoji instead of Chat SDK emoji placeholders,
+// because bot-callback webhooks send via DiscordRestApi directly
+// (not through the Chat SDK adapter that resolves placeholders).
+const EMOJI_THINKING = '💭';
+const EMOJI_SUCCESS = '✅';
 
 // ==================== Message Splitting ====================
 
@@ -36,7 +40,7 @@ export function splitMessage(text: string, limit = DEFAULT_CHAR_LIMIT): string[]
 // ==================== Params ====================
 
 type ToolCallItem = { apiName: string; arguments?: string; identifier: string };
-type ToolResultItem = { apiName: string; identifier: string; output?: string };
+type ToolResultItem = { apiName: string; identifier: string; isSuccess?: boolean; output?: string };
 
 export interface RenderStepParams extends StepPresentationData {
   elapsedMs?: number;
@@ -68,17 +72,17 @@ function formatToolCall(tc: ToolCallItem): string {
   return formatToolName(tc);
 }
 
-export function summarizeOutput(output: string | undefined, maxLength = 100): string | undefined {
+export function summarizeOutput(
+  output: string | undefined,
+  isSuccess?: boolean,
+): string | undefined {
   if (!output) return undefined;
-  const lines = output.split('\n').filter((l) => l.trim());
-  if (lines.length === 0) return undefined;
+  const trimmed = output.trim();
+  if (trimmed.length === 0) return undefined;
 
-  const firstLine = lines[0].length > maxLength ? lines[0].slice(0, maxLength) + '...' : lines[0];
-
-  if (lines.length > 1) {
-    return `${firstLine} … +${lines.length - 1} lines`;
-  }
-  return firstLine;
+  const chars = trimmed.length;
+  const status = isSuccess === false ? 'error' : 'success';
+  return `${status}: ${chars.toLocaleString()} chars`;
 }
 
 function formatPendingTools(toolsCalling: ToolCallItem[]): string {
@@ -92,9 +96,10 @@ function formatCompletedTools(
   return toolsCalling
     .map((tc, i) => {
       const callStr = `⏺ ${formatToolCall(tc)}`;
-      const summary = summarizeOutput(toolsResult?.[i]?.output);
+      const result = toolsResult?.[i];
+      const summary = summarizeOutput(result?.output, result?.isSuccess);
       if (summary) {
-        return `${callStr}\n  ⎿  ${summary}`;
+        return `${callStr}\n⎿  ${summary}`;
       }
       return callStr;
     })
@@ -139,9 +144,7 @@ function renderInlineStats(params: {
 
 // ==================== 1. Start ====================
 
-export function renderStart(content?: string): string {
-  return getExtremeAck(content);
-}
+export const renderStart = getExtremeAck;
 
 // ==================== 2. LLM Generating ====================
 
@@ -162,7 +165,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
     totalTokens,
     totalToolCalls,
   } = params;
-  const displayContent = content || lastContent;
+  const displayContent = (content || lastContent)?.trim();
   const { header, footer } = renderInlineStats({
     elapsedMs,
     totalCost,
@@ -180,15 +183,15 @@ export function renderLLMGenerating(params: RenderStepParams): string {
 
   // Sub-state: has reasoning (thinking)
   if (reasoning && !content) {
-    return `${header}${emoji.thinking} ${reasoning}${footer}`;
+    return `${header}${EMOJI_THINKING} ${reasoning?.trim()}${footer}`;
   }
 
   // Sub-state: pure text content (waiting for next step)
   if (displayContent) {
-    return `${header}${displayContent}\n\n${footer}`;
+    return `${header}${displayContent}${footer}`;
   }
 
-  return `${header}${emoji.thinking} Processing...${footer}`;
+  return `${header}${EMOJI_THINKING} Processing...${footer}`;
 }
 
 // ==================== 3. Tool Executing ====================
@@ -218,13 +221,13 @@ export function renderToolExecuting(params: RenderStepParams): string {
 
   if (header) parts.push(header.trimEnd());
 
-  if (lastContent) parts.push(lastContent);
+  if (lastContent) parts.push(lastContent.trim());
 
   if (lastToolsCalling && lastToolsCalling.length > 0) {
     parts.push(formatCompletedTools(lastToolsCalling, toolsResult));
-    parts.push(`${emoji.thinking} Processing...`);
+    parts.push(`${EMOJI_THINKING} Processing...`);
   } else {
-    parts.push(`${emoji.thinking} Processing...`);
+    parts.push(`${EMOJI_THINKING} Processing...`);
   }
 
   return parts.join('\n\n') + footer;
@@ -246,7 +249,7 @@ export function renderFinalReply(
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
   const calls = llmCalls > 1 || toolCalls > 0 ? ` | llm×${llmCalls} | tools×${toolCalls}` : '';
   const footer = `-# ${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
-  return `${content}\n\n${footer}`;
+  return `${content.trimEnd()}\n\n${footer}`;
 }
 
 export function renderError(errorMessage: string): string {

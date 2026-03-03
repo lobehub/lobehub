@@ -1,8 +1,9 @@
 // Context Provider exports
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
+export { AgentManagementContextInjector } from './AgentManagementContextInjector';
+export { DiscordContextProvider } from './DiscordContextProvider';
 export { EvalContextSystemInjector } from './EvalContextSystemInjector';
 export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
-export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { GroupAgentBuilderContextInjector } from './GroupAgentBuilderContextInjector';
 export { GroupContextInjector } from './GroupContextInjector';
 export { GTDPlanInjector } from './GTDPlanInjector';
@@ -24,8 +25,6 @@ export type {
   AgentBuilderContextInjectorConfig,
   OfficialToolItem,
 } from './AgentBuilderContextInjector';
-export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
-export type { ForceFinishSummaryInjectorConfig } from './ForceFinishSummaryInjector';
 export type {
   AgentManagementContext,
   AgentManagementContextInjectorConfig,
@@ -33,6 +32,9 @@ export type {
   AvailablePluginInfo,
   AvailableProviderInfo,
 } from './AgentManagementContextInjector';
+export type { DiscordContext, DiscordContextProviderConfig } from './DiscordContextProvider';
+export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
+export type { ForceFinishSummaryInjectorConfig } from './ForceFinishSummaryInjector';
 export type {
   GroupAgentBuilderContext,
   GroupAgentBuilderContextInjectorConfig,

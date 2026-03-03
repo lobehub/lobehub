@@ -1,4 +1,5 @@
-import { IToolDetector, createCommandDetector } from '@/core/infrastructure/ToolDetectorManager';
+import type { IToolDetector } from '@/core/infrastructure/ToolDetectorManager';
+import { createCommandDetector } from '@/core/infrastructure/ToolDetectorManager';
 
 /**
  * Content search tool detectors

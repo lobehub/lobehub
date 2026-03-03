@@ -149,6 +149,18 @@ export class CommonActionImpl {
               false,
               n('initUserState'),
             );
+
+            // Auto-detect and sync browser timezone on first load
+            const currentTimezone = data.settings?.general?.timezone;
+            if (!currentTimezone && typeof Intl !== 'undefined') {
+              const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              if (detectedTimezone) {
+                this.#get()
+                  .updateGeneralConfig({ timezone: detectedTimezone })
+                  .catch(() => {});
+              }
+            }
+
             //analytics
             const analytics = getSingletonAnalyticsOptional();
             analytics?.identify(data.userId || '', {

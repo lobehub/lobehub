@@ -277,7 +277,7 @@ export default {
   'delete': 'Delete',
   'document': 'User Manual',
   'download': 'Download',
-  'downloadClient': 'Download Client',
+  'getDesktopApp': 'Get Desktop App',
   'duplicate': 'Duplicate',
   'edit': 'Edit',
   'errors.invalidFileFormat': 'Invalid file format',

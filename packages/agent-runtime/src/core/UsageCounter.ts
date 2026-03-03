@@ -80,6 +80,7 @@ export class UsageCounter {
       'inputImageTokens',
       'inputAudioTokens',
       'inputCitationTokens',
+      'inputToolTokens',
       'outputTextTokens',
       'outputImageTokens',
       'outputAudioTokens',
