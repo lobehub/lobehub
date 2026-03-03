@@ -801,7 +801,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockGoogleStream);
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
     const decoder = new TextDecoder();
     const chunks: string[] = [];
@@ -896,7 +896,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockGoogleStream);
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
     const decoder = new TextDecoder();
     const chunks: string[] = [];
@@ -981,7 +981,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     });
 
-    const protocolStream = VertexAIStream(mockGoogleStream);
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
     const decoder = new TextDecoder();
     const chunks: string[] = [];
