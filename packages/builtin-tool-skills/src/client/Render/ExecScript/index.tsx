@@ -22,16 +22,16 @@ const ExecScript = memo<BuiltinRenderProps<ExecScriptParams, ExecScriptState>>(
       <Flexbox className={styles.container} gap={8}>
         <Block gap={8} padding={8} variant={'outlined'}>
           <Highlighter
+            wrap
             language={'sh'}
             showLanguage={false}
             style={{ paddingInline: 8 }}
             variant={'borderless'}
-            wrap
           >
             {args?.command || command || ''}
           </Highlighter>
           {content && (
-            <Highlighter language={'text'} showLanguage={false} variant={'filled'} wrap>
+            <Highlighter wrap language={'text'} showLanguage={false} variant={'filled'}>
               {content}
             </Highlighter>
           )}

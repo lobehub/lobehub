@@ -1,21 +1,32 @@
 ---
 title: MCP 市场
-description: >-
-  MCP 市场是 LobeHub 的官方市场，汇聚了众多精心设计的 MCP，为工作场景和学习提供便利。欢迎提交你的 MCP
-  作品，共同创造更多有趣、实用且具有创新性的 MCP。
+description: '为助理接入 10,000+ 工具——数据库、API、文件系统等。一个协议，无限集成。'
 tags:
   - LobeHub
-  - MCP 市场
-  - 创新社区
-  - 协作空间
-  - MCP 作品
-  - 自动化国际化
-  - 多语言版本
+  - MCP
+  - 模型上下文协议
+  - 技能
+  - 连接器
 ---
 
 # MCP 市场
 
-LobeHub 的 MCP 市场汇聚了来自全球创作者的优质 MCP。
+**模型上下文协议（Model Context Protocol，MCP）** 是一种开放标准，让助理与外部工具、数据源和服务建立无缝、安全的连接。你可以将其理解为一个通用适配器 —— 助理能够与数据库、API、文件系统、开发工具、业务应用等几乎任何外部服务交互。
+
+LobeHub 的 MCP 市场汇聚了来自全球创作者的优质 MCP，提供超过 10,000 个现成工具，随时为你的助理注入能力。
+
+## 什么是 MCP？
+
+传统助理功能有限 —— 只能聊天，无法与外部工具交互或获取实时数据。MCP 打破了这一壁垒：
+
+| 没有 MCP      | 有了 MCP      |
+| ----------- | ----------- |
+| 孤立的聊天机器人    | 互联的协作伙伴     |
+| 仅限静态知识      | 实时获取外部数据    |
+| 需要手动复制粘贴    | 直接操作外部系统    |
+| 每个工具都需要单独集成 | 一个协议连接数千个服务 |
+
+MCP 将 Agent 从孤立的聊天机器人转变为真正能完成工作的互联队友。
 
 ## 浏览 MCP 市场
 
@@ -23,8 +34,193 @@ LobeHub 的 MCP 市场汇聚了来自全球创作者的优质 MCP。
 
 ![MCP 市场](/blog/assetsb811f2aae8e8346aef16793d6bd10f88.webp)
 
-助理市场按类别组织，方便你快速找到所需的助理类型。
+MCP 市场按类别分类，方便你快速找到所需类型：
+
+- **开发工具** — GitHub、GitLab、Linear、Jira、VS Code
+- **生产力** — Google Drive、Notion、Slack、Trello、Asana
+- **数据分析** — PostgreSQL、MongoDB、Redis、Elasticsearch
+- **云服务** — AWS、Google Cloud、Azure、Cloudflare
+- **文件系统** — 本地文件、Dropbox、OneDrive、S3
+- **通讯** — 邮件、短信、Discord、Telegram
+- **搜索与知识** — 网络搜索、Wikipedia、文档站点
 
 ## 安装 MCP
 
 <Callout type={'info'}>请谨慎使用来路不明的 MCP，LobeHub 无法确保所有 MCP 的安全性。</Callout>
+
+### 一键安装（桌面端）
+
+LobeHub 桌面应用提供最便捷的 MCP 插件安装方式：
+
+1. 点击侧边栏打开 **MCP 市场**
+2. 浏览或搜索你需要的插件
+3. 点击 **安装**
+4. 配置所需设置（API Key、权限等）
+5. 插件立即对所有 Agent 可用
+
+### 手动安装（自托管）
+
+对于自托管部署，可通过配置连接设置来安装 MCP 服务器。
+
+**示例：STDIO 服务器（本地进程）**
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"],
+      "type": "stdio"
+    }
+  }
+}
+```
+
+**示例：HTTP 服务器（远程服务）**
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "url": "https://mcp-server-github.example.com",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer YOUR_GITHUB_TOKEN"
+      }
+    }
+  }
+}
+```
+
+## 连接类型
+
+MCP 支持两种连接方式：
+
+**STDIO（标准输入 / 输出）** — MCP 服务器作为本地进程运行，通过 stdin/stdout 通信。适合本地工具、脚本、文件系统访问和桌面应用。
+
+**HTTP/HTTPS** — MCP 服务器以 Web 服务方式运行，通过 HTTP 通信。适合云服务、远程 API、多用户工具和 Web 应用。
+
+## 热门 MCP 插件
+
+### 文件系统访问
+
+在指定目录中读写、搜索和管理文件。
+
+```bash
+npm install -g @modelcontextprotocol/server-filesystem
+```
+
+使用场景：代码审查、文档搜索、日志分析、项目文件管理。
+
+### GitHub 集成
+
+与仓库、Issue、Pull Request 和 GitHub 工作流交互。需要 GitHub 个人访问令牌。
+
+使用场景：项目管理、代码审查自动化、Issue 分类、发版管理。
+
+### 数据库访问
+
+查询 PostgreSQL、MySQL 等数据库，分析 schema、生成报告、解释查询计划。
+
+使用场景：数据分析、schema 探索、报告生成。
+
+### 网络搜索
+
+通过 Brave Search、Google Search 等实现实时网络搜索和事实核查。
+
+使用场景：获取最新信息、研究、新闻监控、竞品分析。
+
+### Slack 集成
+
+发送消息、读取对话历史、搜索消息并管理通知。
+
+使用场景：团队通知、自动化报告、事件管理。
+
+## 在 Agent 中使用 MCP
+
+安装后，MCP 插件会自动将工具暴露给你的 Agent。Agent 在对话中按需选择并调用工具：
+
+```
+你：在我的项目文件中搜索认证相关代码
+
+Agent：我来帮你搜索。
+       [使用 filesystem MCP — 执行搜索工具]
+
+Agent：我在 src/auth/login.ts 和 src/middleware/auth.ts
+       中找到了认证相关代码，以下是详细内容...
+```
+
+你可以开启**思维链（Chain of Thought）**，查看具体调用了哪些 MCP 工具以及使用的参数。
+
+### 为助理启用 MCP
+
+1. 打开**助理设置**
+2. 进入**技能**
+3. 选择该助理可以访问的 MCP 服务器
+4. 保存配置
+
+## 安全与权限
+
+MCP 插件在受控权限下运行：
+
+- **显式授权** — 用户按 Agent 粒度审批工具访问权限
+- **作用域访问** — 插件只能访问指定资源（如特定目录）
+- **审计日志** — 追踪所有工具调用记录
+- **随时撤销** — 可随时禁用插件
+
+安全最佳实践：
+
+- 只从可信来源安装 MCP 插件
+- 在批准前仔细审查每个 MCP 服务器的访问权限请求
+- 从只读访问开始，必要时再升级权限
+- 定期轮换 API Key 和令牌
+- 先用非生产数据测试新 MCP 服务器
+
+## 故障排查
+
+**安装后插件未显示**
+
+- 确认 MCP 服务器正在运行（对于 STDIO 类型，检查命令是否可用：`which npx` 或 `which python`）
+- 检查配置文件语法是否正确
+- 查看服务器日志中的启动错误
+- 确保所有依赖已安装，然后重启 LobeHub
+
+**工具在对话中未出现**
+
+- 在「设置」中重新连接 MCP 服务器
+- 确认该 Agent 在「工具与插件」设置中已启用该插件
+- 验证服务器是否正确实现了 MCP 协议
+
+**认证 / 连接错误**
+
+- 检查 API Key 或令牌是否正确且未过期
+- 确认认证类型与服务器要求匹配
+- 对于 HTTP 服务器，确认 URL 可访问且 CORS 已正确配置
+- 在自托管部署中启用调试日志：`DEBUG_MCP=1`，查看详细 MCP 通信信息
+
+## 环境变量配置
+
+自托管部署可通过环境变量配置 MCP 行为：
+
+```bash
+# 插件超时时间（毫秒）
+MCP_TOOL_TIMEOUT=30000
+
+# 启用 MCP 调试日志
+DEBUG_MCP=1
+
+# MCP 配置文件路径
+MCP_CONFIG=/path/to/mcp-config.json
+```
+
+## 开发自定义 MCP 插件
+
+你可以将任何 MCP 兼容的服务器直接添加到 LobeHub，无需经过市场。详细操作步骤请参见[自定义 MCP](/zh/docs/usage/community/custom-mcp) 指南，或查看[技能管理](/zh/docs/usage/community/skill-management) 指南了解所有技能类型及管理方式。
+
+<Cards>
+  <Card href={'/zh/docs/usage/agent/web-search'} title={'网络搜索'} />
+
+  <Card href={'/zh/docs/usage/agent/chain-of-thought'} title={'思维链'} />
+
+  <Card href={'/zh/docs/usage/getting-started/agent'} title={'助理'} />
+</Cards>

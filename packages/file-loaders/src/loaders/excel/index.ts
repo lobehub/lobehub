@@ -91,7 +91,7 @@ export class ExcelLoader implements FileLoaderInterface {
           charCount,
           lineCount,
           metadata: {
-            sheetName: sheetName,
+            sheetName,
           },
           pageContent: tableMarkdown.trim(),
         });

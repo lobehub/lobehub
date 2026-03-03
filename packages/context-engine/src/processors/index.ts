@@ -18,9 +18,9 @@ export {
   PlaceholderVariablesProcessor,
   renderPlaceholderTemplate,
 } from './PlaceholderVariables';
+export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
 export { TaskMessageProcessor } from './TaskMessage';
-export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export { TasksFlattenProcessor } from './TasksFlatten';
 export { ToolCallProcessor } from './ToolCall';
 export { ToolMessageReorder } from './ToolMessageReorder';

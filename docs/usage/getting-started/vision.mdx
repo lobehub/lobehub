@@ -1,0 +1,157 @@
+---
+title: Vision & Image Understanding
+description: >-
+  Upload images and have AI agents analyze, describe, extract text, and answer
+  questions about visual content.
+tags:
+  - LobeHub
+  - Vision
+  - Image Analysis
+  - OCR
+  - Multimodal
+---
+
+# Vision & Image Understanding
+
+LobeHub supports vision capabilities — Agents can see and understand images you share. This multimodal feature enables conversations that go beyond text to include rich visual context.
+
+## What AI Can Do with Images
+
+Vision-enabled models can:
+
+- **Analyze images** — Understand photos, screenshots, diagrams, and documents
+- **Read text (OCR)** — Extract text from images, screenshots, handwritten notes, and signs
+- **Describe visuals** — Provide detailed descriptions of scenes and objects
+- **Answer questions** — Respond to queries about what's in an image
+- **Compare images** — Analyze differences between multiple images
+- **Recognize patterns** — Identify layouts, design styles, and trends
+
+## Uploading Images
+
+### Upload Methods
+
+**Drag and drop** — Drag an image file from your computer into the chat input area. Works with single or multiple images at once.
+
+**Click to upload** — Click the attachment/image icon in the input area, browse your files, and select one or more images.
+
+**Paste from clipboard** — Copy any image (screenshot, copied from a web page, etc.), click in the message input, and press `Ctrl+V` (or `Cmd+V` on Mac). The image appears instantly — ideal for quick screenshot questions.
+
+### Supported Formats and Limits
+
+Supported formats: JPEG/JPG, PNG, WebP, GIF (static frames only), BMP
+
+- Maximum size: \~20 MB per image
+- Recommended: under 5 MB for best performance
+- Large images are automatically compressed
+
+<Callout type={'info'}>
+  The image upload button only appears when you are using a vision-capable model. If you don't see
+  it, switch to a model that supports vision (see supported models below).
+</Callout>
+
+<Callout type={'warning'}>
+  Vision features consume more tokens than text-only conversations, which may affect API costs for
+  self-hosted or API-key deployments.
+</Callout>
+
+## Using Vision Features
+
+### Image Analysis
+
+Ask general questions about an image:
+
+```
+"What's in this image?"
+"Describe what you see in detail"
+"What are the main elements of this photo?"
+```
+
+### Text Extraction (OCR)
+
+Extract text from images, screenshots, and documents:
+
+```
+"What does the text say?"
+"Transcribe all text from this image"
+"Read the error message in this screenshot"
+```
+
+Works with screenshots, photos of signs, printed documents, and code in images. Handwriting recognition works with varying accuracy.
+
+### Multiple Images
+
+Upload several images at once and ask for comparison or combined analysis:
+
+```
+"Compare these three design variations and suggest which is most effective"
+"What are the differences between these before/after photos?"
+"Analyze the trends shown in these charts"
+```
+
+### Asking Specific Questions
+
+The more specific your question, the better the analysis:
+
+```
+"What type of plant is this?" (object identification)
+"Where was this photo likely taken?" (scene understanding)
+"What colors are used in this design?" (technical analysis)
+"What's the main message of this infographic?" (content analysis)
+```
+
+## Use Cases
+
+**Software development** — Share screenshots of error messages, UI bugs, stack traces, or whiteboard diagrams. Ask the AI to "fix this error", "review this interface design", or "convert this whiteboard diagram to code".
+
+**Education and learning** — Upload textbook problems, diagrams, scientific images, or handwritten notes. Ask for explanations, summaries, or digital transcriptions.
+
+**Content creation and design** — Get feedback on logo designs, poster layouts, color schemes, and compositions. Create captions, alt text, and writing prompts from images.
+
+**Professional use** — Extract data from invoices, analyze dashboards and charts, review presentation slides, and digitize business cards and receipts.
+
+**Daily life** — Identify plants, products, or landmarks. Translate signs and menus. Get cooking or home repair guidance from photos.
+
+## Best Practices
+
+**Use clear, well-lit images** — Blurry or dark images reduce accuracy significantly.
+
+**Add context with text** — Combine images with a specific question or description of what you want to know. "What's wrong with this code?" alongside a screenshot is far more useful than uploading the image alone.
+
+**Crop to relevant areas** — Remove unnecessary parts of images to focus the AI's attention on what matters.
+
+**Be specific in your questions** — Instead of "What's this?", ask "What type of architectural style is this building?" Specific questions get more useful answers.
+
+**Verify critical information** — Vision AI can and does make mistakes. Always independently verify important details.
+
+## Limitations
+
+<Callout type={'warning'}>
+  Vision models have limitations. Always verify critical information independently.
+</Callout>
+
+- **People and faces** — Cannot identify specific individuals (privacy protection by design)
+- **Fine details** — May miss very small text or details in low-resolution images
+- **Handwriting** — Variable accuracy depending on legibility
+- **Video** — Cannot process video files; only static images are supported
+- **Medical/legal** — Not suitable for medical diagnosis or legal advice; treat as informational only
+- **Privacy** — Images are processed by the AI provider's servers; avoid uploading sensitive or confidential content without redaction
+
+## Supported Models
+
+Vision requires a vision-capable model. Look for models with a vision indicator in the model selector:
+
+| Provider  | Vision Models                                                      |
+| --------- | ------------------------------------------------------------------ |
+| OpenAI    | GPT-4V, GPT-4o, GPT-4o mini                                        |
+| Anthropic | Claude 3 Haiku, Claude 3 Sonnet, Claude 3 Opus, Claude 3.5 Sonnet+ |
+| Google    | Gemini 1.5 Flash, Gemini 1.5 Pro, Gemini Pro Vision                |
+
+Other providers may also offer vision models — check the model's capability tags in the selector.
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/getting-started/image-generation'} title={'Image Generation'} />
+
+  <Card href={'/docs/usage/providers'} title={'AI Providers'} />
+</Cards>

@@ -72,7 +72,7 @@ describe('MessageModel - queryWithWhere with task messages', () => {
       expect(taskMessage.taskDetail).toEqual({
         duration: 5000,
         status: ThreadStatus.Completed,
-        threadId: threadId,
+        threadId,
         title: 'Agent Task Execution',
         totalCost: 0.05,
         totalMessages: 10,
@@ -348,7 +348,7 @@ describe('MessageModel - queryWithWhere with task messages', () => {
       expect(taskMessage.taskDetail).toEqual({
         duration: undefined,
         status: ThreadStatus.Active,
-        threadId: threadId,
+        threadId,
         title: 'Partial Metadata Thread',
         totalCost: undefined,
         totalMessages: undefined,
@@ -387,7 +387,7 @@ describe('MessageModel - queryWithWhere with task messages', () => {
       expect(taskMessage.taskDetail).toEqual({
         duration: undefined,
         status: ThreadStatus.Pending,
-        threadId: threadId,
+        threadId,
         title: undefined,
         totalCost: undefined,
         totalMessages: undefined,

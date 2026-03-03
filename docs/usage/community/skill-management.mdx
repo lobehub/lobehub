@@ -1,0 +1,146 @@
+---
+title: Skill Management
+description: >-
+  Discover, install, configure, and organize Skills — the tools and integrations
+  that extend what your Agents can do.
+tags:
+  - Skills
+  - LobeHub
+  - MCP
+  - Integrations
+  - Skill Management
+  - Plugins
+---
+
+# Skill Management
+
+**Skills** are the capabilities you attach to Agents — web search, code execution, database access, external API integrations, and more. Each skill gives an Agent access to a set of tools it can call during a conversation to complete tasks it couldn't do on its own.
+
+This guide covers how to discover, install, configure, and enable skills across your workspace.
+
+## What Are Skills?
+
+Skills extend Agents beyond conversation. When an Agent has a skill enabled, it can actively use tools — search the web, query a database, read files, send a Slack message — rather than just discussing how to do those things.
+
+Every skill exposes one or more **tools**. The Agent decides when to call a tool based on what you ask. You can enable **Chain of Thought** in a conversation to see exactly which tools are being called and with what parameters.
+
+## Types of Skills
+
+| Type                     | Description                          | Examples                                  |
+| ------------------------ | ------------------------------------ | ----------------------------------------- |
+| **Built-in tools**       | Capabilities built into LobeHub      | Artifacts, Sandbox, GTD, Notebook, Memory |
+| **LobeHub Integrations** | OAuth-connected third-party services | Linear, Microsoft, Twitter                |
+| **Klavis**               | Klavis-powered integrations          | Gmail, Notion, Slack, and more            |
+| **Community MCP**        | MCP servers from the MCP Marketplace | GitHub, PostgreSQL, Brave Search          |
+| **Custom MCP**           | MCP servers you add manually         | Your own APIs, private tools              |
+
+## The Skill Store
+
+The Skill Store is where you discover and install skills. Open it from:
+
+- **Settings → Skills** — click **Skill Store** in the top right
+- **Agent settings → Skills** — click **Add skill**
+- **Chat input** — click the **Tools** button, then **Skill Store**
+
+The Skill Store has three tabs:
+
+- **LobeHub** — Built-in tools and LobeHub-native integrations (Linear, Microsoft, Twitter, Klavis services)
+- **Community** — MCPs from the [MCP Marketplace](/docs/usage/community/mcp-market), covering thousands of services
+- **Custom** — MCP servers you've added manually, plus an **Add custom skill** button
+
+Use the search bar to filter across all tabs by keyword.
+
+## Installing Skills
+
+### Built-in tools and Integrations
+
+Built-in tools (Artifacts, Sandbox, GTD, Notebook) are pre-installed — you can enable them for any Agent immediately. LobeHub Integrations and Klavis services require an OAuth connection:
+
+1. In the Skill Store, go to the **LobeHub** tab
+2. Find the integration you want (e.g. Linear, Gmail)
+3. Click **Connect** and complete the OAuth flow
+4. The integration becomes available as a skill for any Agent
+
+### Community MCP
+
+1. In the Skill Store, go to the **Community** tab (or browse the MCP Marketplace from the sidebar)
+2. Find the MCP you want and click **Install**
+3. If the MCP requires configuration (API keys, URLs), a setup dialog will appear
+4. Once installed, the MCP appears in **Settings → Skills** under **Community MCPs**
+
+See the [MCP Marketplace](/docs/usage/community/mcp-market) guide for more detail on connection types and configuration.
+
+### Custom MCP
+
+Add any MCP-compatible server that isn't in the marketplace:
+
+1. In the Skill Store, go to the **Custom** tab
+2. Click **Add custom skill**
+3. Configure the connection (HTTP endpoint or STDIO command)
+4. Test the connection and click **Install**
+
+See the [Custom MCP](/docs/usage/community/custom-mcp) guide for a full walkthrough.
+
+## Skill Settings Page
+
+**Settings → Skills** is your central view of everything installed in your workspace.
+
+Skills are grouped into three categories:
+
+**Integrations** — Built-in tools, LobeHub-connected services, and Klavis integrations. Each shows its connection status. Click **Connect** or **Disconnect** to manage the OAuth link.
+
+**Community MCPs** — MCP servers installed from the marketplace. Each shows its connection type (HTTP or STDIO). Click **Configure** to edit the connection URL or authentication, or to view the tools it provides.
+
+**Custom MCPs** — MCP servers you've added manually. Click **Configure** to open the full editing dialog where you can change the connection type, URL, command, arguments, environment variables, and other settings.
+
+To uninstall any skill, open its menu and select **Uninstall**.
+
+## Enabling Skills for Agents
+
+Installing a skill adds it to your workspace, but you choose which agents get access to each skill. Skills are **per-agent** — enabling a skill for one agent does not affect others.
+
+### From Agent Settings
+
+1. Open the agent and go to its settings
+2. Navigate to **Skills**
+3. Toggle on the skills this agent should be able to use
+4. Changes take effect in the next conversation
+
+### From the Chat Input
+
+1. Click the **Tools** button above the chat input
+2. Toggle individual skills on or off for the current agent
+3. A link at the bottom opens **Skill Management** for workspace-wide changes
+
+## Configuring MCP Connection Settings
+
+After installation, you may need to update an MCP's connection details — for example, if an API key rotates or a server URL changes.
+
+### Editing an HTTP MCP
+
+1. Go to **Settings → Skills**
+2. Find the MCP and click **Configure**
+3. Click the **Edit** button next to the connection details
+4. Update the endpoint URL, authentication type, or API key
+5. Click **Save**
+
+### Editing a STDIO MCP
+
+1. Go to **Settings → Skills**
+2. Find the MCP and click **Configure**
+3. Edit the command, arguments, or environment variables
+4. Click **Save**
+
+<Callout type={'info'}>For STDIO MCPs, environment variables are the standard way to pass API keys and secrets without exposing them in the command line.</Callout>
+
+## Web Search
+
+Web search is a special built-in capability. Unlike other skills, it is controlled by the **Search Mode** setting in agent configuration rather than the Skills toggle. See the [Web Search](/docs/usage/agent/web-search) guide for details.
+
+<Cards>
+  <Card href={'/docs/usage/community/custom-mcp'} title={'Custom MCP'} />
+
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+</Cards>

@@ -24,11 +24,11 @@ curl -sSL https://dokploy.com/install.sh | sh
 
 1. Connect your GitHub to Dokploy in the Settings / Git section according to the prompt.
 
-![](/blog/assets0f97d1dfccd5ba07172aff71ff9acd7b.webp)
+![Connect GitHub to Dokploy](/blog/assets0f97d1dfccd5ba07172aff71ff9acd7b.webp)
 
 2. Enter the Projects interface to create a Project.
 
-![](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
+![Create Project in Dokploy](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
 
 ### Configure S3 Storage Service
 
@@ -68,7 +68,7 @@ You also need to configure the `JWKS_KEY` environment variable for signing and v
 
 Enter the previously created Project, click on Create Service, and select Database. In the Database interface, choose PostgreSQL, then set the database name, user, and password. In the Docker image field, enter `paradedb/paradedb:latest-pg17`, and finally click Create to create the database.
 
-![](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
+![Create PostgreSQL Database in Dokploy](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
 
 Enter the created database and set an unused port in External Credentials to allow external access; otherwise, LobeHub will not be able to connect to the database. You can view the Postgres database connection URL in External Host, as shown below:
 
@@ -78,21 +78,21 @@ postgresql://postgres:wAbLxfXSwkxxxxxx@45.577.281.48:5432/postgres
 
 Finally, click Deploy to deploy the database.
 
-![](/blog/assets1b9283f9cc5fc5073ff9cffc24880e96.webp)
+![Deploy Database in Dokploy](/blog/assets1b9283f9cc5fc5073ff9cffc24880e96.webp)
 
 ## Deploy LobeHub on Dokploy.
 
 Click "Create Service", select "Application", and create the LobeHub application.
 
-![](/blog/assetsb33085e7553d2b7194005b102184553e.webp)
+![Create LobeHub Application in Dokploy](/blog/assetsb33085e7553d2b7194005b102184553e.webp)
 
 Enter the created LobeHub application, select the forked lobe-chat project and branch, and click Save to save.
 
-![](/blog/assetsf0ebf396dbe9559eb3478f48f648a6e2.webp)
+![Select Repository and Branch in Dokploy](/blog/assetsf0ebf396dbe9559eb3478f48f648a6e2.webp)
 
 Switch to the Environment section, fill in the environment variables, and click Save.
 
-![](/blog/assets6b67dabe7b9226cdff1bace5a3b8ab18.webp)
+![Configure Environment Variables in Dokploy](/blog/assets6b67dabe7b9226cdff1bace5a3b8ab18.webp)
 
 ```shell
 # Environment variables required for building
@@ -123,14 +123,14 @@ S3_ENABLE_PATH_STYLE=
 
 After adding the environment variables and saving, click Deploy to initiate the deployment. You can check the deployment progress and log information under Deployments.
 
-![](/blog/assets7c3eab218c0823fa353b1cd23afe21c3.webp)
+![Deploy LobeHub and View Progress](/blog/assets7c3eab218c0823fa353b1cd23afe21c3.webp)
 
 After a successful deployment, bind your own domain to your LobeHub application and request a certificate on the Domains page.
 
-![](/blog/assetseebf66254337ce88357629c34e78c08d.webp)
+![Bind Domain and Request Certificate](/blog/assetseebf66254337ce88357629c34e78c08d.webp)
 
 ## Check if LobeHub is working properly.
 
 Go to your LobeHub website, and if you click on the login button in the upper left corner and the login pop-up appears normally, it means you have configured it successfully. Enjoy it to the fullest!
 
-![](/blog/assets11a8089b511aaa61e8982dea0a3665c5.webp)
+![LobeHub Login Success](/blog/assets11a8089b511aaa61e8982dea0a3665c5.webp)

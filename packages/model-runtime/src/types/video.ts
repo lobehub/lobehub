@@ -1,4 +1,4 @@
-import { RuntimeVideoGenParams } from 'model-bank';
+import type { RuntimeVideoGenParams } from 'model-bank';
 
 export type CreateVideoPayload = {
   callbackUrl?: string;

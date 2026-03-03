@@ -1,16 +1,18 @@
-import { formatSpeakerMessage } from '@lobechat/prompts';
 import type { ChatTopicBotContext } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import { emoji } from 'chat';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
+import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
+import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import {
   renderError,
   renderFinalReply,
@@ -62,6 +64,24 @@ async function safeReaction(fn: () => Promise<void>, label: string): Promise<voi
   } catch (error) {
     log('safeReaction [%s] failed: %O', label, error);
   }
+}
+
+/**
+ * Workaround for Chat SDK adapter bug: addReaction/removeReaction only use
+ * `channelId` (parts[2]) from the decoded thread ID, ignoring `threadId` (parts[3]).
+ * In Discord threads, the correct channel for API calls is the thread ID itself.
+ *
+ * This function rewrites the encoded thread ID so that the adapter picks up
+ * the thread channel ID in the `channelId` position.
+ *
+ * e.g. "discord:guild:parentChannel:thread" → "discord:guild:thread"
+ */
+function rewriteThreadIdForReaction(threadId: string): string {
+  const parts = threadId.split(':');
+  if (parts.length >= 4 && parts[0] === 'discord' && parts[3]) {
+    return `discord:${parts[1]}:${parts[3]}`;
+  }
+  return threadId;
 }
 
 interface DiscordChannelContext {
@@ -118,7 +138,12 @@ export class AgentBridgeService {
 
     // Immediate feedback: mark as received + show typing
     await safeReaction(
-      () => thread.adapter.addReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () =>
+        thread.adapter.addReaction(
+          rewriteThreadIdForReaction(thread.id),
+          message.id,
+          RECEIVED_EMOJI,
+        ),
       'add eyes',
     );
     await thread.subscribe();
@@ -182,7 +207,12 @@ export class AgentBridgeService {
 
     // Immediate feedback: mark as received + show typing
     await safeReaction(
-      () => thread.adapter.addReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () =>
+        thread.adapter.addReaction(
+          rewriteThreadIdForReaction(thread.id),
+          message.id,
+          RECEIVED_EMOJI,
+        ),
       'add eyes',
     );
     await thread.startTyping();
@@ -282,11 +312,16 @@ export class AgentBridgeService {
       userMessageId: userMessage.id,
     };
 
+    const files = this.extractFiles(userMessage);
+    const prompt = this.formatPrompt(userMessage, botContext);
+
     log(
-      'executeWithWebhooks: agentId=%s, callbackUrl=%s, progressMessageId=%s',
+      'executeWithWebhooks: agentId=%s, callbackUrl=%s, progressMessageId=%s, prompt=%s, files=%d',
       agentId,
       callbackUrl,
       progressMessageId,
+      prompt.slice(0, 100),
+      files?.length ?? 0,
     );
 
     const result = await aiAgentService.execAgent({
@@ -298,8 +333,10 @@ export class AgentBridgeService {
       discordContext: channelContext
         ? { channel: channelContext.channel, guild: channelContext.guild }
         : undefined,
-      prompt: this.formatPrompt(userMessage, botContext),
+      files,
+      prompt,
       stepWebhook: { body: webhookBody, url: callbackUrl },
+      title: '',
       trigger,
       userInterventionConfig: { approvalMode: 'headless' },
       webhookDelivery: 'qstash',
@@ -360,6 +397,16 @@ export class AgentBridgeService {
 
       const getElapsedMs = () => (operationStartTime > 0 ? Date.now() - operationStartTime : 0);
 
+      const files = this.extractFiles(userMessage);
+      const prompt = this.formatPrompt(userMessage, botContext);
+
+      log(
+        'executeWithInMemoryCallbacks: agentId=%s, prompt=%s, files=%d',
+        agentId,
+        prompt.slice(0, 100),
+        files?.length ?? 0,
+      );
+
       aiAgentService
         .execAgent({
           agentId,
@@ -369,7 +416,9 @@ export class AgentBridgeService {
           discordContext: channelContext
             ? { channel: channelContext.channel, guild: channelContext.guild }
             : undefined,
-          prompt: this.formatPrompt(userMessage, botContext),
+          files,
+          prompt,
+          title: '',
           stepCallbacks: {
             onAfterStep: async (stepData) => {
               const { content, shouldContinue, toolsCalling } = stepData;
@@ -454,6 +503,32 @@ export class AgentBridgeService {
                     chunks.length,
                   );
                   resolve({ reply: lastAssistantContent, topicId: resolvedTopicId });
+
+                  // Fire-and-forget: summarize topic title in DB (no Discord rename in local mode)
+                  if (resolvedTopicId && prompt) {
+                    const topicModel = new TopicModel(this.db, this.userId);
+                    topicModel
+                      .findById(resolvedTopicId)
+                      .then(async (topic) => {
+                        if (topic?.title) return;
+
+                        const systemAgent = new SystemAgentService(this.db, this.userId);
+                        const title = await systemAgent.generateTopicTitle({
+                          lastAssistantContent,
+                          userPrompt: prompt,
+                        });
+                        if (!title) return;
+
+                        await topicModel.update(resolvedTopicId, { title });
+                      })
+                      .catch((error) => {
+                        log(
+                          'executeWithInMemoryCallbacks: topic title summarization failed: %O',
+                          error,
+                        );
+                      });
+                  }
+
                   return;
                 }
 
@@ -534,28 +609,64 @@ export class AgentBridgeService {
   }
 
   /**
-   * Format user message into agent prompt:
-   * 1. Strip bot's own @mention (Discord format: <@botId>)
-   * 2. Add speaker tag with user identity
+   * Extract file attachment metadata from Chat SDK message for passing to execAgent.
+   * Includes attachments from both the message itself and any referenced (quoted) message.
    */
-  private formatPrompt(message: Message, botContext?: ChatTopicBotContext): string {
-    let text = message.text;
+  private extractFiles(
+    message: Message,
+  ): Array<{ mimeType?: string; name?: string; size?: number; url: string }> | undefined {
+    type AttachmentLike = {
+      content_type?: string;
+      filename?: string;
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      type?: string;
+      url?: string;
+    };
 
-    if (botContext?.applicationId) {
-      text = text.replaceAll(new RegExp(`<@!?${botContext.applicationId}>\\s*`, 'g'), '').trim();
+    const files: Array<{ mimeType?: string; name?: string; size?: number; url: string }> = [];
+
+    // 1. Direct attachments from the message (parsed by Chat SDK)
+    const directAttachments = (message as any).attachments as AttachmentLike[] | undefined;
+    if (directAttachments?.length) {
+      for (const att of directAttachments) {
+        if (att.url) {
+          files.push({
+            mimeType: att.mimeType,
+            name: att.name,
+            size: att.size,
+            url: att.url,
+          });
+        }
+      }
     }
 
-    const { userId, userName, fullName } = message.author;
-    const raw = (message as any).raw?.author as
-      | { avatar?: string | null; global_name?: string | null }
-      | undefined;
-    const avatar = raw?.avatar ?? '';
-    const globalName = raw?.global_name ?? fullName;
+    // 2. Attachments from referenced (quoted/replied-to) message (Discord raw payload)
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    const refAttachments = raw?.referenced_message?.attachments as AttachmentLike[] | undefined;
+    if (refAttachments?.length) {
+      for (const att of refAttachments) {
+        if (att.url) {
+          files.push({
+            mimeType: att.content_type,
+            name: att.filename,
+            size: att.size,
+            url: att.url,
+          });
+        }
+      }
+    }
 
-    return formatSpeakerMessage(
-      { avatar, id: userId, nickname: globalName, username: userName },
-      text,
-    );
+    return files.length > 0 ? files : undefined;
+  }
+
+  /**
+   * Format user message into agent prompt.
+   * Delegates to the standalone formatPrompt utility.
+   */
+  private formatPrompt(message: Message, botContext?: ChatTopicBotContext): string {
+    return formatPromptUtil(message as any, botContext);
   }
 
   /**
@@ -586,7 +697,12 @@ export class AgentBridgeService {
     message: Message,
   ): Promise<void> {
     await safeReaction(
-      () => thread.adapter.removeReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () =>
+        thread.adapter.removeReaction(
+          rewriteThreadIdForReaction(thread.id),
+          message.id,
+          RECEIVED_EMOJI,
+        ),
       'remove eyes',
     );
   }

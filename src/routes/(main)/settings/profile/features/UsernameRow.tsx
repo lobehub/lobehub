@@ -41,6 +41,7 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
   const validateUsername = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) return t('profile.usernameRequired');
+    if (trimmed.length > 64) return t('profile.usernameTooLong');
     if (!usernameRegex.test(trimmed)) return t('profile.usernameRule');
     return '';
   };
@@ -99,6 +100,8 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
         {!mobile && <Text strong>{t('profile.usernameInputHint')}</Text>}
         <Input
           autoFocus
+          showCount
+          maxLength={64}
           placeholder={t('profile.usernamePlaceholder')}
           status={error ? 'error' : undefined}
           value={editValue}

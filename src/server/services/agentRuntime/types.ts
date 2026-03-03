@@ -2,6 +2,8 @@ import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runti
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type UserInterventionConfig } from '@lobechat/types';
 
+import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+
 // ==================== Step Lifecycle Callbacks ====================
 
 /**
@@ -171,6 +173,8 @@ export interface OperationCreationParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /** User memory (persona) for injection into LLM context */
+  userMemory?: ServerUserMemoryConfig;
   /**
    * Webhook delivery method.
    * - 'fetch': plain HTTP POST (default)

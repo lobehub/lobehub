@@ -23,14 +23,18 @@ import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
+import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import {
   createServerAgentToolsEngine,
   type EvalContext,
   type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
+import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 
@@ -81,6 +85,13 @@ interface InternalExecAgentParams extends ExecAgentParams {
   discordContext?: any;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  /** External file URLs to download, upload to S3, and attach to the user message */
+  files?: Array<{
+    mimeType?: string;
+    name?: string;
+    size?: number;
+    url: string;
+  }>;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
@@ -98,6 +109,12 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
   stream?: boolean;
+  /**
+   * Custom title for the topic.
+   * When provided (including empty string), overrides the default prompt-based title.
+   * When undefined, falls back to prompt.slice(0, 50).
+   */
+  title?: string;
   /** Topic creation trigger source ('cron' | 'chat' | 'api') */
   trigger?: string;
   /**
@@ -171,8 +188,10 @@ export class AiAgentService {
       botContext,
       discordContext,
       existingMessageIds = [],
+      files,
       stepCallbacks,
       stream,
+      title,
       trigger,
       cronJobId,
       evalContext,
@@ -222,7 +241,8 @@ export class AiAgentService {
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
         metadata,
-        title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+        title:
+          title !== undefined ? title : prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
         trigger,
       });
       topicId = newTopic.id;
@@ -423,31 +443,110 @@ export class AiAgentService {
       );
     }
 
-    // 8. Get existing messages if provided
+    // 8. Fetch user persona for memory injection
+    // Persona is user-level global memory, only depends on user's global memory setting
+    let userMemory: ServerUserMemoryConfig | undefined;
+
+    let globalMemoryEnabled = true; // default: enabled (matches DEFAULT_MEMORY_SETTINGS)
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+      globalMemoryEnabled = memorySettings?.enabled !== false;
+    } catch (error) {
+      log('execAgent: failed to fetch user memory settings: %O', error);
+    }
+
+    log('execAgent: memory check — globalMemoryEnabled=%s', globalMemoryEnabled);
+
+    if (globalMemoryEnabled) {
+      try {
+        const personaModel = new UserPersonaModel(this.db, this.userId);
+        const persona = await personaModel.getLatestPersonaDocument();
+
+        if (persona?.persona) {
+          userMemory = {
+            fetchedAt: Date.now(),
+            memories: {
+              contexts: [],
+              experiences: [],
+              persona: {
+                narrative: persona.persona,
+                tagline: persona.tagline,
+              },
+              preferences: [],
+            },
+          };
+          log('execAgent: fetched user persona (version: %d)', persona.version);
+        }
+      } catch (error) {
+        log('execAgent: failed to fetch user persona: %O', error);
+      }
+    }
+
+    // 9. Get existing messages if provided
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
       historyMessages = await this.messageModel.query({
         sessionId: appContext?.sessionId,
         topicId: appContext?.topicId ?? undefined,
       });
-      if (existingMessageIds.length > 0) {
-        const idSet = new Set(existingMessageIds);
-        historyMessages = historyMessages.filter((msg) => idSet.has(msg.id));
-      }
+      const idSet = new Set(existingMessageIds);
+      historyMessages = historyMessages.filter((msg) => idSet.has(msg.id));
+    } else if (appContext?.topicId) {
+      // Follow-up message in existing topic: load all history for context
+      historyMessages = await this.messageModel.query({
+        sessionId: appContext?.sessionId,
+        topicId: appContext.topicId,
+      });
     }
 
-    // 9. Create user message in database
+    // 9. Upload external files to S3 and collect file IDs
+    let fileIds: string[] | undefined;
+    let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
+
+    if (files && files.length > 0) {
+      const fileService = new FileService(this.db, this.userId);
+      fileIds = [];
+      imageList = [];
+
+      for (const file of files) {
+        const ext = file.name?.split('.').pop() || 'bin';
+        const pathname = `files/${this.userId}/${nanoid()}/${file.name || `file.${ext}`}`;
+
+        try {
+          const result = await fileService.uploadFromUrl(file.url, pathname);
+          fileIds.push(result.fileId);
+
+          // Build imageList for vision-capable models
+          const mimeType = file.mimeType || '';
+          if (mimeType.startsWith('image/')) {
+            imageList.push({ alt: file.name || 'image', id: result.fileId, url: result.url });
+          }
+        } catch (error) {
+          log('execAgent: failed to upload file %s: %O', file.url, error);
+        }
+      }
+
+      if (fileIds.length > 0) {
+        log('execAgent: uploaded %d files to S3', fileIds.length);
+      }
+      if (imageList.length === 0) imageList = undefined;
+    }
+
+    // 10. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
       content: prompt,
+      files: fileIds,
       role: 'user',
       threadId: appContext?.threadId ?? undefined,
       topicId,
     });
     log('execAgent: created user message %s', userMessageRecord.id);
 
-    // 10. Create assistant message placeholder in database
+    // 11. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -461,8 +560,8 @@ export class AiAgentService {
     });
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
 
-    // Create user message object for processing
-    const userMessage = { content: prompt, role: 'user' as const };
+    // Create user message object for processing (include imageList for vision models)
+    const userMessage = { content: prompt, imageList, role: 'user' as const };
 
     // Combine history messages with user message
     const allMessages = [...historyMessages, userMessage];
@@ -534,6 +633,7 @@ export class AiAgentService {
         tools,
         userId: this.userId,
         userInterventionConfig,
+        userMemory,
         webhookDelivery,
       });
 

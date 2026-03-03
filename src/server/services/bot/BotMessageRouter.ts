@@ -73,25 +73,19 @@ export class BotMessageRouter {
     // Check for forwarded Gateway event (from Gateway worker)
     const gatewayToken = req.headers.get('x-discord-gateway-token');
     if (gatewayToken) {
-      log('Gateway forwarded event, token=%s...', gatewayToken.slice(0, 10));
-      log(
-        'Known tokens: %o',
-        [...this.botInstancesByToken.keys()].map((t) => t.slice(0, 10)),
-      );
-
-      // Log forwarded event details for debugging
+      // Log forwarded event details
       try {
         const bodyText = new TextDecoder().decode(bodyBuffer);
         const event = JSON.parse(bodyText);
 
         if (event.type === 'GATEWAY_MESSAGE_CREATE') {
           const d = event.data;
+          const mentions = d?.mentions?.map((m: any) => m.username).join(', ');
           log(
-            'MESSAGE_CREATE: author=%s (id=%s, bot=%s), mentions=%o, content=%s',
+            'Gateway MESSAGE_CREATE: author=%s (bot=%s), mentions=[%s], content=%s',
             d?.author?.username,
-            d?.author?.id,
             d?.author?.bot,
-            d?.mentions?.map((m: any) => ({ id: m.id, username: m.username })),
+            mentions || '',
             d?.content?.slice(0, 100),
           );
         }
@@ -101,7 +95,6 @@ export class BotMessageRouter {
 
       const bot = this.botInstancesByToken.get(gatewayToken);
       if (bot?.webhooks && 'discord' in bot.webhooks) {
-        log('Matched bot by token');
         return bot.webhooks.discord(this.cloneRequest(req, bodyBuffer));
       }
 

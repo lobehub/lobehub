@@ -348,6 +348,106 @@ describe('promptUserMemory', () => {
       });
       expect(result).toMatchSnapshot();
     });
+
+    it('should format identity with capturedAt string', () => {
+      const result = promptUserMemory({
+        memories: {
+          identities: [
+            {
+              capturedAt: '2025-02-23T10:30:00.000Z',
+              description: 'User is a software engineer',
+              id: 'id-1',
+              role: 'Engineer',
+              type: 'professional',
+            },
+          ],
+        },
+      });
+      expect(result).toMatchSnapshot();
+    });
+
+    it('should format identity with capturedAt Date object', () => {
+      const result = promptUserMemory({
+        memories: {
+          identities: [
+            {
+              capturedAt: new Date('2025-06-15T00:00:00.000Z'),
+              description: 'User lives in Tokyo',
+              id: 'id-2',
+              type: 'demographic',
+            },
+          ],
+        },
+      });
+      expect(result).toMatchSnapshot();
+    });
+
+    it('should skip capturedAt when null', () => {
+      const result = promptUserMemory({
+        memories: {
+          identities: [
+            {
+              capturedAt: null,
+              description: 'User is a runner',
+              id: 'id-3',
+              type: 'personal',
+            },
+          ],
+        },
+      });
+      expect(result).toMatchSnapshot();
+    });
+  });
+
+  describe('persona only', () => {
+    it('should format persona with narrative and tagline', () => {
+      const result = promptUserMemory({
+        memories: {
+          persona: {
+            narrative:
+              'A senior software engineer based in Shanghai who specializes in frontend development with React and TypeScript. Passionate about open source and building developer tools.',
+            tagline: 'Senior frontend engineer & OSS contributor',
+          },
+        },
+      });
+      expect(result).toMatchSnapshot();
+    });
+
+    it('should format persona with only narrative (no tagline)', () => {
+      const result = promptUserMemory({
+        memories: {
+          persona: {
+            narrative:
+              'A product designer who transitioned from engineering. Enjoys bridging the gap between design and development.',
+          },
+        },
+      });
+      expect(result).toMatchSnapshot();
+    });
+
+    it('should skip persona with null values', () => {
+      const result = promptUserMemory({
+        memories: {
+          persona: {
+            narrative: null,
+            tagline: null,
+          },
+        },
+      });
+      expect(result).toBe('');
+    });
+
+    it('should skip persona with empty string values', () => {
+      const result = promptUserMemory({
+        memories: {
+          persona: {
+            narrative: '',
+            tagline: '',
+          },
+        },
+      });
+      expect(result).toBe('');
+    });
   });
 
   describe('mixed memory types', () => {
@@ -469,6 +569,40 @@ describe('promptUserMemory', () => {
           preferences: [
             {
               conclusionDirectives: 'Always include error handling in examples',
+              id: 'pref-1',
+            },
+          ],
+        },
+      });
+      expect(result).toMatchSnapshot();
+    });
+
+    it('should format persona combined with other memory types', () => {
+      const result = promptUserMemory({
+        memories: {
+          contexts: [
+            {
+              description: 'Working on AI products',
+              id: 'ctx-1',
+              title: 'Current Work',
+            },
+          ],
+          identities: [
+            {
+              description: 'User is a senior engineer',
+              id: 'id-1',
+              role: 'Senior Engineer',
+              type: 'professional',
+            },
+          ],
+          persona: {
+            narrative:
+              'A tech lead who focuses on AI-powered developer tools and has a strong preference for TypeScript.',
+            tagline: 'AI-focused tech lead',
+          },
+          preferences: [
+            {
+              conclusionDirectives: 'Prefer concise responses with code examples',
               id: 'pref-1',
             },
           ],

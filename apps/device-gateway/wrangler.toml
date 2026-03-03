@@ -1,0 +1,16 @@
+name = "device-gateway"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[durable_objects]
+bindings = [
+  { name = "DEVICE_GATEWAY", class_name = "DeviceGatewayDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["DeviceGatewayDO"]
+
+# Secrets (injected via `wrangler secret put`):
+# - JWKS_PUBLIC_KEY: RS256 public key JSON (extracted from JWKS_KEY)
+# - SERVICE_TOKEN: Vercel → CF service-to-service auth secret

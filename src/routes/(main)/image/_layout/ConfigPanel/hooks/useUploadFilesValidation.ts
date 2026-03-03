@@ -2,13 +2,22 @@ import { App } from 'antd';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatFileSize, validateImageFiles } from '../utils/imageValidation';
+import {
+  formatFileSize,
+  type ImageConstraints,
+  validateImageDimensions,
+  validateImageFiles,
+} from '../utils/imageValidation';
 
 /**
  * File upload validation hook
- * Encapsulates file size and count validation logic, provides user-friendly error messages
+ * Encapsulates file size, count, and dimension validation logic, provides user-friendly error messages
  */
-export const useUploadFilesValidation = (maxCount?: number, maxFileSize?: number) => {
+export const useUploadFilesValidation = (
+  maxCount?: number,
+  maxFileSize?: number,
+  imageConstraints?: ImageConstraints,
+) => {
   const { t } = useTranslation('components');
   const { message } = App.useApp();
 
@@ -71,7 +80,67 @@ export const useUploadFilesValidation = (maxCount?: number, maxFileSize?: number
     [maxCount, maxFileSize, message, t],
   );
 
+  const validateDimensions = useCallback(
+    async (file: File): Promise<boolean> => {
+      if (!imageConstraints) return true;
+
+      try {
+        const result = await validateImageDimensions(file, imageConstraints);
+        if (!result.valid) {
+          if (result.error === 'imageDimensionTooSmall') {
+            const parts = [];
+            if (result.minWidth) parts.push(`width ≥ ${result.minWidth}px`);
+            if (result.minHeight) parts.push(`height ≥ ${result.minHeight}px`);
+
+            message.error(
+              t('ImageUpload.validation.imageDimensionTooSmall', {
+                fileName: result.fileName || file.name,
+                height: result.height,
+                minDimension: parts.join(', '),
+                width: result.width,
+              }),
+            );
+          } else if (result.error === 'imageDimensionTooLarge') {
+            const parts = [];
+            if (result.maxWidth) parts.push(`width ≤ ${result.maxWidth}px`);
+            if (result.maxHeight) parts.push(`height ≤ ${result.maxHeight}px`);
+
+            message.error(
+              t('ImageUpload.validation.imageDimensionTooLarge', {
+                fileName: result.fileName || file.name,
+                height: result.height,
+                maxDimension: parts.join(', '),
+                width: result.width,
+              }),
+            );
+          } else if (result.error === 'imageAspectRatioInvalid') {
+            const ratio =
+              result.width && result.height ? (result.width / result.height).toFixed(2) : '?';
+            const min = imageConstraints.aspectRatio?.min;
+            const max = imageConstraints.aspectRatio?.max;
+            const range = min && max ? `${min}–${max}` : min ? `≥ ${min}` : `≤ ${max}`;
+
+            message.error(
+              t('ImageUpload.validation.imageAspectRatioInvalid', {
+                actualRatio: ratio,
+                fileName: result.fileName || file.name,
+                range,
+              }),
+            );
+          }
+          return false;
+        }
+      } catch {
+        // If we can't read dimensions, allow upload to proceed
+      }
+
+      return true;
+    },
+    [imageConstraints, message, t],
+  );
+
   return {
+    validateDimensions,
     validateFiles,
   };
 };

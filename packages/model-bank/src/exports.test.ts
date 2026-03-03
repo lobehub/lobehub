@@ -9,7 +9,7 @@ describe('model-bank package.json exports should cover all aiModels files', () =
   const aiModelsDir = path.resolve(packageRoot, 'src/aiModels');
   const packageJsonPath = path.resolve(packageRoot, 'package.json');
 
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
     exports?: Record<string, string>;
   };
 

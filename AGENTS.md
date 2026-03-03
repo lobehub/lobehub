@@ -1,6 +1,6 @@
-# LobeChat Development Guidelines
+# LobeHub Development Guidelines
 
-This document serves as a comprehensive guide for all team members when developing LobeChat.
+This document serves as a comprehensive guide for all team members when developing LobeHub.
 
 ## Project Description
 

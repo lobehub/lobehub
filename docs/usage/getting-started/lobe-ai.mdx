@@ -1,35 +1,75 @@
 ---
 title: Lobe AI
 description: >-
-  Use Lobe AI to handle your daily tasks, including checking the weather, setting reminders, reading news, managing emails, and more.
-
-
+  Lobe AI is LobeHub's built-in assistant — no setup required. Chat, code,
+  research, write, and more, right out of the box.
 tags:
   - LobeHub
   - Lobe AI
-  - Daily Tasks
+  - Built-in Agent
 ---
 
 # Lobe AI
 
-Lobe AI is the official assistant from LobeHub, designed to help you accomplish a wide range of tasks efficiently.
+No API keys. No configuration. No "getting started" friction. Open LobeHub and Lobe AI is already there, a full-featured Agent ready to work with you from the first second.
 
-## Use Cases
+Think of it as the teammate who's always online. Drop in a question at 2 AM, paste a 500-line error log, ask it to outline a presentation you've been dreading. No setup needed. It just works.
 
-Lobe AI can assist you with various everyday tasks, such as:
+## What You Can Do
 
-- Software Development: View code snippets, generate code, debug programs, and more.
-- Learning Support: Answer questions, provide study materials, generate practice exercises, etc.
-- Personal Assistant: Check the weather, set reminders, read the news, manage emails, and more.
-- Creative Writing: Generate story ideas, polish your writing, offer writing suggestions, etc.
-- Data Analysis: Create data reports, visualize data, provide analytical insights, and more.
+**Code**
 
-If you have specific needs, you can create a [custom assistant](/docs/usage/getting-started/agent) tailored to your personal requirements.
+It's 11 PM, a deploy just broke, and the stack trace points to a module you've never touched. Paste the error in. Lobe AI reads the code, explains what went wrong, and walks you through the fix, faster than searching Stack Overflow.
 
-## Built-in Tools
+**Research**
 
-Lobe AI comes with a variety of built-in tools to help you complete tasks more efficiently:
+You need to compare three cloud providers for a migration decision by tomorrow. Ask once. Lobe AI searches the web in real time, compiles a comparison with pricing, limits, and trade-offs, and cites every source so you can verify, not just trust.
 
-- [GTD](/docs/usage/agent/gtd)
-- [Plan](/docs/usage/agent/plan)
-- [Notebook](/docs/usage/agent/notebook)
+**Write**
+
+A client email that needs the right tone. A blog post outline that won't write itself. A cover letter you've been putting off for a week. Describe the goal and the audience. Lobe AI drafts it, and you refine from there.
+
+**Analyze**
+
+You have a spreadsheet of survey results but no time to build charts. Lobe AI processes the data, surfaces patterns, and renders visualizations as Artifacts right in the conversation. Ready to export or screenshot.
+
+**Create**
+
+Need a hero image for a landing page, a diagram for documentation, or a quick audio clip for a demo? Lobe AI generates images, audio, and rich visual Artifacts without switching tools.
+
+## Built-in Skills
+
+Lobe AI shares the same Skill ecosystem as every custom Agent you build. Toggle any Skill on mid-conversation to unlock new capabilities. No restart, no re-prompting:
+
+| Skill                                      | What it does                                                                 |
+| ------------------------------------------ | ---------------------------------------------------------------------------- |
+| [Web Search](/docs/usage/agent/web-search) | Pull in real-time information from across the internet                       |
+| [Artifacts](/docs/usage/agent/artifacts)   | Render code, charts, diagrams, and interactive content inline                |
+| [Notebook](/docs/usage/agent/notebook)     | Capture key takeaways and organize notes as you go                           |
+| [GTD](/docs/usage/agent/gtd)               | Turn conversations into structured tasks with the Getting Things Done method |
+| [Sandbox](/docs/usage/agent/sandbox)       | Write, run, and test code in an isolated environment                         |
+
+## When to Create a Custom Agent
+
+Lobe AI is the fastest way to get value from LobeHub. But at some point you'll notice a pattern: you keep explaining your coding style, re-pasting your brand guidelines, or re-enabling the same Skills every session.
+
+That's the signal to [create a custom Agent](/docs/usage/getting-started/agent). A custom Agent locks in your system prompt, your knowledge base, your preferred Skills, and your Memory, so every conversation picks up right where the last one left off.
+
+|                    | Lobe AI               | Custom Agent                              |
+| ------------------ | --------------------- | ----------------------------------------- |
+| **Setup**          | None, ready instantly | You define the profile                    |
+| **System prompt**  | General-purpose       | Tailored to a role, tone, or domain       |
+| **Knowledge base** | Shared                | Dedicated per Agent                       |
+| **Memory**         | Shared                | Per-Agent, persistent                     |
+| **Skills**         | Toggle on demand      | Pre-configured, always on                 |
+| **Sharing**        | —                     | Shareable with your team or the Community |
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Create a Custom Agent'} />
+
+  <Card href={'/docs/usage/getting-started/memory'} title={'Memory'} />
+
+  <Card href={'/docs/usage/providers'} title={'AI Providers'} />
+
+  <Card href={'/docs/usage/community/agent-market'} title={'Agent Marketplace'} />
+</Cards>

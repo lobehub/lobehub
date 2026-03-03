@@ -276,23 +276,56 @@ describe('DataExporterRepos', () => {
       expect(result.sessions).toHaveLength(1);
     });
 
-    it.skip('should skip relation tables when source tables have no data', async () => {
-      // 删除文件数据，这将导致 globalFiles 表被跳过
-      await db.delete(files);
+    it('should skip relation tables when source tables have no data', async () => {
+      // Delete agents and sessions, so agentsToSessions source tables have no data
+      await db.delete(agentsToSessions);
+      await db.delete(agents);
+      await db.delete(messages);
+      await db.delete(topics);
+      await db.delete(sessions);
 
-      // 创建导出器实例
       const dataExporter = new DataExporterRepos(db, userId);
-
-      // 执行导出
       const result = await dataExporter.export();
 
-      // 验证文件表为空
-      // expect(result).toHaveProperty('files');
-      // expect(result.files).toEqual([]);
+      // agentsToSessions should be empty because both source tables have no data
+      expect(result).toHaveProperty('agentsToSessions');
+      expect(result.agentsToSessions).toEqual([]);
+    });
 
-      // 验证关联表也为空
-      // expect(result).toHaveProperty('globalFiles');
-      // expect(result.globalFiles).toEqual([]);
+    it('should handle base table query error gracefully', async () => {
+      // Mock a specific base table to throw an error
+      // @ts-ignore
+      vi.spyOn(db.query.userSettings, 'findMany').mockRejectedValueOnce(
+        new Error('DB connection failed'),
+      );
+
+      const dataExporter = new DataExporterRepos(db, userId);
+      const result = await dataExporter.export();
+
+      // userSettings should return empty array due to error handling
+      expect(result).toHaveProperty('userSettings');
+      expect(result.userSettings).toEqual([]);
+
+      // Other tables should still export successfully
+      expect(result.sessions).toHaveLength(1);
+    });
+
+    it('should handle relation table query error gracefully', async () => {
+      // Mock agentsToSessions query to throw an error
+      // @ts-ignore
+      vi.spyOn(db.query.agentsToSessions, 'findMany').mockRejectedValueOnce(
+        new Error('Relation query failed'),
+      );
+
+      const dataExporter = new DataExporterRepos(db, userId);
+      const result = await dataExporter.export();
+
+      // agentsToSessions should return empty array due to error handling
+      expect(result).toHaveProperty('agentsToSessions');
+      expect(result.agentsToSessions).toEqual([]);
+
+      // Base tables should still export successfully
+      expect(result.sessions).toHaveLength(1);
     });
 
     it('should export data for a different user', async () => {

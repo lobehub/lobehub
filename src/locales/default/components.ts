@@ -88,6 +88,12 @@ export default {
     'Uploading multiple files at once is not supported; only the first file will be used',
   'ImageUpload.placeholder.primary': 'Add Image',
   'ImageUpload.placeholder.secondary': 'Click or drag to upload',
+  'ImageUpload.validation.imageAspectRatioInvalid':
+    '{{fileName}} aspect ratio ({{actualRatio}}) is out of range, required: {{range}}',
+  'ImageUpload.validation.imageDimensionTooLarge':
+    '{{fileName}} ({{width}}x{{height}}) is too large, required: {{maxDimension}}',
+  'ImageUpload.validation.imageDimensionTooSmall':
+    '{{fileName}} ({{width}}x{{height}}) is too small, required: {{minDimension}}',
   'KeyValueEditor.addButton': 'Add a row',
   'KeyValueEditor.deleteTooltip': 'Delete',
   'KeyValueEditor.duplicateKeyError': 'Key must be unique',

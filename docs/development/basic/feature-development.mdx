@@ -294,6 +294,7 @@ const OpeningQuestions = memo(() => {
 ```
 
 Key points:
+
 - Read store config via `selectors`
 - Update config via the `setAgentConfig` action
 - Use `useTranslation('setting')` for i18n text
@@ -321,7 +322,8 @@ const WelcomeMessage = () => {
       <ChatItem avatar={meta} message={message} placement="left" />
       {/* Render guiding questions */}
       <OpeningQuestions questions={openingQuestions} />
-    </Flexbox>
+   
+</Flexbox>
   ) : (
     <ChatItem avatar={meta} message={message} placement="left" />
   );

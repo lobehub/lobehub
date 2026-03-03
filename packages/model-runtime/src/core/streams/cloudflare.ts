@@ -46,7 +46,8 @@ function desensitizeAccountId(path: string): string {
 
 function desensitizeCloudflareUrl(url: string): string {
   const urlObj = new URL(url);
-  let { protocol, hostname, port, pathname, search } = urlObj;
+  const { protocol, hostname, port, search } = urlObj;
+  let { pathname } = urlObj;
   if (url.startsWith(DEFAULT_BASE_URL_PREFIX)) {
     return `${protocol}//${hostname}${port ? `:${port}` : ''}${desensitizeAccountId(pathname)}${search}`;
   } else {

@@ -1,9 +1,9 @@
 ---
 title: LobeHub Authentication Service Configuration
 description: >-
-  Learn how to configure external authentication services using Better Auth
-  for centralized user authorization management. Supported
-  authentication services include Auth0, Azure ID, etc.
+  Learn how to configure external authentication services using Better Auth for
+  centralized user authorization management. Supported authentication services
+  include Auth0, Azure ID, etc.
 tags:
   - Authentication Service
   - Better Auth
@@ -105,9 +105,71 @@ When configuring OAuth providers, use the following callback URL format:
 - **Development**: `http://localhost:3210/api/auth/callback/{provider}`
 - **Production**: `https://yourdomain.com/api/auth/callback/{provider}`
 
+## Email/Password Options
+
+**Disable email/password login (SSO-only mode):**
+
+Set `AUTH_DISABLE_EMAIL_PASSWORD=1` to hide the email input on the login page and redirect the signup page to login. Users can only sign in via configured SSO providers. Ensure at least one SSO provider is configured before enabling this.
+
+**Restrict registration to specific emails or domains:**
+
+Set `AUTH_ALLOWED_EMAILS` with a comma-separated list:
+
+```bash
+# Allow only @example.com emails
+AUTH_ALLOWED_EMAILS=example.com
+
+# Allow multiple domains and specific addresses
+AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com
+```
+
+<Callout type={'info'}>
+  `AUTH_ALLOWED_EMAILS` restricts which emails can register, but does not verify email ownership.
+  Combine with `AUTH_EMAIL_VERIFICATION=1` to ensure users own the email they register with.
+</Callout>
+
+## Quick OAuth Setup Examples
+
+**Google OAuth:**
+
+1. Create credentials at [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Set authorized redirect URI: `https://yourdomain.com/api/auth/callback/google`
+3. Configure environment variables:
+
+```bash
+AUTH_SSO_PROVIDERS=google
+AUTH_GOOGLE_ID=xxxxx.apps.googleusercontent.com
+AUTH_GOOGLE_SECRET=GOCSPX-xxxxxxxxxxxxxxxxxxxx
+```
+
+**GitHub OAuth:**
+
+1. Create OAuth App at [GitHub Developer Settings](https://github.com/settings/developers)
+2. Set callback URL: `https://yourdomain.com/api/auth/callback/github`
+3. Configure environment variables:
+
+```bash
+AUTH_SSO_PROVIDERS=github
+AUTH_GITHUB_ID=Ov23xxxxxxxxxxxxx
+AUTH_GITHUB_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
 ## Email Service Configuration
 
-Email service is used for email verification, password reset, and magic link delivery. For detailed configuration, see [Email Service Configuration](/docs/self-hosting/auth/email).
+Email service is required for email verification, password reset, and magic link delivery.
+
+**SMTP configuration:**
+
+```bash
+SMTP_HOST=smtp.gmail.com      # SMTP server hostname
+SMTP_PORT=587                 # 587 for TLS (recommended), 465 for SSL
+SMTP_SECURE=false             # true for port 465, false for port 587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-specific-password  # For Gmail, use an app-specific password
+SMTP_FROM=noreply@yourdomain.com      # Optional, defaults to SMTP_USER
+```
+
+For detailed configuration, see [Email Service Configuration](/docs/self-hosting/auth/email).
 
 <Callout type={'tip'}>
   Go to [Environment Variables](/docs/self-hosting/environment-variables/auth#better-auth) for detailed information on all Better Auth variables.

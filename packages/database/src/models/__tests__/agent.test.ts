@@ -1694,4 +1694,238 @@ describe('AgentModel', () => {
       expect(offsetResults.length).toBe(2);
     });
   });
+
+  describe('checkByMarketIdentifier', () => {
+    it('should return true when agent with marketIdentifier exists', async () => {
+      await serverDB.insert(agents).values({
+        userId,
+        title: 'Market Agent',
+        marketIdentifier: 'market-test-123',
+      });
+
+      const result = await agentModel.checkByMarketIdentifier('market-test-123');
+      expect(result).toBe(true);
+    });
+
+    it('should return false when no agent with marketIdentifier exists', async () => {
+      const result = await agentModel.checkByMarketIdentifier('non-existent-market-id');
+      expect(result).toBe(false);
+    });
+
+    it('should not find agents belonging to other users', async () => {
+      await serverDB.insert(agents).values({
+        userId: userId2,
+        title: 'Other User Agent',
+        marketIdentifier: 'other-user-market',
+      });
+
+      const result = await agentModel.checkByMarketIdentifier('other-user-market');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getAgentByMarketIdentifier', () => {
+    it('should return agent id when found', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Market Agent', marketIdentifier: 'market-get-123' })
+        .returning();
+
+      const result = await agentModel.getAgentByMarketIdentifier('market-get-123');
+      expect(result).toBe(agent.id);
+    });
+
+    it('should return null when not found', async () => {
+      const result = await agentModel.getAgentByMarketIdentifier('nonexistent');
+      expect(result).toBeNull();
+    });
+
+    it('should return the most recently updated agent when multiple match', async () => {
+      const [older] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Older', marketIdentifier: 'dup-market' })
+        .returning();
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const [newer] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Newer', marketIdentifier: 'dup-market' })
+        .returning();
+
+      const result = await agentModel.getAgentByMarketIdentifier('dup-market');
+      expect(result).toBe(newer.id);
+    });
+
+    it('should not return agents from other users', async () => {
+      await serverDB.insert(agents).values({
+        userId: userId2,
+        title: 'Other',
+        marketIdentifier: 'other-market-get',
+      });
+
+      const result = await agentModel.getAgentByMarketIdentifier('other-market-get');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getAgentByForkedFromIdentifier', () => {
+    it('should return agent id when forkedFromIdentifier matches', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Forked Agent',
+          params: { forkedFromIdentifier: 'source-market-id' },
+        })
+        .returning();
+
+      const result = await agentModel.getAgentByForkedFromIdentifier('source-market-id');
+      expect(result).toBe(agent.id);
+    });
+
+    it('should return null when no match', async () => {
+      const result = await agentModel.getAgentByForkedFromIdentifier('no-match');
+      expect(result).toBeNull();
+    });
+
+    it('should not return agents from other users', async () => {
+      await serverDB.insert(agents).values({
+        userId: userId2,
+        title: 'Other Forked',
+        params: { forkedFromIdentifier: 'other-fork-id' },
+      });
+
+      const result = await agentModel.getAgentByForkedFromIdentifier('other-fork-id');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('updateSessionGroupId', () => {
+    it('should update agent sessionGroupId', async () => {
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ userId, name: 'Test Group' })
+        .returning();
+
+      const [agent] = await serverDB.insert(agents).values({ userId, title: 'Agent' }).returning();
+
+      const result = await agentModel.updateSessionGroupId(agent.id, group.id);
+
+      expect(result).toBeDefined();
+      expect(result.sessionGroupId).toBe(group.id);
+    });
+
+    it('should set sessionGroupId to null', async () => {
+      const [group] = await serverDB
+        .insert(sessionGroups)
+        .values({ userId, name: 'Group' })
+        .returning();
+
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Agent', sessionGroupId: group.id })
+        .returning();
+
+      const result = await agentModel.updateSessionGroupId(agent.id, null);
+      expect(result.sessionGroupId).toBeNull();
+    });
+
+    it('should not update agents from other users', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'User1 Agent' })
+        .returning();
+
+      const result = await agentModel2.updateSessionGroupId(agent.id, null);
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('updateConfig edge cases', () => {
+    it('should return early for null data', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Original' })
+        .returning();
+
+      const result = await agentModel.updateConfig(agent.id, null);
+      expect(result).toBeUndefined();
+
+      const dbAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+      expect(dbAgent?.title).toBe('Original');
+    });
+
+    it('should return early for undefined data', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Original' })
+        .returning();
+
+      const result = await agentModel.updateConfig(agent.id, undefined);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return early for empty object', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Original' })
+        .returning();
+
+      const result = await agentModel.updateConfig(agent.id, {});
+      expect(result).toBeUndefined();
+    });
+
+    it('should return early for non-existent agent', async () => {
+      const result = await agentModel.updateConfig('non-existent-id', { title: 'New' });
+      expect(result).toBeUndefined();
+    });
+
+    it('should delete params field when value is undefined', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Params Agent',
+          params: { temperature: 0.7, topP: 0.9 },
+        })
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        params: { temperature: undefined } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      // temperature should be deleted, topP should remain
+      expect((result?.params as any)?.temperature).toBeUndefined();
+      expect((result?.params as any)?.topP).toBe(0.9);
+    });
+
+    it('should handle null param values (disable flag)', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Params Agent',
+          params: { temperature: 0.7 },
+        })
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        params: { temperature: null, topP: 0.5 } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect((result?.params as any)?.temperature).toBeNull();
+      expect((result?.params as any)?.topP).toBe(0.5);
+    });
+  });
 });

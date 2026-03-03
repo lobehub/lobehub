@@ -40,7 +40,7 @@ beforeEach(async () => {
     ]);
     await trx.insert(files).values({
       id: 'f1',
-      userId: userId,
+      userId,
       url: 'abc',
       name: 'file-1',
       fileType: 'image/png',
@@ -1299,6 +1299,107 @@ describe('MessageModel Update Tests', () => {
       const result = await serverDB.select().from(messageTTS).where(eq(messageTTS.id, '1'));
 
       expect(result[0].voice).toBe('updated voice1');
+    });
+  });
+
+  describe('addFiles', () => {
+    it('should add file associations to a message', async () => {
+      await serverDB.insert(messages).values({
+        id: 'msg-add-files',
+        userId,
+        role: 'user',
+        content: 'test message',
+      });
+
+      const result = await messageModel.addFiles('msg-add-files', ['f1']);
+      expect(result.success).toBe(true);
+
+      const messageFiles = await serverDB
+        .select()
+        .from(messagesFiles)
+        .where(eq(messagesFiles.messageId, 'msg-add-files'));
+      expect(messageFiles).toHaveLength(1);
+      expect(messageFiles[0].fileId).toBe('f1');
+    });
+
+    it('should return success true for empty fileIds array', async () => {
+      const result = await messageModel.addFiles('msg-any', []);
+      expect(result.success).toBe(true);
+    });
+
+    it('should return success false on database error', async () => {
+      // Try to add a file with a non-existent fileId (FK constraint violation)
+      await serverDB.insert(messages).values({
+        id: 'msg-add-files-err',
+        userId,
+        role: 'user',
+        content: 'test',
+      });
+
+      const result = await messageModel.addFiles('msg-add-files-err', ['non-existent-file-id']);
+      expect(result.success).toBe(false);
+    });
+
+    it('should add multiple files at once', async () => {
+      await serverDB
+        .insert(files)
+        .values([
+          { id: 'f2', userId, url: 'url2', name: 'file-2', fileType: 'image/jpeg', size: 500 },
+        ]);
+      await serverDB.insert(messages).values({
+        id: 'msg-multi-files',
+        userId,
+        role: 'user',
+        content: 'test',
+      });
+
+      const result = await messageModel.addFiles('msg-multi-files', ['f1', 'f2']);
+      expect(result.success).toBe(true);
+
+      const messageFiles = await serverDB
+        .select()
+        .from(messagesFiles)
+        .where(eq(messagesFiles.messageId, 'msg-multi-files'));
+      expect(messageFiles).toHaveLength(2);
+    });
+  });
+
+  describe('updateToolArguments - parent message without tools', () => {
+    it('should return success false when parent message has no tools', async () => {
+      // Create assistant message WITHOUT tools
+      await serverDB.insert(messages).values({
+        id: 'assistant-no-tools',
+        userId,
+        role: 'assistant',
+        content: 'No tools here',
+        tools: null,
+      });
+
+      // Create tool message pointing to the assistant
+      await serverDB.insert(messages).values({
+        id: 'tool-msg-orphan',
+        userId,
+        role: 'tool',
+        content: 'tool result',
+        parentId: 'assistant-no-tools',
+        tool_call_id: 'orphan-tool-call',
+      });
+
+      // Create plugin record
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-msg-orphan',
+        toolCallId: 'orphan-tool-call',
+        identifier: 'test-plugin',
+        arguments: '{"key":"val"}',
+        userId,
+      });
+
+      // Should fail because parent message has no tools
+      const result = await messageModel.updateToolArguments(
+        'orphan-tool-call',
+        '{"key":"updated"}',
+      );
+      expect(result.success).toBe(false);
     });
   });
 });

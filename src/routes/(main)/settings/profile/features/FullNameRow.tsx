@@ -63,6 +63,8 @@ const FullNameRow = ({ mobile }: FullNameRowProps) => {
         {!mobile && <Text strong>{t('profile.fullNameInputHint')}</Text>}
         <Input
           autoFocus
+          showCount
+          maxLength={64}
           placeholder={t('profile.fullName')}
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}

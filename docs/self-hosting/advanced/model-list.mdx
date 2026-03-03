@@ -67,3 +67,84 @@ Currently supported extension capabilities are:
 | `reasoning`   | Support Reasoning                                        |
 | `search`      | Support Web Search                                       |
 | `file`        | File Upload (a bit hacky, not recommended for daily use) |
+
+## Provider-Specific Examples
+
+### Azure OpenAI
+
+Azure requires deployment name mapping using `->deploymentName`:
+
+```bash
+AZURE_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_API_KEY=your-api-key
+AZURE_API_VERSION=2024-02-01
+# id->deploymentName=displayName<capabilities>
+AZURE_MODEL_LIST="gpt-35-turbo->my-gpt35-deploy=GPT-3.5 Turbo<16000:fc>,gpt-4->my-gpt4-deploy=GPT-4<128000:fc:vision"
+```
+
+### Ollama (Local Models)
+
+```bash
+OLLAMA_PROXY_URL=http://localhost:11434
+OLLAMA_MODEL_LIST="+llama3:8b=Llama 3 8B<8192>,+mistral:latest=Mistral<8192:fc>,+codellama:34b=Code Llama 34B<16000"
+```
+
+### Multiple Providers Simultaneously
+
+```bash
+# OpenAI — curated list
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL_LIST=-all,+gpt-4o,+gpt-4o-mini
+
+# Anthropic — long context backup
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL_LIST="+claude-3-opus-20240229=Claude 3 Opus<200000:vision:fc>,+claude-3-5-sonnet-20241022=Claude 3.5 Sonnet<200000:vision:fc"
+
+# Google
+GOOGLE_API_KEY=...
+GOOGLE_MODEL_LIST="+gemini-1.5-pro=Gemini 1.5 Pro<1000000:vision:fc"
+```
+
+## Best Practices
+
+**Start with `-all` for a clean slate** — Hide all default models, then explicitly add only the ones you want:
+
+```bash
+OPENAI_MODEL_LIST=-all,+gpt-4o,+gpt-4o-mini
+```
+
+**Use descriptive display names** — Make model names user-friendly and meaningful to your users:
+
+```bash
+OPENAI_MODEL_LIST="gpt-4o=GPT-4o (Recommended),gpt-4o-mini=GPT-4o Mini (Fast & Cheap)"
+```
+
+**Test before production** — Verify a new model configuration in a dev environment:
+
+```bash
+docker run -d -p 3210:3210 \
+  -e OPENAI_API_KEY="sk-test..." \
+  -e OPENAI_MODEL_LIST="-all,+gpt-4o" \
+  --name lobe-chat-test lobehub/lobe-chat
+```
+
+## Troubleshooting
+
+**Model doesn't appear in the selector**
+
+- Check for syntax errors (missing commas, mismatched angle brackets)
+- Ensure the provider itself is enabled (`ENABLED_OPENAI=1`, etc.)
+- If using `-all`, confirm you added the model with `+`
+- Check logs: `docker logs lobehub | grep -i "model"`
+
+**Model returns empty responses**
+
+- Try adding `/v1` suffix to the proxy URL: `OPENAI_PROXY_URL=https://api.example.com/v1`
+- Verify the model ID matches what the provider API expects exactly
+- Confirm the API key has access to that model
+
+**Extension capabilities not working**
+
+- The `maxToken` value must be the **first** item inside `< >`: `<8192:fc:vision>` not `<fc:vision>`
+- Confirm the model actually supports the capability in the provider's API (LobeHub cannot enable capabilities the API doesn't provide)
+- Verify you are running a recent enough version of LobeHub

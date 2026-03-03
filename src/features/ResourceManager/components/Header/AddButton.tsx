@@ -291,10 +291,10 @@ const AddButton = () => {
         multiple
         id="folder-upload-input"
         style={{ display: 'none' }}
-        onChange={handleFolderUploadWithClose}
         type="file"
         // @ts-expect-error - webkitdirectory is not in the React types
         webkitdirectory=""
+        onChange={handleFolderUploadWithClose}
       />
       <input
         accept=".zip"

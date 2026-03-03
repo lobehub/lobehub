@@ -57,10 +57,10 @@ export const SearchAgentInspector = memo<BuiltinInspectorProps<SearchAgentParams
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
         gap={8}
-        horizontal
       >
         <span className={styles.title}>{t(titleKey)}</span>
         {keyword && <span className={highlightTextStyles.primary}>{keyword}</span>}

@@ -1,6 +1,6 @@
-# E2E Tests for LobeChat
+# E2E Tests for LobeHub
 
-This directory contains end-to-end (E2E) tests for LobeChat using Cucumber (BDD) and Playwright.
+This directory contains end-to-end (E2E) tests for LobeHub using Cucumber (BDD) and Playwright.
 
 ## Directory Structure
 

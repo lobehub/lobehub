@@ -160,7 +160,7 @@ export const QwenAIStream = (
   return readableStream
     .pipeThrough(
       createTokenSpeedCalculator(transformQwenStream, {
-        enableStreaming: enableStreaming,
+        enableStreaming,
         inputStartAt,
         streamStack: streamContext,
       }),

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { TopicModel } from '@/database/models/topic';
 import { verifyQStashSignature } from '@/libs/qstash';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { DiscordRestApi } from '@/server/services/bot/discordRestApi';
@@ -12,6 +13,7 @@ import {
   renderStepProgress,
   splitMessage,
 } from '@/server/services/bot/replyTemplate';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
 const log = debug('api-route:agent:bot-callback');
 
@@ -111,6 +113,39 @@ export async function POST(request: Request): Promise<Response> {
         } catch (error) {
           log('bot-callback: failed to remove eyes reaction: %O', error);
         }
+      }
+
+      // Fire-and-forget: summarize topic title and update Discord thread name
+      const { reason, topicId, userId, userPrompt, lastAssistantContent } = body;
+      if (reason !== 'error' && topicId && userId && userPrompt && lastAssistantContent) {
+        const topicModel = new TopicModel(serverDB, userId);
+        topicModel
+          .findById(topicId)
+          .then(async (topic) => {
+            // Only generate when topic has an empty title
+            if (topic?.title) return;
+
+            const systemAgent = new SystemAgentService(serverDB, userId);
+            const title = await systemAgent.generateTopicTitle({
+              lastAssistantContent,
+              userPrompt,
+            });
+            if (!title) return;
+
+            await topicModel.update(topicId, { title });
+
+            // Update Discord thread name if there's a thread ID
+            const parts = platformThreadId.split(':');
+            const threadId = parts[3];
+            if (threadId) {
+              discord.updateChannelName(threadId, title).catch((error) => {
+                log('bot-callback: failed to update Discord thread name: %O', error);
+              });
+            }
+          })
+          .catch((error) => {
+            log('bot-callback: topic title summarization failed: %O', error);
+          });
       }
     } else {
       return NextResponse.json({ error: `Unknown callback type: ${type}` }, { status: 400 });

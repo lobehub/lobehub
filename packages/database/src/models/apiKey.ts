@@ -2,8 +2,9 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 
-import { ApiKeyItem, NewApiKeyItem, apiKeys } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { ApiKeyItem,NewApiKeyItem } from '../schemas';
+import { apiKeys } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 type EncryptAPIKeyVaults = (keyVaults: string) => Promise<string>;
 type DecryptAPIKeyVaults = (keyVaults: string) => Promise<{ plaintext: string }>;

@@ -91,7 +91,7 @@ export interface SkillResourceTreeNode {
 
 export interface SkillResourceContent {
   content: string;
-  encoding: 'utf-8' | 'base64';
+  encoding: 'utf8' | 'base64';
   fileHash: string;
   fileType: string;
   path: string;

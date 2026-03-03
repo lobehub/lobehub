@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Markdown, Tag , Flexbox } from '@lobehub/ui';
+import { Block, Flexbox,Markdown, Tag  } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -62,7 +62,7 @@ export const CreateAgentRender = memo<BuiltinRenderProps<CreateAgentParams>>(({ 
       {plugins && plugins.length > 0 && (
         <div className={styles.field}>
           <div className={styles.label}>Plugins</div>
-          <Flexbox gap={4} horizontal wrap={'wrap'}>
+          <Flexbox horizontal gap={4} wrap={'wrap'}>
             {plugins.map((plugin) => (
               <Tag key={plugin}>{plugin}</Tag>
             ))}

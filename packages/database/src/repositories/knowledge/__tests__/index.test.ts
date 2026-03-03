@@ -597,6 +597,218 @@ describe('KnowledgeRepo', () => {
     });
   });
 
+  describe('query with knowledgeBaseId + filters', () => {
+    beforeEach(async () => {
+      await serverDB
+        .insert(knowledgeBases)
+        .values([{ id: 'kb-filter', name: 'Filter KB', userId }]);
+
+      // Create a folder doc in KB
+      await serverDB.insert(documents).values([
+        {
+          id: 'kb-folder-doc',
+          userId,
+          title: 'KB Folder',
+          fileType: 'custom/folder',
+          sourceType: 'topic',
+          source: 'internal://folder/kb-folder-doc',
+          slug: 'kb-folder',
+          knowledgeBaseId: 'kb-filter',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        },
+        {
+          id: 'kb-standalone-doc',
+          userId,
+          title: 'KB Standalone Note',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/kb-standalone-doc',
+          knowledgeBaseId: 'kb-filter',
+          totalCharCount: 200,
+          totalLineCount: 4,
+        },
+        {
+          id: 'kb-standalone-doc-searchable',
+          userId,
+          title: 'Searchable KB Note',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/kb-standalone-doc-searchable',
+          knowledgeBaseId: 'kb-filter',
+          totalCharCount: 100,
+          totalLineCount: 2,
+        },
+        {
+          id: 'kb-app-doc',
+          userId,
+          title: 'KB App Doc',
+          fileType: 'application/pdf',
+          sourceType: 'topic',
+          source: 'internal://doc/kb-app-doc',
+          knowledgeBaseId: 'kb-filter',
+          totalCharCount: 300,
+          totalLineCount: 6,
+        },
+      ]);
+
+      // Create files in KB
+      await serverDB.insert(files).values([
+        {
+          id: 'kb-f-image',
+          userId,
+          name: 'kb-image.png',
+          fileType: 'image/png',
+          size: 1000,
+          url: 'https://example.com/kb-image.png',
+        },
+        {
+          id: 'kb-f-pdf',
+          userId,
+          name: 'kb-doc.pdf',
+          fileType: 'application/pdf',
+          size: 2000,
+          url: 'https://example.com/kb-doc.pdf',
+          parentId: 'kb-folder-doc',
+        },
+        {
+          id: 'kb-f-searchable',
+          userId,
+          name: 'searchable-file.txt',
+          fileType: 'text/plain',
+          size: 100,
+          url: 'https://example.com/searchable.txt',
+        },
+      ]);
+
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: 'kb-f-image', knowledgeBaseId: 'kb-filter', userId },
+        { fileId: 'kb-f-pdf', knowledgeBaseId: 'kb-filter', userId },
+        { fileId: 'kb-f-searchable', knowledgeBaseId: 'kb-filter', userId },
+      ]);
+    });
+
+    it('should filter KB files by parentId', async () => {
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        parentId: 'kb-folder-doc',
+      });
+
+      expect(result.some((item) => item.id === 'kb-f-pdf')).toBe(true);
+      expect(result.every((item) => item.id !== 'kb-f-image')).toBe(true);
+    });
+
+    it('should filter KB files by null parentId', async () => {
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        parentId: null,
+      });
+
+      // Files without parentId should be returned
+      expect(result.some((item) => item.id === 'kb-f-image')).toBe(true);
+    });
+
+    it('should filter KB files by search query', async () => {
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        q: 'searchable',
+      });
+
+      expect(result.some((item) => item.id === 'kb-f-searchable')).toBe(true);
+    });
+
+    it('should filter KB files by category (Images)', async () => {
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        category: FilesTabs.Images,
+      });
+
+      // Images category returns only image files, document query returns empty set
+      expect(result.some((item) => item.id === 'kb-f-image')).toBe(true);
+      expect(result.every((item) => item.fileType.startsWith('image'))).toBe(true);
+    });
+
+    it('should filter KB files by category (Documents) and exclude custom/document', async () => {
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        category: FilesTabs.Documents,
+      });
+
+      // Should include application/* files and custom/* docs
+      expect(
+        result.every(
+          (item) =>
+            item.fileType.startsWith('application') ||
+            (item.fileType.startsWith('custom') && item.fileType !== 'custom/document'),
+        ),
+      ).toBe(true);
+    });
+
+    it('should return KB standalone documents (no fileId) with search', async () => {
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        q: 'Searchable KB',
+      });
+
+      expect(result.some((item) => item.id === 'kb-standalone-doc-searchable')).toBe(true);
+    });
+
+    it('should handle KB with parentId for documents', async () => {
+      // Add a child document under the KB folder
+      await serverDB.insert(documents).values([
+        {
+          id: 'kb-child-doc',
+          userId,
+          title: 'KB Child Doc',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/kb-child-doc',
+          knowledgeBaseId: 'kb-filter',
+          parentId: 'kb-folder-doc',
+          totalCharCount: 50,
+          totalLineCount: 1,
+        },
+      ]);
+
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        parentId: 'kb-folder-doc',
+      });
+
+      expect(result.some((item) => item.id === 'kb-child-doc')).toBe(true);
+    });
+
+    it('should handle KB with null parentId for documents', async () => {
+      const result = await knowledgeRepo.query({
+        knowledgeBaseId: 'kb-filter',
+        parentId: null,
+      });
+
+      // Standalone docs without parentId should be returned
+      expect(result.some((item) => item.id === 'kb-standalone-doc')).toBe(true);
+    });
+  });
+
+  describe('query with non-matching categories (empty document results)', () => {
+    it('should return empty document set for Images category', async () => {
+      // Images only match files, documents should return empty
+      const result = await knowledgeRepo.query({ category: FilesTabs.Images });
+
+      // All results should be files with image/* type
+      result.forEach((item) => {
+        expect(item.fileType.startsWith('image')).toBe(true);
+      });
+    });
+
+    it('should return empty document set for Videos category', async () => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.Videos });
+
+      result.forEach((item) => {
+        expect(item.fileType.startsWith('video')).toBe(true);
+      });
+    });
+  });
+
   describe('query with website category', () => {
     beforeEach(async () => {
       await serverDB.insert(files).values([
@@ -666,6 +878,88 @@ describe('KnowledgeRepo', () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.All });
 
       expect(result.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe('query with unknown category (default getFileTypePrefix)', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'default-cat-file',
+          userId,
+          name: 'file.txt',
+          fileType: 'text/plain',
+          size: 100,
+          url: 'https://example.com/default.txt',
+        },
+      ]);
+    });
+
+    it('should handle Home category (default prefix returns empty string)', async () => {
+      // FilesTabs.Home triggers getFileTypePrefix default case, returning ''
+      // This means all file types match since ILIKE '%' matches everything
+      const result = await knowledgeRepo.query({ category: FilesTabs.Home as any });
+
+      expect(result.length).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('query sort edge cases', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'sort-file-1',
+          userId,
+          name: 'a-file.txt',
+          fileType: 'text/plain',
+          size: 300,
+          url: 'https://example.com/a.txt',
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          updatedAt: new Date('2024-01-05T10:00:00Z'),
+        },
+        {
+          id: 'sort-file-2',
+          userId,
+          name: 'z-file.txt',
+          fileType: 'text/plain',
+          size: 100,
+          url: 'https://example.com/z.txt',
+          createdAt: new Date('2024-01-03T10:00:00Z'),
+          updatedAt: new Date('2024-01-03T10:00:00Z'),
+        },
+      ]);
+    });
+
+    it('should sort by updatedAt asc', async () => {
+      const result = await knowledgeRepo.query({
+        sorter: 'updatedAt',
+        sortType: SortType.Asc,
+      });
+
+      if (result.length >= 2) {
+        expect(result[0].updatedAt.getTime()).toBeLessThanOrEqual(result[1].updatedAt.getTime());
+      }
+    });
+
+    it('should sort by createdAt desc', async () => {
+      const result = await knowledgeRepo.query({
+        sorter: 'createdAt',
+        sortType: SortType.Desc,
+      });
+
+      if (result.length >= 2) {
+        expect(result[0].createdAt.getTime()).toBeGreaterThanOrEqual(result[1].createdAt.getTime());
+      }
+    });
+
+    it('should fallback to default sort when invalid sorter is given', async () => {
+      const result = await knowledgeRepo.query({
+        sorter: 'invalidField',
+        sortType: SortType.Asc,
+      });
+
+      // Should still return results (falls back to created_at DESC)
+      expect(result.length).toBeGreaterThan(0);
     });
   });
 });

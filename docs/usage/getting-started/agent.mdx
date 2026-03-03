@@ -1,105 +1,180 @@
 ---
 title: Agent
 description: >-
-  Simple centralized configuration for prompts, model selection, knowledge
-  bases, plugins, and more.
+  Build a personalized AI Agent — configure its role, model, Skills, knowledge
+  base, and Memory in one place.
 tags:
   - LobeHub
-  - LobeHub
-  - AI Assistant
-  - Assistant Organization
-  - Group Settings
-  - Assistant Search
-  - Assistant Pinning
+  - Agent
+  - Agent Configuration
+  - System Prompt
+  - Knowledge Base
+  - Memory
+  - Skills
 ---
 
 # Agent
 
-At LobeHub, you have the freedom to create and customize your own AI assistants—whether it's a translation assistant that remembers your terminology preferences, a coding assistant familiar with your programming style, or a writing assistant that understands your tone and voice. By configuring prompts, selecting models, adding plugins, and linking knowledge bases, you can build a truly personalized assistant tailored to your needs.
+Every Agent in LobeHub is a persistent teammate — not a one-off conversation. Build a translation Agent that remembers your terminology, a coding Agent tuned to your stack, or a writing Agent that matches your voice. Configure the role, model, Skills, and knowledge base once; let it get smarter from there.
 
-This guide will walk you through how to create and configure your AI assistant.
+This guide walks you through creating and configuring your first Agent.
 
-## Create a New AI Assistant
+## What Makes an Agent
 
-There are three ways to create a new assistant: use the Agent Builder for smart creation, build one from scratch, or quickly add one from the community. No matter which method you choose, your assistant can be fine-tuned to match your workflow.
+Every Agent is built from six components:
+
+| Component          | Purpose                                                            |
+| ------------------ | ------------------------------------------------------------------ |
+| **System Role**    | The Agent's personality, expertise, and behavioral guidelines      |
+| **AI Model**       | The LLM powering the Agent — GPT-4o, Claude, Gemini, and more      |
+| **Skills**         | Capabilities like web search, code execution, and image generation |
+| **Integrations**   | MCP connections and integrations with external services            |
+| **Knowledge Base** | Documents and data the Agent can search and reference              |
+| **Memory**         | Personal context the Agent learns and retains across sessions      |
+
+Start simple — a System Role and a model is all you need. Layer in Skills, Integrations, and a Knowledge Base as your work demands.
+
+## Types of Agents
+
+- **Built-in Agents** — Agent Builder (helps you create Agents), Pages Agent (writing), Memory Agent (manages your personal Memory)
+- **Custom Agents** — Agents you create and configure for your specific workflows
+- **Community Agents** — Ready-to-use Agents shared by the LobeHub community — one click to add
+
+## Create a New Agent
+
+Three paths to your first Agent: smart creation with Agent Builder, building one from scratch, or adding one from the Community. All three let you fine-tune every detail afterward.
 
 ### Smart Creation with Agent Builder
 
-Agent Builder is LobeHub’s built-in assistant that helps you create AI assistants. Simply chat with Agent Builder and describe your needs—it will understand and automatically generate a complete assistant configuration, including role settings, system prompts, and plugin setup.
+Agent Builder is LobeHub's built-in Agent that helps you create other Agents. Describe what you need in plain language — Agent Builder generates the role settings, system prompt, and Skill configuration automatically.
 
-- Click the "Create Agent" button in the left sidebar on the homepage, or use the "Create Agent" option below the chat box.
-- On the assistant profile page, chat with Agent Builder on the right side to describe your needs and complete the smart creation process.
-- After the assistant is generated, you can still manually fine-tune the settings.
+- Click **Create Agent** in the left sidebar, or use the **Create Agent** option below the chat input.
+- On the Agent Profile page, chat with Agent Builder on the right panel and describe your goal.
+- Review the generated configuration and adjust anything that doesn't fit.
 
-![clipboard-1768963219814-ba3d14d1facf3.png](/blog/assets2964497066067ca0588a7767eb4c1709.webp)
+![Agent Builder Smart Creation](/blog/assets2964497066067ca0588a7767eb4c1709.webp)
 
-### Create a Custom Assistant
+### Build a Custom Agent
 
-Custom assistants offer the highest level of personalization. You can set the assistant’s avatar, name, prompts, preferred AI model, and plugins to create a truly unique AI assistant. All customization can be done manually on the assistant profile page.
+For full control: set the avatar, name, system prompt, model, and Integrations yourself on the Agent Profile page. Start with the system prompt — everything else follows.
 
 ### Add from the Community
 
-If you want a ready-to-use assistant with a complete configuration, you can add one directly from the community. The community offers a wide variety of high-quality assistants—design experts, coding helpers, copywriters, academic mentors, and more—ready to use with a single click.
+The Community has thousands of ready-to-use Agents — design experts, coding helpers, copywriters, academic tutors, and more.
 
-- Go to "Community" → "Assistants" in the left sidebar, or scroll down the main interface to find "Community Assistants."
-- Choose an assistant, click to view its details, and then click "Add Assistant and Start Chat" to add it.
+- Go to **Community → Agents** in the left sidebar, or scroll down the main screen to **Community Agents**.
+- Open an Agent's detail page, then click **Add Agent & Chat** to start immediately.
 
-![clipboard-1768963283361-5b62ccd3a1862.png](/blog/assetsbcd98b0913d2dfc30d5a2b5523115d33.webp)
+![Add Agent from Community](/blog/assetsbcd98b0913d2dfc30d5a2b5523115d33.webp)
 
-### Configure Your AI Assistant
+### Connect Skills and Integrations
 
-Once your assistant is created, you can enhance its capabilities by adding plugins and linking external workflows. Plugins provide extended functionality, while external workflows allow the assistant to access and interact with your favorite tools. These enhancements can significantly improve your productivity.
+After creating an Agent, expand its capabilities by adding Skills and linking external services.
 
-### Edit Assistant Information
+Go to **Agent Profile → + Add Skill** in the left sidebar.
 
-You can edit any assistant information at any time to keep it aligned with your evolving needs. Enter a chat with the assistant, then click "Assistant Profile" in the left sidebar to make changes.
+![Add Skill from Agent Profile](/blog/assetsdc6362a2c6db476fc1b7b9d6bf443af2.webp)
 
-### Add Plugins and Link Tools
+### Edit Agent Information
 
-Adding plugins and linking tools makes collaboration with your assistant more efficient.
+Your Agent should evolve as your work does. Open a conversation, click **Agent Profile** in the left sidebar, and update anything — name, role, model, or Skills — at any time.
 
-Enter a chat with the assistant, then go to "Assistant Profile" → "+ Integrate Plugin" in the left sidebar.
+### Link a Knowledge Base
 
-![clipboard-1769050642741-4b72fd17934cf.png](/blog/assetsdc6362a2c6db476fc1b7b9d6bf443af2.webp)
+Attach a knowledge base so your Agent answers from your own data — docs, specs, or research — not just from general training.
 
-### Link Knowledge Bases
+In the chat interface, use the Knowledge Base button to select and attach a knowledge base.
 
-By linking a knowledge base during a conversation, your assistant can provide more accurate and personalized responses based on your data.
-
-In the chat interface, use the appropriate button to select and link a knowledge base.
-
-![clipboard-1769050621749-3709f9939d7d4.png](/blog/assetsc89931ace11a936d87d0b87a6bca1069.webp)
+![Link Knowledge Base in Chat](/blog/assetsc89931ace11a936d87d0b87a6bca1069.webp)
 
 <Callout type="info">
-  For more on using knowledge bases, see [Knowledge Base](./docs/usage/getting-started/resource).
+  For more on knowledge bases, see [Resource Library](/docs/usage/getting-started/resource).
 </Callout>
+
+## Writing Effective System Prompts
+
+The system prompt is the most important part of your Agent. It defines the Agent's expertise, behavior, and communication style. A well-written system prompt produces consistent, high-quality results.
+
+**Example structure:**
+
+```
+You are an expert [ROLE] specializing in [DOMAIN].
+
+Your expertise includes:
+- [Specific area 1]
+- [Specific area 2]
+- [Specific area 3]
+
+When responding:
+- [Communication guideline 1]
+- [Communication guideline 2]
+- [Format preference]
+```
+
+**Tips for writing good prompts:**
+
+- **Be specific about expertise** — "You are a senior TypeScript engineer specializing in React and performance optimization" is far more useful than "You are a coding assistant."
+- **Define the communication style** — Specify tone (professional, casual), response length (concise/detailed), and format (markdown, bullet points, prose).
+- **Include domain-specific guidelines** — For a legal writing Agent: "Cite relevant statutes when applicable. Flag when advice requires licensed legal counsel."
+- **Start simple, iterate** — Begin with a basic prompt and refine based on the Agent's actual responses.
+
+## Choosing the Right Model
+
+Different models have different strengths:
+
+| Model                     | Best For                                      |
+| ------------------------- | --------------------------------------------- |
+| GPT-4o, Claude Sonnet     | Balanced performance, coding, analysis        |
+| Claude Opus, GPT-o1       | Complex reasoning, nuanced tasks              |
+| Gemini                    | Multi-modal tasks, long context               |
+| GPT-4o-mini, Claude Haiku | Fast responses, simple tasks, cost efficiency |
+| Ollama (local)            | Privacy-sensitive tasks, offline use          |
+
+Match the model to the task complexity and your budget. For Agents that handle routine tasks, a smaller model is often sufficient and faster.
+
+## Best Practices
+
+- **Test your prompts** — After creating an Agent, run a few sample conversations to verify it behaves as expected. Refine the system prompt based on what doesn't work.
+- **One responsibility per Agent** — Specialized Agents outperform generalists. Create separate Agents for coding, writing, and research rather than one Agent for everything.
+- **Update Agents as needs evolve** — Agents aren't set-and-forget. Revisit the system prompt when your workflows or requirements change.
+- **Use Agent Builder for complex setups** — For Agents requiring multiple Skills and a sophisticated system prompt, let Agent Builder do the initial setup, then refine manually.
 
 ## Manage Agents
 
-When you have many assistants and group chats, organizing them into groups is the most intuitive way to manage them. It keeps your assistant list clean and makes switching between them easier.
+When you have many Agents and Group Chats, organizing them into Groups keeps the sidebar clean and makes switching easier.
 
 ### Create a Group
 
-On the LobeHub homepage, open the assistant list menu and select "Add New Group" to create a new group.
+On the LobeHub homepage, open the Agent list menu and select **Add New Group**.
 
-![clipboard-1768908420554-e3b90ce1a2e5.png](/blog/assets98cddf4b80b8bac0c250a5236062d198.webp)
+![Add New Group in Agent List](/blog/assets98cddf4b80b8bac0c250a5236062d198.webp)
 
 ### Move to a Group
 
-Select an existing assistant or group chat, then click "Move to Group" to organize it. You can also create new assistants or group chats directly within a group.
+Select an existing Agent or Group Chat, then click **Move to Group**. You can also create new Agents or Group Chats directly inside a Group.
 
 ### Manage Groups
 
-If you have multiple groups, go to the assistant list or group menu and select "Manage Groups" to easily rename or reorder them.
+Go to the Agent list or Group menu and select **Manage Groups** to rename or reorder them.
 
-### Pin Frequently Used Assistants
+### Pin Frequently Used Agents
 
-You can pin frequently used assistants to the top of the list for quicker access. Select the assistant and choose "Pin" from the menu. Pinned assistants will stay at the top of the list for easy access.
+Pin an Agent to the top of the list for quicker access. Select the Agent and choose **Pin** from the menu. Pinned Agents stay at the top.
 
 ## Create a Copy
 
-You can duplicate an assistant to create a copy. Select the assistant and choose "Create Copy" from the menu. The system will generate an identical assistant, which is useful for creating variants with different configurations.
+Duplicate an Agent to explore different configurations without modifying the original. Select the Agent and choose **Create Copy** from the menu.
 
-## Delete an Assistant
+## Delete an Agent
 
-If you no longer need an assistant, you can delete it. Select the assistant, choose "Delete" from the menu, and confirm the deletion to remove it.
+Select the Agent, choose **Delete** from the menu, and confirm. The Agent will be removed.
+
+<Cards>
+  <Card href={'/docs/usage/agent/agent-team'} title={'Agent Groups'} />
+
+  <Card href={'/docs/usage/agent/scheduled-task'} title={'Scheduled Tasks'} />
+
+  <Card href={'/docs/usage/getting-started/memory'} title={'Memory'} />
+
+  <Card href={'/docs/usage/community/publish-agent'} title={'Publish an Agent'} />
+</Cards>

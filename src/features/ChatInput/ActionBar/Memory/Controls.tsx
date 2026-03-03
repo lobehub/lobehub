@@ -60,7 +60,9 @@ interface ToggleOption {
 const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const isEnabled = useAgentStore((s) => chatConfigByIdSelectors.isMemoryEnabledById(agentId)(s));
+  const isEnabled = useAgentStore((s) =>
+    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
+  );
 
   const isActive = value === 'on' ? isEnabled : !isEnabled;
 
@@ -90,8 +92,8 @@ const Controls = memo(() => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [isEnabled, effort] = useAgentStore((s) => [
-    chatConfigByIdSelectors.isMemoryEnabledById(agentId)(s),
-    chatConfigByIdSelectors.getMemoryEffortById(agentId)(s),
+    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
+    chatConfigByIdSelectors.getMemoryToolEffortById(agentId)(s),
   ]);
 
   const toggleOptions: ToggleOption[] = [

@@ -1,0 +1,17 @@
+{
+  "name": "@lobechat/agent-tracing",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/store/types.ts",
+    "./recorder": "./src/recorder/index.ts"
+  },
+  "main": "./src/index.ts",
+  "bin": {
+    "agent-tracing": "./src/cli/index.ts"
+  },
+  "dependencies": {
+    "commander": "^13.1.0"
+  }
+}

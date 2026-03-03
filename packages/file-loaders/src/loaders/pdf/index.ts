@@ -112,7 +112,7 @@ export class PdfLoader implements FileLoaderInterface {
         lineCount: 0,
         metadata: {
           error: `Failed to load or parse PDF file: ${error.message}`,
-          filePath: filePath,
+          filePath,
         },
         pageContent: '',
       };
@@ -159,7 +159,7 @@ export class PdfLoader implements FileLoaderInterface {
     });
 
     return {
-      pdfInfo: pdfInfo,
+      pdfInfo,
       // PDF info (Author, Title, etc.)
       pdfMetadata: metadata,
       // PDF metadata

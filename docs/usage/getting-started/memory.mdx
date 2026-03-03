@@ -1,72 +1,182 @@
 ---
 title: Memory
 description: >-
-  Learn about LobeHub's memory feature, including types of memory, memory
-  sources, memory search, and more.
+  Agents that remember who you are and how you work — transparent, structured,
+  and fully under your control.
 tags:
   - LobeHub
-  - LobeHub
   - Memory
-  - Types of Memory
-  - Memory Sources
-  - Memory Search
+  - Personalization
+  - Memory Agent
+  - Privacy
+  - Context
 ---
 
 # Memory
 
-Traditional AI treats every conversation like the first time—you have to repeat the same information over and over. With the Agent Memory feature, your assistant truly gets to know you. It automatically identifies and remembers key information from your conversations, making each interaction more efficient and personalized.
+Most AI tools treat every conversation like the first one — you repeat the same context, preferences, and background every time. With Memory, your Agents actually learn who you are. Key information is automatically extracted from your conversations, stored in a structured format, and applied in future interactions — making every session more useful than the last.
 
-This isn’t just a simple chat history—it’s intelligent knowledge extraction and organization. The assistant recognizes your identity, work context, personal preferences, and practical experience, and stores them in a structured format. In future conversations, it can proactively recall this memory to provide responses tailored to your needs—just like a colleague who really understands you.
+This isn't a chat log. It's intelligent knowledge extraction: your role, work context, preferences, and habits — organized and ready to use.
+
+## Why Memory Matters
+
+Without Memory, every conversation starts from zero:
+
+- You repeat context constantly
+- Agents forget your preferences between sessions
+- Responses stay generic, unable to adapt to your situation
+
+With Memory, Agents build a clear, evolving picture of who you are and how you work. The more you use LobeHub, the better your Agents become.
+
+## How Memory Works
+
+Memory follows a four-step cycle:
+
+1. **Conversation analysis** — As you interact, the Memory Agent identifies insights: explicit preferences, implicit patterns, project context, communication style.
+2. **Memory extraction** — Key insights are extracted, categorized by type (preference, fact, context), and tagged with relevance and confidence.
+3. **Storage and indexing** — Memories are stored in a structured, searchable format. When new information conflicts with existing Memory, it updates automatically.
+4. **Contextual recall** — When relevant, Agents retrieve and apply the right memories — so responses fit your situation without you needing to re-explain.
+
+### White-Box Transparency
+
+LobeHub Memory is fully transparent. Unlike black-box AI memory, you can view every memory, edit any entry, delete what you don't want, and add memories manually at any time. Agents can't remember anything you haven't approved.
+
+## Types of Memory
+
+**Personal preferences** — How you like to work and communicate: response length, technical depth, tone, format preferences, working hours.
+
+**Personal context** — Who you are and what you're doing: role, organization, team, current projects, key stakeholders.
+
+**Skills and knowledge** — What you know and what you're learning. Helps Agents calibrate their explanations to your level.
+
+**Patterns and habits** — Recurring behaviors and workflows: weekly meetings, common requests, decision-making criteria, typical project workflows.
+
+**Historical context** — Past projects and decisions: lessons learned, reasoning behind past choices, key collaborators.
 
 ## Understanding Agent Memory
 
-Agent Memory is a built-in plugin in LobeHub. It automatically identifies and extracts key information from your conversations with the assistant, forming a structured memory base. These memories are proactively used in future interactions, making communication more personalized and efficient. Instead of merely recording dialogue, the assistant understands and extracts actionable memory instructions. In later conversations, it references relevant memories to provide more personalized responses, avoid asking for known information again, and tailor its output based on your preferences.
+Agent Memory is a built-in plugin in LobeHub. It automatically identifies and extracts key information from your conversations, building a structured memory base. These memories are applied in future interactions, making communication more personalized and efficient. Instead of logging dialogue verbatim, it distills actionable insights — behavioral rules the Agent follows going forward.
 
-![clipboard-1768961800651-151a9b076745c.png](/blog/assets6ebefe8183f31de4de5bac1a921fb153.webp)
+![Agent Memory Interface](/blog/assets6ebefe8183f31de4de5bac1a921fb153.webp)
 
-## Enabling Agent Memory
+## Enabling Memory
 
-Memory is a built-in plugin in LobeHub and must be enabled for each assistant. You can enable the memory plugin from the "Assistant Profile" page under the "Add Plugin" section, or directly within a conversation by selecting the plugin in the chat interface.
+Memory is a built-in plugin and must be enabled for each Agent separately. You can enable it from the Agent Profile page or directly within a conversation.
 
-### Enable from Assistant Profile
+### Enable from Agent Profile
 
-Go to the Assistant Profile page, click "+ Add Plugin", and check the "Memory" plugin to enable it.
+Go to the Agent Profile page, click **+ Add Plugin**, and check **Memory** to enable it.
 
-![clipboard-1768961895831-d380de3507b63.png](/blog/assets27b2bf8596f8e65d545322c66a0d81a2.webp)
+![Add Memory Plugin from Agent Profile](/blog/assets27b2bf8596f8e65d545322c66a0d81a2.webp)
 
 ### Enable in a Conversation
 
-Open a conversation, click the plugin icon below the chat box, and check the "Memory" plugin to activate it.
+Open a conversation, click the plugin icon below the chat input, and check **Memory** to activate it.
 
-![clipboard-1768961929559-f1d7d74c54ca1.png](/blog/assets07820089deb72e5636024ae7e3d1855f.webp)
+![Enable Memory Plugin in Conversation](/blog/assets07820089deb72e5636024ae7e3d1855f.webp)
 
 ## Managing Memory
 
-### Viewing Memory
+### View Memory
 
-Click the "Memory" icon at the bottom of the left sidebar on the LobeHub homepage to open the memory management panel. This panel displays all memories extracted from your conversations. Memories are organized by type for easy browsing and management. Each memory includes the following details:
+Click the **Memory** icon at the bottom of the left sidebar to open the Memory panel. It displays all memories extracted from your conversations, organized by type. Each memory shows:
 
-- Memory Title: A concise summary of the memory’s core content, such as "Dislikes coffee".
-- Preference Weight: Indicates the importance of the memory. The higher the weight, the more the assistant prioritizes it in conversations.
-- Created Time: Shows when the memory was extracted from a conversation.
-- Memory Instruction: The behavioral rule derived from the conversation, which the assistant follows in future interactions. For example: "Avoid recommending coffee or coffee-based drinks unless the user explicitly asks for them; suggest non-coffee alternatives instead."
-- Possible Assistant Actions: Describes how the assistant might apply this memory, such as: "Offer tea, hot chocolate, juice, smoothies, or decaf/non-coffee options depending on context."
-- Tags: Tags related to the memory for easier categorization and search.
+- **Title** — A concise summary, e.g. "Dislikes coffee"
+- **Preference Weight** — How strongly the Agent prioritizes this memory. Higher weight = more influence in conversations.
+- **Created Time** — When the memory was extracted
+- **Memory Instruction** — The behavioral rule derived from the conversation, e.g. "Avoid recommending coffee unless the user explicitly requests it; suggest non-coffee alternatives."
+- **Possible Actions** — How the Agent might apply this memory, e.g. "Offer tea, hot chocolate, juice, or decaf options depending on context."
+- **Tags** — For categorization and search
 
-![clipboard-1768962259734-dc28b56340cb1.png](/blog/assetseb9b70814679291052dfa4618a44a856.webp)
+![Memory Management Panel](/blog/assetseb9b70814679291052dfa4618a44a856.webp)
 
-### Searching Memory
+### Search Memory
 
-When you have many memories, use the search function to quickly locate specific ones. You can also open the command menu at any time to search for memories.
+Use the search function to quickly find specific memories. You can also open the command menu at any time and search for memories there.
 
-### Editing Memory
+### Edit Memory
 
-You can modify the memory instructions generated from conversations to better reflect your actual needs and preferences.
+Modify any memory instruction to better reflect your actual needs and preferences.
 
-![clipboard-1768962379267-f580e519a03f2.png](/blog/assetsd6eba2b1881977c9533ba86c1cd3dfce.webp)
+![Editing Memory](/blog/assetsd6eba2b1881977c9533ba86c1cd3dfce.webp)
 
-### Deleting Memory
+### Delete Memory
 
-Select the memory you want to delete and click the delete button.
+Select a memory and click the delete button to remove it.
 
-![clipboard-1768962364687-81d03308f7b3f.png](/blog/assetse14ddb728d66905c164664b8b5e044d3.webp)
+![Deleting Memory](/blog/assetse14ddb728d66905c164664b8b5e044d3.webp)
+
+## The Memory Agent
+
+The **Memory Agent** is a built-in Agent dedicated to managing your personal Memory:
+
+- **Extraction** — Analyzes conversations to identify valuable insights worth keeping
+- **Organization** — Categorizes and structures memories for easy retrieval
+- **Maintenance** — Identifies outdated or conflicting memories and suggests updates
+- **Application** — Determines when to inject relevant memories into an Agent's context
+
+Talk directly to the Memory Agent to add, update, or review memories:
+
+- "Remember that I prefer morning meetings over afternoon ones."
+- "What do you know about my current projects?"
+- "Update my role: I'm now VP of Product, not Senior PM."
+- "What do you remember about my communication preferences?"
+
+## Using Memory Effectively
+
+### Getting Started
+
+When you first use LobeHub, help Agents learn about you quickly:
+
+- Share your role, team, and current priorities
+- State preferences explicitly ("I prefer bullet points over paragraphs")
+- Add manual memories for important facts Agents should always know
+
+### Natural Conversation with Memory
+
+Once context is established, just work. Here's the difference Memory makes:
+
+**Without Memory:**
+
+- Agent asks: "What format would you like?" / "Who are the stakeholders?" / "What sections should I include?"
+
+**With Memory:**
+
+- Agent uses your preferred template automatically
+- Includes sections you always want (e.g., user research)
+- Lists your stakeholders without asking
+
+### Refining Over Time
+
+Memory improves as you work:
+
+- When an Agent gets something wrong, correct it: "Actually, I prefer X instead of Y." The Memory Agent updates immediately.
+- As your situation changes, tell Agents: "I'm now leading the mobile team in addition to web."
+- Review your Memory panel monthly — remove outdated entries, add new information.
+
+## Privacy and Control
+
+All memories belong to you:
+
+- Stored in your Workspace only
+- Never shared with other users
+- Not used to train models
+- Fully exportable (JSON, CSV, or Markdown)
+
+You can disable Memory extraction for specific conversations, mark sensitive topics as "don't remember", and set automatic expiration by time or project. Memory and conversation history are stored separately — deleting conversations doesn't affect Memory, and vice versa.
+
+## Best Practices
+
+- **Start with key context** — Have a conversation with the Memory Agent when you first start: "Let me tell you about myself and how I work." Cover your role, priorities, communication preferences, and common workflows.
+- **Be explicit about preferences** — "I always want PRDs to include a competitive analysis section" is memorable. "Add competitive analysis" is too vague.
+- **Correct mistakes immediately** — When an Agent misremembers, say: "That's not right. I prefer X instead of Y." The Memory Agent updates right away.
+- **Review monthly** — Remove outdated context, update changed preferences, add new important information.
+- **Don't store sensitive data** — Avoid passwords, financial details, or highly personal information. Memory works best for work preferences, professional context, and general patterns.
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+</Cards>

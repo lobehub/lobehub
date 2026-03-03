@@ -17,13 +17,26 @@ export const formatFileSize = (bytes: number): string => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 };
 
+export interface ImageConstraints {
+  /** Aspect ratio (width/height) constraints */
+  aspectRatio?: { max?: number; min?: number };
+  height?: { max?: number; min?: number };
+  width?: { max?: number; min?: number };
+}
+
 export interface ValidationResult {
   // Additional details for error messages
   actualSize?: number;
   error?: string;
   fileName?: string;
+  height?: number;
+  maxHeight?: number;
   maxSize?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  minWidth?: number;
   valid: boolean;
+  width?: number;
 }
 
 /**
@@ -62,6 +75,82 @@ export const validateImageCount = (count: number, maxCount?: number): Validation
     return {
       error: 'imageCountExceeded',
       valid: false,
+    };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Read image dimensions from a File object
+ */
+export const getImageDimensions = (file: File): Promise<{ height: number; width: number }> => {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new globalThis.Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ height: img.naturalHeight, width: img.naturalWidth });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = url;
+  });
+};
+
+/**
+ * Validate that image dimensions meet the constraints
+ * @param file - Image file to validate
+ * @param constraints - Width and height constraints with optional min/max
+ */
+export const validateImageDimensions = async (
+  file: File,
+  constraints: ImageConstraints,
+): Promise<ValidationResult> => {
+  const { width, height } = await getImageDimensions(file);
+
+  const minW = constraints.width?.min;
+  const maxW = constraints.width?.max;
+  const minH = constraints.height?.min;
+  const maxH = constraints.height?.max;
+
+  if ((minW && width < minW) || (minH && height < minH)) {
+    return {
+      error: 'imageDimensionTooSmall',
+      fileName: file.name,
+      height,
+      minHeight: minH,
+      minWidth: minW,
+      valid: false,
+      width,
+    };
+  }
+
+  if ((maxW && width > maxW) || (maxH && height > maxH)) {
+    return {
+      error: 'imageDimensionTooLarge',
+      fileName: file.name,
+      height,
+      maxHeight: maxH,
+      maxWidth: maxW,
+      valid: false,
+      width,
+    };
+  }
+
+  const ratio = width / height;
+  const minRatio = constraints.aspectRatio?.min;
+  const maxRatio = constraints.aspectRatio?.max;
+
+  if ((minRatio && ratio < minRatio) || (maxRatio && ratio > maxRatio)) {
+    return {
+      error: 'imageAspectRatioInvalid',
+      fileName: file.name,
+      height,
+      valid: false,
+      width,
     };
   }
 

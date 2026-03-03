@@ -257,6 +257,56 @@ After completing the steps above, the configuration of the server-side database 
   <Image alt={'Login successful state'} src={'/blog/assets28616219/9cb5150d-6e1e-4c59-9a18-4e418dce1a5d.webp'} />
 </Steps>
 
+## Platform Limitations
+
+<Callout type={'warning'}>
+  Be aware of these Vercel platform limitations before deploying.
+</Callout>
+
+**Serverless function timeout:**
+
+| Plan       | Timeout     |
+| ---------- | ----------- |
+| Hobby      | 10 seconds  |
+| Pro        | 60 seconds  |
+| Enterprise | 900 seconds |
+
+Long-running AI requests may timeout on the Hobby plan. Streaming responses (enabled by default) help keep connections alive.
+
+**No WebSocket support** — Vercel serverless functions don't support persistent WebSocket connections. Real-time features use Server-Sent Events (SSE) instead.
+
+**Cold starts** — Serverless functions may be slower on first request after idle periods (1–3 seconds). This is normal behavior for serverless platforms.
+
+**File size limits** — Deployment size: 250 MB (compressed). Function size: 50 MB.
+
+## Keeping Updated
+
+<Callout type={'warning'}>
+  If you used the one-click deploy button, Vercel creates a **new** repository instead of forking the original. This prevents automatic upstream updates.
+</Callout>
+
+To receive future LobeHub updates:
+
+1. **Delete** the current project from Vercel dashboard (Settings → Delete Project)
+2. Manually **fork** [lobehub/lobe-chat](https://github.com/lobehub/lobe-chat) on GitHub
+3. **Import** your forked repository to Vercel (Add New → Project)
+4. Re-configure your environment variables and deploy
+5. In your fork's GitHub **Actions** tab, enable the `upstream-sync` workflow — it automatically checks for updates daily
+
+To sync manually: Actions → Upstream Sync → Run workflow.
+
+## Troubleshooting
+
+**Deployment fails** — Check build logs in Vercel Dashboard → Deployments → click the failed deployment → Build Logs. Common causes: missing environment variables, TypeScript errors, or out of memory (fix with `NODE_OPTIONS=--max-old-space-size=4096`).
+
+**Function timeout** — If requests timeout on Hobby plan: upgrade to Pro (60s timeout), use faster AI models (e.g., GPT-4o-mini instead of GPT-4o), reduce max tokens, or ensure streaming is enabled.
+
+**Database connection fails** — Verify `DATABASE_URL` format. Ensure `?sslmode=require` is appended for managed databases. Check that the database's IP allowlist includes Vercel IPs (or use `0.0.0.0/0` for open access). Test locally with `psql "$DATABASE_URL"`.
+
+**502 Bad Gateway** — Common causes: function timeout, out of memory, or database connection pool exhausted. Use a connection pooler (PgBouncer), reduce concurrent connections, or check database logs.
+
+**Environment variables not updating** — After changing env vars, go to Deployments → Redeploy (three dots menu) → select "Use existing Build Cache: No".
+
 ## Appendix
 
 ### Overview of Server-side Database Environment Variables

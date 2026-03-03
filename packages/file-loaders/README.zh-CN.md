@@ -1,8 +1,8 @@
 # @lobechat/file-loaders
 
-`@lobechat/file-loaders` 是 LobeChat 项目中的一个工具包，专门用于从本地文件路径加载各种类型的文件，并将其内容转换为标准化的 `Document` 对象数组。
+`@lobechat/file-loaders` 是 LobeHub 项目中的一个工具包，专门用于从本地文件路径加载各种类型的文件，并将其内容转换为标准化的 `Document` 对象数组。
 
-它的主要目的是提供一个统一的接口来读取不同的文件格式，提取其核心文本内容，并为后续处理（例如在 LobeChat 中进行文件预览、内容提取或将其作为知识库数据源）做好准备。
+它的主要目的是提供一个统一的接口来读取不同的文件格式，提取其核心文本内容，并为后续处理（例如在 LobeHub 中进行文件预览、内容提取或将其作为知识库数据源）做好准备。
 
 ## ✨ 功能特性
 
@@ -73,7 +73,7 @@
 
 ### 贡献流程
 
-1. Fork [LobeChat 仓库](https://github.com/lobehub/lobe-chat)
+1. Fork [LobeHub 仓库](https://github.com/lobehub/lobe-chat)
 2. 添加新格式支持或改进现有解析器
 3. 提交 Pull Request 并描述：
 
@@ -84,6 +84,6 @@
 
 ## 📌 说明
 
-这是 LobeHub 的内部模块（`"private": true`），专为 LobeChat 设计，不作为独立包发布。
+这是 LobeHub 的内部模块（`"private": true`），专为 LobeHub 设计，不作为独立包发布。
 
 如果你对我们的项目感兴趣，欢迎在 [GitHub](https://github.com/lobehub/lobe-chat) 上查看、点赞或贡献代码！
