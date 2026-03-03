@@ -30,6 +30,7 @@ const usernameSchema = z
   .string()
   .trim()
   .min(1, { message: 'USERNAME_REQUIRED' })
+  .max(64, { message: 'USERNAME_TOO_LONG' })
   .regex(/^\w+$/, { message: 'USERNAME_INVALID' });
 
 const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -174,9 +175,11 @@ export const userRouter = router({
     return ctx.userModel.updateUser({ avatar: input });
   }),
 
-  updateFullName: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {
-    return ctx.userModel.updateUser({ fullName: input });
-  }),
+  updateFullName: userProcedure
+    .input(z.string().trim().max(64))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.userModel.updateUser({ fullName: input });
+    }),
 
   updateGuide: userProcedure.input(UserGuideSchema).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updateGuide(input);
