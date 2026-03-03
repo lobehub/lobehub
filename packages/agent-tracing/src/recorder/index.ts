@@ -1,5 +1,5 @@
-import type { ExecutionSnapshot, StepSnapshot } from '../types';
 import type { ISnapshotStore } from '../store/types';
+import type { ExecutionSnapshot, StepSnapshot } from '../types';
 
 /**
  * Append a step to a partial snapshot on disk.

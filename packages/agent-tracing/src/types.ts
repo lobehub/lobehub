@@ -1,30 +1,47 @@
 export interface ExecutionSnapshot {
-  traceId: string;
-  operationId: string;
+  completedAt?: number;
+  completionReason?:
+    | 'done'
+    | 'error'
+    | 'interrupted'
+    | 'max_steps'
+    | 'cost_limit'
+    | 'waiting_for_human';
+  error?: { type: string; message: string };
   model?: string;
+  operationId: string;
   provider?: string;
   startedAt: number;
-  completedAt?: number;
-  completionReason?: 'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit' | 'waiting_for_human';
+  steps: StepSnapshot[];
+  totalCost: number;
   totalSteps: number;
   totalTokens: number;
-  totalCost: number;
-  error?: { type: string; message: string };
-  steps: StepSnapshot[];
+  traceId: string;
 }
 
 export interface StepSnapshot {
-  stepIndex: number;
-  stepType: 'call_llm' | 'call_tool';
-  startedAt: number;
   completedAt: number;
-  executionTimeMs: number;
-
   // LLM data
   content?: string;
-  reasoning?: string;
+  context?: {
+    phase: string;
+    payload?: unknown;
+    stepContext?: unknown;
+  };
+  events?: Array<{ type: string; [key: string]: unknown }>;
+  executionTimeMs: number;
+
   inputTokens?: number;
+  // Detailed data (for inspect --step N)
+  messages?: any[];
+  messagesAfter?: any[];
   outputTokens?: number;
+
+  reasoning?: string;
+  startedAt: number;
+
+  stepIndex: number;
+  stepType: 'call_llm' | 'call_tool';
 
   // Tool data
   toolsCalling?: Array<{
@@ -38,20 +55,19 @@ export interface StepSnapshot {
     isSuccess?: boolean;
     output?: string;
   }>;
-
+  totalCost: number;
   // Cumulative
   totalTokens: number;
-  totalCost: number;
 }
 
 export interface SnapshotSummary {
-  traceId: string;
-  operationId: string;
-  model?: string;
   completionReason?: string;
+  createdAt: number;
+  durationMs: number;
+  hasError: boolean;
+  model?: string;
+  operationId: string;
   totalSteps: number;
   totalTokens: number;
-  durationMs: number;
-  createdAt: number;
-  hasError: boolean;
+  traceId: string;
 }

@@ -24,7 +24,7 @@ export class FileSnapshotStore implements ISnapshotStore {
     const filename = `${ts}_${shortId}.json`;
     const filePath = path.join(this.dir, filename);
 
-    await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), 'utf-8');
+    await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), 'utf8');
 
     // Update latest symlink
     const latestPath = path.join(this.dir, 'latest.json');
@@ -41,7 +41,7 @@ export class FileSnapshotStore implements ISnapshotStore {
     const match = files.find((f) => f.includes(traceId.slice(0, 12)));
     if (!match) return null;
 
-    const content = await fs.readFile(path.join(this.dir, match), 'utf-8');
+    const content = await fs.readFile(path.join(this.dir, match), 'utf8');
     return JSON.parse(content) as ExecutionSnapshot;
   }
 
@@ -54,7 +54,7 @@ export class FileSnapshotStore implements ISnapshotStore {
 
     for (const file of recent) {
       try {
-        const content = await fs.readFile(path.join(this.dir, file), 'utf-8');
+        const content = await fs.readFile(path.join(this.dir, file), 'utf8');
         const snapshot = JSON.parse(content) as ExecutionSnapshot;
         summaries.push(toSummary(snapshot));
       } catch {
@@ -69,14 +69,14 @@ export class FileSnapshotStore implements ISnapshotStore {
     const latestPath = path.join(this.dir, 'latest.json');
     try {
       const realPath = await fs.realpath(latestPath);
-      const content = await fs.readFile(realPath, 'utf-8');
+      const content = await fs.readFile(realPath, 'utf8');
       return JSON.parse(content) as ExecutionSnapshot;
     } catch {
       // No latest symlink — fall back to most recent by filename
       const files = await this.listFiles();
       if (files.length === 0) return null;
 
-      const content = await fs.readFile(path.join(this.dir, files[0]), 'utf-8');
+      const content = await fs.readFile(path.join(this.dir, files[0]), 'utf8');
       return JSON.parse(content) as ExecutionSnapshot;
     }
   }
@@ -94,7 +94,7 @@ export class FileSnapshotStore implements ISnapshotStore {
 
   async loadPartial(operationId: string): Promise<Partial<ExecutionSnapshot> | null> {
     try {
-      const content = await fs.readFile(this.partialPath(operationId), 'utf-8');
+      const content = await fs.readFile(this.partialPath(operationId), 'utf8');
       return JSON.parse(content) as Partial<ExecutionSnapshot>;
     } catch {
       return null;
@@ -103,7 +103,7 @@ export class FileSnapshotStore implements ISnapshotStore {
 
   async savePartial(operationId: string, partial: Partial<ExecutionSnapshot>): Promise<void> {
     await fs.mkdir(this.partialDir(), { recursive: true });
-    await fs.writeFile(this.partialPath(operationId), JSON.stringify(partial), 'utf-8');
+    await fs.writeFile(this.partialPath(operationId), JSON.stringify(partial), 'utf8');
   }
 
   async removePartial(operationId: string): Promise<void> {
