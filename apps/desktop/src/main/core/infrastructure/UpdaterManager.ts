@@ -21,6 +21,12 @@ export class UpdaterManager {
   private updateAvailable: boolean = false;
   private isManualCheck: boolean = false;
   private currentChannel: UpdateChannel = UPDATE_CHANNEL;
+  /** Incremented on each channel switch to invalidate in-flight checks */
+  private checkGeneration: number = 0;
+  /** Generation at the start of the current active check */
+  private activeGeneration: number = 0;
+  /** Whether a recheck is needed after the current check completes */
+  private pendingRecheck: boolean = false;
 
   constructor(app: AppCore) {
     this.app = app;
@@ -90,22 +96,21 @@ export class UpdaterManager {
       (this.currentChannel === 'nightly' && channel === 'stable');
 
     this.currentChannel = channel;
-
-    if (isDowngrade) {
-      autoUpdater.allowDowngrade = true;
-      logger.info('Channel downgrade detected, allowDowngrade=true');
-    }
+    autoUpdater.allowDowngrade = isDowngrade;
+    logger.info(`allowDowngrade=${isDowngrade}`);
 
     autoUpdater.allowPrerelease = channel !== 'stable';
     this.configureUpdateProvider();
 
     this.mainWindow.broadcast('updateChannelChanged', channel);
 
-    // Reset checking flag so the new check can proceed even if an old check is in-flight.
-    // The old check's result is harmless: configureUpdateProvider() already switched the feed URL,
-    // and any stale update-available event will be for the new channel's manifest.
-    this.checking = false;
-    this.checkForUpdates();
+    // Invalidate any in-flight check and schedule a recheck
+    this.checkGeneration++;
+    if (this.checking) {
+      this.pendingRecheck = true;
+    } else {
+      this.checkForUpdates();
+    }
   };
 
   /**
@@ -117,10 +122,13 @@ export class UpdaterManager {
 
     this.checking = true;
     this.isManualCheck = manual;
+    this.activeGeneration = this.checkGeneration;
 
     autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
 
-    logger.info(`${manual ? 'Manually checking' : 'Auto checking'} for updates...`);
+    logger.info(
+      `${manual ? 'Manually checking' : 'Auto checking'} for updates... (gen=${this.activeGeneration})`,
+    );
 
     logger.info('[Updater Config] Channel:', autoUpdater.channel);
     logger.info('[Updater Config] currentChannel:', this.currentChannel);
@@ -139,6 +147,8 @@ export class UpdaterManager {
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {
+      if (this.isStaleCheck()) return;
+
       const message = error instanceof Error ? error.message : String(error);
 
       if (this.isMissingUpdateManifestError(error)) {
@@ -156,6 +166,10 @@ export class UpdaterManager {
       }
     } finally {
       this.checking = false;
+      if (this.pendingRecheck) {
+        this.pendingRecheck = false;
+        this.checkForUpdates();
+      }
     }
   };
 
@@ -360,7 +374,12 @@ export class UpdaterManager {
     });
 
     autoUpdater.on('update-available', (info) => {
-      logger.info(`Update available: ${info.version}`);
+      logger.info(
+        `Update available: ${info.version} (activeGen=${this.activeGeneration}, currentGen=${this.checkGeneration})`,
+      );
+
+      if (this.isStaleCheck()) return;
+
       this.updateAvailable = true;
 
       if (this.isManualCheck) {
@@ -417,6 +436,17 @@ export class UpdaterManager {
     });
 
     logger.debug('Updater events registered');
+  }
+
+  /** Check if the current active check has been superseded by a channel switch */
+  private isStaleCheck(): boolean {
+    if (this.activeGeneration !== this.checkGeneration) {
+      logger.info(
+        `Discarding stale check result (activeGen=${this.activeGeneration}, currentGen=${this.checkGeneration})`,
+      );
+      return true;
+    }
+    return false;
   }
 
   private isMissingUpdateManifestError(error: unknown): boolean {
