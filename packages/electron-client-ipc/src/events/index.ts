@@ -1,3 +1,4 @@
+import type { GatewayConnectionBroadcastEvents } from './gatewayConnection';
 import type { NavigationBroadcastEvents } from './navigation';
 import type { ProtocolBroadcastEvents } from './protocol';
 import type { RemoteServerBroadcastEvents } from './remoteServer';
@@ -11,6 +12,7 @@ import type { AutoUpdateBroadcastEvents } from './update';
 export interface MainBroadcastEvents
   extends
     AutoUpdateBroadcastEvents,
+    GatewayConnectionBroadcastEvents,
     NavigationBroadcastEvents,
     RemoteServerBroadcastEvents,
     SystemBroadcastEvents,
@@ -22,6 +24,7 @@ export type MainBroadcastParams<T extends MainBroadcastEventKey> = Parameters<
   MainBroadcastEvents[T]
 >[0];
 
+export type { GatewayConnectionStatus } from './gatewayConnection';
 export type {
   AuthorizationPhase,
   AuthorizationProgress,

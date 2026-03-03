@@ -47,8 +47,13 @@ const mockBrowserManager = {
   broadcastToAllWindows: vi.fn(),
 };
 
+const mockGatewayConnectionCtr = {
+  disconnect: vi.fn().mockResolvedValue({ success: true }),
+};
+
 const mockApp = {
   browserManager: mockBrowserManager,
+  getController: vi.fn().mockReturnValue(mockGatewayConnectionCtr),
   storeManager: mockStoreManager,
 } as unknown as App;
 
@@ -293,6 +298,13 @@ describe('RemoteServerConfigCtr', () => {
       // Verify tokens are cleared from memory
       const accessToken = await controller.getAccessToken();
       expect(accessToken).toBeNull();
+    });
+
+    it('should disconnect gateway when tokens are cleared', async () => {
+      await controller.saveTokens('access', 'refresh', 3600);
+      await controller.clearTokens();
+
+      expect(mockGatewayConnectionCtr.disconnect).toHaveBeenCalled();
     });
   });
 
