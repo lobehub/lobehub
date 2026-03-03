@@ -9,6 +9,7 @@ export const locales = [
   'en-US',
   'es-ES',
   'fr-FR',
+  'hi-IN',
   'ja-JP',
   'ko-KR',
   'pt-BR',
@@ -32,6 +33,7 @@ export const normalizeLocale = (locale?: string): Locales => {
 
   if (locale.startsWith('ar')) return 'ar';
   if (locale.startsWith('fa')) return 'fa-IR';
+  if (locale.startsWith('hi')) return 'hi-IN';
 
   if (locale.startsWith('cn')) return 'zh-CN';
 
@@ -121,6 +123,10 @@ export const localeOptions: LocaleOptions = [
   {
     label: 'فارسی',
     value: 'fa-IR',
+  },
+  {
+    label: 'हिन्दी',
+    value: 'hi-IN',
   },
 ] as LocaleOptions;
 
