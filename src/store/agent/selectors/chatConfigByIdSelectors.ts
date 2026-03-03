@@ -54,24 +54,24 @@ const getUseModelBuiltinSearchById = (agentId: string) => (s: AgentStoreState) =
 const getSearchFCModelById = (agentId: string) => (s: AgentStoreState) =>
   getChatConfigById(agentId)(s).searchFCModel || DEFAULT_AGENT_SEARCH_FC_MODEL;
 
-const getMemoryConfigById = (agentId: string) => (s: AgentStoreState) =>
+const getMemoryToolConfigById = (agentId: string) => (s: AgentStoreState) =>
   getChatConfigById(agentId)(s).memory;
 
-const isMemoryEnabledById = (agentId: string) => (s: AgentStoreState) =>
+const isMemoryToolEnabledById = (agentId: string) => (s: AgentStoreState) =>
   getChatConfigById(agentId)(s).memory?.enabled ?? false;
 
-const getMemoryEffortById = (agentId: string) => (s: AgentStoreState) =>
+const getMemoryToolEffortById = (agentId: string) => (s: AgentStoreState) =>
   getChatConfigById(agentId)(s).memory?.effort ?? 'medium';
 
 export const chatConfigByIdSelectors = {
   getChatConfigById,
   getEnableHistoryCountById,
   getHistoryCountById,
-  getMemoryConfigById,
-  getMemoryEffortById,
+  getMemoryToolConfigById,
+  getMemoryToolEffortById,
   getSearchFCModelById,
   getSearchModeById,
   getUseModelBuiltinSearchById,
   isEnableSearchById,
-  isMemoryEnabledById,
+  isMemoryToolEnabledById,
 };

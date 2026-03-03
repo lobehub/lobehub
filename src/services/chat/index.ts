@@ -142,9 +142,7 @@ class ChatService {
 
     // =================== 1.1 process user memories =================== //
 
-    const globalMemoryEnabled = settingsSelectors.memoryEnabled(getUserStoreState());
-    const agentMemoryEnabled = chatConfig.memory?.enabled ?? false;
-    const enableUserMemories = globalMemoryEnabled && agentMemoryEnabled;
+    const enableUserMemories = settingsSelectors.memoryEnabled(getUserStoreState());
     const userMemorySettings = settingsSelectors.currentMemorySettings(getUserStoreState());
     const effectiveMemoryEffort =
       chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
