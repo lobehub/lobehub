@@ -30,7 +30,7 @@
     "package:local": "npm run build:main && electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "package:local:reuse": "electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "package:mac": "npm run build:main && electron-builder --mac --config electron-builder.mjs  --publish never",
-    "package:mac:local": "npm run build:main && cross-env UPDATE_CHANNEL=nightly electron-builder --mac --config electron-builder.mjs --publish never",
+    "package:mac:local": "npm run build:main && cross-env UPDATE_CHANNEL=nightly electron-builder --mac --config electron-builder.mjs --publish never --c.mac.notarize=false -c.mac.identity=null",
     "package:win": "npm run build:main && electron-builder --win --config electron-builder.mjs  --publish never",
     "start": "electron-vite preview",
     "stylelint": "stylelint \"src/**/*.{js,jsx,ts,tsx}\" --fix",
