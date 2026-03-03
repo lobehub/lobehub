@@ -842,7 +842,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [deploy-on-sealos-link]: https://template.usw.sealos.io/deploy?templateName=lobe-chat-db
 [deploy-on-zeabur-button-image]: https://zeabur.com/button.svg
 [deploy-on-zeabur-link]: https://zeabur.com/templates/VZGGTI
-[discord-link]: https://discord.gg/AYFPHvv2jT
+[discord-link]: https://discord.gg/lobehub
 [discord-shield]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square
 [discord-shield-badge]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=for-the-badge
 [docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
