@@ -13,70 +13,178 @@ tags:
 
 # Welcome to LobeHub
 
-LobeHub is the workspace for work and life: find, build, and collaborate with Agent teammates that grow with you. We're building the first human–Agent co-working, co-evolving network.
+**The ultimate space for work and life** — find, build, and collaborate with Agent teammates that grow with you.
 
 ![LobeHub](https://hub-apac-1.lobeobjects.space/landing/images/home/overview-light.webp)
 
-## Why LobeHub?
+You've probably been here: you ask one AI to draft a report, paste the output into another to polish the tone, then copy that into a third tool for formatting. None of them remember what the others did. None of them remember what *you* did last week. Every conversation starts from scratch, every context is lost, and you're the one stitching it all together.
 
-Most AI agents today are task-driven tools — they lack Context, live in isolation, and require manual hand-offs. Even when they retain Memory, it's often global, shallow, and impersonal. You end up toggling between fragmented conversations with no structured way to build on past work.
+LobeHub is built for people who are tired of that loop. Here, your Agents share context, remember your preferences, work together in teams, and get better over time — so you spend less time repeating yourself and more time on work that matters.
 
-LobeHub treats **Agents as the unit of work**. Your Agents maintain structured, editable Memory, collaborate in Groups, and adapt to act at the right moment — across your entire workflow.
+## Create — Start with a single sentence
 
-## Core Principles
+You don't need to configure a model, write a system prompt, or connect an API. Just describe what you need — "a writing assistant that matches my brand voice" or "a code reviewer who knows our stack" — and LobeHub assembles the right model, Skills, and context into a ready-to-run Agent.
 
-### Create — Agents as the unit of work
+Start bare-bones. Then layer in a knowledge base when your Agent needs domain expertise, add web search when it needs real-time data, or plug in MCP tools when it needs to take action. Your Agent grows as your work grows.
 
-Describe what you need once, and LobeHub assembles the right model and Skills into a ready-to-run Agent. Start simple, add tools and knowledge as your work demands.
+Not sure where to begin? Browse the [Community](/docs/usage/community/agent-market) — thousands of ready-made Agents are waiting. Find one close to what you need, install it, and make it yours.
 
-- **Any model, any modality** — Seamlessly access 70+ models including GPT-4o, Claude, Gemini, and local LLMs, all under your control
-- **10,000+ Skills** — Connect your Agents to tools and MCP-compatible integrations
-- **Personal Memory** — Your Agents build a structured understanding of your needs through continual learning
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Create a Custom Agent'} />
 
-### Collaborate — at scale
+  <Card href={'/docs/usage/community/agent-market'} title={'Agent Marketplace'} />
+</Cards>
 
-Groups bring multiple specialized Agents together, enabling parallel collaboration and iterative improvement — like a real team.
+## Collaborate — Your Agents work as a team
 
-- **Pages** — Write and refine content with multiple Agents in one place with shared Context
-- **Scheduled Tasks** — Let Agents run automated workflows at the right time, even while you're away
-- **Workspace** — Shared spaces for teams to collaborate with Agents across projects
+Imagine briefing a research analyst, a copywriter, and a fact-checker on the same project — except they're all Agents, they share the same context, and they work in parallel without you managing the hand-offs.
 
-### Evolve — humans and Agents co-evolve
+That's what [Groups](/docs/usage/agent/agent-team) do. Multiple specialized Agents collaborate on a single task — debating approaches, iterating on outputs, and refining results together. You set the goal; they coordinate the execution.
 
-The best Agents are ones that understand how you work. LobeHub features Memory that builds a clear picture of your preferences and adapts over time.
+Beyond Groups, LobeHub weaves Agents into your daily workflow:
 
-- **Continual learning** — Your Agents learn from how you work, getting sharper with every interaction
-- **White-box Memory** — Structured and editable — you have full control over what Agents remember
-- **Transparency** — Watch reasoning unfold step-by-step with Chain of Thought visualization
+- **[Pages](/docs/usage/agent/pages)** — Writing a proposal at midnight? Bring in multiple Agents as co-editors, all sharing the same context. One drafts, another critiques, a third checks the data. The result is a polished document, not a pile of chat messages.
+- **Scheduled Tasks** — Need a competitor report every Monday morning? Set it once. Your Agent compiles, summarizes, and delivers it — even while you sleep.
+- **Workspace** — Your team and your Agents share one space. Everyone sees the same projects, the same context, the same progress.
 
-## What You Can Do
+<Cards>
+  <Card href={'/docs/usage/agent/agent-team'} title={'Agent Groups'} />
 
-| Feature              | Description                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| **Chat with Agents** | Converse with 70+ models — GPT-4o, Claude, Gemini, local LLMs, and more                     |
-| **Build Agents**     | Create specialized Agents with custom Agent Profiles, models, Skills, Resources, and Memory |
-| **Groups**           | Assemble Agent teams that collaborate in sequence, parallel, or debate mode                 |
-| **Pages**            | Co-write and refine documents with Agents as real-time editors                              |
-| **Scheduled Tasks**  | Set Agents to run automated workflows on a schedule                                         |
-| **Resource Library** | Bring in documents, images, audio, and video for Agents to reference                        |
-| **Voice**            | Go hands-free with text-to-speech and speech-to-text                                        |
-| **Skills & MCP**     | Connect Agents to 10,000+ tools via the Model Context Protocol                              |
-| **Image Generation** | Create visuals with DALL-E 3, fal.ai, and other image models                                |
+  <Card href={'/docs/usage/agent/pages'} title={'Pages'} />
+</Cards>
+
+## Evolve — They remember, they learn, they adapt
+
+Most AI tools have the memory of a goldfish. You explain your coding style, your preferred tone, your company's naming conventions — and next session, it's all gone. You start over. Again.
+
+LobeHub Agents don't forget. They build a structured understanding of how you work — your preferences, your patterns, your domain knowledge — and that [Memory](/docs/usage/getting-started/memory) carries across every conversation. The more you work together, the less you need to explain.
+
+And unlike black-box systems, this Memory is fully yours: structured, editable, and transparent. You see exactly what your Agent remembers, you edit what's wrong, you delete what's outdated. Your Agent's reasoning unfolds step-by-step through Chain of Thought — so you always know *why* it made a decision, not just *what* it decided.
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/memory'} title={'Memory'} />
+
+  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+</Cards>
+
+## Choose the right model for every task
+
+Not every question needs the most powerful model. A quick translation? A lightweight model handles it in milliseconds for a fraction of the cost. A nuanced legal analysis? Route it to the model with the deepest reasoning capabilities.
+
+LobeHub gives you access to **70+ providers** — GPT-4o, Claude, Gemini, DeepSeek, Llama, Qwen, and more — from over a dozen providers. Switch models mid-conversation, or let your Agent pick the best one for each turn. You can even run local models if your data stays on-device.
+
+Each Agent can have its own default model, so your code reviewer uses one model while your copywriter uses another — automatically, without you making a choice each time.
+
+<Cards>
+  <Card href={'/docs/usage/providers'} title={'AI Providers'} />
+
+  <Card href={'/docs/usage/getting-started/lobe-ai'} title={'Try Lobe AI'} />
+</Cards>
+
+## 10,000+ Skills — connect Agents to the tools you use
+
+An Agent that can only chat is only half the story. With [Skills](/docs/usage/agent/skills), your Agent reads your GitHub issues, queries your database, sends a Slack message, generates a PDF, or books a meeting — all within the same conversation.
+
+LobeHub supports the [Model Context Protocol (MCP)](/docs/usage/community/mcp-market), an open standard that connects Agents to an ever-growing ecosystem of **10,000+ tools**. Install a Skill from the marketplace in one click, or build your own and share it with the Community.
+
+A few real-world examples:
+
+- *"Summarize the top 5 GitHub issues and post a digest to Slack"* — your Agent reads the issues, writes the summary, sends the message.
+- *"Pull this week's sales data and build a chart"* — your Agent queries the database, processes the numbers, renders a visual Artifact.
+- *"Find flights to Tokyo next month under $800"* — your Agent searches, compares, and presents options with booking links.
+
+<Cards>
+  <Card href={'/docs/usage/agent/skills'} title={'Agent Skills'} />
+
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+</Cards>
+
+## Resource Library — give your Agents real knowledge
+
+Generic AI answers are fine for generic questions. But when you need an Agent that knows *your* codebase, *your* product docs, *your* company policies — that's where the [Resource Library](/docs/usage/agent/resources) comes in.
+
+Upload documents, images, spreadsheets, audio, or video. Your Agent references them during conversations, so its answers are grounded in your actual data — not just training-set knowledge. Build a knowledge base for each Agent, or share resources across your Workspace.
+
+Imagine a customer support Agent that knows your entire help center, a legal assistant trained on your contract templates, or a product manager who has read every PRD you've ever written. That's Resource Library at work.
+
+<Cards>
+  <Card href={'/docs/usage/agent/resources'} title={'Resource Library'} />
+</Cards>
+
+## Voice — go hands-free
+
+Sometimes you need your Agents while your hands are busy — commuting, cooking, walking through a warehouse. LobeHub supports text-to-speech and speech-to-text, so you can have full conversations without typing a word.
+
+Dictate a meeting summary on your walk back to the office. Have your Agent read a long analysis out loud while you drive. Or just talk through an idea and let your Agent capture the structure.
+
+<Cards>
+  <Card href={'/docs/usage/agent/tts'} title={'Voice & TTS'} />
+</Cards>
+
+## Create visuals without leaving the conversation
+
+Need a hero image for a blog post? A diagram for your architecture doc? A quick mockup to pitch an idea? Ask your Agent — it generates images using DALL-E 3, fal.ai, and other models, and renders them as Artifacts right in the chat.
+
+No need to switch to a separate design tool, export, download, and re-upload. The image is there, in context, next to the conversation that produced it.
+
+<Cards>
+  <Card href={'/docs/usage/agent/artifacts'} title={'Artifacts'} />
+</Cards>
+
+## Community — shared intelligence
+
+LobeHub's philosophy starts with people. The [Community](/docs/usage/community/agent-market) is where thousands of creators publish Agents, Skills, and workflows for everyone to discover, install, and remix.
+
+Found an Agent that's 80% of what you need? Install it, tweak the prompt, swap the model, add your own knowledge base — and it becomes yours. Or build something from scratch and share it back. The best ideas compound when they're open.
+
+<Cards>
+  <Card href={'/docs/usage/community/agent-market'} title={'Agent Marketplace'} />
+
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+
+  <Card href={'/docs/usage/community/become-a-creator'} title={'Become a Creator'} />
+</Cards>
+
+## Make it yours
+
+LobeHub adapts to how you like to work — not the other way around.
+
+- **[Appearance](/docs/usage/user-interface/appearance)** — Light mode, dark mode, custom accent colors, and layout density. Make your workspace feel like home.
+- **[Keyboard Shortcuts](/docs/usage/user-interface/shortcuts)** — Power users can navigate, switch conversations, and trigger actions without touching the mouse.
+- **[Command Menu](/docs/usage/user-interface/command-menu)** — Press a key and search everything — Agents, conversations, settings, actions — all from one place.
+
+<Cards>
+  <Card href={'/docs/usage/user-interface/appearance'} title={'Appearance'} />
+
+  <Card href={'/docs/usage/user-interface/shortcuts'} title={'Keyboard Shortcuts'} />
+
+  <Card href={'/docs/usage/user-interface/command-menu'} title={'Command Menu'} />
+</Cards>
+
+## Available everywhere
+
+LobeHub runs in the [browser](https://app.lobehub.com), on [macOS and Windows](/docs/usage/getting-started/get-lobehub), and on [iOS and Android](/docs/usage/getting-started/get-lobehub). One account, and your Agents, Pages, and Memory sync across all devices.
+
+Start a research session on your laptop, continue the conversation on your phone during lunch, and pick it up on your desktop when you're back. Nothing is lost.
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/get-lobehub'} title={'Get LobeHub'} />
+</Cards>
 
 ## Next Steps
 
 <Steps>
   ### Get started
 
-  Follow the [Quickstart](/docs/usage/getting-started/lobe-ai) to start your first conversation in minutes.
+  Follow the [Quickstart](/docs/usage/getting-started/lobe-ai) to start your first conversation with Lobe AI — no setup needed.
 
   ### Build your first Agent
 
-  [Create a custom Agent](/docs/usage/getting-started/agent) tailored to your specific needs — describe what you need, and LobeHub handles the rest.
+  [Create a custom Agent](/docs/usage/getting-started/agent) tailored to your workflow — describe what you need, and LobeHub handles the rest.
 
   ### Spin up a Group
 
-  [Assemble an Agent team](/docs/usage/agent/agent-team) to tackle complex tasks together in sequence, parallel, or debate.
+  [Assemble an Agent team](/docs/usage/agent/agent-team) to tackle complex tasks together — in sequence, parallel, or debate.
 
   ### Explore the Community
 
