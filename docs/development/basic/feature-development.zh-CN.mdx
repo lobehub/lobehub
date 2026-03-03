@@ -293,6 +293,7 @@ const OpeningQuestions = memo(() => {
 ```
 
 关键点：
+
 - 通过 `selectors` 读取 store 中的配置
 - 通过 `setAgentConfig` action 更新配置
 - 使用 `useTranslation('setting')` 获取 i18n 文案
@@ -320,7 +321,8 @@ const WelcomeMessage = () => {
       <ChatItem avatar={meta} message={message} placement="left" />
       {/* 渲染引导性问题 */}
       <OpeningQuestions questions={openingQuestions} />
-    </Flexbox>
+   
+</Flexbox>
   ) : (
     <ChatItem avatar={meta} message={message} placement="left" />
   );

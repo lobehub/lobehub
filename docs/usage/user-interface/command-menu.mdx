@@ -1,56 +1,87 @@
 ---
 title: Command Menu
 description: >-
-  The Command Menu is the quick action center of LobeHub. Instantly accessible via keyboard shortcuts, it allows you to search and execute various actions without navigating through multiple interface layers. This makes navigation and operations faster and more efficient.
-
-
+  The quick action center of LobeHub — search Agents, Topics, settings, and jump anywhere with a few keystrokes.
 tags:
-  - Command Menu
   - LobeHub
+  - Command Menu
   - Quick Navigation
-  - Action Center
+  - Search
   - Keyboard Shortcuts
 ---
 
 # Command Menu
 
-The Command Menu is the quick action center of LobeHub. Instantly accessible via keyboard shortcuts, it allows you to search and execute various actions without navigating through multiple interface layers. This makes navigation and operations faster and more efficient.
+The Command Menu is LobeHub's quick action center. Press `⌘ + K` (Mac) or `Ctrl + K` (Windows/Linux) and a search overlay appears. Type a few keywords to find Agents, Topics, settings, or actions — no need to click through menus or the sidebar. It's the fastest way to navigate LobeHub.
 
-The Command Menu supports fuzzy search, so you don’t need to type the full name—just a few keywords will do. For example, typing "programming" will bring up "Python Programming Assistant." When frequently switching between assistants, using the Command Menu is much faster than browsing through the sidebar.
+**Fuzzy search** — You don't need to type the full name. "programming" or "python" can match "Python Programming Agent." When switching between Agents frequently, the Command Menu is much faster than browsing the sidebar.
 
-## Open the Command Menu
+## Opening the Command Menu
 
-Use the following keyboard shortcuts to open the Command Menu:\
-macOS: Cmd + K\
-Windows/Linux: Ctrl + K\
-The Command Menu will appear as an overlay in the center of the screen.
+- **macOS:** `Cmd + K`
+- **Windows/Linux:** `Ctrl + K`
 
-<Image
-  alt={'Command Menu'}
-  src={'https://file.rene.wang/clipboard-1769137275089-21cf7ab42d52b.png'}
-/>
+The menu appears as an overlay in the center of the screen.
 
-## Search and Navigate
+<Image alt={'Command Menu'} src={'https://file.rene.wang/clipboard-1769137275089-21cf7ab42d52b.png'} />
 
-Type keywords into the Command Menu to instantly search for matching content. You can search for assistant names to quickly switch sessions, enter topic keywords to jump to past conversations, or quickly access sections like Settings, Documents, and Library. You can also search for plugins, files, and more. The Command Menu supports command search as well, allowing you to quickly perform actions like creating a new assistant or starting a conversation with AI.
+## What You Can Search
 
-<Image
-  alt={'Command Menu Search and Navigation'}
-  src={'https://file.rene.wang/clipboard-1769137300488-0b894cc8c7a67.png'}
-/>
+| Type             | Examples                                                               |
+| ---------------- | ---------------------------------------------------------------------- |
+| **Agents**       | Type an Agent name to switch sessions or start a new conversation      |
+| **Topics**       | Enter topic keywords to jump to past conversations                     |
+| **Sections**     | "Settings", "Documents", "Resources" — jump directly to a section      |
+| **Skills & MCP** | Search for plugins and MCP servers                                     |
+| **Actions**      | "Create Agent", "Create Agent Team" — execute without navigating menus |
 
-Use your keyboard to navigate quickly within the Command Menu. Use the ↑ and ↓ arrow keys to move through search results, press Enter to execute the selected action, and press Esc to close the menu.
+**Keyboard navigation:** Use `↑` and `↓` to move through results, `Enter` to execute, `Esc` to close. `Tab` switches between result categories when you're typing a message.
+
+<Image alt={'Command Menu Search and Navigation'} src={'https://file.rene.wang/clipboard-1769137300488-0b894cc8c7a67.png'} />
 
 ## Ask an Agent
 
-To chat with an assistant, press Cmd + K to open the Command Menu, type your message or topic, press Tab to select an assistant, and start the conversation instantly.
+To start a conversation with a specific Agent:
 
-To create a new assistant or assistant team, select "Create Assistant" or "Create Assistant Team" and press Enter.
+1. Press `Cmd + K` / `Ctrl + K` to open the Command Menu
+2. Type your message or topic
+3. Press `Tab` to switch to the Agent selector
+4. Select an Agent and press `Enter` — the conversation starts immediately
+
+**Create new:** Select "Create Agent" or "Create Agent Team" and press `Enter` to create without leaving the menu.
 
 ## Quick Navigation
 
-Select the section you want to access—such as "Documents" or "Resources"—and press Enter to jump right in.
+Select a section like "Documents" or "Resources" and press `Enter` to jump there. No sidebar scrolling, no extra clicks.
 
 ## Search Content
 
-Enter keywords to search through past messages, assistants, MCP plugins, and more. Results are categorized for easier and faster discovery.
+Enter keywords to search across:
+
+- **Past messages** — Find conversations by content
+- **Agents** — Switch by name or description
+- **MCP plugins** — Find and access installed tools
+
+Results are categorized so you can quickly see what you're looking at and choose the right one.
+
+## Use Cases
+
+**Switch Agents mid-task** — `Cmd + K` → type Agent name → Enter. Faster than clicking through the sidebar.
+
+**Resume a past conversation** — `Cmd + K` → type a keyword from the topic → Enter. Jump straight to that Topic.
+
+**Create a new Agent without leaving the flow** — `Cmd + K` → "Create Agent" → Enter. No need to find the create button.
+
+**Quick access to Settings** — `Cmd + K` → "Settings" → Enter. One shortcut instead of avatar → menu → Settings.
+
+## Tips
+
+- **Start typing immediately** — The menu opens ready for input. No need to click the search field.
+- **Use Tab to switch context** — When you've typed a message, Tab lets you switch to selecting an Agent or action without losing what you typed.
+- **Esc to cancel** — Press Esc anytime to close the menu without executing anything.
+
+<Cards>
+  <Card href={'/docs/usage/user-interface/shortcuts'} title={'Keyboard Shortcuts'} />
+
+  <Card href={'/docs/usage/agent/topic'} title={'Topics'} />
+</Cards>

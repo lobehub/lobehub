@@ -1,33 +1,94 @@
 ---
-title: 开始
-description: 上手使用 LobeHub
+title: 入门指南
+description: LobeHub 使用入门 —— 协作助理工作空间
 tags:
   - LobeHub
-  - 功能特性
-  - 视觉识别
-  - 语音会话
-  - AI 服务商
-  - 助手市场
-  - 本地大语言模型
-  - 插件系统
+  - 入门指南
+  - 助理工作空间
+  - 协作助理
+  - 群组
+  - 记忆
+  - MCP
 ---
 
-# LobeHub 用户指南
+# 欢迎来到 LobeHub
 
-欢迎来到 LobeHub 官方用户指南。
+LobeHub 是为工作与生活打造的助理空间：发现、构建，并与随你成长的助理队友协作。我们正在构建首个人与助理协作、共同演进的网络。
+
+![LobeHub](https://hub-apac-1.lobeobjects.space/landing/images/home/overview-light.webp)
+
+## 为什么选择 LobeHub？
+
+当下大多数 AI 助手是一次性的任务工具 —— 缺少上下文、彼此孤立，每次切换都要手动衔接。即使能保留记忆，往往也是全局、浅层且千人一面的。你不得不在碎片化的对话间来回切换，难以形成结构化的生产力。
+
+LobeHub 把**助理当作工作的基本单元**。你的助理维护结构化、可编辑的记忆，在群组中协作，并在恰当的时机主动响应 —— 贯穿你的整个工作流。
+
+## 核心理念
+
+### 创建 —— 助理即工作单元
+
+描述一次需求，LobeHub 自动匹配模型与技能，组装出可运行的助理。从简单开始，按需叠加工具与知识。
+
+- **任意模型、任意模态** — 无缝接入 70+ 模型，包括 GPT-4o、Claude、Gemini 和本地大模型，全程可控
+- **10,000+ 技能** — 通过 MCP 协议为助理接入海量工具与连接器
+- **个人记忆** — 助理通过持续学习，构建对你需求的结构化理解
+
+### 协作 —— 规模化协同
+
+群组将多个专业助理聚合在一起，实现并行协作与迭代优化 —— 如同一支真正的团队。
+
+- **文稿** — 与多个助理在同一上下文中共同撰写和完善内容
+- **定时任务** — 让助理在合适的时间自动执行工作流，即使你不在线
+- **空间** — 团队与助理共享的协作空间，跨项目协同
+
+### 演进 —— 人与助理共同成长
+
+最好的助理是理解你工作方式的助理。LobeHub 的记忆系统持续积累你的偏好，随时间不断适应。
+
+- **持续学习** — 助理从你的工作方式中学习，每次交互更精准
+- **白盒记忆** — 结构化且可编辑，你完全掌控助理记住什么
+- **透明可追踪** — 通过思维链可视化，逐步观察助理的推理过程
+
+## 你能做什么
+
+| 功能          | 说明                                      |
+| ----------- | --------------------------------------- |
+| **与助理对话**   | 接入 70+ 模型 ——GPT-4o、Claude、Gemini、本地大模型等 |
+| **构建助理**    | 创建专属助理，配置助理档案、模型、技能、资源库和记忆              |
+| **群组**      | 组建助理团队，以顺序、并行或辩论模式协同攻克复杂任务              |
+| **文稿**      | 与助理共同撰写和完善文档，实时协作                       |
+| **定时任务**    | 让助理按计划自动执行工作流                           |
+| **资源库**     | 接入文档、图片、音频和视频，供助理引用和处理                  |
+| **语音**      | 文字转语音和语音转文字，解放双手                        |
+| **技能与 MCP** | 通过模型上下文协议为助理接入 10,000+ 工具               |
+| **图像生成**    | 使用 DALL-E 3、fal.ai 等模型创作视觉内容            |
+
+## 下一步
+
+<Steps>
+  ### 快速上手
+
+  跟随[快速开始](/zh/docs/usage/getting-started/lobe-ai)，几分钟内开启第一次对话。
+
+  ### 构建你的第一个助理
+
+  [创建自定义助理](/zh/docs/usage/getting-started/agent)，按你的需求量身定制 —— 描述你的目标，LobeHub 帮你搞定。
+
+  ### 组建群组
+
+  [创建助理团队](/zh/docs/usage/agent/agent-team)，以顺序、并行或辩论模式协同攻克复杂任务。
+
+  ### 探索社区
+
+  [发现其他人创建的助理](/zh/docs/usage/community/agent-market)，即用即走。
+</Steps>
 
 <Callout type="info">
-  欲获取自部署帮助，请访问[私有化部署指南](/docs/self-hosting/start)。欲获取开发者指南，请访问[开发指南](/docs/development/start)
+  自托管部署请参阅[自托管指南](/zh/docs/self-hosting/start)。开发者资源请查看[开发者指南](/zh/docs/development/start)。
 </Callout>
 
-## 开始
+<Cards>
+  <Card href={'/zh/docs/usage/migrate-from-local-database'} title={'从 v1.x 迁移到 v2.x'} />
 
-- [使用 Lobe AI](/docs/usage/getting-started/lobe-ai)
-- [创建你的第一个 Agent](/docs/usage/getting-started/agent)
-- [创建你的第一个 Team](/docs/usage/agent/agent-team)
-- [探索 LobeHub 社区](/docs/usage/community/agent-market)
-- [从 v1.x 本地数据库迁移到 v2.x（云端 / 自部署）](/docs/usage/migrate-from-local-database)
-
-## 帮助与支持
-
-如果你需要帮助，可以参考 [帮助与支持](/docs/usage/help)。
+  <Card href={'/zh/docs/usage/help'} title={'帮助与支持'} />
+</Cards>

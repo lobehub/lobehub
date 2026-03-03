@@ -1,32 +1,49 @@
 ---
 title: Lobe AI
-description: 使用 Lobe AI 完成每日任务，包括查看天气、设置提醒、查看新闻、查看邮件等。
+description: Lobe AI 是 LobeHub 的内置助理——无需配置，开箱即用。随时聊天、写代码、做研究、写文章。
 tags:
   - LobeHub
   - Lobe AI
-  - 每日任务
+  - 内置助理
 ---
 
 # Lobe AI
 
-Lobe AI 是 LobeHub 的官方助手，可以帮助你完成各种任务。
+Lobe AI 是 LobeHub 的内置助理。打开 LobeHub 即可使用，无需任何配置。日常问答、快速查询、深度研究，都可以直接开始。
 
-## 场景
+## 能做什么
 
-Lobe AI 可以帮助你完成多种日常任务，例如：
+- **编程** — 阅读代码片段、生成样板代码、调试错误、解释陌生代码
+- **研究** — 联网搜索、总结文章、对比方案、整理引用
+- **写作** — 起草邮件、润色文档、头脑风暴、生成大纲
+- **分析** — 处理数据、生成报告、可视化结果、解读发现
+- **创作** — 生成图片、制作音频、在对话中直接渲染 Artifact
 
-- 软件开发：查看代码片段、生成代码、调试代码等。
-- 学习辅助：解答问题、提供学习资料、生成练习题等。
-- 生活助手：查看天气、设置提醒、查看新闻、查看邮件等。
-- 创意写作：生成故事情节、润色文章、提供写作建议等。
-- 数据分析：生成数据报告、可视化数据、提供分析建议等。
+## 内置技能
 
-如果你有特殊的需求，可以创建[自定义助手](/docs/usage/getting-started/agent)，满足你的个性化需求。
+Lobe AI 支持与自定义助理相同的技能体系。在对话中启用即可扩展能力：
 
-## 内置工具
+| 技能                                          | 功能                |
+| ------------------------------------------- | ----------------- |
+| [网络搜索](/zh/docs/usage/agent/web-search)     | 实时搜索互联网信息         |
+| [Artifacts](/zh/docs/usage/agent/artifacts) | 在对话中直接渲染代码、图表和富内容 |
+| [Notebook](/zh/docs/usage/agent/notebook)   | 保存和整理对话中的笔记       |
+| [GTD](/zh/docs/usage/agent/gtd)             | 用 GTD 方法管理任务      |
+| [沙盒](/zh/docs/usage/agent/sandbox)          | 在隔离环境中运行和测试代码     |
 
-Lobe AI 集成了多种内置工具，帮助你更高效地完成任务：
+## 什么时候该用自定义助理
 
-- [GTD](/docs/usage/agent/gtd)
-- [Plan](/docs/usage/agent/plan)
-- [Notebook](/docs/usage/agent/notebook)
+Lobe AI 是上手 LobeHub 的最佳起点，但如果你需要以下能力，建议创建[自定义助理](/zh/docs/usage/getting-started/agent)：
+
+- 固定的系统提示词（特定角色、语气或专业领域）
+- 专属知识库或长期记忆
+- 始终开启的固定技能组合
+- 可分享、可复用的团队助理
+
+<Cards>
+  <Card href={'/zh/docs/usage/getting-started/memory'} title={'记忆'} />
+
+  <Card href={'/zh/docs/usage/providers'} title={'AI 提供商'} />
+
+  <Card href={'/zh/docs/usage/community/agent-market'} title={'助理市场'} />
+</Cards>

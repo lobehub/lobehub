@@ -1,66 +1,141 @@
 ---
-title: Agent Teams
+title: Agent Groups
 description: >-
-  Simple centralized configuration for prompts, model selection, knowledge
-  bases, plugins, and more.
+  Bring multiple specialized Agents together to collaborate — sequential,
+  parallel, iterative, or debate mode.
 tags:
   - LobeHub
-  - LobeHub
-  - AI Assistant
-  - Assistant Organization
-  - Group Settings
-  - Assistant Search
-  - Assistant Pinning
+  - Agent Group
+  - Multi-Agent Collaboration
+  - Group Chat
+  - Moderator
+  - Sequential Mode
+  - Parallel Mode
 ---
 
-# Agent Teams
+# Agent Groups
 
-Sometimes, one assistant's perspective just isn't enough. Complex problems require multifaceted thinking, creative projects thrive on diverse expertise, and learning discussions benefit from multiple viewpoints. Agent Group Chat brings together multiple specialized assistants to collaborate just like in a real group chat — a translation assistant, a coding assistant, and a product manager assistant sitting around the table, each contributing their strengths to solve your problem. You're not just getting an answer — you're engaging in a conversation. Here, different perspectives collide, expertise complements one another, and the insights generated through AI collaboration go far beyond what a single assistant can offer.
+One Agent's perspective is rarely enough. Complex problems need multiple angles; creative projects thrive on diverse expertise; decisions benefit from structured debate. Agent Group Chat assembles a team of specialized Agents that work together like a real group — a research Agent, an analysis Agent, and a writing Agent each contributing their strengths to your task. You're not just getting an answer; you're running a coordinated process.
 
-Agent Group Chat is a collaborative space for multiple specialized assistants. You pose a question or task, and each assistant offers insights from their area of expertise. They can discuss, supplement, and even debate with one another.
+Pose a question or task, and each Agent responds from its area of expertise. They can build on each other's outputs, challenge assumptions, or work in parallel — depending on the mode you choose.
 
-## Limitations of a Single Assistant
+## Why Not Just One Agent?
 
-- Can only analyze problems from one perspective
-- Expertise is limited to its predefined role
-- Lacks the richness of diverse viewpoints
+- A single Agent can only analyze from one perspective
+- Expertise is bounded by a single predefined role
+- There's no back-and-forth to surface blind spots or trade-offs
 
-## Advantages of Agent Group Chat
+Agent Groups fix all three.
 
-- Multiple assistants contribute their strengths and collaborate
-- Diverse professional backgrounds lead to comprehensive solutions
-- Discussions among assistants spark deeper insights
-- A built-in moderator ensures orderly and focused conversations
+## Collaboration Modes
+
+Agent Groups adapt to the task:
+
+**Sequential** — Agents work one after another in a defined order. Example: Research Agent gathers information → Analysis Agent processes data → Writing Agent creates the final document. Best for linear workflows with clear handoff points.
+
+**Parallel** — Multiple Agents tackle different aspects simultaneously. Example: Marketing Agent writes copy while Data Agent compiles metrics. Best for independent subtasks.
+
+**Iterative** — Agents review and refine work through multiple rounds. Example: Writer creates draft → Editor provides feedback → Writer revises → Editor does final review. Best for high-quality output that requires polish.
+
+**Debate** — Agents argue different positions. An advocate makes the case, a critic challenges assumptions, an analyst weighs evidence, and a mediator synthesizes conclusions. Best for complex decisions that benefit from structured disagreement.
 
 ## About the Moderator
 
-Every Agent Group Chat includes a built-in moderator responsible for:
+Every Agent Group includes a built-in moderator responsible for:
 
-- Understanding your needs and assigning discussion tasks
-- Coordinating the speaking order of assistants
+- Understanding your goal and assigning tasks to the right Agents
+- Coordinating the order of contributions
 - Summarizing the discussion and extracting key conclusions
 - Keeping the conversation organized and on-topic
 
-## Creating an Agent Group Chat
+## Create an Agent Group
 
-Click "Create Group" in the left sidebar to get started.
+Click **Create Group** in the left sidebar to get started.
 
-![clipboard-1768907980491-9cc0669fc3a38.png](/blog/assets8be3a46c8f9c5d3b61bc541f44b7f245.webp)
+![Create Agent Group](/blog/assets8be3a46c8f9c5d3b61bc541f44b7f245.webp)
 
-When creating a group chat, you can use existing templates or assemble your own team of AI assistants. You can also choose whether to include a moderator and select the model for the moderator.
+When creating a group, you can start from an existing template or assemble your own team. Choose whether to include a moderator and select the model for it.
 
-![clipboard-1768908081787-ed9eb1cb78bdb.png](/blog/assetsab009b79dd794f02aec24b7607f342e8.webp)
+![Agent Group Creation — Templates or Custom Team](/blog/assetsab009b79dd794f02aec24b7607f342e8.webp)
 
-## Configuring an Agent Group Chat
+## Configure an Agent Group
 
-In the group chat session, use the left sidebar to select an assistant. You can easily switch their model or remove them from the group.
+In the group chat session, select an Agent in the left sidebar to swap its model or remove it from the group.
 
-![clipboard-1768908121691-b3517bf882633.png](/blog/assetsd3cae44cba0d3f57df6440b46246e5e7.webp)
+![Select Agent in Group Chat](/blog/assetsd3cae44cba0d3f57df6440b46246e5e7.webp)
 
-Also in the left sidebar, click the "Add Member" button to bring additional assistants into the group chat.
+Click **Add Member** in the left sidebar to bring additional Agents into the group.
 
-![clipboard-1768908209289-9d3ecff50142f.png](/blog/assets75a5cf08b3e432d2477899d30acc9d47.webp)
+![Add Member to Agent Group](/blog/assets75a5cf08b3e432d2477899d30acc9d47.webp)
 
-Go to "Group Profile" in the left sidebar to edit the group prompt, add plugins, or change the moderator model. You can also use the Agent Builder on the right panel for intelligent group creation. Agent Builder is LobeHub’s built-in assistant — simply chat with it, describe your needs, and it will automatically generate a complete group chat configuration, including group settings, system prompts, and plugin setup.
+Go to **Group Profile** in the left sidebar to edit the group prompt, add Skills, or change the moderator model. You can also use Agent Builder on the right panel — describe your goal and it will generate the complete group configuration, including settings, system prompts, and Skill setup.
 
-![clipboard-1768908230723-3fce0ae5baf9b.png](/blog/assets8e9b164fa30c795850ce8fa8ef7e7c24.webp)
+![Agent Group Profile Settings](/blog/assets8e9b164fa30c795850ce8fa8ef7e7c24.webp)
+
+## Example Agent Groups
+
+### Content Creation Team
+
+A sequential workflow for producing blog posts or articles:
+
+1. **Researcher** — Gathers information, credible sources, statistics, and expert quotes
+2. **Writer** — Writes an engaging draft using the research material
+3. **Editor** — Reviews and refines for clarity, flow, and consistency
+4. **SEO Specialist** — Optimizes keywords, headings, and meta description
+
+### Research Analysis Team
+
+1. **Data Collector** — Gathers data from multiple sources and documents
+2. **Statistician** — Analyzes data, calculates metrics, identifies patterns
+3. **Domain Expert** — Interprets findings in the context of industry knowledge
+4. **Report Writer** — Synthesizes insights into an executive summary
+
+### Software Development Team
+
+- **Requirements Agent** — Gathers needs and writes product requirements documents
+- **Technical Architect** — Designs system architecture and technical specifications
+- **Developer** — Writes implementation code and technical documentation
+- **QA Tester** — Reviews code, suggests test cases, identifies edge cases
+
+## Best Practices
+
+**Define clear roles** — Each Agent should have a specific, well-defined responsibility:
+
+- ❌ Vague: "Agent 1: Help with content"
+- ✅ Clear: "Research Agent: Find 3–5 credible sources on the topic and summarize key points. Include statistics and expert quotes."
+
+**Avoid redundancy** — Don't create multiple Agents with overlapping roles. Each Agent should bring unique value.
+
+**Set clear handoff points** — In sequential workflows, define exactly what each Agent passes to the next. Example: "Research Agent outputs a Markdown document with sources, key points, and data. Writer Agent uses this as input to draft."
+
+**Right-size the team** — More Agents does not mean better results. Start with 2–3 Agents and add more only as needed. Too many Agents slow the workflow without adding value.
+
+**Match models to tasks** — Use capable models where reasoning matters; use faster, lighter models for straightforward steps.
+
+## Common Use Cases
+
+**Content production** — Blog posts (research → write → edit → SEO), social media campaigns, documentation, video scripts.
+
+**Business analysis** — Market research, competitive analysis, financial modeling, risk assessment.
+
+**Software development** — Feature development (requirements → design → code → testing), code review, bug fixing, API design.
+
+**Creative projects** — Story development, marketing campaigns, product naming, design critique.
+
+## Troubleshooting
+
+**Group responds too slowly** — Reduce the number of Agents, use lighter models for simple steps, switch to parallel mode when possible, or simplify Agent system roles.
+
+**Inconsistent outputs** — Add clearer role definitions, include shared guidelines in the group context, add a reviewer Agent, or lower the temperature setting.
+
+**Agents not collaborating well** — Explicitly define what each Agent receives and produces, add transition instructions between Agents, or switch to sequential mode.
+
+**Poor quality results** — Upgrade to a better model for critical Agents, add specialist Agents for key areas, include a quality-control Agent, or write more detailed system roles.
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+
+  <Card href={'/docs/usage/agent/scheduled-task'} title={'Scheduled Tasks'} />
+
+  <Card href={'/docs/usage/getting-started/page'} title={'Pages'} />
+</Cards>

@@ -1,6 +1,6 @@
 # 🤯 LobeHub Desktop Application
 
-LobeHub Desktop is a cross-platform desktop application for [LobeChat](https://github.com/lobehub/lobe-chat), built with Electron, providing a more native desktop experience and functionality.
+LobeHub Desktop is a cross-platform desktop application for [LobeHub](https://github.com/lobehub/lobe-chat), built with Electron, providing a more native desktop experience and functionality.
 
 ## ✨ Features
 
@@ -11,7 +11,7 @@ LobeHub Desktop is a cross-platform desktop application for [LobeChat](https://g
 - **🔒 Secure & Reliable**: macOS notarized, encrypted token storage, secure OAuth flow
 - **📦 Multiple Release Channels**: Stable, beta, and nightly build versions
 - **⚡ Advanced Window Management**: Multi-window architecture with theme synchronization
-- **🔗 Remote Server Sync**: Secure data synchronization with remote LobeChat instances
+- **🔗 Remote Server Sync**: Secure data synchronization with remote LobeHub instances
 - **🎯 Developer Tools**: Built-in development panel and comprehensive debugging tools
 
 ## 🚀 Development Setup
@@ -347,7 +347,7 @@ Desktop application development involves complex cross-platform considerations a
 
 ### Contribution Process
 
-1. Fork the [LobeChat repository](https://github.com/lobehub/lobe-chat)
+1. Fork the [LobeHub repository](https://github.com/lobehub/lobe-chat)
 2. Set up the desktop development environment following our setup guide
 3. Make your changes to the desktop application
 4. Submit a Pull Request describing:

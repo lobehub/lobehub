@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidelines for using Claude Code in this LobeChat repository.
+Guidelines for using Claude Code in this LobeHub repository.
 
 ## Tech Stack
 

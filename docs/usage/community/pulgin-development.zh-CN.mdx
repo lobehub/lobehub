@@ -1,276 +1,144 @@
 ---
-title: 插件开发
-description: 学习如何在 LobeHub 中添加和使用自定义插件，包括创建插件项目、在角色设置中添加本地插件、测试插件功能以及插件开发流程和部署。
+title: 技能管理
+description: 发现、安装、配置并管理技能——这些工具和集成扩展了你的助理的能力边界。
 tags:
+  - 技能
   - LobeHub
-  - LobeHub
-  - 插件开发
-  - 自定义插件
-  - 插件部署
-  - 插件发布
-  - 插件UI
-  - 插件SDK
+  - MCP
+  - 集成
+  - 技能管理
+  - 插件
 ---
 
-# 插件开发
+# 技能管理
 
-## 插件构成
+**技能**是你为助理配备的能力 —— 网络搜索、代码执行、数据库查询、外部 API 集成等。每项技能都让助理在对话中能够主动调用工具，完成单靠对话无法实现的任务。
 
-一个 LobeHub 的插件由以下几个部分组成：
+本指南介绍如何在工作区中发现、安装、配置和启用技能。
 
-1. **插件索引**：用于展示插件的基本信息，包括插件名称、描述、作者、版本、插件描述清单的链接，官方的插件索引地址：[lobe-chat-plugins](https://github.com/lobehub/lobe-chat-plugins)。若想上架插件到官方插件市场，需要 [提交 PR](https://github.com/lobehub/lobe-chat-plugins/pulls) 到该仓库；
-2. **插件描述清单 (manifest)**：用于描述插件的功能实现，包含了插件的服务端描述、前端展示信息、版本号等。关于 manifest 的详细介绍，详见 [manifest][manifest-docs-url]；
-3. **插件服务**：用于实现插件描述清单中所描述的服务端和前端模块，分别如下：
-   - **服务端**：需要实现 manifest 中描述的 `api` 部分的接口能力；
-   - **前端 UI**（可选）：需要实现 manifest 中描述的 `ui` 部分的界面，该界面将会在插件消息中透出，进而实现比文本更加丰富的信息展示方式。
+## 什么是技能？
 
-## 自定义插件流程
+技能让助理超越对话本身。当助理启用了某项技能，它就能主动使用工具 —— 搜索网络、查询数据库、读取文件、发送 Slack 消息 —— 而不只是和你聊如何做这些事。
 
-本节将会介绍如何在 LobeHub 中添加和使用一个自定义插件。
+每项技能提供一个或多个**工具**，助理根据你的需求决定何时调用工具。你可以在对话中开启**思维链**，查看具体调用了哪些工具以及使用的参数。
 
-<Steps>
-  ### 创建并启动插件项目
+## 技能类型
 
-  你需要先在本地创建一个插件项目，可以使用我们准备好的模板 [lobe-chat-plugin-template][lobe-chat-plugin-template-url]
+| 类型             | 说明                 | 示例                         |
+| -------------- | ------------------ | -------------------------- |
+| **内置工具**       | LobeHub 内置的能力      | Artifacts、沙盒、GTD、笔记本、记忆    |
+| **LobeHub 集成** | 通过 OAuth 连接的第三方服务  | Linear、Microsoft、Twitter   |
+| **Klavis**     | Klavis 提供的集成       | Gmail、Notion、Slack 等       |
+| **社区 MCP**     | 来自 MCP 市场的 MCP 服务器 | GitHub、PostgreSQL、Brave 搜索 |
+| **自定义 MCP**    | 你手动添加的 MCP 服务器     | 私有 API、内部工具                |
 
-  ```bash
-  $ git clone https://github.com/lobehub/chat-plugin-template.git
-  $ cd chat-plugin-template
-  $ npm i
-  $ npm run dev
-  ```
+## 技能商店
 
-  当出现`ready started server on 0.0.0.0:3400, url: http://localhost:3400` 时，说明插件服务已经在本地启动成功。
+技能商店是发现和安装技能的地方。可以从以下入口打开：
 
-  <Image alt="创建并启动插件项目" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259526-9ef25272-4312-429b-93bc-a95515727ed3.png" />
+- **设置 → 技能** — 点击右上角的**技能商店**
+- **助理设置 → 技能** — 点击**添加技能**
+- **对话输入框** — 点击**工具**按钮，选择**技能商店**
 
-  ### 在 LobeHub 角色设置中添加本地插件
+技能商店有三个标签页：
 
-  接下来进入到 LobeHub 中，创建一个新的助手，并进入它的会话设置页：
+- **LobeHub** — 内置工具和 LobeHub 原生集成（Linear、Microsoft、Twitter、Klavis 服务等）
+- **社区** — 来自 [MCP 市场](/zh/docs/usage/community/mcp-market)的 MCP，涵盖数千种服务
+- **自定义** — 你手动添加的 MCP 服务器，以及**添加自定义技能**按钮
 
-  <Image alt="在 LobeHub 角色设置中添加本地插件 S1" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259643-1a9cc34a-76f3-4ccf-928b-129654670efd.png" />
+可使用搜索框按关键词跨标签筛选。
 
-  点击插件列表右侧的 <kbd>添加</kbd> 按钮，打开自定义插件添加弹窗：
+## 安装技能
 
-  <Image alt="在 LobeHub 角色设置中添加本地插件 S2" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259748-2ef6a244-39bb-483c-b359-f156ffcbe1a4.png" />
+### 内置工具与集成
 
-  在 **插件描述文件 Url** 地址 中填入 `http://localhost:3400/manifest-dev.json` ，这是我们本地启动的插件描述清单地址。
+内置工具（Artifacts、沙盒、GTD、笔记本）已预装，可直接为任意助理启用。LobeHub 集成和 Klavis 服务需要先完成 OAuth 授权：
 
-  此时，你应该可以看到看到插件的标识符一栏已经被自动识别为 `chat-plugin-template`。接下来你需要填写剩下的表单字段（只有标题必填），然后点击 <kbd>保存</kbd> 按钮，即可完成自定义插件添加。
+1. 在技能商店中，进入 **LobeHub** 标签页
+2. 找到需要的集成（如 Linear、Gmail）
+3. 点击**连接**，完成 OAuth 授权流程
+4. 授权完成后，该集成即可作为技能用于任意助理
 
-  <Image alt="在 LobeHub 角色设置中添加本地插件 S3" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259964-59f4906d-ae2e-4ec0-8b43-db36871d0869.png" />
+### 社区 MCP
 
-  完成添加后，在插件列表中就能看到刚刚添加的插件，如果需要修改插件的配置，可以点击最右侧的 <kbd>设置</kbd> 按钮进行修改。
+1. 在技能商店中，进入**社区**标签页（或从侧边栏进入 MCP 市场浏览）
+2. 找到所需 MCP，点击**安装**
+3. 如果该 MCP 需要配置（API Key、URL 等），会弹出配置对话框
+4. 安装完成后，该 MCP 会出现在**设置 → 技能**的**社区 MCP** 列表中
 
-  <Image alt="在 LobeHub 角色设置中添加本地插件 S4" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260093-a0363c74-0b5b-48dd-b103-2db6b4a8262e.png" />
+连接类型和配置详情请参阅 [MCP 市场](/zh/docs/usage/community/mcp-market)指南。
 
-  ### 会话测试插件功能
+### 自定义 MCP
 
-  接来下我们需要测试这个插件的功能是否正常。
+添加不在市场中的任何 MCP 兼容服务器：
 
-  点击 <kbd>返回</kbd> 按钮回到会话区，然后向助手发送消息：「我应该穿什么？ 」此时助手将会尝试向你询问，了解你的性别与当前的心情。
+1. 在技能商店中，进入**自定义**标签页
+2. 点击**添加自定义技能**
+3. 配置连接方式（HTTP 端点或 STDIO 命令）
+4. 测试连接，点击**安装**
 
-  <Image alt="会话测试插件功能 S1" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260291-f0aa0e7c-0ffb-486c-a834-08e73d49896f.png" />
+完整操作步骤请参阅[自定义 MCP](/zh/docs/usage/community/custom-plugin) 指南。
 
-  当回答完毕后，助手将会发起插件的调用，根据你的性别、心情，从服务端获取推荐的衣服数据，并推送给你。最后基于这些信息做一轮文本总结。
+## 技能管理页面
 
-  <Image alt="会话测试插件功能 S2" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260461-c22ae797-2809-464b-96fc-d0c020f4807b.png" />
+**设置 → 技能**是工作区中所有已安装技能的统一管理界面。
 
-  当完成这些操作后，你已经了解了添加自定义插件，并在 LobeHub 中使用的基础流程。
-</Steps>
+技能按以下三个分类展示：
 
-## 本地插件开发
+**集成** — 内置工具、LobeHub 连接的服务和 Klavis 集成，每项显示连接状态。点击**连接**或**断开连接**管理 OAuth 授权。
 
-在上述流程中，我们已经了解插件的添加和使用的方式，接下来重点介绍自定义插件开发的过程。
+**社区 MCP** — 从市场安装的 MCP 服务器，每项显示连接类型（HTTP 或 STDIO）。点击**配置**可编辑连接 URL 或认证信息，或查看提供的工具列表。
 
-### manifest
+**自定义 MCP** — 你手动添加的 MCP 服务器。点击**配置**打开完整编辑对话框，可修改连接类型、URL、命令、参数、环境变量等设置。
 
-`manifest` 聚合了插件功能如何实现的信息。核心字段为 `api` 与 `ui`，分别描述了插件的服务端接口能力与前端渲染的界面地址。
+如需卸载某项技能，打开其菜单并选择**卸载**。
 
-以我们提供的模板中的 `manifest` 为例：
+## 为助理启用技能
 
-```json
-{
-  "api": [
-    {
-      "url": "http://localhost:3400/api/clothes",
-      "name": "recommendClothes",
-      "description": "根据用户的心情，给用户推荐他有的衣服",
-      "parameters": {
-        "properties": {
-          "mood": {
-            "description": "用户当前的心情，可选值有：开心（happy）, 难过（sad）,生气 （anger）,害怕（fear）,惊喜（ surprise）,厌恶 （disgust）",
-            "enums": ["happy", "sad", "anger", "fear", "surprise", "disgust"],
-            "type": "string"
-          },
-          "gender": {
-            "type": "string",
-            "enum": ["man", "woman"],
-            "description": "对话用户的性别，需要询问用户后才知道这个信息"
-          }
-        },
-        "required": ["mood", "gender"],
-        "type": "object"
-      }
-    }
-  ],
-  "gateway": "http://localhost:3400/api/gateway",
-  "identifier": "chat-plugin-template",
-  "ui": {
-    "url": "http://localhost:3400",
-    "height": 200
-  },
-  "version": "1"
-}
-```
+安装技能后，技能在工作区内可用，但需要为每个助理单独配置。技能是**按助理维度**启用的 —— 为某个助理启用技能不会影响其他助理。
 
-在这份 manifest 中，主要包含了以下几个部分：
+### 通过助理设置
 
-1. `identifier`：这是插件的唯一标识符，用来区分不同的插件，这个字段需要全局唯一。
-2. `api`：这是一个数组，包含了插件的所有 API 接口信息。每个接口都包含了 url、name、description 和 parameters 字段，均为必填项。其中 `description` 和 `parameters` 两个字段，将会作为 [Function Call](https://sspai.com/post/81986) 的 `functions` 参数发送给 gpt， parameters 需要符合 [JSON Schema](https://json-schema.org/) 规范。 在这个例子中，api 接口名为 `recommendClothes` ，这个接口的功能是根据用户的心情和性别来推荐衣服。接口的参数包括用户的心情和性别，这两个参数都是必填项。
-3. `ui`：这个字段包含了插件的用户界面信息，指明了 LobeHub 从哪个地址加载插件的前端界面。由于 LobeHub 插件界面加载是基于 iframe 实现的，因此可以按需指定插件界面的高度、宽度。
-4. `gateway`：这个字段指定了 LobeHub 查询 api 接口的网关。LobeHub 默认的插件网关是云端服务，而自定义插件的请求需要发给本地启动的服务，远端调用本地地址，一般调用不通。gateway 字段解决了该问题。通过在 manifest 中指定 gateway，LobeHub 将会向该地址发送插件请求，本地的网关地址将会调度请求到本地的插件服务。发布到线上的插件可以不用指定该字段。
-5. `version`：这是插件的版本号，现阶段暂时没有作用；
+1. 打开助理，进入其设置页面
+2. 导航至**技能**
+3. 开启该助理需要使用的技能
+4. 下次对话即刻生效
 
-在实际开发中，你可以根据自己的需求，修改插件的描述清单，声明想要实现的功能。 关于 manifest 各个字段的完整介绍，参见：[manifest][manifest-docs-url]。
+### 通过对话输入框
 
-### 项目结构
+1. 点击对话输入框上方的**工具**按钮
+2. 为当前助理开启或关闭各项技能
+3. 底部链接可跳转至**技能管理**，进行工作区级别的统一管理
 
-[lobe-chat-plugin-template][lobe-chat-plugin-template-url] 这个模板项目使用了 Next.js 作为开发框架，它的核心目录结构如下：
+## 配置 MCP 连接设置
 
-```
-➜  chat-plugin-template
-├── public
-│   └── manifest-dev.json            # 描述清单文件
-├── src
-│   └── pages
-│   │   ├── api                      # nextjs 服务端文件夹
-│   │   │   ├── clothes.ts           # recommendClothes 接口实现
-│   │   │   └── gateway.ts           # 本地插件代理网关
-│   │   └── index.tsx                # 前端展示界面
-```
+安装后，你可能需要更新 MCP 的连接信息 —— 例如 API Key 轮换或服务器 URL 变更。
 
-本模板使用 Next.js 作为开发框架。你可以使用任何你熟悉的开发框架与开发语言，只要能够实现 manifest 中描述的功能即可。
+### 编辑 HTTP 类型 MCP
 
-同时也欢迎大家贡献更多框架与语言的插件模板。
+1. 进入**设置 → 技能**
+2. 找到该 MCP，点击**配置**
+3. 点击连接信息旁的**编辑**按钮
+4. 更新端点 URL、认证类型或 API Key
+5. 点击**保存**
 
-### 服务端
+### 编辑 STDIO 类型 MCP
 
-服务端需要实现 manifest 中描述的 api 接口。在模板中，我们使用了 vercel 的 [Edge Runtime](https://nextjs.org/docs/pages/api-reference/edge)，免去运维。
+1. 进入**设置 → 技能**
+2. 找到该 MCP，点击**配置**
+3. 编辑命令、参数或环境变量
+4. 点击**保存**
 
-#### API 实现
+<Callout type={'info'}>对于 STDIO 类型的 MCP，使用环境变量传递 API Key 和密钥是标准做法，避免在命令行中直接暴露敏感信息。</Callout>
 
-针对 Edge Runtime ，我们在 `@lobehub/chat-plugin-sdk` 提供了 `createErrorResponse` 方法，用于快速返回错误响应。目前提供的错误类型详见：[PluginErrorType][plugin-error-type-url]。
+## 网络搜索
 
-模板中的 clothes 接口实现如下：
+网络搜索是一项特殊的内置能力。与其他技能不同，它通过助理配置中的**搜索模式**设置来控制，而不是通过技能开关。详情请参阅[网络搜索](/zh/docs/usage/agent/web-search)指南。
 
-```ts
-export default async (req: Request) => {
-  if (req.method !== 'POST') return createErrorResponse(PluginErrorType.MethodNotAllowed);
+<Cards>
+  <Card href={'/zh/docs/usage/community/custom-plugin'} title={'自定义 MCP'} />
 
-  const { gender, mood } = (await req.json()) as RequestData;
+  <Card href={'/zh/docs/usage/community/mcp-market'} title={'MCP 市场'} />
 
-  const clothes = gender === 'man' ? manClothes : womanClothes;
-
-  const result: ResponseData = {
-    clothes: clothes[mood] || [],
-    mood,
-    today: Date.now(),
-  };
-
-  return new Response(JSON.stringify(result));
-};
-```
-
-其中 `maniClothes` 和 `womanClothes` 是 mock 数据，在实际场景中，可以替换为数据库查询等。
-
-#### Plugin Gateway
-
-由于 LobeHub 默认的插件网关是云端服务 `/api/plugins`，云端服务通过 manifest 上的 `api.url` 地址发送请求，以解决跨域问题。
-
-针对自定义插件，插件请求需要发送给本地服务， 因此通过在 manifest 中指定网关 ([http://localhost:3400/api/gateway)，LobeHub](http://localhost:3400/api/gateway\)，LobeHub) 将会直接请求该地址，然后只需要在该地址下创建对应的网关即可。
-
-```ts
-import { createLobeHubPluginGateway } from '@lobehub/chat-plugins-gateway';
-
-export const config = {
-  runtime: 'edge',
-};
-
-export default createLobeHubPluginGateway();
-```
-
-[`@lobehub/chat-plugins-gateway`](https://github.com/lobehub/chat-plugins-gateway) 包含了 LobeHub 中插件网关的[实现](https://github.com/lobehub/lobe-chat/blob/main/src/pages/api/plugins.api.ts)，你可以直接使用该包创建网关，进而让 LobeHub 访问到本地的插件服务。
-
-### 插件 UI 界面
-
-自定义插件的 UI 界面是一个可选项。例如 官方插件 [「🧩 / 🕸 网页内容提取」](https://github.com/lobehub/chat-plugin-web-crawler)，没有实现相应的用户界面。
-
-<Image alt="插件 UI 界面 S1" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263241-0e765fdc-3463-4c36-a398-aef177a30df9.png" />
-
-如果你希望在插件消息中展示更加丰富的信息，或者包含一些富交互操作，你可以为插件定制一个用户界面。例如下图则为[「搜索引擎」](https://github.com/lobehub/chat-plugin-search-engine)插件的用户界面。
-
-<Image alt="插件 UI 界面 S2" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263427-9bdc03d5-aa61-4f62-a2ce-88683f3308d8.png" />
-
-#### 插件 UI 界面实现
-
-LobeHub 通过 `iframe` 实现插件 ui 的加载，使用 `postMessage` 实现主体与插件的通信。因此， 插件 UI 的实现方式与普通的网页开发一致，你可以使用任何你熟悉的前端框架与开发语言。
-
-<Image alt="插件 UI 界面实现" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263653-4ea87abc-249a-49f3-a241-7ed93ddb1ddf.png" />
-
-在我们提供的模板中使用了 React + Next.js + [antd](https://ant.design/) 作为前端界面框架，你可以在 [`src/pages/index.tsx`](https://github.com/lobehub/chat-plugin-template/blob/main/src/pages/index.tsx) 中找到用户界面的实现。
-
-其中关于插件通信，我们在 [`@lobehub/chat-plugin-sdk`](https://github.com/lobehub/chat-plugin-sdk) 提供了相关方法，用于简化插件与 LobeHub 的通信。你可以通过 `fetchPluginMessage` 方法主动向 LobeHub 获取当前消息的数据。关于该方法的详细介绍，参见：[fetchPluginMessage][fetch-plugin-message-url]。
-
-```tsx
-import { fetchPluginMessage } from '@lobehub/chat-plugin-sdk';
-import { memo, useEffect, useState } from 'react';
-
-import { ResponseData } from '@/type';
-
-const Render = memo(() => {
-  const [data, setData] = useState<ResponseData>();
-
-  useEffect(() => {
-    // 从 LobeHub 获取当前插件的消息
-    fetchPluginMessage().then((e: ResponseData) => {
-      setData(e);
-    });
-  }, []);
-
-  return <>...</>;
-});
-
-export default Render;
-```
-
-## 插件部署与发布
-
-当你完成插件的开发后，你可以使用你习惯的方式进行插件的部署。例如使用 vercel ，或者打包成 docker 发布等等。
-
-如果你希望插件被更多人使用，欢迎将你的插件 [提交上架](https://github.com/lobehub/lobe-chat-plugins) 到插件市场。
-
-[![][submit-plugin-shield]][submit-plugin-url]
-
-### 插件 Shield
-
-[![lobe-chat-plugin](https://img.shields.io/badge/%F0%9F%A4%AF%20%26%20%F0%9F%A7%A9%20LobeHub-Plugin-95f3d9?labelColor=black\&style=flat-square)](https://github.com/lobehub/lobe-chat-plugins)
-
-```markdown
-[![lobe-chat-plugin](https://img.shields.io/badge/%F0%9F%A4%AF%20%26%20%F0%9F%A7%A9%20LobeHub-Plugin-95f3d9?labelColor=black&style=flat-square)](https://github.com/lobehub/lobe-chat-plugins)
-```
-
-## 链接
-
-- **📘 Pluging SDK 文档**: [https://chat-plugin-sdk.lobehub.com](https://chat-plugin-sdk.lobehub.com)
-- **🚀 chat-plugin-template**: [https://github.com/lobehub/chat-plugin-template](https://github.com/lobehub/chat-plugin-template)
-- **🧩 chat-plugin-sdk**: [https://github.com/lobehub/chat-plugin-sdk](https://github.com/lobehub/chat-plugin-sdk)
-- **🚪 chat-plugin-gateway**: [https://github.com/lobehub/chat-plugins-gateway](https://github.com/lobehub/chat-plugins-gateway)
-- **🏪 lobe-chat-plugins**: [https://github.com/lobehub/lobe-chat-plugins](https://github.com/lobehub/lobe-chat-plugins)
-
-[fetch-plugin-message-url]: https://github.com/lobehub/chat-plugin-template
-[lobe-chat-plugin-template-url]: https://github.com/lobehub/chat-plugin-template
-[manifest-docs-url]: https://chat-plugin-sdk.lobehub.com/guides/plugin-manifest
-[plugin-error-type-url]: https://github.com/lobehub/chat-plugin-template
-[submit-plugin-shield]: https://img.shields.io/badge/🧩/🏪_submit_plugin-%E2%86%92-95f3d9?labelColor=black&style=for-the-badge
-[submit-plugin-url]: https://github.com/lobehub/lobe-chat-plugins
+  <Card href={'/zh/docs/usage/getting-started/agent'} title={'助理'} />
+</Cards>

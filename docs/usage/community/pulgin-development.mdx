@@ -1,281 +1,146 @@
 ---
-title: Plugin Development
+title: Skill Management
 description: >-
-  Learn how to add and use custom plugins in LobeHub, including creating a
-  plugin project, adding local plugins in role settings, testing plugin
-  functionality, and understanding the development and deployment process.
+  Discover, install, configure, and organize Skills — the tools and integrations
+  that extend what your Agents can do.
 tags:
+  - Skills
   - LobeHub
-  - LobeHub
-  - Plugin Development
-  - Custom Plugins
-  - Plugin Deployment
-  - Plugin Publishing
-  - Plugin UI
-  - Plugin SDK
+  - MCP
+  - Integrations
+  - Skill Management
+  - Plugins
 ---
 
-# Plugin Development
+# Skill Management
 
-## Plugin Structure
+**Skills** are the capabilities you attach to Agents — web search, code execution, database access, external API integrations, and more. Each skill gives an Agent access to a set of tools it can call during a conversation to complete tasks it couldn't do on its own.
 
-A LobeHub plugin consists of the following components:
+This guide covers how to discover, install, configure, and enable skills across your workspace.
 
-1. **Plugin Index**: Displays basic plugin information, including name, description, author, version, and a link to the plugin manifest. The official plugin index is hosted at [lobe-chat-plugins](https://github.com/lobehub/lobe-chat-plugins). To publish your plugin to the official marketplace, you need to [submit a PR](https://github.com/lobehub/lobe-chat-plugins/pulls) to this repository.
-2. **Plugin Manifest**: Describes the plugin's functionality, including backend services, frontend UI, version, and more. For a detailed explanation, see \[manifest]\[manifest-docs-url].
-3. **Plugin Services**: Implements the backend and optional frontend modules described in the manifest:
-   - **Backend**: Implements the `api` section defined in the manifest.
-   - **Frontend UI** (optional): Implements the `ui` section, allowing for richer message displays beyond plain text.
+## What Are Skills?
 
-## Custom Plugin Workflow
+Skills extend Agents beyond conversation. When an Agent has a skill enabled, it can actively use tools — search the web, query a database, read files, send a Slack message — rather than just discussing how to do those things.
 
-This section walks you through how to add and use a custom plugin in LobeHub.
+Every skill exposes one or more **tools**. The Agent decides when to call a tool based on what you ask. You can enable **Chain of Thought** in a conversation to see exactly which tools are being called and with what parameters.
 
-<Steps>
-  ### Create and Start a Plugin Project
+## Types of Skills
 
-  First, create a local plugin project using our template: \[lobe-chat-plugin-template]\[lobe-chat-plugin-template-url]
+| Type                     | Description                          | Examples                                  |
+| ------------------------ | ------------------------------------ | ----------------------------------------- |
+| **Built-in tools**       | Capabilities built into LobeHub      | Artifacts, Sandbox, GTD, Notebook, Memory |
+| **LobeHub Integrations** | OAuth-connected third-party services | Linear, Microsoft, Twitter                |
+| **Klavis**               | Klavis-powered integrations          | Gmail, Notion, Slack, and more            |
+| **Community MCP**        | MCP servers from the MCP Marketplace | GitHub, PostgreSQL, Brave Search          |
+| **Custom MCP**           | MCP servers you add manually         | Your own APIs, private tools              |
 
-  ```bash
-  $ git clone https://github.com/lobehub/chat-plugin-template.git
-  $ cd chat-plugin-template
-  $ npm i
-  $ npm run dev
-  ```
+## The Skill Store
 
-  Once you see `ready started server on 0.0.0.0:3400, url: http://localhost:3400`, your plugin service is running locally.
+The Skill Store is where you discover and install skills. Open it from:
 
-  <Image alt="Create and Start Plugin Project" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259526-9ef25272-4312-429b-93bc-a95515727ed3.png" />
+- **Settings → Skills** — click **Skill Store** in the top right
+- **Agent settings → Skills** — click **Add skill**
+- **Chat input** — click the **Tools** button, then **Skill Store**
 
-  ### Add Local Plugin in LobeHub Role Settings
+The Skill Store has three tabs:
 
-  Next, go to LobeHub, create a new assistant, and open its session settings:
+- **LobeHub** — Built-in tools and LobeHub-native integrations (Linear, Microsoft, Twitter, Klavis services)
+- **Community** — MCPs from the [MCP Marketplace](/docs/usage/community/mcp-market), covering thousands of services
+- **Custom** — MCP servers you've added manually, plus an **Add custom skill** button
 
-  <Image alt="Add Local Plugin in LobeHub Role Settings S1" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259643-1a9cc34a-76f3-4ccf-928b-129654670efd.png" />
+Use the search bar to filter across all tabs by keyword.
 
-  Click the <kbd>Add</kbd> button on the right side of the plugin list to open the custom plugin dialog:
+## Installing Skills
 
-  <Image alt="Add Local Plugin in LobeHub Role Settings S2" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259748-2ef6a244-39bb-483c-b359-f156ffcbe1a4.png" />
+### Built-in tools and Integrations
 
-  Enter `http://localhost:3400/manifest-dev.json` in the **Plugin Manifest URL** field. This is the local address of your plugin manifest.
+Built-in tools (Artifacts, Sandbox, GTD, Notebook) are pre-installed — you can enable them for any Agent immediately. LobeHub Integrations and Klavis services require an OAuth connection:
 
-  You should now see the plugin identifier auto-filled as `chat-plugin-template`. Fill in the remaining fields (only the title is required), then click <kbd>Save</kbd> to complete the setup.
+1. In the Skill Store, go to the **LobeHub** tab
+2. Find the integration you want (e.g. Linear, Gmail)
+3. Click **Connect** and complete the OAuth flow
+4. The integration becomes available as a skill for any Agent
 
-  <Image alt="Add Local Plugin in LobeHub Role Settings S3" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259964-59f4906d-ae2e-4ec0-8b43-db36871d0869.png" />
+### Community MCP
 
-  Once added, the plugin will appear in the list. To edit its configuration, click the <kbd>Settings</kbd> button on the far right.
+1. In the Skill Store, go to the **Community** tab (or browse the MCP Marketplace from the sidebar)
+2. Find the MCP you want and click **Install**
+3. If the MCP requires configuration (API keys, URLs), a setup dialog will appear
+4. Once installed, the MCP appears in **Settings → Skills** under **Community MCPs**
 
-  <Image alt="Add Local Plugin in LobeHub Role Settings S4" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260093-a0363c74-0b5b-48dd-b103-2db6b4a8262e.png" />
+See the [MCP Marketplace](/docs/usage/community/mcp-market) guide for more detail on connection types and configuration.
 
-  ### Test Plugin Functionality in Chat
+### Custom MCP
 
-  Now let’s test if the plugin works as expected.
+Add any MCP-compatible server that isn't in the marketplace:
 
-  Click <kbd>Back</kbd> to return to the chat area, and send a message like: “What should I wear?” The assistant will ask for your gender and current mood.
+1. In the Skill Store, go to the **Custom** tab
+2. Click **Add custom skill**
+3. Configure the connection (HTTP endpoint or STDIO command)
+4. Test the connection and click **Install**
 
-  <Image alt="Test Plugin Functionality S1" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260291-f0aa0e7c-0ffb-486c-a834-08e73d49896f.png" />
+See the [Custom MCP](/docs/usage/community/custom-plugin) guide for a full walkthrough.
 
-  After you respond, the assistant will call the plugin, fetch clothing recommendations based on your gender and mood, and present the results along with a summary.
+## Skill Settings Page
 
-  <Image alt="Test Plugin Functionality S2" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260461-c22ae797-2809-464b-96fc-d0c020f4807b.png" />
+**Settings → Skills** is your central view of everything installed in your workspace.
 
-  After completing these steps, you now understand the basic process of adding and using a custom plugin in LobeHub.
-</Steps>
+Skills are grouped into three categories:
 
-## Local Plugin Development
+**Integrations** — Built-in tools, LobeHub-connected services, and Klavis integrations. Each shows its connection status. Click **Connect** or **Disconnect** to manage the OAuth link.
 
-Now that you know how to add and use a plugin, let’s dive into the development process.
+**Community MCPs** — MCP servers installed from the marketplace. Each shows its connection type (HTTP or STDIO). Click **Configure** to edit the connection URL or authentication, or to view the tools it provides.
 
-### Manifest
+**Custom MCPs** — MCP servers you've added manually. Click **Configure** to open the full editing dialog where you can change the connection type, URL, command, arguments, environment variables, and other settings.
 
-The `manifest` defines how the plugin works. The key fields are `api` and `ui`, which describe the backend API and frontend UI respectively.
+To uninstall any skill, open its menu and select **Uninstall**.
 
-Here’s an example from the template:
+## Enabling Skills for Agents
 
-```json
-{
-  "api": [
-    {
-      "url": "http://localhost:3400/api/clothes",
-      "name": "recommendClothes",
-      "description": "Recommend clothes based on the user's mood",
-      "parameters": {
-        "properties": {
-          "mood": {
-            "description": "User's current mood. Options: happy, sad, anger, fear, surprise, disgust",
-            "enums": ["happy", "sad", "anger", "fear", "surprise", "disgust"],
-            "type": "string"
-          },
-          "gender": {
-            "type": "string",
-            "enum": ["man", "woman"],
-            "description": "User's gender, must be asked before calling the API"
-          }
-        },
-        "required": ["mood", "gender"],
-        "type": "object"
-      }
-    }
-  ],
-  "gateway": "http://localhost:3400/api/gateway",
-  "identifier": "chat-plugin-template",
-  "ui": {
-    "url": "http://localhost:3400",
-    "height": 200
-  },
-  "version": "1"
-}
-```
+Installing a skill adds it to your workspace, but you choose which agents get access to each skill. Skills are **per-agent** — enabling a skill for one agent does not affect others.
 
-Key fields:
+### From Agent Settings
 
-1. `identifier`: Unique plugin ID. Must be globally unique.
-2. `api`: Array of API definitions. Each includes `url`, `name`, `description`, and `parameters`. The `description` and `parameters` are used in GPT’s [Function Call](https://sspai.com/post/81986) and must follow [JSON Schema](https://json-schema.org/).
-3. `ui`: Defines the plugin’s frontend interface, loaded via iframe. You can specify height and width.
-4. `gateway`: Specifies the API gateway. LobeHub’s default is a cloud service, but for local plugins, this should point to your local server.
-5. `version`: Plugin version (currently unused).
+1. Open the agent and go to its settings
+2. Navigate to **Skills**
+3. Toggle on the skills this agent should be able to use
+4. Changes take effect in the next conversation
 
-For a full breakdown of manifest fields, see: \[manifest]\[manifest-docs-url].
+### From the Chat Input
 
-### Project Structure
+1. Click the **Tools** button above the chat input
+2. Toggle individual skills on or off for the current agent
+3. A link at the bottom opens **Skill Management** for workspace-wide changes
 
-The \[lobe-chat-plugin-template]\[lobe-chat-plugin-template-url] uses Next.js. Its structure:
+## Configuring MCP Connection Settings
 
-```
-➜  chat-plugin-template
-├── public
-│   └── manifest-dev.json            # Manifest file
-├── src
-│   └── pages
-│   │   ├── api                      # Next.js API routes
-│   │   │   ├── clothes.ts           # recommendClothes API
-│   │   │   └── gateway.ts           # Local plugin gateway
-│   │   └── index.tsx                # Frontend UI
-```
+After installation, you may need to update an MCP's connection details — for example, if an API key rotates or a server URL changes.
 
-You can use any framework or language, as long as it implements the manifest functionality.
+### Editing an HTTP MCP
 
-We also welcome contributions of templates in other frameworks and languages.
+1. Go to **Settings → Skills**
+2. Find the MCP and click **Configure**
+3. Click the **Edit** button next to the connection details
+4. Update the endpoint URL, authentication type, or API key
+5. Click **Save**
 
-### Backend
+### Editing a STDIO MCP
 
-The backend implements the APIs defined in the manifest. The template uses Vercel’s [Edge Runtime](https://nextjs.org/docs/pages/api-reference/edge) for serverless deployment.
+1. Go to **Settings → Skills**
+2. Find the MCP and click **Configure**
+3. Edit the command, arguments, or environment variables
+4. Click **Save**
 
-#### API Implementation
+<Callout type={'info'}>For STDIO MCPs, environment variables are the standard way to pass API keys and secrets without exposing them in the command line.</Callout>
 
-We provide a `createErrorResponse` method in `@lobehub/chat-plugin-sdk` for handling errors. See \[PluginErrorType]\[plugin-error-type-url] for available types.
+## Web Search
 
-Example implementation of the clothes API:
+Web search is a special built-in capability. Unlike other skills, it is controlled by the **Search Mode** setting in agent configuration rather than the Skills toggle. See the [Web Search](/docs/usage/agent/web-search) guide for details.
 
-```ts
-export default async (req: Request) => {
-  if (req.method !== 'POST') return createErrorResponse(PluginErrorType.MethodNotAllowed);
+<Cards>
+  <Card href={'/docs/usage/community/custom-plugin'} title={'Custom MCP'} />
 
-  const { gender, mood } = (await req.json()) as RequestData;
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
 
-  const clothes = gender === 'man' ? manClothes : womanClothes;
-
-  const result: ResponseData = {
-    clothes: clothes[mood] || [],
-    mood,
-    today: Date.now(),
-  };
-
-  return new Response(JSON.stringify(result));
-};
-```
-
-`manClothes` and `womanClothes` are mock data. Replace with real data sources as needed.
-
-#### Plugin Gateway
-
-LobeHub’s default plugin gateway is `/api/plugins`, which sends requests to the `api.url` in the manifest.
-
-For local plugins, set the `gateway` to a local address (e.g., `http://localhost:3400/api/gateway`). Then implement the gateway:
-
-```ts
-import { createLobeHubPluginGateway } from '@lobehub/chat-plugins-gateway';
-
-export const config = {
-  runtime: 'edge',
-};
-
-export default createLobeHubPluginGateway();
-```
-
-[`@lobehub/chat-plugins-gateway`](https://github.com/lobehub/chat-plugins-gateway) provides the gateway implementation used in LobeHub. Use it to route requests to your local plugin service.
-
-### Plugin UI
-
-The UI is optional. For example, the official plugin [🧩 / 🕸 Web Content Extractor](https://github.com/lobehub/chat-plugin-web-crawler) has no UI.
-
-<Image alt="Plugin UI Example S1" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263241-0e765fdc-3463-4c36-a398-aef177a30df9.png" />
-
-If you want to display rich content or interactive elements, you can build a custom UI. For example, the [Search Engine](https://github.com/lobehub/chat-plugin-search-engine) plugin:
-
-<Image alt="Plugin UI Example S2" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263427-9bdc03d5-aa61-4f62-a2ce-88683f3308d8.png" />
-
-#### Implementing the UI
-
-LobeHub loads plugin UIs via `iframe` and uses `postMessage` for communication. You can use any frontend framework or language.
-
-<Image alt="Plugin UI Implementation" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263653-4ea87abc-249a-49f3-a241-7ed93ddb1ddf.png" />
-
-The template uses React + Next.js + [antd](https://ant.design/). See [`src/pages/index.tsx`](https://github.com/lobehub/chat-plugin-template/blob/main/src/pages/index.tsx) for the UI implementation.
-
-To simplify communication, use `fetchPluginMessage` from [`@lobehub/chat-plugin-sdk`](https://github.com/lobehub/chat-plugin-sdk). It fetches the current plugin message from LobeHub. See \[fetchPluginMessage]\[fetch-plugin-message-url] for details.
-
-```tsx
-import { fetchPluginMessage } from '@lobehub/chat-plugin-sdk';
-import { memo, useEffect, useState } from 'react';
-
-import { ResponseData } from '@/type';
-
-const Render = memo(() => {
-  const [data, setData] = useState<ResponseData>();
-
-  useEffect(() => {
-    fetchPluginMessage().then((e: ResponseData) => {
-      setData(e);
-    });
-  }, []);
-
-  return <>...</>;
-});
-
-export default Render;
-```
-
-## Plugin Deployment & Publishing
-
-Once your plugin is ready, deploy it using your preferred method—Vercel, Docker, etc.
-
-To share your plugin with others, consider [submitting it](https://github.com/lobehub/lobe-chat-plugins) to the official plugin marketplace.
-
-\[!\[]\[submit-plugin-shield]]\[submit-plugin-url]
-
-### Plugin Shield
-
-[![lobe-chat-plugin](https://img.shields.io/badge/%F0%9F%A4%AF%20%26%20%F0%9F%A7%A9%20LobeHub-Plugin-95f3d9?labelColor=black\&style=flat-square)](https://github.com/lobehub/lobe-chat-plugins)
-
-```markdown
-[![lobe-chat-plugin](https://img.shields.io/badge/%F0%9F%A4%AF%20%26%20%F0%9F%A7%A9%20LobeHub-Plugin-95f3d9?labelColor=black&style=flat-square)](https://github.com/lobehub/lobe-chat-plugins)
-```
-
-## Links
-
-- **📘 Plugin SDK Docs**: [https://chat-plugin-sdk.lobehub.com](https://chat-plugin-sdk.lobehub.com)
-- **🚀 chat-plugin-template**: [https://github.com/lobehub/chat-plugin-template](https://github.com/lobehub/chat-plugin-template)
-- **🧩 chat-plugin-sdk**: [https://github.com/lobehub/chat-plugin-sdk](https://github.com/lobehub/chat-plugin-sdk)
-- **🚪 chat-plugin-gateway**: [https://github.com/lobehub/chat-plugins-gateway](https://github.com/lobehub/chat-plugins-gateway)
-- **🏪 lobe-chat-plugins**: [https://github.com/lobehub/lobe-chat-plugins](https://github.com/lobehub/lobe-chat-plugins)
-
-```
-
-[fetch-plugin-message-url]: https://github.com/lobehub/chat-plugin-template
-[lobe-chat-plugin-template-url]: https://github.com/lobehub/chat-plugin-template
-[manifest-docs-url]: https://chat-plugin-sdk.lobehub.com/guides/plugin-manifest
-[plugin-error-type-url]: https://github.com/lobehub/chat-plugin-template
-[submit-plugin-shield]: https://img.shields.io/badge/🧩/🏪_submit_plugin-%E2%86%92-95f3d9?labelColor=black&style=for-the-badge
-[submit-plugin-url]: https://github.com/lobehub/lobe-chat-plugins
-```
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+</Cards>
