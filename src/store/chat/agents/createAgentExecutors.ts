@@ -47,7 +47,7 @@ import { sleep } from '@/utils/sleep';
 
 import { StreamingHandler } from './StreamingHandler';
 import { type StreamChunk } from './types/streaming';
-import { dedupeBy } from './utils/dedupeBy';
+import { dedupeBy } from '@lobechat/utils';
 
 const log = debug('lobe-store:agent-executors');
 

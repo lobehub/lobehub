@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dedupeBy } from '../../utils/dedupeBy';
+import { dedupeBy } from './dedupeBy';
 
 describe('dedupeBy', () => {
   it('should deduplicate items by key, keeping the first occurrence', () => {
