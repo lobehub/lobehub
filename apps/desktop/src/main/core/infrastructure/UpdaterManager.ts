@@ -343,7 +343,7 @@ export class UpdaterManager {
       autoUpdater.setFeedURL({
         owner: 'lobehub',
         provider: 'github',
-        repo: 'lobe-chat',
+        repo: 'lobehub',
       });
 
       autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
