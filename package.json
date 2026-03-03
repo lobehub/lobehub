@@ -37,7 +37,7 @@
     "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build && pnpm run build-sitemap",
     "build:next": "cross-env NODE_OPTIONS=--max-old-space-size=6144 next build",
     "build:spa": "rm -rf public/spa && cross-env NODE_OPTIONS=--max-old-space-size=6144 vite build",
-    "build:spa:copy": "mkdir -p public/spa && cp -r dist/desktop/assets public/spa/ && ([ -d dist/mobile/assets ] && cp -r dist/mobile/assets public/spa/ || true) && tsx scripts/generateSpaTemplates.mts",
+    "build:spa:copy": "mkdir -p public/spa && for dir in assets i18n vendor; do ([ -d dist/desktop/$dir ] && cp -r dist/desktop/$dir public/spa/ || true) && ([ -d dist/mobile/$dir ] && cp -r dist/mobile/$dir public/spa/ || true); done && tsx scripts/generateSpaTemplates.mts",
     "build:spa:mobile": "cross-env NODE_OPTIONS=--max-old-space-size=8192 MOBILE=true vite build",
     "build:vercel": "bun run build && bun run db:migrate",
     "build-migrate-db": "bun run db:migrate",
