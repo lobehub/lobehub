@@ -4,6 +4,7 @@ import { Command } from 'commander';
 
 import { registerInspectCommand } from './inspect';
 import { registerListCommand } from './list';
+import { registerPartialCommand } from './partial';
 import { registerTraceCommand } from './trace';
 
 const program = new Command();
@@ -13,5 +14,6 @@ program.name('agent-tracing').description('Local agent execution snapshot viewer
 registerTraceCommand(program);
 registerListCommand(program);
 registerInspectCommand(program);
+registerPartialCommand(program);
 
 program.parse();

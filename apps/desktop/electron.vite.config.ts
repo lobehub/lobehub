@@ -48,8 +48,9 @@ export default defineConfig({
       minify: !isDev,
       outDir: 'dist/main',
       rollupOptions: {
-        // Native modules must be externalized to work correctly
-        external: getExternalDependencies(),
+        // Native modules must be externalized to work correctly.
+        // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
+        external: [...getExternalDependencies(), 'bufferutil', 'utf-8-validate'],
         output: {
           // Prevent debug package from being bundled into index.js to avoid side-effect pollution
           manualChunks(id) {

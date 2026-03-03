@@ -37,6 +37,8 @@ export class FileSnapshotStore implements ISnapshotStore {
   }
 
   async get(traceId: string): Promise<ExecutionSnapshot | null> {
+    if (traceId === 'latest') return this.getLatest();
+
     const files = await this.listFiles();
     const match = files.find((f) => f.includes(traceId.slice(0, 12)));
     if (!match) return null;
@@ -90,6 +92,36 @@ export class FileSnapshotStore implements ISnapshotStore {
   private partialPath(operationId: string): string {
     const safe = operationId.replaceAll('/', '_');
     return path.join(this.partialDir(), `${safe}.json`);
+  }
+
+  async listPartials(): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(this.partialDir());
+      return entries
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+        .reverse();
+    } catch {
+      return [];
+    }
+  }
+
+  async getPartial(idOrFilename: string): Promise<Partial<ExecutionSnapshot> | null> {
+    // Try exact filename first
+    try {
+      const filePath = idOrFilename.endsWith('.json')
+        ? path.join(this.partialDir(), idOrFilename)
+        : this.partialPath(idOrFilename);
+      const content = await fs.readFile(filePath, 'utf8');
+      return JSON.parse(content) as Partial<ExecutionSnapshot>;
+    } catch {
+      // Fall back to substring match
+      const files = await this.listPartials();
+      const match = files.find((f) => f.includes(idOrFilename));
+      if (!match) return null;
+      const content = await fs.readFile(path.join(this.partialDir(), match), 'utf8');
+      return JSON.parse(content) as Partial<ExecutionSnapshot>;
+    }
   }
 
   async loadPartial(operationId: string): Promise<Partial<ExecutionSnapshot> | null> {

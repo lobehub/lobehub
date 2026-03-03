@@ -246,6 +246,7 @@ export class AgentRuntimeService {
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
+      activeDeviceId,
       operationId,
       initialContext,
       agentConfig,
@@ -253,11 +254,9 @@ export class AgentRuntimeService {
       userId,
       autoStart = true,
       stream,
-      tools,
       initialMessages = [],
       appContext,
-      toolManifestMap,
-      toolSourceMap,
+      toolSet,
       stepCallbacks,
       userInterventionConfig,
       completionWebhook,
@@ -267,7 +266,11 @@ export class AgentRuntimeService {
       evalContext,
       maxSteps,
       userMemory,
+      deviceSystemInfo,
+      userTimezone,
     } = params;
+
+    const operationToolSet = toolSet;
 
     try {
       const memories = userMemory?.memories;
@@ -277,9 +280,9 @@ export class AgentRuntimeService {
         autoStart,
         agentConfig?.model,
         agentConfig?.provider,
-        tools?.length ?? 0,
+        operationToolSet.tools?.length ?? 0,
         initialMessages.length,
-        toolManifestMap ? Object.keys(toolManifestMap).length : 0,
+        operationToolSet.manifestMap ? Object.keys(operationToolSet.manifestMap).length : 0,
         memories
           ? `{contexts:${memories.contexts?.length ?? 0},experiences:${memories.experiences?.length ?? 0},preferences:${memories.preferences?.length ?? 0},identities:${memories.identities?.length ?? 0},activities:${memories.activities?.length ?? 0},persona:${memories.persona ? 'yes' : 'no'}}`
           : 'none',
@@ -294,8 +297,10 @@ export class AgentRuntimeService {
         // Use the passed initial messages
         messages: initialMessages,
         metadata: {
+          activeDeviceId,
           agentConfig,
           completionWebhook,
+          deviceSystemInfo,
           discordContext,
           evalContext,
           // need be removed
@@ -304,6 +309,7 @@ export class AgentRuntimeService {
           stream,
           userId,
           userMemory,
+          userTimezone,
           webhookDelivery,
           workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
@@ -312,11 +318,13 @@ export class AgentRuntimeService {
         // modelRuntimeConfig at state level for executor fallback
         modelRuntimeConfig,
         operationId,
+        operationToolSet,
         status: 'idle',
         stepCount: 0,
-        toolManifestMap,
-        toolSourceMap,
-        tools,
+        // Backward-compat: resolved tool fields read by RuntimeExecutors
+        toolManifestMap: operationToolSet.manifestMap,
+        toolSourceMap: operationToolSet.sourceMap,
+        tools: operationToolSet.tools,
         // User intervention config for headless mode in async tasks
         userInterventionConfig,
       } as Partial<AgentState>;
@@ -1276,8 +1284,11 @@ export class AgentRuntimeService {
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
+      activeDeviceId: metadata?.activeDeviceId,
       agentConfig: metadata?.agentConfig,
+      deviceSystemInfo: metadata?.deviceSystemInfo,
       discordContext: metadata?.discordContext,
+      userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
       messageModel: this.messageModel,
       operationId,

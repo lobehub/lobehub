@@ -143,6 +143,7 @@ export class MessagesEngine {
       stepContext,
       pageContentContext,
       enableSystemDate,
+      timezone,
     } = this.params;
 
     const isAgentBuilderEnabled = !!agentBuilderContext;
@@ -178,7 +179,7 @@ export class MessagesEngine {
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
 
       // 3. System date injection (appends current date to system message)
-      new SystemDateProvider({ enabled: isSystemDateEnabled }),
+      new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
 
       // =============================================
       // Phase 2: First User Message Context Injection
