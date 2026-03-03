@@ -47,6 +47,7 @@ import { sleep } from '@/utils/sleep';
 
 import { StreamingHandler } from './StreamingHandler';
 import { type StreamChunk } from './types/streaming';
+import { dedupeBy } from './utils/dedupeBy';
 
 const log = debug('lobe-store:agent-executors');
 
@@ -54,16 +55,6 @@ const log = debug('lobe-store:agent-executors');
 const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/craw': 0.002,
   'lobe-web-browsing/search': 0.001,
-};
-
-const dedupeBy = <T>(items: T[], getKey: (item: T) => string): T[] => {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = getKey(item);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 };
 
 /**
