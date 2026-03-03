@@ -19,6 +19,7 @@ export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeGoogleAI } from './providers/google';
 export { LobeGroq } from './providers/groq';
 export { LobeHubAI } from './providers/lobehub';
+export { LobeLongCatAI } from './providers/longcat';
 export { LobeMinimaxAI } from './providers/minimax';
 export { LobeMistralAI } from './providers/mistral';
 export { LobeMoonshotAI } from './providers/moonshot';

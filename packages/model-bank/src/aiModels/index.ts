@@ -33,6 +33,7 @@ import { default as internlm } from './internlm';
 import { default as jina } from './jina';
 import { default as lmstudio } from './lmstudio';
 import { default as lobehub } from './lobehub/index';
+import { default as longcat } from './longcat';
 import { default as minimax } from './minimax';
 import { default as mistral } from './mistral';
 import { default as modelscope } from './modelscope';
@@ -125,6 +126,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   internlm,
   jina,
   lmstudio,
+  longcat,
   ...(ENABLE_BUSINESS_FEATURES ? { lobehub } : {}),
   minimax,
   mistral,
@@ -200,6 +202,7 @@ export { default as internlm } from './internlm';
 export { default as jina } from './jina';
 export { default as lmstudio } from './lmstudio';
 export { default as lobehub } from './lobehub/index';
+export { default as longcat } from './longcat';
 export { default as minimax } from './minimax';
 export { default as mistral } from './mistral';
 export { default as modelscope } from './modelscope';
