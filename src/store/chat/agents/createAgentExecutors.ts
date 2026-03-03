@@ -56,6 +56,16 @@ const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/search': 0.001,
 };
 
+const dedupeBy = <T>(items: T[], getKey: (item: T) => string): T[] => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = getKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 /**
  * Creates custom executors for the Chat Agent Runtime
  * These executors wrap existing chat store methods to integrate with agent-runtime
@@ -349,17 +359,26 @@ export const createAgentExecutors = (context: {
         });
 
         if (additional.tools?.length) {
-          resolvedAgentConfig = {
-            ...context.agentConfig,
-            enabledManifests: [
-              ...(context.agentConfig.enabledManifests || []),
-              ...additional.enabledManifests,
-            ],
-            enabledToolIds: [
+          const mergedEnabledManifests = dedupeBy(
+            [...(context.agentConfig.enabledManifests || []), ...additional.enabledManifests],
+            (manifest) => manifest.identifier,
+          );
+          const mergedEnabledToolIds = [
+            ...new Set([
               ...(context.agentConfig.enabledToolIds || []),
               ...additional.enabledToolIds,
-            ],
-            tools: [...(context.agentConfig.tools || []), ...additional.tools],
+            ]),
+          ];
+          const mergedTools = dedupeBy(
+            [...(context.agentConfig.tools || []), ...additional.tools],
+            (tool) => tool.function.name,
+          );
+
+          resolvedAgentConfig = {
+            ...context.agentConfig,
+            enabledManifests: mergedEnabledManifests,
+            enabledToolIds: mergedEnabledToolIds,
+            tools: mergedTools,
           };
 
           log(

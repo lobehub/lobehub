@@ -332,9 +332,17 @@ export const buildGoogleTools = (
 ): GoogleFunctionCallTool[] | undefined => {
   if (!tools || tools.length === 0) return;
 
+  const seenToolNames = new Set<string>();
+  const uniqueTools = tools.filter((tool) => {
+    const name = tool.function.name;
+    if (seenToolNames.has(name)) return false;
+    seenToolNames.add(name);
+    return true;
+  });
+
   return [
     {
-      functionDeclarations: tools.map((tool) => buildGoogleTool(tool)),
+      functionDeclarations: uniqueTools.map((tool) => buildGoogleTool(tool)),
     },
   ];
 };
