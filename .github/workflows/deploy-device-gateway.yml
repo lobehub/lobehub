@@ -1,5 +1,8 @@
 name: Deploy Device Gateway
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [canary]
