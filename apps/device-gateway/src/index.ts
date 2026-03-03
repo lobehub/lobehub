@@ -18,19 +18,8 @@ export default {
       const token = url.searchParams.get('token');
       if (!token) return new Response('Missing token', { status: 401 });
 
-      let userId: string;
-
       try {
-        if (token === env.SERVICE_TOKEN) {
-          // Service token auth (for CLI debugging)
-          const uid = url.searchParams.get('userId');
-          if (!uid) return new Response('Missing userId for service token auth', { status: 400 });
-          userId = uid;
-        } else {
-          // JWT auth (normal desktop flow)
-          const result = await verifyDesktopToken(env, token);
-          userId = result.userId;
-        }
+        const { userId } = await verifyDesktopToken(env, token);
 
         const id = env.DEVICE_GATEWAY.idFromName(`user:${userId}`);
         const stub = env.DEVICE_GATEWAY.get(id);
