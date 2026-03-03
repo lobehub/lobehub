@@ -1,9 +1,10 @@
-import type { ProgressInfo, UpdateInfo } from '../types';
+import type { ProgressInfo, UpdateChannel, UpdateInfo } from '../types';
 
 export interface AutoUpdateBroadcastEvents {
   manualUpdateAvailable: (info: UpdateInfo) => void;
   manualUpdateCheckStart: () => void;
   manualUpdateNotAvailable: (info: UpdateInfo) => void;
+  updateChannelChanged: (channel: UpdateChannel) => void;
   updateDownloaded: (info: UpdateInfo) => void;
   updateDownloadProgress: (progress: ProgressInfo) => void;
   updateDownloadStart: () => void;

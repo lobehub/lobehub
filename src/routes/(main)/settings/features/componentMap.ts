@@ -7,6 +7,9 @@ import { SettingsTabs } from '@/store/global/initialState';
 const loading = (debugId: string) => () => createElement(Loading, { debugId });
 
 export const componentMap = {
+  [SettingsTabs.Beta]: dynamic(() => import('../beta'), {
+    loading: loading('Settings > Beta'),
+  }),
   [SettingsTabs.Common]: dynamic(() => import('../common'), {
     loading: loading('Settings > Common'),
   }),

@@ -294,7 +294,7 @@ jobs:
           fi
           bun add --no-save yaml@2.8.1
 
-      - name: Merge latest-mac.yml files
+      - name: Merge mac YAML files
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files

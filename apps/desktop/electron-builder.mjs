@@ -25,39 +25,42 @@ const hasAppleCertificate = Boolean(process.env.CSC_LINK);
 // 自定义更新服务器 URL (用于 stable 频道)
 const updateServerUrl = process.env.UPDATE_SERVER_URL;
 
-console.log(`🚄 Build Version ${packageJSON.version}, Channel: ${channel}`);
-console.log(`🏗️ Building for architecture: ${arch}`);
+console.info(`🚄 Build Version ${packageJSON.version}, Channel: ${channel}`);
+console.info(`🏗️ Building for architecture: ${arch}`);
 
 // Channel identity derived solely from UPDATE_CHANNEL env var.
 // Adding a new channel won't break stable detection.
 const isStable = !channel || channel === 'stable';
 const isNightly = channel === 'nightly';
 const isBeta = channel === 'beta';
+const isCanary = channel === 'canary';
 
-// 根据 channel 配置不同的 publish provider
-// - Stable + UPDATE_SERVER_URL: 使用 generic (自定义 HTTP 服务器)
-// - Beta/Nightly: 仅使用 GitHub
+// All channels use generic provider (S3) when UPDATE_SERVER_URL is set.
+// URL format: {UPDATE_SERVER_URL}/{channelPath}
+// Fallback to GitHub when no S3 URL configured (local dev).
 const getPublishConfig = () => {
-  const githubProvider = {
-    owner: 'lobehub',
-    provider: 'github',
-    repo: 'lobe-chat',
-  };
+  const channelPath = isNightly ? 'nightly' : isCanary ? 'canary' : 'stable';
 
-  // Stable channel: 使用自定义服务器 (generic provider)
-  if (isStable && updateServerUrl) {
-    console.log(`📦 Stable channel: Using generic provider (${updateServerUrl})`);
-    const genericProvider = {
-      provider: 'generic',
-      url: updateServerUrl,
-    };
-    // 同时发布到自定义服务器和 GitHub (GitHub 作为备用/镜像)
-    return [genericProvider, githubProvider];
+  if (updateServerUrl) {
+    console.info(
+      `📦 ${channelPath} channel: Using generic provider (${updateServerUrl}/${channelPath})`,
+    );
+    return [
+      {
+        provider: 'generic',
+        url: `${updateServerUrl}/${channelPath}`,
+      },
+    ];
   }
 
-  // Beta/Nightly channel: 仅使用 GitHub
-  console.log(`📦 ${channel || 'default'} channel: Using GitHub provider`);
-  return [githubProvider];
+  console.info(`📦 ${channel || 'default'} channel: No UPDATE_SERVER_URL, using GitHub provider`);
+  return [
+    {
+      owner: 'lobehub',
+      provider: 'github',
+      repo: 'lobe-chat',
+    },
+  ];
 };
 
 // Keep only these Electron Framework localization folders (*.lproj)
@@ -68,11 +71,12 @@ const keepLanguages = new Set(['en', 'en_GB', 'en-US', 'en_US']);
 if (!hasAppleCertificate) {
   // Disable auto discovery to keep electron-builder from searching unavailable signing identities
   process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
-  console.log('⚠️ Apple certificate link not found, macOS artifacts will be unsigned.');
+  console.info('⚠️ Apple certificate link not found, macOS artifacts will be unsigned.');
 }
 
 // 根据版本类型确定协议 scheme
 const getProtocolScheme = () => {
+  if (isCanary) return 'lobehub-canary';
   if (isNightly) return 'lobehub-nightly';
   if (isBeta) return 'lobehub-beta';
 
@@ -172,18 +176,15 @@ const config = {
     try {
       await fs.access(assetsCarSource);
       await fs.copyFile(assetsCarSource, assetsCarDest);
-      console.log(`✅ Copied Liquid Glass icon: ${iconFileName}.Assets.car`);
+      console.info(`✅ Copied Liquid Glass icon: ${iconFileName}.Assets.car`);
     } catch {
       // Non-critical: Assets.car not found or copy failed
       // App will use fallback .icns icon on all macOS versions
-      console.log(`⏭️  Skipping Assets.car (not found or copy failed)`);
+      console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
-  appId: isNightly
-    ? 'com.lobehub.lobehub-desktop-nightly'
-    : isBeta
-      ? 'com.lobehub.lobehub-desktop-beta'
-      : 'com.lobehub.lobehub-desktop',
+  // Unified appId across all channels for seamless cross-channel updates
+  appId: 'com.lobehub.lobehub-desktop',
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },

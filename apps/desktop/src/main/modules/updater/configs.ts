@@ -1,32 +1,27 @@
+import type { UpdateChannel } from '@lobechat/electron-client-ipc';
+
 import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
 
-// Update channel (stable, beta, alpha, etc.)
-export const UPDATE_CHANNEL = getDesktopEnv().UPDATE_CHANNEL || 'stable';
+// Build-time default channel, can be overridden at runtime via store
+const rawChannel = getDesktopEnv().UPDATE_CHANNEL || 'stable';
+const VALID_CHANNELS = new Set<UpdateChannel>(['stable', 'nightly', 'canary']);
+export const UPDATE_CHANNEL: UpdateChannel = VALID_CHANNELS.has(rawChannel as UpdateChannel)
+  ? (rawChannel as UpdateChannel)
+  : rawChannel === 'beta'
+    ? 'nightly'
+    : 'stable';
 
-// Determine if stable channel
-export const isStableChannel = UPDATE_CHANNEL === 'stable' || !UPDATE_CHANNEL;
-
-// Custom update server URL (for stable channel)
-// e.g., https://releases.lobehub.com/stable
+// S3 base URL for all channels
+// e.g., https://releases.lobehub.com
+// Each channel resolves to {base}/{channel}/
 export const UPDATE_SERVER_URL = getDesktopEnv().UPDATE_SERVER_URL;
 
-// GitHub configuration (for beta/nightly channels, or as fallback)
-export const githubConfig = {
-  owner: 'lobehub',
-  repo: 'lobe-chat',
-};
-
 export const updaterConfig = {
-  // Application update configuration
   app: {
-    // Whether to auto-check for updates
     autoCheckUpdate: true,
-    // Whether to auto-download updates
     autoDownloadUpdate: true,
-    // Update check interval (milliseconds)
     checkUpdateInterval: 60 * 60 * 1000, // 1 hour
   },
-  // Whether to enable application updates
   enableAppUpdate: !isDev,
 };

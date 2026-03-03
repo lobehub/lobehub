@@ -794,6 +794,17 @@ When I am ___, I need ___
   'systemAgent.translation.title': 'Message Translation Agent',
   'tab.about': 'About',
   'tab.addAgentSkill': 'Add Agent Skill',
+  'tab.beta': 'Beta',
+  'tab.beta.updateChannel.canary': 'Canary',
+  'tab.beta.updateChannel.canaryDesc':
+    'Triggered on every PR merge, multiple builds per day. Most unstable.',
+  'tab.beta.updateChannel.desc':
+    'By default, get notifications for stable updates. Nightly and Canary channels receive pre-release builds that may be unstable for production work.',
+  'tab.beta.updateChannel.nightly': 'Nightly',
+  'tab.beta.updateChannel.nightlyDesc': 'Automated daily builds with the latest changes.',
+  'tab.beta.updateChannel.stable': 'Stable',
+  'tab.beta.updateChannel.stableDesc': 'Production-ready releases.',
+  'tab.beta.updateChannel.title': 'Update Channel',
   'tab.addCustomMcp': 'Add Custom MCP Skill',
   'tab.addCustomMcp.desc': 'Manually configure a custom MCP server',
   'tab.addCustomSkill': 'Add',

@@ -9,6 +9,7 @@ import {
   CreditCard,
   Database,
   EthernetPort,
+  FlaskConical,
   Gift,
   Image as ImageIcon,
   Info,
@@ -219,6 +220,11 @@ export const useCategory = () => {
         icon: TerminalSquare,
         key: SettingsTabs.SystemTools,
         label: t('tab.systemTools'),
+      },
+      isDesktop && {
+        icon: FlaskConical,
+        key: SettingsTabs.Beta,
+        label: t('tab.beta'),
       },
       {
         icon: Database,

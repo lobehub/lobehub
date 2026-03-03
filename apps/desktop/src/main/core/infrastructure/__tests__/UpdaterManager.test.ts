@@ -66,11 +66,6 @@ vi.mock('@/utils/logger', () => ({
 vi.mock('@/modules/updater/configs', () => ({
   UPDATE_CHANNEL: 'stable',
   UPDATE_SERVER_URL: 'https://mock.update.server',
-  githubConfig: {
-    owner: 'lobehub',
-    repo: 'lobe-chat',
-  },
-  isStableChannel: true,
   updaterConfig: {
     app: {
       autoCheckUpdate: false,
@@ -130,6 +125,10 @@ describe('UpdaterManager', () => {
         }),
       },
       isQuiting: false,
+      storeManager: {
+        get: vi.fn().mockReturnValue('stable'),
+        set: vi.fn(),
+      },
     } as unknown as AppCore;
 
     updaterManager = new UpdaterManager(mockApp);

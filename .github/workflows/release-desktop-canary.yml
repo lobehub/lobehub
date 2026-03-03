@@ -187,6 +187,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -205,6 +206,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -219,6 +221,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -273,7 +276,7 @@ jobs:
           fi
           bun add --no-save yaml@2.8.1
 
-      - name: Merge latest-mac.yml files
+      - name: Merge mac YAML files
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files
@@ -331,6 +334,7 @@ jobs:
             | Windows | `.exe` |
             | Linux | `.AppImage` / `.deb` |
           files: |
+            release/canary*
             release/latest*
             release/*.dmg*
             release/*.zip*
@@ -342,6 +346,151 @@ jobs:
             release/*.tar.gz*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # 发布到 S3 更新服务器
+  # ============================================
+  publish-s3:
+    needs: [merge-mac-files, calculate-version]
+    name: Publish Canary to S3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download merged artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: merged-release
+          path: release
+
+      - name: List artifacts to upload
+        run: |
+          echo "📦 Artifacts to upload to S3:"
+          ls -lah release/
+          echo ""
+          echo "📋 Version: ${{ needs.calculate-version.outputs.version }}"
+
+      - name: Upload to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.UPDATE_S3_REGION || 'us-east-1' }}
+          S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
+          VERSION: ${{ needs.calculate-version.outputs.version }}
+        run: |
+          set -e
+
+          if [ -z "$S3_BUCKET" ]; then
+            echo "⚠️ UPDATE_S3_BUCKET is not configured, skipping S3 upload"
+            exit 0
+          fi
+
+          ENDPOINT_ARG=""
+          if [ -n "$S3_ENDPOINT" ]; then
+            ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
+            echo "📡 Using custom S3 endpoint: $S3_ENDPOINT"
+          fi
+
+          echo "🚀 Uploading to S3 bucket: $S3_BUCKET"
+          echo "📁 Target path: s3://$S3_BUCKET/canary/"
+          echo ""
+
+          # 1. Upload release files to version directory
+          echo "📦 Uploading release files to s3://$S3_BUCKET/canary/$VERSION/"
+          for file in release/*.dmg release/*.zip release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.snap release/*.tar.gz; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              echo "   ↗️ $filename"
+              aws s3 cp "$file" "s3://$S3_BUCKET/canary/$VERSION/$filename" $ENDPOINT_ARG
+            fi
+          done
+
+          # 2. Create canary*.yml from latest*.yml with version URL prefix
+          echo ""
+          echo "📋 Creating canary*.yml files from latest*.yml..."
+          for yml in release/latest*.yml; do
+            if [ -f "$yml" ]; then
+              canary_name=$(basename "$yml" | sed 's/latest/canary/')
+              sed "s|url: |url: $VERSION/|g" "$yml" > "release/$canary_name"
+              echo "   📄 Created $canary_name from $(basename $yml) with URL prefix: $VERSION/"
+            fi
+          done
+
+          # Also process existing canary*.yml files (from generateUpdatesFilesForAllChannels)
+          for yml in release/canary*.yml; do
+            if [ -f "$yml" ]; then
+              canary_name=$(basename "$yml")
+              if ! grep -q "url: $VERSION/" "$yml"; then
+                sed -i "s|url: |url: $VERSION/|g" "$yml"
+                echo "   📄 Updated $canary_name with URL prefix: $VERSION/"
+              fi
+            fi
+          done
+
+          # 3. Upload manifest files
+          echo ""
+          echo "📋 Uploading manifest files..."
+          for yml in release/canary*.yml; do
+            if [ -f "$yml" ]; then
+              filename=$(basename "$yml")
+              echo "   ↗️ $filename -> s3://$S3_BUCKET/canary/$filename"
+              aws s3 cp "$yml" "s3://$S3_BUCKET/canary/$filename" $ENDPOINT_ARG
+              echo "   ↗️ $filename -> s3://$S3_BUCKET/canary/$VERSION/$filename (archive)"
+              aws s3 cp "$yml" "s3://$S3_BUCKET/canary/$VERSION/$filename" $ENDPOINT_ARG
+            fi
+          done
+
+          echo ""
+          echo "✅ S3 upload completed!"
+
+  # ============================================
+  # 清理旧的 S3 Canary 版本 (保留最近 15 个)
+  # ============================================
+  cleanup-s3:
+    needs: [publish-s3, calculate-version]
+    name: Cleanup Old S3 Canary Versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup old canary versions on S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.UPDATE_S3_REGION || 'us-east-1' }}
+          S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
+        run: |
+          set -e
+
+          if [ -z "$S3_BUCKET" ]; then
+            echo "⚠️ UPDATE_S3_BUCKET is not configured, skipping cleanup"
+            exit 0
+          fi
+
+          ENDPOINT_ARG=""
+          if [ -n "$S3_ENDPOINT" ]; then
+            ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
+          fi
+
+          echo "🧹 Listing canary version directories..."
+          versions=$(aws s3 ls "s3://$S3_BUCKET/canary/" $ENDPOINT_ARG | grep 'PRE' | awk '{print $2}' | sed 's|/$||' | sort -V)
+          count=$(echo "$versions" | grep -c . || true)
+
+          echo "📊 Found $count version directories"
+
+          if [ "$count" -le 15 ]; then
+            echo "✅ No cleanup needed (keeping all $count versions)"
+            exit 0
+          fi
+
+          to_delete=$(echo "$versions" | head -n $((count - 15)))
+          delete_count=$(echo "$to_delete" | grep -c . || true)
+
+          echo "🗑️ Deleting $delete_count old versions..."
+          for version in $to_delete; do
+            echo "   🗑️ Deleting s3://$S3_BUCKET/canary/$version/"
+            aws s3 rm "s3://$S3_BUCKET/canary/$version/" --recursive $ENDPOINT_ARG
+          done
+
+          echo "✅ Cleanup complete. Kept 15 versions, deleted $delete_count."
 
   # ============================================
   # 清理旧的 Canary Releases (保留最近 7 个)

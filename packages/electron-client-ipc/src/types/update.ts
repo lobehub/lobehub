@@ -1,3 +1,5 @@
+export type UpdateChannel = 'stable' | 'nightly' | 'canary';
+
 export interface ReleaseNoteInfo {
   /**
    * The note.
