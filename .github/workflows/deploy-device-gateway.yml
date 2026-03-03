@@ -33,7 +33,8 @@ jobs:
         run: cd apps/device-gateway && npx tsc --noEmit
 
       - name: Deploy
-        run: cd apps/device-gateway && npx wrangler deploy
+        run: cd apps/device-gateway && npx wrangler deploy --route "$DEVICE_GATEWAY_DOMAIN"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEVICE_GATEWAY_DOMAIN: ${{ secrets.DEVICE_GATEWAY_DOMAIN }}
