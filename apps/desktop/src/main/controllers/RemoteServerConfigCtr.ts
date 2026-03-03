@@ -1,8 +1,9 @@
-import { DataSyncConfig } from '@lobechat/electron-client-ipc';
-import retry from 'async-retry';
-import { session as electronSession, safeStorage } from 'electron';
 import querystring from 'node:querystring';
 import { URL } from 'node:url';
+
+import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
+import retry from 'async-retry';
+import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
 import { appendVercelCookie } from '@/utils/http-headers';
@@ -302,6 +303,14 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Also clear from persistent storage
     logger.debug(`Deleting tokens from store key: ${this.encryptedTokensKey}`);
     this.app.storeManager.delete(this.encryptedTokensKey);
+
+    // Disconnect gateway when tokens are cleared (logout / token refresh failure)
+    const GatewayConnectionCtr = (await import('./GatewayConnectionCtr')).default;
+    const gatewayCtr = this.app.getController(GatewayConnectionCtr);
+    if (gatewayCtr) {
+      logger.debug('Disconnecting gateway due to token clear');
+      await gatewayCtr.disconnect();
+    }
   }
 
   /**
@@ -536,7 +545,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   }
 
   async getRemoteServerUrl(config?: DataSyncConfig) {
-    const dataConfig = this.normalizeConfig(config ? config : await this.getRemoteServerConfig());
+    const dataConfig = this.normalizeConfig(config ?? (await this.getRemoteServerConfig()));
 
     return dataConfig.storageMode === 'cloud' ? OFFICIAL_CLOUD_SERVER : dataConfig.remoteServerUrl;
   }

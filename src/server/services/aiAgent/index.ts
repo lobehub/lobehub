@@ -1,4 +1,10 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  type DeviceAttachment,
+  generateSystemPrompt,
+  RemoteDeviceManifest,
+} from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
 import { type LobeToolManifest } from '@lobechat/context-engine';
@@ -37,6 +43,7 @@ import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/type
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
+import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -289,10 +296,43 @@ export class AiAgentService {
     }
     log('execAgent: got %d klavis manifests', klavisManifests.length);
 
+    // 6.5. Fetch user settings (memory config + timezone)
+    let globalMemoryEnabled = false;
+    let userTimezone: string | undefined;
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+      globalMemoryEnabled = memorySettings?.enabled === true;
+      const generalSettings = settings?.general as { timezone?: string } | undefined;
+      userTimezone = generalSettings?.timezone;
+    } catch (error) {
+      log('execAgent: failed to fetch user settings: %O', error);
+    }
+    log(
+      'execAgent: globalMemoryEnabled=%s, timezone=%s',
+      globalMemoryEnabled,
+      userTimezone ?? 'default',
+    );
+
     // 7. Create tools using Server AgentToolsEngine
     const hasEnabledKnowledgeBases =
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
+
+    // Build device context for ToolsEngine enableChecker
+    const gatewayConfigured = deviceProxy.isConfigured;
+    const boundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
+    let onlineDevices: DeviceAttachment[] = [];
+    if (gatewayConfigured) {
+      try {
+        onlineDevices = await deviceProxy.queryDeviceList(this.userId);
+        log('execAgent: found %d online device(s)', onlineDevices.length);
+      } catch (error) {
+        log('execAgent: failed to query device list: %O', error);
+      }
+    }
+    const deviceOnline = onlineDevices.length > 0;
 
     const toolsContext: ServerAgentToolsContext = {
       installedPlugins,
@@ -305,13 +345,18 @@ export class AiAgentService {
         chatConfig: agentConfig.chatConfig ?? undefined,
         plugins: agentConfig?.plugins ?? undefined,
       },
+      deviceContext: gatewayConfigured
+        ? { boundDeviceId, deviceOnline, gatewayConfigured: true }
+        : undefined,
+      globalMemoryEnabled,
       hasEnabledKnowledgeBases,
       model,
       provider,
     });
 
     // Generate tools and manifest map
-    const pluginIds = agentConfig.plugins || [];
+    // Include device tool IDs so ToolsEngine can process them via enableChecker
+    const pluginIds = [...(agentConfig.plugins || []), LocalSystemManifest.identifier];
     log('execAgent: agent configured plugins: %O', pluginIds);
 
     const toolsResult = toolsEngine.generateToolsDetailed({
@@ -350,6 +395,53 @@ export class AiAgentService {
       lobehubSkillManifests.length,
       klavisManifests.length,
     );
+
+    // Add remote-device manifest to toolManifestMap for tool discovery (activateTools)
+    // It's not in pluginIds (not injected by default), but available for LLM to discover and activate
+    if (gatewayConfigured) {
+      toolManifestMap[RemoteDeviceManifest.identifier] = {
+        ...RemoteDeviceManifest,
+        systemRole: generateSystemPrompt(onlineDevices),
+      };
+    }
+
+    // Derive activeDeviceId from device context:
+    // 1. If agent has a bound device and it's online, use it
+    // 2. In IM/Bot scenarios, auto-activate when exactly one device is online
+    const activeDeviceId = boundDeviceId
+      ? deviceOnline
+        ? boundDeviceId
+        : undefined
+      : (discordContext || botContext) && onlineDevices.length === 1
+        ? onlineDevices[0].deviceId
+        : undefined;
+
+    // 7.4. Fetch device system info for placeholder variable replacement
+    let deviceSystemInfo: Record<string, string> = {};
+    if (activeDeviceId) {
+      try {
+        const systemInfo = await deviceProxy.queryDeviceSystemInfo(this.userId, activeDeviceId);
+        if (systemInfo) {
+          const activeDevice = onlineDevices.find((d) => d.deviceId === activeDeviceId);
+          deviceSystemInfo = {
+            arch: systemInfo.arch,
+            desktopPath: systemInfo.desktopPath,
+            documentsPath: systemInfo.documentsPath,
+            downloadsPath: systemInfo.downloadsPath,
+            homePath: systemInfo.homePath,
+            musicPath: systemInfo.musicPath,
+            picturesPath: systemInfo.picturesPath,
+            platform: activeDevice?.platform ?? 'unknown',
+            userDataPath: systemInfo.userDataPath,
+            videosPath: systemInfo.videosPath,
+            workingDirectory: systemInfo.workingDirectory,
+          };
+          log('execAgent: fetched device system info for %s', activeDeviceId);
+        }
+      } catch (error) {
+        log('execAgent: failed to fetch device system info: %O', error);
+      }
+    }
 
     // 7.5. Build Agent Management context if agent-management tool is enabled
     const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
@@ -443,21 +535,8 @@ export class AiAgentService {
       );
     }
 
-    // 8. Fetch user persona for memory injection
-    // Persona is user-level global memory, only depends on user's global memory setting
+    // 8. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 6.5)
     let userMemory: ServerUserMemoryConfig | undefined;
-
-    let globalMemoryEnabled = true; // default: enabled (matches DEFAULT_MEMORY_SETTINGS)
-    try {
-      const userModel = new UserModel(this.db, this.userId);
-      const settings = await userModel.getUserSettings();
-      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
-      globalMemoryEnabled = memorySettings?.enabled !== false;
-    } catch (error) {
-      log('execAgent: failed to fetch user memory settings: %O', error);
-    }
-
-    log('execAgent: memory check — globalMemoryEnabled=%s', globalMemoryEnabled);
 
     if (globalMemoryEnabled) {
       try {
@@ -609,7 +688,10 @@ export class AiAgentService {
     // If createOperation fails, we still have valid messages that need error info
     try {
       const result = await this.agentRuntimeService.createOperation({
+        activeDeviceId,
         agentConfig,
+        deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
+        userTimezone,
         appContext: {
           agentId: resolvedAgentId,
           groupId: appContext?.groupId,
@@ -623,14 +705,17 @@ export class AiAgentService {
         initialContext,
         initialMessages: allMessages,
         maxSteps,
-        stepWebhook,
         modelRuntimeConfig: { model, provider },
         operationId,
         stepCallbacks,
+        stepWebhook,
         stream,
-        toolManifestMap,
-        toolSourceMap,
-        tools,
+        toolSet: {
+          enabledToolIds: toolsResult.enabledToolIds,
+          manifestMap: toolManifestMap,
+          sourceMap: toolSourceMap,
+          tools,
+        },
         userId: this.userId,
         userInterventionConfig,
         userMemory,

@@ -128,12 +128,18 @@ export const buildAnthropicMessage = async (
           content: [
             // avoid empty text content block
             ...messageContent,
-            ...(message.tool_calls.map((tool) => ({
-              id: tool.id,
-              input: JSON.parse(tool.function.arguments),
-              name: tool.function.name,
-              type: 'tool_use',
-            })) as any),
+            ...(message.tool_calls.map((tool) => {
+              let input: Record<string, unknown> = {};
+              try {
+                input = JSON.parse(tool.function.arguments);
+              } catch {}
+              return {
+                id: tool.id,
+                input,
+                name: tool.function.name,
+                type: 'tool_use',
+              };
+            }) as any),
           ].filter(Boolean),
           role: 'assistant',
         };

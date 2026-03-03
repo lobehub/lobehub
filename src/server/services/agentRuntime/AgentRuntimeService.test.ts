@@ -211,7 +211,7 @@ describe('AgentRuntimeService', () => {
       appContext: {},
       agentConfig: { name: 'test-agent' },
       modelRuntimeConfig: { model: 'gpt-4' },
-      toolManifestMap: {},
+      toolSet: { manifestMap: {} },
       userId: 'user-123',
       autoStart: true,
       initialMessages: [],

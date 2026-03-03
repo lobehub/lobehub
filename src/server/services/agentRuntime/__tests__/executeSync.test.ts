@@ -112,8 +112,7 @@ describe('AgentRuntimeService.executeSync', () => {
         initialMessages: [{ role: 'user', content: 'Hello' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
         operationId,
-        toolManifestMap: {},
-        tools: [],
+        toolSet: { manifestMap: {}, tools: [] },
         userId,
       });
 
@@ -153,8 +152,7 @@ describe('AgentRuntimeService.executeSync', () => {
         ],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
         operationId,
-        toolManifestMap: {},
-        tools: [],
+        toolSet: { manifestMap: {}, tools: [] },
         userId,
       });
 
