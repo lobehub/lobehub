@@ -39,18 +39,23 @@ export default defineConfig({
       name: 'lobe-dev-proxy-print',
       configureServer(server: ViteDevServer) {
         const ONLINE_HOST = 'https://app.lobehub.com';
-        server.httpServer?.once('listening', () => {
-          const address = server.httpServer?.address();
-          const port = typeof address === 'object' && address ? address.port : 9876;
-          const localHost = `http://localhost:${port}`;
-          const proxyUrl = `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
-
-          setTimeout(() => {
-            console.info();
-            console.info(`  \x1B[1m\x1B[35mDebug Proxy:\x1B[0m \x1B[36m${proxyUrl}\x1B[0m`);
-            console.info();
-          }, 100);
-        });
+        const c = {
+          green: (s: string) => `\x1B[32m${s}\x1B[0m`,
+          bold: (s: string) => `\x1B[1m${s}\x1B[0m`,
+          cyan: (s: string) => `\x1B[36m${s}\x1B[0m`,
+        };
+        const { info } = server.config.logger;
+        return () => {
+          server.printUrls = () => {
+            const urls = server.resolvedUrls;
+            if (!urls?.local?.[0]) return;
+            const localHost = urls.local[0].replace(/\/$/, '');
+            const proxyUrl = `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
+            const colorUrl = (url: string) =>
+              c.cyan(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`));
+            info(`  ${c.green('➜')}  ${c.bold('Debug Proxy')}: ${colorUrl(proxyUrl)}`);
+          };
+        };
       },
     },
 
