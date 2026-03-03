@@ -1,4 +1,4 @@
-import { and, count, desc, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, isNull, or, sql } from 'drizzle-orm';
 
 import {
   agentEvalBenchmarks,
@@ -22,7 +22,10 @@ export class AgentEvalBenchmarkModel {
    * Create a new benchmark
    */
   create = async (params: NewAgentEvalBenchmark) => {
-    const [result] = await this.db.insert(agentEvalBenchmarks).values(params).returning();
+    const [result] = await this.db
+      .insert(agentEvalBenchmarks)
+      .values({ ...params, userId: this.userId })
+      .returning();
     return result;
   };
 
@@ -32,7 +35,13 @@ export class AgentEvalBenchmarkModel {
   delete = async (id: string) => {
     return this.db
       .delete(agentEvalBenchmarks)
-      .where(and(eq(agentEvalBenchmarks.id, id), eq(agentEvalBenchmarks.isSystem, false)));
+      .where(
+        and(
+          eq(agentEvalBenchmarks.id, id),
+          eq(agentEvalBenchmarks.isSystem, false),
+          eq(agentEvalBenchmarks.userId, this.userId),
+        ),
+      );
   };
 
   /**
@@ -40,7 +49,13 @@ export class AgentEvalBenchmarkModel {
    * @param includeSystem - Whether to include system benchmarks (default: true)
    */
   query = async (includeSystem = true) => {
-    const conditions = includeSystem ? undefined : eq(agentEvalBenchmarks.isSystem, false);
+    const userCondition = or(
+      eq(agentEvalBenchmarks.userId, this.userId),
+      isNull(agentEvalBenchmarks.userId),
+    );
+    const conditions = includeSystem
+      ? userCondition
+      : and(eq(agentEvalBenchmarks.isSystem, false), userCondition);
 
     const datasetCountSq = this.db
       .select({
@@ -129,7 +144,12 @@ export class AgentEvalBenchmarkModel {
     const [result] = await this.db
       .select()
       .from(agentEvalBenchmarks)
-      .where(eq(agentEvalBenchmarks.id, id))
+      .where(
+        and(
+          eq(agentEvalBenchmarks.id, id),
+          or(eq(agentEvalBenchmarks.userId, this.userId), isNull(agentEvalBenchmarks.userId)),
+        ),
+      )
       .limit(1);
     return result;
   };
@@ -141,7 +161,12 @@ export class AgentEvalBenchmarkModel {
     const [result] = await this.db
       .select()
       .from(agentEvalBenchmarks)
-      .where(eq(agentEvalBenchmarks.identifier, identifier))
+      .where(
+        and(
+          eq(agentEvalBenchmarks.identifier, identifier),
+          or(eq(agentEvalBenchmarks.userId, this.userId), isNull(agentEvalBenchmarks.userId)),
+        ),
+      )
       .limit(1);
     return result;
   };
@@ -153,7 +178,13 @@ export class AgentEvalBenchmarkModel {
     const [result] = await this.db
       .update(agentEvalBenchmarks)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(agentEvalBenchmarks.id, id), eq(agentEvalBenchmarks.isSystem, false)))
+      .where(
+        and(
+          eq(agentEvalBenchmarks.id, id),
+          eq(agentEvalBenchmarks.isSystem, false),
+          eq(agentEvalBenchmarks.userId, this.userId),
+        ),
+      )
       .returning();
     return result;
   };
