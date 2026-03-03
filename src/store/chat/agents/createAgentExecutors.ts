@@ -30,6 +30,7 @@ import {
   type ModelUsage,
   TraceNameMap,
 } from '@lobechat/types';
+import { dedupeBy } from '@lobechat/utils';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -47,7 +48,6 @@ import { sleep } from '@/utils/sleep';
 
 import { StreamingHandler } from './StreamingHandler';
 import { type StreamChunk } from './types/streaming';
-import { dedupeBy } from '@lobechat/utils';
 
 const log = debug('lobe-store:agent-executors');
 
