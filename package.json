@@ -399,6 +399,7 @@
     "@edge-runtime/vm": "^5.0.0",
     "@huggingface/tasks": "^0.19.80",
     "@inquirer/prompts": "^8.2.0",
+    "@lobechat/agent-tracing": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobehub/i18n-cli": "^1.26.0",
     "@lobehub/lint": "2.1.5",

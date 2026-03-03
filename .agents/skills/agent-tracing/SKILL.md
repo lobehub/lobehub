@@ -95,13 +95,13 @@ agent-tracing trace
 agent-tracing list
 
 # 4. Inspect a specific step's messages to see what was sent to the LLM
-agent-tracing inspect 0 -m < traceId > -s
+agent-tracing inspect TRACE_ID -s 0 -m
 
 # 5. Drill into a truncated message for full content
-agent-tracing inspect 0 --msg 2 < traceId > -s
+agent-tracing inspect TRACE_ID -s 0 --msg 2
 
 # 6. Check tool calls and results
-agent-tracing inspect 1 -t < traceId > -s
+agent-tracing inspect 1 -t TRACE_ID -s
 ```
 
 ## Key Types
