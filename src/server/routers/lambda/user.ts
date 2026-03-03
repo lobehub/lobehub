@@ -176,7 +176,7 @@ export const userRouter = router({
   }),
 
   updateFullName: userProcedure
-    .input(z.string().trim().max(64))
+    .input(z.string().trim().max(64, { message: 'FULLNAME_TOO_LONG' }))
     .mutation(async ({ ctx, input }) => {
       return ctx.userModel.updateUser({ fullName: input });
     }),
@@ -217,14 +217,12 @@ export const userRouter = router({
   }),
 
   updateUsername: userProcedure.input(usernameSchema).mutation(async ({ ctx, input }) => {
-    const username = input.trim();
-
-    const existedUser = await UserModel.findByUsername(ctx.serverDB, username);
+    const existedUser = await UserModel.findByUsername(ctx.serverDB, input);
     if (existedUser && existedUser.id !== ctx.userId) {
       throw new TRPCError({ code: 'CONFLICT', message: 'USERNAME_TAKEN' });
     }
 
-    return ctx.userModel.updateUser({ username });
+    return ctx.userModel.updateUser({ username: input });
   }),
 });
 
