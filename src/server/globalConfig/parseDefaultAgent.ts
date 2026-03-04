@@ -79,18 +79,29 @@ export const parseAgentConfig = (envStr: string) => {
  * Parse DEFAULT_AGENT_CONFIG env string and split the result into { config, meta }
  * so that meta keys (avatar, displayName, description, etc.) end up in the right bucket.
  */
+/**
+ * Replace alias keys (e.g. `displayName`) with their canonical meta key (`title`)
+ * directly in the raw env string so that `parseAgentConfig`'s natural last-wins
+ * behaviour applies correctly when both an alias and its canonical key appear.
+ */
+const normalizeAliases = (envStr: string): string => {
+  const regex = /([^;=]+)(=[^;]*)/g;
+  return envStr.replace(regex, (_match, rawKey: string, rest: string) => {
+    const key = rawKey.trim();
+    const canonical = META_ALIASES[key];
+    return canonical ? canonical + rest : rawKey + rest;
+  });
+};
+
 export const parseDefaultAgentSettings = (envStr: string) => {
-  const flat = parseAgentConfig(envStr);
+  const flat = parseAgentConfig(normalizeAliases(envStr));
   if (!flat || Object.keys(flat).length === 0) return undefined;
 
   const config: Record<string, unknown> = {};
   const meta: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(flat)) {
-    const aliasedKey = META_ALIASES[key];
-    if (aliasedKey) {
-      meta[aliasedKey] = value;
-    } else if (META_KEYS.has(key)) {
+    if (META_KEYS.has(key)) {
       meta[key] = value;
     } else {
       config[key] = value;

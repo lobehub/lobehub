@@ -274,4 +274,36 @@ describe('parseDefaultAgentSettings', () => {
       config: { model: 'gpt-4', params: { max_tokens: 300 } },
     });
   });
+
+  it('should let later displayName override earlier title', () => {
+    const result = parseDefaultAgentSettings('title=First;displayName=Second');
+
+    expect(result).toEqual({
+      meta: { title: 'Second' },
+    });
+  });
+
+  it('should let later title override earlier displayName', () => {
+    const result = parseDefaultAgentSettings('displayName=First;title=Second');
+
+    expect(result).toEqual({
+      meta: { title: 'Second' },
+    });
+  });
+
+  it('should use last value when displayName appears multiple times with title in between', () => {
+    const result = parseDefaultAgentSettings('displayName=A;title=B;displayName=C');
+
+    expect(result).toEqual({
+      meta: { title: 'C' },
+    });
+  });
+
+  it('should use last value when title appears after repeated displayName', () => {
+    const result = parseDefaultAgentSettings('displayName=A;displayName=B;title=C');
+
+    expect(result).toEqual({
+      meta: { title: 'C' },
+    });
+  });
 });
