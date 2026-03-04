@@ -29,10 +29,14 @@ console.info(`🚄 Build Version ${packageJSON.version}, Channel: ${channel}`);
 console.info(`🏗️ Building for architecture: ${arch}`);
 
 // Channel identity derived solely from UPDATE_CHANNEL env var.
-// Adding a new channel won't break stable detection.
+// Supported channels: stable, nightly, canary
 const isStable = !channel || channel === 'stable';
 const isNightly = channel === 'nightly';
-const isBeta = channel === 'beta';
+const isCanary = channel === 'canary';
+
+// Strip trailing channel path from URL for re-appending the correct channel
+// Handles both base URL (https://cdn.example.com) and legacy URL with channel (https://cdn.example.com/stable)
+const stripChannelSuffix = (url) => url.replace(/\/(stable|nightly|canary)\/?$/, '');
 
 // Strip trailing channel path from URL for re-appending the correct channel
 // Handles both base URL (https://cdn.example.com) and legacy URL with channel (https://cdn.example.com/stable)
@@ -80,9 +84,8 @@ if (!hasAppleCertificate) {
 
 // 根据版本类型确定协议 scheme
 const getProtocolScheme = () => {
+  if (isCanary) return 'lobehub-canary';
   if (isNightly) return 'lobehub-nightly';
-  if (isBeta) return 'lobehub-beta';
-
   return 'lobehub';
 };
 
@@ -91,8 +94,7 @@ const protocolScheme = getProtocolScheme();
 // Determine icon file based on version type
 const getIconFileName = () => {
   if (isStable) return 'Icon';
-  if (isBeta) return 'Icon-beta';
-  // nightly, canary, and any future pre-release channels share nightly icon
+  // nightly, canary share pre-release icon
   return 'Icon-nightly';
 };
 
@@ -186,11 +188,7 @@ const config = {
       console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
-  appId: isNightly
-    ? 'com.lobehub.lobehub-desktop-nightly'
-    : isBeta
-      ? 'com.lobehub.lobehub-desktop-beta'
-      : 'com.lobehub.lobehub-desktop',
+  appId: 'com.lobehub.lobehub-desktop',
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
