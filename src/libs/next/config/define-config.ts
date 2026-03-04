@@ -109,6 +109,22 @@ export function defineConfig(config: CustomNextConfig) {
           headers: securityHeaders,
           source: '/:path*',
         },
+        // SPA assets have content-hashed filenames and are immutable.
+        // Without immutable caching, 450+ JS chunks all hit the origin simultaneously,
+        // causing ERR_ABORTED on some critical route chunks and a prolonged loading state.
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/spa/(.*).(js|css|woff2?|wasm)',
+        },
         {
           headers: [
             {
