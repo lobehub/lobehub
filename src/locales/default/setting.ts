@@ -641,6 +641,9 @@ export default {
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
   'settingSystemTools.autoSelectDesc': 'The best available tool will be automatically selected',
+  'settingSystemTools.category.browserAutomation': 'Browser Automation',
+  'settingSystemTools.category.browserAutomation.desc':
+    'Tools for headless browser automation and web interaction',
   'settingSystemTools.category.contentSearch': 'Content Search',
   'settingSystemTools.category.contentSearch.desc': 'Tools for searching text content within files',
   'settingSystemTools.category.fileSearch': 'File Search',
@@ -651,6 +654,8 @@ export default {
   'settingSystemTools.status.notDetected': 'Not detected',
   'settingSystemTools.status.unavailable': 'Unavailable',
   'settingSystemTools.title': 'System Tools',
+  'settingSystemTools.tools.agentBrowser.desc':
+    'Agent-browser - headless browser automation CLI for AI agents',
   'settingSystemTools.tools.ag.desc': 'The Silver Searcher - fast code searching tool',
   'settingSystemTools.tools.fd.desc': 'fd - fast and user-friendly alternative to find',
   'settingSystemTools.tools.find.desc': 'Unix find - standard file search command',
