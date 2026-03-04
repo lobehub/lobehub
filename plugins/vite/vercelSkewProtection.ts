@@ -6,10 +6,12 @@
  * dynamically imported module" errors caused by version skew.
  *
  * Coverage:
- *   1. dynamic import()     — renderChunk (post-enforce, after Vite internals)
- *   2. CSS url()            — generateBundle
- *   3. HTML <script>/<link> — transformIndexHtml
- *   4. Web Worker URLs      — renderChunk
+ *   1. static import/export — renderChunk (post-enforce, after Vite internals)
+ *   2. dynamic import()     — renderChunk
+ *   3. CSS url()            — generateBundle
+ *   4. HTML <script>/<link> — transformIndexHtml
+ *   5. Web Worker URLs      — renderChunk
+ *   6. __vite__mapDeps      — renderChunk (preload deps array)
  *
  * Why enforce:'post'?
  *   Vite's buildImportAnalysisPlugin rewrites dynamic imports in its own
@@ -54,7 +56,24 @@ export function vercelSkewProtection(deploymentId?: string): Plugin {
       let modified = code;
       let changed = false;
 
-      // 1a. Rewrite dynamic import() with relative paths
+      // 1a. Rewrite static import/export declarations
+      //
+      // After Vite processing, static imports/exports between chunks look like:
+      //   import { x } from "./chunk-hash.js";
+      //   import "./chunk-hash.js";
+      //   export { foo } from "./chunk-hash.js";
+      // We append ?dpl= to the specifier so browsers request the correct deployment.
+      const staticImportRe =
+        /((?:import|export)\s*(?:\{[^}]*\}\s*from\s*)?["'])(\.\.?\/[^"']+)(["'])/g;
+      modified = modified.replaceAll(
+        staticImportRe,
+        (_, before: string, path: string, after: string) => {
+          changed = true;
+          return before + appendDpl(path) + after;
+        },
+      );
+
+      // 1b. Rewrite dynamic import() with relative paths
       //
       // After Vite processing, dynamic imports look like:
       //   import("./chunk-hash.js")
@@ -65,7 +84,7 @@ export function vercelSkewProtection(deploymentId?: string): Plugin {
         return before + appendDpl(path) + after;
       });
 
-      // 1b. Rewrite __vite__mapDeps dep array
+      // 1c. Rewrite __vite__mapDeps dep array
       //
       // Vite 7 format:
       //   const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=[
@@ -83,7 +102,7 @@ export function vercelSkewProtection(deploymentId?: string): Plugin {
         },
       );
 
-      // 1c. Rewrite Worker URLs
+      // 1d. Rewrite Worker URLs
       //   new Worker(new URL("./worker-hash.js", import.meta.url))
       const workerRe = /(new\s+(?:Shared)?Worker\(\s*new\s+URL\(\s*")([^"]+)(")/g;
       modified = modified.replaceAll(workerRe, (_, before: string, path: string, after: string) => {
@@ -94,7 +113,7 @@ export function vercelSkewProtection(deploymentId?: string): Plugin {
       if (changed) return { code: modified, map: null };
     },
 
-    // ── 3. Rewrite CSS url() references ──
+    // ── 2. Rewrite CSS url() references ──
     generateBundle(_, bundle) {
       if (!enabled) return;
       for (const [fileName, asset] of Object.entries(bundle)) {
@@ -115,7 +134,7 @@ export function vercelSkewProtection(deploymentId?: string): Plugin {
       }
     },
 
-    // ── 4. Rewrite HTML <script src> and <link href> ──
+    // ── 3. Rewrite HTML <script src> and <link href> ──
     transformIndexHtml(html) {
       if (!enabled) return;
       // <script ... src="...">
