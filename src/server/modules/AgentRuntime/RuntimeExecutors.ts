@@ -9,7 +9,14 @@ import {
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  ChatErrorType,
+  type ChatMessageError,
+  type ChatToolPayload,
+  type MessageToolCall,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -29,6 +36,56 @@ const timing = debug('lobe-server:agent-runtime:timing');
 const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/craw': 0,
   'lobe-web-browsing/search': 0,
+};
+
+const formatRuntimeError = (error: unknown): ChatMessageError => {
+  // Handle ChatCompletionErrorPayload format
+  // e.g., { errorType: 'InvalidProviderAPIKey', error: { ... }, provider: 'openai' }
+  if (error && typeof error === 'object' && 'errorType' in error) {
+    const payload = error as {
+      error?: unknown;
+      errorType: ChatMessageError['type'];
+      message?: string;
+    };
+
+    return {
+      body: payload.error || error,
+      message: payload.message || String(payload.errorType),
+      type: payload.errorType,
+    };
+  }
+
+  // Handle ChatMessageError format
+  // e.g., { type: 'ProviderBizError', message: '...', body: {...} }
+  if (error && typeof error === 'object' && 'type' in error && 'message' in error) {
+    const payload = error as {
+      body?: unknown;
+      message: string;
+      type: ChatMessageError['type'];
+    };
+
+    return {
+      body: payload.body,
+      message: payload.message,
+      type: payload.type,
+    };
+  }
+
+  // Handle standard Error objects
+  if (error instanceof Error) {
+    return {
+      body: { name: error.name },
+      message: error.message,
+      type: ChatErrorType.InternalServerError,
+    };
+  }
+
+  // Fallback for unknown error types
+  return {
+    body: error,
+    message: String(error),
+    type: AgentRuntimeErrorType.AgentRuntimeError,
+  };
 };
 
 export interface RuntimeExecutorContext {
@@ -519,10 +576,14 @@ export const createRuntimeExecutors = (
         },
       };
     } catch (error) {
-      // Publish error event
+      const formattedError = formatRuntimeError(error);
+
+      // Publish structured error event
       await streamManager.publishStreamEvent(operationId, {
         data: {
-          error: (error as Error).message,
+          error: formattedError,
+          errorType: formattedError.type,
+          message: formattedError.message,
           phase: 'llm_execution',
         },
         stepIndex,

@@ -1972,7 +1972,13 @@ describe('RuntimeExecutors', () => {
         expect.objectContaining({
           type: 'error',
           data: expect.objectContaining({
-            error: '401 Unauthorized',
+            error: expect.objectContaining({
+              body: expect.objectContaining({ name: 'Error' }),
+              message: '401 Unauthorized',
+              type: 500,
+            }),
+            errorType: 500,
+            message: '401 Unauthorized',
             phase: 'llm_execution',
           }),
         }),
