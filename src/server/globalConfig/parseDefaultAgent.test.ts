@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseAgentConfig } from './parseDefaultAgent';
+import { parseAgentConfig, parseDefaultAgentSettings } from './parseDefaultAgent';
 
 describe('parseAgentConfig', () => {
   describe('single functional feature', () => {
@@ -191,5 +191,87 @@ describe('parseAgentConfig', () => {
     const envStr = 'model=';
     const expected = { model: undefined }; // 或 { model: '' }，取决于应用逻辑
     expect(parseAgentConfig(envStr)).toEqual(expected);
+  });
+});
+
+describe('parseDefaultAgentSettings', () => {
+  it('should put model and provider into config', () => {
+    const result = parseDefaultAgentSettings('model=gpt-4;provider=openai');
+
+    expect(result).toEqual({
+      config: { model: 'gpt-4', provider: 'openai' },
+    });
+  });
+
+  it('should put avatar and description into meta', () => {
+    const result = parseDefaultAgentSettings('avatar=https://example.com/avatar.png;description=A helpful bot');
+
+    expect(result).toEqual({
+      meta: { avatar: 'https://example.com/avatar.png', description: 'A helpful bot' },
+    });
+  });
+
+  it('should map displayName to meta.title', () => {
+    const result = parseDefaultAgentSettings('displayName=My Assistant');
+
+    expect(result).toEqual({
+      meta: { title: 'My Assistant' },
+    });
+  });
+
+  it('should put title directly into meta', () => {
+    const result = parseDefaultAgentSettings('title=My Assistant');
+
+    expect(result).toEqual({
+      meta: { title: 'My Assistant' },
+    });
+  });
+
+  it('should split a full config with both config and meta keys', () => {
+    const envStr =
+      'model=gemini-2.5-flash;provider=openai;displayName=Significa Assistant;avatar=https://cdn.significa.co/logo.png;systemRole=You are helpful';
+
+    const result = parseDefaultAgentSettings(envStr);
+
+    expect(result).toEqual({
+      config: {
+        model: 'gemini-2.5-flash',
+        provider: 'openai',
+        systemRole: 'You are helpful',
+      },
+      meta: {
+        avatar: 'https://cdn.significa.co/logo.png',
+        title: 'Significa Assistant',
+      },
+    });
+  });
+
+  it('should handle backgroundColor and tags as meta keys', () => {
+    const result = parseDefaultAgentSettings('model=gpt-4;backgroundColor=#ff0000;tags=coding,writing');
+
+    expect(result).toEqual({
+      config: { model: 'gpt-4' },
+      meta: { backgroundColor: '#ff0000', tags: ['coding', 'writing'] },
+    });
+  });
+
+  it('should return undefined for empty string', () => {
+    expect(parseDefaultAgentSettings('')).toBeUndefined();
+  });
+
+  it('should omit config key when only meta keys are present', () => {
+    const result = parseDefaultAgentSettings('displayName=Bot;avatar=https://example.com/a.png');
+
+    expect(result).toEqual({
+      meta: { avatar: 'https://example.com/a.png', title: 'Bot' },
+    });
+  });
+
+  it('should omit meta key when only config keys are present', () => {
+    const result = parseDefaultAgentSettings('model=gpt-4;params.max_tokens=300');
+
+    expect(result).toEqual({
+      config: { model: 'gpt-4', params: { max_tokens: 300 } },
+    });
   });
 });

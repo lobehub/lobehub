@@ -1,5 +1,13 @@
 import { set } from 'es-toolkit/compat';
 
+// Keys that belong in MetaData rather than LobeAgentConfig
+const META_KEYS = new Set(['avatar', 'backgroundColor', 'description', 'title', 'tags']);
+
+// User-friendly aliases mapped to their canonical MetaData key
+const META_ALIASES: Record<string, string> = {
+  displayName: 'title',
+};
+
 /**
  * Improved parsing function that handles numbers, booleans, semicolons, and equals signs in values.
  * @param {string} envStr - The environment variable string to be parsed.
@@ -44,4 +52,32 @@ export const parseAgentConfig = (envStr: string) => {
   }
 
   return config;
+};
+
+/**
+ * Parse DEFAULT_AGENT_CONFIG env string and split the result into { config, meta }
+ * so that meta keys (avatar, displayName, description, etc.) end up in the right bucket.
+ */
+export const parseDefaultAgentSettings = (envStr: string) => {
+  const flat = parseAgentConfig(envStr);
+  if (!flat || Object.keys(flat).length === 0) return undefined;
+
+  const config: Record<string, any> = {};
+  const meta: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(flat)) {
+    const aliasedKey = META_ALIASES[key];
+    if (aliasedKey) {
+      meta[aliasedKey] = value;
+    } else if (META_KEYS.has(key)) {
+      meta[key] = value;
+    } else {
+      config[key] = value;
+    }
+  }
+
+  return {
+    ...(Object.keys(config).length > 0 ? { config } : {}),
+    ...(Object.keys(meta).length > 0 ? { meta } : {}),
+  };
 };

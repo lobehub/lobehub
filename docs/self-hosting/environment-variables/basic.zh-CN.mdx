@@ -61,6 +61,12 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 特殊字符  | `inputTemplate="Hello; I am a bot;"`                                                                                    | 设置输入模板为 `Hello; I am a bot;`。                         |
 | 错误处理  | `model=gpt-4;maxToken`                                                                                                  | 忽略无效条目 `maxToken`，仅解析出 `model=gpt-4`。                 |
 | 值覆盖   | `model=gpt-4;model=gpt-4-1106-preview`                                                                                  | 如果键重复，使用最后一次出现的值，此处 `model` 的值为 `gpt-4-1106-preview`。 |
+| 显示名称 | `displayName=My Assistant`                                                                                               | 设置助理在侧边栏和聊天头部显示的名称。                                   |
+| 头像   | `avatar=https://example.com/avatar.png`                                                                                  | 设置助理的头像为自定义图片 URL 或 emoji。                             |
+| 描述   | `description=A helpful coding assistant`                                                                                 | 设置助理的描述。                                              |
+| 背景颜色 | `backgroundColor=#4a90d9`                                                                                                | 设置助理的背景颜色（未设置头像时使用）。                                  |
+| 标签   | `tags=coding,writing`                                                                                                    | 设置助理的标签。                                              |
+| 完整示例 | `model=gpt-4;provider=openai;displayName=My Bot;avatar=🤖;systemRole=You are helpful`                                   | 同时设置模型、服务商、显示名称、头像和系统角色。                              |
 
 相关阅读：
 

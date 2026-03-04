@@ -14,7 +14,7 @@ import { type GlobalServerConfig } from '@/types/serverConfig';
 import { cleanObject } from '@/utils/object';
 
 import { genServerAiProvidersConfig } from './genServerAiProviderConfig';
-import { parseAgentConfig } from './parseDefaultAgent';
+import { parseAgentConfig, parseDefaultAgentSettings } from './parseDefaultAgent';
 import { parseFilesConfig } from './parseFilesConfig';
 import { getPublicMemoryExtractionConfig } from './parseMemoryExtractionConfig';
 
@@ -71,9 +71,7 @@ export const getServerGlobalConfig = async () => {
         withDeploymentName: true,
       },
     }),
-    defaultAgent: {
-      config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
-    },
+    defaultAgent: parseDefaultAgentSettings(DEFAULT_AGENT_CONFIG),
     disableEmailPassword: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
@@ -104,6 +102,8 @@ export const getServerGlobalConfig = async () => {
 export const getServerDefaultAgentConfig = () => {
   const { DEFAULT_AGENT_CONFIG } = getAppConfig();
 
+  // Only return the config portion (not meta) for server-side agent config merging.
+  // Meta keys (avatar, displayName, etc.) are handled separately via getServerGlobalConfig().
   return parseAgentConfig(DEFAULT_AGENT_CONFIG) || {};
 };
 
