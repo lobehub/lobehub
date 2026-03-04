@@ -1,7 +1,7 @@
 'use client';
 
 import { LoadingOutlined } from '@ant-design/icons';
-import { Flexbox, Input, Text } from '@lobehub/ui';
+import { Button, Flexbox, Input, Text } from '@lobehub/ui';
 import { type InputRef, Spin } from 'antd';
 import { type ChangeEvent } from 'react';
 import { useCallback, useRef, useState } from 'react';
@@ -22,6 +22,7 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
   const updateUsername = useUserStore((s) => s.updateUsername);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);
   const inputRef = useRef<InputRef>(null);
 
   const usernameRegex = /^\w+$/;
@@ -51,6 +52,7 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
       setSaving(true);
       setError('');
       await updateUsername(value);
+      setDirty(false);
     } catch (err: any) {
       console.error('Failed to update username:', err);
       if (err?.data?.code === 'CONFLICT' || err?.message === 'USERNAME_TAKEN') {
@@ -65,6 +67,7 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    setDirty(value.trim() !== (username || ''));
     if (!value.trim()) {
       setError('');
       return;
@@ -76,10 +79,41 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
     setError('');
   };
 
+  const handleCancel = useCallback(() => {
+    if (inputRef.current?.input) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      nativeInputValueSetter?.call(inputRef.current.input, username || '');
+      inputRef.current.input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    setError('');
+    setDirty(false);
+    inputRef.current?.blur();
+  }, [username]);
+
   const input = (
     <Flexbox gap={4}>
       <Flexbox horizontal align="center" gap={8}>
         {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
+        {error && (
+          <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="danger">
+            {error}
+          </Text>
+        )}
+        {dirty && !saving && (
+          <Button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleCancel();
+            }}
+            size="small"
+            variant="outlined"
+          >
+            {t('profile.cancel')}
+          </Button>
+        )}
         <Input
           defaultValue={username || ''}
           disabled={saving}
@@ -91,14 +125,15 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
           variant="filled"
           onBlur={handleSave}
           onChange={handleChange}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              handleCancel();
+            }
+          }}
           onPressEnter={handleSave}
         />
       </Flexbox>
-      {error && (
-        <Text style={{ fontSize: 12, textAlign: 'right' }} type="danger">
-          {error}
-        </Text>
-      )}
     </Flexbox>
   );
 
