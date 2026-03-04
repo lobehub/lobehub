@@ -61,6 +61,22 @@ function formatErrorForState(error: unknown): ChatMessageError {
     };
   }
 
+  // Handle ChatMessageError format
+  // e.g., { type: 'ProviderBizError', message: '...', body: {...} }
+  if (error && typeof error === 'object' && 'type' in error && 'message' in error) {
+    const payload = error as {
+      body?: unknown;
+      message: string;
+      type: ChatMessageError['type'];
+    };
+
+    return {
+      body: payload.body,
+      message: payload.message,
+      type: payload.type,
+    };
+  }
+
   // Handle standard Error objects
   if (error instanceof Error) {
     return {
@@ -882,10 +898,14 @@ export class AgentRuntimeService {
     } catch (error) {
       log('Step %d failed for operation %s: %O', stepIndex, operationId, error);
 
-      // Publish error event
+      const formattedError = formatErrorForState(error);
+
+      // Publish structured error event
       await this.streamManager.publishStreamEvent(operationId, {
         data: {
-          error: (error as Error).message,
+          error: formattedError,
+          errorType: formattedError.type,
+          message: formattedError.message,
           phase: 'step_execution',
           stepIndex,
         },
@@ -897,7 +917,7 @@ export class AgentRuntimeService {
       const errorState = await this.coordinator.loadAgentState(operationId);
       const finalStateWithError = {
         ...errorState!,
-        error: formatErrorForState(error),
+        error: formattedError,
         status: 'error' as const,
       };
 

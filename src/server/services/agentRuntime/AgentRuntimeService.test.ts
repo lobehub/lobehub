@@ -418,7 +418,15 @@ describe('AgentRuntimeService', () => {
         data: {
           stepIndex: 1,
           phase: 'step_execution',
-          error: 'Runtime error',
+          message: 'Runtime error',
+          errorType: 500,
+          error: {
+            body: {
+              name: 'Error',
+            },
+            message: 'Runtime error',
+            type: 500,
+          },
         },
       });
     });

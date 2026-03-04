@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { type ChatToolPayload } from '@lobechat/types';
+import { type ChatMessageError, type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
 import i18n from 'i18next';
 
@@ -48,14 +48,28 @@ export class AgentActionImpl {
     this.#get().cancelOperation(messageOpId, 'Cleanup requested');
   };
 
-  internal_handleAgentError = (assistantId: string, errorMessage: string): void => {
+  internal_handleAgentError = (
+    assistantId: string,
+    errorMessage: string,
+    error?: ChatMessageError,
+  ): void => {
     log(`Agent error for ${assistantId}: ${errorMessage}`);
+
+    const normalizedError: ChatMessageError = error
+      ? {
+          ...error,
+          message: error.message || errorMessage,
+        }
+      : ({
+          message: errorMessage,
+          type: 'UnknownError' as any,
+        } as ChatMessageError);
 
     // Find operation by messageId (assistantId) and fail it
     const messageOpId = this.#get().messageOperationMap[assistantId];
     if (messageOpId) {
       this.#get().failOperation(messageOpId, {
-        message: errorMessage,
+        message: normalizedError.message || errorMessage,
         type: 'AgentExecutionError',
       });
     }
@@ -65,10 +79,7 @@ export class AgentActionImpl {
       id: assistantId,
       type: 'updateMessage',
       value: {
-        error: {
-          message: errorMessage,
-          type: 'UnknownError' as any,
-        },
+        error: normalizedError,
       },
     });
 
@@ -320,10 +331,23 @@ export class AgentActionImpl {
       case 'error': {
         const { error, message, phase } = event.data || {};
         log(`Error in ${phase} for ${assistantId}:`, error);
-        this.#get().internal_handleAgentError(
-          assistantId,
-          message || error || 'Unknown agent error',
-        );
+
+        const structuredError =
+          error &&
+          typeof error === 'object' &&
+          'message' in error &&
+          'type' in error &&
+          typeof (error as any).message === 'string'
+            ? (error as ChatMessageError)
+            : undefined;
+
+        const errorMessage =
+          message ||
+          structuredError?.message ||
+          (typeof error === 'string' ? error : undefined) ||
+          'Unknown agent error';
+
+        this.#get().internal_handleAgentError(assistantId, errorMessage, structuredError);
         break;
       }
 

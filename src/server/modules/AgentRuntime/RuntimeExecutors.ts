@@ -367,13 +367,10 @@ export const createRuntimeExecutors = (
       // Consume stream to ensure all callbacks complete execution
       await consumeStreamUntilDone(response);
 
-      // If a stream error was captured via onError callback, throw to propagate the error
+      // If a stream error was captured via onError callback, throw original payload
+      // to preserve structured fields (type/errorType/body/provider) for downstream handling.
       if (streamError) {
-        const errorMessage =
-          typeof streamError.message === 'string'
-            ? streamError.message
-            : JSON.stringify(streamError);
-        throw new Error(`LLM stream error: ${errorMessage}`);
+        throw streamError;
       }
 
       await flushTextBuffer();
