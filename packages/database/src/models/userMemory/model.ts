@@ -89,6 +89,23 @@ const coerceDate = (input: unknown): Date | null => {
   return null;
 };
 
+const parseAssociationExtra = (
+  value: string | null | undefined,
+): Record<string, unknown> | null => {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+
+    return { value: parsed };
+  } catch {
+    return { raw: value };
+  }
+};
+
 export interface BaseCreateUserMemoryParams {
   capturedAt?: Date;
   details: string;
@@ -372,8 +389,9 @@ export class UserMemoryModel {
     value.forEach((item) => {
       const parsed = AssociatedObjectSchema.safeParse(item);
       if (parsed.success) {
-        const extra = JSON.parse(parsed.data.extra || '{}');
-        parsed.data.extra = extra;
+        const extra = parseAssociationExtra(parsed.data.extra);
+        if (extra) parsed.data.extra = extra as any;
+        else delete (parsed.data as any).extra;
         associations.push(parsed.data);
         return;
       }
@@ -399,8 +417,9 @@ export class UserMemoryModel {
     value.forEach((item) => {
       const parsed = AssociatedObjectSchema.safeParse(item);
       if (parsed.success) {
-        const extra = JSON.parse(parsed.data.extra || '{}');
-        parsed.data.extra = extra;
+        const extra = parseAssociationExtra(parsed.data.extra);
+        if (extra) parsed.data.extra = extra as any;
+        else delete (parsed.data as any).extra;
         associations.push(parsed.data);
         return;
       }
