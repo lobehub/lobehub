@@ -271,7 +271,7 @@ jobs:
           fi
           bun add --no-save yaml@2.8.1
 
-      - name: Merge mac YAML files
+      - name: Merge latest-mac.yml files
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files
@@ -332,7 +332,6 @@ jobs:
             | Windows | `.exe` |
             | Linux | `.AppImage` / `.deb` |
           files: |
-            release/nightly*
             release/latest*
             release/*.dmg*
             release/*.zip*
@@ -344,152 +343,6 @@ jobs:
             release/*.tar.gz*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ============================================
-  # 发布到 S3 更新服务器
-  # ============================================
-  publish-s3:
-    needs: [merge-mac-files, calculate-version]
-    name: Publish Nightly to S3
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download merged artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: merged-release
-          path: release
-
-      - name: List artifacts to upload
-        run: |
-          echo "📦 Artifacts to upload to S3:"
-          ls -lah release/
-          echo ""
-          echo "📋 Version: ${{ needs.calculate-version.outputs.version }}"
-
-      - name: Upload to S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.UPDATE_S3_REGION || 'us-east-1' }}
-          S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
-          S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
-          VERSION: ${{ needs.calculate-version.outputs.version }}
-        run: |
-          set -e
-
-          if [ -z "$S3_BUCKET" ]; then
-            echo "⚠️ UPDATE_S3_BUCKET is not configured, skipping S3 upload"
-            exit 0
-          fi
-
-          ENDPOINT_ARG=""
-          if [ -n "$S3_ENDPOINT" ]; then
-            ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
-            echo "📡 Using custom S3 endpoint: $S3_ENDPOINT"
-          fi
-
-          echo "🚀 Uploading to S3 bucket: $S3_BUCKET"
-          echo "📁 Target path: s3://$S3_BUCKET/nightly/"
-          echo ""
-
-          # 1. Upload release files to version directory
-          echo "📦 Uploading release files to s3://$S3_BUCKET/nightly/$VERSION/"
-          for file in release/*.dmg release/*.zip release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.snap release/*.tar.gz; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              echo "   ↗️ $filename"
-              aws s3 cp "$file" "s3://$S3_BUCKET/nightly/$VERSION/$filename" $ENDPOINT_ARG
-            fi
-          done
-
-          # 2. Create nightly*.yml from latest*.yml with version URL prefix
-          echo ""
-          echo "📋 Creating nightly*.yml files from latest*.yml..."
-          for yml in release/latest*.yml; do
-            if [ -f "$yml" ]; then
-              nightly_name=$(basename "$yml" | sed 's/latest/nightly/')
-              sed "s|url: |url: $VERSION/|g" "$yml" > "release/$nightly_name"
-              echo "   📄 Created $nightly_name from $(basename $yml) with URL prefix: $VERSION/"
-            fi
-          done
-
-          # Also process existing nightly*.yml files (from generateUpdatesFilesForAllChannels)
-          for yml in release/nightly*.yml; do
-            if [ -f "$yml" ]; then
-              nightly_name=$(basename "$yml")
-              # Check if URL already has version prefix
-              if ! grep -q "url: $VERSION/" "$yml"; then
-                sed -i "s|url: |url: $VERSION/|g" "$yml"
-                echo "   📄 Updated $nightly_name with URL prefix: $VERSION/"
-              fi
-            fi
-          done
-
-          # 3. Upload manifest files
-          echo ""
-          echo "📋 Uploading manifest files..."
-          for yml in release/nightly*.yml; do
-            if [ -f "$yml" ]; then
-              filename=$(basename "$yml")
-              echo "   ↗️ $filename -> s3://$S3_BUCKET/nightly/$filename"
-              aws s3 cp "$yml" "s3://$S3_BUCKET/nightly/$filename" $ENDPOINT_ARG
-              echo "   ↗️ $filename -> s3://$S3_BUCKET/nightly/$VERSION/$filename (archive)"
-              aws s3 cp "$yml" "s3://$S3_BUCKET/nightly/$VERSION/$filename" $ENDPOINT_ARG
-            fi
-          done
-
-          echo ""
-          echo "✅ S3 upload completed!"
-
-  # ============================================
-  # 清理旧的 S3 Nightly 版本 (保留最近 15 个)
-  # ============================================
-  cleanup-s3:
-    needs: [publish-s3, calculate-version]
-    name: Cleanup Old S3 Nightly Versions
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cleanup old nightly versions on S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.UPDATE_S3_REGION || 'us-east-1' }}
-          S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
-          S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
-        run: |
-          set -e
-
-          if [ -z "$S3_BUCKET" ]; then
-            echo "⚠️ UPDATE_S3_BUCKET is not configured, skipping cleanup"
-            exit 0
-          fi
-
-          ENDPOINT_ARG=""
-          if [ -n "$S3_ENDPOINT" ]; then
-            ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
-          fi
-
-          echo "🧹 Listing nightly version directories..."
-          versions=$(aws s3 ls "s3://$S3_BUCKET/nightly/" $ENDPOINT_ARG | grep 'PRE' | awk '{print $2}' | sed 's|/$||' | sort -V)
-          count=$(echo "$versions" | grep -c . || true)
-
-          echo "📊 Found $count version directories"
-
-          if [ "$count" -le 15 ]; then
-            echo "✅ No cleanup needed (keeping all $count versions)"
-            exit 0
-          fi
-
-          to_delete=$(echo "$versions" | head -n $((count - 15)))
-          delete_count=$(echo "$to_delete" | grep -c . || true)
-
-          echo "🗑️ Deleting $delete_count old versions..."
-          for version in $to_delete; do
-            echo "   🗑️ Deleting s3://$S3_BUCKET/nightly/$version/"
-            aws s3 rm "s3://$S3_BUCKET/nightly/$version/" --recursive $ENDPOINT_ARG
-          done
-
-          echo "✅ Cleanup complete. Kept 15 versions, deleted $delete_count."
 
   # ============================================
   # 清理旧的 Nightly Releases (保留最近 7 个)

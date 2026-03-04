@@ -33,13 +33,12 @@ console.info(`🏗️ Building for architecture: ${arch}`);
 const isStable = !channel || channel === 'stable';
 const isNightly = channel === 'nightly';
 const isBeta = channel === 'beta';
-const isCanary = channel === 'canary';
 
-// All channels use generic provider (S3) when UPDATE_SERVER_URL is set.
-// URL format: {UPDATE_SERVER_URL}/{channelPath}
-// Fallback to GitHub when no S3 URL configured (local dev).
+// 根据 channel 配置 publish provider
+// - 所有渠道 + UPDATE_SERVER_URL: 使用 generic (S3)
+// - 无 UPDATE_SERVER_URL: 回退到 GitHub (本地开发)
 const getPublishConfig = () => {
-  const channelPath = isNightly ? 'nightly' : isCanary ? 'canary' : 'stable';
+  const channelPath = isStable ? 'stable' : isNightly ? 'nightly' : channel || 'stable';
 
   if (updateServerUrl) {
     console.info(
@@ -53,12 +52,13 @@ const getPublishConfig = () => {
     ];
   }
 
-  console.info(`📦 ${channel || 'default'} channel: No UPDATE_SERVER_URL, using GitHub provider`);
+  // 本地开发无 S3 时回退到 GitHub
+  console.info(`📦 ${channelPath} channel: No UPDATE_SERVER_URL, falling back to GitHub provider`);
   return [
     {
       owner: 'lobehub',
       provider: 'github',
-      repo: 'lobe-chat',
+      repo: 'lobehub',
     },
   ];
 };
@@ -76,7 +76,6 @@ if (!hasAppleCertificate) {
 
 // 根据版本类型确定协议 scheme
 const getProtocolScheme = () => {
-  if (isCanary) return 'lobehub-canary';
   if (isNightly) return 'lobehub-nightly';
   if (isBeta) return 'lobehub-beta';
 
@@ -183,8 +182,11 @@ const config = {
       console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
-  // Unified appId across all channels for seamless cross-channel updates
-  appId: 'com.lobehub.lobehub-desktop',
+  appId: isNightly
+    ? 'com.lobehub.lobehub-desktop-nightly'
+    : isBeta
+      ? 'com.lobehub.lobehub-desktop-beta'
+      : 'com.lobehub.lobehub-desktop',
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
