@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Cấu hình để xem trước",
   "dev.preview.title": "Xem trước tên Kỹ năng",
   "dev.save": "Cài đặt",
+  "dev.saveError": "Cài đặt thất bại, vui lòng thử lại",
   "dev.saveSuccess": "Đã lưu cài đặt",
   "dev.tabs.manifest": "Manifest",
   "dev.tabs.meta": "Thông tin meta",

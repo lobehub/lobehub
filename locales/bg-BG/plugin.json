@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Конфигурирай за преглед",
   "dev.preview.title": "Преглед на име на умение",
   "dev.save": "Инсталирай",
+  "dev.saveError": "Инсталирането не бе успешно, моля опитайте отново",
   "dev.saveSuccess": "Настройките са запазени",
   "dev.tabs.manifest": "Манифест",
   "dev.tabs.meta": "Мета информация",

@@ -236,6 +236,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "Voor Gemini 3 Pro Preview-modellen; regelt de diepte van het denken.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "Voor Gemini 3.1 Pro Preview-modellen; regelt de diepte van het denken met lage/middelmatige/hoge niveaus.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint": "Voor Gemini 3.1 Flash Image-modellen; schakelt denken aan/uit.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint": "Voor Gemini 3.1 Flash-Lite Preview; regelt de diepte van het denken met minimale/lage/middelmatige/hoge niveaus.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "Voor Gemini-serie; ondersteunt het aanleveren van URL-context.",
   "providerModels.item.modelConfig.extendParams.placeholder": "Selecteer uit te schakelen uitgebreide parameters",
   "providerModels.item.modelConfig.extendParams.previewFallback": "Voorbeeld niet beschikbaar",
