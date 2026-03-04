@@ -34,6 +34,10 @@ const isStable = !channel || channel === 'stable';
 const isNightly = channel === 'nightly';
 const isBeta = channel === 'beta';
 
+// Strip trailing channel path from URL for re-appending the correct channel
+// Handles both base URL (https://cdn.example.com) and legacy URL with channel (https://cdn.example.com/stable)
+const stripChannelSuffix = (url) => url.replace(/\/(stable|nightly|canary|beta)\/?$/, '');
+
 // 根据 channel 配置 publish provider
 // - 所有渠道 + UPDATE_SERVER_URL: 使用 generic (S3)
 // - 无 UPDATE_SERVER_URL: 回退到 GitHub (本地开发)
@@ -41,13 +45,13 @@ const getPublishConfig = () => {
   const channelPath = isStable ? 'stable' : isNightly ? 'nightly' : channel || 'stable';
 
   if (updateServerUrl) {
-    console.info(
-      `📦 ${channelPath} channel: Using generic provider (${updateServerUrl}/${channelPath})`,
-    );
+    const baseUrl = stripChannelSuffix(updateServerUrl);
+    const fullUrl = `${baseUrl}/${channelPath}`;
+    console.info(`📦 ${channelPath} channel: Using generic provider (${fullUrl})`);
     return [
       {
         provider: 'generic',
-        url: `${updateServerUrl}/${channelPath}`,
+        url: fullUrl,
       },
     ];
   }

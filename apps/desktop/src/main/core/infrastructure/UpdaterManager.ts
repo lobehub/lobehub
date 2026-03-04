@@ -329,13 +329,23 @@ export class UpdaterManager {
   };
 
   /**
+   * Strip trailing channel path from URL so we can re-append the correct channel.
+   * Handles both base URL (https://cdn.example.com) and legacy URL with channel (https://cdn.example.com/stable)
+   */
+  private getBaseUpdateUrl(): string | undefined {
+    if (!UPDATE_SERVER_URL) return undefined;
+    return UPDATE_SERVER_URL.replace(/\/(stable|nightly|canary|beta)\/?$/, '');
+  }
+
+  /**
    * Configure update provider — all channels use generic HTTP provider (S3)
-   * URL format: {UPDATE_SERVER_URL}/{channel}/
+   * URL format: {base}/{channel}/
    * electron-updater looks for {channel}-mac.yml
    */
   private configureUpdateProvider() {
-    if (UPDATE_SERVER_URL) {
-      const feedUrl = `${UPDATE_SERVER_URL}/${this.currentChannel}`;
+    const baseUrl = this.getBaseUpdateUrl();
+    if (baseUrl) {
+      const feedUrl = `${baseUrl}/${this.currentChannel}`;
       autoUpdater.channel = this.currentChannel;
 
       logger.info(`Configuring generic provider for ${this.currentChannel} channel`);
