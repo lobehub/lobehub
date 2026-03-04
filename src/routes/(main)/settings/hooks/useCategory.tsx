@@ -62,7 +62,7 @@ export const useCategory = () => {
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { enableSTT, hideDocs, showAiImage, showApiKeyManage } =
+  const { enableSTT, hideDocs, showAiImage, showApiKeyManage, showProvider } =
     useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
@@ -170,7 +170,7 @@ export const useCategory = () => {
 
     // AI configuration group - AI-related settings
     const aiConfigItems: CategoryItem[] = [
-      {
+      showProvider && {
         icon: Brain,
         key: SettingsTabs.Provider,
         label: t('tab.provider'),
@@ -248,6 +248,7 @@ export const useCategory = () => {
     mobile,
     showAiImage,
     showApiKeyManage,
+    showProvider,
     avatarUrl,
     username,
   ]);
