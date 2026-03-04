@@ -258,6 +258,68 @@ describe('ChatPluginAction', () => {
     });
   });
 
+  describe('internal_invokeDifferentTypePlugin', () => {
+    it('should route default type to builtin executor when builtin executor exists', async () => {
+      const messageId = 'message-id';
+      const payload: ChatToolPayload = {
+        apiName: 'crawlSinglePage',
+        arguments: '{"url":"https://example.com"}',
+        id: 'tool-call-id',
+        identifier: 'lobe-web-browsing',
+        type: 'default',
+      };
+
+      const invokeBuiltinTool = vi.fn().mockResolvedValue(undefined);
+      const invokeDefaultTypePlugin = vi.fn().mockResolvedValue(undefined);
+
+      act(() => {
+        useChatStore.setState({
+          invokeBuiltinTool,
+          invokeDefaultTypePlugin,
+        });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.internal_invokeDifferentTypePlugin(messageId, payload);
+      });
+
+      expect(invokeBuiltinTool).toHaveBeenCalledWith(messageId, payload, undefined);
+      expect(invokeDefaultTypePlugin).not.toHaveBeenCalled();
+    });
+
+    it('should keep default routing for non-builtin tools', async () => {
+      const messageId = 'message-id';
+      const payload: ChatToolPayload = {
+        apiName: 'query',
+        arguments: '{}',
+        id: 'tool-call-id',
+        identifier: 'unknown-plugin',
+        type: 'default',
+      };
+
+      const invokeBuiltinTool = vi.fn().mockResolvedValue(undefined);
+      const invokeDefaultTypePlugin = vi.fn().mockResolvedValue(undefined);
+
+      act(() => {
+        useChatStore.setState({
+          invokeBuiltinTool,
+          invokeDefaultTypePlugin,
+        });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.internal_invokeDifferentTypePlugin(messageId, payload);
+      });
+
+      expect(invokeBuiltinTool).not.toHaveBeenCalled();
+      expect(invokeDefaultTypePlugin).toHaveBeenCalledWith(messageId, payload);
+    });
+  });
+
   describe('updatePluginState', () => {
     it('should update the plugin state for a message', async () => {
       const messageId = 'message-id';

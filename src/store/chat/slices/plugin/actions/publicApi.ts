@@ -2,6 +2,7 @@ import { type ChatToolPayload, type RuntimeStepContext, type UIChatMessage } fro
 import i18n from 'i18next';
 
 import { type ChatStore } from '@/store/chat/store';
+import { hasExecutor } from '@/store/tool/slices/builtin/executors';
 import { type StoreSetter } from '@/store/types';
 
 import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
@@ -91,6 +92,14 @@ export class PluginPublicApiActionImpl {
     payload: ChatToolPayload,
     stepContext?: RuntimeStepContext,
   ): Promise<any> => {
+    // Compatibility fallback:
+    // Some providers may return function names without the `____builtin` suffix,
+    // which gets parsed as type=default. If the identifier/apiName pair matches a
+    // registered builtin executor, route it as builtin to avoid plugin-gateway 404.
+    if (payload.type === 'default' && hasExecutor(payload.identifier, payload.apiName)) {
+      return await this.#get().invokeBuiltinTool(id, payload, stepContext);
+    }
+
     switch (payload.type) {
       case 'standalone': {
         return await this.#get().invokeStandaloneTypePlugin(id, payload);
