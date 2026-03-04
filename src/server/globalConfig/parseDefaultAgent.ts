@@ -1,10 +1,31 @@
 import { set } from 'es-toolkit/compat';
 
-// Keys that belong in MetaData rather than LobeAgentConfig
-const META_KEYS = new Set(['avatar', 'backgroundColor', 'description', 'title', 'tags']);
+import { type MetaData } from '@/types/meta';
 
-// User-friendly aliases mapped to their canonical MetaData key
-const META_ALIASES: Record<string, string> = {
+/**
+ * Keys from MetaData that should be separated from LobeAgentConfig when parsing
+ * DEFAULT_AGENT_CONFIG. If MetaData gains new fields, add them here.
+ *
+ * `marketIdentifier` is intentionally excluded — it's not user-configurable via env var.
+ *
+ * The typed array literal ensures a compile error if a key is misspelled or
+ * removed from MetaData. The Set itself is `Set<string>` so `.has()` accepts
+ * any string without requiring a cast.
+ */
+const META_KEY_LIST: (keyof MetaData)[] = [
+  'avatar',
+  'backgroundColor',
+  'description',
+  'title',
+  'tags',
+];
+const META_KEYS: Set<string> = new Set(META_KEY_LIST);
+
+/**
+ * User-friendly aliases mapped to their canonical MetaData key.
+ * `displayName` is more intuitive in env vars than `title`.
+ */
+const META_ALIASES: Record<string, keyof MetaData> = {
   displayName: 'title',
 };
 
@@ -13,7 +34,7 @@ const META_ALIASES: Record<string, string> = {
  * @param {string} envStr - The environment variable string to be parsed.
  */
 export const parseAgentConfig = (envStr: string) => {
-  const config = {};
+  const config: Record<string, unknown> = {};
   // use regex to match key-value pairs, considering the possibility of semicolons in values
   const regex = /([^;=]+)=("[^"]+"|[^;]+)/g;
   let match;
@@ -23,14 +44,14 @@ export const parseAgentConfig = (envStr: string) => {
     const value = match[2].trim();
     if (!key || !value) return;
 
-    let finalValue: any = value;
+    let finalValue: unknown = value;
 
     // Handle string value
     if (value.startsWith('"') && value.endsWith('"')) {
       finalValue = value.slice(1, -1);
     }
     // Handle numeric values
-    else if (!isNaN(value as any)) {
+    else if (!Number.isNaN(Number(value))) {
       finalValue = Number(value);
     }
     // Handle boolean values
@@ -40,7 +61,7 @@ export const parseAgentConfig = (envStr: string) => {
     // Handle arrays
     else if (value.includes(',') || value.includes('，')) {
       const array = value.replaceAll('，', ',').split(',');
-      finalValue = array.map((item) => (isNaN(item as any) ? item : Number(item)));
+      finalValue = array.map((item) => (Number.isNaN(Number(item)) ? item : Number(item)));
     }
 
     // handle plugins if it's a string
@@ -62,8 +83,8 @@ export const parseDefaultAgentSettings = (envStr: string) => {
   const flat = parseAgentConfig(envStr);
   if (!flat || Object.keys(flat).length === 0) return undefined;
 
-  const config: Record<string, any> = {};
-  const meta: Record<string, any> = {};
+  const config: Record<string, unknown> = {};
+  const meta: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(flat)) {
     const aliasedKey = META_ALIASES[key];
