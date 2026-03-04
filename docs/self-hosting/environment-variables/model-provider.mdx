@@ -842,4 +842,20 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## LLM API
+
+### `LLMAPI_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the LLM API service.
+- Default: -
+- Example: `your_llmapi_api_key`
+
+### `LLMAPI_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the LLM API model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+gpt-4o,+claude-3-5-sonnet-20241022=claude-3.5-sonnet`
+
 [model-list]: /docs/self-hosting/advanced/model-list

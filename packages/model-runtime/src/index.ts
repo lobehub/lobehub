@@ -18,6 +18,7 @@ export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeGoogleAI } from './providers/google';
 export { LobeGroq } from './providers/groq';
+export { LobeLlmApiAI } from './providers/llmapi';
 export { LobeHubAI } from './providers/lobehub';
 export { LobeMinimaxAI } from './providers/minimax';
 export { LobeMistralAI } from './providers/mistral';

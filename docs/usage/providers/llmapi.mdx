@@ -1,0 +1,59 @@
+---
+title: Using LLM API in LobeHub
+description: Learn how to integrate and use LLM API's unified gateway in LobeHub to access 100+ large language models with a single API key.
+tags:
+  - LLM API
+  - API Key
+  - Web Interface
+---
+
+# Using LLM API in LobeHub
+
+[LLM API](https://llmapi.ai/) is a unified OpenAI-compatible gateway that provides access to 100+ large language models — including GPT, Claude, Gemini, DeepSeek, and more — through a single endpoint. It is free to get started and requires no changes to your existing OpenAI-compatible code.
+
+This guide will walk you through how to use LLM API within LobeHub.
+
+<Steps>
+  ### Step 1: Create an LLM API Account and Get Your API Key
+
+- Visit [app.llmapi.ai/signup](https://app.llmapi.ai/signup) and create a free account;
+- After signing in, go to the [Dashboard](https://app.llmapi.ai/);
+- Create a new **Project** and copy the generated API key.
+
+### Step 2: Configure LLM API in LobeHub
+
+- Navigate to the `Settings` page in LobeHub;
+- Under `AI Service Provider`, find the `LLM API` section;
+- Enter the API key you obtained and click **Save**;
+- Click **Fetch Models** to load the available model list, then choose a model and start chatting.
+
+  <Callout type={'info'}>
+    LLM API is free to use. For details on usage limits and available models, visit the
+    [LLM API models page](https://llmapi.ai/models/).
+  </Callout>
+</Steps>
+
+That's it! You can now start chatting in LobeHub using any of the models provided by LLM API.
+
+## Model Selection
+
+LLM API supports a wide range of model providers, including:
+
+- **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `o1`, `o3-mini`, and more
+- **Anthropic**: `claude-opus-4`, `claude-sonnet-4`, `claude-3-5-haiku`, and more
+- **Google**: `gemini-2.5-pro`, `gemini-2.0-flash`, and more
+- **DeepSeek**: `deepseek-chat`, `deepseek-reasoner`, and more
+- **Meta**: `llama-3.3-70b-instruct`, and more
+- And many others...
+
+To view the full list of supported models, visit the [LLM API Models](https://llmapi.ai/models/) page.
+
+## API Configuration
+
+LLM API uses an OpenAI-compatible API format. The base URL is:
+
+```
+https://api.llmapi.ai/v1
+```
+
+You can use any OpenAI-compatible client by pointing it to this endpoint with your API key.

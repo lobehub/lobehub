@@ -218,6 +218,9 @@ export const getLLMConfig = () => {
       ENABLED_STRAICO: z.boolean(),
       STRAICO_API_KEY: z.string().optional(),
 
+      ENABLED_LLMAPI: z.boolean(),
+      LLMAPI_API_KEY: z.string().optional(),
+
       ENABLED_LOBEHUB: z.boolean(),
 
       ENABLED_XIAOMIMIMO: z.boolean(),
@@ -437,6 +440,9 @@ export const getLLMConfig = () => {
 
       ENABLED_STRAICO: !!process.env.STRAICO_API_KEY,
       STRAICO_API_KEY: process.env.STRAICO_API_KEY,
+
+      ENABLED_LLMAPI: !!process.env.LLMAPI_API_KEY,
+      LLMAPI_API_KEY: process.env.LLMAPI_API_KEY,
 
       ENABLED_LOBEHUB: !!process.env.ENABLED_LOBEHUB,
 

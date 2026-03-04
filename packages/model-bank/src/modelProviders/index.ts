@@ -32,6 +32,7 @@ import HunyuanProvider from './hunyuan';
 import InfiniAIProvider from './infiniai';
 import InternLMProvider from './internlm';
 import JinaProvider from './jina';
+import LlmApiProvider from './llmapi';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import MinimaxProvider from './minimax';
@@ -204,6 +205,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ZenMuxProvider,
   StraicoProvider,
   XiaomiMiMoProvider,
+  LlmApiProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -245,6 +247,7 @@ export { default as HunyuanProviderCard } from './hunyuan';
 export { default as InfiniAIProviderCard } from './infiniai';
 export { default as InternLMProviderCard } from './internlm';
 export { default as JinaProviderCard } from './jina';
+export { default as LlmApiProviderCard } from './llmapi';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as MinimaxProviderCard } from './minimax';

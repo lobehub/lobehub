@@ -1,0 +1,59 @@
+---
+title: 在 LobeHub 中使用 LLM API
+description: 了解如何在 LobeHub 中集成和使用 LLM API 的统一网关，通过单一 API 密钥访问 100+ 大语言模型。
+tags:
+  - LLM API
+  - API 密钥
+  - Web 界面
+---
+
+# 在 LobeHub 中使用 LLM API
+
+[LLM API](https://llmapi.ai/) 是一个 OpenAI 兼容的统一网关，通过单一端点提供对 100+ 大语言模型的访问——包括 GPT、Claude、Gemini、DeepSeek 等。免费即可开始使用，无需修改现有的 OpenAI 兼容代码。
+
+本文将指导您如何在 LobeHub 中使用 LLM API。
+
+<Steps>
+  ### 第一步：创建 LLM API 账号并获取 API 密钥
+
+- 访问 [app.llmapi.ai/signup](https://app.llmapi.ai/signup) 注册免费账号；
+- 登录后，进入 [控制台](https://app.llmapi.ai/)；
+- 创建一个新 **项目** 并复制生成的 API 密钥。
+
+### 第二步：在 LobeHub 中配置 LLM API
+
+- 进入 LobeHub 的 `设置` 页面；
+- 在 `AI 服务提供商` 下，找到 `LLM API` 设置；
+- 输入您获得的 API 密钥并点击 **保存**；
+- 点击 **获取模型列表** 加载可用模型，选择模型后即可开始对话。
+
+  <Callout type={'info'}>
+    LLM API 免费提供使用。有关用量限制和可用模型的详细信息，请访问
+    [LLM API 模型页面](https://llmapi.ai/models/)。
+  </Callout>
+</Steps>
+
+至此，您可以在 LobeHub 中使用 LLM API 提供的任意模型开始聊天了。
+
+## 模型选择
+
+LLM API 支持多种模型提供商，包括：
+
+- **OpenAI**: `gpt-4o`、`gpt-4o-mini`、`o1`、`o3-mini` 等
+- **Anthropic**: `claude-opus-4`、`claude-sonnet-4`、`claude-3-5-haiku` 等
+- **Google**: `gemini-2.5-pro`、`gemini-2.0-flash` 等
+- **DeepSeek**: `deepseek-chat`、`deepseek-reasoner` 等
+- **Meta**: `llama-3.3-70b-instruct` 等
+- 以及更多...
+
+如需查看完整的支持模型列表，请访问 [LLM API 模型](https://llmapi.ai/models/) 页面。
+
+## API 配置
+
+LLM API 使用 OpenAI 兼容的 API 格式。基础 URL 为：
+
+```
+https://api.llmapi.ai/v1
+```
+
+您可以使用任何 OpenAI 兼容的客户端，将其指向此端点并使用您的 API 密钥。
