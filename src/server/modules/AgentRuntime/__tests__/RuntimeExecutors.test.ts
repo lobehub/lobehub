@@ -1945,6 +1945,65 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should preserve type-only ChatMessageError payload for llm_execution events', async () => {
+      const { consumeStreamUntilDone: realConsume } =
+        await import('../../../../../packages/model-runtime/src/utils/consumeStream');
+      const { createCallbacksTransformer } =
+        await import('../../../../../packages/model-runtime/src/core/streams/protocol');
+
+      vi.mocked(consumeStreamUntilDone).mockImplementation(realConsume);
+
+      const errorPayload = {
+        body: { message: 'chunk parse failed' },
+        type: 'StreamChunkError',
+      };
+
+      const mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+        const callbacks = options?.callback;
+        const sseLines = ['event: error\n', `data: ${JSON.stringify(errorPayload)}\n\n`];
+        const source = new ReadableStream<string>({
+          start(controller) {
+            for (const line of sseLines) controller.enqueue(line);
+            controller.close();
+          },
+        });
+        return new Response(source.pipeThrough(createCallbacksTransformer(callbacks)));
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toEqual(errorPayload);
+
+      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+        'op-123',
+        expect.objectContaining({
+          type: 'error',
+          data: expect.objectContaining({
+            error: expect.objectContaining({
+              body: expect.objectContaining({ message: 'chunk parse failed' }),
+              message: 'chunk parse failed',
+              type: 'StreamChunkError',
+            }),
+            errorType: 'StreamChunkError',
+            message: 'chunk parse failed',
+            phase: 'llm_execution',
+          }),
+        }),
+      );
+    });
+
     it('should throw and not produce llm_result when modelRuntime.chat rejects', async () => {
       // When chat() throws (pre-stream error like auth failure), it SHOULD propagate
       const mockChat = vi.fn().mockRejectedValue(new Error('401 Unauthorized'));

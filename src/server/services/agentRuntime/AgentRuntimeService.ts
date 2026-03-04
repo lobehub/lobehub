@@ -62,17 +62,24 @@ function formatErrorForState(error: unknown): ChatMessageError {
   }
 
   // Handle ChatMessageError format
-  // e.g., { type: 'ProviderBizError', message: '...', body: {...} }
-  if (error && typeof error === 'object' && 'type' in error && 'message' in error) {
+  // e.g., { type: 'ProviderBizError', message?: '...', body?: {...} }
+  if (error && typeof error === 'object' && 'type' in error) {
     const payload = error as {
       body?: unknown;
-      message: string;
+      message?: string;
       type: ChatMessageError['type'];
     };
 
+    const body = payload.body ?? error;
+    const bodyMessage =
+      body && typeof body === 'object' && 'message' in body
+        ? (body as { message?: unknown }).message
+        : undefined;
+
     return {
-      body: payload.body,
-      message: payload.message,
+      body,
+      message:
+        payload.message ?? (typeof bodyMessage === 'string' ? bodyMessage : String(payload.type)),
       type: payload.type,
     };
   }

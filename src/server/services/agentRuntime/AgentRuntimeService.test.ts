@@ -495,6 +495,49 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should preserve type-only ChatMessageError in step_execution error handling', async () => {
+      const llmError = {
+        body: { message: 'chunk parse failed' },
+        type: 'StreamChunkError',
+      };
+      const mockRuntime = { step: vi.fn().mockRejectedValue(llmError) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await expect(service.executeStep(mockParams)).rejects.toEqual(llmError);
+
+      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith('test-operation-1', {
+        type: 'error',
+        stepIndex: 1,
+        data: {
+          stepIndex: 1,
+          phase: 'step_execution',
+          message: 'chunk parse failed',
+          errorType: 'StreamChunkError',
+          error: {
+            body: {
+              message: 'chunk parse failed',
+            },
+            message: 'chunk parse failed',
+            type: 'StreamChunkError',
+          },
+        },
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          error: expect.objectContaining({
+            body: {
+              message: 'chunk parse failed',
+            },
+            message: 'chunk parse failed',
+            type: 'StreamChunkError',
+          }),
+          status: 'error',
+        }),
+      );
+    });
+
     it('should save error state to coordinator for later retrieval (inMemory mode fix)', async () => {
       const error = new Error('Test error for inMemory mode');
       const mockRuntime = { step: vi.fn().mockRejectedValue(error) };
