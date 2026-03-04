@@ -23,3 +23,12 @@ export interface UpdateInfo {
   releaseNotes?: string | ReleaseNoteInfo[];
   version: string;
 }
+
+export type UpdaterStage = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'latest' | 'error';
+
+export interface UpdaterState {
+  errorMessage?: string;
+  progress?: ProgressInfo;
+  stage: UpdaterStage;
+  updateInfo?: UpdateInfo;
+}

@@ -1,6 +1,7 @@
-/* eslint-disable unicorn/no-array-push-push */
-import { Menu, MenuItemConstructorOptions, app, clipboard, shell } from 'electron';
 import * as path from 'node:path';
+
+import type { MenuItemConstructorOptions } from 'electron';
+import { app, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 import NotificationCtr from '@/controllers/NotificationCtr';
@@ -78,12 +79,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('macOS.about', { appName }),
           },
-          {
-            click: () => {
-              this.app.updaterManager.checkForUpdates({ manual: true });
-            },
-            label: t('common.checkUpdates'),
-          },
+          this.getUpdateMenuItem(t),
           { type: 'separator' },
           {
             accelerator: 'Command+,',
@@ -250,7 +246,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           {
             click: () => {
               const logsPath = app.getPath('logs');
-              console.log(`[Menu] Opening logs directory: ${logsPath}`);
+              console.info(`[Menu] Opening logs directory: ${logsPath}`);
               shell.openPath(logsPath).catch((err) => {
                 console.error(`[Menu] Error opening path ${logsPath}:`, err);
                 // Optionally show an error dialog to the user
@@ -261,7 +257,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           {
             click: () => {
               const userDataPath = app.getPath('userData');
-              console.log(`[Menu] Opening user data directory: ${userDataPath}`);
+              console.info(`[Menu] Opening user data directory: ${userDataPath}`);
               shell.openPath(userDataPath).catch((err) => {
                 console.error(`[Menu] Error opening path ${userDataPath}:`, err);
                 // Optionally show an error dialog to the user
@@ -388,6 +384,34 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     }
 
     return template;
+  }
+
+  private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
+    const { stage } = this.app.updaterManager.getUpdaterState();
+
+    switch (stage) {
+      case 'checking': {
+        return { enabled: false, label: t('common.checkingUpdates') };
+      }
+      case 'downloading': {
+        return { enabled: false, label: t('common.downloadingUpdate') };
+      }
+      case 'downloaded': {
+        return {
+          click: () => this.app.updaterManager.installNow(),
+          label: t('common.restartToUpdate'),
+        };
+      }
+      case 'latest': {
+        return { enabled: false, label: t('common.isLatestVersion') };
+      }
+      default: {
+        return {
+          click: () => this.app.updaterManager.checkForUpdates({ manual: true }),
+          label: t('common.checkUpdates'),
+        };
+      }
+    }
   }
 
   private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {

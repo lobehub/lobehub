@@ -1,4 +1,10 @@
-import type { UpdateChannel, UpdateInfo } from '@lobechat/electron-client-ipc';
+import type {
+  ProgressInfo,
+  UpdateChannel,
+  UpdateInfo,
+  UpdaterStage,
+  UpdaterState,
+} from '@lobechat/electron-client-ipc';
 import { app as electronApp } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
@@ -19,7 +25,6 @@ export class UpdaterManager {
   private checking: boolean = false;
   private downloading: boolean = false;
   private updateAvailable: boolean = false;
-  private isManualCheck: boolean = false;
   private currentChannel: UpdateChannel = UPDATE_CHANNEL;
   /** Incremented on each channel switch to invalidate in-flight checks */
   private checkGeneration: number = 0;
@@ -27,6 +32,11 @@ export class UpdaterManager {
   private activeGeneration: number = 0;
   /** Whether a recheck is needed after the current check completes */
   private pendingRecheck: boolean = false;
+
+  private stage: UpdaterStage = 'idle';
+  private latestUpdateInfo: UpdateInfo | null = null;
+  private latestProgress: ProgressInfo | null = null;
+  private latestError: string | null = null;
 
   constructor(app: AppCore) {
     this.app = app;
@@ -39,6 +49,44 @@ export class UpdaterManager {
 
   get mainWindow() {
     return this.app.browserManager.getMainWindow();
+  }
+
+  public getUpdaterState(): UpdaterState {
+    const state: UpdaterState = { stage: this.stage };
+    if (this.latestProgress) state.progress = this.latestProgress;
+    if (this.latestUpdateInfo) state.updateInfo = this.latestUpdateInfo;
+    if (this.latestError) state.errorMessage = this.latestError;
+    return state;
+  }
+
+  private setStage(
+    stage: UpdaterStage,
+    opts?: {
+      error?: string;
+      progress?: ProgressInfo;
+      rebuildMenu?: boolean;
+      updateInfo?: UpdateInfo;
+    },
+  ) {
+    this.stage = stage;
+    if (opts?.updateInfo !== undefined) this.latestUpdateInfo = opts.updateInfo;
+    if (opts?.progress !== undefined) this.latestProgress = opts.progress;
+    if (opts?.error !== undefined) this.latestError = opts.error;
+
+    // Clear irrelevant fields on stage transitions
+    if (stage === 'idle' || stage === 'checking') {
+      this.latestProgress = null;
+      this.latestError = null;
+    }
+    if (stage !== 'error') {
+      this.latestError = null;
+    }
+
+    this.mainWindow.broadcast('updaterStateChanged', this.getUpdaterState());
+
+    if (opts?.rebuildMenu !== false) {
+      this.app.menuManager.rebuildAppMenu();
+    }
   }
 
   public initialize = async () => {
@@ -115,13 +163,11 @@ export class UpdaterManager {
 
   /**
    * Check for updates
-   * @param manual whether this is a manual check for updates
    */
   public checkForUpdates = async ({ manual = false }: { manual?: boolean } = {}) => {
     if (this.checking || this.downloading) return;
 
     this.checking = true;
-    this.isManualCheck = manual;
     this.activeGeneration = this.checkGeneration;
 
     autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
@@ -140,9 +186,7 @@ export class UpdaterManager {
     logger.info('[Updater Config] Build channel from config:', UPDATE_CHANNEL);
     logger.info('[Updater Config] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
 
-    if (manual) {
-      this.mainWindow.broadcast('manualUpdateCheckStart');
-    }
+    this.setStage('checking');
 
     try {
       await autoUpdater.checkForUpdates();
@@ -153,17 +197,18 @@ export class UpdaterManager {
 
       if (this.isMissingUpdateManifestError(error)) {
         logger.warn('[Updater] Update manifest not ready yet, treating as no update:', message);
-        if (manual) {
-          this.mainWindow.broadcast('manualUpdateNotAvailable', this.getCurrentUpdateInfo());
-        }
+        this.setStage('latest');
+        setTimeout(() => {
+          if (this.stage === 'latest') this.setStage('idle');
+        }, 5000);
         return;
       }
 
       logger.error('Error checking for updates:', message);
-
-      if (manual) {
-        this.mainWindow.broadcast('updateError', message);
-      }
+      this.setStage('error', { error: message });
+      setTimeout(() => {
+        if (this.stage === 'error') this.setStage('idle');
+      }, 3000);
     } finally {
       this.checking = false;
       if (this.pendingRecheck) {
@@ -175,27 +220,24 @@ export class UpdaterManager {
 
   /**
    * Download update
-   * @param manual whether this is a manual download
    */
-  public downloadUpdate = async (manual: boolean = false) => {
+  public downloadUpdate = async () => {
     if (this.downloading || !this.updateAvailable) return;
 
     this.downloading = true;
-    logger.info(`${manual ? 'Manually downloading' : 'Auto downloading'} update...`);
+    logger.info('Downloading update...');
 
-    if (manual || this.isManualCheck) {
-      this.mainWindow.broadcast('updateDownloadStart');
-    }
+    this.setStage('downloading');
 
     try {
       await autoUpdater.downloadUpdate();
     } catch (error) {
       this.downloading = false;
       logger.error('Error downloading update:', error);
-
-      if (manual || this.isManualCheck) {
-        this.mainWindow.broadcast('updateError', (error as Error).message);
-      }
+      this.setStage('error', { error: (error as Error).message });
+      setTimeout(() => {
+        if (this.stage === 'error') this.setStage('idle');
+      }, 3000);
     }
   };
 
@@ -245,8 +287,7 @@ export class UpdaterManager {
 
     logger.info('Simulating update available...');
 
-    const mainWindow = this.mainWindow;
-    const mockUpdateInfo = {
+    const mockUpdateInfo: UpdateInfo = {
       releaseDate: new Date().toISOString(),
       releaseNotes: ` #### Version 1.0.0 Release Notes
 - Added some great new features
@@ -258,12 +299,12 @@ export class UpdaterManager {
     };
 
     this.updateAvailable = true;
+    this.setStage('checking');
 
-    if (this.isManualCheck) {
-      mainWindow.broadcast('manualUpdateAvailable', mockUpdateInfo);
-    } else {
+    setTimeout(() => {
+      this.setStage('downloading', { updateInfo: mockUpdateInfo });
       this.simulateDownloadProgress();
-    }
+    }, 1000);
   };
 
   /**
@@ -274,22 +315,20 @@ export class UpdaterManager {
 
     logger.info('Simulating update downloaded...');
 
-    const mainWindow = this.app.browserManager.getMainWindow();
-    if (mainWindow) {
-      const mockUpdateInfo = {
-        releaseDate: new Date().toISOString(),
-        releaseNotes: ` #### Version 1.0.0 Release Notes
+    const mockUpdateInfo: UpdateInfo = {
+      releaseDate: new Date().toISOString(),
+      releaseNotes: ` #### Version 1.0.0 Release Notes
 - Added some great new features
 - Fixed bugs affecting usability
 - Optimized overall application performance
 - Updated dependency libraries
 `,
-        version: '1.0.0',
-      };
+      version: '1.0.0',
+    };
 
-      this.downloading = false;
-      mainWindow.broadcast('updateDownloaded', mockUpdateInfo);
-    }
+    this.downloading = false;
+    this.setStage('downloaded', { updateInfo: mockUpdateInfo });
+    this.mainWindow.broadcast('updateDownloaded', mockUpdateInfo);
   };
 
   /**
@@ -300,25 +339,22 @@ export class UpdaterManager {
 
     logger.info('Simulating download progress...');
 
-    const mainWindow = this.app.browserManager.getMainWindow();
-
     this.downloading = true;
-
-    if (this.isManualCheck) {
-      mainWindow.broadcast('updateDownloadStart');
-    }
 
     let progress = 0;
     const interval = setInterval(() => {
       progress += 10;
 
-      if (progress <= 100 && this.isManualCheck) {
-        mainWindow.broadcast('updateDownloadProgress', {
+      if (progress <= 100) {
+        const progressInfo: ProgressInfo = {
           bytesPerSecond: 1024 * 1024,
           percent: progress,
           total: 1024 * 1024 * 100,
           transferred: 1024 * 1024 * progress,
-        });
+        };
+        this.latestProgress = progressInfo;
+        this.mainWindow.broadcast('updaterStateChanged', this.getUpdaterState());
+        this.mainWindow.broadcast('updateDownloadProgress', progressInfo);
       }
 
       if (progress >= 100) {
@@ -392,20 +428,19 @@ export class UpdaterManager {
 
       this.updateAvailable = true;
 
-      if (this.isManualCheck) {
-        this.mainWindow.broadcast('manualUpdateAvailable', info);
-      } else {
-        logger.info('Auto check found update, starting download automatically...');
-        this.downloadUpdate();
-      }
+      // Always auto-download
+      logger.info('Update found, starting download automatically...');
+      this.setStage('downloading', { updateInfo: info });
+      this.downloadUpdate();
     });
 
     autoUpdater.on('update-not-available', (info) => {
       logger.info(`Update not available. Current: ${info.version}`);
 
-      if (this.isManualCheck) {
-        this.mainWindow.broadcast('manualUpdateNotAvailable', info);
-      }
+      this.setStage('latest');
+      setTimeout(() => {
+        if (this.stage === 'latest') this.setStage('idle');
+      }, 5000);
     });
 
     autoUpdater.on('error', async (err) => {
@@ -413,9 +448,10 @@ export class UpdaterManager {
 
       if (this.isMissingUpdateManifestError(err)) {
         logger.warn('[Updater] Update manifest not ready yet, skipping error handling:', message);
-        if (this.isManualCheck) {
-          this.mainWindow.broadcast('manualUpdateNotAvailable', this.getCurrentUpdateInfo());
-        }
+        this.setStage('latest');
+        setTimeout(() => {
+          if (this.stage === 'latest') this.setStage('idle');
+        }, 5000);
         return;
       }
 
@@ -425,23 +461,27 @@ export class UpdaterManager {
       logger.error('[Updater Error Context] allowPrerelease:', autoUpdater.allowPrerelease);
       logger.error('[Updater Error Context] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
 
-      if (this.isManualCheck) {
-        this.mainWindow.broadcast('updateError', err.message);
-      }
+      this.mainWindow.broadcast('updateError', err.message);
+      this.setStage('error', { error: message });
+      setTimeout(() => {
+        if (this.stage === 'error') this.setStage('idle');
+      }, 3000);
     });
 
     autoUpdater.on('download-progress', (progressObj) => {
       logger.debug(
         `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`,
       );
-      if (this.isManualCheck) {
-        this.mainWindow.broadcast('updateDownloadProgress', progressObj);
-      }
+      this.latestProgress = progressObj;
+      // Broadcast state without menu rebuild (too frequent)
+      this.mainWindow.broadcast('updaterStateChanged', this.getUpdaterState());
+      this.mainWindow.broadcast('updateDownloadProgress', progressObj);
     });
 
     autoUpdater.on('update-downloaded', (info) => {
       logger.info(`Update downloaded: ${info.version}`);
       this.downloading = false;
+      this.setStage('downloaded', { updateInfo: info });
       this.mainWindow.broadcast('updateDownloaded', info);
     });
 

@@ -1,4 +1,4 @@
-import type { UpdateChannel } from '@lobechat/electron-client-ipc';
+import type { UpdateChannel, UpdaterState } from '@lobechat/electron-client-ipc';
 
 import { createLogger } from '@/utils/logger';
 
@@ -59,5 +59,10 @@ export default class UpdaterCtr extends ControllerModule {
     logger.info(`Set update channel requested: ${channel}`);
     this.app.storeManager.set('updateChannel', channel);
     this.app.updaterManager.switchChannel(channel);
+  }
+
+  @IpcMethod()
+  async getUpdaterState(): Promise<UpdaterState> {
+    return this.app.updaterManager.getUpdaterState();
   }
 }

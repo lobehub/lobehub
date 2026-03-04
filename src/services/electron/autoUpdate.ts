@@ -1,4 +1,4 @@
-import type { UpdateChannel } from '@lobechat/electron-client-ipc';
+import type { UpdateChannel, UpdaterState } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -25,6 +25,10 @@ class AutoUpdateService {
 
   setUpdateChannel = async (channel: UpdateChannel): Promise<void> => {
     return ensureElectronIpc().autoUpdate.setUpdateChannel(channel);
+  };
+
+  getUpdaterState = async (): Promise<UpdaterState> => {
+    return ensureElectronIpc().autoUpdate.getUpdaterState();
   };
 }
 

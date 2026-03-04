@@ -1,8 +1,12 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { getElectronIpc } from '@lobechat/electron-client-ipc';
+import {
+  getElectronIpc,
+  type UpdaterState,
+  useWatchBroadcast,
+} from '@lobechat/electron-client-ipc';
 import { Block, Button, Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
@@ -31,6 +35,73 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
   const isDesktop = useMemo(() => !!getElectronIpc(), []);
+
+  const [updaterState, setUpdaterState] = useState<UpdaterState>({ stage: 'idle' });
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    autoUpdateService.getUpdaterState().then(setUpdaterState);
+  }, [isDesktop]);
+
+  useWatchBroadcast('updaterStateChanged', (state: UpdaterState) => {
+    setUpdaterState(state);
+  });
+
+  const renderUpdateButton = () => {
+    if (!isDesktop) {
+      if (hasNewVersion) {
+        return (
+          <a href={MANUAL_UPGRADE_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
+            <Button block={mobile} type={'primary'}>
+              {t('upgradeVersion.action')}
+            </Button>
+          </a>
+        );
+      }
+      return null;
+    }
+
+    const { stage, progress } = updaterState;
+
+    switch (stage) {
+      case 'checking': {
+        return (
+          <Button loading block={mobile}>
+            {t('checkForUpdates')}
+          </Button>
+        );
+      }
+      case 'downloading': {
+        const percent = progress ? Math.round(progress.percent) : 0;
+        return (
+          <Button loading block={mobile}>
+            {t('downloadingUpdate', { percent })}
+          </Button>
+        );
+      }
+      case 'downloaded': {
+        return (
+          <Button block={mobile} type="primary" onClick={() => void autoUpdateService.installNow()}>
+            {t('restartToUpdate')}
+          </Button>
+        );
+      }
+      case 'latest': {
+        return (
+          <Button disabled block={mobile}>
+            {t('alreadyUpToDate')}
+          </Button>
+        );
+      }
+      default: {
+        return (
+          <Button block={mobile} onClick={() => void autoUpdateService.checkUpdate()}>
+            {t('checkForUpdates')}
+          </Button>
+        );
+      }
+    }
+  };
 
   return (
     <Flexbox
@@ -72,18 +143,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         <a href={CHANGELOG_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
           <Button block={mobile}>{t('changelog')}</Button>
         </a>
-        {isDesktop && !hasNewVersion && (
-          <Button block={mobile} onClick={() => void autoUpdateService.checkUpdate()}>
-            {t('checkForUpdates')}
-          </Button>
-        )}
-        {hasNewVersion && !isDesktop && (
-          <a href={MANUAL_UPGRADE_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
-            <Button block={mobile} type={'primary'}>
-              {t('upgradeVersion.action')}
-            </Button>
-          </a>
-        )}
+        {renderUpdateButton()}
       </Flexbox>
     </Flexbox>
   );
