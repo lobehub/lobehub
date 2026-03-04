@@ -1,22 +1,25 @@
-import { ElectronIPCEventHandler, ElectronIPCServer } from '@lobechat/electron-server-ipc';
+import os from 'node:os';
+import { join } from 'node:path';
+
+import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
+import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
 import { app, nativeTheme, protocol } from 'electron';
 import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
 import { macOS, windows } from 'electron-is';
-import os from 'node:os';
-import { join } from 'node:path';
 
 import { name } from '@/../../package.json';
 import { buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
-import { IControlModule } from '@/controllers';
+import type { IControlModule } from '@/controllers';
 import AuthCtr from '@/controllers/AuthCtr';
 import {
   astSearchDetectors,
+  browserAutomationDetectors,
   contentSearchDetectors,
   fileSearchDetectors,
 } from '@/modules/toolDetectors';
-import { IServiceModule } from '@/services';
+import type { IServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
 
 import { BrowserManager } from './browser/BrowserManager';
@@ -189,6 +192,11 @@ export class App {
     // Register file search tools (mdfind, fd, find)
     for (const detector of fileSearchDetectors) {
       this.toolDetectorManager.register(detector, 'file-search');
+    }
+
+    // Register browser automation tools (agent-browser)
+    for (const detector of browserAutomationDetectors) {
+      this.toolDetectorManager.register(detector, 'browser-automation');
     }
 
     logger.info(
