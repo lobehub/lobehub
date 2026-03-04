@@ -1,29 +1,23 @@
 import { type LobeTool } from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
-import { t } from 'i18next';
 import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
-import { notification } from '@/components/AntdStaticMethods';
 import { mutate } from '@/libs/swr';
 import { pluginService } from '@/services/plugin';
 import { toolService } from '@/services/tool';
 import { globalHelpers } from '@/store/global/helpers';
-import { pluginStoreSelectors } from '@/store/tool/selectors';
 import { type StoreSetter } from '@/store/types';
 import {
   type DiscoverPluginItem,
   type PluginListResponse,
   type PluginQueryParams,
 } from '@/types/discover';
-import { type PluginInstallError } from '@/types/tool/plugin';
-import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
 import { type PluginInstallProgress, type PluginStoreState } from './initialState';
-import { PluginInstallStep } from './initialState';
 
 const n = setNamespace('pluginStore');
 
@@ -44,107 +38,21 @@ export class PluginStoreActionImpl {
   }
 
   installOldPlugin = async (
-    name: string,
-    type: 'plugin' | 'customPlugin' = 'plugin',
+    _name: string,
+    _type: 'plugin' | 'customPlugin' = 'plugin',
   ): Promise<void> => {
-    const plugin = pluginStoreSelectors.getPluginById(name)(this.#get());
-    if (!plugin) return;
-
-    const { updateInstallLoadingState, refreshPlugins, updatePluginInstallProgress } = this.#get();
-
-    try {
-      // Start installation process
-      updateInstallLoadingState(name, true);
-
-      // Step 1: Fetch plugin manifest
-      updatePluginInstallProgress(name, {
-        progress: 25,
-        step: PluginInstallStep.FETCHING_MANIFEST,
-      });
-
-      const data = await toolService.getToolManifest(plugin.manifest);
-
-      // Step 2: Install plugin
-      updatePluginInstallProgress(name, {
-        progress: 60,
-        step: PluginInstallStep.INSTALLING_PLUGIN,
-      });
-
-      await pluginService.installPlugin({ identifier: plugin.identifier, manifest: data, type });
-
-      updatePluginInstallProgress(name, {
-        progress: 85,
-        step: PluginInstallStep.INSTALLING_PLUGIN,
-      });
-
-      await refreshPlugins();
-
-      // Step 4: Complete installation
-      updatePluginInstallProgress(name, {
-        progress: 100,
-        step: PluginInstallStep.COMPLETED,
-      });
-
-      // Briefly show completion status then clear progress
-      await sleep(1000);
-
-      updatePluginInstallProgress(name, undefined);
-      updateInstallLoadingState(name, undefined);
-    } catch (error) {
-      console.error(error);
-
-      const err = error as PluginInstallError;
-
-      // Set error state
-      updatePluginInstallProgress(name, {
-        error: err.message,
-        progress: 0,
-        step: PluginInstallStep.ERROR,
-      });
-
-      updateInstallLoadingState(name, undefined);
-
-      notification.error({
-        description: t(`error.${err.message}`, { ns: 'plugin' }),
-        message: t('error.installError', { name: plugin.title, ns: 'plugin' }),
-      });
-    }
+    // Old plugin system has been deprecated, skip installation silently
   };
 
   installPlugin = async (
-    name: string,
-    type: 'plugin' | 'customPlugin' = 'plugin',
+    _name: string,
+    _type: 'plugin' | 'customPlugin' = 'plugin',
   ): Promise<void> => {
-    const plugin = pluginStoreSelectors.getPluginById(name)(this.#get());
-    if (!plugin) return;
-
-    const { updateInstallLoadingState, refreshPlugins } = this.#get();
-    try {
-      updateInstallLoadingState(name, true);
-      const data = await toolService.getToolManifest(plugin.manifest);
-
-      await pluginService.installPlugin({ identifier: plugin.identifier, manifest: data, type });
-      await refreshPlugins();
-
-      updateInstallLoadingState(name, undefined);
-    } catch (error) {
-      console.error(error);
-
-      const err = error as PluginInstallError;
-
-      updateInstallLoadingState(name, undefined);
-
-      notification.error({
-        description: t(`error.${err.message}`, { ns: 'plugin' }),
-        message: t('error.installError', { name: plugin.title, ns: 'plugin' }),
-      });
-    }
+    // Old plugin system has been deprecated, skip installation silently
   };
 
-  installPlugins = async (plugins: string[]): Promise<void> => {
-    const { installPlugin } = this.#get();
-
-    await Promise.all(plugins.map((identifier) => installPlugin(identifier)));
+  installPlugins = async (_plugins: string[]): Promise<void> => {
+    // Old plugin system has been deprecated, skip installation silently
   };
 
   loadMorePlugins = (): void => {
