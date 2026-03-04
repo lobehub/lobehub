@@ -1,8 +1,7 @@
 'use client';
 
-import { toast } from '@lobehub/ui';
 import { type ComponentType, type ReactElement } from 'react';
-import { createElement, lazy, memo, Suspense, useCallback, useEffect, useRef } from 'react';
+import { createElement, lazy, memo, Suspense, useCallback, useEffect } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import {
   createBrowserRouter,
@@ -16,24 +15,10 @@ import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useGlobalStore } from '@/store/global';
-import { isChunkLoadError, tryChunkErrorReload } from '@/utils/chunkError';
+import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
-const MAX_IMPORT_RETRIES = 2;
-
-async function importWithRetry<T>(
-  importFn: () => Promise<T>,
-  retries = MAX_IMPORT_RETRIES,
-): Promise<T> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await importFn();
-    } catch (error) {
-      if (attempt === retries || !isChunkLoadError(error)) throw error;
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-    }
-  }
-  // unreachable, but keeps TS happy
-  throw new Error('importWithRetry exhausted');
+async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
+  return importFn();
 }
 
 function resolveLazyModule<P>(module: { default: ComponentType<P> } | ComponentType<P>) {
@@ -63,7 +48,7 @@ export function dynamicElement<P = NonNullable<unknown>>(
   debugId?: string,
 ): ReactElement {
   const LazyComponent = lazy(async () => {
-    const mod = await importWithRetry(importFn);
+    const mod = await importModule(importFn);
     return resolveLazyModule(mod);
   });
 
@@ -85,7 +70,7 @@ export function dynamicLayout<P = NonNullable<unknown>>(
   debugId?: string,
 ): ReactElement {
   const LazyComponent = lazy(async () => {
-    const mod = await importWithRetry(importFn);
+    const mod = await importModule(importFn);
     return resolveLazyModule(mod);
   });
 
@@ -117,17 +102,13 @@ export interface ErrorBoundaryProps {
 
 export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const error = useRouteError() as Error;
-  const reloadRef = useRef(false);
   const navigate = useNavigate();
   const reset = useCallback(() => {
     navigate(resetPath);
   }, [navigate, resetPath]);
 
-  if (typeof window !== 'undefined' && isChunkLoadError(error) && !reloadRef.current) {
-    reloadRef.current = true;
-    toast.info('Web app has been updated so it needs to be reloaded.');
-    tryChunkErrorReload();
-    return null;
+  if (typeof window !== 'undefined' && isChunkLoadError(error)) {
+    notifyChunkError();
   }
 
   return createElement(ErrorCapture, { error, reset });

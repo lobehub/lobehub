@@ -5,11 +5,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import utc from 'dayjs/plugin/utc';
 import { enableMapSet } from 'immer';
 
-import {
-  clearChunkErrorReloadFlag,
-  isChunkLoadError,
-  tryChunkErrorReload,
-} from '@/utils/chunkError';
+import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 enableMapSet();
 
@@ -21,22 +17,15 @@ dayjs.extend(isYesterday);
 
 // Global fallback: catch async chunk-load failures that escape Error Boundaries
 if (typeof window !== 'undefined') {
-  // Vite dispatches vite:preloadError when modulepreload or CSS preload fails.
-  // Default behavior is to throw (blocking dynamic import). We intercept and reload instead.
   window.addEventListener('vite:preloadError', (event) => {
     event.preventDefault();
-    tryChunkErrorReload();
+    notifyChunkError();
   });
 
   window.addEventListener('unhandledrejection', (event) => {
     if (isChunkLoadError(event.reason)) {
       event.preventDefault();
-      tryChunkErrorReload();
+      notifyChunkError();
     }
-  });
-
-  // Successful load — clear the reload guard so future errors can trigger recovery
-  window.addEventListener('load', () => {
-    clearChunkErrorReloadFlag();
   });
 }
