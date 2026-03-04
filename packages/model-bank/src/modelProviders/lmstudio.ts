@@ -17,7 +17,6 @@ const LMStudio: ModelProviderCard = {
       speed: 2,
       text: 'smooth',
     },
-    showApiKey: false,
     showModelFetcher: true,
   },
   url: 'https://lmstudio.ai',
