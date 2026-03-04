@@ -13,6 +13,7 @@ import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../ut
 const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
   'image/png',
   'image/jpeg',
+  'image/jpg', // non-standard but widely used alias for image/jpeg
   'image/webp',
   'image/heic',
   'image/heif',
@@ -47,10 +48,11 @@ const getGeminiMajorVersion = (model?: string) => {
  * External HTTP / Signed URLs support varies by model generation.
  * In practice, Gemini 3+ supports `fileData.fileUri` for external URLs reliably,
  * while earlier models often require `inlineData`.
+ * Returns false for unversioned model IDs (e.g. gemini-pro) to avoid request failures.
  */
 const supportsExternalUrlFileData = (model?: string) => {
   const major = getGeminiMajorVersion(model);
-  if (major === null) return true;
+  if (major === null) return false;
   return major >= 3;
 };
 
