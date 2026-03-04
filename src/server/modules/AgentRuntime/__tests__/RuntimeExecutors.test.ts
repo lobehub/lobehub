@@ -1930,7 +1930,11 @@ describe('RuntimeExecutors', () => {
         type: 'call_llm' as const,
       };
 
-      await expect(executors.call_llm!(instruction, state)).rejects.toThrow(/LLM stream error/);
+      await expect(executors.call_llm!(instruction, state)).rejects.toMatchObject({
+        body: { message: 'rate limit exceeded' },
+        message: 'rate limit exceeded',
+        type: 'ProviderBizError',
+      });
 
       // Error event should be published to stream manager
       expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
