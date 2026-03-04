@@ -15,7 +15,9 @@ import {
 
 // Mock the utils
 vi.mock('../../utils/uriParser', () => ({
+  isPublicExternalUrl: vi.fn().mockReturnValue(false),
   parseDataUri: vi.fn(),
+  validateExternalUrl: vi.fn().mockResolvedValue({ isValid: false, reason: 'mocked' }),
 }));
 
 vi.mock('../../utils/imageToBase64', () => ({

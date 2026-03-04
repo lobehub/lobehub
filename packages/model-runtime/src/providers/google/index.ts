@@ -186,7 +186,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         thinkingLevel,
       }) as ThinkingConfig;
 
-      const contents = await buildGoogleMessages(payload.messages);
+      const contents = await buildGoogleMessages(payload.messages, { model });
 
       const controller = new AbortController();
       const originalSignal = options?.signal;
@@ -207,9 +207,9 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         imageConfig:
           modelsWithModalities.has(model) && imageAspectRatio && imageAspectRatio !== 'auto'
             ? {
-                aspectRatio: imageAspectRatio,
-                imageSize: imageResolution,
-              }
+              aspectRatio: imageAspectRatio,
+              imageSize: imageResolution,
+            }
             : undefined,
         maxOutputTokens: payload.max_tokens,
         responseModalities: modelsWithModalities.has(model) ? ['Text', 'Image'] : undefined,
@@ -328,7 +328,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    */
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
     // Convert OpenAI messages to Google format
-    const contents = await buildGoogleMessages(payload.messages);
+    const contents = await buildGoogleMessages(payload.messages, { model: payload.model });
     const pricing = await getModelPricing(payload.model, this.provider);
 
     // Handle tools-based structured output
