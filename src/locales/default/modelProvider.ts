@@ -287,6 +287,8 @@ export default {
     'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint':
     'For Gemini 3.1 Flash Image models; toggle thinking on/off.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint':
+    'For Gemini 3.1 Flash-Lite Preview; controls thinking depth with minimal/low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':
