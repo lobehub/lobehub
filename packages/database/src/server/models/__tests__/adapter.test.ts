@@ -253,7 +253,7 @@ describe('DrizzleAdapter', () => {
         });
 
         expect(result).toBeDefined();
-        expect(result?.data.accountId).toBe(testUserId);
+        expect((result?.data as any).accountId).toBe(testUserId);
         expect(result?.userId).toBe(testUserId);
       });
 
@@ -275,7 +275,7 @@ describe('DrizzleAdapter', () => {
 
         expect(result).toBeDefined();
         // For non-DeviceCode models, accountId should be injected into payload
-        expect(result?.data.accountId).toBe(testUserId);
+        expect((result?.data as any).accountId).toBe(testUserId);
       });
     });
   });

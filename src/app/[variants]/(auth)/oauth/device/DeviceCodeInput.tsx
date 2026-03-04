@@ -41,7 +41,7 @@ const DeviceCodeInput = memo<DeviceCodeInputProps>(({ xsrf, errorKey, userCode }
     >
       {errorKey && (
         <Block padding={16} variant="filled">
-          <Text style={{ color: 'red' }}>{t(errorKey)}</Text>
+          <Text style={{ color: 'red' }}>{t(errorKey as any)}</Text>
         </Block>
       )}
     </AuthCard>
