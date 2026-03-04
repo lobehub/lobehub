@@ -8,6 +8,17 @@
       globalThis['__DEBUG_PROXY__'] = true;
 
       // --- 1. 解析 debug host ---
+      function isValidDevHost(urlStr) {
+        try {
+          var u = new URL(urlStr);
+          if (['http:', 'https:'].indexOf(u.protocol) === -1) return false;
+          var h = u.hostname.toLowerCase();
+          return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+        } catch (e) {
+          return false;
+        }
+      }
+
       var searchParams = new URLSearchParams(window.location.search);
       var debugHost = searchParams.get('debug-host');
 
@@ -16,27 +27,29 @@
       }
 
       var storedHost = sessionStorage.getItem('debug-host');
-      var host = debugHost || storedHost || 'http://localhost:9876';
-
-      if (debugHost) {
+      var host = 'http://localhost:9876';
+      if (debugHost && isValidDevHost(debugHost)) {
+        host = debugHost;
         sessionStorage.setItem('debug-host', debugHost);
+      } else if (storedHost && isValidDevHost(storedHost)) {
+        host = storedHost;
       }
 
       // --- 2. Worker 跨域补丁（必须在任何模块加载前注入）---
       var workerPatch = document.createElement('script');
-      workerPatch.textContent =
-        '(function(){' +
-        'var O=globalThis.Worker;' +
-        'globalThis.Worker=function(u,o){' +
-        'var h=typeof u==="string"?u:u instanceof URL?u.href:"";' +
-        'if(h.startsWith("' +
-        host +
-        '")){' +
-        'var b=new Blob(["import \\\\""+h+"\\\\";"],{type:"application/javascript"});' +
-        'return new O(URL.createObjectURL(b),Object.assign({},o,{type:"module"}));' +
-        '}return new O(u,o)};' +
-        'globalThis.Worker.prototype=O.prototype;' +
-        '})();';
+      workerPatch.textContent = `(function () {
+  var O = globalThis.Worker;
+  globalThis.Worker = function (u, o) {
+    var h = typeof u === "string" ? u : u instanceof URL ? u.href : "";
+    if (h.startsWith(${JSON.stringify(host)})) {
+      var code = 'import "' + h + '";';
+      var b = new Blob([code], { type: "application/javascript" });
+      return new O(URL.createObjectURL(b), Object.assign({}, o, { type: "module" }));
+    }
+    return new O(u, o);
+  };
+  globalThis.Worker.prototype = O.prototype;
+})();`;
       document.head.insertBefore(workerPatch, document.head.firstChild);
 
       // --- 3. 注入 React Refresh runtime（HMR 前置条件）---
