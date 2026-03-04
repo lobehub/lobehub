@@ -41,13 +41,7 @@ const UpdateChannel = memo(() => {
         {
           children: [
             {
-              children: (
-                <Select<UpdateChannelValue>
-                  options={channelOptions}
-                  value={channel}
-                  onChange={handleChange}
-                />
-              ),
+              children: <Select options={channelOptions} value={channel} onChange={handleChange} />,
               desc: t('tab.beta.updateChannel.desc'),
               label: t('tab.beta.updateChannel.title'),
             },
