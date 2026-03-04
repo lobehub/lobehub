@@ -24,23 +24,28 @@
 
       // --- 2. Worker 跨域补丁（必须在任何模块加载前注入）---
       var workerPatch = document.createElement('script');
-      workerPatch.textContent = '(function(){' +
+      workerPatch.textContent =
+        '(function(){' +
         'var O=globalThis.Worker;' +
         'globalThis.Worker=function(u,o){' +
-          'var h=typeof u==="string"?u:u instanceof URL?u.href:"";' +
-          'if(h.startsWith("'+host+'")){' +
-            'var b=new Blob(["import \\\\""+h+"\\\\";"],{type:"application/javascript"});' +
-            'return new O(URL.createObjectURL(b),Object.assign({},o,{type:"module"}));' +
-          '}return new O(u,o)};' +
+        'var h=typeof u==="string"?u:u instanceof URL?u.href:"";' +
+        'if(h.startsWith("' +
+        host +
+        '")){' +
+        'var b=new Blob(["import \\\\""+h+"\\\\";"],{type:"application/javascript"});' +
+        'return new O(URL.createObjectURL(b),Object.assign({},o,{type:"module"}));' +
+        '}return new O(u,o)};' +
         'globalThis.Worker.prototype=O.prototype;' +
-      '})();';
+        '})();';
       document.head.insertBefore(workerPatch, document.head.firstChild);
 
       // --- 3. 注入 React Refresh runtime（HMR 前置条件）---
       var refreshScript = document.createElement('script');
       refreshScript.type = 'module';
       refreshScript.textContent =
-        'import RefreshRuntime from "' + host + '/@react-refresh";' +
+        'import RefreshRuntime from "' +
+        host +
+        '/@react-refresh";' +
         'RefreshRuntime.injectIntoGlobalHook(window);' +
         'window.$RefreshReg$ = () => {};' +
         'window.$RefreshSig$ = () => (type) => type;' +
@@ -54,11 +59,11 @@
         ) || 'en-US';
 
       var configReady = fetch('/spa/' + locale + '/chat')
-        .then(function(res) { return res.text(); })
-        .then(function(html) {
-          var match = html.match(
-            /window\.__SERVER_CONFIG__\s*=\s*(\{[\s\S]*?\});/,
-          );
+        .then(function (res) {
+          return res.text();
+        })
+        .then(function (html) {
+          var match = html.match(/window\.__SERVER_CONFIG__\s*=\s*(\{[\s\S]*?\});/);
           if (match) {
             var configScript = document.createElement('script');
             configScript.textContent = 'window.__SERVER_CONFIG__ = ' + match[1] + ';';
@@ -68,33 +73,35 @@
 
       // --- 5. Fetch dev server HTML 并注入 ---
       var devHtmlReady = fetch(host)
-        .then(function(res) { return res.text(); })
-        .then(function(html) {
+        .then(function (res) {
+          return res.text();
+        })
+        .then(function (html) {
           var parser = new DOMParser();
           var doc = parser.parseFromString(html, 'text/html');
 
           var scripts = doc.querySelectorAll('script');
-          scripts.forEach(function(s) { s.remove(); });
+          scripts.forEach(function (s) {
+            s.remove();
+          });
 
-          doc.head.querySelectorAll('meta').forEach(function(meta) {
+          doc.head.querySelectorAll('meta').forEach(function (meta) {
             document.head.append(meta);
           });
 
-          doc.head
-            .querySelectorAll('style, link[rel="stylesheet"]')
-            .forEach(function(el) {
-              if (el.tagName === 'LINK') {
-                var href = el.getAttribute('href');
-                if (href && href.startsWith('/')) {
-                  el.setAttribute('href', new URL(href, host).toString());
-                }
+          doc.head.querySelectorAll('style, link[rel="stylesheet"]').forEach(function (el) {
+            if (el.tagName === 'LINK') {
+              var href = el.getAttribute('href');
+              if (href && href.startsWith('/')) {
+                el.setAttribute('href', new URL(href, host).toString());
               }
-              document.head.append(el);
-            });
+            }
+            document.head.append(el);
+          });
 
           document.body.innerHTML = doc.body.innerHTML;
 
-          scripts.forEach(function(script) {
+          scripts.forEach(function (script) {
             var s = document.createElement('script');
             s.type = 'module';
             if (script.crossOrigin) s.crossOrigin = script.crossOrigin;
@@ -107,7 +114,9 @@
             } else if (script.textContent) {
               s.textContent = script.textContent.replace(
                 /from\s+["'](\/[@\w].*?)["']/g,
-                function(_, p) { return 'from "' + new URL(p, host).toString() + '"'; },
+                function (_, p) {
+                  return 'from "' + new URL(p, host).toString() + '"';
+                },
               );
             } else {
               return;
@@ -117,11 +126,8 @@
           });
         });
 
-      Promise.all([configReady, devHtmlReady]).then(function() {
-        console.log(
-          '%c[Debug Proxy] Loaded from ' + host,
-          'color: #52c41a; font-weight: bold;',
-        );
+      Promise.all([configReady, devHtmlReady]).then(function () {
+        console.log('%c[Debug Proxy] Loaded from ' + host, 'color: #52c41a; font-weight: bold;');
       });
     </script>
   </head>
