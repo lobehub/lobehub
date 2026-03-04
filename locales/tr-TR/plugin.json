@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Önizleme için yapılandırın",
   "dev.preview.title": "Yetenek adı önizlemesi",
   "dev.save": "Yükle",
+  "dev.saveError": "Kurulum başarısız oldu, lütfen tekrar deneyin",
   "dev.saveSuccess": "Ayarlar kaydedildi",
   "dev.tabs.manifest": "Manifest",
   "dev.tabs.meta": "Meta bilgi",

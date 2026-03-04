@@ -11,6 +11,7 @@ import {
   sharedRendererPlugins,
   sharedRollupOutput,
 } from './plugins/vite/sharedRendererConfig';
+import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
 
 const isMobile = process.env.MOBILE === 'true';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
@@ -32,6 +33,7 @@ export default defineConfig({
   define: sharedRendererDefine({ isMobile, isElectron: false }),
   optimizeDeps: sharedOptimizeDeps,
   plugins: [
+    vercelSkewProtection(),
     viteEnvRestartKeys(['APP_URL']),
     ...sharedRendererPlugins({ platform }),
 

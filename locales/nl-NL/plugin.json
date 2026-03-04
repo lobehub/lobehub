@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Configureer om voorbeeld te bekijken",
   "dev.preview.title": "Skill-naamvoorbeeld",
   "dev.save": "Installeren",
+  "dev.saveError": "Installatie mislukt, probeer het opnieuw",
   "dev.saveSuccess": "Instellingen opgeslagen",
   "dev.tabs.manifest": "Manifest",
   "dev.tabs.meta": "Metainfo",

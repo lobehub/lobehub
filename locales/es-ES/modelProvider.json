@@ -236,6 +236,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "Para modelos Gemini 3 Pro Preview; controla la profundidad de pensamiento.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "Para modelos Gemini 3.1 Pro Preview; controla la profundidad de pensamiento con niveles bajo/medio/alto.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint": "Para modelos Gemini 3.1 Flash Image; activa o desactiva el pensamiento.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint": "Para la vista previa de Gemini 3.1 Flash-Lite; controla la profundidad de pensamiento con niveles mínimo/bajo/medio/alto.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "Para la serie Gemini; permite proporcionar contexto mediante URL.",
   "providerModels.item.modelConfig.extendParams.placeholder": "Selecciona los parámetros extendidos a habilitar",
   "providerModels.item.modelConfig.extendParams.previewFallback": "Vista previa no disponible",

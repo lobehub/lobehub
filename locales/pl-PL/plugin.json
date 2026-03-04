@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Skonfiguruj, aby zobaczyć podgląd",
   "dev.preview.title": "Podgląd nazwy umiejętności",
   "dev.save": "Zainstaluj",
+  "dev.saveError": "Instalacja nie powiodła się, spróbuj ponownie",
   "dev.saveSuccess": "Ustawienia zapisane",
   "dev.tabs.manifest": "Manifest",
   "dev.tabs.meta": "Informacje meta",

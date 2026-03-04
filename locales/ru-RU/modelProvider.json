@@ -236,6 +236,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "Для моделей Gemini 3 Pro Preview; управляет глубиной размышлений.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "Для моделей Gemini 3.1 Pro Preview; управляет глубиной размышлений с уровнями низкий/средний/высокий.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint": "Для моделей Gemini 3.1 Flash Image; переключает размышления вкл/выкл.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint": "Для Gemini 3.1 Flash-Lite Preview; управляет глубиной мышления с минимальным/низким/средним/высоким уровнями.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "Для серии Gemini; поддерживает предоставление контекста по URL.",
   "providerModels.item.modelConfig.extendParams.placeholder": "Выберите параметры для активации",
   "providerModels.item.modelConfig.extendParams.previewFallback": "Предпросмотр недоступен",

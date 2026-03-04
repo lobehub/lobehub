@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "スキル設定後にプレビュー開始",
   "dev.preview.title": "スキル名プレビュー",
   "dev.save": "スキルをインストール",
+  "dev.saveError": "インストールに失敗しました。もう一度お試しください。",
   "dev.saveSuccess": "スキル設定が正常に保存されました",
   "dev.tabs.manifest": "機能記述リスト (Manifest)",
   "dev.tabs.meta": "スキルメタ情報",

@@ -1463,6 +1463,23 @@ describe('UserMemoryModel', () => {
         type: UserMemoryContextObjectType.Person,
       });
     });
+
+    it('should not throw on non-JSON extra and preserve raw text', () => {
+      const result = UserMemoryModel.parseAssociatedObjects([
+        {
+          name: 'Policy Doc',
+          type: UserMemoryContextObjectType.Other,
+          extra: 'plain text metadata note',
+        },
+      ]);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        extra: { raw: 'plain text metadata note' },
+        name: 'Policy Doc',
+        type: UserMemoryContextObjectType.Other,
+      });
+    });
   });
 
   describe('parseAssociatedSubjects - valid schema', () => {
@@ -1480,6 +1497,22 @@ describe('UserMemoryModel', () => {
       expect(result[0]).toMatchObject({
         name: 'TestSubject',
         extra: { role: 'admin' },
+      });
+    });
+
+    it('should not throw on plain text subject extra', () => {
+      const result = UserMemoryModel.parseAssociatedSubjects([
+        {
+          name: 'Runtime Agent',
+          type: 'person',
+          extra: 'subject plain text metadata',
+        },
+      ]);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        extra: { raw: 'subject plain text metadata' },
+        name: 'Runtime Agent',
       });
     });
   });
