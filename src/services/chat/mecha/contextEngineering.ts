@@ -44,11 +44,7 @@ import {
 } from '@/store/tool/selectors';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
-import {
-  combineUserMemoryData,
-  resolveGlobalIdentities,
-  resolveTopicMemories,
-} from './memoryManager';
+import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { createSkillEngine } from './skillEngineering';
 
 const log = debug('context-engine:contextEngineering');
@@ -296,13 +292,13 @@ export const contextEngineering = async ({
     .filter((kb) => kb.enabled)
     .map((kb) => ({ description: kb.description, id: kb.id, name: kb.name }));
 
-  // Resolve user memories: topic memories and global identities are independent layers
+  // Resolve user memories: topic memories and user persona are independent layers
   // Both functions now read from cache only (no network requests) to avoid blocking sendMessage
   let userMemoryData: UserMemoryData | undefined;
   if (enableUserMemories) {
     const topicMemories = resolveTopicMemories();
-    const globalIdentities = resolveGlobalIdentities();
-    userMemoryData = combineUserMemoryData(topicMemories, globalIdentities);
+    const persona = resolveUserPersona();
+    userMemoryData = combineUserMemoryData(topicMemories, persona);
   }
 
   // Resolve GTD context: plan and todos

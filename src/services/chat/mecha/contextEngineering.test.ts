@@ -464,7 +464,7 @@ describe('contextEngineering', () => {
         },
       ];
 
-      // Mock topic memories and global identities separately
+      // Mock topic memories and user persona separately
       vi.spyOn(memoryManager, 'resolveTopicMemories').mockReturnValue({
         activities: [],
         contexts: [
@@ -489,7 +489,7 @@ describe('contextEngineering', () => {
         experiences: [],
         preferences: [],
       });
-      vi.spyOn(memoryManager, 'resolveGlobalIdentities').mockReturnValue([]);
+      vi.spyOn(memoryManager, 'resolveUserPersona').mockReturnValue(undefined);
 
       const result = await contextEngineering({
         enableUserMemories: true,

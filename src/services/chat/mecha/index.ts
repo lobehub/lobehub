@@ -22,8 +22,4 @@ export { resolveModelExtendParams } from './modelParamsResolver';
 
 // Memory management
 export type { TopicMemoryResolverContext } from './memoryManager';
-export {
-  combineUserMemoryData,
-  resolveGlobalIdentities,
-  resolveTopicMemories,
-} from './memoryManager';
+export { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
