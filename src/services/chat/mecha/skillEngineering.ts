@@ -1,5 +1,6 @@
 import { SkillEngine } from '@lobechat/context-engine';
 
+import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { getToolStoreState } from '@/store/tool';
 
 /**
@@ -13,11 +14,13 @@ export const createSkillEngine = (): SkillEngine => {
   const toolState = getToolStoreState();
 
   // Source 1: builtin skills
-  const builtinMetas = (toolState.builtinSkills || []).map((s) => ({
-    description: s.description,
-    identifier: s.identifier,
-    name: s.name,
-  }));
+  const builtinMetas = (toolState.builtinSkills || [])
+    .filter((s) => shouldEnableBuiltinSkill(s.identifier))
+    .map((s) => ({
+      description: s.description,
+      identifier: s.identifier,
+      name: s.name,
+    }));
 
   // Source 2: DB skills (agentSkills table)
   const dbMetas = (toolState.agentSkills || []).map((s) => ({

@@ -13,6 +13,7 @@ import { sha256 } from 'js-sha256';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
+import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
@@ -291,7 +292,10 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       userId: context.userId,
     });
 
-    return new SkillsExecutionRuntime({ builtinSkills, service });
+    return new SkillsExecutionRuntime({
+      builtinSkills: filterBuiltinSkills(builtinSkills),
+      service,
+    });
   },
   identifier: SkillsIdentifier,
 };

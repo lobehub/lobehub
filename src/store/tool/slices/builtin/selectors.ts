@@ -1,5 +1,6 @@
 import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 
+import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { shouldEnableTool } from '@/helpers/toolFilters';
 
 import { type ToolStoreState } from '../../initialState';
@@ -41,7 +42,7 @@ const toSkillMeta = (s: BuiltinSkill): LobeToolMeta => ({
 
 const toSkillMetaWithAvailability = (s: BuiltinSkill): LobeToolMetaWithAvailability => ({
   ...toSkillMeta(s),
-  availableInWeb: true,
+  availableInWeb: shouldEnableBuiltinSkill(s.identifier),
 });
 
 const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
@@ -90,7 +91,12 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
     .map(toBuiltinMeta);
 
   const skillMetas = (s.builtinSkills || [])
-    .filter((skill) => !uninstalledBuiltinTools.includes(skill.identifier))
+    .filter((skill) => {
+      if (!shouldEnableBuiltinSkill(skill.identifier)) return false;
+      if (uninstalledBuiltinTools.includes(skill.identifier)) return false;
+
+      return true;
+    })
     .map(toSkillMeta);
   const agentSkillMetas = agentSkillsSelectors.agentSkillMetaList(s);
 
@@ -151,7 +157,12 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
  * Get installed builtin skills (excludes uninstalled ones)
  */
 const installedBuiltinSkills = (s: ToolStoreState): BuiltinSkill[] =>
-  (s.builtinSkills || []).filter((skill) => !s.uninstalledBuiltinTools.includes(skill.identifier));
+  (s.builtinSkills || []).filter((skill) => {
+    if (!shouldEnableBuiltinSkill(skill.identifier)) return false;
+    if (s.uninstalledBuiltinTools.includes(skill.identifier)) return false;
+
+    return true;
+  });
 
 /**
  * Get uninstalled builtin tool identifiers

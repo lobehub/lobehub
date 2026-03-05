@@ -9,6 +9,7 @@ import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionR
 import { SkillsExecutor } from '@lobechat/builtin-tool-skills/executor';
 import { isDesktop } from '@lobechat/const';
 
+import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { cloudSandboxService } from '@/services/cloudSandbox';
 import { localFileService } from '@/services/electron/localFileService';
 import { agentSkillService } from '@/services/skill';
@@ -16,7 +17,7 @@ import { useChatStore } from '@/store/chat';
 
 // Create runtime with client-side service
 const runtime = new SkillsExecutionRuntime({
-  builtinSkills,
+  builtinSkills: filterBuiltinSkills(builtinSkills),
   service: {
     execScript: async (command, options) => {
       const { runInClient, description, config } = options;
