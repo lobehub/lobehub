@@ -13,28 +13,37 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Rename macOS latest-mac.yml for multi-architecture support
+    - name: Rename macOS *-mac.yml for multi-architecture support
       if: runner.os == 'macOS'
       shell: bash
       run: |
         cd apps/desktop/release
-        if [ -f "latest-mac.yml" ]; then
-          SYSTEM_ARCH=$(uname -m)
-          if [[ "$SYSTEM_ARCH" == "arm64" ]]; then
-            ARCH_SUFFIX="arm64"
-          else
-            ARCH_SUFFIX="x64"
-          fi
-          mv latest-mac.yml "latest-mac-${ARCH_SUFFIX}.yml"
-          echo "✅ Renamed latest-mac.yml to latest-mac-${ARCH_SUFFIX}.yml"
+        SYSTEM_ARCH=$(uname -m)
+        if [[ "$SYSTEM_ARCH" == "arm64" ]]; then
+          ARCH_SUFFIX="arm64"
+        else
+          ARCH_SUFFIX="x64"
         fi
+        for yml in *-mac.yml; do
+          if [ -f "$yml" ]; then
+            new_name="${yml%.yml}-${ARCH_SUFFIX}.yml"
+            mv "$yml" "$new_name"
+            echo "✅ Renamed $yml to $new_name"
+          fi
+        done
+
+    - name: List yml files before upload
+      shell: bash
+      run: |
+        echo "📋 YML files to upload:"
+        ls -la apps/desktop/release/*.yml 2>/dev/null || echo "   ⚠️ No yml files found!"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.artifact-name }}
         path: |
-          apps/desktop/release/latest*
+          apps/desktop/release/*.yml
           apps/desktop/release/*.dmg*
           apps/desktop/release/*.zip*
           apps/desktop/release/*.exe*
