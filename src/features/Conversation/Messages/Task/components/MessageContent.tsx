@@ -58,6 +58,7 @@ const MessageContent = memo<UIChatMessage>(
             content={content}
             hasImages={showImageItems}
             id={id}
+            isMessageGenerating={generating}
             isMultimodal={metadata?.isMultimodal}
             isToolCallGenerating={isToolCallGenerating}
             markdownProps={markdownProps}
