@@ -2,6 +2,11 @@ import type { AgentItem, LobeAgentConfig } from '../agent';
 import type { NewChatGroupAgent } from '../agentGroup';
 import type { MetaData } from '../meta';
 
+export const CHAT_GROUP_SESSION_ID_PREFIX = 'cg_' as const;
+
+export const isChatGroupSessionId = (id?: string | null): id is string =>
+  typeof id === 'string' && id.startsWith(CHAT_GROUP_SESSION_ID_PREFIX);
+
 export enum LobeSessionType {
   Agent = 'agent',
   Group = 'group',
@@ -36,7 +41,7 @@ export interface LobeAgentSession {
 export interface LobeGroupSession {
   createdAt: Date;
   group?: string;
-  id: string; // Start with 'cg_'
+  id: string; // Start with CHAT_GROUP_SESSION_ID_PREFIX
   members?: GroupMemberWithAgent[];
   meta: MetaData;
   pinned?: boolean;

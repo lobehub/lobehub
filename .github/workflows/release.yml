@@ -17,6 +17,7 @@ concurrency:
 jobs:
   release:
     name: Release
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
 
     services:

@@ -4,6 +4,7 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
@@ -34,13 +35,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface AgentSelectorActionProps {
-  agentId: string;
   onAgentChange: (id: string) => void;
 }
 
-const AgentSelectorAction = memo<AgentSelectorActionProps>(({ agentId, onAgentChange }) => {
+const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) => {
   const { t } = useTranslation(['chat', 'common']);
   const [open, setOpen] = useState(false);
+  const agentId = useConversationStore(conversationSelectors.agentId);
 
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
   const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
@@ -50,7 +51,9 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ agentId, onAgentCh
   useFetchAgentList();
 
   const agentsWithBuiltin = useMemo(() => {
-    const hasPageAgent = agents.some((agent) => agent.id === pageAgentId);
+    // Page Copilot only supports selecting agent sessions, not group sessions.
+    const availableAgents = agents.filter((agent) => agent.type === 'agent');
+    const hasPageAgent = availableAgents.some((agent) => agent.id === pageAgentId);
 
     if (pageAgentId && !hasPageAgent) {
       return [
@@ -63,11 +66,11 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ agentId, onAgentCh
           type: 'agent' as const,
           updatedAt: new Date(),
         },
-        ...agents,
+        ...availableAgents,
       ];
     }
 
-    return agents;
+    return availableAgents;
   }, [agents, pageAgentId, pageAgentData, t]);
 
   const activeAgent = useMemo(

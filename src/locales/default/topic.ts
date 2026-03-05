@@ -8,6 +8,7 @@ export default {
   'actions.duplicate': 'Duplicate',
   'actions.export': 'Export Topics',
   'actions.import': 'Import Conversation',
+  'actions.openInNewTab': 'Open in New Tab',
   'actions.openInNewWindow': 'Open in a new window',
   'actions.removeAll': 'Delete All Topics',
   'actions.removeUnstarred': 'Delete Unstarred Topics',

@@ -7,6 +7,7 @@
   "actions.duplicate": "复制",
   "actions.export": "导出话题",
   "actions.import": "导入对话",
+  "actions.openInNewTab": "在新标签页中打开",
   "actions.openInNewWindow": "打开独立窗口",
   "actions.removeAll": "删除全部话题",
   "actions.removeUnstarred": "删除未收藏话题",

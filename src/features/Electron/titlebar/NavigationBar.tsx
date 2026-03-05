@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
+import type { GlobalState } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { electronStylish } from '@/styles/electron';
 import { isMacOS } from '@/utils/platform';
@@ -17,8 +18,14 @@ import { loadAllRecentlyViewedPlugins } from './RecentlyViewed/plugins';
 
 const isMac = isMacOS();
 
+const navPanelSelector = (s: GlobalState) => {
+  const showLeftPanel = systemStatusSelectors.showLeftPanel(s);
+  if (!showLeftPanel) return 0;
+  return systemStatusSelectors.leftPanelWidth(s);
+};
+
 const useNavPanelWidth = () => {
-  return useGlobalStore(systemStatusSelectors.leftPanelWidth);
+  return useGlobalStore(navPanelSelector);
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -44,7 +51,7 @@ const NavigationBar = memo(() => {
   const { t } = useTranslation('electron');
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
-  // Use ResizeObserver for real-time width updates during resize
+
   const leftPanelWidth = useNavPanelWidth();
 
   // Toggle history popover
@@ -71,13 +78,18 @@ const NavigationBar = memo(() => {
   // Tooltip content for the clock button
   const tooltipContent = t('navigation.recentView');
 
+  const isLeftPanelVisible = leftPanelWidth > 0;
+
   return (
     <Flexbox
       horizontal
       align="center"
       data-width={leftPanelWidth}
       justify="end"
-      style={{ width: `${leftPanelWidth - 12}px` }}
+      style={{
+        width: isLeftPanelVisible ? `${leftPanelWidth - 12}px` : '150px',
+        transition: !isLeftPanelVisible ? 'width 0.2s' : 'none',
+      }}
     >
       <Flexbox horizontal align="center" className={electronStylish.nodrag} gap={2}>
         <ActionIcon disabled={!canGoBack} icon={ArrowLeft} size="small" onClick={goBack} />

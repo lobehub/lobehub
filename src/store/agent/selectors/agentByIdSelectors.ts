@@ -102,14 +102,14 @@ const getAgentBuilderContextById =
 
     return {
       config: {
-        chatConfig: config.chatConfig,
-        model: config.model,
-        openingMessage: config.openingMessage,
-        openingQuestions: config.openingQuestions,
-        params: config.params,
-        plugins: config.plugins,
-        provider: config.provider,
-        systemRole: config.systemRole,
+        chatConfig: config?.chatConfig,
+        model: config?.model,
+        openingMessage: config?.openingMessage,
+        openingQuestions: config?.openingQuestions,
+        params: config?.params,
+        plugins: config?.plugins,
+        provider: config?.provider,
+        systemRole: config?.systemRole,
       },
       meta,
     };

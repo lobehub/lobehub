@@ -345,6 +345,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ============================================
+  # 发布到 S3 更新服务器
+  # ============================================
+  publish-s3:
+    needs: [merge-mac-files, calculate-version]
+    name: Publish to S3
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/desktop-publish-s3
+        with:
+          channel: nightly
+          version: ${{ needs.calculate-version.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  # ============================================
   # 清理旧的 Nightly Releases (保留最近 7 个)
   # ============================================
   cleanup-old-nightlies:

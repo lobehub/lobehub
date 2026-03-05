@@ -37,7 +37,7 @@ export class BackendProxyProtocolManager {
    * Debounce timer for authorization required notifications.
    * Prevents multiple rapid 401 responses from triggering duplicate notifications.
    */
-  // eslint-disable-next-line no-undef
+
   private authRequiredDebounceTimer: NodeJS.Timeout | null = null;
   private static readonly AUTH_REQUIRED_DEBOUNCE_MS = 1000;
 
@@ -119,7 +119,6 @@ export class BackendProxyProtocolManager {
         }
         appendVercelCookie(headers);
 
-        // eslint-disable-next-line no-undef
         const requestInit: RequestInit & { duplex?: 'half' } = {
           headers,
           method: request.method,
@@ -141,13 +140,7 @@ export class BackendProxyProtocolManager {
         } catch (error) {
           this.logger.error(`${logPrefix} upstream fetch failed: ${rewrittenUrl}`, error);
 
-          return new Response('Upstream fetch failed, target url: ' + rewrittenUrl, {
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-            },
-            status: 502,
-            statusText: 'Bad Gateway',
-          });
+          throw error;
         }
 
         const responseHeaders = new Headers(upstreamResponse.headers);
@@ -183,7 +176,7 @@ export class BackendProxyProtocolManager {
         });
       } catch (error) {
         this.logger.error(`${logPrefix} protocol.handle error:`, error);
-        return null;
+        throw error;
       }
     });
 

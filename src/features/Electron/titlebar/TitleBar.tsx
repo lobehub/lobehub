@@ -8,9 +8,11 @@ import { electronStylish } from '@/styles/electron';
 import { isMacOS } from '@/utils/platform';
 
 import Connection from '../connection/Connection';
+import { useTabNavigation } from '../navigation/useTabNavigation';
 import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
 import { UpdateNotification } from '../updater/UpdateNotification';
 import NavigationBar from './NavigationBar';
+import TabBar from './TabBar';
 import WinControl from './WinControl';
 
 const isMac = isMacOS();
@@ -23,6 +25,7 @@ const TitleBar = memo(() => {
 
   initElectronAppState();
   useWatchThemeUpdate();
+  useTabNavigation();
 
   const showWinControl = isAppStateInit && !isMac;
 
@@ -45,6 +48,7 @@ const TitleBar = memo(() => {
       width={'100%'}
     >
       <NavigationBar />
+      <TabBar />
 
       <Flexbox horizontal align={'center'} gap={4}>
         <Flexbox horizontal className={electronStylish.nodrag} gap={8}>
