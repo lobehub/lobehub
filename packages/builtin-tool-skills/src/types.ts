@@ -39,11 +39,6 @@ export interface ExecScriptParams {
     name?: string;
   };
   description: string;
-  /**
-   * Whether to run on the desktop client (for local shell access).
-   * Only available on desktop. When false or omitted, runs in cloud sandbox.
-   */
-  runInClient?: boolean;
 }
 
 export interface ExecScriptState {
@@ -54,7 +49,6 @@ export interface ExecScriptState {
 
 export interface RunCommandOptions {
   command: string;
-  runInClient?: boolean;
   timeout?: number;
 }
 
