@@ -29,9 +29,7 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
 
   if (!content && !hasTools) return isGenerating ? <ContentLoading id={id} /> : null;
 
-  if (content === LOADING_FLAT) {
-    return <ContentLoading id={id} />;
-  }
+  if (content === LOADING_FLAT) return isGenerating ? <ContentLoading id={id} /> : null;
 
   const isSingleLine = (message || '').split('\n').length <= 2;
 
