@@ -262,6 +262,25 @@ describe('SessionModel', () => {
       // 断言结果
       expect(result).toBe(0);
     });
+
+    it('should count sessions with date range filter', async () => {
+      await serverDB.insert(sessions).values([
+        { id: 's1', userId, createdAt: new Date('2024-01-01') },
+        { id: 's2', userId, createdAt: new Date('2024-06-01') },
+        { id: 's3', userId, createdAt: new Date('2024-12-01') },
+      ]);
+
+      const rangeResult = await sessionModel.count({
+        range: ['2024-03-01', '2024-09-01'],
+      });
+      expect(rangeResult).toBe(1);
+
+      const startResult = await sessionModel.count({ startDate: '2024-05-01' });
+      expect(startResult).toBe(2);
+
+      const endResult = await sessionModel.count({ endDate: '2024-07-01' });
+      expect(endResult).toBe(2);
+    });
   });
 
   describe('queryByKeyword', () => {
@@ -1384,6 +1403,37 @@ describe('SessionModel', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('1'); // Most topics (2)
       expect(result[1].id).toBe('2'); // Second most topics (1)
+    });
+
+    it('should include inbox topics in ranking when topics have no sessionId', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: '1', userId }]);
+        await trx
+          .insert(agents)
+          .values([{ id: 'a1', userId, title: 'Agent 1', avatar: 'av1', backgroundColor: 'bg1' }]);
+        await trx.insert(agentsToSessions).values([{ sessionId: '1', agentId: 'a1', userId }]);
+
+        // Create topics: 1 for session, 3 for inbox (no sessionId)
+        await trx.insert(topics).values([
+          { id: 'inbox-t1', userId, sessionId: null },
+          { id: 'inbox-t2', userId, sessionId: null },
+          { id: 'inbox-t3', userId, sessionId: null },
+          { id: 'session-t1', sessionId: '1', userId },
+        ]);
+      });
+
+      const result = await sessionModel.rank();
+
+      // Should include both inbox and session entries
+      expect(result.length).toBeGreaterThanOrEqual(2);
+      // Inbox should have 3 topics and be ranked first
+      const inboxEntry = result.find((r) => r.id === 'inbox');
+      expect(inboxEntry).toBeDefined();
+      expect(inboxEntry?.count).toBe(3);
+      // Session should have 1 topic
+      const sessionEntry = result.find((r) => r.id === '1');
+      expect(sessionEntry).toBeDefined();
+      expect(sessionEntry?.count).toBe(1);
     });
 
     it('should handle sessions with no topics', async () => {

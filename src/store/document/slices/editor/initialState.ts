@@ -35,6 +35,10 @@ export interface EditorContentState {
    */
   lastSavedContent: string;
   /**
+   * Last saved editor JSON for comparison
+   */
+  lastSavedEditorData?: any;
+  /**
    * Last updated time
    */
   lastUpdatedTime: Date | null;
@@ -85,6 +89,7 @@ export const createInitialEditorContentState = (
   editorData: null,
   isDirty: false,
   lastSavedContent: '',
+  lastSavedEditorData: null,
   lastUpdatedTime: null,
   saveStatus: 'idle',
   sourceType,

@@ -27,6 +27,7 @@ export const defaultToolIds = [
   SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
+  MemoryManifest.identifier,
 ];
 
 export const builtinTools: LobeBuiltinTool[] = [

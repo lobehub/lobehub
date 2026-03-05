@@ -229,6 +229,10 @@ export default {
 
   'cmdk.search.folders': 'Folders',
 
+  'cmdk.search.knowledgeBase': 'Library',
+
+  'cmdk.search.knowledgeBases': 'Libraries',
+
   'cmdk.search.loading': 'Searching...',
 
   'cmdk.search.market': 'Community',
@@ -290,6 +294,7 @@ export default {
   'exportType.allAgentWithMessage': 'Export All Agents and Messages',
   'exportType.globalSetting': 'Export Global Settings',
   'feedback': 'Feedback',
+  'feedback.emailContact': 'You can also email us at {{email}}',
   'feedback.errors.fileTooLarge': 'File exceeds 5MB',
   'feedback.errors.submitFailed': 'Submit failed. Try again.',
   'feedback.errors.teamNotFound': 'Configuration error',
@@ -499,7 +504,7 @@ export default {
   'userPanel.community': 'Community',
   'userPanel.data': 'Data Storage',
   'userPanel.defaultNickname': 'Community User',
-  'userPanel.discord': 'Community Support',
+  'userPanel.discord': 'Discord',
   'userPanel.docs': 'Documentation',
   'userPanel.email': 'Email Support',
   'userPanel.feedback': 'Contact Us',

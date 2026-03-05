@@ -1,9 +1,6 @@
 import { Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
-
-dayjs.extend(relativeTime);
 
 interface TimeProps {
   capturedAt?: Date | number | string;

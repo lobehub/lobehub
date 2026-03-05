@@ -236,6 +236,7 @@
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint": "За модели Gemini 3 Pro Preview; контролира дълбочината на мислене.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint": "За модели Gemini 3.1 Pro Preview; контролира дълбочината на мислене с ниско/средно/високо ниво.",
   "providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint": "За модели Gemini 3.1 Flash Image; включване/изключване на мисленето.",
+  "providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint": "За Gemini 3.1 Flash-Lite Preview; контролира дълбочината на мислене с минимално/ниско/средно/високо ниво.",
   "providerModels.item.modelConfig.extendParams.options.urlContext.hint": "За серията Gemini; поддържа предоставяне на контекст чрез URL.",
   "providerModels.item.modelConfig.extendParams.placeholder": "Изберете разширени параметри за активиране",
   "providerModels.item.modelConfig.extendParams.previewFallback": "Прегледът не е наличен",

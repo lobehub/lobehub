@@ -17,6 +17,28 @@ export default defineConfig({
       '@': resolve(__dirname, '../../src'),
 
     },
+    coverage: {
+      exclude: [
+        'src/server/**',
+        'src/repositories/dataImporter/deprecated/**',
+        'src/types/**',
+        'src/models/userMemory/sources/index.ts',
+        'src/models/userMemory/sources/shared.ts',
+        'src/models/ragEval/index.ts',
+        'src/models/agentEval/index.ts',
+        'src/repositories/userMemory/index.ts',
+        'src/models/_template.ts',
+        'src/models/__tests__/_test_template.ts',
+        'src/models/web-server.ts',
+        'src/core/web-server.ts',
+        'src/core/db-adaptor.ts',
+        'src/core/getTestDB.ts',
+        'src/index.ts',
+        'tests/**',
+        'vitest.config*.mts',
+      ],
+      reporter: ['text', 'json'],
+    },
     environment: 'happy-dom',
     exclude: [
       'node_modules/**/**',

@@ -2,6 +2,7 @@
   "error.backHome": "返回首页",
   "error.desc": "页面暂时不可用。你可以返回首页，或稍后重试（你的设置不会因此丢失）",
   "error.retry": "重新加载",
+  "error.stack": "错误堆栈",
   "error.title": "页面暂时不可用",
   "fetchError.detail": "查看详情",
   "fetchError.title": "请求未能完成",

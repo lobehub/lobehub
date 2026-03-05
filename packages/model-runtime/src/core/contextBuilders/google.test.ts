@@ -24,6 +24,14 @@ vi.mock('../../utils/imageToBase64', () => ({
 }));
 
 describe('google contextBuilders', () => {
+  describe('GEMINI_MAGIC_THOUGHT_SIGNATURE', () => {
+    it('should use skip_thought_signature_validator for Vertex AI compatibility', () => {
+      // Vertex AI only accepts `skip_thought_signature_validator`, not `context_engineering_is_the_way_to_go`
+      // see: https://github.com/pydantic/pydantic-ai/issues/3881
+      expect(GEMINI_MAGIC_THOUGHT_SIGNATURE).toBe('skip_thought_signature_validator');
+    });
+  });
+
   describe('buildGooglePart', () => {
     it('should handle text type messages', async () => {
       const content: UserMessageContentPart = {
@@ -1447,6 +1455,74 @@ describe('google contextBuilders', () => {
       expect(googleTools![0].functionDeclarations).toHaveLength(2);
       expect(googleTools![0].functionDeclarations![0].name).toBe('get_weather');
       expect(googleTools![0].functionDeclarations![1].name).toBe('get_time');
+    });
+
+    it('should deduplicate tools with the same function name', () => {
+      const tools: ChatCompletionTool[] = [
+        {
+          function: {
+            description: 'Search the web',
+            name: 'lobe-web-browsing____search____builtin',
+            parameters: {
+              properties: { query: { type: 'string' } },
+              required: ['query'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+        {
+          function: {
+            description: 'Get weather',
+            name: 'get_weather',
+            parameters: {
+              properties: { city: { type: 'string' } },
+              required: ['city'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+        {
+          function: {
+            description: 'Search the web (duplicate)',
+            name: 'lobe-web-browsing____search____builtin',
+            parameters: {
+              properties: { query: { type: 'string' } },
+              required: ['query'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+      ];
+
+      const googleTools = buildGoogleTools(tools);
+
+      expect(googleTools).toHaveLength(1);
+      expect(googleTools![0].functionDeclarations).toHaveLength(2);
+      expect(googleTools![0].functionDeclarations![0].name).toBe(
+        'lobe-web-browsing____search____builtin',
+      );
+      expect(googleTools![0].functionDeclarations![0].description).toBe('Search the web');
+      expect(googleTools![0].functionDeclarations![1].name).toBe('get_weather');
+    });
+
+    it('should keep all tools when there are no duplicates', () => {
+      const tools: ChatCompletionTool[] = [
+        {
+          function: { description: 'Tool A', name: 'tool_a', parameters: { type: 'object' } },
+          type: 'function',
+        },
+        {
+          function: { description: 'Tool B', name: 'tool_b', parameters: { type: 'object' } },
+          type: 'function',
+        },
+      ];
+
+      const googleTools = buildGoogleTools(tools);
+
+      expect(googleTools![0].functionDeclarations).toHaveLength(2);
     });
   });
 });

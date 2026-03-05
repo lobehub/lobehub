@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/lobehub",
-  "version": "2.1.33",
+  "version": "2.1.34",
   "description": "LobeHub - an open-source,comprehensive AI Agent framework that supports speech synthesis, multimodal, and extensible Function Call plugin system. Supports one-click free deployment of your private ChatGPT/LLM web application.",
   "keywords": [
     "framework",
@@ -24,7 +24,9 @@
   },
   "license": "MIT",
   "author": "LobeHub <i@lobehub.com>",
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/initialize.ts"
+  ],
   "workspaces": [
     "packages/*",
     "packages/business/*",
@@ -37,7 +39,7 @@
     "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build && pnpm run build-sitemap",
     "build:next": "cross-env NODE_OPTIONS=--max-old-space-size=6144 next build",
     "build:spa": "rm -rf public/spa && cross-env NODE_OPTIONS=--max-old-space-size=6144 vite build",
-    "build:spa:copy": "mkdir -p public/spa && cp -r dist/desktop/assets public/spa/ && ([ -d dist/mobile/assets ] && cp -r dist/mobile/assets public/spa/ || true) && tsx scripts/generateSpaTemplates.mts",
+    "build:spa:copy": "tsx scripts/copySpaBuild.mts && tsx scripts/generateSpaTemplates.mts",
     "build:spa:mobile": "cross-env NODE_OPTIONS=--max-old-space-size=8192 MOBILE=true vite build",
     "build:vercel": "bun run build && bun run db:migrate",
     "build-migrate-db": "bun run db:migrate",
@@ -168,6 +170,7 @@
     "@cfworker/json-schema": "^4.1.1",
     "@chat-adapter/discord": "^4.14.0",
     "@chat-adapter/state-ioredis": "^4.14.0",
+    "@chat-adapter/telegram": "^4.15.0",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@discordjs/rest": "^2.6.0",
     "@dnd-kit/core": "^6.3.1",
@@ -234,7 +237,7 @@
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^4.0.0",
     "@lobehub/icons": "^5.0.0",
-    "@lobehub/market-sdk": "^0.31.1",
+    "@lobehub/market-sdk": "^0.31.3",
     "@lobehub/tts": "^5.1.2",
     "@lobehub/ui": "^5.0.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -399,6 +402,7 @@
     "@edge-runtime/vm": "^5.0.0",
     "@huggingface/tasks": "^0.19.80",
     "@inquirer/prompts": "^8.2.0",
+    "@lobechat/agent-tracing": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobehub/i18n-cli": "^1.26.0",
     "@lobehub/lint": "2.1.5",

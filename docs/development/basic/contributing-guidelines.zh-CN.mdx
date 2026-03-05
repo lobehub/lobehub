@@ -87,14 +87,104 @@ bunx vitest run --silent='passed-only' '[file-path]'
 
 更多测试相关信息请参阅 [测试指南](/zh/docs/development/basic/test)。
 
+### Gitmoji 参考表
+
+提交信息请使用以下 emoji 作为前缀：
+
+| Emoji | 代码                       | 类型       | 说明        | 触发发布？ |
+| ----- | ------------------------ | -------- | --------- | ----- |
+| ✨     | `:sparkles:`             | feat     | 新功能       | 是     |
+| 🐛    | `:bug:`                  | fix      | Bug 修复    | 是     |
+| 📝    | `:memo:`                 | docs     | 文档更新      | 否     |
+| 💄    | `:lipstick:`             | style    | UI / 样式更改 | 否     |
+| ♻️    | `:recycle:`              | refactor | 代码重构      | 否     |
+| ✅     | `:white_check_mark:`     | test     | 测试相关      | 否     |
+| 🔨    | `:hammer:`               | chore    | 维护任务      | 否     |
+| 🚀    | `:rocket:`               | perf     | 性能优化      | 否     |
+| 🌐    | `:globe_with_meridians:` | i18n     | 国际化       | 否     |
+
 ### 如何贡献
 
-1. Fork 项目到您的账户。
-2. 创建一个新的分支进行开发。
-3. 开发完成后，确保您的代码通过了代码风格检查和测试。
-4. 提交您的更改，并使用合适的 gitmoji 标注您的提交信息。
-5. 创建一个 Pull Request 到原项目的主分支。
-6. 确保 GitHub Actions CI 全部通过。
-7. 等待代码审查，并根据反馈进行必要的修改。
+**1. Fork 并克隆仓库**
+
+在 GitHub 上 Fork [lobehub/lobe-chat](https://github.com/lobehub/lobe-chat)，然后克隆你的 Fork 到本地。
+
+**2. 创建分支**
+
+使用分支命名格式：`用户名/类型/描述`
+
+```bash
+git checkout -b yourname/feat/add-voice-input
+git checkout -b yourname/fix/message-duplication
+git checkout -b yourname/docs/update-api-guide
+```
+
+**3. 进行更改**
+
+遵循上方的代码风格指南。提交前运行代码检查：
+
+```bash
+pnpm lint:ts       # TypeScript/JavaScript
+pnpm lint:style    # CSS/样式
+bun run type-check # 类型检查
+```
+
+**4. 使用 gitmoji 提交**
+
+```bash
+git commit -m "✨ feat: 添加语音输入支持"
+git commit -m "🐛 fix: 修复群聊消息重复问题"
+git commit -m "📝 docs: 更新安装指南"
+```
+
+**5. 创建 Pull Request**
+
+<Callout type={'warning'}>
+  PR 的目标分支必须是 **`canary`**，而非 `main`。`canary` 是当前活跃的开发分支，向 `main` 发起的 PR 会被重定向。
+</Callout>
+
+请使用 `.github/PULL_REQUEST_TEMPLATE.md` 中的 PR 模板：
+
+```markdown
+## Description
+清晰描述此 PR 的改动内容。
+
+## Type of Change
+- [ ] ✨ 新功能
+- [ ] 🐛 Bug 修复
+- [ ] 📝 文档
+- [ ] ♻️ 重构
+
+## Checklist
+- [ ] 代码符合项目风格指南
+- [ ] 已添加/更新测试
+- [ ] 已更新文档
+- [ ] 所有测试通过
+
+## Related Issues
+Fixes #123
+```
+
+**PR 标题中带有 `✨ feat:` 或 `🐛 fix:` 前缀时将自动触发新版本发布。** 不需要发布新版本的改动请使用其他前缀。
+
+**6. 代码审查**
+
+每次 PR 会自动运行：ESLint、TypeScript 类型检查、Vitest 单元测试、E2E 测试和构建验证。请根据审查意见向同一分支推送新的提交。
+
+### 同步 Fork 与上游代码
+
+```bash
+git remote add upstream https://github.com/lobehub/lobe-chat.git
+git fetch upstream
+git rebase upstream/canary
+```
+
+### 贡献方向
+
+- **功能开发** — 查看 [标注为 `good first issue` 的 Issue](https://github.com/lobehub/lobe-chat/issues?q=is%3Aissue+label%3A%22good+first+issue%22)，找到适合新手的任务
+- **Bug 修复** — 搜索标注为 `bug` 的开放 Issue
+- **文档改善** — 完善文档、修正错别字、添加示例
+- **测试补充** — 为缺少覆盖的代码路径添加测试
+- **翻译** — 添加缺失的 i18n 键（参见 [i18n 指南](/zh/docs/development/internationalization/internationalization-implementation)）
 
 感谢您遵循这些指导原则，它们有助于我们维护项目的质量和一致性。我们期待您的贡献！

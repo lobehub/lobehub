@@ -2,6 +2,7 @@
   "error.backHome": "Zurück zur Startseite",
   "error.desc": "Versuchen Sie es später erneut oder kehren Sie in die bekannte Welt zurück.",
   "error.retry": "Neu laden",
+  "error.stack": "Fehlerstapel",
   "error.title": "Hoppla, da ist etwas schiefgelaufen..",
   "fetchError.detail": "Fehlerdetails",
   "fetchError.title": "Anfrage fehlgeschlagen",

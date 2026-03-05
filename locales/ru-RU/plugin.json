@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Настройте для предпросмотра",
   "dev.preview.title": "Предпросмотр названия навыка",
   "dev.save": "Установить",
+  "dev.saveError": "Установка не удалась, пожалуйста, попробуйте снова",
   "dev.saveSuccess": "Настройки сохранены",
   "dev.tabs.manifest": "Манифест",
   "dev.tabs.meta": "Мета-информация",

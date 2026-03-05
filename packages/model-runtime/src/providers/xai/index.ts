@@ -1,6 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { ChatStreamPayload } from '../../types';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createXAIImage } from './createImage';
 
@@ -20,41 +21,22 @@ export const LobeXAI = createOpenAICompatibleRuntime({
     handlePayload: (payload) => {
       const { enabledSearch, frequency_penalty, model, presence_penalty, ...rest } = payload;
 
+      if (enabledSearch) {
+        return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
+      }
+
       return {
         ...rest,
         frequency_penalty: isGrokReasoningModel(model) ? undefined : frequency_penalty,
         model,
         presence_penalty: isGrokReasoningModel(model) ? undefined : presence_penalty,
         stream: true,
-        ...(enabledSearch && {
-          search_parameters: {
-            max_search_results: Math.min(
-              Math.max(parseInt(process.env.XAI_MAX_SEARCH_RESULTS ?? '15', 10), 1),
-              30,
-            ),
-            mode: 'auto',
-            return_citations: true,
-            sources: [
-              {
-                safe_search: process.env.XAI_SAFE_SEARCH === '1',
-                type: 'news',
-              },
-              /*
-              { type: 'rss' },
-              */
-              {
-                safe_search: process.env.XAI_SAFE_SEARCH === '1',
-                type: 'web',
-              },
-              { type: 'x' },
-            ],
-          },
-        }),
       } as any;
     },
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_XAI_CHAT_COMPLETION === '1',
+    responses: () => process.env.DEBUG_XAI_RESPONSES === '1',
   },
   models: async ({ client }) => {
     const modelsPage = (await client.models.list()) as any;
@@ -63,4 +45,19 @@ export const LobeXAI = createOpenAICompatibleRuntime({
     return processModelList(modelList, MODEL_LIST_CONFIGS.xai, 'xai');
   },
   provider: ModelProvider.XAI,
+  responses: {
+    handlePayload: (payload) => {
+      const { enabledSearch, tools, ...rest } = payload;
+
+      const xaiTools = enabledSearch
+        ? [...(tools || []), { type: 'web_search' }, { type: 'x_search' }]
+        : tools;
+
+      return {
+        ...rest,
+        stream: payload.stream ?? true,
+        tools: xaiTools,
+      } as any;
+    },
+  },
 });

@@ -4,11 +4,13 @@ import { emoji } from 'chat';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
+import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import {
@@ -147,6 +149,11 @@ export class AgentBridgeService {
     await thread.subscribe();
     await thread.startTyping();
 
+    // Keep typing indicator alive (Telegram's expires after ~5s)
+    const typingInterval = setInterval(() => {
+      thread.startTyping().catch(() => {});
+    }, 4000);
+
     // Fetch channel context for Discord context injection
     const channelContext = await this.fetchChannelContext(thread);
 
@@ -172,6 +179,7 @@ export class AgentBridgeService {
       const msg = error instanceof Error ? error.message : String(error);
       await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
     } finally {
+      clearInterval(typingInterval);
       // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
         await this.removeReceivedReaction(thread, message);
@@ -215,6 +223,11 @@ export class AgentBridgeService {
     );
     await thread.startTyping();
 
+    // Keep typing indicator alive (Telegram's expires after ~5s)
+    const typingInterval = setInterval(() => {
+      thread.startTyping().catch(() => {});
+    }, 4000);
+
     try {
       // executeWithCallback handles progress message (post + edit at each step)
       await this.executeWithCallback(thread, message, {
@@ -225,10 +238,22 @@ export class AgentBridgeService {
         trigger: 'bot',
       });
     } catch (error) {
+      // If the cached topicId references a deleted topic (FK violation),
+      // clear thread state and retry as a fresh mention instead of surfacing the DB error.
+      const errMsg = error instanceof Error ? error.message : String(error);
+      if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+        log(
+          'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
+          topicId,
+        );
+        await thread.setState({ ...threadState, topicId: undefined });
+        return this.handleMention(thread, message, { agentId, botContext });
+      }
+
       log('handleSubscribedMessage error: %O', error);
-      const msg = error instanceof Error ? error.message : String(error);
-      await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${msg}\n\`\`\``);
+      await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
     } finally {
+      clearInterval(typingInterval);
       // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
         await this.removeReceivedReaction(thread, message);
@@ -334,6 +359,7 @@ export class AgentBridgeService {
       files,
       prompt,
       stepWebhook: { body: webhookBody, url: callbackUrl },
+      title: '',
       trigger,
       userInterventionConfig: { approvalMode: 'headless' },
       webhookDelivery: 'qstash',
@@ -376,6 +402,8 @@ export class AgentBridgeService {
       log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
     }
 
+    const platform = botContext?.platform;
+
     // Track the last LLM content and tool calls for showing during tool execution
     let lastLLMContent = '';
     let lastToolsCalling:
@@ -415,6 +443,7 @@ export class AgentBridgeService {
             : undefined,
           files,
           prompt,
+          title: '',
           stepCallbacks: {
             onAfterStep: async (stepData) => {
               const { content, shouldContinue, toolsCalling } = stepData;
@@ -427,6 +456,7 @@ export class AgentBridgeService {
                 elapsedMs: getElapsedMs(),
                 lastContent: lastLLMContent,
                 lastToolsCalling,
+                platform,
                 totalToolCalls,
               });
 
@@ -471,12 +501,15 @@ export class AgentBridgeService {
                   const finalText = renderFinalReply(lastAssistantContent, {
                     elapsedMs: getElapsedMs(),
                     llmCalls: finalState.usage?.llm?.apiCalls ?? 0,
+                    platform,
                     toolCalls: finalState.usage?.tools?.totalCalls ?? 0,
                     totalCost: finalState.cost?.total ?? 0,
                     totalTokens: finalState.usage?.llm?.tokens?.total ?? 0,
                   });
 
-                  const chunks = splitMessage(finalText);
+                  // Telegram supports 4096 chars vs Discord's 2000
+                  const charLimit = platform === 'telegram' ? 4000 : undefined;
+                  const chunks = splitMessage(finalText, charLimit);
 
                   if (progressMessage) {
                     try {
@@ -499,6 +532,32 @@ export class AgentBridgeService {
                     chunks.length,
                   );
                   resolve({ reply: lastAssistantContent, topicId: resolvedTopicId });
+
+                  // Fire-and-forget: summarize topic title in DB (no Discord rename in local mode)
+                  if (resolvedTopicId && prompt) {
+                    const topicModel = new TopicModel(this.db, this.userId);
+                    topicModel
+                      .findById(resolvedTopicId)
+                      .then(async (topic) => {
+                        if (topic?.title) return;
+
+                        const systemAgent = new SystemAgentService(this.db, this.userId);
+                        const title = await systemAgent.generateTopicTitle({
+                          lastAssistantContent,
+                          userPrompt: prompt,
+                        });
+                        if (!title) return;
+
+                        await topicModel.update(resolvedTopicId, { title });
+                      })
+                      .catch((error) => {
+                        log(
+                          'executeWithInMemoryCallbacks: topic title summarization failed: %O',
+                          error,
+                        );
+                      });
+                  }
+
                   return;
                 }
 

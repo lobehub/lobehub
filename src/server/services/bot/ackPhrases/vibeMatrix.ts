@@ -1,20 +1,20 @@
 // ==========================================
-// 1. 定义类型
+// 1. Type Definitions
 // ==========================================
 export type TimeSegment = 'early' | 'morning' | 'lunch' | 'afternoon' | 'evening' | 'night';
 export type ContextType =
-  | 'urgent' // 最高优先级
-  | 'debugging' // 错误修复
-  | 'coding' // 代码实现
-  | 'review' // 审查/检查
-  | 'planning' // 计划/列表
-  | 'analysis' // 深度思考
-  | 'explanation' // 解释/教学
-  | 'creative' // 创意/生成
-  | 'casual' // 闲聊
-  | 'quick'; // 兜底/短语
+  | 'urgent' // highest priority
+  | 'debugging' // error fixing
+  | 'coding' // code implementation
+  | 'review' // review/inspection
+  | 'planning' // planning/lists
+  | 'analysis' // deep thinking
+  | 'explanation' // explanation/teaching
+  | 'creative' // creativity/generation
+  | 'casual' // casual chat
+  | 'quick'; // fallback/phrases
 
-// 为了方便配置，定义 'all' 类型
+// Define the 'all' type for convenience in configuration
 export type TimeRule = TimeSegment[] | 'all';
 export type ContextRule = ContextType[] | 'all';
 
@@ -25,11 +25,11 @@ export interface VibeRule {
 }
 
 // ==========================================
-// 2. 语料规则库 (Rule-Based Corpus)
+// 2. Corpus Rule Library (Rule-Based Corpus)
 // ==========================================
 export const VIBE_CORPUS: VibeRule[] = [
   // =================================================================
-  // 🌍 GLOBAL / UNIVERSAL (通用回复)
+  // 🌍 GLOBAL / UNIVERSAL (universal replies)
   // =================================================================
   {
     phrases: [

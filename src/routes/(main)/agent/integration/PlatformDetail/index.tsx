@@ -36,6 +36,8 @@ export interface IntegrationFormValues {
   applicationId: string;
   botToken: string;
   publicKey: string;
+  secretToken?: string;
+  webhookProxyUrl?: string;
 }
 
 export interface TestResult {
@@ -75,6 +77,8 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
         applicationId: currentConfig.applicationId || '',
         botToken: currentConfig.credentials?.botToken || '',
         publicKey: currentConfig.credentials?.publicKey || '',
+        secretToken: currentConfig.credentials?.secretToken || '',
+        webhookProxyUrl: currentConfig.credentials?.webhookProxyUrl || '',
       });
     }
   }, [currentConfig, form]);
@@ -86,20 +90,37 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
       setSaving(true);
       setSaveResult(undefined);
 
-      const credentials = {
-        botToken: values.botToken,
-        publicKey: values.publicKey || 'default',
-      };
+      // Auto-derive applicationId from bot token for Telegram
+      let applicationId = values.applicationId;
+      if (provider.autoAppId && values.botToken) {
+        const colonIdx = values.botToken.indexOf(':');
+        if (colonIdx !== -1) {
+          applicationId = values.botToken.slice(0, colonIdx);
+          form.setFieldValue('applicationId', applicationId);
+        }
+      }
+
+      // Build platform-specific credentials
+      const credentials: Record<string, string> = { botToken: values.botToken };
+      if (provider.fieldTags.publicKey) {
+        credentials.publicKey = values.publicKey || 'default';
+      }
+      if (provider.fieldTags.secretToken && values.secretToken) {
+        credentials.secretToken = values.secretToken;
+      }
+      if (provider.webhookMode === 'auto' && values.webhookProxyUrl) {
+        credentials.webhookProxyUrl = values.webhookProxyUrl;
+      }
 
       if (currentConfig) {
         await updateBotProvider(currentConfig.id, agentId, {
-          applicationId: values.applicationId,
+          applicationId,
           credentials,
         });
       } else {
         await createBotProvider({
           agentId,
-          applicationId: values.applicationId,
+          applicationId,
           credentials,
           platform: provider.id,
         });
@@ -113,7 +134,16 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
     } finally {
       setSaving(false);
     }
-  }, [agentId, provider.id, form, currentConfig, createBotProvider, updateBotProvider]);
+  }, [
+    agentId,
+    provider.id,
+    provider.autoAppId,
+    provider.fieldTags,
+    form,
+    currentConfig,
+    createBotProvider,
+    updateBotProvider,
+  ]);
 
   const handleDelete = useCallback(async () => {
     if (!currentConfig) return;

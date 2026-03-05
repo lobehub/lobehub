@@ -919,4 +919,30 @@ describe('GenerationModel', () => {
       );
     });
   });
+
+  describe('findByAsyncTaskId', () => {
+    it('should find generation by asyncTaskId', async () => {
+      const [task] = await serverDB
+        .insert(asyncTasks)
+        .values({ status: 'processing', userId })
+        .returning();
+
+      await serverDB.insert(generations).values({
+        ...testGeneration,
+        userId,
+        asyncTaskId: task.id,
+      });
+
+      const result = await generationModel.findByAsyncTaskId(task.id);
+      expect(result).toBeDefined();
+      expect(result?.asyncTaskId).toBe(task.id);
+    });
+
+    it('should return undefined for non-existent asyncTaskId', async () => {
+      const result = await generationModel.findByAsyncTaskId(
+        '00000000-0000-0000-0000-000000000000',
+      );
+      expect(result).toBeUndefined();
+    });
+  });
 });

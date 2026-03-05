@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Configurer pour prévisualiser",
   "dev.preview.title": "Aperçu du nom de la compétence",
   "dev.save": "Installer",
+  "dev.saveError": "L'installation a échoué, veuillez réessayer",
   "dev.saveSuccess": "Paramètres enregistrés",
   "dev.tabs.manifest": "Manifeste",
   "dev.tabs.meta": "Infos méta",

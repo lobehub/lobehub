@@ -100,6 +100,9 @@ robots.txt
 # Cloud service keys
 vertex-ai-key.json
 
+# Agent tracing snapshots
+.agent-tracing/
+
 # AI coding tools
 .local/
 .claude/

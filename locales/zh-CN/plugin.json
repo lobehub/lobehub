@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "配置技能后开始预览",
   "dev.preview.title": "技能名称预览",
   "dev.save": "安装技能",
+  "dev.saveError": "安装失败，请重试",
   "dev.saveSuccess": "技能设置保存成功",
   "dev.tabs.manifest": "功能描述清单 (Manifest)",
   "dev.tabs.meta": "技能元信息",

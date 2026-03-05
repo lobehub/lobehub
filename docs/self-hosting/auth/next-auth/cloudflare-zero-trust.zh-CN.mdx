@@ -22,23 +22,23 @@ tags:
 
   首先我们需要访问 `https://one.dash.cloudflare.com/` 并前往 `Access - Applications` 中。
 
-  ![image](/blog/assetsc74cf5c8daee1515c37a85bce087f0d6.webp)
+  ![Cloudflare Zero Trust 访问 - 应用程序](/blog/assetsc74cf5c8daee1515c37a85bce087f0d6.webp)
 
   现在，在所在页面点击 `Add an application` 并选择 `SaaS`。
 
-  ![image](/blog/assetse717764a3618df4e56212e447a6c20cd.webp)
+  ![添加应用 - 选择 SaaS](/blog/assetse717764a3618df4e56212e447a6c20cd.webp)
 
   在 `Application` 文本框内填入应用名称，如：`LobeHub SSO`，然后点击 `Select OIDC` 后点击 `Add applicaiton`
 
-  ![image](/blog/assets0ceb7e446f9a850df283093563ba7803.webp)
+  ![添加 LobeHub SSO 应用](/blog/assets0ceb7e446f9a850df283093563ba7803.webp)
 
   至此您已成功在 Clouflare Zero Trust 中创建了一个名为 `LobeHub SSO` 的 SaaS 应用。
 
-  接下来我们需要在 `Redirect URLs` 中填入 `https://chat.example.com/api/auth/callback/cloudflare-zero-trust`（注意此处的 `chat.example.com` 需要替换为您的实例地址） ![image](/blog/assets4aaf8d5d092608b649230e0e6fc92df6.webp)
+  接下来我们需要在 `Redirect URLs` 中填入 `https://chat.example.com/api/auth/callback/cloudflare-zero-trust`（注意此处的 `chat.example.com` 需要替换为您的实例地址） ![配置重定向 URL](/blog/assets4aaf8d5d092608b649230e0e6fc92df6.webp)
 
   最后我们将页面往下滚动，您将需要记录以下三个值 `Client secret`, `Client ID` 及 `Issuer` 以备后续部署 LobeHub 环境变量使用。
 
-  ![image](/blog/assets66b0dfa56c1f5b3063b5ba740dd3ef8d.webp)
+  ![Client ID、Client Secret 和 Issuer](/blog/assets66b0dfa56c1f5b3063b5ba740dd3ef8d.webp)
 
   ### 配置环境变量
 

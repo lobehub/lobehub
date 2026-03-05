@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Configure para visualizar",
   "dev.preview.title": "Pré-visualização do nome da Skill",
   "dev.save": "Instalar",
+  "dev.saveError": "Instalação falhou, por favor tente novamente",
   "dev.saveSuccess": "Configurações salvas",
   "dev.tabs.manifest": "Manifesto",
   "dev.tabs.meta": "Informações meta",

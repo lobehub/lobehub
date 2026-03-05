@@ -381,3 +381,29 @@ describe('initUserMemoryExtractionMetadata', () => {
     expect(result.source).toBe('chat_topic');
   });
 });
+
+describe('AsyncTaskModel.findByInferenceId', () => {
+  it('should find a task by inferenceId', async () => {
+    const [task] = await serverDB
+      .insert(asyncTasks)
+      .values({
+        status: AsyncTaskStatus.Processing,
+        userId,
+        inferenceId: 'inference-123',
+        type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
+      })
+      .returning();
+
+    const result = await AsyncTaskModel.findByInferenceId(serverDB, 'inference-123');
+    expect(result).toBeDefined();
+    expect(result?.id).toBe(task.id);
+  });
+
+  it('should return undefined for non-existent inferenceId', async () => {
+    const result = await AsyncTaskModel.findByInferenceId(
+      serverDB,
+      '00000000-0000-0000-0000-000000000000',
+    );
+    expect(result).toBeUndefined();
+  });
+});

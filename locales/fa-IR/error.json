@@ -2,6 +2,7 @@
   "error.backHome": "بازگشت به خانه",
   "error.desc": "بعداً دوباره امتحان کنید یا به دنیای آشنا بازگردید.",
   "error.retry": "بارگذاری مجدد",
+  "error.stack": "پشته خطا",
   "error.title": "اوه، مشکلی پیش آمده...",
   "fetchError.detail": "جزئیات خطا",
   "fetchError.title": "درخواست ناموفق بود",

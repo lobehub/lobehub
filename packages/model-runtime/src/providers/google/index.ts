@@ -44,6 +44,10 @@ const modelsWithModalities = new Set([
   'nano-banana-pro-preview',
 ]);
 
+const modelsWithImageSearch = new Set([
+  'gemini-3.1-flash-image-preview',
+]);
+
 const modelsDisableInstuction = new Set([
   'gemini-2.0-flash-exp',
   'gemini-2.0-flash-exp-image-generation',
@@ -167,7 +171,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       const config: GenerateContentConfig = {
         abortSignal: originalSignal,
         imageConfig:
-          modelsWithModalities.has(model) && imageAspectRatio
+          modelsWithModalities.has(model) && imageAspectRatio && imageAspectRatio !== 'auto'
             ? {
                 aspectRatio: imageAspectRatio,
                 imageSize: imageResolution,
@@ -463,15 +467,24 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       return buildGoogleTools(tools);
     }
 
+    // Build GoogleSearch tool config with optional image search support
+    const googleSearchTool = hasSearch
+      ? {
+          googleSearch: modelsWithImageSearch.has(payload?.model ?? '')
+            ? { searchTypes: { imageSearch: {}, webSearch: {} } }
+            : {},
+        }
+      : undefined;
+
     // Build and return search-related tools (search tools cannot be used with FunctionCall simultaneously)
     if (hasUrlContext && hasSearch) {
-      return [{ urlContext: {} }, { googleSearch: {} }];
+      return [{ urlContext: {} }, googleSearchTool!];
     }
     if (hasUrlContext) {
       return [{ urlContext: {} }];
     }
     if (hasSearch) {
-      return [{ googleSearch: {} }];
+      return [googleSearchTool!];
     }
 
     // Finally consider function declarations

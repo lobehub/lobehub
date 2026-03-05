@@ -2,6 +2,7 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { defaultToolIds } from '@lobechat/builtin-tools';
 import { isDesktop } from '@lobechat/const';
@@ -11,7 +12,7 @@ import { type ChatCompletionTool, type WorkingModel } from '@lobechat/types';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   klavisStoreSelectors,
@@ -114,6 +115,11 @@ export const createAgentToolsEngine = (workingModel: WorkingModel) =>
         const agentState = getAgentStoreState();
 
         return agentSelectors.hasEnabledKnowledgeBases(agentState);
+      }
+
+      // For MemoryManifest, check per-agent memory tool toggle
+      if (pluginId === MemoryManifest.identifier) {
+        return agentChatConfigSelectors.isMemoryToolEnabled(getAgentStoreState());
       }
 
       // For all other plugins, enable by default

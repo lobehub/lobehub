@@ -66,3 +66,84 @@ id->deploymentName=displayName<maxToken:vision:reasoning:search:fc:file:imageOut
 | `reasoning`   | 支持推理                   |
 | `search`      | 支持联网搜索                 |
 | `file`        | 文件上传（比较 hack，不建议日常使用）  |
+
+## 提供商专属示例
+
+### Azure OpenAI
+
+Azure 需要使用 `->deploymentName` 映射部署名称：
+
+```bash
+AZURE_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_API_KEY=your-api-key
+AZURE_API_VERSION=2024-02-01
+# id->deploymentName=displayName<能力>
+AZURE_MODEL_LIST="gpt-35-turbo->my-gpt35-deploy=GPT-3.5 Turbo<16000:fc>,gpt-4->my-gpt4-deploy=GPT-4<128000:fc:vision"
+```
+
+### Ollama（本地模型）
+
+```bash
+OLLAMA_PROXY_URL=http://localhost:11434
+OLLAMA_MODEL_LIST="+llama3:8b=Llama 3 8B<8192>,+mistral:latest=Mistral<8192:fc>,+codellama:34b=Code Llama 34B<16000"
+```
+
+### 同时配置多个提供商
+
+```bash
+# OpenAI — 精选列表
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL_LIST=-all,+gpt-4o,+gpt-4o-mini
+
+# Anthropic — 长上下文备选
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL_LIST="+claude-3-opus-20240229=Claude 3 Opus<200000:vision:fc>,+claude-3-5-sonnet-20241022=Claude 3.5 Sonnet<200000:vision:fc"
+
+# Google
+GOOGLE_API_KEY=...
+GOOGLE_MODEL_LIST="+gemini-1.5-pro=Gemini 1.5 Pro<1000000:vision:fc"
+```
+
+## 最佳实践
+
+**使用 `-all` 从零开始** — 隐藏所有默认模型，再明确添加你需要的模型：
+
+```bash
+OPENAI_MODEL_LIST=-all,+gpt-4o,+gpt-4o-mini
+```
+
+**使用描述性的展示名称** — 让模型名称对用户更友好、更清晰：
+
+```bash
+OPENAI_MODEL_LIST="gpt-4o=GPT-4o（推荐）,gpt-4o-mini=GPT-4o Mini（快速省钱）"
+```
+
+**上生产前先测试** — 在开发环境中验证新的模型配置：
+
+```bash
+docker run -d -p 3210:3210 \
+  -e OPENAI_API_KEY="sk-test..." \
+  -e OPENAI_MODEL_LIST="-all,+gpt-4o" \
+  --name lobe-chat-test lobehub/lobe-chat
+```
+
+## 故障排查
+
+**模型未出现在选择器中**
+
+- 检查语法错误（逗号缺失、尖括号不匹配）
+- 确认提供商本身已启用（`ENABLED_OPENAI=1` 等）
+- 若使用了 `-all`，确认已用 `+` 添加该模型
+- 查看日志：`docker logs lobehub | grep -i "model"`
+
+**模型返回空响应**
+
+- 尝试在代理 URL 末尾加上 `/v1`：`OPENAI_PROXY_URL=https://api.example.com/v1`
+- 验证模型 ID 与提供商 API 期望的完全一致
+- 确认 API Key 有权访问该模型
+
+**扩展能力不生效**
+
+- `maxToken` 值必须是 `< >` 内的**第一个**值：`<8192:fc:vision>` 而非 `<fc:vision>`
+- 确认该模型在提供商 API 中实际支持该能力（LobeHub 无法开启 API 本身不提供的能力）
+- 确认你运行的是足够新的 LobeHub 版本

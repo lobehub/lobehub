@@ -2,6 +2,7 @@
   "error.backHome": "Back to Home",
   "error.desc": "Give it a try later, or go back to the known world.",
   "error.retry": "Reload",
+  "error.stack": "Error Stack",
   "error.title": "Oops, something went wrong..",
   "fetchError.detail": "Error details",
   "fetchError.title": "Request failed",

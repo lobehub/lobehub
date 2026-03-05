@@ -137,6 +137,255 @@ describe('DataImporter', () => {
     });
   });
 
+  describe('import with empty tables', () => {
+    it('should skip tables with empty data', async () => {
+      const data: ImportPgDataStructure = {
+        data: {
+          agents: [],
+          sessions: [],
+          sessionGroups: [],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(data);
+
+      expect(result.success).toBe(true);
+      // No results should be returned for empty tables
+      expect(Object.keys(result.results)).toHaveLength(0);
+    });
+  });
+
+  describe('import with sessionGroups (relation mapping)', () => {
+    it('should import sessions with sessionGroup relations', async () => {
+      const data: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_rel_test',
+              slug: 'rel-test-agent',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          agentsToSessions: [{ agentId: 'agt_rel_test', sessionId: 'ssn_rel_test' }],
+          sessionGroups: [
+            {
+              id: 'sg_test1',
+              name: 'Test Group',
+              sort: 0,
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          sessions: [
+            {
+              id: 'ssn_rel_test',
+              slug: 'rel-test-session',
+              type: 'agent',
+              groupId: 'sg_test1',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(data);
+
+      expect(result.success).toBe(true);
+      expect(result.results.sessionGroups).toMatchObject({ added: 1, errors: 0 });
+      expect(result.results.sessions).toMatchObject({ added: 1, errors: 0 });
+
+      // Verify the session's groupId was mapped to the new sessionGroup ID
+      const sessions = await clientDB.query.sessions.findMany({
+        where: eq(Schema.sessions.userId, userId),
+      });
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].groupId).not.toBeNull();
+    });
+
+    it('should set relation to null when group mapping not found', async () => {
+      // Import a session with a groupId that has no corresponding sessionGroup in the import data
+      // The code handles this by: if idMaps[sessionGroups] exists but mappedId is undefined → set to null
+      // However, if sessionGroups was never imported, idMaps[sessionGroups] won't exist and groupId stays as-is
+      // Let's import sessionGroups first (empty) to ensure the map exists, then sessions with unmapped groupId
+      const data: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_nomap',
+              slug: 'nomap-agent',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          agentsToSessions: [{ agentId: 'agt_nomap', sessionId: 'ssn_nomap' }],
+          sessionGroups: [
+            {
+              id: 'sg_exists',
+              name: 'Exists Group',
+              sort: 0,
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          sessions: [
+            {
+              id: 'ssn_nomap',
+              slug: 'nomap-session',
+              type: 'agent',
+              groupId: 'non_existent_group',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(data);
+
+      expect(result.success).toBe(true);
+      expect(result.results.sessions).toMatchObject({ added: 1, errors: 0 });
+
+      // Session should be imported but groupId should be null (unmapped)
+      const sessions = await clientDB.query.sessions.findMany({
+        where: eq(Schema.sessions.userId, userId),
+      });
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].groupId).toBeNull();
+    });
+  });
+
+  describe('import with self-references', () => {
+    it('should nullify self-reference fields (parentId, quotaId)', async () => {
+      const data: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_selfref',
+              slug: 'selfref-agent',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          agentsToSessions: [{ agentId: 'agt_selfref', sessionId: 'ssn_selfref' }],
+          sessions: [
+            {
+              id: 'ssn_selfref',
+              slug: 'selfref-session',
+              type: 'agent',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          messages: [
+            {
+              id: 'msg_selfref_1',
+              role: 'user',
+              content: 'Hello',
+              sessionId: 'ssn_selfref',
+              parentId: 'msg_selfref_parent',
+              quotaId: 'msg_selfref_quota',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(data);
+
+      expect(result.success).toBe(true);
+      expect(result.results.messages).toMatchObject({ added: 1, errors: 0 });
+
+      // Verify self-reference fields are set to null
+      const messages = await clientDB.query.messages.findMany({
+        where: eq(Schema.messages.userId, userId),
+      });
+      expect(messages).toHaveLength(1);
+      expect(messages[0].parentId).toBeNull();
+      expect(messages[0].quotaId).toBeNull();
+    });
+  });
+
+  describe('import with override conflict strategy', () => {
+    it('should apply field processor when overriding duplicate slug', async () => {
+      // First, create an agent with a specific slug
+      const firstData: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_override1',
+              slug: 'override-test-slug',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          agentsToSessions: [],
+          sessions: [],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      await importer.importPgData(firstData);
+
+      // Now create a new importer and import a DIFFERENT agent with the same slug
+      const importer2 = new DataImporterRepos(clientDB, userId);
+      const secondData: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_override2',
+              slug: 'override-test-slug',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-02T00:00:00Z',
+              updatedAt: '2025-01-02T00:00:00Z',
+            },
+          ],
+          agentsToSessions: [],
+          sessions: [],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      // Default conflictStrategy for agents is 'override' (no conflictStrategy in config = default 'override')
+      const result = await importer2.importPgData(secondData);
+
+      expect(result.success).toBe(true);
+      // The override strategy should apply the field processor (appends UUID suffix to slug)
+      expect(result.results.agents).toMatchObject({ added: 1, errors: 0 });
+
+      const agents = await clientDB.query.agents.findMany({
+        where: eq(Schema.agents.userId, userId),
+      });
+      expect(agents).toHaveLength(2);
+    });
+  });
+
   describe('import message and topic', () => {
     it('should import return correct result', async () => {
       const exportData = topicsData as ImportPgDataStructure;

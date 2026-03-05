@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DrizzleAdapter } from '@/libs/oidc-provider/adapter';
 
@@ -13,6 +13,10 @@ import {
   oidcRefreshTokens,
   oidcSessions,
 } from '../../../schemas/oidc';
+
+vi.mock('@lobechat/utils/server', () => ({
+  getUserAuth: vi.fn(),
+}));
 
 const serverDB = await getTestDB();
 
@@ -199,6 +203,80 @@ describe('DrizzleAdapter', () => {
       expect(result?.clientUri).toBe('https://updated.com');
       expect(result?.scopes).toEqual(['openid', 'profile']);
       expect(result?.redirectUris).toEqual(['https://updated.com/callback']);
+    });
+
+    describe('DeviceCode payload accountId protection', () => {
+      afterEach(async () => {
+        const { getUserAuth } = await import('@lobechat/utils/server');
+        vi.mocked(getUserAuth).mockReset();
+      });
+
+      it('should NOT inject accountId into DeviceCode payload from auth context', async () => {
+        const { getUserAuth } = await import('@lobechat/utils/server');
+        vi.mocked(getUserAuth).mockResolvedValueOnce({ userId: testUserId } as any);
+
+        const adapter = new DrizzleAdapter('DeviceCode', serverDB);
+        const payload = {
+          clientId: testClientId,
+          userCode: testUserCode,
+          inFlight: true,
+          // No accountId — simulates oidc-provider's inFlight stage
+        };
+
+        await adapter.upsert(testId, payload, 3600);
+
+        const result = await serverDB.query.oidcDeviceCodes.findFirst({
+          where: eq(oidcDeviceCodes.id, testId),
+        });
+
+        expect(result).toBeDefined();
+        // JSONB data must NOT contain accountId — oidc-provider uses its absence
+        // to signal that authorization is still pending (inFlight).
+        // Injecting it would cause the token endpoint to consume the code prematurely.
+        expect(result?.data).not.toHaveProperty('accountId');
+        // DB column userId should still be set for indexing
+        expect(result?.userId).toBe(testUserId);
+      });
+
+      it('should preserve accountId in DeviceCode payload when oidc-provider explicitly sets it', async () => {
+        const adapter = new DrizzleAdapter('DeviceCode', serverDB);
+        const payload = {
+          clientId: testClientId,
+          userCode: testUserCode,
+          accountId: testUserId, // Explicitly set by oidc-provider after consent
+        };
+
+        await adapter.upsert(testId, payload, 3600);
+
+        const result = await serverDB.query.oidcDeviceCodes.findFirst({
+          where: eq(oidcDeviceCodes.id, testId),
+        });
+
+        expect(result).toBeDefined();
+        expect((result?.data as any).accountId).toBe(testUserId);
+        expect(result?.userId).toBe(testUserId);
+      });
+
+      it('should still inject accountId into non-DeviceCode payload from auth context', async () => {
+        const { getUserAuth } = await import('@lobechat/utils/server');
+        vi.mocked(getUserAuth).mockResolvedValueOnce({ userId: testUserId } as any);
+
+        const adapter = new DrizzleAdapter('Interaction', serverDB);
+        const payload = {
+          prompt: { name: 'consent' },
+          // No accountId — auth context should inject it for non-DeviceCode models
+        };
+
+        await adapter.upsert(testId, payload, 3600);
+
+        const result = await serverDB.query.oidcInteractions.findFirst({
+          where: eq(oidcInteractions.id, testId),
+        });
+
+        expect(result).toBeDefined();
+        // For non-DeviceCode models, accountId should be injected into payload
+        expect((result?.data as any).accountId).toBe(testUserId);
+      });
     });
   });
 

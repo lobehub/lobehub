@@ -2,6 +2,7 @@
   "error.backHome": "Quay về Trang chủ",
   "error.desc": "Hãy thử lại sau, hoặc quay về thế giới quen thuộc.",
   "error.retry": "Tải lại",
+  "error.stack": "Ngăn xếp lỗi",
   "error.title": "Ôi, đã xảy ra lỗi..",
   "fetchError.detail": "Chi tiết lỗi",
   "fetchError.title": "Yêu cầu thất bại",

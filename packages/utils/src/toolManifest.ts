@@ -102,26 +102,5 @@ export const getToolManifest = async (
     throw new TypeError('manifestInvalid', { cause: parser.error });
   }
 
-  // 4. if exist OpenAPI api, merge the OpenAPIs to api
-  if (parser.data.openapi) {
-    const openapiJson = await fetchJSON(parser.data.openapi, useProxy);
-
-    // avoid https://github.com/lobehub/lobe-chat/issues/9059
-    if (typeof window !== 'undefined') {
-      try {
-        const { OpenAPIConvertor } = await import('@lobehub/chat-plugin-sdk/openapi');
-
-        const convertor = new OpenAPIConvertor(openapiJson);
-        const openAPIs = await convertor.convertOpenAPIToPluginSchema();
-
-        data.api = [...data.api, ...openAPIs];
-
-        data.settings = await convertor.convertAuthToSettingsSchema(data.settings);
-      } catch (error) {
-        throw new TypeError('openAPIInvalid', { cause: error });
-      }
-    }
-  }
-
   return data;
 };

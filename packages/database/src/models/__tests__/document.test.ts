@@ -223,6 +223,55 @@ describe('DocumentModel', () => {
       expect(allResult.total).toBe(3);
     });
 
+    it('should filter documents by fileTypes', async () => {
+      const { id: fileId1 } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'test1.txt',
+        size: 100,
+        url: 'https://example.com/test1.txt',
+      });
+      const file1 = await fileModel.findById(fileId1);
+      if (!file1) throw new Error('File not found');
+
+      const { id: fileId2 } = await fileModel.create({
+        fileType: 'application/pdf',
+        name: 'test2.pdf',
+        size: 200,
+        url: 'https://example.com/test2.pdf',
+      });
+      const file2 = await fileModel.findById(fileId2);
+      if (!file2) throw new Error('File not found');
+
+      await documentModel.create({
+        content: 'Text document',
+        fileId: file1.id,
+        fileType: 'text/plain',
+        source: file1.url,
+        sourceType: 'file',
+        totalCharCount: 13,
+        totalLineCount: 1,
+      });
+
+      await documentModel.create({
+        content: 'PDF document',
+        fileId: file2.id,
+        fileType: 'application/pdf',
+        source: file2.url,
+        sourceType: 'file',
+        totalCharCount: 12,
+        totalLineCount: 1,
+      });
+
+      // Filter by fileTypes
+      const textResult = await documentModel.query({ fileTypes: ['text/plain'] });
+      expect(textResult.items).toHaveLength(1);
+      expect(textResult.total).toBe(1);
+
+      // Without filter returns all
+      const allResult = await documentModel.query();
+      expect(allResult.items).toHaveLength(2);
+    });
+
     it('should return documents ordered by updatedAt desc', async () => {
       const { documentId: doc1Id } = await createTestDocument(
         documentModel,

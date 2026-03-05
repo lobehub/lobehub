@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "برای پیش‌نمایش پیکربندی کنید",
   "dev.preview.title": "پیش‌نمایش نام مهارت",
   "dev.save": "نصب",
+  "dev.saveError": "نصب ناموفق بود، لطفاً دوباره تلاش کنید",
   "dev.saveSuccess": "تنظیمات ذخیره شد",
   "dev.tabs.manifest": "مانیفست",
   "dev.tabs.meta": "اطلاعات متا",

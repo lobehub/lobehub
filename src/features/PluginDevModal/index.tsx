@@ -96,9 +96,17 @@ const DevModal = memo<DevModalProps>(
         onFormFinish={async (_, info) => {
           if (onSave) {
             setSubmitting(true);
-
-            await onSave?.(info.values as LobeToolCustomPlugin);
-            setSubmitting(false);
+            try {
+              await onSave?.(info.values as LobeToolCustomPlugin);
+              message.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
+              onOpenChange(false);
+            } catch (error) {
+              console.error('[DevModal] Install failed:', error);
+              message.error(t('dev.saveError'));
+            } finally {
+              setSubmitting(false);
+            }
+            return;
           }
           message.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
           onOpenChange(false);

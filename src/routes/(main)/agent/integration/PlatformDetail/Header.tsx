@@ -71,7 +71,7 @@ const Header = memo<HeaderProps>(({ provider, currentConfig, onToggleEnable }) =
             <Icon fill={'white'} icon={ProviderIcon} size={'large'} />
           </div>
           <div>
-            <Flexbox align="center">
+            <Flexbox align="flex-start">
               <Title level={5} style={{ margin: 0 }}>
                 {provider.name}
               </Title>

@@ -1,5 +1,7 @@
 'use client';
 
+import type { RouteObject } from 'react-router-dom';
+
 import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
@@ -65,11 +67,10 @@ import VideoPage from '@/routes/(main)/video';
 import DesktopVideoLayout from '@/routes/(main)/video/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
-import { type RouteConfig } from '@/utils/router';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
 
 // Desktop router configuration — all sync imports for Electron local build
-export const desktopRoutes: RouteConfig[] = [
+export const desktopRoutes: RouteObject[] = [
   {
     children: [
       // Chat routes (agent)

@@ -1,14 +1,15 @@
 'use client';
 
+import { type RouteObject } from 'react-router-dom';
+
 import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
-import { type RouteConfig } from '@/utils/router';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 // Mobile router configuration (declarative mode)
-export const mobileRoutes: RouteConfig[] = [
+export const mobileRoutes: RouteObject[] = [
   {
     children: [
       // Chat routes

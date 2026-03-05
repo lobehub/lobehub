@@ -2,6 +2,7 @@
   "error.backHome": "Powrót do strony głównej",
   "error.desc": "Spróbuj ponownie później lub wróć do znanego świata.",
   "error.retry": "Odśwież",
+  "error.stack": "Stos błędów",
   "error.title": "Ups, coś poszło nie tak...",
   "fetchError.detail": "Szczegóły błędu",
   "fetchError.title": "Żądanie nie powiodło się",

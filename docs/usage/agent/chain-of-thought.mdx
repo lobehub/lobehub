@@ -1,0 +1,108 @@
+---
+title: Chain of Thought
+description: >-
+  Visualize AI reasoning step-by-step with transparent thinking processes. Watch
+  how models break down complex problems before giving a final answer.
+tags:
+  - LobeHub
+  - Chain of Thought
+  - AI Reasoning
+  - Transparency
+---
+
+# Chain of Thought
+
+LobeHub's Chain of Thought (CoT) visualization provides transparency into how AI models reason through complex problems, letting you watch the thinking process unfold in real time before the final answer arrives.
+
+## What is Chain of Thought?
+
+Chain of Thought is a reasoning technique where AI models break down complex problems into clear, logical steps before producing a final answer. LobeHub makes this internal reasoning visible so you can:
+
+- **See the thinking process** — Watch how the AI approaches problems
+- **Understand decision-making** — Follow the logical progression from question to answer
+- **Validate reasoning** — Verify that conclusions are based on sound logic
+- **Debug responses** — Identify where reasoning may have gone wrong
+- **Learn problem-solving** — Observe expert-level reasoning patterns
+
+## How It Works
+
+When a model uses Chain of Thought reasoning:
+
+1. **Problem analysis** — The model first analyzes what's being asked
+2. **Step-by-step thinking** — Breaks down the approach into logical steps
+3. **Intermediate reasoning** — Works through each step with visible thought
+4. **Final answer** — Synthesizes insights into a clear response
+
+All of this happens in real time, displayed in an expandable section above the final answer.
+
+## Viewing the Reasoning
+
+### Thinking Indicator
+
+When a model is reasoning, you'll see:
+
+- A **"Thinking…"** animated indicator showing active reasoning
+- A **duration counter** showing how long the model spent reasoning
+- An **expandable section** — click to see the full thought process
+- **Step-by-step breakdown** of each reasoning step
+
+### Display Modes
+
+**Collapsed view** — Shows only the "Thinking..." indicator and duration. Best for quick responses where you trust the reasoning, or when you want to keep the interface clean.
+
+**Expanded view** — Click to reveal complete step-by-step reasoning, intermediate conclusions, logical connections, and the full thought process from start to finish. Best for validating complex reasoning or learning how problems are approached.
+
+## When Chain of Thought Activates
+
+CoT reasoning is most beneficial — and most commonly used by models — for:
+
+**Mathematical problems** — Multi-step calculations where the model sets up equations, performs intermediate calculations, and shows work at each step. Example: "Calculate the compound interest on $10,000 at 5% annual rate for 3 years, compounded quarterly."
+
+**Logical reasoning** — Deductive and inductive problems where the model identifies premises, applies logical rules, draws intermediate conclusions, and builds to a final inference.
+
+**Code debugging** — Systematic error analysis where the model examines code structure, identifies potential issues, tests hypotheses, and proposes solutions.
+
+**Complex problem solving** — Multi-faceted analysis where the model breaks down the problem, considers multiple angles, weighs trade-offs, and synthesizes solutions.
+
+**Strategic planning** — Structured decision-making where the model defines objectives, analyzes constraints, evaluates options, and recommends approaches.
+
+## Use Cases
+
+**Education and learning** — Chain of Thought is invaluable for students. See how to approach complex problems, learn step-by-step methodologies, and understand where mistakes occur. Ask the AI to "show its work" or "explain step-by-step" for the clearest reasoning display.
+
+**Software development** — Use CoT to understand technical decisions: code review logic, architecture choices, debugging complex issues, algorithm optimization. Follow the AI's analysis to discover considerations you may have missed.
+
+**Data analysis** — See how conclusions are drawn from data. Watch statistical reasoning, hypothesis testing, and pattern recognition unfold, then verify the analytical approach before acting on insights.
+
+**Research and writing** — Observe how arguments and narratives are constructed: how points are organized, how logical flow develops, and how supporting evidence is selected.
+
+## Interpreting the Reasoning
+
+When reviewing Chain of Thought output, look for:
+
+**Logical progression** — Do steps build on each other? Are there clear connections between ideas? Does the reasoning flow naturally?
+
+**Completeness** — Are all aspects of the question addressed? Were edge cases considered? Is anything overlooked?
+
+**Validity** — Are assumptions reasonable? Is the logic sound? Do conclusions follow from the premises?
+
+If a reasoning step seems incorrect or incomplete, continue the conversation: "That step seems wrong because..." or "Can you reconsider step 3?" The model can revise its reasoning based on your feedback.
+
+## Tips
+
+- **Ask explicitly for reasoning** — Prompts like "show your reasoning step by step" or "think through this carefully" encourage detailed CoT responses
+- **Review for critical decisions** — Always expand and read the reasoning for important choices or high-stakes problems
+- **Question unexpected reasoning** — If a step seems off, ask for clarification or an alternative approach
+- **Learn from patterns** — Studying how the AI approaches different problem types can improve your own problem-solving
+
+<Callout type={'info'}>
+  Not all models use Chain of Thought reasoning, and not all responses trigger it even on models
+  that support it. CoT is most common with complex problems that benefit from step-by-step analysis.
+  Supported models include o1, o3, Claude 3.7 Sonnet, Gemini 2.0 Flash Thinking, and others.
+</Callout>
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+</Cards>

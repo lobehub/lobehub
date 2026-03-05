@@ -27,6 +27,7 @@ const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.ai/anthropic';
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
 const isKimiK25Model = (model: string) => model === 'kimi-k2.5';
+const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-thinking');
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
@@ -116,7 +117,8 @@ const buildMoonshotAnthropicPayload = async (
     8192;
 
   const isK25 = isKimiK25Model(payload.model);
-  const isThinkingEnabled = isK25 && payload.thinking?.type !== 'disabled';
+  const isNativeThinking = isKimiNativeThinkingModel(payload.model);
+  const isThinkingEnabled = isNativeThinking || (isK25 && payload.thinking?.type !== 'disabled');
 
   const basePayload = await buildDefaultAnthropicPayload({
     ...payload,
@@ -128,15 +130,15 @@ const buildMoonshotAnthropicPayload = async (
   const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
   const basePayloadWithSearch = { ...basePayload, tools };
 
-  if (!isK25) return basePayloadWithSearch;
+  if (!isK25 && !isNativeThinking) return basePayloadWithSearch;
 
   const resolvedThinkingBudget = payload.thinking?.budget_tokens
     ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)
     : 1024;
   const thinkingParam =
-    payload.thinking?.type === 'disabled'
-      ? ({ type: 'disabled' } as const)
-      : ({ budget_tokens: resolvedThinkingBudget, type: 'enabled' } as const);
+    isNativeThinking || payload.thinking?.type !== 'disabled'
+      ? ({ budget_tokens: resolvedThinkingBudget, type: 'enabled' } as const)
+      : ({ type: 'disabled' } as const);
 
   return {
     ...basePayloadWithSearch,
@@ -154,12 +156,16 @@ const buildMoonshotOpenAIPayload = (
   const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
 
   const isK25 = isKimiK25Model(model);
-  const isThinkingEnabled = isK25 && thinking?.type !== 'disabled';
+  const isNativeThinking = isKimiNativeThinkingModel(model);
+  const isThinkingEnabled = isNativeThinking || (isK25 && thinking?.type !== 'disabled');
   const normalizedMessages = normalizeMessagesForOpenAI(messages, isThinkingEnabled);
   const moonshotTools = appendSearchTool(tools, enabledSearch);
 
-  if (isK25) {
-    const thinkingParam = isThinkingEnabled ? { type: 'enabled' } : { type: 'disabled' };
+  if (isK25 || isNativeThinking) {
+    const thinkingParam =
+      isNativeThinking || thinking?.type !== 'disabled'
+        ? { type: 'enabled' }
+        : { type: 'disabled' };
 
     return {
       ...rest,

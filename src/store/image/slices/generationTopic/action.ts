@@ -10,7 +10,7 @@ import { generationTopicService } from '@/services/generationTopic';
 import { globalHelpers } from '@/store/global/helpers';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { systemAgentSelectors } from '@/store/user/selectors';
+import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type ImageGenerationTopic } from '@/types/generation';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
@@ -108,7 +108,12 @@ export class GenerationTopicActionImpl {
     await chatService.fetchPresetTaskResult({
       params: merge(
         generationTopicAgentConfig,
-        chainSummaryGenerationTitle(prompts, 'image', globalHelpers.getCurrentLanguage()),
+        chainSummaryGenerationTitle(
+          prompts,
+          'image',
+          userGeneralSettingsSelectors.responseLanguage(useUserStore.getState()) ||
+            globalHelpers.getCurrentLanguage(),
+        ),
       ),
       onError: async () => {
         const fallbackTitle = generateFallbackTitle();

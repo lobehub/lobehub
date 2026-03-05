@@ -20,6 +20,8 @@ export const labelStyle: CSSProperties = {
   width: 160,
 };
 
+export const INPUT_WIDTH = 240;
+
 const ProfileRow = ({ label, children, action, mobile }: ProfileRowProps) => {
   if (mobile) {
     return (
@@ -34,11 +36,9 @@ const ProfileRow = ({ label, children, action, mobile }: ProfileRowProps) => {
   }
 
   return (
-    <Flexbox horizontal align="center" gap={24} justify="space-between" style={rowStyle}>
-      <Flexbox horizontal align="center" gap={24} style={{ flex: 1 }}>
-        <Text style={labelStyle}>{label}</Text>
-        <Flexbox style={{ flex: 1 }}>{children}</Flexbox>
-      </Flexbox>
+    <Flexbox horizontal align="center" gap={24} style={rowStyle}>
+      <Text style={labelStyle}>{label}</Text>
+      <Flexbox align="flex-end" style={{ flex: 1 }}>{children}</Flexbox>
       {action && <Flexbox>{action}</Flexbox>}
     </Flexbox>
   );

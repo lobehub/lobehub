@@ -7,13 +7,13 @@ export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
 export type ChatResponseFormat =
   | { type: 'json_object' }
   | {
-    json_schema: {
-      name: string;
-      schema: Record<string, any>;
-      strict?: boolean;
+      json_schema: {
+        name: string;
+        schema: Record<string, any>;
+        strict?: boolean;
+      };
+      type: 'json_schema';
     };
-    type: 'json_schema';
-  };
 
 interface UserMessageContentPartThinking {
   signature: string;
@@ -150,7 +150,7 @@ export interface ChatStreamPayload {
   /**
    * Thinking level for Gemini models (e.g., gemini-3.0-pro)
    */
-  thinkingLevel?: 'low' | 'medium' | 'high';
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   tool_choice?: string;
   tools?: ChatCompletionTool[];
   /**

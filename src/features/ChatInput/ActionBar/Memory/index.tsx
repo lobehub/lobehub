@@ -18,7 +18,7 @@ const Memory = memo(() => {
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [isLoading, isEnabled] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
-    chatConfigByIdSelectors.isMemoryEnabledById(agentId)(s),
+    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
   ]);
   const isMobile = useIsMobile();
 

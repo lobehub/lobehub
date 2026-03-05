@@ -1,6 +1,7 @@
 export default {
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
+  'error.stack': 'Error Stack',
   'error.retry': 'Reload',
   'error.title': 'Oops, something went wrong..',
   'fetchError.detail': 'Error details',

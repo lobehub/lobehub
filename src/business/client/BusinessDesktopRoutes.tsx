@@ -1,5 +1,5 @@
-import { type RouteConfig } from '@/utils/router';
+import { type RouteObject } from 'react-router-dom';
 
-export const BusinessDesktopRoutesWithMainLayout: RouteConfig[] = [];
-export const BusinessDesktopRoutesWithSettingsLayout: RouteConfig[] = [];
-export const BusinessDesktopRoutesWithoutMainLayout: RouteConfig[] = [];
+export const BusinessDesktopRoutesWithMainLayout: RouteObject[] = [];
+export const BusinessDesktopRoutesWithSettingsLayout: RouteObject[] = [];
+export const BusinessDesktopRoutesWithoutMainLayout: RouteObject[] = [];

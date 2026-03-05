@@ -54,3 +54,26 @@ tags:
 | `commercial_hide_docs`    | 隐藏文档和帮助菜单，包括更新日志、文档和反馈（需要商业授权）。      | 关闭  |
 
 你可以随时检查 [featureFlags](https://github.com/lobehub/lobehub/blob/main/src/config/featureFlags/schema.ts) 以获取最新的特性标志列表。
+
+## 独立功能启用 / 禁用变量
+
+除了上述 `FEATURE_FLAGS` 体系外，LobeHub 还提供了一批独立的环境变量，用于控制依赖外部基础设施的特定功能。这些是独立变量（不属于 `FEATURE_FLAGS`）：
+
+| 环境变量                     | 默认值 | 说明                                           | 依赖                 |
+| ------------------------ | --- | -------------------------------------------- | ------------------ |
+| `ENABLED_ARTIFACTS`      | `1` | 启用 Artifacts 面板（Claude 风格的代码 / SVG/React 预览） | —                  |
+| `ENABLED_MCP`            | `1` | 启用模型上下文协议（MCP）插件系统                           | —                  |
+| `ENABLED_UPLOAD`         | `1` | 启用文件上传功能                                     | S3 兼容存储            |
+| `ENABLED_KNOWLEDGE_BASE` | `1` | 启用知识库和 RAG 功能                                | S3 存储 + PostgreSQL |
+| `ENABLED_WEB_SEARCH`     | `1` | 启用网络搜索集成（在线搜索）                               | Searxng 或搜索插件      |
+
+设置为 `0` 可禁用对应功能。例如，若未配置 S3 存储，可禁用文件上传：
+
+```bash
+ENABLED_UPLOAD=0
+ENABLED_KNOWLEDGE_BASE=0
+```
+
+<Callout type={'info'}>
+  如果未配置 S3 兼容存储，应将 `ENABLED_UPLOAD` 和 `ENABLED_KNOWLEDGE_BASE` 设为禁用状态，否则文件相关操作将会失败。
+</Callout>

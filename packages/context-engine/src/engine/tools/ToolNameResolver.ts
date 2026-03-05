@@ -86,7 +86,7 @@ export class ToolNameResolver {
           id: toolCall.id,
           identifier,
           thoughtSignature: toolCall.thoughtSignature,
-          type: (type ?? 'default') as any,
+          type: (type ?? manifests[identifier]?.type ?? 'default') as any,
         };
 
         // Step 2: Resolve hashed apiName if needed

@@ -350,6 +350,7 @@ export default {
   'dev.preview.empty.title': 'Configure to preview',
   'dev.preview.title': 'Skill name preview',
   'dev.save': 'Install',
+  'dev.saveError': 'Install failed, please try again',
   'dev.saveSuccess': 'Settings saved',
   'dev.tabs.manifest': 'Manifest',
   'dev.tabs.meta': 'Meta info',

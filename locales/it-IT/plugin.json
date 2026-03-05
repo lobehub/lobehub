@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Configura per visualizzare",
   "dev.preview.title": "Anteprima nome Skill",
   "dev.save": "Installa",
+  "dev.saveError": "Installazione non riuscita, riprova per favore",
   "dev.saveSuccess": "Impostazioni salvate",
   "dev.tabs.manifest": "Manifest",
   "dev.tabs.meta": "Info meta",

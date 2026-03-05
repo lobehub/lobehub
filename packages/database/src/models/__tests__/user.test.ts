@@ -672,5 +672,29 @@ describe('UserModel', () => {
         expect(result.responseLanguage).toBe('en-US');
       });
     });
+
+    describe('getUserPreference', () => {
+      it('should return user preference after update', async () => {
+        await serverDB
+          .update(users)
+          .set({ preference: { telemetry: true, useCmdEnterKey: false } })
+          .where(eq(users.id, userId));
+
+        const result = await userModel.getUserPreference();
+        expect(result).toBeDefined();
+        expect(result).toMatchObject({ telemetry: true, useCmdEnterKey: false });
+      });
+
+      it('should return default preference for existing user', async () => {
+        const result = await userModel.getUserPreference();
+        expect(result).toBeDefined();
+      });
+
+      it('should return undefined for non-existent user', async () => {
+        const nonExistentModel = new UserModel(serverDB, 'non-existent-user');
+        const result = await nonExistentModel.getUserPreference();
+        expect(result).toBeUndefined();
+      });
+    });
   });
 });

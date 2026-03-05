@@ -148,17 +148,19 @@ const Body = memo<BodyProps>(
           <div className={styles.section}>
             <div className={styles.sectionTitle}>{t('integration.connectionConfig')}</div>
 
-            <div className={styles.field}>
-              <div className={styles.label}>
-                <div className={styles.labelLeft}>
-                  {t('integration.applicationId')}
-                  {provider.fieldTags.appId && <Tag>{provider.fieldTags.appId}</Tag>}
+            {!provider.autoAppId && (
+              <div className={styles.field}>
+                <div className={styles.label}>
+                  <div className={styles.labelLeft}>
+                    {t('integration.applicationId')}
+                    {provider.fieldTags.appId && <Tag>{provider.fieldTags.appId}</Tag>}
+                  </div>
                 </div>
+                <Form.Item noStyle name="applicationId" rules={[{ required: true }]}>
+                  <Input placeholder={t('integration.applicationIdPlaceholder')} />
+                </Form.Item>
               </div>
-              <Form.Item noStyle name="applicationId" rules={[{ required: true }]}>
-                <Input placeholder={t('integration.applicationIdPlaceholder')} />
-              </Form.Item>
-            </div>
+            )}
 
             <div className={styles.field}>
               <div className={styles.label}>
@@ -214,12 +216,65 @@ const Body = memo<BodyProps>(
                 </Form.Item>
               </div>
             )}
+
+            {provider.fieldTags.secretToken && (
+              <div className={styles.field}>
+                <div className={styles.label}>
+                  <div className={styles.labelLeft}>
+                    {t('integration.secretToken')}
+                    <Tag>{provider.fieldTags.secretToken}</Tag>
+                  </div>
+                </div>
+                <Form.Item noStyle name="secretToken">
+                  <Input.Password
+                    placeholder={t('integration.secretTokenPlaceholder')}
+                    style={{ fontFamily: 'monospace' }}
+                  />
+                </Form.Item>
+                <Text
+                  type="secondary"
+                  style={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    fontSize: 12,
+                    gap: 4,
+                  }}
+                >
+                  <Icon icon={Info} size={'small'} /> {t('integration.secretTokenHint')}
+                </Text>
+              </div>
+            )}
+            {/* Dev-only: HTTPS tunnel URL for Telegram webhook */}
+            {provider.webhookMode === 'auto' && process.env.NODE_ENV === 'development' && (
+              <div className={styles.field}>
+                <div className={styles.label}>
+                  <div className={styles.labelLeft}>{t('integration.devWebhookProxyUrl')}</div>
+                </div>
+                <Form.Item noStyle name="webhookProxyUrl">
+                  <Input
+                    placeholder="https://xxx.trycloudflare.com"
+                    style={{ fontFamily: 'monospace' }}
+                  />
+                </Form.Item>
+                <Text
+                  type="secondary"
+                  style={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    fontSize: 12,
+                    gap: 4,
+                  }}
+                >
+                  <Icon icon={Info} size={'small'} /> {t('integration.devWebhookProxyUrlHint')}
+                </Text>
+              </div>
+            )}
           </div>
 
           {/* Action Bar */}
           <div className={styles.actionBar}>
             {hasConfig ? (
-              <Button danger icon={<Trash2 size={16} />} type="text" onClick={onDelete}>
+              <Button danger icon={<Trash2 size={16} />} type="primary" onClick={onDelete}>
                 {t('integration.removeIntegration')}
               </Button>
             ) : (
@@ -264,8 +319,8 @@ const Body = memo<BodyProps>(
             />
           )}
 
-          {/* Endpoint URL - only shown after config is saved */}
-          {hasConfig && (
+          {/* Endpoint URL - platform-specific rendering */}
+          {hasConfig && provider.webhookMode !== 'auto' && (
             <div className={styles.field}>
               <div className={styles.label}>
                 <div className={styles.labelLeft}>

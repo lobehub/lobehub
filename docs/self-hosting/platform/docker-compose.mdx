@@ -348,6 +348,161 @@ If `INTERNAL_APP_URL` is not set, it defaults to `APP_URL`.
   For Docker Compose deployments with `network_mode: 'service:network-service'`, use `http://localhost:3210` as the `INTERNAL_APP_URL`.
 </Callout>
 
+## Reverse Proxy Configuration
+
+For production deployments with a custom domain and HTTPS, configure a reverse proxy in front of LobeHub.
+
+**Nginx:**
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name lobehub.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:3210;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**Caddy** (automatically handles HTTPS with Let's Encrypt):
+
+```caddyfile
+lobehub.example.com {
+    reverse_proxy localhost:3210
+}
+```
+
+**Traefik** — add labels to the `lobe` service in `docker-compose.yml`:
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.lobehub.rule=Host(`lobehub.example.com`)"
+  - "traefik.http.routers.lobehub.entrypoints=websecure"
+  - "traefik.http.routers.lobehub.tls.certresolver=letsencrypt"
+```
+
+## Management Commands
+
+```sh
+# View logs (all services)
+docker compose logs -f
+
+# View logs for a specific service
+docker compose logs -f lobehub
+
+# Restart all services
+docker compose restart
+
+# Restart a specific service
+docker compose restart lobehub
+
+# Stop all services
+docker compose stop
+
+# Update to the latest version
+docker compose pull && docker compose up -d
+```
+
+## Backup and Restore
+
+**Database backup:**
+
+```sh
+docker compose exec postgresql pg_dump -U postgres lobechat > backup.sql
+```
+
+Restore from backup:
+
+```sh
+docker compose exec -T postgresql psql -U postgres lobechat < backup.sql
+```
+
+**File storage (RustFS) backup:**
+
+```sh
+docker compose exec rustfs tar czf /tmp/backup.tar.gz /data
+docker cp lobe-rustfs:/tmp/backup.tar.gz ./rustfs-backup.tar.gz
+```
+
+**Redis** — Redis automatically persists data with AOF. To manually save:
+
+```sh
+docker compose exec redis redis-cli BGSAVE
+```
+
+## Resource Requirements
+
+**Minimum (light usage):**
+
+- CPU: 2 cores
+- RAM: 4 GB
+- Storage: 20 GB
+
+**Recommended (production):**
+
+- CPU: 4+ cores
+- RAM: 8+ GB
+- Storage: 50+ GB (depending on file uploads)
+
+For high-traffic deployments, consider using managed database (Neon, Supabase, RDS), Redis cluster for caching, and a CDN for static assets.
+
+## Troubleshooting
+
+**Service won't start**
+
+Check service status and logs:
+
+```sh
+docker compose ps
+docker compose logs [service-name]
+```
+
+Common causes: port already in use (change `LOBE_PORT` in `.env`), insufficient disk space, or database connection failure.
+
+**Database connection error**
+
+Verify PostgreSQL is healthy:
+
+```sh
+docker compose exec postgresql pg_isready -U postgres
+```
+
+If unhealthy, check its logs: `docker compose logs postgresql`
+
+**File upload fails**
+
+Check RustFS service:
+
+```sh
+docker compose logs rustfs
+docker compose logs rustfs-init
+```
+
+Verify the bucket was created: `docker compose exec rustfs ls /data/lobe`
+
+**Running out of disk space**
+
+Check usage: `docker system df`
+
+Clean up unused resources (make sure to back up first):
+
+```sh
+docker system prune -a --volumes
+```
+
 ## Configuring Authentication
 
 To configure SSO authentication services (such as Casdoor, Logto, etc.), please refer to the [Authentication Services](/docs/self-hosting/auth) documentation.

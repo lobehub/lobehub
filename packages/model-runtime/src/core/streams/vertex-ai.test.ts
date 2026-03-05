@@ -747,4 +747,277 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       ].map((i) => i + '\n'),
     );
   });
+
+  it('should handle groundingMetadata with image search results', async () => {
+    vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+    const rawChunks = [
+      {
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [{ text: 'Here are images and web results' }],
+            },
+            finishReason: 'STOP',
+            index: 0,
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  web: {
+                    uri: 'https://example.com/article',
+                    title: 'example.com',
+                  },
+                },
+                {
+                  image: {
+                    imageUri: 'https://example.com/photo.jpg',
+                    sourceUri: 'https://example.com/page',
+                    title: 'Example Photo',
+                    domain: 'example.com',
+                  },
+                },
+              ],
+              webSearchQueries: ['example query'],
+              imageSearchQueries: ['example image query'],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5,
+          candidatesTokenCount: 10,
+          totalTokenCount: 15,
+          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 5 }],
+          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 10 }],
+        },
+        modelVersion: 'gemini-3.1-flash-image-preview',
+      },
+    ];
+
+    const mockGoogleStream = new ReadableStream({
+      start(controller) {
+        rawChunks.forEach((chunk) => controller.enqueue(chunk));
+        controller.close();
+      },
+    });
+
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual(
+      [
+        'id: chat_1',
+        'event: text',
+        'data: "Here are images and web results"\n',
+
+        'id: chat_1',
+        'event: grounding',
+        `data: ${JSON.stringify({
+          citations: [
+            {
+              favicon: 'example.com',
+              title: 'example.com',
+              url: 'https://example.com/article',
+            },
+          ],
+          imageResults: [
+            {
+              domain: 'example.com',
+              imageUri: 'https://example.com/photo.jpg',
+              sourceUri: 'https://example.com/page',
+              title: 'Example Photo',
+            },
+          ],
+          imageSearchQueries: ['example image query'],
+          searchQueries: ['example query'],
+        })}\n`,
+
+        'id: chat_1',
+        'event: stop',
+        `data: "STOP"\n`,
+
+        'id: chat_1',
+        'event: usage',
+        `data: {"inputTextTokens":5,"outputImageTokens":0,"outputTextTokens":10,"totalInputTokens":5,"totalOutputTokens":10,"totalTokens":15}\n`,
+      ].map((i) => i + '\n'),
+    );
+  });
+
+  it('should handle groundingMetadata with only image chunks (no web chunks)', async () => {
+    vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+    const rawChunks = [
+      {
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [{ text: 'Image results only' }],
+            },
+            finishReason: 'STOP',
+            index: 0,
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  image: {
+                    imageUri: 'https://img.example.com/cat.jpg',
+                    sourceUri: 'https://example.com/cats',
+                    title: 'Cat Photo',
+                    domain: 'example.com',
+                  },
+                },
+              ],
+              imageSearchQueries: ['cute cats'],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 3,
+          candidatesTokenCount: 5,
+          totalTokenCount: 8,
+          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
+          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 5 }],
+        },
+        modelVersion: 'gemini-3.1-flash-image-preview',
+      },
+    ];
+
+    const mockGoogleStream = new ReadableStream({
+      start(controller) {
+        rawChunks.forEach((chunk) => controller.enqueue(chunk));
+        controller.close();
+      },
+    });
+
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual(
+      [
+        'id: chat_1',
+        'event: text',
+        'data: "Image results only"\n',
+
+        'id: chat_1',
+        'event: grounding',
+        `data: ${JSON.stringify({
+          imageResults: [
+            {
+              domain: 'example.com',
+              imageUri: 'https://img.example.com/cat.jpg',
+              sourceUri: 'https://example.com/cats',
+              title: 'Cat Photo',
+            },
+          ],
+          imageSearchQueries: ['cute cats'],
+        })}\n`,
+
+        'id: chat_1',
+        'event: stop',
+        `data: "STOP"\n`,
+
+        'id: chat_1',
+        'event: usage',
+        `data: {"inputTextTokens":3,"outputImageTokens":0,"outputTextTokens":5,"totalInputTokens":3,"totalOutputTokens":5,"totalTokens":8}\n`,
+      ].map((i) => i + '\n'),
+    );
+  });
+
+  it('should filter empty strings from searchQueries in groundingMetadata', async () => {
+    vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+    const rawChunks = [
+      {
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [{ text: 'result' }],
+            },
+            finishReason: 'STOP',
+            index: 0,
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  web: {
+                    uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+                    title: 'example.com',
+                  },
+                },
+              ],
+              webSearchQueries: ['', '杭州天气', 'Hangzhou weather'],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5,
+          candidatesTokenCount: 3,
+          totalTokenCount: 8,
+          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 5 }],
+          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
+        },
+        modelVersion: 'gemini-3.1-flash-image-preview',
+      },
+    ];
+
+    const mockGoogleStream = new ReadableStream({
+      start(controller) {
+        rawChunks.forEach((chunk) => controller.enqueue(chunk));
+        controller.close();
+      },
+    });
+
+    const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual(
+      [
+        'id: chat_1',
+        'event: text',
+        'data: "result"\n',
+
+        'id: chat_1',
+        'event: grounding',
+        `data: ${JSON.stringify({
+          citations: [
+            {
+              favicon: 'example.com',
+              title: 'example.com',
+              url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+            },
+          ],
+          searchQueries: ['杭州天气', 'Hangzhou weather'],
+        })}\n`,
+
+        'id: chat_1',
+        'event: stop',
+        `data: "STOP"\n`,
+
+        'id: chat_1',
+        'event: usage',
+        `data: {"inputTextTokens":5,"outputImageTokens":0,"outputTextTokens":3,"totalInputTokens":5,"totalOutputTokens":3,"totalTokens":8}\n`,
+      ].map((i) => i + '\n'),
+    );
+  });
 });

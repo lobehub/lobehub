@@ -209,6 +209,37 @@ const googleChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
+      "Gemini 3.1 Flash-Lite Preview is Google's most cost-efficient multimodal model, optimized for high-volume agentic tasks, translation, and data processing.",
+    displayName: 'Gemini 3.1 Flash-Lite Preview',
+    enabled: true,
+    id: 'gemini-3.1-flash-lite-preview',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-04',
+    settings: {
+      extendParams: ['thinkingLevel5', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
       video: true,
       vision: true,
     },
@@ -871,6 +902,7 @@ export const imagenGenParameters: ModelParamsSchema = {
 };
 
 const NANO_BANANA_ASPECT_RATIOS = [
+  'auto',
   '1:1', // 1024x1024 / 2048x2048 / 4096x4096
   '2:3', // 848x1264 / 1696x2528 / 3392x5056
   '3:2', // 1264x848 / 2528x1696 / 5056x3392
@@ -887,7 +919,7 @@ const NANO_BANANA_2_ASPECT_RATIOS = [...NANO_BANANA_ASPECT_RATIOS, '1:4', '4:1',
 
 export const nanoBananaParameters: ModelParamsSchema = {
   aspectRatio: {
-    default: '1:1',
+    default: 'auto',
     enum: NANO_BANANA_ASPECT_RATIOS,
   },
   imageUrls: {
@@ -898,7 +930,7 @@ export const nanoBananaParameters: ModelParamsSchema = {
 
 export const nanoBananaProParameters: ModelParamsSchema = {
   aspectRatio: {
-    default: '1:1',
+    default: 'auto',
     enum: NANO_BANANA_ASPECT_RATIOS,
   },
   imageUrls: {
@@ -913,7 +945,7 @@ export const nanoBananaProParameters: ModelParamsSchema = {
 
 export const nanoBanana2Parameters: ModelParamsSchema = {
   aspectRatio: {
-    default: '1:1',
+    default: 'auto',
     enum: NANO_BANANA_2_ASPECT_RATIOS,
   },
   imageUrls: {

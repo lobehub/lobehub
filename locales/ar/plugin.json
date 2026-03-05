@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "قم بالإعداد للمعاينة",
   "dev.preview.title": "معاينة اسم المهارة",
   "dev.save": "تثبيت",
+  "dev.saveError": "فشل التثبيت، يرجى المحاولة مرة أخرى",
   "dev.saveSuccess": "تم حفظ الإعدادات",
   "dev.tabs.manifest": "البيان",
   "dev.tabs.meta": "معلومات التعريف",

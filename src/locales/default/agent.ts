@@ -25,6 +25,9 @@ export default {
   'integration.removed': 'Integration removed',
   'integration.removeFailed': 'Failed to remove integration',
   'integration.save': 'Save Configuration',
+  'integration.secretToken': 'Webhook Secret Token',
+  'integration.secretTokenHint': 'Optional. Used to verify webhook requests from Telegram.',
+  'integration.secretTokenPlaceholder': 'Optional secret for webhook verification',
   'integration.saveFailed': 'Failed to save configuration',
   'integration.saveFirstWarning': 'Please save configuration first',
   'integration.saved': 'Configuration saved successfully',
@@ -33,4 +36,7 @@ export default {
   'integration.testSuccess': 'Connection test passed',
   'integration.updateFailed': 'Failed to update status',
   'integration.validationError': 'Please fill in Application ID and Token',
+  'integration.devWebhookProxyUrl': 'HTTPS Tunnel URL',
+  'integration.devWebhookProxyUrlHint':
+    'Telegram requires HTTPS for webhooks. Paste your tunnel URL (e.g. from cloudflared or ngrok) to forward webhook requests to your local dev server.',
 } as const;

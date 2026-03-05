@@ -23,11 +23,14 @@ import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
+import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import {
   createServerAgentToolsEngine,
   type EvalContext,
   type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
+import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
@@ -106,6 +109,12 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
   stream?: boolean;
+  /**
+   * Custom title for the topic.
+   * When provided (including empty string), overrides the default prompt-based title.
+   * When undefined, falls back to prompt.slice(0, 50).
+   */
+  title?: string;
   /** Topic creation trigger source ('cron' | 'chat' | 'api') */
   trigger?: string;
   /**
@@ -182,6 +191,7 @@ export class AiAgentService {
       files,
       stepCallbacks,
       stream,
+      title,
       trigger,
       cronJobId,
       evalContext,
@@ -231,7 +241,8 @@ export class AiAgentService {
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
         metadata,
-        title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+        title:
+          title !== undefined ? title : prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
         trigger,
       });
       topicId = newTopic.id;
@@ -432,7 +443,48 @@ export class AiAgentService {
       );
     }
 
-    // 8. Get existing messages if provided
+    // 8. Fetch user persona for memory injection
+    // Persona is user-level global memory, only depends on user's global memory setting
+    let userMemory: ServerUserMemoryConfig | undefined;
+
+    let globalMemoryEnabled = true; // default: enabled (matches DEFAULT_MEMORY_SETTINGS)
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+      globalMemoryEnabled = memorySettings?.enabled !== false;
+    } catch (error) {
+      log('execAgent: failed to fetch user memory settings: %O', error);
+    }
+
+    log('execAgent: memory check — globalMemoryEnabled=%s', globalMemoryEnabled);
+
+    if (globalMemoryEnabled) {
+      try {
+        const personaModel = new UserPersonaModel(this.db, this.userId);
+        const persona = await personaModel.getLatestPersonaDocument();
+
+        if (persona?.persona) {
+          userMemory = {
+            fetchedAt: Date.now(),
+            memories: {
+              contexts: [],
+              experiences: [],
+              persona: {
+                narrative: persona.persona,
+                tagline: persona.tagline,
+              },
+              preferences: [],
+            },
+          };
+          log('execAgent: fetched user persona (version: %d)', persona.version);
+        }
+      } catch (error) {
+        log('execAgent: failed to fetch user persona: %O', error);
+      }
+    }
+
+    // 9. Get existing messages if provided
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
       historyMessages = await this.messageModel.query({
@@ -581,6 +633,7 @@ export class AiAgentService {
         tools,
         userId: this.userId,
         userInterventionConfig,
+        userMemory,
         webhookDelivery,
       });
 
