@@ -3,13 +3,13 @@ import { and, count, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
 import { ALL_SCOPE } from '@/const/rbac';
 import { RbacModel } from '@/database/models/rbac';
 import { messages, roles, userRoles, users } from '@/database/schemas';
-import { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
-import { ServiceResult } from '../types';
-import {
+import type { ServiceResult } from '../types';
+import type {
   CreateUserRequest,
   UpdateUserRequest,
   UpdateUserRolesRequest,
@@ -112,7 +112,7 @@ export class UserService extends BaseService {
       const usersWithRoles = await Promise.all(
         userList.map(async (userRow) => {
           const userRoleResults = await this.db
-            .select({ roles: roles })
+            .select({ roles })
             .from(userRoles)
             .innerJoin(roles, eq(userRoles.roleId, roles.id))
             .where(eq(userRoles.userId, userRow.id));
@@ -429,7 +429,7 @@ export class UserService extends BaseService {
               createdAt: new Date(),
               expiresAt: role.expiresAt ? new Date(role.expiresAt) : null,
               roleId: role.roleId,
-              userId: userId,
+              userId,
             };
             return data;
           });

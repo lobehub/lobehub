@@ -1,12 +1,12 @@
 import { and, count, desc, eq, ilike, isNull, notInArray } from 'drizzle-orm';
 
 import { agentsToSessions, messages, topics, users } from '@/database/schemas';
-import { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
-import {
+import type {
   TopicCreateRequest,
   TopicListQuery,
   TopicListResponse,
@@ -20,19 +20,14 @@ export class TopicService extends BaseService {
   }
 
   /**
-   * 获取话题列表（支持按 session/agent/group 过滤）
+   * 获取话题列表（支持按 agent/group 过滤）
    * @param request 查询参数
    * @returns 话题列表
    */
   async getTopics(request: TopicListQuery): Promise<TopicListResponse> {
     try {
       // 权限校验
-      const permissionResult = await this.resolveOperationPermission(
-        'TOPIC_READ',
-        request.sessionId
-          ? { targetSessionId: request.sessionId }
-          : undefined,
-      );
+      const permissionResult = await this.resolveOperationPermission('TOPIC_READ');
 
       if (!permissionResult.isPermitted) {
         throw this.createAuthorizationError(permissionResult.message || '没有权限访问话题列表');
@@ -63,8 +58,6 @@ export class TopicService extends BaseService {
           // agentId 不存在对应 session，直接返回空
           return { topics: [], total: 0 };
         }
-      } else if (request.sessionId) {
-        conditions.push(eq(topics.sessionId, request.sessionId));
       } else if (request.isInbox) {
         // inbox：sessionId 为 null 且 groupId 为 null 且 agentId 为 null
         conditions.push(isNull(topics.sessionId));
@@ -133,7 +126,7 @@ export class TopicService extends BaseService {
       }
 
       // 构建查询条件
-      let whereConditions = [eq(topics.id, topicId)];
+      const whereConditions = [eq(topics.id, topicId)];
 
       // 应用权限条件
       if (permissionResult.condition?.userId) {
@@ -174,10 +167,10 @@ export class TopicService extends BaseService {
    */
   async createTopic(payload: TopicCreateRequest): Promise<TopicResponse> {
     try {
-      const { sessionId, agentId, groupId, title, favorite, clientId } = payload;
+      const { agentId, groupId, title, favorite, clientId } = payload;
 
-      // 权限校验：优先用 sessionId，agentId 时反查 sessionId
-      let effectiveSessionId = sessionId ?? null;
+      // agentId 时反查 sessionId
+      let effectiveSessionId: string | null = null;
 
       if (!effectiveSessionId && agentId) {
         const [relation] = await this.db
@@ -236,7 +229,7 @@ export class TopicService extends BaseService {
       }
 
       // 构建查询条件检查话题是否存在
-      let whereConditions = [eq(topics.id, topicId)];
+      const whereConditions = [eq(topics.id, topicId)];
 
       // 应用权限条件
       if (permissionResult.condition?.userId) {
@@ -275,7 +268,7 @@ export class TopicService extends BaseService {
       }
 
       // 构建查询条件检查话题是否存在
-      let whereConditions = [eq(topics.id, topicId)];
+      const whereConditions = [eq(topics.id, topicId)];
 
       // 应用权限条件
       if (permissionResult.condition?.userId) {

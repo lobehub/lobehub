@@ -1,14 +1,14 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { MessageTranslateService } from '../services/message-translations.service';
-import {
+import type {
   MessageTranslateBody,
   MessageTranslateInfoUpdate,
   MessageTranslateParams,
 } from '../types/message-translations.type';
 
-export class MessageTranslateController extends BaseController {
+export class MessageTranslationController extends BaseController {
   /**
    * 获取指定消息的翻译信息
    * GET /api/v1/message_translates/:messageId
@@ -56,7 +56,7 @@ export class MessageTranslateController extends BaseController {
   /**
    * 更新消息翻译信息
    * PUT /api/v1/message-translates/:messageId
-   * Body: { from: string, to: string, translatedContent: string }
+   * Body: { from: string, to: string, content: string }
    */
   async handleUpdateTranslateInfo(c: Context) {
     try {

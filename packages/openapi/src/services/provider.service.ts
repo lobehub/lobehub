@@ -270,8 +270,18 @@ export class ProviderService extends BaseService {
       }
 
       const { id: _id, keyVaults, ...rest } = request;
+      let encryptedKeyVaults: string | null | undefined;
 
-      const encryptedKeyVaults = await this.encryptKeyVaults(keyVaults);
+      if (keyVaults === undefined) {
+        encryptedKeyVaults = undefined;
+      } else if (keyVaults === null) {
+        encryptedKeyVaults = null;
+      } else {
+        const existingKeyVaults = await this.decryptKeyVaults(existing.keyVaults);
+        const mergedKeyVaults = { ...existingKeyVaults, ...keyVaults };
+
+        encryptedKeyVaults = await this.encryptKeyVaults(mergedKeyVaults);
+      }
 
       const updateData: Partial<typeof aiProviders.$inferInsert> = {
         ...rest,

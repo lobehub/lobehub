@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
-import { MessageTranslateController } from '../controllers';
+import { MessageTranslationController } from '../controllers';
 import { requireAuth } from '../middleware';
 import { requireAnyPermission } from '../middleware/permission-check';
 import {
@@ -13,10 +13,10 @@ import {
 } from '../types/message-translations.type';
 
 // Message Translate 相关路由
-const MessageTranslatesRoutes = new Hono();
+const MessageTranslationRoutes = new Hono();
 
 // POST /api/v1/message-translates - 翻译指定消息
-MessageTranslatesRoutes.post(
+MessageTranslationRoutes.post(
   '/:messageId',
   requireAuth,
   requireAnyPermission(
@@ -30,13 +30,13 @@ MessageTranslatesRoutes.post(
   zValidator('param', MessageTranslateQueryRequestSchema),
   zValidator('json', MessageTranslateTriggerRequestSchema),
   (c) => {
-    const controller = new MessageTranslateController();
+    const controller = new MessageTranslationController();
     return controller.handleTranslateMessage(c);
   },
 );
 
 // GET /api/v1/message-translates - 获取指定消息的翻译信息
-MessageTranslatesRoutes.get(
+MessageTranslationRoutes.get(
   '/:messageId',
   requireAuth,
   requireAnyPermission(
@@ -49,13 +49,13 @@ MessageTranslatesRoutes.get(
   ),
   zValidator('param', MessageTranslateQueryRequestSchema),
   (c) => {
-    const controller = new MessageTranslateController();
+    const controller = new MessageTranslationController();
     return controller.handleGetTranslateByMessage(c);
   },
 );
 
 // PUT /api/v1/message-translates/:messageId - 更新消息翻译信息
-MessageTranslatesRoutes.patch(
+MessageTranslationRoutes.patch(
   '/:messageId',
   requireAuth,
   requireAnyPermission(
@@ -69,13 +69,13 @@ MessageTranslatesRoutes.patch(
   zValidator('param', MessageTranslateQueryRequestSchema),
   zValidator('json', MessageTranslateInfoUpdateSchema),
   (c) => {
-    const controller = new MessageTranslateController();
+    const controller = new MessageTranslationController();
     return controller.handleUpdateTranslateInfo(c);
   },
 );
 
 // DELETE /api/v1/message-translates/:messageId - 删除消息翻译信息
-MessageTranslatesRoutes.delete(
+MessageTranslationRoutes.delete(
   '/:messageId',
   requireAuth,
   requireAnyPermission(
@@ -84,9 +84,9 @@ MessageTranslatesRoutes.delete(
   ),
   zValidator('param', MessageTranslateQueryRequestSchema),
   (c) => {
-    const controller = new MessageTranslateController();
+    const controller = new MessageTranslationController();
     return controller.handleDeleteTranslate(c);
   },
 );
 
-export default MessageTranslatesRoutes;
+export default MessageTranslationRoutes;

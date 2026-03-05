@@ -1,15 +1,15 @@
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
-import type { LobeAgentChatConfig, LobeAgentConfig } from '@lobechat/types';
+import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import { DEFAULT_AGENT_CHAT_CONFIG } from '@/const/settings';
+import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
+import { UserModel } from '@/database/models/user';
 import { agents, agentsToSessions, aiModels } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
 
 import { BaseService } from '../common/base.service';
-import { NO_THINKING_CHAT_OPTIONS } from '../constant/chat';
 import type { ServiceResult } from '../types';
 import type {
   ChatServiceConfig,
@@ -34,6 +34,76 @@ export class ChatService extends BaseService {
       timeout: 30_000,
       ...config,
     };
+  }
+
+  /**
+   * 从错误对象中提取最可读的错误信息
+   */
+  private extractErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) return error.message;
+
+    if (typeof error === 'object' && error !== null) {
+      const raw = error as Record<string, unknown>;
+
+      if (typeof raw.message === 'string') return raw.message;
+
+      const nestedError = raw.error;
+      if (typeof nestedError === 'object' && nestedError !== null) {
+        const nested = nestedError as Record<string, unknown>;
+        if (typeof nested.message === 'string') return nested.message;
+      }
+
+      try {
+        return JSON.stringify(raw);
+      } catch {
+        return String(raw);
+      }
+    }
+
+    return String(error);
+  }
+
+  /**
+   * 判断是否是「必须开启 reasoning」的模型错误
+   */
+  private isReasoningMandatoryError(error: unknown): boolean {
+    const message = this.extractErrorMessage(error).toLowerCase();
+
+    return (
+      message.includes('reasoning is mandatory') ||
+      message.includes('cannot be disabled') ||
+      message.includes('必须开启') ||
+      message.includes('必须启用')
+    );
+  }
+
+  /**
+   * 获取系统设置中的翻译模型配置（含默认值兜底）
+   */
+  private async getSystemTranslationModelConfig(): Promise<{ model: string; provider: string }> {
+    const defaults = DEFAULT_SYSTEM_AGENT_CONFIG.translation;
+    if (!this.userId) {
+      return { model: defaults.model, provider: defaults.provider };
+    }
+
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const userSettings = await userModel.getUserSettings();
+      const systemAgent = userSettings?.systemAgent as Partial<UserSystemAgentConfig> | undefined;
+      const translationConfig = systemAgent?.translation;
+
+      return {
+        model: translationConfig?.model || defaults.model,
+        provider: translationConfig?.provider || defaults.provider,
+      };
+    } catch (error) {
+      this.log('warn', '读取系统翻译模型配置失败，使用默认配置', {
+        error: this.extractErrorMessage(error),
+        userId: this.userId,
+      });
+
+      return { model: defaults.model, provider: defaults.provider };
+    }
   }
 
   /**
@@ -329,7 +399,7 @@ export class ChatService extends BaseService {
         model,
         provider,
       });
-      throw this.createCommonError('聊天对话失败');
+      throw this.createCommonError(`聊天对话失败: ${this.extractErrorMessage(error)}`);
     }
   }
 
@@ -339,28 +409,44 @@ export class ChatService extends BaseService {
    * @returns 翻译结果
    */
   async translate(request: TranslateServiceParams): ServiceResult<string> {
-    // 权限检查
-    const permissionModel = await this.resolveOperationPermission('AI_MODEL_INVOKE', {
-      targetModelId: request.model,
-    });
-    if (!permissionModel.isPermitted) {
-      throw this.createAuthorizationError(permissionModel.message || '无权限操作');
-    }
+    const systemTranslationConfig = await this.getSystemTranslationModelConfig();
 
-    // 获取最终使用的模型配置
+    // 获取最终使用的模型配置（优先级：请求参数 > 系统设置翻译模型 > session 配置 > 默认配置）
     const modelConfig = await this.resolveModelConfig({
-      model: request.model,
-      provider: request.provider,
+      model: request.model || systemTranslationConfig.model,
+      provider: request.provider || systemTranslationConfig.provider,
       sessionId: request.sessionId,
     });
 
-    const finalProvider = modelConfig.provider || this.config.defaultProvider!;
-    const finalModel = modelConfig.model || this.config.defaultModel!;
+    const finalProvider =
+      modelConfig.provider || systemTranslationConfig.provider || this.config.defaultProvider!;
+    const finalModel =
+      modelConfig.model || systemTranslationConfig.model || this.config.defaultModel!;
+
+    // 权限检查（基于最终使用的模型）
+    const modelScopedPermission = await this.resolveOperationPermission('AI_MODEL_INVOKE', {
+      targetModelId: finalModel,
+    });
+
+    if (!modelScopedPermission.isPermitted) {
+      const fallbackPermission = await this.resolveOperationPermission('AI_MODEL_INVOKE');
+      if (!fallbackPermission.isPermitted) {
+        throw this.createAuthorizationError(modelScopedPermission.message || '无权限操作');
+      }
+
+      this.log('warn', '模型级权限校验失败，已回退到通用模型调用权限校验', {
+        model: finalModel,
+        provider: finalProvider,
+        userId: this.userId,
+      });
+    }
 
     this.log('info', '开始翻译文本', {
       ...request,
       model: finalModel,
       provider: finalProvider,
+      systemTranslationModel: systemTranslationConfig.model,
+      systemTranslationProvider: systemTranslationConfig.provider,
       userId: this.userId,
     });
 
@@ -382,20 +468,17 @@ export class ChatService extends BaseService {
         { content: request.text, role: 'user' as const },
       ];
 
-      // 调用聊天服务进行翻译
-      const response = await this.chat(
-        {
-          frequency_penalty: 0,
-          messages,
-          model: finalModel,
-          presence_penalty: 0,
-          provider: finalProvider,
-          stream: false,
-          temperature: 0.3, // 较低的温度以确保翻译的一致性
-        },
-        // 翻译不使用思考
-        NO_THINKING_CHAT_OPTIONS,
-      );
+      const chatParams: ChatServiceParams = {
+        frequency_penalty: 0,
+        messages,
+        model: finalModel,
+        presence_penalty: 0,
+        provider: finalProvider,
+        stream: false,
+        temperature: 0.3, // 较低的温度以确保翻译的一致性
+      };
+
+      const response = await this.chat(chatParams);
 
       this.log('info', '翻译文本完成', {
         model: finalModel,
@@ -405,12 +488,7 @@ export class ChatService extends BaseService {
 
       return response.content;
     } catch (error) {
-      this.log('error', '翻译文本失败', {
-        error: error instanceof Error ? error.message : String(error),
-        model: finalModel,
-        provider: finalProvider,
-      });
-      throw this.createCommonError('翻译失败');
+      this.handleServiceError(error, '翻译文本');
     }
   }
 

@@ -18,7 +18,7 @@ import {
 // Topic 相关路由
 const TopicsRoutes = new Hono();
 
-// GET /api/v1/topics - 获取话题列表（支持分页和会话过滤）
+// GET /api/v1/topics - 获取话题列表（支持分页和 agent/group 过滤）
 TopicsRoutes.get(
   '/',
   requireAuth,

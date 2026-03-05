@@ -53,7 +53,7 @@ import type {
   KnowledgeBaseFileOperationResult,
   MoveKnowledgeBaseFilesRequest,
   MoveKnowledgeBaseFilesResponse,
-} from '../types/knowledgeBase.type';
+} from '../types/knowledge-base.type';
 
 /**
  * 文件上传服务类
@@ -1392,19 +1392,17 @@ export class FileUploadService extends BaseService {
       const userIds = [...new Set(dedupedFiles.map((file) => file.userId))];
 
       [fileKnowledgeBases, usersData] = await Promise.all([
-        this.db.query.knowledgeBaseFiles.findMany({
-          where: inArray(knowledgeBaseFiles.fileId, fileIds),
-          with: {
-            knowledgeBase: {
-              columns: {
-                avatar: true,
-                description: true,
-                id: true,
-                name: true,
-              },
-            },
-          },
-        }),
+        this.db
+          .select({
+            fileId: knowledgeBaseFiles.fileId,
+            knowledgeBaseAvatar: knowledgeBases.avatar,
+            knowledgeBaseDescription: knowledgeBases.description,
+            knowledgeBaseId: knowledgeBases.id,
+            knowledgeBaseName: knowledgeBases.name,
+          })
+          .from(knowledgeBaseFiles)
+          .innerJoin(knowledgeBases, eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBases.id))
+          .where(inArray(knowledgeBaseFiles.fileId, fileIds)),
         userIds.length > 0
           ? this.db.query.users.findMany({
               columns: {
@@ -1435,7 +1433,14 @@ export class FileUploadService extends BaseService {
 
         // 获取知识库信息
         const knowledgeBases = needsManualRelationFetch
-          ? fileKnowledgeBases.filter((kb) => kb.fileId === file.id).map((kb) => kb.knowledgeBase)
+          ? fileKnowledgeBases
+              .filter((kb) => kb.fileId === file.id)
+              .map((kb) => ({
+                avatar: kb.knowledgeBaseAvatar,
+                description: kb.knowledgeBaseDescription,
+                id: kb.knowledgeBaseId,
+                name: kb.knowledgeBaseName,
+              }))
           : file.knowledgeBases?.map((kb) => kb.knowledgeBase) || [];
 
         // 获取用户信息

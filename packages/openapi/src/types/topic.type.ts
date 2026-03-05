@@ -1,10 +1,10 @@
+import type { ChatTopicMetadata } from '@lobechat/types';
 import { z } from 'zod';
 
-import { ChatTopicMetadata } from '@lobechat/types';
+import type { TopicItem, UserItem } from '@/database/schemas';
 
-import { TopicItem, UserItem } from '@/database/schemas';
-
-import { IPaginationQuery, PaginationQueryResponse, PaginationQuerySchema } from './common.type';
+import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
+import { PaginationQuerySchema } from './common.type';
 
 // ==================== Topic Query Types ====================
 
@@ -13,7 +13,6 @@ export interface TopicListQuery extends IPaginationQuery {
   excludeTriggers?: string[];
   groupId?: string | null;
   isInbox?: boolean;
-  sessionId?: string | null;
 }
 
 export const TopicListQuerySchema = z
@@ -25,7 +24,6 @@ export const TopicListQuerySchema = z
       .string()
       .optional()
       .transform((v) => v === 'true'),
-    sessionId: z.string().nullish(),
   })
   .extend(PaginationQuerySchema.shape);
 
@@ -36,7 +34,6 @@ export interface TopicCreateRequest {
   clientId?: string;
   favorite?: boolean;
   groupId?: string | null;
-  sessionId?: string | null;
   title: string;
 }
 
@@ -45,7 +42,6 @@ export const TopicCreateRequestSchema = z.object({
   clientId: z.string().optional(),
   favorite: z.boolean().optional(),
   groupId: z.string().nullish(),
-  sessionId: z.string().nullish(),
   title: z.string().min(1, '标题不能为空'),
 });
 
@@ -53,7 +49,6 @@ export interface TopicUpdateRequest {
   favorite?: boolean;
   historySummary?: string;
   metadata?: ChatTopicMetadata;
-  sessionId?: string;
   title?: string;
 }
 
@@ -67,7 +62,6 @@ export const TopicUpdateRequestSchema = z.object({
       workingDirectory: z.string().optional(),
     })
     .optional(),
-  sessionId: z.string().optional(),
   title: z.string().min(1, '标题不能为空').optional(),
 });
 

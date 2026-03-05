@@ -1,12 +1,12 @@
 import { eq } from 'drizzle-orm';
 
-import { messageTranslates, messages } from '@/database/schemas';
-import { LobeChatDatabase } from '@/database/type';
+import { messages, messageTranslates } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 
 import { BaseService } from '../common/base.service';
 import { removeSystemContext } from '../helpers/translate';
-import { ServiceResult } from '../types';
-import {
+import type { ServiceResult } from '../types';
+import type {
   MessageTranslateInfoUpdate,
   MessageTranslateResponse,
   MessageTranslateTriggerRequest,
@@ -96,7 +96,7 @@ export class MessageTranslateService extends BaseService {
         from: translateData.from,
         messageId: translateData.messageId,
         to: translateData.to,
-        translatedContent,
+        content: translatedContent,
       });
     } catch (error) {
       this.handleServiceError(error, '翻译消息');
@@ -126,7 +126,7 @@ export class MessageTranslateService extends BaseService {
       await this.db
         .insert(messageTranslates)
         .values({
-          content: data.translatedContent,
+          content: data.content,
           from: data.from,
           id: data.messageId,
           to: data.to,
@@ -134,7 +134,7 @@ export class MessageTranslateService extends BaseService {
         })
         .onConflictDoUpdate({
           set: {
-            content: data.translatedContent,
+            content: data.content,
             from: data.from,
             to: data.to,
           },
@@ -144,7 +144,7 @@ export class MessageTranslateService extends BaseService {
       this.log('info', '更新翻译信息完成', { messageId: data.messageId });
 
       return {
-        content: data.translatedContent,
+        content: data.content,
         from: data.from,
         id: data.messageId,
         to: data.to,

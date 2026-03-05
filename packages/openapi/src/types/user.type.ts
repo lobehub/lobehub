@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { RoleItem, UserItem, UserRoleItem } from '@/database/schemas';
+import type { RoleItem, UserItem, UserRoleItem } from '@/database/schemas';
 
-import { IPaginationQuery, PaginationQueryResponse } from './common.type';
+import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 
 // ==================== User Base Types ====================
 

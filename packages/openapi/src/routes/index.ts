@@ -1,27 +1,27 @@
-import AgentGroupRoutes from './agent-groups.route';
-import AgentRoutes from './agents.route';
+import AgentGroupsRoutes from './agent-groups.route';
+import AgentsRoutes from './agents.route';
 import FileRoutes from './files.route';
-import KnowledgeBaseRoutes from './knowledgeBases.route';
-import MessageRoutes from './message.route';
+import KnowledgeBasesRoutes from './knowledge-bases.route';
 import MessageTranslationsRoutes from './message-translations.route';
-import ModelRoutes from './models.route';
+import MessagesRoutes from './messages.route';
+import ModelsRoutes from './models.route';
 import PermissionsRoutes from './permissions.route';
-import ProviderRoutes from './providers.route';
+import ProvidersRoutes from './providers.route';
 import RolesRoutes from './roles.route';
 import TopicsRoutes from './topics.route';
-import UserRoutes from './users.route';
+import UsersRoutes from './users.route';
 
 export default {
-  'agent-groups': AgentGroupRoutes,
-  'agents': AgentRoutes,
+  'agent-groups': AgentGroupsRoutes,
+  'agents': AgentsRoutes,
   'files': FileRoutes,
-  'knowledge-bases': KnowledgeBaseRoutes,
+  'knowledge-bases': KnowledgeBasesRoutes,
   'message-translations': MessageTranslationsRoutes,
-  'messages': MessageRoutes,
-  'models': ModelRoutes,
+  'messages': MessagesRoutes,
+  'models': ModelsRoutes,
   'permissions': PermissionsRoutes,
-  'providers': ProviderRoutes,
+  'providers': ProvidersRoutes,
   'roles': RolesRoutes,
   'topics': TopicsRoutes,
-  'users': UserRoutes,
+  'users': UsersRoutes,
 };

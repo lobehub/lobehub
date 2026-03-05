@@ -1,12 +1,12 @@
 import { and, asc, count, eq, ilike, or } from 'drizzle-orm';
 
 import { aiModels } from '@/database/schemas';
-import { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
-import { ServiceResult } from '../types';
-import {
+import type { ServiceResult } from '../types';
+import type {
   CreateModelRequest,
   GetModelsResponse,
   ModelDetailResponse,

@@ -54,7 +54,6 @@ export const CountByUserRequestSchema = z.object({
  */
 export interface MessagesListQuery extends IPaginationQuery {
   role?: 'user' | 'system' | 'assistant' | 'tool';
-  sessionId?: string;
   topicId?: string;
   userId?: string;
 }
@@ -63,13 +62,12 @@ export const MessagesListQuerySchema = z
   .object({
     // 过滤参数
     topicId: z.string().nullish(),
-    sessionId: z.string().nullish(),
     userId: z.string().nullish(),
     role: z.enum(['user', 'system', 'assistant', 'tool']).nullish(),
   })
   .extend(PaginationQuerySchema.shape)
-  .refine((data) => Boolean(data.topicId || data.sessionId || data.userId), {
-    message: '至少需要提供一个过滤参数：topicId、sessionId 或 userId',
+  .refine((data) => Boolean(data.topicId || data.userId), {
+    message: '至少需要提供一个过滤参数：topicId 或 userId',
   });
 
 // ==================== Message Search Types ====================
@@ -78,14 +76,12 @@ export interface SearchMessagesByKeywordRequest {
   keyword: string;
   limit?: number;
   offset?: number;
-  sessionId?: string;
 }
 
 export const SearchMessagesByKeywordRequestSchema = z.object({
   keyword: z.string().min(1, '搜索关键词不能为空'),
   limit: z.number().min(1).max(100).nullish().default(20),
   offset: z.number().min(0).nullish().default(0),
-  sessionId: z.string().min(1, '会话ID不能为空'),
 });
 
 // ==================== Message CRUD Types ====================
@@ -116,9 +112,6 @@ export interface MessagesCreateRequest {
   reasoning?: any;
   role: 'user' | 'system' | 'assistant' | 'tool';
   search?: any;
-  // 会话关联
-  sessionId: string;
-
   threadId?: string | null;
   tools?: any;
 
@@ -136,8 +129,6 @@ export const MessagesCreateRequestSchema = z.object({
   model: z.string().nullish(), // 使用的模型
   provider: z.string().nullish(), // 提供商
 
-  // 会话关联
-  sessionId: z.string().min(1, '会话ID不能为空'),
   topicId: z.string().nullable().nullish(),
   threadId: z.string().nullable().nullish(),
 

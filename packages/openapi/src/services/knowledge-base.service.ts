@@ -17,7 +17,7 @@ import type {
   KnowledgeBaseListQuery,
   KnowledgeBaseListResponse,
   UpdateKnowledgeBaseRequest,
-} from '../types/knowledgeBase.type';
+} from '../types/knowledge-base.type';
 
 /**
  * 知识库服务类

@@ -1,8 +1,8 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { AgentService } from '../services/agent.service';
-import {
+import type {
   AgentDeleteRequest,
   CreateAgentRequest,
   GetAgentsRequest,

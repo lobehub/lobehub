@@ -1,9 +1,9 @@
-import { LobeAgentChatConfig } from '@lobechat/types';
+import type { LobeAgentChatConfig } from '@lobechat/types';
 import { z } from 'zod';
 
-import { AgentItem } from '@/database/schemas';
+import type { AgentItem } from '@/database/schemas';
 
-import { IPaginationQuery, PaginationQueryResponse } from './common.type';
+import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 
 // ==================== Agent CRUD Types ====================
 

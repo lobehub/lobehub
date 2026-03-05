@@ -3,7 +3,7 @@ export * from './agent-group.controller';
 export * from './chat.controller';
 export * from './file.controller';
 export * from './message.controller';
-export * from './message-translations.controller';
+export * from './message-translation.controller';
 export * from './model.controller';
 export * from './permission.controller';
 export * from './provider.controller';

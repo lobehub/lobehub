@@ -1,4 +1,4 @@
-import { IPaginationQuery } from '../types';
+import type { IPaginationQuery } from '../types';
 
 const DEFAULT_PAGE_SIZE = 20;
 

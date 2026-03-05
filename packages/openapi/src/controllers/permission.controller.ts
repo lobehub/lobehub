@@ -1,8 +1,8 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { PermissionService } from '../services/permission.service';
-import {
+import type {
   CreatePermissionRequest,
   PermissionsListQuery,
   UpdatePermissionRequest,

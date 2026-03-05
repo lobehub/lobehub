@@ -48,11 +48,11 @@ export type MessageTranslateTriggerRequest = MessageTranslateQueryRequest & Mess
  * 更新翻译信息请求参数
  */
 export type MessageTranslateInfoUpdate = MessageTranslateTriggerRequest & {
-  translatedContent?: string;
+  content?: string;
 };
 
 export const MessageTranslateInfoUpdateSchema = MessageTranslateTriggerRequestSchema.extend({
-  translatedContent: z.string().optional(),
+  content: z.string().optional(),
 });
 
 // ==================== Message Translation Response Types ====================

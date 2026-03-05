@@ -1,14 +1,14 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { TopicService } from '../services/topic.service';
-import { TopicCreateRequest, TopicListQuery, TopicUpdateRequest } from '../types/topic.type';
+import type { TopicCreateRequest, TopicListQuery, TopicUpdateRequest } from '../types/topic.type';
 
 export class TopicController extends BaseController {
   /**
-   * 统一获取话题列表 (支持会话过滤)
-   * GET /api/v1/topics?sessionId=xxx&keyword=xxx
-   * Query: { sessionId?: string, keyword?: string }
+   * 统一获取话题列表
+   * GET /api/v1/topics?keyword=xxx
+   * Query: { keyword?: string, agentId?: string, groupId?: string, isInbox?: boolean }
    */
   async handleGetTopics(c: Context) {
     try {
@@ -49,7 +49,7 @@ export class TopicController extends BaseController {
   /**
    * 创建新的话题
    * POST /api/v1/topics
-   * Body: { sessionId?: string, agentId?: string, groupId?: string, title: string, favorite?: boolean, clientId?: string }
+   * Body: { agentId?: string, groupId?: string, title: string, favorite?: boolean, clientId?: string }
    */
   async handleCreateTopic(c: Context) {
     try {
@@ -69,7 +69,7 @@ export class TopicController extends BaseController {
   /**
    * 更新话题
    * PATCH /api/v1/topics/:id
-   * Body: { title?: string, favorite?: boolean, historySummary?: string, metadata?: object, sessionId?: string }
+   * Body: { title?: string, favorite?: boolean, historySummary?: string, metadata?: object }
    */
   async handleUpdateTopic(c: Context) {
     try {
@@ -95,7 +95,7 @@ export class TopicController extends BaseController {
   async handleDeleteTopic(c: Context) {
     try {
       const userId = this.getUserId(c)!;
-      const topicId = c.req.param('id');
+      const { id: topicId } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
       const topicService = new TopicService(db, userId);

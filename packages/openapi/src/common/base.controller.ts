@@ -1,13 +1,13 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
 import { RBAC_PERMISSIONS } from '@/const/rbac';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { RbacModel } from '@/database/models/rbac';
-import { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 
 import { parseFormData } from '../helpers/file';
-import { ApiResponse } from '../types';
+import type { ApiResponse } from '../types';
 
 /**
  * Base Controller Class

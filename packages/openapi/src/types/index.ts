@@ -59,7 +59,7 @@ export * from './agent-group.type';
 export * from './chat.type';
 export * from './common.type';
 export * from './file.type';
-export * from './knowledgeBase.type';
+export * from './knowledge-base.type';
 export * from './message.type';
 export * from './message-translations.type';
 export * from './model.type';

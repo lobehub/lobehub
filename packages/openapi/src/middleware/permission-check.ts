@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { Context, Next } from 'hono';
+import type { Context, Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
 import { getServerDB } from '@/database/core/db-adaptor';

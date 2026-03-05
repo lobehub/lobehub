@@ -1,8 +1,8 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { ChatService } from '../services/chat.service';
-import {
+import type {
   ChatServiceParams,
   MessageGenerationParams,
   TranslateServiceParams,

@@ -1,16 +1,16 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { FileUploadService } from '../services/file.service';
-import { KnowledgeBaseService } from '../services/knowledgeBase.service';
-import {
+import { KnowledgeBaseService } from '../services/knowledge-base.service';
+import type {
   CreateKnowledgeBaseRequest,
   KnowledgeBaseFileBatchRequest,
   KnowledgeBaseFileListQuery,
   KnowledgeBaseListQuery,
   MoveKnowledgeBaseFilesRequest,
   UpdateKnowledgeBaseRequest,
-} from '../types/knowledgeBase.type';
+} from '../types/knowledge-base.type';
 
 /**
  * 知识库控制器

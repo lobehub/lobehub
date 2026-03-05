@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
-import { KnowledgeBaseController } from '../controllers/knowledgeBase.controller';
+import { KnowledgeBaseController } from '../controllers/knowledge-base.controller';
 import { requireAnyPermission } from '../middleware';
 import { requireAuth } from '../middleware/auth';
 import {
@@ -14,7 +14,7 @@ import {
   KnowledgeBaseListQuerySchema,
   MoveKnowledgeBaseFilesSchema,
   UpdateKnowledgeBaseSchema,
-} from '../types/knowledgeBase.type';
+} from '../types/knowledge-base.type';
 
 const app = new Hono();
 

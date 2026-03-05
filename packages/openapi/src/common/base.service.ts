@@ -419,7 +419,7 @@ export abstract class BaseService implements IBaseService {
     }
 
     // 获取所有资源的用户 ID
-    let userIds: string[] = [];
+    let userIds: string[];
     try {
       // 根据 targetInfoIds 中的属性自动判断资源类型
       switch (true) {

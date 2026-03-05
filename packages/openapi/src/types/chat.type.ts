@@ -57,7 +57,7 @@ export interface ChatServiceResponse {
  * 翻译服务参数
  */
 export interface TranslateServiceParams {
-  from: string;
+  from?: string;
   model?: string;
   provider?: string;
   sessionId?: string | null;
@@ -66,7 +66,7 @@ export interface TranslateServiceParams {
 }
 
 export const TranslateServiceParamsSchema = z.object({
-  from: z.string().min(1, '源语言不能为空'),
+  from: z.string().min(1, '源语言不能为空').optional(),
   model: z.string().nullish(),
   provider: z.string().nullish(),
   text: z.string().min(1, '待翻译文本不能为空'),

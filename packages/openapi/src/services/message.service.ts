@@ -1,14 +1,14 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
 import { messages, messagesFiles } from '@/database/schemas';
-import { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
-import { ServiceResult } from '../types';
-import {
+import type { ServiceResult } from '../types';
+import type {
   MessageListResponse,
   MessageResponse,
   MessageResponseFromDatabase,
@@ -188,22 +188,16 @@ export class MessageService extends BaseService {
 
     try {
       // 权限校验，判断session的归属以及用户有没有消息的读取权限
-      const permissionResult = await this.resolveOperationPermission(
-        'MESSAGE_READ',
-        searchRequest.sessionId ? { targetSessionId: searchRequest.sessionId } : undefined,
-      );
+      const permissionResult = await this.resolveOperationPermission('MESSAGE_READ');
 
       if (!permissionResult.isPermitted) {
         throw this.createAuthorizationError(permissionResult.message || '无权搜索消息');
       }
 
-      const { keyword, limit = 20, offset = 0, sessionId } = searchRequest;
+      const { keyword, limit = 20, offset = 0 } = searchRequest;
 
       // 构建查询条件
       const conditions = [eq(messages.userId, this.userId!)];
-      if (sessionId) {
-        conditions.push(eq(messages.sessionId, sessionId));
-      }
 
       const contentMatchedMessages = await this.db
         .select({ id: messages.id })
@@ -217,8 +211,8 @@ export class MessageService extends BaseService {
 
       // 使用 with 关联查询获取完整的消息信息
       const result = (await this.db.query.messages.findMany({
-        limit: limit,
-        offset: offset,
+        limit,
+        offset,
         orderBy: desc(messages.createdAt),
         where: inArray(
           messages.id,
@@ -256,25 +250,12 @@ export class MessageService extends BaseService {
     this.log('info', '获取消息列表', { request, userId: this.userId });
 
     try {
-      if (!request.sessionId && !request.userId && !request.topicId) {
-        throw this.createValidationError('获取消息列表时必须提供 sessionId、userId 或 topicId');
+      if (!request.userId && !request.topicId) {
+        throw this.createValidationError('获取消息列表时必须提供 userId 或 topicId');
       }
 
       // 构建查询条件
       const conditions = [];
-
-      // 校验 session 的归属以及用户有没有消息的读取权限
-      if (request.sessionId) {
-        const permissionResult = await this.resolveOperationPermission('MESSAGE_READ', {
-          targetSessionId: request.sessionId,
-        });
-
-        if (!permissionResult.isPermitted) {
-          throw this.createAuthorizationError(permissionResult.message || '无权访问消息列表');
-        }
-
-        conditions.push(eq(messages.sessionId, request.sessionId));
-      }
 
       // 校验 user 的归属以及用户有没有消息的读取权限
       if (request.userId) {
@@ -317,8 +298,8 @@ export class MessageService extends BaseService {
 
       // 创建查询语句
       const listQuery = this.db.query.messages.findMany({
-        limit: limit,
-        offset: offset,
+        limit,
+        offset,
         orderBy: asc(messages.createdAt),
         where: whereExpr,
         with: {
@@ -413,19 +394,19 @@ export class MessageService extends BaseService {
   async createMessage(messageData: MessagesCreateRequest): ServiceResult<MessageResponse> {
     this.log('info', '创建新消息', {
       role: messageData.role,
-      sessionId: messageData.sessionId,
       topicId: messageData.topicId,
       userId: this.userId,
     });
 
     try {
       // 权限校验
-      const permissionSession = await this.resolveOperationPermission('MESSAGE_CREATE', {
-        targetSessionId: messageData.sessionId!,
-      });
+      const permissionResult = await this.resolveOperationPermission(
+        'MESSAGE_CREATE',
+        messageData.topicId ? { targetTopicId: messageData.topicId } : undefined,
+      );
 
-      if (!permissionSession.isPermitted) {
-        throw this.createAuthorizationError(permissionSession.message || '无权创建消息');
+      if (!permissionResult.isPermitted) {
+        throw this.createAuthorizationError(permissionResult.message || '无权创建消息');
       }
 
       const [newMessage] = await this.db
@@ -445,7 +426,7 @@ export class MessageService extends BaseService {
           reasoning: messageData.reasoning,
           role: messageData.role,
           search: messageData.search,
-          sessionId: messageData.sessionId,
+          sessionId: null,
           threadId: messageData.threadId,
           tools: messageData.tools,
           topicId: messageData.topicId,
@@ -512,18 +493,18 @@ export class MessageService extends BaseService {
   ): ServiceResult<MessageResponse | null | undefined> {
     this.log('info', '创建消息并生成AI回复', {
       role: messageData.role,
-      sessionId: messageData.sessionId,
       topicId: messageData.topicId,
       userId: this.userId,
     });
 
     try {
       // 权限校验
-      const permissionSession = await this.resolveOperationPermission('MESSAGE_CREATE', {
-        targetSessionId: messageData.sessionId!,
-      });
-      if (!permissionSession.isPermitted) {
-        throw this.createAuthorizationError(permissionSession.message || '无权创建消息');
+      const permissionResult = await this.resolveOperationPermission(
+        'MESSAGE_CREATE',
+        messageData.topicId ? { targetTopicId: messageData.topicId } : undefined,
+      );
+      if (!permissionResult.isPermitted) {
+        throw this.createAuthorizationError(permissionResult.message || '无权创建消息');
       }
 
       // 1. 创建用户消息
@@ -533,10 +514,7 @@ export class MessageService extends BaseService {
       if (messageData.role === 'user') {
         this.log('info', '开始获取对话历史');
         // 获取对话历史
-        const conversationHistory = await this.getConversationHistory(
-          messageData.sessionId || null,
-          messageData.topicId,
-        );
+        const conversationHistory = await this.getConversationHistory(messageData.topicId);
         this.log('info', '对话历史获取完成', { historyLength: conversationHistory.length });
 
         // 使用ChatService生成回复
@@ -554,7 +532,7 @@ export class MessageService extends BaseService {
             conversationHistory,
             model: messageData.model,
             provider: messageData.provider,
-            sessionId: messageData.sessionId!,
+            sessionId: null,
             userMessage: messageData.content,
           });
           this.log('info', 'AI回复生成完成', { replyLength: aiReplyContent.length });
@@ -571,7 +549,6 @@ export class MessageService extends BaseService {
           model: messageData.model,
           provider: messageData.provider,
           role: 'assistant',
-          sessionId: messageData.sessionId,
           topicId: messageData.topicId,
         };
 
@@ -596,13 +573,11 @@ export class MessageService extends BaseService {
 
   /**
    * 获取对话历史
-   * @param sessionId 会话ID
    * @param topicId 话题ID
    * @param limit 消息数量限制
    * @returns 对话历史
    */
   private async getConversationHistory(
-    sessionId: string | null,
     topicId: string | null,
     limit: number = 10,
   ): Promise<Array<{ content: string; role: 'user' | 'assistant' | 'system' }>> {
@@ -612,10 +587,9 @@ export class MessageService extends BaseService {
           content: true,
           role: true,
         },
-        limit: limit,
+        limit,
         orderBy: desc(messages.createdAt),
         where: and(
-          sessionId === null ? isNull(messages.sessionId) : eq(messages.sessionId, sessionId),
           topicId === null ? isNull(messages.topicId) : eq(messages.topicId, topicId),
           eq(messages.userId, this.userId!),
         ),
@@ -632,7 +606,6 @@ export class MessageService extends BaseService {
     } catch (error) {
       this.log('error', '获取对话历史失败', {
         error: error instanceof Error ? error.message : String(error),
-        sessionId,
         topicId,
       });
       return [];

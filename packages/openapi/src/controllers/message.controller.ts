@@ -1,8 +1,8 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { MessageService } from '../services/message.service';
-import {
+import type {
   MessagesCountQuery,
   MessagesCreateRequest,
   MessagesDeleteBatchRequest,
@@ -39,7 +39,7 @@ export class MessageController extends BaseController {
   /**
    * 统一的消息列表查询接口 (RESTful API 优化后)
    * GET /api/v1/messages
-   * Query: { page?, limit?, topicId?, sessionId?, userId?, role?, query?, sort?, order? }
+   * Query: { page?, limit?, topicId?, userId?, role?, query?, sort?, order? }
    */
   async handleGetMessages(c: Context) {
     try {
@@ -83,7 +83,7 @@ export class MessageController extends BaseController {
   /**
    * 创建新消息
    * POST /api/v1/messages
-   * Body: { content: string, role: 'user'|'assistant'|'system'|'tool', sessionId?: string, topicId?: string, model?: string, provider?: string, files?: string[] }
+   * Body: { content: string, role: 'user'|'assistant'|'system'|'tool', topicId?: string, model?: string, provider?: string, files?: string[] }
    */
   async handleCreateMessage(c: Context) {
     try {
@@ -103,7 +103,7 @@ export class MessageController extends BaseController {
   /**
    * 创建用户消息并生成AI回复
    * POST /api/v1/messages/replies
-   * Body: { content: string, role: 'user', sessionId?: string, topicId?: string, model?: string, provider?: string, files?: string[] }
+   * Body: { content: string, role: 'user', topicId?: string, model?: string, provider?: string, files?: string[] }
    */
   async handleCreateMessageWithAIReply(c: Context) {
     try {

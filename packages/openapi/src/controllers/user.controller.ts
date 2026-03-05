@@ -1,8 +1,8 @@
-import { Context } from 'hono';
+import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { UserService } from '../services';
-import {
+import type {
   CreateUserRequest,
   UpdateUserRequest,
   UpdateUserRolesRequest,
