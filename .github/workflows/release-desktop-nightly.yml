@@ -367,13 +367,15 @@ jobs:
   # 清理旧的 Nightly Releases (保留最近 7 个)
   # ============================================
   cleanup-old-nightlies:
-    needs: [publish-release]
+    needs: [publish-release, publish-s3]
     name: Cleanup Old Nightly Releases
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Delete old nightly releases
+      - uses: actions/checkout@v6
+
+      - name: Delete old nightly GitHub releases
         uses: actions/github-script@v7
         with:
           script: |
@@ -412,3 +414,14 @@ jobs:
             }
 
             console.log(`✅ Cleanup complete. Kept ${Math.min(nightlyReleases.length, 7)} nightly releases, deleted ${toDelete.length}.`);
+
+      - name: Cleanup old S3 versions
+        uses: ./.github/actions/desktop-cleanup-s3
+        with:
+          channel: nightly
+          keep-count: '15'
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}

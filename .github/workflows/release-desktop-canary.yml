@@ -369,13 +369,15 @@ jobs:
   # 清理旧的 Canary Releases (保留最近 7 个)
   # ============================================
   cleanup-old-canaries:
-    needs: [publish-release]
+    needs: [publish-release, publish-s3]
     name: Cleanup Old Canary Releases
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Delete old canary releases
+      - uses: actions/checkout@v6
+
+      - name: Delete old canary GitHub releases
         uses: actions/github-script@v7
         with:
           script: |
@@ -414,3 +416,14 @@ jobs:
             }
 
             console.log(`✅ Cleanup complete. Kept ${Math.min(canaryReleases.length, 7)} canary releases, deleted ${toDelete.length}.`);
+
+      - name: Cleanup old S3 versions
+        uses: ./.github/actions/desktop-cleanup-s3
+        with:
+          channel: canary
+          keep-count: '15'
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
