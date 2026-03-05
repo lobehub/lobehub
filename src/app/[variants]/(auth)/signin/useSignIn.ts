@@ -14,6 +14,8 @@ import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils
 import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
+const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
+
 type Step = 'email' | 'password';
 
 interface SignInFormValues {
@@ -40,6 +42,13 @@ export const useSignIn = () => {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [isSocialOnly, setIsSocialOnly] = useState(false);
+  const [lastAuthProvider] = useState(() => {
+    try {
+      return localStorage.getItem(LAST_AUTH_PROVIDER_KEY);
+    } catch {
+      return null;
+    }
+  });
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
   const { ssoProviders, preSocialSigninCheck, getAdditionalData } = useBusinessSignin();
@@ -194,6 +203,10 @@ export const useSignIn = () => {
         return;
       }
 
+      try {
+        localStorage.setItem(LAST_AUTH_PROVIDER_KEY, provider);
+      } catch {}
+
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
       const result = isBuiltinProvider(normalizedProvider)
@@ -243,6 +256,15 @@ export const useSignIn = () => {
     }
   };
 
+  const resolvedProviders = ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders;
+  const sortedProviders = lastAuthProvider
+    ? [...resolvedProviders].sort((a, b) => {
+        if (a === lastAuthProvider) return -1;
+        if (b === lastAuthProvider) return 1;
+        return 0;
+      })
+    : resolvedProviders;
+
   return {
     disableEmailPassword,
     email,
@@ -254,8 +276,9 @@ export const useSignIn = () => {
     handleSignIn,
     handleSocialSignIn,
     isSocialOnly,
+    lastAuthProvider,
     loading,
-    oAuthSSOProviders: ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders,
+    oAuthSSOProviders: sortedProviders,
     serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,
     socialLoading,
     step,
