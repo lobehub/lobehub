@@ -218,6 +218,7 @@ export default {
   'header.sessionDesc': 'Agent Profile and session preferences',
   'header.sessionWithName': 'Session Settings · {{name}}',
   'header.title': 'Settings',
+  'hotkey.clearBinding': 'Clear binding',
   'hotkey.conflicts': 'Conflicts with existing hotkeys',
   'hotkey.errors.CONFLICT': 'Hotkey conflict: This hotkey is already assigned to another function',
   'hotkey.errors.INVALID_FORMAT':

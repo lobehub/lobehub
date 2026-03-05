@@ -207,6 +207,7 @@
   "header.sessionDesc": "助理档案与会话偏好",
   "header.sessionWithName": "会话设置 · {{name}}",
   "header.title": "设置",
+  "hotkey.clearBinding": "取消绑定",
   "hotkey.conflicts": "与现有快捷键冲突",
   "hotkey.errors.CONFLICT": "快捷键冲突：该快捷键已被其他功能占用",
   "hotkey.errors.INVALID_FORMAT": "快捷键格式无效：请使用正确的格式（如 CommandOrControl+E）",
