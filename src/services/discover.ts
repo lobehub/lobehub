@@ -76,6 +76,8 @@ class DiscoverService {
   };
 
   getAssistantList = async (params: AssistantQueryParams = {}): Promise<AssistantListResponse> => {
+    await this.injectMPToken();
+
     const locale = globalHelpers.getCurrentLanguage();
     return lambdaClient.market.getAssistantList.query(
       {
@@ -126,6 +128,8 @@ class DiscoverService {
   };
 
   getMcpList = async (params: McpQueryParams = {}): Promise<McpListResponse> => {
+    await this.injectMPToken();
+
     const locale = globalHelpers.getCurrentLanguage();
     return lambdaClient.market.getMcpList.query({
       ...params,
