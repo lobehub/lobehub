@@ -45,7 +45,7 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - './postgres_data:/var/lib/postgresql/data'
+      - './data:/var/lib/postgresql/data'
     environment:
       - 'POSTGRES_DB=${LOBE_DB_NAME}'
       - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}'
@@ -68,7 +68,7 @@ services:
       - '6379:6379'
     command: redis-server --save 60 1000 --appendonly yes
     volumes:
-      - './redis_data:/data'
+      - 'redis_data:/data'
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -94,7 +94,7 @@ services:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
     volumes:
-      - './rustfs_data:/data'
+      - 'rustfs-data:/data'
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
       interval: 5s
@@ -135,3 +135,9 @@ services:
 networks:
   lobe-network:
     driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
+  rustfs-data:
+    driver: local
