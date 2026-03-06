@@ -4,9 +4,7 @@ import { useState } from 'react';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 
-import { DEFAULT_WIDTH, FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../const';
-import { usePanelHandlers } from '../hooks/usePanelHandlers';
-import { Footer } from './Footer';
+import { DEFAULT_WIDTH, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../const';
 import { List } from './List';
 import { Toolbar } from './Toolbar';
 
@@ -25,14 +23,9 @@ export const PanelContent: FC<PanelContentProps> = ({
 }) => {
   const enabledList = useEnabledChatModels();
   const [searchKeyword, setSearchKeyword] = useState('');
-  const { handleClose } = usePanelHandlers({
-    onModelChange: onModelChangeProp,
-    onOpenChange,
-  });
-
   const panelHeight =
     enabledList.length === 0
-      ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider'] + FOOTER_HEIGHT
+      ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider']
       : MAX_PANEL_HEIGHT;
 
   return (
@@ -54,7 +47,6 @@ export const PanelContent: FC<PanelContentProps> = ({
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}
       />
-      <Footer onClose={handleClose} />
     </Flexbox>
   );
 };
