@@ -4,7 +4,6 @@ import { type FC } from 'react';
 import { Link } from 'react-router-dom';
 
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
-import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
@@ -63,11 +62,8 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       )}
 
       <Menu items={mainItems} onClick={closePopover} />
+      <LangButton placement={'right' as any} />
       <Menu items={logoutItems} onClick={handleSignOut} />
-      <Flexbox horizontal gap={4} justify={'space-between'} style={{ padding: '6px 8px 6px 16px' }}>
-        <BrandWatermark />
-        <LangButton placement={'right' as any} />
-      </Flexbox>
     </Flexbox>
   );
 };

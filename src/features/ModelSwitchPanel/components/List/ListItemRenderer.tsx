@@ -155,9 +155,9 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 <ModelItemRender
                   {...item.model}
                   {...item.model.abilities}
-                  showInfoTag
                   newBadgeLabel={newLabel}
                   proBadgeLabel={restricted ? proLabel : undefined}
+                  showInfoTag={false}
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>

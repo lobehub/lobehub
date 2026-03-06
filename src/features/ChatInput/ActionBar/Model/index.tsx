@@ -1,27 +1,16 @@
-import { LoadingOutlined } from '@ant-design/icons';
 import { ModelIcon } from '@lobehub/icons';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Spin } from 'antd';
+import { Center } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { Settings2Icon } from 'lucide-react';
-import { memo, Suspense, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import { memo, useCallback } from 'react';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
-import ModelDetailPanel from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { useAgentId } from '../../hooks/useAgentId';
-import Action from '../components/Action';
 import { useActionBarContext } from '../context';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    border-radius: 24px;
-    background: ${cssVar.colorFillTertiary};
-  `,
   icon: cx(
     'model-switch',
     css`
@@ -42,17 +31,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
-  modelWithControl: css`
-    border-radius: 24px;
-
-    :hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
 }));
 
 const ModelSwitch = memo(() => {
-  const { t } = useTranslation('chat');
   const { dropdownPlacement } = useActionBarContext();
 
   const agentId = useAgentId();
@@ -62,10 +43,6 @@ const ModelSwitch = memo(() => {
     s.updateAgentConfigById,
   ]);
 
-  const isModelHasExtendParams = useAiInfraStore(
-    aiModelSelectors.isModelHasExtendParams(model, provider),
-  );
-
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
       await updateAgentConfigById(agentId, params);
@@ -74,53 +51,18 @@ const ModelSwitch = memo(() => {
   );
 
   return (
-    <Flexbox horizontal align={'center'} className={isModelHasExtendParams ? styles.container : ''}>
-      <ModelSwitchPanel
-        model={model}
-        placement={dropdownPlacement}
-        provider={provider}
-        onModelChange={handleModelChange}
-      >
-        <Center
-          className={cx(styles.model, isModelHasExtendParams && styles.modelWithControl)}
-          height={36}
-          width={36}
-        >
-          <div className={styles.icon}>
-            <ModelIcon model={model} size={22} />
-          </div>
-        </Center>
-      </ModelSwitchPanel>
-
-      {isModelHasExtendParams && (
-        <Action
-          icon={Settings2Icon}
-          showTooltip={false}
-          style={{ borderRadius: 24, marginInlineStart: -4 }}
-          title={t('extendParams.title')}
-          popover={{
-            content: (
-              <Suspense
-                fallback={
-                  <Flexbox
-                    align={'center'}
-                    justify={'center'}
-                    style={{ minHeight: 100, width: '100%' }}
-                  >
-                    <Spin indicator={<LoadingOutlined spin />} />
-                  </Flexbox>
-                }
-              >
-                <ModelDetailPanel model={model} provider={provider} />
-              </Suspense>
-            ),
-            maxWidth: 400,
-            minWidth: 400,
-            placement: 'topLeft',
-          }}
-        />
-      )}
-    </Flexbox>
+    <ModelSwitchPanel
+      model={model}
+      placement={dropdownPlacement}
+      provider={provider}
+      onModelChange={handleModelChange}
+    >
+      <Center className={styles.model} height={36} width={36}>
+        <div className={styles.icon}>
+          <ModelIcon model={model} size={22} />
+        </div>
+      </Center>
+    </ModelSwitchPanel>
   );
 });
 

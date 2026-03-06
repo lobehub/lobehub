@@ -29,28 +29,11 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
-import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { formatTokenNumber } from '@/utils/format';
 import { formatPriceByCurrency, getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/index';
 
-import ControlsForm from './ControlsForm';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  extraControls: css`
-    padding: 8px;
-
-    .ant-form-item:first-child {
-      padding-block: 0 4px;
-    }
-
-    .ant-form-item:last-child {
-      padding-block: 4px 0;
-    }
-
-    .ant-divider {
-      display: none;
-    }
-  `,
   actionText: css`
     font-size: 14px;
     font-weight: 500;
@@ -239,15 +222,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, prov
     return providerData?.children.find((m) => m.id === modelId);
   }, [enabledList, modelId, provider]);
 
-  const hasExtendParams = useAiInfraStore(
-    aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
-  );
-
-  const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
-    const keys: string[] = [];
-    if (hasExtendParams) keys.push('config');
-    return keys;
-  });
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
 
   const hasPricing = !!model?.pricing;
   const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;
@@ -281,7 +256,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, prov
       <Divider size="small" />
 
       {/* Sections */}
-      {(hasPricing || hasContext || hasAbilities || hasExtendParams) && (
+      {(hasPricing || hasContext || hasAbilities) && (
         <Accordion
           expandedKeys={expandedKeys}
           gap={8}
@@ -473,32 +448,6 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, prov
                   </Flexbox>
                 ))}
               </Flexbox>
-            </AccordionItem>
-          )}
-          {/* Model Config */}
-          {hasExtendParams && provider && (
-            <AccordionItem
-              itemKey="config"
-              paddingBlock={6}
-              paddingInline={8}
-              title={
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <div
-                    style={{
-                      background: '#52c41a',
-                      borderRadius: 2,
-                      flexShrink: 0,
-                      height: 14,
-                      width: 3,
-                    }}
-                  />
-                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.config')}</span>
-                </Flexbox>
-              }
-            >
-              <div className={styles.extraControls}>
-                <ControlsForm model={model.id} provider={provider} />
-              </div>
             </AccordionItem>
           )}
         </Accordion>

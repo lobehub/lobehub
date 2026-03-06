@@ -93,9 +93,6 @@ export const useMenu = () => {
         </a>
       ),
     },
-    {
-      type: 'divider',
-    },
   ];
 
   const data = !isLogin

@@ -18,7 +18,7 @@ export const SingleProviderModelItem = memo<SingleProviderModelItemProps>(
         {...data.model.abilities}
         newBadgeLabel={newLabel}
         proBadgeLabel={proBadgeLabel}
-        showInfoTag={true}
+        showInfoTag={false}
       />
     );
   },

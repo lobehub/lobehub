@@ -5,7 +5,6 @@ import { useLocation } from 'react-router-dom';
 import PageTitle from '@/components/PageTitle';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 
 import HomeContent from './features';
 

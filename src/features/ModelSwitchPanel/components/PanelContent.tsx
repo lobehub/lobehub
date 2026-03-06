@@ -1,13 +1,11 @@
+import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { useState } from 'react';
-import { Rnd } from 'react-rnd';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 
-import { ENABLE_RESIZING, MAX_WIDTH, MIN_WIDTH } from '../const';
+import { DEFAULT_WIDTH, FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../const';
 import { usePanelHandlers } from '../hooks/usePanelHandlers';
-import { usePanelSize } from '../hooks/usePanelSize';
-import { usePanelState } from '../hooks/usePanelState';
 import { Footer } from './Footer';
 import { List } from './List';
 import { Toolbar } from './Toolbar';
@@ -27,34 +25,29 @@ export const PanelContent: FC<PanelContentProps> = ({
 }) => {
   const enabledList = useEnabledChatModels();
   const [searchKeyword, setSearchKeyword] = useState('');
-  const { groupMode, handleGroupModeChange } = usePanelState();
-  const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
   const { handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
 
+  const panelHeight =
+    enabledList.length === 0
+      ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider'] + FOOTER_HEIGHT
+      : MAX_PANEL_HEIGHT;
+
   return (
-    <Rnd
-      disableDragging
-      enableResizing={ENABLE_RESIZING}
-      maxWidth={MAX_WIDTH}
-      minWidth={MIN_WIDTH}
-      position={{ x: 0, y: 0 }}
-      size={{ height: panelHeight, width: panelWidth }}
-      style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
-      onResizeStop={(_e, _direction, ref) => {
-        handlePanelWidthChange(ref.offsetWidth);
+    <Flexbox
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: panelHeight,
+        position: 'relative',
+        width: DEFAULT_WIDTH,
       }}
     >
-      <Toolbar
-        groupMode={groupMode}
-        searchKeyword={searchKeyword}
-        onGroupModeChange={handleGroupModeChange}
-        onSearchKeywordChange={setSearchKeyword}
-      />
+      <Toolbar searchKeyword={searchKeyword} onSearchKeywordChange={setSearchKeyword} />
       <List
-        groupMode={groupMode}
+        groupMode={'byModel'}
         model={modelProp}
         provider={providerProp}
         searchKeyword={searchKeyword}
@@ -62,6 +55,6 @@ export const PanelContent: FC<PanelContentProps> = ({
         onOpenChange={onOpenChange}
       />
       <Footer onClose={handleClose} />
-    </Rnd>
+    </Flexbox>
   );
 };
