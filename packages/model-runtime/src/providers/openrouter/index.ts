@@ -130,7 +130,7 @@ export const params = {
           if (model.description && model.description.includes('`reasoning` `enabled`')) {
             extendParams.push('enableReasoning');
           }
-          if (hasReasoning && model.id.includes('gpt-5.2')) {
+          if (hasReasoning && (model.id.includes('gpt-5.2') || model.id.includes('gpt-5.4'))) {
             extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
           } else if (hasReasoning && model.id.includes('gpt-5.1')) {
             extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');

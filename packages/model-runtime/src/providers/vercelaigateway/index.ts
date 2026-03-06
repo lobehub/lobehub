@@ -126,14 +126,18 @@ export const params = {
             tags.includes('reasoning') &&
             m.id.includes('gpt-5') &&
             !m.id.includes('gpt-5.1') &&
-            !m.id.includes('gpt-5.2')
+            !m.id.includes('gpt-5.2') &&
+            !m.id.includes('gpt-5.4')
           ) {
             extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {
             extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');
           }
-          if (tags.includes('reasoning') && m.id.includes('gpt-5.2')) {
+          if (
+            tags.includes('reasoning') &&
+            (m.id.includes('gpt-5.2') || m.id.includes('gpt-5.4'))
+          ) {
             extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('openai') && !m.id.includes('gpt-5')) {
