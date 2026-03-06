@@ -161,8 +161,8 @@ function sleep(ms: number): Promise<void> {
 
 function openBrowser(url: string) {
   if (process.platform === 'win32') {
-    // On Windows, use cmd.exe to invoke the "start" command safely.
-    execFile('cmd.exe', ['/c', 'start', '', url], (err) => {
+    // On Windows, use rundll32 to invoke the default URL handler without a shell.
+    execFile('rundll32', ['url.dll,FileProtocolHandler', url], (err) => {
       if (err) {
         log.debug(`Could not open browser automatically: ${err.message}`);
       }
