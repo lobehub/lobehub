@@ -72,6 +72,23 @@ jobs:
           git checkout main
           git pull --rebase origin main
 
+      - name: Setup Node.js
+        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.11.1
+          package-manager-cache: false
+
+      - name: Install bun
+        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
+        run: bun i
+
       - name: Resolve patch version (patch bump)
         id: patch-version
         if: steps.patch.outputs.should_tag == 'true'
@@ -117,12 +134,10 @@ jobs:
             echo "✅ Tag v$VERSION does not exist, can create"
           fi
 
-      - name: Bump package.json version (before tagging)
+      - name: Bump package.json version
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        id: bump-version
         run: |
           VERSION="${{ env.VERSION }}"
-          KIND="${{ env.KIND }}"
           echo "📝 Bumping package.json version to: $VERSION"
 
           # Validate VERSION is strict semver before writing
@@ -130,10 +145,6 @@ jobs:
             echo "❌ Invalid semver version: $VERSION"
             exit 1
           fi
-
-          # Configure git
-          git config --global user.name "lobehubbot"
-          git config --global user.email "i@lobehub.com"
 
           # Update package.json using Node.js
           node -e "
@@ -149,8 +160,26 @@ jobs:
             console.log('✅ package.json updated to', target);
           "
 
+      - name: Generate changelog
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
+        run: bun run workflow:changelog:gen
+
+      - name: Build static changelog
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
+        run: bun run workflow:changelog
+
+      - name: Commit release changes and push
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
+        id: bump-version
+        run: |
+          VERSION="${{ env.VERSION }}"
+
+          # Configure git
+          git config --global user.name "lobehubbot"
+          git config --global user.email "i@lobehub.com"
+
           # Commit changes (if any) and push
-          git add package.json
+          git add package.json CHANGELOG.md changelog/
           COMMIT_MSG="🔖 chore(release): release version v$VERSION [skip ci]"
           git commit -m "$COMMIT_MSG" || echo "Nothing to commit"
           git push origin HEAD:main
