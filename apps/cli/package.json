@@ -6,6 +6,8 @@
     "lh": "./src/index.ts"
   },
   "scripts": {
+    "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
+    "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

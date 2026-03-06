@@ -6,10 +6,15 @@
     ".": "./src/index.ts"
   },
   "main": "./src/index.ts",
+  "scripts": {
+    "test": "bunx vitest run --silent='passed-only'",
+    "test:coverage": "bunx vitest run --coverage"
+  },
   "dependencies": {
     "ws": "^8.18.1"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1",
+    "vitest": "^3.0.0"
   }
 }

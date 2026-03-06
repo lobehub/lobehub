@@ -1,6 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
+import { Hono } from 'hono';
 
+import { verifyDesktopToken } from './auth';
 import type { DeviceAttachment, Env } from './types';
+
+const AUTH_TIMEOUT = 10_000; // 10s to authenticate after connect
+const HEARTBEAT_TIMEOUT = 90_000; // 90s without heartbeat → close
+const HEARTBEAT_CHECK_INTERVAL = 90_000; // check every 90s
 
 export class DeviceGatewayDO extends DurableObject<Env> {
   private pendingRequests = new Map<
@@ -11,58 +17,91 @@ export class DeviceGatewayDO extends DurableObject<Env> {
     }
   >();
 
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-
-    // ─── WebSocket upgrade (from Desktop) ───
-    if (request.headers.get('Upgrade') === 'websocket') {
-      const pair = new WebSocketPair();
-      const [client, server] = Object.values(pair);
-
-      this.ctx.acceptWebSocket(server);
-
-      const deviceId = url.searchParams.get('deviceId') || 'unknown';
-      const hostname = url.searchParams.get('hostname') || '';
-      const platform = url.searchParams.get('platform') || '';
-
-      server.serializeAttachment({
-        connectedAt: Date.now(),
-        deviceId,
-        hostname,
-        platform,
-      } satisfies DeviceAttachment);
-
-      return new Response(null, { status: 101, webSocket: client });
-    }
-
-    // ─── HTTP API (from Vercel Agent) ───
-    if (url.pathname === '/api/device/status') {
-      const sockets = this.ctx.getWebSockets();
+  private router = new Hono()
+    .all('/api/device/status', async () => {
+      const sockets = this.getAuthenticatedSockets();
       return Response.json({
         deviceCount: sockets.length,
         online: sockets.length > 0,
       });
-    }
-
-    if (url.pathname === '/api/device/tool-call') {
-      return this.handleToolCall(request);
-    }
-
-    if (url.pathname === '/api/device/devices') {
-      const sockets = this.ctx.getWebSockets();
+    })
+    .post('/api/device/tool-call', async (c) => {
+      return this.handleToolCall(c.req.raw);
+    })
+    .post('/api/device/system-info', async (c) => {
+      return this.handleSystemInfo(c.req.raw);
+    })
+    .all('/api/device/devices', async () => {
+      const sockets = this.getAuthenticatedSockets();
       const devices = sockets.map((ws) => ws.deserializeAttachment() as DeviceAttachment);
       return Response.json({ devices });
+    });
+
+  async fetch(request: Request): Promise<Response> {
+    // ─── WebSocket upgrade (from Desktop) ───
+    if (request.headers.get('Upgrade') === 'websocket') {
+      return this.handleWebSocketUpgrade(request);
     }
 
-    return new Response('Not Found', { status: 404 });
+    // ─── HTTP API routes ───
+    return this.router.fetch(request);
   }
 
   // ─── Hibernation Handlers ───
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
     const data = JSON.parse(message as string);
+    const att = ws.deserializeAttachment() as DeviceAttachment;
 
-    if (data.type === 'tool_call_response') {
+    // ─── Auth message handling ───
+    if (data.type === 'auth') {
+      if (att.authenticated) return; // Already authenticated, ignore
+
+      try {
+        const token = data.token as string;
+        if (!token) throw new Error('Missing token');
+
+        let verifiedUserId: string;
+
+        if (token === this.env.SERVICE_TOKEN) {
+          // Service token auth (for CLI debugging)
+          const storedUserId = await this.ctx.storage.get<string>('_userId');
+          if (!storedUserId) throw new Error('Missing userId');
+          verifiedUserId = storedUserId;
+        } else {
+          // JWT auth (normal desktop flow)
+          const result = await verifyDesktopToken(this.env, token);
+          verifiedUserId = result.userId;
+        }
+
+        // Verify userId matches the DO routing
+        const storedUserId = await this.ctx.storage.get<string>('_userId');
+        if (storedUserId && verifiedUserId !== storedUserId) {
+          throw new Error('userId mismatch');
+        }
+
+        // Mark as authenticated
+        att.authenticated = true;
+        att.authDeadline = undefined;
+        ws.serializeAttachment(att);
+
+        ws.send(JSON.stringify({ type: 'auth_success' }));
+
+        // Schedule heartbeat check for authenticated connections
+        await this.scheduleHeartbeatCheck();
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'Authentication failed';
+        ws.send(JSON.stringify({ reason, type: 'auth_failed' }));
+        ws.close(1008, reason);
+      }
+      return;
+    }
+
+    // ─── Reject unauthenticated messages ───
+    if (!att.authenticated) return;
+
+    // ─── Business messages (authenticated only) ───
+    if (data.type === 'tool_call_response' || data.type === 'system_info_response') {
       const pending = this.pendingRequests.get(data.requestId);
       if (pending) {
         clearTimeout(pending.timer);
@@ -72,6 +111,8 @@ export class DeviceGatewayDO extends DurableObject<Env> {
     }
 
     if (data.type === 'heartbeat') {
+      att.lastHeartbeat = Date.now();
+      ws.serializeAttachment(att);
       ws.send(JSON.stringify({ type: 'heartbeat_ack' }));
     }
   }
@@ -84,10 +125,162 @@ export class DeviceGatewayDO extends DurableObject<Env> {
     ws.close(1011, 'Internal error');
   }
 
+  // ─── Heartbeat Timeout ───
+
+  async alarm() {
+    const now = Date.now();
+    const closedSockets = new Set<WebSocket>();
+
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as DeviceAttachment;
+
+      // Auth timeout: close unauthenticated connections past deadline
+      if (!att.authenticated && att.authDeadline && now > att.authDeadline) {
+        ws.send(JSON.stringify({ reason: 'Authentication timeout', type: 'auth_failed' }));
+        ws.close(1008, 'Authentication timeout');
+        closedSockets.add(ws);
+        continue;
+      }
+
+      // Heartbeat timeout: only for authenticated connections
+      if (att.authenticated && now - att.lastHeartbeat > HEARTBEAT_TIMEOUT) {
+        ws.close(1000, 'Heartbeat timeout');
+        closedSockets.add(ws);
+      }
+    }
+
+    // Keep alarm running while there are active connections
+    const remaining = this.ctx.getWebSockets().filter((ws) => !closedSockets.has(ws));
+    if (remaining.length > 0) {
+      await this.scheduleHeartbeatCheck();
+    }
+  }
+
+  // ─── WebSocket Upgrade ───
+
+  private async handleWebSocketUpgrade(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const userId = request.headers.get('X-User-Id');
+
+    const deviceId = url.searchParams.get('deviceId') || 'unknown';
+    const hostname = url.searchParams.get('hostname') || '';
+    const platform = url.searchParams.get('platform') || '';
+
+    // Close stale connection from the same device
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as DeviceAttachment;
+      if (att.deviceId === deviceId) {
+        ws.close(1000, 'Replaced by new connection');
+      }
+    }
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+
+    this.ctx.acceptWebSocket(server);
+
+    const now = Date.now();
+    server.serializeAttachment({
+      authDeadline: now + AUTH_TIMEOUT,
+      authenticated: false,
+      connectedAt: now,
+      deviceId,
+      hostname,
+      lastHeartbeat: now,
+      platform,
+    } satisfies DeviceAttachment);
+
+    if (userId) {
+      await this.ctx.storage.put('_userId', userId);
+    }
+
+    // Schedule auth timeout check (10s)
+    await this.scheduleAuthTimeout();
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  private async scheduleAuthTimeout() {
+    const currentAlarm = await this.ctx.storage.getAlarm();
+    if (!currentAlarm) {
+      await this.ctx.storage.setAlarm(Date.now() + AUTH_TIMEOUT);
+    }
+  }
+
+  private async scheduleHeartbeatCheck() {
+    const currentAlarm = await this.ctx.storage.getAlarm();
+    if (!currentAlarm) {
+      await this.ctx.storage.setAlarm(Date.now() + HEARTBEAT_CHECK_INTERVAL);
+    }
+  }
+
+  // ─── Helpers ───
+
+  private getAuthenticatedSockets(): WebSocket[] {
+    return this.ctx.getWebSockets().filter((ws) => {
+      const att = ws.deserializeAttachment() as DeviceAttachment;
+      return att.authenticated;
+    });
+  }
+
+  // ─── System Info RPC ───
+
+  private async handleSystemInfo(request: Request): Promise<Response> {
+    const sockets = this.getAuthenticatedSockets();
+    if (sockets.length === 0) {
+      return Response.json({ error: 'DEVICE_OFFLINE', success: false }, { status: 503 });
+    }
+
+    const { deviceId, timeout = 10_000 } = (await request.json()) as {
+      deviceId?: string;
+      timeout?: number;
+    };
+    const requestId = crypto.randomUUID();
+
+    const targetWs = deviceId
+      ? sockets.find((ws) => {
+          const att = ws.deserializeAttachment() as DeviceAttachment;
+          return att.deviceId === deviceId;
+        })
+      : sockets[0];
+
+    if (!targetWs) {
+      return Response.json({ error: 'DEVICE_NOT_FOUND', success: false }, { status: 503 });
+    }
+
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.pendingRequests.delete(requestId);
+          reject(new Error('TIMEOUT'));
+        }, timeout);
+
+        this.pendingRequests.set(requestId, { resolve, timer });
+
+        targetWs.send(
+          JSON.stringify({
+            requestId,
+            type: 'system_info_request',
+          }),
+        );
+      });
+
+      return Response.json({ success: true, ...(result as object) });
+    } catch (err) {
+      return Response.json(
+        {
+          error: (err as Error).message,
+          success: false,
+        },
+        { status: 504 },
+      );
+    }
+  }
+
   // ─── Tool Call RPC ───
 
   private async handleToolCall(request: Request): Promise<Response> {
-    const sockets = this.ctx.getWebSockets();
+    const sockets = this.getAuthenticatedSockets();
     if (sockets.length === 0) {
       return Response.json(
         { content: '桌面设备不在线', error: 'DEVICE_OFFLINE', success: false },
