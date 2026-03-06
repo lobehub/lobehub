@@ -110,6 +110,7 @@
     "type-check:tsc": "tsc --noEmit",
     "workflow:cdn": "tsx ./scripts/cdnWorkflow/index.ts",
     "workflow:changelog": "tsx ./scripts/changelogWorkflow/index.ts",
+    "workflow:changelog:gen": "tsx ./scripts/changelogWorkflow/generateChangelog.ts",
     "workflow:countCharters": "tsx scripts/countEnWord.ts",
     "workflow:dbml": "tsx ./scripts/dbmlWorkflow/index.ts",
     "workflow:docs": "tsx ./scripts/docsWorkflow/index.ts",
