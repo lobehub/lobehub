@@ -29,6 +29,7 @@ export const openaiChatModels: AIChatModelCard[] = [
         {
           name: 'textInput_cacheRead',
           strategy: 'tiered',
+          tierBy: 'textInput',
           tiers: [
             { rate: 0.25, upTo: 272_000 },
             { rate: 0.5, upTo: 'infinity' },
@@ -38,6 +39,7 @@ export const openaiChatModels: AIChatModelCard[] = [
         {
           name: 'textOutput',
           strategy: 'tiered',
+          tierBy: 'textInput',
           tiers: [
             { rate: 15, upTo: 272_000 },
             { rate: 22.5, upTo: 'infinity' },
@@ -63,6 +65,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.4 Pro uses more compute to think harder and provide the best answers for the hardest problems.',
     displayName: 'GPT-5.4 Pro',
+    enabled: true,
     id: 'gpt-5.4-pro',
     maxOutput: 128_000,
     pricing: {
@@ -79,6 +82,7 @@ export const openaiChatModels: AIChatModelCard[] = [
         {
           name: 'textOutput',
           strategy: 'tiered',
+          tierBy: 'textInput',
           tiers: [
             { rate: 180, upTo: 272_000 },
             { rate: 270, upTo: 'infinity' },
