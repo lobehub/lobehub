@@ -100,6 +100,7 @@
   "pageEditor.saving": "저장 중...",
   "pageEditor.titlePlaceholder": "제목 없음",
   "pageEditor.wordCount": "{{wordCount}}자",
+  "pageList.actions.openInNewTab": "새 탭에서 열기",
   "pageList.copyContent": "전체 내용 복사",
   "pageList.duplicate": "복사본 만들기",
   "pageList.empty": "아직 문서가 없습니다. 위 버튼을 클릭하여 첫 문서를 작성해 보세요",

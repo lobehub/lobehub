@@ -100,6 +100,7 @@
   "pageEditor.saving": "Guardando...",
   "pageEditor.titlePlaceholder": "Sin título",
   "pageEditor.wordCount": "{{wordCount}} palabras",
+  "pageList.actions.openInNewTab": "Abrir en una nueva pestaña",
   "pageList.copyContent": "Copiar texto completo",
   "pageList.duplicate": "Duplicar",
   "pageList.empty": "Aún no hay páginas. Haz clic en el botón de arriba para crear la primera.",

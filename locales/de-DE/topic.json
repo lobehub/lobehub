@@ -7,6 +7,7 @@
   "actions.duplicate": "Duplizieren",
   "actions.export": "Themen exportieren",
   "actions.import": "Konversation importieren",
+  "actions.openInNewTab": "In neuem Tab öffnen",
   "actions.openInNewWindow": "In neuem Fenster öffnen",
   "actions.removeAll": "Alle Themen löschen",
   "actions.removeUnstarred": "Nicht markierte Themen löschen",

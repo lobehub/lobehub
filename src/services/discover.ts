@@ -40,6 +40,7 @@ import { cleanObject } from '@/utils/object';
 
 class DiscoverService {
   private _isRetrying = false;
+  private _tokenRefreshPromise: Promise<void> | null = null;
 
   // ============================== Assistant Market ==============================
   getAssistantCategories = async (
@@ -389,6 +390,22 @@ class DiscoverService {
     const tokenStatus = this.getTokenStatusFromCookie();
     if (tokenStatus === 'active') return;
 
+    // If a token refresh is already in progress, wait for it to complete
+    if (this._tokenRefreshPromise) {
+      await this._tokenRefreshPromise;
+      return;
+    }
+
+    // Create a new refresh promise and execute
+    this._tokenRefreshPromise = this._doRefreshToken();
+    try {
+      await this._tokenRefreshPromise;
+    } finally {
+      this._tokenRefreshPromise = null;
+    }
+  }
+
+  private async _doRefreshToken() {
     let clientId: string;
     let clientSecret: string;
 
@@ -444,7 +461,7 @@ class DiscoverService {
         if (!this._isRetrying) {
           this._isRetrying = true;
           try {
-            await this.injectMPToken();
+            await this._doRefreshToken();
           } finally {
             this._isRetrying = false;
           }
@@ -454,10 +471,25 @@ class DiscoverService {
 
         return;
       }
+
+      // 6. Wait for cookie to be set by browser
+      // The Set-Cookie header processing may have a tiny delay
+      await this._waitForCookieSet();
     } catch (error) {
       console.error('Failed to register M2M token:', error);
-      return null;
     }
+  }
+
+  private async _waitForCookieSet(maxRetries = 10, interval = 10): Promise<void> {
+    for (let i = 0; i < maxRetries; i++) {
+      if (this.getTokenStatusFromCookie() === 'active') {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+    // If cookie still not set after retries, continue anyway
+    // The request might still work if the cookie was set but we couldn't detect it
+    console.warn('Cookie may not be fully set, proceeding anyway');
   }
 
   private getTokenStatusFromCookie(): string | null {

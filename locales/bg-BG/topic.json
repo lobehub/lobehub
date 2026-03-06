@@ -7,6 +7,7 @@
   "actions.duplicate": "Дублирай",
   "actions.export": "Експортирай теми",
   "actions.import": "Импортирай разговор",
+  "actions.openInNewTab": "Отвори в нов раздел",
   "actions.openInNewWindow": "Отвори в нов прозорец",
   "actions.removeAll": "Изтрий всички теми",
   "actions.removeUnstarred": "Изтрий немаркираните теми",

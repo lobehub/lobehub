@@ -7,6 +7,7 @@
   "actions.duplicate": "Duplica",
   "actions.export": "Esporta Argomenti",
   "actions.import": "Importa Conversazione",
+  "actions.openInNewTab": "Apri in una nuova scheda",
   "actions.openInNewWindow": "Apri in una nuova finestra",
   "actions.removeAll": "Elimina Tutti gli Argomenti",
   "actions.removeUnstarred": "Elimina Argomenti Non Contrassegnati",

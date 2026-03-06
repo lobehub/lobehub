@@ -681,6 +681,7 @@
   "gpt-5.2-chat-latest.description": "GPT-5.2 Chat은 최신 대화 기능이 반영된 ChatGPT 변형 모델입니다.",
   "gpt-5.2-pro.description": "GPT-5.2 Pro는 더 똑똑하고 정밀한 GPT-5.2 변형 모델로, 복잡한 문제 해결과 장기 다중 턴 추론에 적합합니다. (Responses API 전용)",
   "gpt-5.2.description": "GPT-5.2는 더 강력한 추론 능력과 긴 컨텍스트 성능을 갖춘 코딩 및 에이전트 워크플로우용 플래그십 모델입니다.",
+  "gpt-5.4.description": "GPT-5.4는 복잡한 전문 작업을 위한 OpenAI의 최신 모델로, GPT-5.2 및 GPT-5.3 Codex를 대체할 수 있는 모델입니다.",
   "gpt-5.description": "도메인 간 코딩 및 에이전트 작업에 가장 적합한 모델입니다. GPT-5는 정확성, 속도, 추론, 컨텍스트 인식, 구조적 사고, 문제 해결에서 비약적인 발전을 이뤘습니다.",
   "gpt-audio.description": "GPT Audio는 오디오 입출력을 지원하는 일반 대화형 모델로, Chat Completions API에서 사용 가능합니다.",
   "gpt-image-1-mini.description": "텍스트 및 이미지 입력과 이미지 출력을 지원하는 저비용 GPT Image 1 변형 모델입니다.",

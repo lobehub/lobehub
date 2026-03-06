@@ -7,6 +7,7 @@
   "actions.duplicate": "Duplicar",
   "actions.export": "Exportar Tópicos",
   "actions.import": "Importar Conversa",
+  "actions.openInNewTab": "Abrir em Nova Aba",
   "actions.openInNewWindow": "Abrir em nova janela",
   "actions.removeAll": "Excluir Todos os Tópicos",
   "actions.removeUnstarred": "Excluir Tópicos Não Favoritados",

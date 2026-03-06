@@ -7,6 +7,7 @@
   "actions.duplicate": "Dupliceren",
   "actions.export": "Onderwerpen exporteren",
   "actions.import": "Gesprek importeren",
+  "actions.openInNewTab": "Openen in nieuw tabblad",
   "actions.openInNewWindow": "Openen in een nieuw venster",
   "actions.removeAll": "Alle onderwerpen verwijderen",
   "actions.removeUnstarred": "Niet-gemarkeerde onderwerpen verwijderen",

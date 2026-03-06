@@ -100,6 +100,7 @@
   "pageEditor.saving": "Запазване...",
   "pageEditor.titlePlaceholder": "Без заглавие",
   "pageEditor.wordCount": "{{wordCount}} думи",
+  "pageList.actions.openInNewTab": "Отвори в нов раздел",
   "pageList.copyContent": "Копирай целия текст",
   "pageList.duplicate": "Дублирай",
   "pageList.empty": "Все още няма страници. Натиснете бутона по-горе, за да създадете първата.",

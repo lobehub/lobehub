@@ -7,6 +7,7 @@
   "actions.duplicate": "복제",
   "actions.export": "주제 내보내기",
   "actions.import": "대화 가져오기",
+  "actions.openInNewTab": "새 탭에서 열기",
   "actions.openInNewWindow": "새 창에서 열기",
   "actions.removeAll": "모든 주제 삭제",
   "actions.removeUnstarred": "즐겨찾기하지 않은 주제 삭제",

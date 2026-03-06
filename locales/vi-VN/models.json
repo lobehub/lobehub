@@ -681,6 +681,7 @@
   "gpt-5.2-chat-latest.description": "GPT-5.2 Chat là biến thể ChatGPT (chat-latest) với các cải tiến hội thoại mới nhất.",
   "gpt-5.2-pro.description": "GPT-5.2 Pro: biến thể GPT-5.2 thông minh và chính xác hơn (chỉ dùng qua API Responses), phù hợp với các vấn đề khó và suy luận nhiều lượt dài.",
   "gpt-5.2.description": "GPT-5.2 là mô hình hàng đầu cho lập trình và quy trình tác nhân với khả năng suy luận mạnh mẽ và hiệu suất ngữ cảnh dài vượt trội.",
+  "gpt-5.4.description": "GPT-5.4 là mô hình mới nhất của OpenAI dành cho công việc chuyên nghiệp phức tạp và là sự thay thế trực tiếp cho GPT-5.2 và GPT-5.3 Codex.",
   "gpt-5.description": "Mô hình tốt nhất cho các tác vụ lập trình và tác nhân đa lĩnh vực. GPT-5 vượt trội về độ chính xác, tốc độ, suy luận, nhận thức ngữ cảnh, tư duy có cấu trúc và giải quyết vấn đề.",
   "gpt-audio.description": "GPT Audio là mô hình trò chuyện tổng quát hỗ trợ đầu vào/ra âm thanh, được hỗ trợ trong API Chat Completions.",
   "gpt-image-1-mini.description": "Biến thể GPT Image 1 chi phí thấp với đầu vào văn bản và hình ảnh gốc, đầu ra hình ảnh.",

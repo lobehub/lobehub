@@ -681,6 +681,7 @@
   "gpt-5.2-chat-latest.description": "GPT-5.2 Chatは、最新の会話機能を備えたChatGPTバリアント（chat-latest）です。",
   "gpt-5.2-pro.description": "GPT-5.2 Proは、より賢く精密なGPT-5.2バリアント（Responses API専用）であり、難解な問題や長い多段階推論に適しています。",
   "gpt-5.2.description": "GPT-5.2 は、コーディングやエージェントワークフローに対応するフラッグシップモデルで、強力な推論力と長文コンテキスト処理能力を備えています。",
+  "gpt-5.4.description": "GPT-5.4は、複雑な専門的作業のためのOpenAIの最新モデルであり、GPT-5.2およびGPT-5.3 Codexの代替としてそのまま使用できます。",
   "gpt-5.description": "GPT-5 は、分野横断的なコーディングやエージェントタスクに最適なモデルで、精度、速度、推論力、文脈理解、構造的思考、問題解決能力において飛躍的な進化を遂げています。",
   "gpt-audio.description": "GPT Audio は、音声の入出力に対応した汎用チャットモデルで、Chat Completions API に対応しています。",
   "gpt-image-1-mini.description": "低コストな GPT Image 1 バリアントで、テキストと画像の入力および画像出力に対応しています。",
