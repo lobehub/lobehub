@@ -171,12 +171,6 @@ export interface FixedPricingUnit extends PricingUnitBase {
 
 export interface TieredPricingUnit extends PricingUnitBase {
   strategy: 'tiered';
-  /**
-   * When set, use the specified unit's quantity (instead of this unit's own quantity)
-   * to determine which tier applies. e.g. OpenAI charges output at a higher rate
-   * when the INPUT exceeds 272K tokens, so textOutput would set tierBy: 'textInput'.
-   */
-  tierBy?: PricingUnitName;
   tiers: Array<{
     rate: number;
     upTo: number | 'infinity';

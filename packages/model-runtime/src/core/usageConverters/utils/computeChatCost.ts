@@ -288,9 +288,9 @@ export const computeChatCost = (
 
     if (unit.strategy === 'tiered') {
       const tieredUnit = unit as TieredPricingUnit;
-      const tierQuantity = tieredUnit.tierBy
-        ? resolveQuantity({ ...tieredUnit, name: tieredUnit.tierBy } as PricingUnit, usage)
-        : undefined;
+      // Use totalInputTokens to determine the tier — providers like OpenAI and Google
+      // set pricing tiers based on total prompt size, not per-unit quantity.
+      const tierQuantity = usage.totalInputTokens ?? usage.inputTextTokens;
       const { credits: rawCredits, segments } = computeTieredCredits(
         tieredUnit,
         quantity,

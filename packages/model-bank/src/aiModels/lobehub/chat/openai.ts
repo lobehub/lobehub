@@ -29,7 +29,7 @@ export const openaiChatModels: AIChatModelCard[] = [
         {
           name: 'textInput_cacheRead',
           strategy: 'tiered',
-          tierBy: 'textInput',
+
           tiers: [
             { rate: 0.25, upTo: 272_000 },
             { rate: 0.5, upTo: 'infinity' },
@@ -39,7 +39,7 @@ export const openaiChatModels: AIChatModelCard[] = [
         {
           name: 'textOutput',
           strategy: 'tiered',
-          tierBy: 'textInput',
+
           tiers: [
             { rate: 15, upTo: 272_000 },
             { rate: 22.5, upTo: 'infinity' },
@@ -82,7 +82,7 @@ export const openaiChatModels: AIChatModelCard[] = [
         {
           name: 'textOutput',
           strategy: 'tiered',
-          tierBy: 'textInput',
+
           tiers: [
             { rate: 180, upTo: 272_000 },
             { rate: 270, upTo: 'infinity' },
