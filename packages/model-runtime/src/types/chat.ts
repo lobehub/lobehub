@@ -83,6 +83,7 @@ export interface ChatStreamPayload {
    * @title Image resolution for image generation (e.g., '1K', '2K', '4K')
    */
   imageResolution?: '1K' | '2K' | '4K';
+  logprobs?: boolean;
   /**
    * @title Maximum length of generated text
    */
@@ -123,7 +124,7 @@ export interface ChatStreamPayload {
     effort?: string;
     summary?: string;
   };
-  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high';
+  reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   response_format?: ChatResponseFormat;
   responseMode?: 'stream' | 'json';
   /**
@@ -157,6 +158,7 @@ export interface ChatStreamPayload {
    * @title Controls the highest probability single token in generated text
    * @default 1
    */
+  top_logprobs?: number;
   top_p?: number;
   truncation?: 'auto' | 'disabled';
   /**

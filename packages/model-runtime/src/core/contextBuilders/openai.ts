@@ -162,7 +162,7 @@ export const convertOpenAIResponseInputs = async (
 
 export const pruneReasoningPayload = (payload: ChatStreamPayload) => {
   const shouldStream = !disableStreamModels.has(payload.model);
-  const { stream_options, ...cleanedPayload } = payload as any;
+  const { stream_options, logprobs, top_logprobs, ...cleanedPayload } = payload as any;
 
   // When reasoning_effort is 'none', allow user-defined temperature/top_p
   const effort = payload.reasoning?.effort || payload.reasoning_effort;
@@ -187,10 +187,12 @@ export const pruneReasoningPayload = (payload: ChatStreamPayload) => {
 
     /**
      *  In openai docs: https://platform.openai.com/docs/guides/latest-model#gpt-5-2-parameter-compatibility
-     *  Fields like `top_p`, `temperature` and `logprobs` only supported to
+     *  Fields like `top_p`, `temperature`, `logprobs`, and `top_logprobs` are only supported by
      *  GPT-5 series (e.g. 5-mini 5-nano ) when reasoning effort is none
      */
+    logprobs: isEffortNone ? logprobs : undefined,
     temperature: isEffortNone ? payload.temperature : undefined,
+    top_logprobs: isEffortNone ? top_logprobs : undefined,
     top_p: isEffortNone ? payload.top_p : undefined,
   };
 };
