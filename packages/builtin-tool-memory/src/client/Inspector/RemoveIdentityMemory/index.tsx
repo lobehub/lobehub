@@ -45,7 +45,7 @@ export const RemoveIdentityMemoryInspector = memo<
       <span>{t('builtins.lobe-user-memory.apiName.removeIdentityMemory')}</span>
       {id && (
         <>
-          : <span className={highlightTextStyles.warning}>{id}</span>
+          :<span className={highlightTextStyles.warning}>{id}</span>
         </>
       )}
       {!isLoading && isSuccess && (

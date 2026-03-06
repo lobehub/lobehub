@@ -8,26 +8,25 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { SearchAgentParams, SearchAgentState } from '../../../types';
+import type { SearchSkillParams, SearchSkillState } from '../../../types';
 
-export const SearchAgentInspector = memo<
-  BuiltinInspectorProps<SearchAgentParams, SearchAgentState>
+export const SearchSkillInspector = memo<
+  BuiltinInspectorProps<SearchSkillParams, SearchSkillState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const query = args?.query || partialArgs?.query;
+  const query = args?.q || partialArgs?.q || '';
+  const resultCount = pluginState?.items?.length ?? 0;
+  const total = pluginState?.total ?? resultCount;
+  const hasResults = resultCount > 0;
 
-  // Initial streaming state
   if (isArgumentsStreaming && !query) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.searchAgent')}</span>
+        <span>{t('builtins.lobe-skill-store.apiName.searchSkill')}</span>
       </div>
     );
   }
-
-  const resultCount = pluginState?.total ?? pluginState?.agents?.length ?? 0;
-  const hasResults = resultCount > 0;
 
   return (
     <div
@@ -36,17 +35,15 @@ export const SearchAgentInspector = memo<
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{t('builtins.lobe-group-agent-builder.apiName.searchAgent')}</span>
-      {query && (
-        <>
-          :<span className={highlightTextStyles.primary}>{query}</span>
-        </>
-      )}
+      <span>
+        {t('builtins.lobe-skill-store.apiName.searchSkill')}:{'\u00A0'}
+      </span>
+      {query && <span className={highlightTextStyles.primary}>{query}</span>}
       {!isLoading &&
         !isArgumentsStreaming &&
-        pluginState?.agents &&
+        pluginState &&
         (hasResults ? (
-          <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
+          <span style={{ marginInlineStart: 4 }}>({total})</span>
         ) : (
           <Text
             as={'span'}
@@ -54,13 +51,11 @@ export const SearchAgentInspector = memo<
             fontSize={12}
             style={{ marginInlineStart: 4 }}
           >
-            ({t('builtins.lobe-group-agent-builder.inspector.noResults')})
+            ({t('builtins.lobe-skill-store.inspector.noResults')})
           </Text>
         ))}
     </div>
   );
 });
 
-SearchAgentInspector.displayName = 'SearchAgentInspector';
-
-export default SearchAgentInspector;
+SearchSkillInspector.displayName = 'SearchSkillInspector';

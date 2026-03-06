@@ -67,6 +67,7 @@ export interface ReadReferenceParams {
 export interface ReadReferenceState {
   encoding: 'base64' | 'utf8';
   fileType: string;
+  fullPath?: string;
   path: string;
   size: number;
 }

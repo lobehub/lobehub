@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import * as path from 'node:path';
+import { access, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   type EditLocalFileParams,
@@ -20,7 +20,11 @@ import {
   type OpenLocalFolderParams,
   type PickFileParams,
   type PickFileResult,
+  type PrepareSkillDirectoryParams,
+  type PrepareSkillDirectoryResult,
   type RenameLocalFileResult,
+  type ResolveSkillResourcePathParams,
+  type ResolveSkillResourcePathResult,
   type ShowOpenDialogParams,
   type ShowOpenDialogResult,
   type ShowSaveDialogParams,
@@ -30,6 +34,7 @@ import {
 import { loadFile, SYSTEM_FILES_TO_IGNORE } from '@lobechat/file-loaders';
 import { createPatch } from 'diff';
 import { dialog, shell } from 'electron';
+import { unzipSync } from 'fflate';
 
 import { type FileResult, type SearchOptions } from '@/modules/fileSearch';
 import ContentSearchService from '@/services/contentSearchSrv';
@@ -333,29 +338,14 @@ export default class LocalFileCtr extends ControllerModule {
 
       // Sort entries based on sortBy and sortOrder
       results.sort((a, b) => {
-        let comparison = 0;
-
-        switch (sortBy) {
-          case 'name': {
-            comparison = (a.name || '').localeCompare(b.name || '');
-            break;
-          }
-          case 'modifiedTime': {
-            comparison = a.modifiedTime.getTime() - b.modifiedTime.getTime();
-            break;
-          }
-          case 'createdTime': {
-            comparison = a.createdTime.getTime() - b.createdTime.getTime();
-            break;
-          }
-          case 'size': {
-            comparison = a.size - b.size;
-            break;
-          }
-          default: {
-            comparison = a.modifiedTime.getTime() - b.modifiedTime.getTime();
-          }
-        }
+        const comparison =
+          sortBy === 'name'
+            ? (a.name || '').localeCompare(b.name || '')
+            : sortBy === 'createdTime'
+              ? a.createdTime.getTime() - b.createdTime.getTime()
+              : sortBy === 'size'
+                ? a.size - b.size
+                : a.modifiedTime.getTime() - b.modifiedTime.getTime();
 
         return sortOrder === 'desc' ? -comparison : comparison;
       });
@@ -418,11 +408,12 @@ export default class LocalFileCtr extends ControllerModule {
         } catch (accessError: any) {
           if (accessError.code === 'ENOENT') {
             logger.error(`${logPrefix} Source file does not exist`);
-            throw new Error(`Source path not found: ${sourcePath}`);
+            throw new Error(`Source path not found: ${sourcePath}`, { cause: accessError });
           } else {
             logger.error(`${logPrefix} Permission error accessing source file:`, accessError);
             throw new Error(
               `Permission denied accessing source path: ${sourcePath}. ${accessError.message}`,
+              { cause: accessError },
             );
           }
         }
@@ -607,6 +598,96 @@ export default class LocalFileCtr extends ControllerModule {
         success: false,
       };
     }
+  }
+
+  @IpcMethod()
+  async handlePrepareSkillDirectory({
+    forceRefresh,
+    url,
+    zipHash,
+  }: PrepareSkillDirectoryParams): Promise<PrepareSkillDirectoryResult> {
+    const cacheRoot = path.join(this.app.appStoragePath, 'file-storage', 'skills');
+    const extractedDir = path.join(cacheRoot, 'extracted', zipHash);
+    const markerPath = path.join(extractedDir, '.prepared');
+    const zipPath = path.join(cacheRoot, 'archives', `${zipHash}.zip`);
+
+    try {
+      if (!forceRefresh) {
+        await access(markerPath, constants.F_OK);
+        return { extractedDir, success: true, zipPath };
+      }
+    } catch {
+      // Cache miss, continue preparing the local copy.
+    }
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to download skill package: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const extractedFiles = unzipSync(new Uint8Array(buffer));
+
+      await rm(extractedDir, { force: true, recursive: true });
+      await mkdir(path.dirname(zipPath), { recursive: true });
+      await mkdir(extractedDir, { recursive: true });
+      await writeFile(zipPath, buffer);
+
+      for (const [relativePath, fileContent] of Object.entries(extractedFiles)) {
+        if (relativePath.endsWith('/')) continue;
+
+        const targetPath = path.resolve(extractedDir, relativePath);
+        const normalizedRoot = `${path.resolve(extractedDir)}${path.sep}`;
+        if (targetPath !== path.resolve(extractedDir) && !targetPath.startsWith(normalizedRoot)) {
+          throw new Error(`Unsafe file path in skill archive: ${relativePath}`);
+        }
+
+        await mkdir(path.dirname(targetPath), { recursive: true });
+        await writeFile(targetPath, Buffer.from(fileContent));
+      }
+
+      await writeFile(markerPath, JSON.stringify({ preparedAt: Date.now(), url, zipHash }), 'utf8');
+
+      return { extractedDir, success: true, zipPath };
+    } catch (error) {
+      return {
+        error: (error as Error).message,
+        extractedDir,
+        success: false,
+        zipPath,
+      };
+    }
+  }
+
+  @IpcMethod()
+  async handleResolveSkillResourcePath({
+    path: resourcePath,
+    url,
+    zipHash,
+  }: ResolveSkillResourcePathParams): Promise<ResolveSkillResourcePathResult> {
+    const prepared = await this.handlePrepareSkillDirectory({ url, zipHash });
+
+    if (!prepared.success) {
+      return { error: prepared.error, success: false };
+    }
+
+    const normalizedRoot = path.resolve(prepared.extractedDir);
+    const fullPath = path.resolve(normalizedRoot, resourcePath);
+
+    if (fullPath !== normalizedRoot && !fullPath.startsWith(`${normalizedRoot}${path.sep}`)) {
+      return {
+        error: `Unsafe skill resource path: ${resourcePath}`,
+        success: false,
+      };
+    }
+
+    return {
+      fullPath,
+      success: true,
+    };
   }
 
   // ==================== Search & Find ====================

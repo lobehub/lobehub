@@ -94,6 +94,7 @@ export interface SkillResourceContent {
   encoding: 'utf8' | 'base64';
   fileHash: string;
   fileType: string;
+  fullPath?: string;
   path: string;
   size: number;
 }

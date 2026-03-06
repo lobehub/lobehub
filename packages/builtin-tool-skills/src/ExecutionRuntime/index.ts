@@ -191,6 +191,7 @@ export class SkillsExecutionRuntime {
         state: {
           encoding: resource.encoding,
           fileType: resource.fileType,
+          fullPath: resource.fullPath,
           path: resource.path,
           size: resource.size,
         },
