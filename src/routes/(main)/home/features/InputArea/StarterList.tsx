@@ -4,7 +4,7 @@ import { type ButtonProps } from '@lobehub/ui';
 import { Button, Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, PenLineIcon } from 'lucide-react';
+import { BotIcon, PenLineIcon, VideoIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -81,12 +81,12 @@ const StarterList = memo(() => {
         key: 'image',
         titleKey: 'starter.nanoBanana2',
       },
-      // {
-      //   hot: true,
-      //   icon: VideoIcon,
-      //   key: 'video',
-      //   titleKey: 'starter.seedance',
-      // },
+      {
+        hot: true,
+        icon: VideoIcon,
+        key: 'video',
+        titleKey: 'starter.seedance',
+      },
       // {
       //   disabled: true,
       //   icon: MicroscopeIcon,
