@@ -235,9 +235,20 @@ type ExtendParamsDefinition = {
 };
 
 interface ExtendParamsSelectProps {
-  onChange?: (value: ExtendParamsType[] | undefined) => void;
+  onChange?: (value: ExtendParamsType[]) => void;
   value?: ExtendParamsType[];
 }
+
+export const normalizeExtendParamsValue = (
+  value: ExtendParamsType[] | undefined,
+  definitionMap: Map<ExtendParamsType, ExtendParamsDefinition>,
+): ExtendParamsType[] => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [];
+  }
+
+  return value.filter((item) => definitionMap.has(item));
+};
 
 const PreviewContent = ({
   desc,
@@ -416,13 +427,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
 
   const placeholder = String(t('providerModels.item.modelConfig.extendParams.placeholder'));
   const handleChange = (val: ExtendParamsType[]) => {
-    if (!Array.isArray(val) || val.length === 0) {
-      onChange?.(undefined);
-      return;
-    }
-
-    const filtered = val.filter((item) => definitionMap.has(item));
-    onChange?.(filtered.length ? filtered : undefined);
+    onChange?.(normalizeExtendParamsValue(val, definitionMap));
   };
 
   return (
