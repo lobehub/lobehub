@@ -1352,7 +1352,7 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3.5-flash-2026-02-23',
+      deploymentName: 'qwen3.5-flash', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
