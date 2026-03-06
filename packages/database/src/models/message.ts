@@ -62,6 +62,7 @@ import {
   messageTranslates,
   messageTTS,
   threads,
+  topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -1287,6 +1288,14 @@ export class MessageModel {
         );
       }
 
+      // Touch topic's updatedAt when creating a message in a topic
+      if (message.topicId) {
+        await trx
+          .update(topics)
+          .set({ updatedAt: new Date() })
+          .where(and(eq(topics.id, message.topicId), eq(topics.userId, this.userId)));
+      }
+
       return item;
     });
   };
@@ -1335,10 +1344,19 @@ export class MessageModel {
           mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
         }
 
-        await trx
+        const [updated] = await trx
           .update(messages)
           .set({ ...message, ...(mergedMetadata && { metadata: mergedMetadata }) })
-          .where(and(eq(messages.id, id), eq(messages.userId, this.userId)));
+          .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+          .returning({ topicId: messages.topicId });
+
+        // Touch topic's updatedAt when updating a message
+        if (updated?.topicId) {
+          await trx
+            .update(topics)
+            .set({ updatedAt: new Date() })
+            .where(and(eq(topics.id, updated.topicId), eq(topics.userId, this.userId)));
+        }
       });
 
       return { success: true };

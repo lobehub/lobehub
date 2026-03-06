@@ -49,7 +49,7 @@ const TopicList = memo(() => {
           }}
         />
       )}
-      {topicDisplayMode === TopicDisplayMode.ByTime ? <ByTimeMode /> : <FlatMode />}
+      {topicDisplayMode === TopicDisplayMode.Flat ? <FlatMode /> : <ByTimeMode />}
       <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
     </>
   );

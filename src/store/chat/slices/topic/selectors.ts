@@ -1,7 +1,7 @@
 import { t } from 'i18next';
 
 import { type ChatTopic, type ChatTopicSummary, type GroupedTopic } from '@/types/topic';
-import { groupTopicsByTime } from '@/utils/client/topic';
+import { groupTopicsByTime, groupTopicsByUpdatedTime } from '@/utils/client/topic';
 
 import { type ChatStoreState } from '../../initialState';
 import { topicMapKey } from '../../utils/topicMapKey';
@@ -112,8 +112,9 @@ const groupedTopicsSelector = (s: ChatStoreState): GroupedTopic[] => {
     : groupTopicsByTime(topics);
 };
 
-// Limit grouped topics for sidebar
-const groupedTopicsForSidebar =
+// Factory for creating grouped topics selector with a given grouping function
+const createGroupedTopicsForSidebar =
+  (groupFn: typeof groupTopicsByTime) =>
   (pageSize: number) =>
   (s: ChatStoreState): GroupedTopic[] => {
     const limitedTopics = displayTopicsForSidebar(pageSize)(s);
@@ -129,10 +130,14 @@ const groupedTopicsForSidebar =
             id: 'favorite',
             title: t('favorite', { ns: 'topic' }),
           },
-          ...groupTopicsByTime(unfavTopics),
+          ...groupFn(unfavTopics),
         ]
-      : groupTopicsByTime(limitedTopics);
+      : groupFn(limitedTopics);
   };
+
+const groupedTopicsForSidebar = createGroupedTopicsForSidebar(groupTopicsByTime);
+const groupedTopicsForSidebarByUpdatedTime =
+  createGroupedTopicsForSidebar(groupTopicsByUpdatedTime);
 
 const hasMoreTopics = (s: ChatStoreState): boolean => currentTopicData(s)?.hasMore ?? false;
 
@@ -157,6 +162,7 @@ export const topicSelectors = {
   getTopicById,
   getTopicsByAgentId,
   groupedTopicsForSidebar,
+  groupedTopicsForSidebarByUpdatedTime,
   groupedTopicsSelector,
   hasMoreTopics,
   isCreatingTopic,

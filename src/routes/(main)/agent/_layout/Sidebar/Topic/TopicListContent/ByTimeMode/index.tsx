@@ -12,12 +12,16 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { preferenceSelectors } from '@/store/user/selectors';
+import { TopicDisplayMode } from '@/types/topic';
 
 import GroupItem from './GroupItem';
 
 const ByTimeMode = memo(() => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
+  const topicDisplayMode = useUserStore(preferenceSelectors.topicDisplayMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopics(s),
@@ -25,7 +29,12 @@ const ByTimeMode = memo(() => {
     s.openAllTopicsDrawer,
   ]);
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
-  const groupTopics = useChatStore(topicSelectors.groupedTopicsForSidebar(topicPageSize), isEqual);
+
+  const groupSelector =
+    topicDisplayMode === TopicDisplayMode.ByUpdatedTime
+      ? topicSelectors.groupedTopicsForSidebarByUpdatedTime
+      : topicSelectors.groupedTopicsForSidebar;
+  const groupTopics = useChatStore(groupSelector(topicPageSize), isEqual);
 
   const [topicGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.topicGroupKeys(s),
@@ -33,7 +42,14 @@ const ByTimeMode = memo(() => {
   ]);
 
   const expandedKeys = useMemo(() => {
-    return topicGroupKeys || groupTopics.map((group) => group.id);
+    const allKeys = groupTopics.map((group) => group.id);
+    if (!topicGroupKeys) return allKeys;
+
+    // If group structure changed (e.g., display mode switch), expand all new groups
+    const hasNewGroups = allKeys.some((key) => !topicGroupKeys.includes(key));
+    if (hasNewGroups) return allKeys;
+
+    return topicGroupKeys;
   }, [topicGroupKeys, groupTopics]);
 
   return (
