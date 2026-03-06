@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 
 import type { Command } from 'commander';
 
@@ -160,12 +160,19 @@ function sleep(ms: number): Promise<void> {
 }
 
 function openBrowser(url: string) {
-  const cmd =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-
-  exec(`${cmd} "${url}"`, (err) => {
-    if (err) {
-      log.debug(`Could not open browser automatically: ${err.message}`);
-    }
-  });
+  if (process.platform === 'win32') {
+    // On Windows, use cmd.exe to invoke the "start" command safely.
+    execFile('cmd.exe', ['/c', 'start', '', url], (err) => {
+      if (err) {
+        log.debug(`Could not open browser automatically: ${err.message}`);
+      }
+    });
+  } else {
+    const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+    execFile(cmd, [url], (err) => {
+      if (err) {
+        log.debug(`Could not open browser automatically: ${err.message}`);
+      }
+    });
+  }
 }
