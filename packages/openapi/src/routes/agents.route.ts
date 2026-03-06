@@ -25,7 +25,7 @@ AgentRoutes.get(
   '/',
   requireAuth,
   requireAnyPermission(
-    getScopePermissions('AGENT_READ', ['ALL']),
+    getScopePermissions('AGENT_READ', ['ALL', 'OWNER']),
     'You do not have permission to view the Agent list',
   ),
   zValidator('query', PaginationQuerySchema),
