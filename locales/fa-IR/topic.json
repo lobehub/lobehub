@@ -7,6 +7,7 @@
   "actions.duplicate": "ایجاد نسخه مشابه",
   "actions.export": "خروجی گرفتن از گفت‌وگوها",
   "actions.import": "وارد کردن گفت‌وگو",
+  "actions.openInNewTab": "باز کردن در تب جدید",
   "actions.openInNewWindow": "باز کردن در پنجره جدید",
   "actions.removeAll": "حذف تمام گفت‌وگوها",
   "actions.removeUnstarred": "حذف گفت‌وگوهای بدون ستاره",

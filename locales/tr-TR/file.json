@@ -100,6 +100,7 @@
   "pageEditor.saving": "Kaydediliyor...",
   "pageEditor.titlePlaceholder": "Başlıksız",
   "pageEditor.wordCount": "{{wordCount}} kelime",
+  "pageList.actions.openInNewTab": "Yeni Sekmede Aç",
   "pageList.copyContent": "Tüm Metni Kopyala",
   "pageList.duplicate": "Kopyala",
   "pageList.empty": "Henüz sayfa yok. İlk sayfanızı oluşturmak için yukarıdaki butona tıklayın.",

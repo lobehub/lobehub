@@ -100,6 +100,7 @@
   "pageEditor.saving": "Speichern...",
   "pageEditor.titlePlaceholder": "Unbenannt",
   "pageEditor.wordCount": "{{wordCount}} Wörter",
+  "pageList.actions.openInNewTab": "In neuem Tab öffnen",
   "pageList.copyContent": "Gesamten Text kopieren",
   "pageList.duplicate": "Duplizieren",
   "pageList.empty": "Noch keine Seiten vorhanden. Klicken Sie oben auf die Schaltfläche, um Ihre erste Seite zu erstellen.",

@@ -100,6 +100,7 @@
   "pageEditor.saving": "در حال ذخیره...",
   "pageEditor.titlePlaceholder": "بدون عنوان",
   "pageEditor.wordCount": "{{wordCount}} کلمه",
+  "pageList.actions.openInNewTab": "باز کردن در زبانه جدید",
   "pageList.copyContent": "کپی متن کامل",
   "pageList.duplicate": "تکثیر",
   "pageList.empty": "هنوز هیچ صفحه‌ای وجود ندارد. برای ایجاد اولین صفحه روی دکمه بالا کلیک کنید.",

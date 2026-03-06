@@ -7,6 +7,7 @@
   "actions.duplicate": "複製",
   "actions.export": "トピックをエクスポート",
   "actions.import": "会話をインポート",
+  "actions.openInNewTab": "新しいタブで開く",
   "actions.openInNewWindow": "新しいウィンドウで開く",
   "actions.removeAll": "すべてのトピックを削除",
   "actions.removeUnstarred": "未お気に入りのトピックを削除",

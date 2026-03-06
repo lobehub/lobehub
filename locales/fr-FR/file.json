@@ -100,6 +100,7 @@
   "pageEditor.saving": "Enregistrement...",
   "pageEditor.titlePlaceholder": "Sans titre",
   "pageEditor.wordCount": "{{wordCount}} mots",
+  "pageList.actions.openInNewTab": "Ouvrir dans un nouvel onglet",
   "pageList.copyContent": "Copier le texte complet",
   "pageList.duplicate": "Dupliquer",
   "pageList.empty": "Aucune page pour le moment. Cliquez sur le bouton ci-dessus pour en créer une.",

@@ -681,6 +681,7 @@
   "gpt-5.2-chat-latest.description": "GPT-5.2 Chat é a variante do ChatGPT (chat-latest) com as melhorias mais recentes em conversação.",
   "gpt-5.2-pro.description": "GPT-5.2 Pro: uma variante mais inteligente e precisa do GPT-5.2 (somente API de Respostas), ideal para problemas difíceis e raciocínio prolongado em múltiplas interações.",
   "gpt-5.2.description": "GPT-5.2 é um modelo principal para fluxos de trabalho de codificação e agentes, com raciocínio mais forte e desempenho aprimorado em contextos longos.",
+  "gpt-5.4.description": "GPT-5.4 é o modelo mais recente da OpenAI para trabalhos profissionais complexos e um substituto direto para o GPT-5.2 e GPT-5.3 Codex.",
   "gpt-5.description": "O melhor modelo para tarefas de codificação e agentes em múltiplos domínios. O GPT-5 representa um salto em precisão, velocidade, raciocínio, consciência de contexto, pensamento estruturado e resolução de problemas.",
   "gpt-audio.description": "GPT Audio é um modelo geral de chat com suporte a entrada/saída de áudio, disponível na API Chat Completions.",
   "gpt-image-1-mini.description": "Uma variante de menor custo do GPT Image 1 com entrada nativa de texto e imagem e saída de imagem.",

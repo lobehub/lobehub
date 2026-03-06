@@ -7,6 +7,7 @@
   "actions.duplicate": "建立副本",
   "actions.export": "匯出話題",
   "actions.import": "匯入對話",
+  "actions.openInNewTab": "在新分頁中開啟",
   "actions.openInNewWindow": "在新視窗中開啟",
   "actions.removeAll": "刪除全部話題",
   "actions.removeUnstarred": "刪除未收藏話題",

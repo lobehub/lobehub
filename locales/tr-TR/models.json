@@ -681,6 +681,7 @@
   "gpt-5.2-chat-latest.description": "GPT-5.2 Chat, en son sohbet geliştirmeleri için optimize edilmiş ChatGPT varyantıdır (chat-latest).",
   "gpt-5.2-pro.description": "GPT-5.2 pro: Daha zeki ve hassas bir GPT-5.2 varyantı (yalnızca Responses API), zorlu problemler ve uzun çok adımlı akıl yürütme için uygundur.",
   "gpt-5.2.description": "GPT-5.2, güçlü akıl yürütme ve uzun bağlam performansı ile kodlama ve ajan iş akışları için amiral gemisi modeldir.",
+  "gpt-5.4.description": "GPT-5.4, OpenAI'nin karmaşık profesyonel işler için en son modelidir ve GPT-5.2 ve GPT-5.3 Codex'in yerine kullanılabilecek bir modeldir.",
   "gpt-5.description": "Alanlar arası kodlama ve ajan görevleri için en iyi model. GPT-5, doğruluk, hız, akıl yürütme, bağlam farkındalığı, yapılandırılmış düşünme ve problem çözmede büyük ilerlemeler sunar.",
   "gpt-audio.description": "GPT Audio, Chat Completions API'de ses girdi/çıktısını destekleyen genel bir sohbet modelidir.",
   "gpt-image-1-mini.description": "Doğal metin ve görsel girdi ile görsel çıktı sunan, daha düşük maliyetli GPT Image 1 varyantı.",

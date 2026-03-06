@@ -7,6 +7,7 @@
   "actions.duplicate": "Dupliquer",
   "actions.export": "Exporter les sujets",
   "actions.import": "Importer une conversation",
+  "actions.openInNewTab": "Ouvrir dans un nouvel onglet",
   "actions.openInNewWindow": "Ouvrir dans une nouvelle fenêtre",
   "actions.removeAll": "Supprimer tous les sujets",
   "actions.removeUnstarred": "Supprimer les sujets non favoris",

@@ -681,6 +681,7 @@
   "gpt-5.2-chat-latest.description": "GPT-5.2 Chat 是 ChatGPT 的最新對話版本，帶來最新的對話體驗改進。",
   "gpt-5.2-pro.description": "GPT-5.2 Pro：更智慧、更精確的 GPT-5.2 變體（僅限 Responses API），適用於高難度問題與多輪長推理。",
   "gpt-5.2.description": "GPT-5.2 是針對編碼與智能體工作流程的旗艦模型，具備更強推理能力與長上下文表現。",
+  "gpt-5.4.description": "GPT-5.4 是 OpenAI 最新的模型，適用於複雜的專業工作，並可直接替代 GPT-5.2 和 GPT-5.3 Codex。",
   "gpt-5.description": "跨領域編碼與智能體任務的最佳模型。GPT-5 在準確性、速度、推理、上下文理解、結構化思維與問題解決方面實現飛躍。",
   "gpt-audio.description": "GPT Audio 是一款通用聊天模型，支援音訊輸入/輸出，並整合於 Chat Completions API 中。",
   "gpt-image-1-mini.description": "GPT Image 1 的低成本變體，原生支援文字與圖片輸入，並輸出圖片。",

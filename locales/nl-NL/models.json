@@ -681,6 +681,7 @@
   "gpt-5.2-chat-latest.description": "GPT-5.2 Chat is de ChatGPT-variant (chat-latest) met de nieuwste verbeteringen in conversatie.",
   "gpt-5.2-pro.description": "GPT-5.2 Pro: een slimmer, nauwkeuriger GPT-5.2-variant (alleen Responses API), geschikt voor moeilijke problemen en langere redeneringen over meerdere beurten.",
   "gpt-5.2.description": "GPT-5.2 is een toonaangevend model voor programmeren en agentworkflows met sterkere redeneercapaciteit en prestaties bij lange contexten.",
+  "gpt-5.4.description": "GPT-5.4 is het nieuwste model van OpenAI voor complex professioneel werk en een directe vervanging voor GPT-5.2 en GPT-5.3 Codex.",
   "gpt-5.description": "Het beste model voor domeinoverstijgende programmeer- en agenttaken. GPT-5 biedt sprongen in nauwkeurigheid, snelheid, redeneervermogen, contextbewustzijn, gestructureerd denken en probleemoplossing.",
   "gpt-audio.description": "GPT Audio is een algemeen chatmodel voor audio-invoer/-uitvoer, ondersteund in de Chat Completions API.",
   "gpt-image-1-mini.description": "Een goedkopere GPT Image 1-variant met native tekst- en afbeeldingsinvoer en afbeeldingsuitvoer.",

@@ -7,6 +7,7 @@
   "actions.duplicate": "Duplikuj",
   "actions.export": "Eksportuj tematy",
   "actions.import": "Importuj rozmowę",
+  "actions.openInNewTab": "Otwórz w nowej karcie",
   "actions.openInNewWindow": "Otwórz w nowym oknie",
   "actions.removeAll": "Usuń wszystkie tematy",
   "actions.removeUnstarred": "Usuń nieoznaczone gwiazdką tematy",

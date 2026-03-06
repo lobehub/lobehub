@@ -100,6 +100,7 @@
   "pageEditor.saving": "Đang lưu...",
   "pageEditor.titlePlaceholder": "Chưa có tiêu đề",
   "pageEditor.wordCount": "{{wordCount}} từ",
+  "pageList.actions.openInNewTab": "Mở trong tab mới",
   "pageList.copyContent": "Sao Chép Toàn Bộ Nội Dung",
   "pageList.duplicate": "Sao Chép",
   "pageList.empty": "Chưa có trang nào. Nhấn nút phía trên để tạo trang đầu tiên.",

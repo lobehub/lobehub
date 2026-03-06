@@ -7,6 +7,7 @@
   "actions.duplicate": "نسخ",
   "actions.export": "تصدير المواضيع",
   "actions.import": "استيراد المحادثة",
+  "actions.openInNewTab": "افتح في علامة تبويب جديدة",
   "actions.openInNewWindow": "فتح في نافذة جديدة",
   "actions.removeAll": "حذف جميع المواضيع",
   "actions.removeUnstarred": "حذف المواضيع غير المميزة",

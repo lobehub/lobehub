@@ -7,6 +7,7 @@
   "actions.duplicate": "Kopyala",
   "actions.export": "Konuları Dışa Aktar",
   "actions.import": "Konuşmayı İçe Aktar",
+  "actions.openInNewTab": "Yeni Sekmede Aç",
   "actions.openInNewWindow": "Yeni pencerede aç",
   "actions.removeAll": "Tüm Konuları Sil",
   "actions.removeUnstarred": "Yıldızlanmamış Konuları Sil",

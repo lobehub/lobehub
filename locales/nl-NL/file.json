@@ -100,6 +100,7 @@
   "pageEditor.saving": "Bezig met opslaan...",
   "pageEditor.titlePlaceholder": "Naamloos",
   "pageEditor.wordCount": "{{wordCount}} woorden",
+  "pageList.actions.openInNewTab": "Openen in nieuw tabblad",
   "pageList.copyContent": "Volledige tekst kopiëren",
   "pageList.duplicate": "Dupliceren",
   "pageList.empty": "Nog geen pagina’s. Klik hierboven om je eerste aan te maken.",
