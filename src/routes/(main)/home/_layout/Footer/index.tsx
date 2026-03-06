@@ -22,7 +22,6 @@ import ChangelogModal from '@/components/ChangelogModal';
 import HighlightNotification from '@/components/HighlightNotification';
 import LabsModal from '@/components/LabsModal';
 import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
-import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
@@ -208,11 +207,10 @@ const Footer = memo(() => {
 
   return (
     <>
-      <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
+      <Flexbox horizontal align={'center'} gap={2} padding={8}>
         <DropdownMenu items={helpMenuItems} placement="topLeft">
           <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
         </DropdownMenu>
-        <ThemeButton placement={'topCenter'} size={16} />
       </Flexbox>
       <LabsModal open={isLabsModalOpen} onClose={handleCloseLabsModal} />
       <ChangelogModal
