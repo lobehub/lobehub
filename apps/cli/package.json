@@ -1,0 +1,25 @@
+{
+  "name": "@lobehub/cli",
+  "version": "0.0.1-canary.1",
+  "private": true,
+  "bin": {
+    "lh": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
+    "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lobechat/device-gateway-client": "workspace:*",
+    "commander": "^13.1.0",
+    "diff": "^7.0.0",
+    "fast-glob": "^3.3.3",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/diff": "^6.0.0",
+    "@types/node": "^22.13.5",
+    "typescript": "^5.9.3"
+  }
+}
