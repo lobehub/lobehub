@@ -136,7 +136,7 @@ describe('resolveModelExtendParams', () => {
         ]);
       });
 
-      it('should set thinking to enabled when only reasoningBudgetToken is supported', () => {
+      it('should only set thinking budget when only reasoningBudgetToken is supported', () => {
         const result = resolveModelExtendParams({
           chatConfig: {
             reasoningBudgetToken: 4096,
@@ -147,7 +147,6 @@ describe('resolveModelExtendParams', () => {
 
         expect(result.thinking).toEqual({
           budget_tokens: 4096,
-          type: 'enabled',
         });
       });
 
@@ -160,7 +159,6 @@ describe('resolveModelExtendParams', () => {
 
         expect(result.thinking).toEqual({
           budget_tokens: 1024,
-          type: 'enabled',
         });
       });
     });
