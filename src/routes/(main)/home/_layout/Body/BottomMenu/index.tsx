@@ -7,11 +7,9 @@ import { getRouteById } from '@/config/routes';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { SidebarTabKey } from '@/store/global/initialState';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
-  hidden?: boolean;
   icon: any;
   key: SidebarTabKey;
   title: string;
@@ -23,18 +21,10 @@ const BottomMenu = memo(() => {
 
   const navigate = useNavigate();
   const { t } = useTranslation('common');
-  const { showMarket } = useServerConfigStore(featureFlagsSelectors);
 
   const items = useMemo(
     () =>
       [
-        {
-          hidden: !showMarket,
-          icon: getRouteById('community')!.icon,
-          key: SidebarTabKey.Community,
-          title: t('tab.community'),
-          url: '/community',
-        },
         {
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
@@ -48,7 +38,7 @@ const BottomMenu = memo(() => {
           url: '/page',
         },
       ].filter(Boolean) as Item[],
-    [t, showMarket],
+    [t],
   );
 
   return (
@@ -59,21 +49,19 @@ const BottomMenu = memo(() => {
         overflow: 'hidden',
       }}
     >
-      {items.map((item) =>
-        item.hidden ? null : (
-          <Link
-            key={item.key}
-            to={item.url}
-            onClick={(e) => {
-              if (isModifierClick(e)) return;
-              e.preventDefault();
-              navigate(item.url);
-            }}
-          >
-            <NavItem active={tab === item.key} icon={item.icon} title={item.title} />
-          </Link>
-        ),
-      )}
+      {items.map((item) => (
+        <Link
+          key={item.key}
+          to={item.url}
+          onClick={(e) => {
+            if (isModifierClick(e)) return;
+            e.preventDefault();
+            navigate(item.url);
+          }}
+        >
+          <NavItem active={tab === item.key} icon={item.icon} title={item.title} />
+        </Link>
+      ))}
     </Flexbox>
   );
 });

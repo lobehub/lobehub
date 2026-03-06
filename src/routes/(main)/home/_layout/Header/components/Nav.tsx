@@ -6,11 +6,13 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { getRouteById } from '@/config/routes';
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
@@ -28,6 +30,7 @@ const Nav = memo(() => {
   const navigate = useNavigate();
   const { t } = useTranslation('common');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const { showMarket } = useServerConfigStore(featureFlagsSelectors);
 
   const items: Item[] = useMemo(
     () => [
@@ -45,8 +48,15 @@ const Nav = memo(() => {
         title: t('tab.home'),
         url: '/',
       },
+      {
+        hidden: !showMarket,
+        icon: getRouteById('community')!.icon,
+        key: SidebarTabKey.Community,
+        title: t('tab.marketplace'),
+        url: '/community',
+      },
     ],
-    [t],
+    [t, showMarket],
   );
 
   const newBadge = (
