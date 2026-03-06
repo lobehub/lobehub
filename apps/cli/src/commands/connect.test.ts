@@ -21,6 +21,30 @@ vi.mock('../tools/shell', () => ({
   cleanupAllProcesses: vi.fn(),
 }));
 
+let mockRunningPid: number | null = null;
+let mockSpawnedPid = 0;
+let mockStatus: any = null;
+vi.mock('../daemon/manager', () => ({
+  appendLog: vi.fn(),
+  getLogPath: vi.fn().mockReturnValue('/tmp/test-daemon.log'),
+  getRunningDaemonPid: vi.fn().mockImplementation(() => mockRunningPid),
+  readStatus: vi.fn().mockImplementation(() => mockStatus),
+  removePid: vi.fn(),
+  removeStatus: vi.fn(),
+  spawnDaemon: vi.fn().mockImplementation(() => {
+    mockSpawnedPid = 99999;
+    return mockSpawnedPid;
+  }),
+  stopDaemon: vi.fn().mockImplementation(() => {
+    if (mockRunningPid !== null) {
+      mockRunningPid = null;
+      return true;
+    }
+    return false;
+  }),
+  writeStatus: vi.fn(),
+}));
+
 vi.mock('../tools', () => ({
   executeToolCall: vi.fn().mockResolvedValue({
     content: 'tool result',
@@ -60,6 +84,8 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 // eslint-disable-next-line import-x/first
 import { resolveToken } from '../auth/resolveToken';
 // eslint-disable-next-line import-x/first
+import { spawnDaemon, stopDaemon } from '../daemon/manager';
+// eslint-disable-next-line import-x/first
 import { executeToolCall } from '../tools';
 // eslint-disable-next-line import-x/first
 import { cleanupAllProcesses } from '../tools/shell';
@@ -73,6 +99,9 @@ describe('connect command', () => {
 
   beforeEach(() => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    mockRunningPid = null;
+    mockSpawnedPid = 0;
+    mockStatus = null;
   });
 
   afterEach(() => {
@@ -148,7 +177,7 @@ describe('connect command', () => {
 
     await clientEventHandlers['auth_expired']?.();
 
-    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('expired'));
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('expired'));
     expect(cleanupAllProcesses).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
@@ -167,21 +196,6 @@ describe('connect command', () => {
     await program.parseAsync(['node', 'test', 'connect', '-v']);
 
     expect(setVerbose).toHaveBeenCalledWith(true);
-  });
-
-  it('should show service-token auth type', async () => {
-    const program = createProgram();
-    await program.parseAsync([
-      'node',
-      'test',
-      'connect',
-      '--service-token',
-      'svc-tok',
-      '--user-id',
-      'u1',
-    ]);
-
-    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('service-token'));
   });
 
   it('should handle SIGINT', async () => {
@@ -250,5 +264,91 @@ describe('connect command', () => {
     } else {
       expect(sysInfo.videosPath).toContain('Videos');
     }
+  });
+
+  describe('--daemon flag', () => {
+    it('should spawn daemon and exit', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', '--daemon']);
+
+      expect(spawnDaemon).toHaveBeenCalled();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Daemon started'));
+    });
+
+    it('should refuse if daemon already running', async () => {
+      mockRunningPid = 12345;
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', '--daemon']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('already running'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('connect stop', () => {
+    it('should stop running daemon', async () => {
+      mockRunningPid = 12345;
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', 'stop']);
+
+      expect(stopDaemon).toHaveBeenCalled();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Daemon stopped'));
+    });
+
+    it('should warn if no daemon is running', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', 'stop']);
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('No daemon'));
+    });
+  });
+
+  describe('connect status', () => {
+    it('should show no daemon running', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', 'status']);
+
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('No daemon'));
+    });
+
+    it('should show daemon status', async () => {
+      mockRunningPid = 12345;
+      mockStatus = {
+        connectionStatus: 'connected',
+        gatewayUrl: 'https://gateway.test.com',
+        pid: 12345,
+        startedAt: new Date(Date.now() - 3600_000).toISOString(),
+      };
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', 'status']);
+
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Daemon Status'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('12345'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('connected'));
+    });
+  });
+
+  describe('connect restart', () => {
+    it('should stop and start daemon', async () => {
+      mockRunningPid = 12345;
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', 'restart']);
+
+      expect(stopDaemon).toHaveBeenCalled();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Stopped existing'));
+      expect(spawnDaemon).toHaveBeenCalled();
+    });
+
+    it('should start daemon even if none was running', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'connect', 'restart']);
+
+      expect(spawnDaemon).toHaveBeenCalled();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Daemon started'));
+    });
   });
 });

@@ -16,5 +16,6 @@
       "@lobechat/device-gateway-client": ["../../packages/device-gateway-client/src"]
     }
   },
+  "exclude": ["**/*.test.ts"],
   "include": ["src"]
 }

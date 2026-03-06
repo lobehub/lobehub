@@ -18,9 +18,10 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-// Mock child_process.exec to prevent browser opening
+// Mock child_process to prevent browser opening
 vi.mock('node:child_process', () => ({
   exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
+  execFile: vi.fn((_cmd: string, _args: string[], cb: any) => cb?.(null)),
 }));
 
 describe('login command', () => {
