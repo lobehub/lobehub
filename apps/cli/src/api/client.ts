@@ -1,86 +1,37 @@
+import { createTRPCClient, httpLink } from '@trpc/client';
+import superjson from 'superjson';
+
+import type { LambdaRouter } from '@/server/routers/lambda';
+
 import { getValidToken } from '../auth/refresh';
 import { log } from '../utils/logger';
 
-interface TrpcSuccessResult<T = unknown> {
-  result: { data: { json: T } };
-}
+export type TrpcClient = ReturnType<typeof createTRPCClient<LambdaRouter>>;
 
-interface TrpcErrorResult {
-  error: {
-    json: {
-      code: number;
-      data: { code: string };
-      message: string;
-    };
-  };
-}
+let _client: TrpcClient | undefined;
 
-export class ApiClient {
-  private serverUrl: string;
-  private token: string;
+export async function getTrpcClient(): Promise<TrpcClient> {
+  if (_client) return _client;
 
-  constructor(serverUrl: string, token: string) {
-    this.serverUrl = serverUrl.replace(/\/$/, '');
-    this.token = token;
+  const result = await getValidToken();
+  if (!result) {
+    log.error("No authentication found. Run 'lh login' first.");
+    process.exit(1);
   }
 
-  static async create(): Promise<ApiClient> {
-    const result = await getValidToken();
-    if (!result) {
-      log.error("No authentication found. Run 'lh login' first.");
-      process.exit(1);
-    }
+  const { serverUrl, accessToken } = result.credentials;
 
-    return new ApiClient(result.credentials.serverUrl, result.credentials.accessToken);
-  }
+  _client = createTRPCClient<LambdaRouter>({
+    links: [
+      httpLink({
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        transformer: superjson,
+        url: `${serverUrl.replace(/\/$/, '')}/trpc/lambda`,
+      }),
+    ],
+  });
 
-  async query<T = unknown>(procedure: string, input?: unknown): Promise<T> {
-    const url = new URL(`/trpc/lambda/${procedure}`, this.serverUrl);
-
-    if (input !== undefined) {
-      url.searchParams.set('input', JSON.stringify({ json: input }));
-    }
-
-    const res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-      },
-    });
-
-    return this.handleResponse<T>(res, procedure);
-  }
-
-  async mutation<T = unknown>(procedure: string, input?: unknown): Promise<T> {
-    const url = new URL(`/trpc/lambda/${procedure}`, this.serverUrl);
-
-    const res = await fetch(url.toString(), {
-      body: JSON.stringify(input !== undefined ? { json: input } : { json: {} }),
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-    });
-
-    return this.handleResponse<T>(res, procedure);
-  }
-
-  private async handleResponse<T>(res: Response, procedure: string): Promise<T> {
-    if (!res.ok) {
-      const text = await res.text();
-      log.error(`API request failed: ${procedure} (${res.status})`);
-      log.debug(text);
-      process.exit(1);
-    }
-
-    const body = (await res.json()) as TrpcErrorResult | TrpcSuccessResult<T>;
-
-    if ('error' in body) {
-      const err = body.error.json;
-      log.error(`${procedure}: ${err.message} (${err.data.code})`);
-      process.exit(1);
-    }
-
-    return body.result.data.json;
-  }
+  return _client;
 }

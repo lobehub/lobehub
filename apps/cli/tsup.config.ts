@@ -5,7 +5,7 @@ export default defineConfig({
   clean: true,
   entry: ['src/index.ts'],
   format: ['esm'],
-  noExternal: ['@lobechat/device-gateway-client'],
+  noExternal: ['@lobechat/device-gateway-client', '@trpc/client', 'superjson'],
   platform: 'node',
   target: 'node18',
 });

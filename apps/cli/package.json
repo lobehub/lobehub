@@ -17,10 +17,12 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@trpc/client": "^11.8.1",
     "commander": "^13.1.0",
     "diff": "^7.0.0",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1",
+    "superjson": "^2.2.6",
     "ws": "^8.18.1"
   },
   "devDependencies": {

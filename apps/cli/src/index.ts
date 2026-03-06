@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 
 import { registerConnectCommand } from './commands/connect';
+import { registerDocCommand } from './commands/doc';
 import { registerLoginCommand } from './commands/login';
 import { registerLogoutCommand } from './commands/logout';
 import { registerStatusCommand } from './commands/status';
@@ -16,5 +17,6 @@ registerLoginCommand(program);
 registerLogoutCommand(program);
 registerConnectCommand(program);
 registerStatusCommand(program);
+registerDocCommand(program);
 
 program.parse();
