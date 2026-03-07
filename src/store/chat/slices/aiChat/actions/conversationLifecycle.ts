@@ -268,6 +268,13 @@ export class ConversationLifecycleActionImpl {
 
         // Record the created topicId in metadata (not context)
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
+      } else if (operationContext.topicId) {
+        // Optimistically update topic's updatedAt so sidebar re-groups immediately
+        this.#get().internal_dispatchTopic({
+          type: 'updateTopic',
+          id: operationContext.topicId,
+          value: { updatedAt: Date.now() },
+        });
       }
 
       // Record created threadId in operation metadata

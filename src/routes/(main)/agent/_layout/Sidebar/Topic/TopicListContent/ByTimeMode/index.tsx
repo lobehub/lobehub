@@ -3,7 +3,7 @@
 import { Accordion, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -40,14 +40,13 @@ const ByTimeMode = memo(() => {
     s.updateSystemStatus,
   ]);
 
-  const expandedKeys = useMemo(() => {
-    const allKeys = groupTopics.map((group) => group.id);
-    if (!topicGroupKeys) return allKeys;
+  // Reset expanded keys when display mode changes so all groups start expanded
+  useEffect(() => {
+    updateSystemStatus({ expandTopicGroupKeys: undefined });
+  }, [topicDisplayMode, updateSystemStatus]);
 
-    // Keep previously expanded keys that still exist, and auto-expand any new groups
-    const newKeys = allKeys.filter((key) => !topicGroupKeys.includes(key));
-    const survivingKeys = topicGroupKeys.filter((key) => allKeys.includes(key));
-    return [...survivingKeys, ...newKeys];
+  const expandedKeys = useMemo(() => {
+    return topicGroupKeys || groupTopics.map((group) => group.id);
   }, [topicGroupKeys, groupTopics]);
 
   return (
