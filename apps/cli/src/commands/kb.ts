@@ -193,42 +193,4 @@ export function registerKbCommand(program: Command) {
         `${pc.green('✓')} Removed ${options.ids.length} file(s) from knowledge base ${pc.bold(knowledgeBaseId)}`,
       );
     });
-
-  // ── files ─────────────────────────────────────────────
-
-  kb.command('files')
-    .description('List files (optionally filtered by knowledge base)')
-    .option('--kb-id <id>', 'Filter by knowledge base ID')
-    .option('-L, --limit <n>', 'Maximum number of items', '30')
-    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { json?: string | boolean; kbId?: string; limit?: string }) => {
-      const client = await getTrpcClient();
-      const input: any = {};
-      if (options.kbId) input.knowledgeBaseId = options.kbId;
-      if (options.limit) input.limit = Number.parseInt(options.limit, 10);
-
-      const result = await client.file.getFiles.query(input);
-      const items = Array.isArray(result) ? result : ((result as any).items ?? []);
-
-      if (options.json !== undefined) {
-        const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
-        return;
-      }
-
-      if (items.length === 0) {
-        console.log('No files found.');
-        return;
-      }
-
-      const rows = items.map((f: any) => [
-        f.id,
-        truncate(f.name || f.filename || '', 50),
-        f.fileType || '',
-        f.size ? `${Math.round(f.size / 1024)}KB` : '',
-        f.updatedAt ? timeAgo(f.updatedAt) : '',
-      ]);
-
-      printTable(rows, ['ID', 'NAME', 'TYPE', 'SIZE', 'UPDATED']);
-    });
 }

@@ -6,9 +6,6 @@ import { registerKbCommand } from './kb';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
-    file: {
-      getFiles: { query: vi.fn() },
-    },
     knowledgeBase: {
       addFilesToKnowledgeBase: { mutate: vi.fn() },
       createKnowledgeBase: { mutate: vi.fn() },
@@ -204,30 +201,6 @@ describe('kb command', () => {
         ids: ['f1', 'f2'],
         knowledgeBaseId: 'kb1',
       });
-    });
-  });
-
-  describe('files', () => {
-    it('should list files', async () => {
-      mockTrpcClient.file.getFiles.query.mockResolvedValue([
-        { fileType: 'pdf', id: 'f1', name: 'doc.pdf', size: 1024 },
-      ]);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'kb', 'files']);
-
-      expect(consoleSpy).toHaveBeenCalledTimes(2); // header + 1 row
-    });
-
-    it('should filter by kb id', async () => {
-      mockTrpcClient.file.getFiles.query.mockResolvedValue([]);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'kb', 'files', '--kb-id', 'kb1']);
-
-      expect(mockTrpcClient.file.getFiles.query).toHaveBeenCalledWith(
-        expect.objectContaining({ knowledgeBaseId: 'kb1' }),
-      );
     });
   });
 });
