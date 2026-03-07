@@ -59,7 +59,6 @@ describe('generate command', () => {
       accessToken: 'test-token',
       serverUrl: 'https://app.lobehub.com',
     });
-    // Reset all mocks
     for (const router of Object.values(mockTrpcClient)) {
       for (const method of Object.values(router)) {
         for (const fn of Object.values(method)) {
@@ -84,8 +83,49 @@ describe('generate command', () => {
   }
 
   describe('text', () => {
-    it('should call chat endpoint with streaming', async () => {
-      // Create a mock SSE stream
+    it('should default to non-streaming and output plain text', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          json: vi.fn().mockResolvedValue({
+            choices: [{ message: { content: 'Response text' } }],
+          }),
+          ok: true,
+        }),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hello']);
+
+      // Should send stream: false by default
+      const fetchCall = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]!.body as string);
+      expect(body.stream).toBe(false);
+
+      expect(stdoutSpy).toHaveBeenCalledWith('Response text');
+    });
+
+    it('should output JSON when --json is used', async () => {
+      const responseBody = {
+        choices: [{ message: { content: 'Hello' } }],
+        model: 'gpt-4o-mini',
+        usage: { completion_tokens: 5, prompt_tokens: 10 },
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          json: vi.fn().mockResolvedValue(responseBody),
+          ok: true,
+        }),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hello', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(responseBody, null, 2));
+    });
+
+    it('should stream when --stream is explicitly passed', async () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -100,33 +140,13 @@ describe('generate command', () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ body: stream, ok: true }));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hello world']);
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
 
-      expect(fetch).toHaveBeenCalledWith(
-        'https://app.lobehub.com/webapi/chat/openai',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({ 'Oidc-Auth': 'test-token' }),
-        }),
-      );
+      const fetchCall = vi.mocked(fetch).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]!.body as string);
+      expect(body.stream).toBe(true);
+
       expect(stdoutSpy).toHaveBeenCalledWith('Hello');
-    });
-
-    it('should handle non-streaming mode', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          json: vi.fn().mockResolvedValue({
-            choices: [{ message: { content: 'Response text' } }],
-          }),
-          ok: true,
-        }),
-      );
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hello', '--no-stream']);
-
-      expect(stdoutSpy).toHaveBeenCalledWith('Response text');
     });
 
     it('should parse provider from model string', async () => {
@@ -149,7 +169,6 @@ describe('generate command', () => {
         'Hi',
         '--model',
         'anthropic/claude-3-haiku',
-        '--no-stream',
       ]);
 
       expect(fetch).toHaveBeenCalledWith(
@@ -213,19 +232,9 @@ describe('generate command', () => {
   });
 
   describe('video', () => {
-    it('should require model and provider', async () => {
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'video', 'a dancing cat']);
-
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--model and --provider'));
-      expect(exitSpy).toHaveBeenCalledWith(1);
-    });
-
     it('should create video generation', async () => {
       mockTrpcClient.generationTopic.createTopic.mutate.mockResolvedValue('topic-2');
-      mockTrpcClient.video.createVideo.mutate.mockResolvedValue({
-        generationId: 'gen-v1',
-      });
+      mockTrpcClient.video.createVideo.mutate.mockResolvedValue({ generationId: 'gen-v1' });
 
       const program = createProgram();
       await program.parseAsync([
@@ -336,7 +345,7 @@ describe('generate command', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'generate', 'list']);
 
-      expect(consoleSpy).toHaveBeenCalledTimes(2); // header + 1 row
+      expect(consoleSpy).toHaveBeenCalledTimes(2);
       expect(consoleSpy.mock.calls[0][0]).toContain('ID');
     });
 
