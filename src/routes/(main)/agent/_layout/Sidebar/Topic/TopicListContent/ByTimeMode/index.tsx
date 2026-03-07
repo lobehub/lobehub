@@ -3,7 +3,7 @@
 import { Accordion, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -14,7 +14,6 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
-import { TopicDisplayMode } from '@/types/topic';
 
 import GroupItem from './GroupItem';
 
@@ -30,11 +29,11 @@ const ByTimeMode = memo(() => {
   ]);
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
 
-  const groupSelector =
-    topicDisplayMode === TopicDisplayMode.ByUpdatedTime
-      ? topicSelectors.groupedTopicsForSidebarByUpdatedTime
-      : topicSelectors.groupedTopicsForSidebar;
-  const groupTopics = useChatStore(groupSelector(topicPageSize), isEqual);
+  const groupSelector = useMemo(
+    () => topicSelectors.groupedTopicsForSidebar(topicPageSize, topicDisplayMode),
+    [topicPageSize, topicDisplayMode],
+  );
+  const groupTopics = useChatStore(groupSelector, isEqual);
 
   const [topicGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.topicGroupKeys(s),

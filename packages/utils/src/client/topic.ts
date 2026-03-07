@@ -71,11 +71,11 @@ const groupTopicsByField = (
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const sortedTopics = [...topics].sort((a, b) => (b[field] as number) - (a[field] as number));
+  const sortedTopics = [...topics].sort((a, b) => b[field] - a[field]);
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
   for (const topic of sortedTopics) {
-    const groupId = getTopicGroupId(topic[field] as number);
+    const groupId = getTopicGroupId(topic[field]);
     const existing = groupsMap.get(groupId);
     if (existing) {
       existing.push(topic);
