@@ -28,8 +28,6 @@ export const defaultProxySettings: NetworkProxySettings = {
 export const STORE_DEFAULTS: ElectronMainStore = {
   dataSyncConfig: { storageMode: 'cloud' },
   encryptedTokens: {},
-  gatewayDeviceId: '',
-  gatewayUrl: 'https://device-gateway.lobehub.com',
   locale: 'auto',
   networkProxy: defaultProxySettings,
   shortcuts: DEFAULT_SHORTCUTS_CONFIG,

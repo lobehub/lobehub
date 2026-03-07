@@ -303,14 +303,6 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Also clear from persistent storage
     logger.debug(`Deleting tokens from store key: ${this.encryptedTokensKey}`);
     this.app.storeManager.delete(this.encryptedTokensKey);
-
-    // Disconnect gateway when tokens are cleared (logout / token refresh failure)
-    const GatewayConnectionCtr = (await import('./GatewayConnectionCtr')).default;
-    const gatewayCtr = this.app.getController(GatewayConnectionCtr);
-    if (gatewayCtr) {
-      logger.debug('Disconnecting gateway due to token clear');
-      await gatewayCtr.disconnect();
-    }
   }
 
   /**
@@ -545,7 +537,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   }
 
   async getRemoteServerUrl(config?: DataSyncConfig) {
-    const dataConfig = this.normalizeConfig(config ?? (await this.getRemoteServerConfig()));
+    const dataConfig = this.normalizeConfig(config ? config : await this.getRemoteServerConfig());
 
     return dataConfig.storageMode === 'cloud' ? OFFICIAL_CLOUD_SERVER : dataConfig.remoteServerUrl;
   }
