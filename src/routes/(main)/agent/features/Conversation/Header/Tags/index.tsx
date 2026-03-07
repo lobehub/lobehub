@@ -47,7 +47,7 @@ const TitleTags = memo(() => {
     <Skeleton.Button active size={'small'} style={{ height: 20 }} />
   ) : (
     <Flexbox horizontal align={'center'} gap={4}>
-      <ModelSwitchPanel>
+      <ModelSwitchPanel showModelDetailPanel={false}>
         <ModelTag model={model} />
       </ModelSwitchPanel>
       {isAgentEnableSearch && <SearchTags />}

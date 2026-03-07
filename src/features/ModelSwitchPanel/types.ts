@@ -68,4 +68,8 @@ export interface ModelSwitchPanelProps {
    * Current provider ID. If not provided, uses currentAgentModelProvider from store.
    */
   provider?: string;
+  /**
+   * Whether to show the model detail popup on submenu hover. Defaults to true.
+   */
+  showModelDetailPanel?: boolean;
 }

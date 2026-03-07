@@ -32,10 +32,11 @@ interface ListItemRendererProps {
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  showModelDetailPanel?: boolean;
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ activeKey, item, newLabel, onModelChange, onClose }) => {
+  ({ activeKey, item, newLabel, onModelChange, onClose, showModelDetailPanel = true }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [detailOpen, setDetailOpen] = useState(false);
@@ -115,6 +116,28 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const key = menuKey(item.provider.id, item.model.id);
         const isActive = key === activeKey;
 
+        if (!showModelDetailPanel) {
+          return (
+            <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+              <Flexbox
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={async () => {
+                  await onModelChange(item.model.id, item.provider.id);
+                  onClose();
+                }}
+              >
+                <ModelItemRender
+                  {...item.model}
+                  {...item.model.abilities}
+                  showInfoTag
+                  newBadgeLabel={newLabel}
+                />
+              </Flexbox>
+            </Flexbox>
+          );
+        }
+
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
@@ -123,7 +146,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 style={{ paddingBlock: 8, paddingInline: 8 }}
                 onClick={async () => {
                   setDetailOpen(false);
-                  onModelChange(item.model.id, item.provider.id);
+                  await onModelChange(item.model.id, item.provider.id);
                   onClose();
                 }}
               >
@@ -151,6 +174,23 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const key = menuKey(singleProvider.id, item.data.model.id);
         const isActive = key === activeKey;
 
+        if (!showModelDetailPanel) {
+          return (
+            <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+              <Flexbox
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={async () => {
+                  await onModelChange(item.data.model.id, singleProvider.id);
+                  onClose();
+                }}
+              >
+                <SingleProviderModelItem data={item.data} newLabel={newLabel} />
+              </Flexbox>
+            </Flexbox>
+          );
+        }
+
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
@@ -159,7 +199,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 style={{ paddingBlock: 8, paddingInline: 8 }}
                 onClick={async () => {
                   setDetailOpen(false);
-                  onModelChange(item.data.model.id, singleProvider.id);
+                  await onModelChange(item.data.model.id, singleProvider.id);
                   onClose();
                 }}
               >
@@ -184,6 +224,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               activeKey={activeKey}
               data={item.data}
               newLabel={newLabel}
+              showModelDetailPanel={showModelDetailPanel}
               onClose={onClose}
               onModelChange={onModelChange}
             />

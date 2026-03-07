@@ -17,6 +17,7 @@ interface PanelContentProps {
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
   provider?: string;
+  showModelDetailPanel?: boolean;
 }
 
 export const PanelContent: FC<PanelContentProps> = ({
@@ -24,6 +25,7 @@ export const PanelContent: FC<PanelContentProps> = ({
   onModelChange: onModelChangeProp,
   onOpenChange,
   provider: providerProp,
+  showModelDetailPanel = true,
 }) => {
   const enabledList = useEnabledChatModels();
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -58,6 +60,7 @@ export const PanelContent: FC<PanelContentProps> = ({
         model={modelProp}
         provider={providerProp}
         searchKeyword={searchKeyword}
+        showModelDetailPanel={showModelDetailPanel}
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}
       />

@@ -33,10 +33,11 @@ interface MultipleProvidersModelItemProps {
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  showModelDetailPanel?: boolean;
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
-  ({ activeKey, data, newLabel, onModelChange, onClose }) => {
+  ({ activeKey, data, newLabel, onModelChange, onClose, showModelDetailPanel = true }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -60,14 +61,14 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         <DropdownMenuPortal>
           <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
-              <ModelDetailPanel
-                model={data.model.id}
-                provider={(activeProvider ?? data.providers[0]).id}
-              />
+              {showModelDetailPanel && (
+                <ModelDetailPanel
+                  model={data.model.id}
+                  provider={(activeProvider ?? data.providers[0]).id}
+                />
+              )}
               <DropdownMenuGroup>
-                <DropdownMenuGroupLabel>
-                  {t('ModelSwitchPanel.useModelFrom')}
-                </DropdownMenuGroupLabel>
+                <DropdownMenuGroupLabel>{t('ModelSwitchPanel.useModelFrom')}</DropdownMenuGroupLabel>
                 {data.providers.map((p) => {
                   const key = menuKey(p.id, data.model.id);
                   const isProviderActive = activeKey === key;

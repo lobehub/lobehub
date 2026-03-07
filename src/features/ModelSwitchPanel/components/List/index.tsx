@@ -21,6 +21,7 @@ interface ListProps {
   onOpenChange?: (open: boolean) => void;
   provider?: string;
   searchKeyword?: string;
+  showModelDetailPanel?: boolean;
 }
 
 export const List: FC<ListProps> = ({
@@ -30,6 +31,7 @@ export const List: FC<ListProps> = ({
   onOpenChange,
   provider: providerProp,
   searchKeyword = '',
+  showModelDetailPanel = true,
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
@@ -52,7 +54,6 @@ export const List: FC<ListProps> = ({
 
   const activeKey = menuKey(provider, model);
 
-  // Set initial scroll position to keep active model centered
   const listRef = useRef<HTMLDivElement | null>(null);
   const activeNodeRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedPositionRef = useRef(false);
@@ -101,6 +102,7 @@ export const List: FC<ListProps> = ({
             item={item}
             key={key}
             newLabel={newLabel}
+            showModelDetailPanel={showModelDetailPanel}
             onClose={handleClose}
             onModelChange={handleModelChange}
           />
