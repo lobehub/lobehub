@@ -67,6 +67,7 @@
   "response.ConnectionCheckFailed": "测试返回为空。请确认 API 代理地址末尾未包含 `/v1`",
   "response.CreateMessageError": "消息未能发送。建议先复制内容再重试；刷新页面后该消息不会保留",
   "response.ExceededContextWindow": "上下文长度超出模型限制。请减少内容量后重试",
+  "response.ExceededContextWindowCloud": "当前对话内容过长，无法继续处理。请编辑最后一条消息减少输入内容或者删除一些消息重试。",
   "response.FreePlanLimit": "当前计划不支持该功能。请升级到付费计划后继续",
   "response.GoogleAIBlockReason.BLOCKLIST": "内容包含被禁止的词汇。请修改后重试",
   "response.GoogleAIBlockReason.IMAGE_SAFETY": "图像生成请求因安全策略被阻止。请调整描述后重试",
