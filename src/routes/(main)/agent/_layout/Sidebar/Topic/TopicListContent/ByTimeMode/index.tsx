@@ -44,11 +44,10 @@ const ByTimeMode = memo(() => {
     const allKeys = groupTopics.map((group) => group.id);
     if (!topicGroupKeys) return allKeys;
 
-    // If group structure changed (e.g., display mode switch), expand all new groups
-    const hasNewGroups = allKeys.some((key) => !topicGroupKeys.includes(key));
-    if (hasNewGroups) return allKeys;
-
-    return topicGroupKeys;
+    // Keep previously expanded keys that still exist, and auto-expand any new groups
+    const newKeys = allKeys.filter((key) => !topicGroupKeys.includes(key));
+    const survivingKeys = topicGroupKeys.filter((key) => allKeys.includes(key));
+    return [...survivingKeys, ...newKeys];
   }, [topicGroupKeys, groupTopics]);
 
   return (
