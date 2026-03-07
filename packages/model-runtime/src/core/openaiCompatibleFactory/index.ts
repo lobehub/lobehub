@@ -39,6 +39,7 @@ import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProper
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
 import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
+import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -908,6 +909,16 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          provider: this.id,
+        });
+      }
+
+      if (isQuotaLimitError(errorMsg)) {
+        log('quota limit reached detected from message');
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.QuotaLimitReached,
           provider: this.id,
         });
       }

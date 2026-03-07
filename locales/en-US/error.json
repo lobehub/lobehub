@@ -107,6 +107,7 @@
   "response.PluginSettingsInvalid": "This skill needs to be correctly configured before it can be used. Please check if your configuration is correct",
   "response.ProviderBizError": "Error requesting {{provider}} service, please troubleshoot or retry based on the following information",
   "response.QuotaLimitReached": "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
+  "response.QuotaLimitReachedCloud": "The model service is currently under heavy load. Please try again later.",
   "response.ServerAgentRuntimeError": "Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.",
   "response.StreamChunkError": "Error parsing the message chunk of the streaming request. Please check if the current API interface complies with the standard specifications, or contact your API provider for assistance.",
   "response.SubscriptionKeyMismatch": "We apologize for the inconvenience. Due to a temporary system malfunction, your current subscription usage is inactive. Please click the button below to restore your subscription, or contact us via email for support.",
