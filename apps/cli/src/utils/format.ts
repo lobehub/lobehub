@@ -1,3 +1,5 @@
+import { createInterface } from 'node:readline';
+
 import pc from 'picocolors';
 
 export function timeAgo(date: Date | string): string {
@@ -59,8 +61,7 @@ export function outputJson(data: unknown, fields?: string) {
 }
 
 export function confirm(message: string): Promise<boolean> {
-  const readline = require('node:readline');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
   return new Promise((resolve) => {
     rl.question(`${message} (y/N) `, (answer: string) => {
       rl.close();

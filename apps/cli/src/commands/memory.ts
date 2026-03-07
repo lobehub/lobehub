@@ -93,41 +93,31 @@ export function registerMemoryCommand(program: Command) {
   // ── create ────────────────────────────────────────────
 
   memory
-    .command('create <category>')
-    .description(`Create a memory entry (${CATEGORIES.join(', ')})`)
-    .option('--type <type>', 'Memory type (for identity)')
-    .option('--role <role>', 'Role (for identity)')
-    .option('--relationship <rel>', 'Relationship (for identity)')
+    .command('create')
+    .description('Create an identity memory entry (other categories are created via extraction)')
+    .option('--type <type>', 'Memory type')
+    .option('--role <role>', 'Role')
+    .option('--relationship <rel>', 'Relationship')
     .option('-d, --description <desc>', 'Description')
-    .option('--narrative <text>', 'Narrative (for activity)')
-    .option('--notes <text>', 'Notes (for activity)')
-    .option('--status <status>', 'Status (for activity/context)')
-    .option('--title <title>', 'Title (for context)')
-    .option('--situation <text>', 'Situation (for experience)')
-    .option('--action <text>', 'Action (for experience)')
-    .option('--key-learning <text>', 'Key learning (for experience)')
-    .option('--directives <text>', 'Conclusion directives (for preference)')
-    .option('--suggestions <text>', 'Suggestions (for preference)')
     .option('--labels <labels...>', 'Extracted labels')
-    .action(async (category: string, options: Record<string, any>) => {
-      if (!CATEGORIES.includes(category as Category)) {
-        log.error(`Invalid category: ${category}. Must be one of: ${CATEGORIES.join(', ')}`);
-        process.exit(1);
-      }
-
+    .action(async (options: Record<string, any>) => {
       const client = await getTrpcClient();
-      const router = client.userMemory as any;
-      const mutationName = `create${capitalize(category)}`;
 
-      const input = buildCategoryInput(category as Category, options);
+      const input: Record<string, any> = {};
+      if (options.type) input.type = options.type;
+      if (options.role) input.role = options.role;
+      if (options.relationship) input.relationship = options.relationship;
+      if (options.description) input.description = options.description;
+      if (options.labels) input.extractedLabels = options.labels;
 
       try {
-        const result = await router[mutationName].mutate(input);
-        const id = result?.id || (result as any)?.id || 'unknown';
-        console.log(`${pc.green('✓')} Created ${category} memory ${pc.bold(id)}`);
+        const result = await (client.userMemory as any).createIdentity.mutate(input);
+        const id = result?.id || 'unknown';
+        console.log(`${pc.green('✓')} Created identity memory ${pc.bold(id)}`);
       } catch (error: any) {
-        log.error(`Failed to create ${category}: ${error.message}`);
+        log.error(`Failed to create identity: ${error.message}`);
         process.exit(1);
+        return;
       }
     });
 
@@ -168,6 +158,7 @@ export function registerMemoryCommand(program: Command) {
       } catch (error: any) {
         log.error(`Failed to update ${category}: ${error.message}`);
         process.exit(1);
+        return;
       }
     });
 
@@ -201,6 +192,7 @@ export function registerMemoryCommand(program: Command) {
       } catch (error: any) {
         log.error(`Failed to delete ${category}: ${error.message}`);
         process.exit(1);
+        return;
       }
     });
 

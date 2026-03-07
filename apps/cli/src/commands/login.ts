@@ -60,6 +60,7 @@ export function registerLoginCommand(program: Command) {
           const text = await res.text();
           log.error(`Failed to start device authorization: ${res.status} ${text}`);
           process.exit(1);
+          return;
         }
 
         deviceAuth = (await res.json()) as DeviceAuthResponse;
@@ -67,6 +68,7 @@ export function registerLoginCommand(program: Command) {
         log.error(`Failed to reach server: ${error.message}`);
         log.error(`Make sure ${serverUrl} is reachable.`);
         process.exit(1);
+        return;
       }
 
       // Step 2: Show user code and open browser
@@ -120,16 +122,17 @@ export function registerLoginCommand(program: Command) {
               case 'access_denied': {
                 log.error('Authorization denied by user.');
                 process.exit(1);
-                break;
+                return;
               }
               case 'expired_token': {
                 log.error('Device code expired. Please run login again.');
                 process.exit(1);
-                break;
+                return;
               }
               default: {
                 log.error(`Authorization error: ${body.error} - ${body.error_description || ''}`);
                 process.exit(1);
+                return;
               }
             }
           } else if (body.access_token) {

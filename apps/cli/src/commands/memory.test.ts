@@ -115,7 +115,6 @@ describe('memory command', () => {
         'test',
         'memory',
         'create',
-        'identity',
         '--type',
         'professional',
         '--description',
@@ -126,14 +125,6 @@ describe('memory command', () => {
         expect.objectContaining({ description: 'Software dev', type: 'professional' }),
       );
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('mem-1'));
-    });
-
-    it('should reject invalid category', async () => {
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'memory', 'create', 'invalid']);
-
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid category'));
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 

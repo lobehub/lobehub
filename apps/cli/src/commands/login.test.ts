@@ -124,12 +124,6 @@ describe('login command', () => {
   });
 
   it('should handle device auth failure', async () => {
-    // For early-exit tests, process.exit must throw to stop code execution
-    // (otherwise code continues past exit and accesses undefined deviceAuth)
-    exitSpy.mockImplementation(() => {
-      throw new Error('exit');
-    });
-
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -137,21 +131,17 @@ describe('login command', () => {
     } as any);
 
     const program = createProgram();
-    await runLoginAndAdvanceTimers(program).catch(() => {});
+    await runLoginAndAdvanceTimers(program);
 
     expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to start'));
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle network error on device auth', async () => {
-    exitSpy.mockImplementation(() => {
-      throw new Error('exit');
-    });
-
     vi.mocked(fetch).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
     const program = createProgram();
-    await runLoginAndAdvanceTimers(program).catch(() => {});
+    await runLoginAndAdvanceTimers(program);
 
     expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to reach'));
     expect(exitSpy).toHaveBeenCalledWith(1);
