@@ -28,7 +28,7 @@ export function registerAsrCommand(parent: Command) {
           return;
         }
 
-        const { serverUrl, accessToken } = await getAuthInfo();
+        const { serverUrl, headers } = await getAuthInfo();
 
         const sttOptions: Record<string, any> = { model: options.model };
         if (options.language) sttOptions.language = options.language;
@@ -38,11 +38,12 @@ export function registerAsrCommand(parent: Command) {
         formData.append('speech', fileBuffer, path.basename(audioFile));
         formData.append('options', JSON.stringify(sttOptions));
 
+        // Remove Content-Type for multipart/form-data (let fetch set it with boundary)
+        const { 'Content-Type': _, ...formHeaders } = headers;
+
         const res = await fetch(`${serverUrl}/webapi/stt/openai`, {
           body: formData,
-          headers: {
-            'Oidc-Auth': accessToken,
-          },
+          headers: formHeaders,
           method: 'POST',
         });
 

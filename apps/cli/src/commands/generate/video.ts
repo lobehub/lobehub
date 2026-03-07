@@ -49,9 +49,10 @@ export function registerVideoCommand(parent: Command) {
           return;
         }
 
+        const data = r.data || r;
         console.log(`${pc.green('✓')} Video generation started`);
-        if (r.generationId) {
-          console.log(`  Generation ID: ${pc.bold(r.generationId)}`);
+        if (data.generationId) {
+          console.log(`  Generation ID: ${pc.bold(data.generationId)}`);
         }
         console.log(
           pc.dim('Video generation runs asynchronously. Check status or wait for notification.'),

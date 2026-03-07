@@ -63,14 +63,11 @@ export function registerTextCommand(parent: Command) {
         if (options.temperature) payload.temperature = Number.parseFloat(options.temperature);
         if (options.maxTokens) payload.max_tokens = Number.parseInt(options.maxTokens, 10);
 
-        const { serverUrl, accessToken } = await getAuthInfo();
+        const { serverUrl, headers } = await getAuthInfo();
 
         const res = await fetch(`${serverUrl}/webapi/chat/${provider}`, {
           body: JSON.stringify(payload),
-          headers: {
-            'Content-Type': 'application/json',
-            'Oidc-Auth': accessToken,
-          },
+          headers,
           method: 'POST',
         });
 

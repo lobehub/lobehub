@@ -54,10 +54,11 @@ export function registerImageCommand(parent: Command) {
           return;
         }
 
+        const data = r.data || r;
         console.log(`${pc.green('✓')} Image generation started`);
-        if (r.batch?.id) console.log(`  Batch ID: ${pc.bold(r.batch.id)}`);
+        if (data.batch?.id) console.log(`  Batch ID: ${pc.bold(data.batch.id)}`);
 
-        const generations = r.generations || [];
+        const generations = data.generations || [];
         if (generations.length > 0) {
           console.log(`  ${generations.length} image(s) queued`);
           for (const gen of generations) {

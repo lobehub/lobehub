@@ -57,6 +57,11 @@ describe('generate command', () => {
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockGetAuthInfo.mockResolvedValue({
       accessToken: 'test-token',
+      headers: {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': 'test-token',
+        'X-lobe-chat-auth': 'test-xor-token',
+      },
       serverUrl: 'https://app.lobehub.com',
     });
     for (const router of Object.values(mockTrpcClient)) {
@@ -199,8 +204,11 @@ describe('generate command', () => {
     it('should create image generation', async () => {
       mockTrpcClient.generationTopic.createTopic.mutate.mockResolvedValue('topic-1');
       mockTrpcClient.image.createImage.mutate.mockResolvedValue({
-        batch: { id: 'batch-1' },
-        generations: [{ asyncTaskId: 'task-1', id: 'gen-1' }],
+        data: {
+          batch: { id: 'batch-1' },
+          generations: [{ asyncTaskId: 'task-1', id: 'gen-1' }],
+        },
+        success: true,
       });
 
       const program = createProgram();
@@ -234,7 +242,10 @@ describe('generate command', () => {
   describe('video', () => {
     it('should create video generation', async () => {
       mockTrpcClient.generationTopic.createTopic.mutate.mockResolvedValue('topic-2');
-      mockTrpcClient.video.createVideo.mutate.mockResolvedValue({ generationId: 'gen-v1' });
+      mockTrpcClient.video.createVideo.mutate.mockResolvedValue({
+        data: { generationId: 'gen-v1' },
+        success: true,
+      });
 
       const program = createProgram();
       await program.parseAsync([

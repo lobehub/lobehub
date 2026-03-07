@@ -33,7 +33,7 @@ export function registerTtsCommand(parent: Command) {
           return;
         }
 
-        const { serverUrl, accessToken } = await getAuthInfo();
+        const { serverUrl, headers } = await getAuthInfo();
 
         const payload: Record<string, any> = {
           input: text,
@@ -48,10 +48,7 @@ export function registerTtsCommand(parent: Command) {
 
         const res = await fetch(`${serverUrl}/webapi/tts/${options.backend}`, {
           body: JSON.stringify(payload),
-          headers: {
-            'Content-Type': 'application/json',
-            'Oidc-Auth': accessToken,
-          },
+          headers,
           method: 'POST',
         });
 
