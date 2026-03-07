@@ -19,6 +19,7 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
+import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -282,6 +283,15 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
   }
 
   const { errorResult } = handleAnthropicError(error);
+
+  const errorMsg = errorResult.message || errorResult.error?.message;
+  if (isExceededContextWindowError(errorMsg)) {
+    return {
+      endpoint: desensitizedEndpoint,
+      error: errorResult,
+      errorType: AgentRuntimeErrorType.ExceededContextWindow,
+    };
+  }
 
   return {
     endpoint: desensitizedEndpoint,
@@ -659,6 +669,16 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
         return { headers: error?.headers, stack: error?.stack, status: error?.status };
       })();
+
+      const errorMsg = errorResult.message || errorResult.error?.message;
+      if (isExceededContextWindowError(errorMsg)) {
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          provider: this.id,
+        });
+      }
 
       return AgentRuntimeError.chat({
         endpoint: desensitizedEndpoint,
