@@ -25,7 +25,7 @@ export async function getTrpcClient(): Promise<TrpcClient> {
     links: [
       httpLink({
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          'Oidc-Auth': accessToken,
         },
         transformer: superjson,
         url: `${serverUrl.replace(/\/$/, '')}/trpc/lambda`,
