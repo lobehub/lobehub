@@ -31,6 +31,7 @@ packages/agent-tracing/
       index.ts        # Terminal rendering: renderSnapshot, renderStepDetail, renderMessageDetail, renderSummaryTable, renderPayload, renderPayloadTools, renderMemory
     cli/
       index.ts        # CLI entry point (#!/usr/bin/env bun)
+      inspect.ts      # Inspect command (default)
       partial.ts      # Partial snapshot commands (list, inspect, clean)
     index.ts          # Barrel exports
 ```
@@ -47,20 +48,15 @@ packages/agent-tracing/
 All commands run from the **repo root**:
 
 ```bash
-# View latest trace (tree overview)
-agent-tracing trace
-
-# View specific trace
-agent-tracing trace <traceId>
+# View latest trace (tree overview, `inspect` is the default command)
+agent-tracing
+agent-tracing inspect
+agent-tracing inspect <traceId>
+agent-tracing inspect latest
 
 # List recent snapshots
 agent-tracing list
 agent-tracing list -l 20
-
-# Inspect trace detail (overview, defaults to latest)
-agent-tracing inspect
-agent-tracing inspect <traceId>
-agent-tracing inspect latest
 
 # Inspect specific step (-s is short for --step)
 agent-tracing inspect <traceId> -s 0
@@ -136,7 +132,7 @@ Flags marked "Default Step: 0" auto-select step 0 if `--step` is not provided. A
 # 1. Trigger an agent operation in the dev UI
 
 # 2. See the overview
-agent-tracing trace
+agent-tracing inspect
 
 # 3. List all traces, get traceId
 agent-tracing list
