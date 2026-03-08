@@ -1,5 +1,7 @@
 import type { ILobeAgentRuntimeErrorType } from '../types/error';
 import { AgentRuntimeErrorType } from '../types/error';
+import { isExceededContextWindowError } from './isExceededContextWindowError';
+import { isQuotaLimitError } from './isQuotaLimitError';
 
 export interface ParsedError {
   error: any;
@@ -108,6 +110,14 @@ export function parseGoogleErrorMessage(message: string): ParsedError {
   const lowerMessage = message.toLowerCase();
   if (lowerMessage.includes('no image generated') || lowerMessage.includes('no image data')) {
     return { error: { message }, errorType: AgentRuntimeErrorType.ProviderNoImageGenerated };
+  }
+
+  if (isExceededContextWindowError(message)) {
+    return { error: { message }, errorType: AgentRuntimeErrorType.ExceededContextWindow };
+  }
+
+  if (isQuotaLimitError(message)) {
+    return { error: { message }, errorType: AgentRuntimeErrorType.QuotaLimitReached };
   }
 
   // Unified error type determination function

@@ -188,6 +188,7 @@ export function defineConfig() {
     // Make only the consent view public (GET page), not other oauth paths
     '/oauth/consent/(.*)',
     '/oidc/handoff',
+    '/oidc/device/auth',
     '/oidc/token',
     // market
     '/market-auth-callback',
