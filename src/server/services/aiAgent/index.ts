@@ -1,4 +1,5 @@
-import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   type DeviceAttachment,
@@ -7,17 +8,17 @@ import {
 } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import { type LobeToolManifest } from '@lobechat/context-engine';
-import { type LobeChatDatabase } from '@lobechat/database';
-import {
-  type ChatTopicBotContext,
-  type ExecAgentParams,
-  type ExecAgentResult,
-  type ExecGroupAgentParams,
-  type ExecGroupAgentResult,
-  type ExecSubAgentTaskParams,
-  type ExecSubAgentTaskResult,
-  type UserInterventionConfig,
+import type { LobeToolManifest } from '@lobechat/context-engine';
+import type { LobeChatDatabase } from '@lobechat/database';
+import type {
+  ChatTopicBotContext,
+  ExecAgentParams,
+  ExecAgentResult,
+  ExecGroupAgentParams,
+  ExecGroupAgentResult,
+  ExecSubAgentTaskParams,
+  ExecSubAgentTaskResult,
+  UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -236,7 +237,30 @@ export class AiAgentService {
       agentConfig.provider,
     );
 
-    // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
+    // 2. Merge builtin agent runtime config (systemRole, plugins)
+    // The DB only stores persist config. Runtime config (e.g. inbox systemRole) is generated dynamically.
+    const agentSlug = agentConfig.slug;
+    const builtinSlugs = Object.values(BUILTIN_AGENT_SLUGS) as string[];
+    if (agentSlug && builtinSlugs.includes(agentSlug)) {
+      const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
+        model: agentConfig.model,
+        plugins: agentConfig.plugins ?? [],
+      });
+      if (runtimeConfig) {
+        // Runtime systemRole takes effect only if DB has no user-customized systemRole
+        if (!agentConfig.systemRole && runtimeConfig.systemRole) {
+          agentConfig.systemRole = runtimeConfig.systemRole;
+          log('execAgent: merged builtin agent runtime systemRole for slug=%s', agentSlug);
+        }
+        // Runtime plugins merged (runtime plugins take priority if provided)
+        if (runtimeConfig.plugins && runtimeConfig.plugins.length > 0) {
+          agentConfig.plugins = runtimeConfig.plugins;
+          log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
+        }
+      }
+    }
+
+    // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     if (!topicId) {
       // Prepare metadata with cronJobId and botContext if provided
@@ -267,18 +291,18 @@ export class AiAgentService {
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
 
-    // 3. Get installed plugins from database
+    // 4. Get installed plugins from database
     const installedPlugins = await this.pluginModel.query();
     log('execAgent: got %d installed plugins', installedPlugins.length);
 
-    // 4. Get model abilities from model-bank for function calling support check
+    // 5. Get model abilities from model-bank for function calling support check
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
     const isModelSupportToolUse = (m: string, p: string) => {
       const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
       return info?.abilities?.functionCall ?? true;
     };
 
-    // 5. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
+    // 6. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
     let lobehubSkillManifests: LobeToolManifest[] = [];
     try {
       lobehubSkillManifests = await this.marketService.getLobehubSkillManifests();
@@ -287,7 +311,7 @@ export class AiAgentService {
     }
     log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
 
-    // 6. Fetch Klavis tool manifests from database
+    // 7. Fetch Klavis tool manifests from database
     let klavisManifests: LobeToolManifest[] = [];
     try {
       klavisManifests = await this.klavisService.getKlavisManifests();
@@ -296,7 +320,7 @@ export class AiAgentService {
     }
     log('execAgent: got %d klavis manifests', klavisManifests.length);
 
-    // 6.5. Fetch user settings (memory config + timezone)
+    // 8. Fetch user settings (memory config + timezone)
     let globalMemoryEnabled = false;
     let userTimezone: string | undefined;
     try {
@@ -315,7 +339,7 @@ export class AiAgentService {
       userTimezone ?? 'default',
     );
 
-    // 7. Create tools using Server AgentToolsEngine
+    // 9. Create tools using Server AgentToolsEngine
     const hasEnabledKnowledgeBases =
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
@@ -416,7 +440,7 @@ export class AiAgentService {
         ? onlineDevices[0].deviceId
         : undefined;
 
-    // 7.4. Fetch device system info for placeholder variable replacement
+    // 9.4. Fetch device system info for placeholder variable replacement
     let deviceSystemInfo: Record<string, string> = {};
     if (activeDeviceId) {
       try {
@@ -443,7 +467,7 @@ export class AiAgentService {
       }
     }
 
-    // 7.5. Build Agent Management context if agent-management tool is enabled
+    // 9.5. Build Agent Management context if agent-management tool is enabled
     const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
     let agentManagementContext;
     if (isAgentManagementEnabled) {
@@ -535,7 +559,7 @@ export class AiAgentService {
       );
     }
 
-    // 8. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 6.5)
+    // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
     let userMemory: ServerUserMemoryConfig | undefined;
 
     if (globalMemoryEnabled) {
@@ -563,7 +587,7 @@ export class AiAgentService {
       }
     }
 
-    // 9. Get existing messages if provided
+    // 11. Get existing messages if provided
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
       historyMessages = await this.messageModel.query({
@@ -580,7 +604,7 @@ export class AiAgentService {
       });
     }
 
-    // 9. Upload external files to S3 and collect file IDs
+    // 12. Upload external files to S3 and collect file IDs
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
 
@@ -613,7 +637,7 @@ export class AiAgentService {
       if (imageList.length === 0) imageList = undefined;
     }
 
-    // 10. Create user message in database
+    // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -625,7 +649,7 @@ export class AiAgentService {
     });
     log('execAgent: created user message %s', userMessageRecord.id);
 
-    // 11. Create assistant message placeholder in database
+    // 14. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -647,11 +671,11 @@ export class AiAgentService {
 
     log('execAgent: prepared evalContext for executor');
 
-    // 12. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
+    // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
     const timestamp = Date.now();
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
-    // 13. Create initial context
+    // 16. Create initial context
     const initialContext: AgentRuntimeContext = {
       payload: {
         // Pass assistant message ID so agent runtime knows which message to update
@@ -672,7 +696,7 @@ export class AiAgentService {
       },
     };
 
-    // 14. Log final operation parameters summary
+    // 17. Log final operation parameters summary
     log(
       'execAgent: creating operation %s with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d',
       operationId,
@@ -683,7 +707,7 @@ export class AiAgentService {
       Object.keys(toolManifestMap).length,
     );
 
-    // 15. Create operation using AgentRuntimeService
+    // 18. Create operation using AgentRuntimeService
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {

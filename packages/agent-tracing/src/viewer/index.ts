@@ -29,6 +29,33 @@ function formatCost(cost: number): string {
   return `$${cost.toFixed(4)}`;
 }
 
+interface CacheStats {
+  cached: number;
+  miss: number;
+  rate: number; // 0-1
+  total: number;
+}
+
+function getStepCacheStats(step: StepSnapshot): CacheStats | null {
+  const ev = step.events?.find((e) => e.type === 'llm_result') as any;
+  const usage = ev?.result?.usage;
+  if (!usage) return null;
+
+  const cached = usage.inputCachedTokens ?? 0;
+  const total = usage.inputTextTokens ?? usage.totalInputTokens ?? step.inputTokens ?? 0;
+  if (total === 0) return null;
+
+  const miss = usage.inputCacheMissTokens ?? total - cached;
+  const rate = cached / total;
+  return { cached, miss, rate, total };
+}
+
+function formatCacheRate(rate: number): string {
+  const pct = (rate * 100).toFixed(0);
+  const colorFn = rate >= 0.8 ? green : rate >= 0.4 ? yellow : rate > 0 ? red : dim;
+  return colorFn(`${pct}%`);
+}
+
 function truncate(s: string, maxLen: number): string {
   const single = s.replaceAll('\n', ' ');
   if (single.length <= maxLen) return single;
@@ -156,12 +183,26 @@ export function renderSnapshot(snapshot: ExecutionSnapshot): string {
     }
   }
 
+  // Aggregate cache stats
+  let totalCached = 0;
+  let totalInput = 0;
+  for (const step of snapshot.steps) {
+    const cache = getStepCacheStats(step);
+    if (cache) {
+      totalCached += cache.cached;
+      totalInput += cache.total;
+    }
+  }
+  const totalCacheLabel =
+    totalInput > 0 ? `  cache:${formatCacheRate(totalCached / totalInput)}` : '';
+
   // Footer
   const reasonColor = snapshot.completionReason === 'done' ? green : snapshot.error ? red : yellow;
   lines.push(
     `${dim('└─')} ${reasonColor(snapshot.completionReason ?? 'unknown')}` +
       `  tokens=${formatTokens(snapshot.totalTokens)}` +
-      `  cost=${formatCost(snapshot.totalCost)}`,
+      `  cost=${formatCost(snapshot.totalCost)}` +
+      totalCacheLabel,
   );
 
   if (snapshot.error) {
@@ -176,8 +217,11 @@ function renderLlmStep(lines: string[], step: StepSnapshot, prefix: string): voi
   if (step.inputTokens) tokenInfo.push(`in:${formatTokens(step.inputTokens)}`);
   if (step.outputTokens) tokenInfo.push(`out:${formatTokens(step.outputTokens)}`);
 
+  const cache = getStepCacheStats(step);
+  const cacheLabel = cache ? `  cache:${formatCacheRate(cache.rate)}` : '';
+
   if (tokenInfo.length > 0) {
-    lines.push(`${prefix}${dim('├─')} LLM     ${tokenInfo.join(' ')} tokens`);
+    lines.push(`${prefix}${dim('├─')} LLM     ${tokenInfo.join(' ')} tokens${cacheLabel}`);
   }
 
   if (step.toolsCalling && step.toolsCalling.length > 0) {
