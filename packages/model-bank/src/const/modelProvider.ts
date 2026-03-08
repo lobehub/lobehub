@@ -57,6 +57,7 @@ export enum ModelProvider {
   Straico = 'straico',
   Taichu = 'taichu',
   TencentCloud = 'tencentcloud',
+  Tensorix = 'tensorix',
   TogetherAI = 'togetherai',
   Upstage = 'upstage',
   V0 = 'v0',

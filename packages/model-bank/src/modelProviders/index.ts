@@ -60,6 +60,7 @@ import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
+import TensorixProvider from './tensorix';
 import TogetherAIProvider from './togetherai';
 import UpstageProvider from './upstage';
 import V0Provider from './v0';
@@ -95,6 +96,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   VLLMProvider.chatModels,
   XinferenceProvider.chatModels,
   OpenRouterProvider.chatModels,
+  TensorixProvider.chatModels,
   TogetherAIProvider.chatModels,
   FireworksAIProvider.chatModels,
   PerplexityProvider.chatModels,
@@ -160,6 +162,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   PPIOProvider,
   Ai302Provider,
   NvidiaProvider,
+  TensorixProvider,
   TogetherAIProvider,
   FireworksAIProvider,
   GroqProvider,
@@ -275,6 +278,7 @@ export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
+export { default as TensorixProviderCard } from './tensorix';
 export { default as TogetherAIProviderCard } from './togetherai';
 export { default as UpstageProviderCard } from './upstage';
 export { default as V0ProviderCard } from './v0';
