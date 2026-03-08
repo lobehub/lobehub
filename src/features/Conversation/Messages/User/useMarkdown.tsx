@@ -15,27 +15,29 @@ const remarkPlugins = markdownElements
   .map((element) => element.remarkPlugin)
   .filter(Boolean);
 
-export const useMarkdown = (id: string): Partial<MarkdownProps> => {
-  const components = useMemo(
-    () =>
-      Object.fromEntries(
-        markdownElements.map((element) => {
-          const Component = element.Component;
-          return [element.tag, (props: any) => <Component {...props} id={id} />];
-        }),
-      ),
-    [id],
-  );
+// Override heading components to render as plain text
+// This prevents markdown heading syntax (# ## ###) from being styled as headings in user messages
+const PlainTextHeading = ({ children }: { children: ReactNode }) => <>{children}</>;
 
+export const useMarkdown = (id: string): Partial<MarkdownProps> => {
   return useMemo(
     () =>
       ({
-        components: Object.fromEntries(
-          markdownElements.map((element) => {
-            const Component = element.Component;
-            return [element.tag, (props: any) => <Component {...props} id={id} />];
-          }),
-        ) as any,
+        components: {
+          ...Object.fromEntries(
+            markdownElements.map((element) => {
+              const Component = element.Component;
+              return [element.tag, (props: any) => <Component {...props} id={id} />];
+            }),
+          ),
+          // Override heading tags to render as plain text
+          h1: PlainTextHeading,
+          h2: PlainTextHeading,
+          h3: PlainTextHeading,
+          h4: PlainTextHeading,
+          h5: PlainTextHeading,
+          h6: PlainTextHeading,
+        } as any,
         customRender: (dom: ReactNode, { text }: { text: string }) => {
           if (text.length > 30_000) return <ContentPreview content={text} id={id} />;
           return dom;
@@ -44,6 +46,6 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
         rehypePlugins,
         remarkPlugins,
       }) satisfies Partial<MarkdownProps>,
-    [components],
+    [id],
   );
 };
