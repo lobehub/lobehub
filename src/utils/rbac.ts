@@ -1,9 +1,5 @@
-import {
-  PERMISSION_ACTIONS,
-  type PermissionScope,
-  RBAC_PERMISSIONS,
-  getAllowedScopesForAction,
-} from '@/const/rbac';
+import type { PERMISSION_ACTIONS, PermissionScope } from '@/const/rbac';
+import { getAllowedScopesForAction, RBAC_PERMISSIONS } from '@/const/rbac';
 
 /**
  * 获取指定权限的所有scope权限值数组
