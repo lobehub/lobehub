@@ -136,6 +136,7 @@ export const buildDefaultAnthropicPayload = async (
     thinking,
   });
 
+  // Filter out empty/whitespace-only system prompts — Anthropic API rejects them
   const systemMessage = messages.find((message) => message.role === 'system');
   const userMessages = messages.filter((message) => message.role !== 'system');
   const systemPromptText =
@@ -189,6 +190,8 @@ export const buildDefaultAnthropicPayload = async (
     } as Anthropic.MessageCreateParams;
   }
 
+  // Resolve temperature/top_p: Claude 4+ doesn't allow both simultaneously.
+  // normalizeTemperature divides by 2 to map LobeChat's 0-2 range to Anthropic's 0-1 range.
   const resolvedSamplingParams = resolveModelSamplingParameters(
     model,
     { temperature, top_p },

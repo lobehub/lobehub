@@ -239,6 +239,23 @@ interface SamplingParameterResolverOptions {
   preferTemperature?: boolean;
 }
 
+/**
+ * High-level helper that resolves temperature and top_p for a given model.
+ *
+ * Automatically detects whether the model has a temperature/top_p conflict
+ * (e.g. Claude 4+ series) and delegates to `resolveParameters` with the
+ * appropriate conflict flag. This avoids duplicating the model-detection +
+ * parameter-resolution pattern across multiple call sites.
+ *
+ * @example
+ * // Claude 4+ with both params → keeps temperature only
+ * resolveModelSamplingParameters('claude-sonnet-4-5-20250929', { temperature: 0.8, top_p: 0.9 })
+ * // → { temperature: 0.4 }   (temperature / 2, top_p omitted)
+ *
+ * // Non-conflict model → keeps both
+ * resolveModelSamplingParameters('claude-3-haiku-20240307', { temperature: 0.8, top_p: 0.9 })
+ * // → { temperature: 0.4, top_p: 0.9 }
+ */
 export const resolveModelSamplingParameters = (
   model: string | undefined,
   config: Pick<ParameterConfig, 'temperature' | 'top_p'>,

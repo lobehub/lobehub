@@ -18,6 +18,10 @@ const isImageTypeSupported = (mimeType: string | null): boolean => {
   return ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
 };
 
+/**
+ * Check if a text value contains visible (non-whitespace) characters.
+ * Used to filter out empty/whitespace-only messages that would cause Anthropic API errors.
+ */
 const hasVisibleText = (text: string | null | undefined): text is string => !!text?.trim();
 
 export const buildAnthropicBlock = async (
@@ -81,6 +85,11 @@ const buildArrayContent = async (content: UserMessageContentPart[]) => {
   return messageContent;
 };
 
+/**
+ * Build a single Anthropic tool_result block from an OpenAI tool message.
+ * Returns undefined if tool_call_id is missing. Uses '<empty_content>' placeholder
+ * when content is empty, as Anthropic requires non-empty tool_result content.
+ */
 const buildAnthropicToolResultBlock = async (
   message: Pick<OpenAIChatMessage, 'content' | 'tool_call_id'>,
 ): Promise<Anthropic.ToolResultBlockParam | undefined> => {
@@ -114,6 +123,8 @@ export const buildAnthropicMessage = async (
     }
 
     case 'user': {
+      // Filter out empty user messages to prevent Anthropic API validation errors.
+      // Empty messages can appear after context truncation or user edits.
       if (Array.isArray(content)) {
         const messageContent = await buildArrayContent(content);
         if (messageContent.length === 0) return undefined;
@@ -201,6 +212,21 @@ export const buildAnthropicMessages = async (
 ): Promise<Anthropic.Messages.MessageParam[]> => {
   const messages: Anthropic.Messages.MessageParam[] = [];
 
+  // === Two-pass strategy to guarantee tool_use / tool_result pairing ===
+  //
+  // Anthropic requires every tool_use block in an assistant message to have a
+  // matching tool_result block in the immediately following user message. The old
+  // sequential approach relied on message ordering, which broke when messages were
+  // truncated, reordered, or deleted — causing "tool_use ids were found without
+  // tool_result blocks" errors.
+  //
+  // Pass 1: Collect all valid tool_call_ids from assistant messages, then build a
+  //         Map<tool_call_id, ToolResultBlock> from matching tool messages.
+  // Pass 2: For each assistant message, only keep tool_calls that have a paired
+  //         tool_result, and emit the paired tool_results right after.
+  //         Unpaired tool messages degrade to plain-text user messages.
+
+  // Pass 1a: Collect valid tool_call_ids from assistant messages
   const validToolCallIds = new Set<string>();
   for (const message of oaiMessages) {
     if (message.role === 'assistant' && message.tool_calls?.length) {
@@ -212,6 +238,7 @@ export const buildAnthropicMessages = async (
     }
   }
 
+  // Pass 1b: Pre-build tool_result blocks indexed by tool_call_id
   const toolResultsByCallId = new Map<string, Anthropic.ToolResultBlockParam>();
   for (const message of oaiMessages) {
     if (
@@ -227,8 +254,10 @@ export const buildAnthropicMessages = async (
     }
   }
 
+  // Pass 2: Build final message array with guaranteed tool_use/tool_result pairing
   for (const message of oaiMessages) {
     if (message.role === 'assistant') {
+      // Only keep tool_calls that have a matching tool_result in the Map
       const pairedToolCalls = message.tool_calls?.filter(
         (toolCall) => !!toolCall.id && toolResultsByCallId.has(toolCall.id),
       );
@@ -242,6 +271,7 @@ export const buildAnthropicMessages = async (
         messages.push(anthropicMessage);
       }
 
+      // Emit paired tool_results as a user message immediately after the assistant message
       if (pairedToolCalls?.length) {
         messages.push({
           content: pairedToolCalls.flatMap((toolCall) => {
@@ -256,10 +286,12 @@ export const buildAnthropicMessages = async (
     }
 
     if (message.role === 'tool') {
+      // Already handled in Pass 1b and emitted above — skip
       if (message.tool_call_id && validToolCallIds.has(message.tool_call_id)) {
         continue;
       }
 
+      // Orphan tool message (no matching assistant tool_call) — degrade to plain text
       const fallbackContent = Array.isArray(message.content)
         ? JSON.stringify(message.content)
         : message.content || '<empty_content>';

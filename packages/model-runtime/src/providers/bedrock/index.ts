@@ -172,6 +172,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const inputStartAt = Date.now();
     const system_message = messages.find((m) => m.role === 'system');
     const user_messages = messages.filter((m) => m.role !== 'system');
+    // Filter out empty/whitespace-only system prompts — Anthropic API rejects them
     const systemPromptText =
       typeof system_message?.content === 'string' && system_message.content.trim()
         ? system_message.content
@@ -232,7 +233,8 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         thinking: resolvedThinking,
       };
     } else {
-      // Resolve temperature and top_p parameters based on model constraints
+      // Resolve temperature/top_p: Claude 4+ on Bedrock doesn't allow both simultaneously.
+      // normalizeTemperature divides by 2 to map LobeChat's 0-2 range to Anthropic's 0-1 range.
       const resolvedSamplingParams = resolveModelSamplingParameters(
         model,
         { temperature, top_p },

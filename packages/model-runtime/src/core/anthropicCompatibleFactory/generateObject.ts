@@ -20,7 +20,8 @@ export const createAnthropicGenerateObject = async (
   log('schema: %O', schema);
   log('messages count: %d', messages.length);
 
-  // Convert messages to Anthropic format
+  // Convert messages to Anthropic format.
+  // Filter out empty/whitespace-only system prompts — Anthropic API rejects them.
   const system_message = messages.find((m) => m.role === 'system')?.content;
   const systemPromptText =
     typeof system_message === 'string' && system_message.trim() ? system_message : undefined;

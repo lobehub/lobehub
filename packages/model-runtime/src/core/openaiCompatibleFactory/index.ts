@@ -373,6 +373,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           return await this.handleResponseAPIMode(processedPayload, options);
         }
 
+        // Sanitize temperature/top_p conflict for Claude 4+ models routed via OpenAI-compatible API.
+        // normalizeTemperature is false here because OpenAI-compatible providers use the raw range.
         const postPayload = {
           ...handledPayload,
           ...resolveModelSamplingParameters(handledPayload.model, handledPayload, {
@@ -441,6 +443,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (customClient?.createChatCompletionStream) {
           log('using custom client for chat completion stream');
+          // Also sanitize sampling params for custom client path (e.g. OpenRouter)
           response = customClient.createChatCompletionStream(
             this.client,
             {
@@ -994,6 +997,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         stream: !isStreaming ? undefined : isStreaming,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
         user: options?.user,
+        // Sanitize sampling params for Responses API path
         ...resolveModelSamplingParameters(res.model, res, {
           normalizeTemperature: false,
           preferTemperature: true,
