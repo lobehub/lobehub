@@ -7,6 +7,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { DiscordRestApi } from './discordRestApi';
+import { LarkRestApi } from './larkRestApi';
 import { renderError, renderFinalReply, renderStepProgress, splitMessage } from './replyTemplate';
 import { TelegramRestApi } from './telegramRestApi';
 
@@ -23,13 +24,17 @@ function extractTelegramChatId(platformThreadId: string): string {
   return platformThreadId.split(':')[1];
 }
 
+function extractLarkChatId(platformThreadId: string): string {
+  return platformThreadId.split(':')[1];
+}
+
 function parseTelegramMessageId(compositeId: string): number {
   const colonIdx = compositeId.lastIndexOf(':');
   return colonIdx !== -1 ? Number(compositeId.slice(colonIdx + 1)) : Number(compositeId);
 }
 
-/** Telegram has a 4096 char limit vs Discord's 2000 */
 const TELEGRAM_CHAR_LIMIT = 4000;
+const LARK_CHAR_LIMIT = 4000;
 
 // --------------- Platform-agnostic messenger ---------------
 
@@ -66,6 +71,16 @@ function createTelegramMessenger(telegram: TelegramRestApi, chatId: string): Pla
     removeReaction: (messageId) =>
       telegram.removeMessageReaction(chatId, parseTelegramMessageId(messageId)),
     triggerTyping: () => telegram.sendChatAction(chatId, 'typing'),
+  };
+}
+
+function createLarkMessenger(lark: LarkRestApi, chatId: string): PlatformMessenger {
+  return {
+    createMessage: (content) => lark.sendMessage(chatId, content).then(() => {}),
+    editMessage: (messageId, content) => lark.editMessage(messageId, content),
+    // Lark has no reaction/typing API for bots
+    removeReaction: () => Promise.resolve(),
+    triggerTyping: () => Promise.resolve(),
   };
 }
 
@@ -158,27 +173,38 @@ export class BotCallbackService {
       credentials = JSON.parse(row.credentials);
     }
 
-    const botToken = credentials.botToken;
-    if (!botToken) {
-      throw new Error(`Bot token not found for ${platform} appId=${applicationId}`);
+    const isLark = platform === 'lark' || platform === 'feishu';
+
+    if (isLark ? !credentials.appId || !credentials.appSecret : !credentials.botToken) {
+      throw new Error(`Bot credentials incomplete for ${platform} appId=${applicationId}`);
     }
 
     switch (platform) {
       case 'telegram': {
-        const telegram = new TelegramRestApi(botToken);
+        const telegram = new TelegramRestApi(credentials.botToken);
         const chatId = extractTelegramChatId(platformThreadId);
         return {
-          botToken,
+          botToken: credentials.botToken,
           charLimit: TELEGRAM_CHAR_LIMIT,
           messenger: createTelegramMessenger(telegram, chatId),
         };
       }
+      case 'lark':
+      case 'feishu': {
+        const lark = new LarkRestApi(credentials.appId, credentials.appSecret, platform);
+        const chatId = extractLarkChatId(platformThreadId);
+        return {
+          botToken: credentials.appId,
+          charLimit: LARK_CHAR_LIMIT,
+          messenger: createLarkMessenger(lark, chatId),
+        };
+      }
       case 'discord':
       default: {
-        const discord = new DiscordRestApi(botToken);
+        const discord = new DiscordRestApi(credentials.botToken);
         const channelId = extractDiscordChannelId(platformThreadId);
         return {
-          botToken,
+          botToken: credentials.botToken,
           messenger: createDiscordMessenger(discord, channelId, platformThreadId),
         };
       }
