@@ -30,7 +30,7 @@ export function registerVideoCommand(parent: Command) {
         const client = await getTrpcClient();
         const topicId = await client.generationTopic.createTopic.mutate({ type: 'video' });
 
-        const params: Record<string, any> = { prompt };
+        const params: { prompt: string } & Record<string, any> = { prompt };
         if (options.aspectRatio) params.aspectRatio = options.aspectRatio;
         if (options.duration) params.duration = Number.parseInt(options.duration, 10);
         if (options.resolution) params.resolution = options.resolution;

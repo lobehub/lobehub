@@ -34,7 +34,7 @@ export function registerImageCommand(parent: Command) {
         // Create a generation topic first
         const topicId = await client.generationTopic.createTopic.mutate({ type: 'image' });
 
-        const params: Record<string, any> = { prompt };
+        const params: { prompt: string } & Record<string, any> = { prompt };
         if (options.width) params.width = Number.parseInt(options.width, 10);
         if (options.height) params.height = Number.parseInt(options.height, 10);
         if (options.steps) params.steps = Number.parseInt(options.steps, 10);
