@@ -327,7 +327,7 @@ export class AiAgentService {
       const userModel = new UserModel(this.db, this.userId);
       const settings = await userModel.getUserSettings();
       const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
-      globalMemoryEnabled = memorySettings?.enabled === true;
+      globalMemoryEnabled = memorySettings?.enabled !== false;
       const generalSettings = settings?.general as { timezone?: string } | undefined;
       userTimezone = generalSettings?.timezone;
     } catch (error) {
