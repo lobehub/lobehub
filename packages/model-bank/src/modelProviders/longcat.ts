@@ -10,6 +10,9 @@ const LongCat: ModelProviderCard = {
   name: 'LongCat',
   settings: {
     disableBrowserRequest: false,
+    proxyUrl: {
+      placeholder: 'https://api.longcat.chat/openai/v1',
+    },
     sdkType: 'openai',
     showModelFetcher: false,
   },

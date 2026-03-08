@@ -38,9 +38,6 @@ const longcatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-01-14',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
     type: 'chat',
   },
   {
@@ -60,9 +57,6 @@ const longcatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-09-22',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
     type: 'chat',
   },
   {
