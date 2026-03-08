@@ -128,7 +128,7 @@ const ModelSelect = memo<ModelSelectProps>(
             <ModelItemRender
               {...(option as ModelOption)}
               {...(option as ModelOption).abilities}
-              showInfoTag
+              showInfoTag={false} // Must be false to prevent React Error #185
             />
           )}
           style={{
