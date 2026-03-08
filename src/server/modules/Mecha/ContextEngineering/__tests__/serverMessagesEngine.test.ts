@@ -461,10 +461,8 @@ describe('serverMessagesEngine', () => {
 
       const result = await serverMessagesEngine({
         discordContext: {
-          channelId: 'ch-1',
-          channelName: 'general',
-          guildId: 'guild-1',
-          guildName: 'Test Guild',
+          channel: { id: 'ch-1', name: 'general' },
+          guild: { id: 'guild-1', name: 'Test Guild' },
         },
         messages,
         model: 'gpt-4',
@@ -479,7 +477,7 @@ describe('serverMessagesEngine', () => {
 
       const result = await serverMessagesEngine({
         evalContext: {
-          environmentPrompt: 'This is an evaluation environment',
+          envPrompt: 'This is an evaluation environment',
         },
         messages,
         model: 'gpt-4',
@@ -494,8 +492,9 @@ describe('serverMessagesEngine', () => {
 
       const result = await serverMessagesEngine({
         agentManagementContext: {
-          availableModels: ['gpt-4', 'claude-3'],
-          availablePlugins: ['web-browsing'],
+          availablePlugins: [
+            { identifier: 'web-browsing', name: 'Web Browsing', type: 'builtin' as const },
+          ],
         },
         messages,
         model: 'gpt-4',
@@ -514,10 +513,8 @@ describe('serverMessagesEngine', () => {
           meta: { description: 'Test agent', title: 'Test' },
         },
         discordContext: {
-          channelId: 'ch-1',
-          channelName: 'general',
-          guildId: 'guild-1',
-          guildName: 'Test Guild',
+          channel: { id: 'ch-1', name: 'general' },
+          guild: { id: 'guild-1', name: 'Test Guild' },
         },
         messages,
         model: 'gpt-4',

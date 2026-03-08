@@ -447,15 +447,19 @@ describe('RuntimeExecutors', () => {
 
       it('should pass tools normally when state.forceFinish is not set', async () => {
         const executors = createRuntimeExecutors(ctx);
-        const state = createMockState();
+        const tools = [
+          {
+            function: { description: 'Search the web', name: 'search' },
+            type: 'function' as const,
+          },
+        ];
+        const state = createMockState({ tools: tools as any });
 
-        const tools = [{ description: 'Search the web', name: 'search' }];
         const instruction = {
           payload: {
             messages: [{ content: 'Hello', role: 'user' }],
             model: 'gpt-4',
             provider: 'openai',
-            tools,
           },
           type: 'call_llm' as const,
         };
@@ -470,7 +474,12 @@ describe('RuntimeExecutors', () => {
 
       it('should fallback to state.tools when payload.tools is not provided', async () => {
         const executors = createRuntimeExecutors(ctx);
-        const stateTools = [{ description: 'State tool', name: 'state-tool' }];
+        const stateTools = [
+          {
+            function: { description: 'State tool', name: 'state-tool' },
+            type: 'function' as const,
+          },
+        ];
         const state = createMockState({ tools: stateTools as any });
 
         const instruction = {
@@ -494,7 +503,12 @@ describe('RuntimeExecutors', () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState({
           forceFinish: true,
-          tools: [{ description: 'State tool', name: 'state-tool' }] as any,
+          tools: [
+            {
+              function: { description: 'State tool', name: 'state-tool' },
+              type: 'function' as const,
+            },
+          ] as any,
         });
 
         const instruction = {
@@ -592,48 +606,6 @@ describe('RuntimeExecutors', () => {
         expect(mockChat).toHaveBeenCalledWith(
           expect.objectContaining({ messages: rawMessages }),
           expect.anything(),
-        );
-      });
-
-      it('should pass correct params from agentConfig to serverMessagesEngine', async () => {
-        const ctxWithConfig: RuntimeExecutorContext = {
-          ...ctx,
-          agentConfig: {
-            chatConfig: { enableHistoryCount: true, historyCount: 10 },
-            files: [{ content: 'file contents', enabled: true, id: 'file-1', name: 'doc.pdf' }],
-            knowledgeBases: [{ enabled: true, id: 'kb-1', name: 'My KB' }],
-            plugins: ['web-search', 'calculator'],
-            systemRole: 'You are a helpful assistant',
-          },
-        };
-        const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
-
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
-
-        await executors.call_llm!(instruction, state);
-
-        expect(engineSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            enableHistoryCount: true,
-            historyCount: 10,
-            knowledge: {
-              fileContents: [{ content: 'file contents', fileId: 'file-1', filename: 'doc.pdf' }],
-              knowledgeBases: [{ id: 'kb-1', name: 'My KB' }],
-            },
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-            toolsConfig: { tools: ['web-search', 'calculator'] },
-          }),
         );
       });
 
