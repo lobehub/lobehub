@@ -1552,6 +1552,47 @@ describe('RuntimeExecutors', () => {
       // Original state must not be mutated
       expect(state.usage.tools.totalCalls).toBe(0);
     });
+
+    it('should pass toolResultMaxLength from agentConfig to executeTool', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        metadata: {
+          agentConfig: {
+            chatConfig: {
+              toolResultMaxLength: 5000,
+            },
+          },
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await executors.call_tools_batch!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          toolResultMaxLength: 5000,
+        }),
+      );
+    });
   });
 
   describe('resolve_aborted_tools executor', () => {

@@ -301,6 +301,51 @@ describe('ToolResolver', () => {
     });
   });
 
+  describe('defensive defaults for missing fields', () => {
+    it('should handle undefined enabledToolIds gracefully', () => {
+      const opSet: OperationToolSet = {
+        manifestMap: { 'web-search': mockSearchManifest },
+        sourceMap: {},
+        // enabledToolIds intentionally omitted (lambda path)
+      };
+
+      const result = resolver.resolve(opSet, emptyDelta);
+
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.tools).toEqual([]);
+      // manifestMap should be empty since no enabledToolIds to match
+      expect(Object.keys(result.manifestMap)).toHaveLength(0);
+    });
+
+    it('should handle undefined tools gracefully', () => {
+      const opSet: OperationToolSet = {
+        enabledToolIds: ['web-search'],
+        manifestMap: { 'web-search': mockSearchManifest },
+        sourceMap: {},
+        // tools intentionally omitted
+      };
+
+      const result = resolver.resolve(opSet, emptyDelta);
+
+      expect(result.tools).toEqual([]);
+      expect(result.enabledToolIds).toEqual(['web-search']);
+      expect(result.manifestMap['web-search']).toBeDefined();
+    });
+
+    it('should handle both enabledToolIds and tools undefined without throwing', () => {
+      const opSet: OperationToolSet = {
+        manifestMap: {},
+        sourceMap: {},
+      };
+
+      expect(() => resolver.resolve(opSet, emptyDelta)).not.toThrow();
+
+      const result = resolver.resolve(opSet, emptyDelta);
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.tools).toEqual([]);
+    });
+  });
+
   describe('immutability', () => {
     it('should not mutate the original operationToolSet', () => {
       const opSet = makeOperationToolSet([mockSearchManifest]);
