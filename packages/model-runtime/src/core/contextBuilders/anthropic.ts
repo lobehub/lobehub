@@ -18,6 +18,8 @@ const isImageTypeSupported = (mimeType: string | null): boolean => {
   return ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
 };
 
+const hasVisibleText = (text: string | null | undefined): text is string => !!text?.trim();
+
 export const buildAnthropicBlock = async (
   content: UserMessageContentPart,
 ): Promise<Anthropic.ContentBlock | Anthropic.ImageBlockParam | undefined> => {
@@ -79,6 +81,28 @@ const buildArrayContent = async (content: UserMessageContentPart[]) => {
   return messageContent;
 };
 
+const buildAnthropicToolResultBlock = async (
+  message: Pick<OpenAIChatMessage, 'content' | 'tool_call_id'>,
+): Promise<Anthropic.ToolResultBlockParam | undefined> => {
+  if (!message.tool_call_id) return undefined;
+
+  const toolResultContent = Array.isArray(message.content)
+    ? await buildArrayContent(message.content)
+    : hasVisibleText(message.content)
+      ? [{ text: message.content, type: 'text' as const }]
+      : [];
+
+  return {
+    content: (toolResultContent.length > 0
+      ? toolResultContent
+      : [
+          { text: '<empty_content>', type: 'text' as const },
+        ]) as Anthropic.ToolResultBlockParam['content'],
+    tool_use_id: message.tool_call_id,
+    type: 'tool_result',
+  };
+};
+
 export const buildAnthropicMessage = async (
   message: OpenAIChatMessage,
 ): Promise<Anthropic.Messages.MessageParam | undefined> => {
@@ -90,8 +114,20 @@ export const buildAnthropicMessage = async (
     }
 
     case 'user': {
+      if (Array.isArray(content)) {
+        const messageContent = await buildArrayContent(content);
+        if (messageContent.length === 0) return undefined;
+
+        return {
+          content: messageContent,
+          role: 'user',
+        };
+      }
+
+      if (!hasVisibleText(content)) return undefined;
+
       return {
-        content: typeof content === 'string' ? content : await buildArrayContent(content),
+        content,
         role: 'user',
       };
     }
@@ -164,9 +200,7 @@ export const buildAnthropicMessages = async (
   options: { enabledContextCaching?: boolean } = {},
 ): Promise<Anthropic.Messages.MessageParam[]> => {
   const messages: Anthropic.Messages.MessageParam[] = [];
-  let pendingToolResults: Anthropic.ToolResultBlockParam[] = [];
 
-  // First collect all tool_call_id from assistant messages for subsequent lookup
   const validToolCallIds = new Set<string>();
   for (const message of oaiMessages) {
     if (message.role === 'assistant' && message.tool_calls?.length) {
@@ -178,50 +212,68 @@ export const buildAnthropicMessages = async (
     }
   }
 
+  const toolResultsByCallId = new Map<string, Anthropic.ToolResultBlockParam>();
   for (const message of oaiMessages) {
-    const index = oaiMessages.indexOf(message);
+    if (
+      message.role !== 'tool' ||
+      !message.tool_call_id ||
+      !validToolCallIds.has(message.tool_call_id)
+    )
+      continue;
 
-    // refs: https://docs.anthropic.com/claude/docs/tool-use#tool-use-and-tool-result-content-blocks
-    if (message.role === 'tool') {
-      // Handle different content types in tool messages
-      const toolResultContent = Array.isArray(message.content)
-        ? await buildArrayContent(message.content)
-        : !message.content
-          ? [{ text: '<empty_content>', type: 'text' as const }]
-          : [{ text: message.content, type: 'text' as const }];
+    const toolResultBlock = await buildAnthropicToolResultBlock(message);
+    if (toolResultBlock) {
+      toolResultsByCallId.set(message.tool_call_id, toolResultBlock);
+    }
+  }
 
-      // Check if this tool message has a corresponding assistant tool call
-      if (message.tool_call_id && validToolCallIds.has(message.tool_call_id)) {
-        pendingToolResults.push({
-          content: toolResultContent as Anthropic.ToolResultBlockParam['content'],
-          tool_use_id: message.tool_call_id,
-          type: 'tool_result',
-        });
+  for (const message of oaiMessages) {
+    if (message.role === 'assistant') {
+      const pairedToolCalls = message.tool_calls?.filter(
+        (toolCall) => !!toolCall.id && toolResultsByCallId.has(toolCall.id),
+      );
 
-        // If this is the last message or the next message is not 'tool', add accumulated tool results as a 'user' message
-        if (index === oaiMessages.length - 1 || oaiMessages[index + 1].role !== 'tool') {
-          messages.push({
-            content: pendingToolResults,
-            role: 'user',
-          });
-          pendingToolResults = [];
-        }
-      } else {
-        // If tool message has no corresponding assistant tool call, treat as plain text
-        const fallbackContent = Array.isArray(message.content)
-          ? JSON.stringify(message.content)
-          : message.content || '<empty_content>';
-        messages.push({
-          content: fallbackContent,
-          role: 'user',
-        });
-      }
-    } else {
-      const anthropicMessage = await buildAnthropicMessage(message);
-      // Filter out undefined messages (e.g., empty assistant messages)
+      const anthropicMessage = await buildAnthropicMessage({
+        ...message,
+        tool_calls: pairedToolCalls?.length ? pairedToolCalls : undefined,
+      });
+
       if (anthropicMessage) {
         messages.push(anthropicMessage);
       }
+
+      if (pairedToolCalls?.length) {
+        messages.push({
+          content: pairedToolCalls.flatMap((toolCall) => {
+            const toolResultBlock = toolResultsByCallId.get(toolCall.id);
+            return toolResultBlock ? [toolResultBlock] : [];
+          }),
+          role: 'user',
+        });
+      }
+
+      continue;
+    }
+
+    if (message.role === 'tool') {
+      if (message.tool_call_id && validToolCallIds.has(message.tool_call_id)) {
+        continue;
+      }
+
+      const fallbackContent = Array.isArray(message.content)
+        ? JSON.stringify(message.content)
+        : message.content || '<empty_content>';
+      messages.push({
+        content: fallbackContent,
+        role: 'user',
+      });
+
+      continue;
+    }
+
+    const anthropicMessage = await buildAnthropicMessage(message);
+    if (anthropicMessage) {
+      messages.push(anthropicMessage);
     }
   }
 
