@@ -40,9 +40,7 @@ const TOOL_PRICING: Record<string, number> = {
 };
 
 export interface RuntimeExecutorContext {
-  activeDeviceId?: string;
   agentConfig?: any;
-  deviceSystemInfo?: Record<string, string>;
   discordContext?: any;
   evalContext?: EvalContext;
   fileService?: any;
@@ -75,7 +73,7 @@ export const createRuntimeExecutors = (
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
     // Resolve tools via ToolResolver (unified tool injection)
-    const activeDeviceId = ctx.activeDeviceId || state.metadata?.activeDeviceId;
+    const activeDeviceId = state.metadata?.activeDeviceId;
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
       manifestMap: state.toolManifestMap ?? {},
@@ -177,7 +175,7 @@ export const createRuntimeExecutors = (
         const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
         const contextEngineInput = {
-          additionalVariables: ctx.deviceSystemInfo,
+          additionalVariables: state.metadata?.deviceSystemInfo,
           userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
@@ -623,7 +621,7 @@ export const createRuntimeExecutors = (
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
-        activeDeviceId: ctx.activeDeviceId,
+        activeDeviceId: state.metadata?.activeDeviceId,
         memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
         serverDB: ctx.serverDB,
         toolManifestMap: effectiveManifestMap,
@@ -697,21 +695,6 @@ export const createRuntimeExecutors = (
 
       newState.usage = usage;
       if (cost) newState.cost = cost;
-
-      // Handle activateDevice metadata — persist activeDeviceId for subsequent call_llm steps
-      const activatedDeviceId = executionResult.state?.metadata?.activeDeviceId;
-      if (activatedDeviceId && !ctx.activeDeviceId) {
-        ctx.activeDeviceId = activatedDeviceId;
-
-        if (newState.metadata) {
-          newState.metadata.activeDeviceId = activatedDeviceId;
-        }
-
-        log(
-          `[${operationLogId}] Device activated (deviceId: %s), local-system tools will be injected in next call_llm`,
-          activatedDeviceId,
-        );
-      }
 
       // Persist ToolsActivator discovery results to state.activatedStepTools
       const discoveredTools = executionResult.state?.activatedTools as
@@ -854,6 +837,7 @@ export const createRuntimeExecutors = (
           };
 
           const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+            activeDeviceId: state.metadata?.activeDeviceId,
             memoryToolPermission: state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
             serverDB: ctx.serverDB,
             toolManifestMap: batchManifestMap,

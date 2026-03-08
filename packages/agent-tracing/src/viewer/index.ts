@@ -193,8 +193,14 @@ export function renderSnapshot(snapshot: ExecutionSnapshot): string {
       totalInput += cache.total;
     }
   }
-  const totalCacheLabel =
-    totalInput > 0 ? `  cache:${formatCacheRate(totalCached / totalInput)}` : '';
+  const totalCacheParts: string[] = [];
+  if (totalInput > 0) {
+    totalCacheParts.push(`cache:${formatCacheRate(totalCached / totalInput)}`);
+    if (totalCached > 0) totalCacheParts.push(dim(`hit:${formatTokens(totalCached)}`));
+    const totalMiss = totalInput - totalCached;
+    if (totalMiss > 0) totalCacheParts.push(dim(`miss:${formatTokens(totalMiss)}`));
+  }
+  const totalCacheLabel = totalCacheParts.length > 0 ? `  ${totalCacheParts.join(' ')}` : '';
 
   // Footer
   const reasonColor = snapshot.completionReason === 'done' ? green : snapshot.error ? red : yellow;
@@ -218,7 +224,13 @@ function renderLlmStep(lines: string[], step: StepSnapshot, prefix: string): voi
   if (step.outputTokens) tokenInfo.push(`out:${formatTokens(step.outputTokens)}`);
 
   const cache = getStepCacheStats(step);
-  const cacheLabel = cache ? `  cache:${formatCacheRate(cache.rate)}` : '';
+  const cacheParts: string[] = [];
+  if (cache) {
+    cacheParts.push(`cache:${formatCacheRate(cache.rate)}`);
+    if (cache.cached > 0) cacheParts.push(dim(`hit:${formatTokens(cache.cached)}`));
+    if (cache.miss > 0) cacheParts.push(dim(`miss:${formatTokens(cache.miss)}`));
+  }
+  const cacheLabel = cacheParts.length > 0 ? `  ${cacheParts.join(' ')}` : '';
 
   if (tokenInfo.length > 0) {
     lines.push(`${prefix}${dim('├─')} LLM     ${tokenInfo.join(' ')} tokens${cacheLabel}`);

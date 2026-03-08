@@ -380,7 +380,11 @@ export class AiAgentService {
 
     // Generate tools and manifest map
     // Include device tool IDs so ToolsEngine can process them via enableChecker
-    const pluginIds = [...(agentConfig.plugins || []), LocalSystemManifest.identifier];
+    const pluginIds = [
+      ...(agentConfig.plugins || []),
+      LocalSystemManifest.identifier,
+      RemoteDeviceManifest.identifier,
+    ];
     log('execAgent: agent configured plugins: %O', pluginIds);
 
     const toolsResult = toolsEngine.generateToolsDetailed({
@@ -420,11 +424,11 @@ export class AiAgentService {
       klavisManifests.length,
     );
 
-    // Add remote-device manifest to toolManifestMap for tool discovery (activateTools)
-    // It's not in pluginIds (not injected by default), but available for LLM to discover and activate
-    if (gatewayConfigured) {
+    // Override RemoteDevice manifest's systemRole with dynamic device list prompt
+    // The manifest is already included/excluded by ToolsEngine enableChecker
+    if (toolManifestMap[RemoteDeviceManifest.identifier]) {
       toolManifestMap[RemoteDeviceManifest.identifier] = {
-        ...RemoteDeviceManifest,
+        ...toolManifestMap[RemoteDeviceManifest.identifier],
         systemRole: generateSystemPrompt(onlineDevices),
       };
     }
