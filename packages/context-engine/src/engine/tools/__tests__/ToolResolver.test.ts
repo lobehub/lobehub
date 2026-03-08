@@ -303,11 +303,11 @@ describe('ToolResolver', () => {
 
   describe('defensive defaults for missing fields', () => {
     it('should handle undefined enabledToolIds gracefully', () => {
-      const opSet: OperationToolSet = {
+      // Simulate lambda path where enabledToolIds is not provided at runtime
+      const opSet = {
         manifestMap: { 'web-search': mockSearchManifest },
         sourceMap: {},
-        // enabledToolIds intentionally omitted (lambda path)
-      };
+      } as unknown as OperationToolSet;
 
       const result = resolver.resolve(opSet, emptyDelta);
 
@@ -318,12 +318,12 @@ describe('ToolResolver', () => {
     });
 
     it('should handle undefined tools gracefully', () => {
-      const opSet: OperationToolSet = {
+      // Simulate partial toolSet missing tools array
+      const opSet = {
         enabledToolIds: ['web-search'],
         manifestMap: { 'web-search': mockSearchManifest },
         sourceMap: {},
-        // tools intentionally omitted
-      };
+      } as unknown as OperationToolSet;
 
       const result = resolver.resolve(opSet, emptyDelta);
 
@@ -333,10 +333,10 @@ describe('ToolResolver', () => {
     });
 
     it('should handle both enabledToolIds and tools undefined without throwing', () => {
-      const opSet: OperationToolSet = {
+      const opSet = {
         manifestMap: {},
         sourceMap: {},
-      };
+      } as unknown as OperationToolSet;
 
       expect(() => resolver.resolve(opSet, emptyDelta)).not.toThrow();
 
