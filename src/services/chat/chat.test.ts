@@ -159,6 +159,36 @@ describe('ChatService', () => {
       );
     });
 
+    it('should strip tools from the final llm call when forceFinish is true', async () => {
+      const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+      const messages = [{ content: 'Finalize this media result', role: 'user' }] as UIChatMessage[];
+      const mockTools = [
+        {
+          type: 'function' as const,
+          function: {
+            name: 'plugin1____api1',
+          },
+        },
+      ];
+
+      await chatService.createAssistantMessage({
+        messages,
+        forceFinish: true,
+        resolvedAgentConfig: createMockResolvedConfig({
+          plugins: ['plugin1'],
+          tools: mockTools,
+          enabledToolIds: ['plugin1'],
+        }),
+      });
+
+      expect(getChatCompletionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tools: undefined,
+        }),
+        expect.anything(),
+      );
+    });
+
     describe('extendParams functionality', () => {
       it('should add reasoning parameters when model supports enableReasoning and user enables it', async () => {
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');

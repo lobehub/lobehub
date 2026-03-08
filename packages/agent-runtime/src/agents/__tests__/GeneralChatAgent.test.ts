@@ -2507,4 +2507,66 @@ describe('GeneralChatAgent', () => {
       ]);
     });
   });
+
+  describe('forceFinish tool stripping', () => {
+    it('should strip tools after tool_result when forceFinish is enabled', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        forceFinish: true,
+        messages: [{ role: 'tool', content: 'done' }] as any,
+        tools: [{ function: { name: 'plugin____tool' }, type: 'function' }] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tool_result', { parentMessageId: 'tool-msg-1' }),
+        state,
+      );
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'tool-msg-1',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+
+    it('should strip tools after tools_batch_result when forceFinish is enabled', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        forceFinish: true,
+        messages: [{ role: 'tool', content: 'done' }] as any,
+        tools: [{ function: { name: 'plugin____tool' }, type: 'function' }] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tools_batch_result', { parentMessageId: 'tool-msg-2' }),
+        state,
+      );
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'tool-msg-2',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+  });
 });

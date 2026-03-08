@@ -523,7 +523,7 @@ export class GeneralChatAgent implements Agent {
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
+            tools: state.forceFinish ? undefined : state.tools,
           } as GeneralAgentCallLLMInstructionPayload,
           type: 'call_llm',
         };
@@ -556,7 +556,7 @@ export class GeneralChatAgent implements Agent {
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
+            tools: state.forceFinish ? undefined : state.tools,
           } as GeneralAgentCallLLMInstructionPayload,
           type: 'call_llm',
         };
@@ -573,7 +573,7 @@ export class GeneralChatAgent implements Agent {
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
+            tools: state.forceFinish ? undefined : state.tools,
           } as GeneralAgentCallLLMInstructionPayload,
           type: 'call_llm',
         };
@@ -602,7 +602,7 @@ export class GeneralChatAgent implements Agent {
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
+            tools: state.forceFinish ? undefined : state.tools,
           } as GeneralAgentCallLLMInstructionPayload,
           type: 'call_llm',
         };
@@ -623,7 +623,7 @@ export class GeneralChatAgent implements Agent {
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId: compressionPayload.parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
+            tools: state.forceFinish ? undefined : state.tools,
           } as GeneralAgentCallLLMInstructionPayload,
           type: 'call_llm',
         };

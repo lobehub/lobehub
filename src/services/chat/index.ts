@@ -59,12 +59,13 @@ import { type FetchOptions } from './types';
 
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
-  groupId?: string;
-  messages: UIChatMessage[];
   /**
    * Pre-resolved agent config from AgentRuntime layer.
    * Required to ensure config consistency and proper isSubTask filtering.
    */
+  forceFinish?: boolean;
+  groupId?: string;
+  messages: UIChatMessage[];
   resolvedAgentConfig: ResolvedAgentConfig;
   topicId?: string;
 }
@@ -107,6 +108,7 @@ class ChatService {
       groupId,
       topicId,
       resolvedAgentConfig,
+      forceFinish,
       ...params
     }: GetChatCompletionPayload,
     options?: FetchOptions,
@@ -137,6 +139,10 @@ class ChatService {
       tools,
     } = resolvedAgentConfig;
 
+    const effectiveEnabledManifests = forceFinish ? [] : enabledManifests;
+    const effectiveEnabledToolIds = forceFinish ? [] : enabledToolIds;
+    const effectiveTools = forceFinish ? undefined : tools;
+
     // Get search config with agentId for agent-specific settings
     const searchConfig = getSearchConfig(payload.model, payload.provider!, targetAgentId);
 
@@ -152,7 +158,7 @@ class ChatService {
     // Check if Agent Builder tool is enabled and build context for it
     // Note: When Agent Builder is active, we need to get the context of the agent being edited,
     // which is stored in chatStore.activeAgentId, not the targetAgentId (which is the Agent Builder itself)
-    const isAgentBuilderEnabled = enabledToolIds.includes(AgentBuilderIdentifier);
+    const isAgentBuilderEnabled = effectiveEnabledToolIds.includes(AgentBuilderIdentifier);
     let agentBuilderContext;
 
     if (isAgentBuilderEnabled) {
@@ -250,7 +256,8 @@ class ChatService {
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
-      manifests: enabledManifests,
+      forceFinish,
+      manifests: effectiveEnabledManifests,
       messages,
       model: payload.model,
       plugins,
@@ -258,7 +265,7 @@ class ChatService {
       sessionId: options?.trace?.sessionId,
       stepContext: options?.stepContext,
       systemRole: agentConfig.systemRole,
-      tools: enabledToolIds,
+      tools: effectiveEnabledToolIds,
       topicId,
       memoryContext: {
         effort: effectiveMemoryEffort,
@@ -281,7 +288,7 @@ class ChatService {
         messages: modelMessages,
         // Use the chatConfig from the target agent for streaming preference
         stream: chatConfig.enableStreaming !== false,
-        tools,
+        tools: effectiveTools,
       },
       { ...options, agentId: targetAgentId, topicId },
     );
