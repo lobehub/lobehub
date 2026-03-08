@@ -29,10 +29,10 @@ export class ToolResolver {
     stepDelta: StepToolDelta,
     accumulatedActivations: ActivatedStepTool[] = [],
   ): ResolvedToolSet {
-    // Start from operation-level snapshot (shallow copies)
-    const tools: UniformTool[] = [...operationToolSet.tools];
+    // Start from operation-level snapshot (shallow copies, with safe defaults)
+    const tools: UniformTool[] = [...(operationToolSet.tools ?? [])];
     const sourceMap: Record<string, ToolSource> = { ...operationToolSet.sourceMap };
-    const enabledToolIds: string[] = [...operationToolSet.enabledToolIds];
+    const enabledToolIds: string[] = [...(operationToolSet.enabledToolIds ?? [])];
 
     // Only include manifests for enabled tools to prevent injecting
     // systemRole for disabled tools (e.g. web-browsing when search is off)

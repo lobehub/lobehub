@@ -836,11 +836,14 @@ export const createRuntimeExecutors = (
             ),
           };
 
+          const batchAgentConfig = state.metadata?.agentConfig;
+
           const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
             activeDeviceId: state.metadata?.activeDeviceId,
-            memoryToolPermission: state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
+            memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
             serverDB: ctx.serverDB,
             toolManifestMap: batchManifestMap,
+            toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
             topicId: ctx.topicId,
             userId: ctx.userId,
           });

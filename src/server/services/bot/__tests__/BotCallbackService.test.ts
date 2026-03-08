@@ -160,7 +160,7 @@ describe('BotCallbackService', () => {
       const body = makeBody({ type: 'step' });
 
       await expect(service.handleCallback(body)).rejects.toThrow(
-        'Bot token not found for discord appId=app-123',
+        'Bot credentials incomplete for discord appId=app-123',
       );
     });
 
