@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { hasTemperatureTopPConflict } from '../const/models';
-import { createParameterResolver, resolveParameters } from './parameterResolver';
+import {
+  createParameterResolver,
+  resolveModelSamplingParameters,
+  resolveParameters,
+} from './parameterResolver';
 
 describe('resolveParameters', () => {
   describe('Basic functionality', () => {
@@ -213,10 +217,50 @@ describe('resolveParameters', () => {
       expect(result).toEqual({ top_p: 0.9 });
     });
 
+    it('should treat null values as undefined', () => {
+      const result = resolveParameters(
+        { frequency_penalty: null, temperature: null, top_p: 0.9 },
+        {},
+      );
+      expect(result).toEqual({ top_p: 0.9 });
+    });
+
     it('should handle both parameters undefined with conflict', () => {
       const result = resolveParameters({}, { hasConflict: true });
       expect(result).toEqual({});
     });
+  });
+});
+
+describe('resolveModelSamplingParameters', () => {
+  it('should omit top_p for Claude 4+ models when temperature is also set', () => {
+    const result = resolveModelSamplingParameters(
+      'claude-haiku-4-5-20251001',
+      { temperature: 0.7, top_p: 0.9 },
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    expect(result).toEqual({ temperature: 0.7 });
+  });
+
+  it('should keep both parameters for non-conflict models', () => {
+    const result = resolveModelSamplingParameters(
+      'claude-3-5-sonnet-20240620',
+      { temperature: 0.7, top_p: 0.9 },
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    expect(result).toEqual({ temperature: 0.7, top_p: 0.9 });
+  });
+
+  it('should treat null sampling values as undefined', () => {
+    const result = resolveModelSamplingParameters(
+      'claude-haiku-4-5-20251001',
+      { temperature: null, top_p: 0.9 },
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    expect(result).toEqual({ top_p: 0.9 });
   });
 });
 

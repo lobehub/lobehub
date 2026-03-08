@@ -1,3 +1,5 @@
+import { hasTemperatureTopPConflict } from '../const/models';
+
 /**
  * Chat completion parameter configuration
  */
@@ -5,23 +7,23 @@ interface ParameterConfig {
   /**
    * Frequency penalty (reduces repetition)
    */
-  frequency_penalty?: number;
+  frequency_penalty?: number | null;
   /**
    * Maximum tokens to generate
    */
-  max_tokens?: number;
+  max_tokens?: number | null;
   /**
    * Presence penalty (reduces topic repetition)
    */
-  presence_penalty?: number;
+  presence_penalty?: number | null;
   /**
    * Temperature value (0-2 range, controls randomness)
    */
-  temperature?: number;
+  temperature?: number | null;
   /**
    * Top P value (0-1 range, nucleus sampling)
    */
-  top_p?: number;
+  top_p?: number | null;
 }
 
 /**
@@ -172,7 +174,11 @@ export const resolveParameters = (
     maxTokensRange,
   } = options;
 
-  const { temperature, top_p, frequency_penalty, presence_penalty, max_tokens } = config;
+  const temperature = config.temperature ?? undefined;
+  const top_p = config.top_p ?? undefined;
+  const frequency_penalty = config.frequency_penalty ?? undefined;
+  const presence_penalty = config.presence_penalty ?? undefined;
+  const max_tokens = config.max_tokens ?? undefined;
 
   const result: ResolvedParameters = {};
 
@@ -218,6 +224,37 @@ export const resolveParameters = (
   }
 
   return result;
+};
+
+interface SamplingParameterResolverOptions {
+  /**
+   * Whether to normalize temperature (divide by 2)
+   * @default true
+   */
+  normalizeTemperature?: boolean;
+  /**
+   * Whether to prefer temperature over top_p when both are set and there's a conflict
+   * @default true
+   */
+  preferTemperature?: boolean;
+}
+
+export const resolveModelSamplingParameters = (
+  model: string | undefined,
+  config: Pick<ParameterConfig, 'temperature' | 'top_p'>,
+  options: SamplingParameterResolverOptions = {},
+): Pick<ResolvedParameters, 'temperature' | 'top_p'> => {
+  return resolveParameters(
+    {
+      temperature: config.temperature ?? undefined,
+      top_p: config.top_p ?? undefined,
+    },
+    {
+      hasConflict: !!model && hasTemperatureTopPConflict(model),
+      normalizeTemperature: options.normalizeTemperature,
+      preferTemperature: options.preferTemperature,
+    },
+  );
 };
 
 /**

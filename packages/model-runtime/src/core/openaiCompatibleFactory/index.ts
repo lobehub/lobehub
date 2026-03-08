@@ -44,6 +44,7 @@ import { postProcessModelList } from '../../utils/postProcessModelList';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
+import { resolveModelSamplingParameters } from '../parameterResolver';
 import type { OpenAIStreamOptions } from '../streams';
 import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import { createOpenAICompatibleImage } from './createImage';
@@ -361,16 +362,24 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         }
 
         // Then perform factory-level processing
-        const postPayload = chatCompletion?.handlePayload
+        const handledPayload = chatCompletion?.handlePayload
           ? chatCompletion.handlePayload(processedPayload, this._options)
           : ({
               ...processedPayload,
               stream: processedPayload.stream ?? true,
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
-        if ((postPayload as any).apiMode === 'responses') {
+        if ((handledPayload as any).apiMode === 'responses') {
           return await this.handleResponseAPIMode(processedPayload, options);
         }
+
+        const postPayload = {
+          ...handledPayload,
+          ...resolveModelSamplingParameters(handledPayload.model, handledPayload, {
+            normalizeTemperature: false,
+            preferTemperature: true,
+          }),
+        };
 
         const computedBaseURL =
           typeof this._options.baseURL === 'string' && this._options.baseURL
@@ -434,7 +443,13 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           log('using custom client for chat completion stream');
           response = customClient.createChatCompletionStream(
             this.client,
-            processedPayload,
+            {
+              ...processedPayload,
+              ...resolveModelSamplingParameters(processedPayload.model, processedPayload, {
+                normalizeTemperature: false,
+                preferTemperature: true,
+              }),
+            },
             this,
           ) as any;
         } else {
@@ -979,6 +994,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         stream: !isStreaming ? undefined : isStreaming,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
         user: options?.user,
+        ...resolveModelSamplingParameters(res.model, res, {
+          normalizeTemperature: false,
+          preferTemperature: true,
+        }),
       } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
 
       if (debugParams?.responses?.()) {

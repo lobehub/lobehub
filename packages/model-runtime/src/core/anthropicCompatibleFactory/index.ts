@@ -4,7 +4,6 @@ import { CURRENT_VERSION } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 
-import { hasTemperatureTopPConflict } from '../../const/models';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -29,7 +28,7 @@ import {
   buildAnthropicTools,
   buildSearchTool,
 } from '../contextBuilders/anthropic';
-import { resolveParameters } from '../parameterResolver';
+import { resolveModelSamplingParameters } from '../parameterResolver';
 import { AnthropicStream } from '../streams';
 import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 import { createAnthropicGenerateObject } from './generateObject';
@@ -190,10 +189,10 @@ export const buildDefaultAnthropicPayload = async (
     } as Anthropic.MessageCreateParams;
   }
 
-  const hasConflict = hasTemperatureTopPConflict(model);
-  const resolvedParams = resolveParameters(
+  const resolvedSamplingParams = resolveModelSamplingParameters(
+    model,
     { temperature, top_p },
-    { hasConflict, normalizeTemperature: true, preferTemperature: true },
+    { normalizeTemperature: true, preferTemperature: true },
   );
 
   // Support effort parameter even without thinking (per Claude 4.6 guidance)
@@ -202,9 +201,9 @@ export const buildDefaultAnthropicPayload = async (
     messages: postMessages,
     model,
     system: systemPrompts,
-    temperature: resolvedParams.temperature,
+    temperature: resolvedSamplingParams.temperature,
     tools: postTools as Anthropic.MessageCreateParams['tools'],
-    top_p: resolvedParams.top_p,
+    top_p: resolvedSamplingParams.top_p,
   };
 
   // If effort is specified without thinking mode, add output_config
