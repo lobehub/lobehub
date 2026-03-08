@@ -18,6 +18,7 @@
   "favorite": "Избранное",
   "groupMode.ascMessages": "Сортировать по возрастанию количества сообщений",
   "groupMode.byTime": "Группировать по времени",
+  "groupMode.byUpdatedTime": "Группировать по времени обновления",
   "groupMode.descMessages": "Сортировать по убыванию количества сообщений",
   "groupMode.flat": "Без группировки",
   "groupTitle.byTime.month": "В этом месяце",

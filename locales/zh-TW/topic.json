@@ -18,6 +18,7 @@
   "favorite": "收藏",
   "groupMode.ascMessages": "按消息總數順序",
   "groupMode.byTime": "按時間分組",
+  "groupMode.byUpdatedTime": "按更新時間分組",
   "groupMode.descMessages": "按消息總數倒序",
   "groupMode.flat": "不分組",
   "groupTitle.byTime.month": "本月",

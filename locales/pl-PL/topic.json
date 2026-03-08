@@ -18,6 +18,7 @@
   "favorite": "Ulubione",
   "groupMode.ascMessages": "Sortuj według liczby wiadomości rosnąco",
   "groupMode.byTime": "Grupuj według czasu",
+  "groupMode.byUpdatedTime": "Grupuj według czasu aktualizacji",
   "groupMode.descMessages": "Sortuj według liczby wiadomości malejąco",
   "groupMode.flat": "Bez grupowania",
   "groupTitle.byTime.month": "W tym miesiącu",
