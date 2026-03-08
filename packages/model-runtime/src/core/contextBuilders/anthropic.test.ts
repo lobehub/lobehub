@@ -184,6 +184,24 @@ describe('anthropicHelpers', () => {
       expect(result).toEqual({ content: 'Hello!', role: 'user' });
     });
 
+    it('should return undefined for user message with empty string content', async () => {
+      const message: OpenAIChatMessage = {
+        content: '',
+        role: 'user',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for user message with whitespace-only string content', async () => {
+      const message: OpenAIChatMessage = {
+        content: '   \n\t  ',
+        role: 'user',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toBeUndefined();
+    });
+
     it('should correctly convert user message with content parts', async () => {
       const message: OpenAIChatMessage = {
         content: [
@@ -196,6 +214,15 @@ describe('anthropicHelpers', () => {
       expect(result!.role).toBe('user');
       expect(result!.content).toHaveLength(2);
       expect((result!.content[1] as any).type).toBe('image');
+    });
+
+    it('should return undefined for user message when content parts are all filtered out', async () => {
+      const message: OpenAIChatMessage = {
+        content: [{ type: 'text', text: '' }],
+        role: 'user',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toBeUndefined();
     });
 
     it('should correctly convert tool message', async () => {
@@ -1096,6 +1123,22 @@ describe('anthropicHelpers', () => {
         {
           content: [{ cache_control: { type: 'ephemeral' }, text: 'Hi', type: 'text' }],
           role: 'assistant',
+        },
+      ]);
+    });
+
+    it('should filter empty user messages before applying cache control', async () => {
+      const messages: OpenAIChatMessage[] = [
+        { content: '   \n\t  ', role: 'user' },
+        { content: 'Hello', role: 'user' },
+      ];
+
+      const contents = await buildAnthropicMessages(messages, { enabledContextCaching: true });
+
+      expect(contents).toEqual([
+        {
+          content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
+          role: 'user',
         },
       ]);
     });

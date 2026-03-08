@@ -173,6 +173,10 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const inputStartAt = Date.now();
     const system_message = messages.find((m) => m.role === 'system');
     const user_messages = messages.filter((m) => m.role !== 'system');
+    const systemPromptText =
+      typeof system_message?.content === 'string' && system_message.content.trim()
+        ? system_message.content
+        : undefined;
 
     const { bedrock: bedrockModels } = await import('model-bank');
 
@@ -183,11 +187,11 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       thinking,
     });
 
-    const systemPrompts = !!system_message?.content
+    const systemPrompts = !!systemPromptText
       ? ([
           {
             cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
-            text: system_message.content as string,
+            text: systemPromptText,
             type: 'text',
           },
         ] as Anthropic.TextBlockParam[])

@@ -139,12 +139,16 @@ export const buildDefaultAnthropicPayload = async (
 
   const systemMessage = messages.find((message) => message.role === 'system');
   const userMessages = messages.filter((message) => message.role !== 'system');
+  const systemPromptText =
+    typeof systemMessage?.content === 'string' && systemMessage.content.trim()
+      ? systemMessage.content
+      : undefined;
 
-  const systemPrompts = systemMessage?.content
+  const systemPrompts = systemPromptText
     ? ([
         {
           cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
-          text: systemMessage.content as string,
+          text: systemPromptText,
           type: 'text',
         },
       ] as Anthropic.TextBlockParam[])

@@ -633,6 +633,31 @@ describe('LobeAnthropicAI', () => {
         );
       });
 
+      it('should ignore whitespace-only system prompts', async () => {
+        const payload: ChatStreamPayload = {
+          messages: [
+            { content: '   \n\t  ', role: 'system' },
+            { content: 'Hello', role: 'user' },
+          ],
+          model: 'claude-3-haiku-20240307',
+          temperature: 0.7,
+        };
+
+        const result = await buildDefaultAnthropicPayload(payload);
+
+        expect(result).toEqual(
+          expect.objectContaining({
+            messages: [
+              {
+                content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
+                role: 'user',
+              },
+            ],
+            system: undefined,
+          }),
+        );
+      });
+
       it('should correctly build payload with tools', async () => {
         const tools: ChatCompletionTool[] = [
           { function: { name: 'tool1', description: 'desc1' }, type: 'function' },
