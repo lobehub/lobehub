@@ -41,7 +41,8 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.70",
-    "electron-liquid-glass": "^1.1.1"
+    "electron-liquid-glass": "^1.1.1",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

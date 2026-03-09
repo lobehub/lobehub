@@ -646,7 +646,7 @@ export default class LocalFileCtr extends ControllerModule {
         }
 
         await mkdir(path.dirname(targetPath), { recursive: true });
-        await writeFile(targetPath, Buffer.from(fileContent));
+        await writeFile(targetPath, Buffer.from(fileContent as Uint8Array));
       }
 
       await writeFile(markerPath, JSON.stringify({ preparedAt: Date.now(), url, zipHash }), 'utf8');
