@@ -1,7 +1,5 @@
 import { getCachedTextInputUnitRate } from '@lobechat/utils';
-import { ModelIcon } from '@lobehub/icons';
-import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Accordion, AccordionItem, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import {
@@ -41,11 +39,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     padding-block-end: 8px;
-  `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
   `,
   row: css`
     padding-block: 4px;
@@ -213,7 +206,6 @@ interface ModelDetailPanelProps {
 
 const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, provider }) => {
   const { t } = useTranslation('components');
-  const { t: tModels } = useTranslation('models');
 
   const enabledList = useEnabledChatModels();
   const model = useMemo(() => {
@@ -241,20 +233,6 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, prov
 
   return (
     <Flexbox className={styles.container}>
-      {/* Header */}
-      <Flexbox gap={8} padding={8}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <ModelIcon model={model.id} size={28} />
-          <Text ellipsis style={{ fontSize: 16, fontWeight: 600 }}>
-            {model.displayName || model.id}
-          </Text>
-        </Flexbox>
-        {model.description && (
-          <div className={styles.description}>{tModels(`${model.id}.description`)}</div>
-        )}
-      </Flexbox>
-      <Divider size="small" />
-
       {/* Sections */}
       {(hasPricing || hasContext || hasAbilities) && (
         <Accordion

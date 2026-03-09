@@ -171,6 +171,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 {...item.model.abilities}
                 newBadgeLabel={newLabel}
                 proBadgeLabel={restricted ? proLabel : undefined}
+                showInfoTag={isDevMode}
               />
             </Block>
           </Flexbox>
