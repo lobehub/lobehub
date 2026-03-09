@@ -51,8 +51,10 @@ export const useDesktopUserStateRedirect = () => {
 
   return useCallback(
     (state: UserInitializationState) => {
-      if (!getDesktopOnboardingCompleted()) return;
-      // Desktop onboarding is handled by desktop-only flow.
+      if (!getDesktopOnboardingCompleted()) {
+        redirectIfNotOn(window.location.pathname, '/desktop-onboarding');
+        return;
+      }
     },
     [openExternalAndLogout],
   );
