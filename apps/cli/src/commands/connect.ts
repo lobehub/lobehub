@@ -11,6 +11,7 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
+import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import {
   appendLog,
   getLogPath,
@@ -22,6 +23,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
+import { loadSettings, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
@@ -40,7 +42,7 @@ export function registerConnectCommand(program: Command) {
     .command('connect')
     .description('Connect to the device gateway and listen for tool calls')
     .option('--token <jwt>', 'JWT access token')
-    .option('--gateway <url>', 'Gateway URL', 'https://device-gateway.lobehub.com')
+    .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID (auto-generated if not provided)')
     .option('-v, --verbose', 'Enable verbose logging')
     .option('-d, --daemon', 'Run as a background daemon process')
@@ -124,7 +126,7 @@ export function registerConnectCommand(program: Command) {
     .command('restart')
     .description('Restart the background daemon process')
     .option('--token <jwt>', 'JWT access token')
-    .option('--gateway <url>', 'Gateway URL', 'https://device-gateway.lobehub.com')
+    .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID')
     .option('-v, --verbose', 'Enable verbose logging')
     .action((options: ConnectOptions) => {
@@ -171,11 +173,26 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
 
 async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const auth = await resolveToken(options);
-  const gatewayUrl = options.gateway || 'https://device-gateway.lobehub.com';
+  const settings = loadSettings();
+  const gatewayUrl = options.gateway?.replace(/\/$/, '') || settings?.gatewayUrl;
+
+  if (!gatewayUrl && settings?.serverUrl) {
+    log.error(
+      `Current login uses custom --server ${settings?.serverUrl}. Please also provide '--gateway <url>' for the device gateway.`,
+    );
+    process.exit(1);
+    throw new Error('process.exit');
+  }
+
+  if (options.gateway && gatewayUrl) {
+    saveSettings({ ...settings, gatewayUrl });
+  }
+
+  const resolvedGatewayUrl = gatewayUrl || OFFICIAL_GATEWAY_URL;
 
   const client = new GatewayClient({
     deviceId: options.deviceId,
-    gatewayUrl,
+    gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
     token: auth.token,
     userId: auth.userId,
@@ -196,7 +213,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info(`  Device ID : ${client.currentDeviceId}`);
   info(`  Hostname  : ${os.hostname()}`);
   info(`  Platform  : ${process.platform}`);
-  info(`  Gateway   : ${gatewayUrl}`);
+  info(`  Gateway   : ${resolvedGatewayUrl}`);
   info(`  Auth      : jwt`);
   info(`  Mode      : ${isDaemonChild ? 'daemon' : 'foreground'}`);
   info('───────────────────');
@@ -206,7 +223,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     if (isDaemonChild) {
       writeStatus({
         connectionStatus,
-        gatewayUrl,
+        gatewayUrl: resolvedGatewayUrl,
         pid: process.pid,
         startedAt: startedAt.toISOString(),
       });

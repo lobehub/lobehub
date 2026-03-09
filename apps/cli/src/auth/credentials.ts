@@ -7,7 +7,6 @@ export interface StoredCredentials {
   accessToken: string;
   expiresAt?: number; // Unix timestamp (seconds)
   refreshToken?: string;
-  serverUrl: string;
 }
 
 const CREDENTIALS_DIR = path.join(os.homedir(), '.lobehub');

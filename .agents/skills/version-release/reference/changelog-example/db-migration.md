@@ -15,4 +15,4 @@ This release includes a **database schema migration** involving **5 new tables**
 - The migration runs automatically on application startup
 - No manual intervention required
 
-The migration owner: @arvinxx — responsible for this database schema change, reach out for any migration-related issues.
+The migration owner: @\[pr-author] — responsible for this database schema change, reach out for any migration-related issues.

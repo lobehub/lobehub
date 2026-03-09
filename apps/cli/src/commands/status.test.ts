@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../auth/resolveToken', () => ({
   resolveToken: vi.fn().mockResolvedValue({ token: 'test-token', userId: 'test-user' }),
 }));
+vi.mock('../settings', () => ({
+  loadSettings: vi.fn().mockReturnValue(null),
+  saveSettings: vi.fn(),
+}));
 
 vi.mock('../utils/logger', () => ({
   log: {
@@ -38,6 +42,8 @@ vi.mock('@lobechat/device-gateway-client', () => ({
   }),
 }));
 
+// eslint-disable-next-line import-x/first
+import { loadSettings, saveSettings } from '../settings';
 // eslint-disable-next-line import-x/first
 import { log } from '../utils/logger';
 // eslint-disable-next-line import-x/first
@@ -74,6 +80,40 @@ describe('status command', () => {
 
     await parsePromise;
     expect(clientOptions.autoReconnect).toBe(false);
+  });
+
+  it('should require explicit gateway for custom login server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({ serverUrl: 'https://self-hosted.example.com' });
+
+    const program = createProgram();
+    await expect(program.parseAsync(['node', 'test', 'status'])).rejects.toThrow('process.exit');
+    expect(log.error).toHaveBeenCalledWith(
+      "Current login uses custom --server https://self-hosted.example.com. Please also provide '--gateway <url>' for the device gateway.",
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('should use explicit gateway for custom login server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({ serverUrl: 'https://self-hosted.example.com' });
+
+    const program = createProgram();
+    const parsePromise = program.parseAsync([
+      'node',
+      'test',
+      'status',
+      '--gateway',
+      'https://gateway.example.com/',
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    clientEventHandlers['connected']?.();
+
+    await parsePromise;
+    expect(clientOptions.gatewayUrl).toBe('https://gateway.example.com');
+    expect(saveSettings).toHaveBeenCalledWith({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://self-hosted.example.com',
+    });
   });
 
   it('should log CONNECTED on successful connection', async () => {

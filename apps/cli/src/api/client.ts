@@ -4,6 +4,8 @@ import superjson from 'superjson';
 import type { LambdaRouter } from '@/server/routers/lambda';
 
 import { getValidToken } from '../auth/refresh';
+import { OFFICIAL_SERVER_URL } from '../constants/urls';
+import { loadSettings } from '../settings';
 import { log } from '../utils/logger';
 
 export type TrpcClient = ReturnType<typeof createTRPCClient<LambdaRouter>>;
@@ -19,7 +21,8 @@ export async function getTrpcClient(): Promise<TrpcClient> {
     process.exit(1);
   }
 
-  const { serverUrl, accessToken } = result.credentials;
+  const accessToken = result.credentials.accessToken;
+  const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
 
   _client = createTRPCClient<LambdaRouter>({
     links: [

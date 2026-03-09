@@ -5,6 +5,8 @@ import path from 'node:path';
 import type { Command } from 'commander';
 
 import { saveCredentials } from '../auth/credentials';
+import { OFFICIAL_SERVER_URL } from '../constants/urls';
+import { loadSettings, saveSettings } from '../settings';
 import { log } from '../utils/logger';
 
 const CLIENT_ID = 'lobehub-cli';
@@ -50,7 +52,7 @@ export function registerLoginCommand(program: Command) {
   program
     .command('login')
     .description('Log in to LobeHub via browser (Device Code Flow)')
-    .option('--server <url>', 'LobeHub server URL', 'https://app.lobehub.com')
+    .option('--server <url>', 'LobeHub server URL', OFFICIAL_SERVER_URL)
     .action(async (options: LoginOptions) => {
       const serverUrl = options.server.replace(/\/$/, '');
 
@@ -161,8 +163,22 @@ export function registerLoginCommand(program: Command) {
                 ? Math.floor(Date.now() / 1000) + body.expires_in
                 : undefined,
               refreshToken: body.refresh_token,
-              serverUrl,
             });
+            const existingSettings = loadSettings();
+            const shouldPreserveGateway = existingSettings?.serverUrl === serverUrl;
+
+            saveSettings(
+              shouldPreserveGateway
+                ? {
+                    gatewayUrl: existingSettings.gatewayUrl,
+                    serverUrl,
+                  }
+                : {
+                    // Gateway auth is tied to the login server's token issuer/JWKS.
+                    // When server changes, clear old gateway to avoid stale cross-environment config.
+                    serverUrl,
+                  },
+            );
 
             log.info('Login successful! Credentials saved.');
             return;
@@ -195,22 +211,21 @@ export function resolveCommandExecutable(
   const pathValue = process.env.PATH || '';
   if (!pathValue) return undefined;
 
-  const pathEntries = pathValue.split(path.delimiter).filter(Boolean);
-
   if (platform === 'win32') {
+    const pathEntries = pathValue.split(';').filter(Boolean);
     const pathext = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
-    const hasExtension = path.extname(cmd).length > 0;
+    const hasExtension = path.win32.extname(cmd).length > 0;
     const candidateNames = hasExtension ? [cmd] : [cmd, ...pathext.map((ext) => `${cmd}${ext}`)];
 
     // Prefer PATH lookup, then fall back to System32 for built-in tools like rundll32.
     const systemRoot = process.env.SystemRoot || process.env.WINDIR;
     if (systemRoot) {
-      pathEntries.push(path.join(systemRoot, 'System32'));
+      pathEntries.push(path.win32.join(systemRoot, 'System32'));
     }
 
     for (const entry of pathEntries) {
       for (const candidate of candidateNames) {
-        const resolved = path.join(entry, candidate);
+        const resolved = path.win32.join(entry, candidate);
         if (fs.existsSync(resolved)) return resolved;
       }
     }
@@ -218,6 +233,7 @@ export function resolveCommandExecutable(
     return undefined;
   }
 
+  const pathEntries = pathValue.split(path.delimiter).filter(Boolean);
   for (const entry of pathEntries) {
     const resolved = path.join(entry, cmd);
     if (fs.existsSync(resolved)) return resolved;
