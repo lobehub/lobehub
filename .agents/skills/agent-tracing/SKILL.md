@@ -96,10 +96,10 @@ agent-tracing inspect <traceId> -s 0 -j
 # List in-progress partial snapshots
 agent-tracing partial list
 
-# Inspect a partial snapshot (defaults to latest)
-agent-tracing partial inspect
-agent-tracing partial inspect <operationId>
-agent-tracing partial inspect -j
+# Inspect a partial (use `inspect` directly — all flags work with partial IDs)
+agent-tracing inspect <partialOperationId>
+agent-tracing inspect <partialOperationId> -T
+agent-tracing inspect <partialOperationId> -p
 
 # Clean up stale partial snapshots
 agent-tracing partial clean

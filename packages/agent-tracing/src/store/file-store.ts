@@ -39,12 +39,19 @@ export class FileSnapshotStore implements ISnapshotStore {
   async get(traceId: string): Promise<ExecutionSnapshot | null> {
     if (traceId === 'latest') return this.getLatest();
 
+    // Search completed snapshots first
     const files = await this.listFiles();
     const match = files.find((f) => f.includes(traceId.slice(0, 12)));
-    if (!match) return null;
+    if (match) {
+      const content = await fs.readFile(path.join(this.dir, match), 'utf8');
+      return JSON.parse(content) as ExecutionSnapshot;
+    }
 
-    const content = await fs.readFile(path.join(this.dir, match), 'utf8');
-    return JSON.parse(content) as ExecutionSnapshot;
+    // Fallback to partials
+    const partial = await this.getPartial(traceId);
+    if (partial) return partialToSnapshot(partial);
+
+    return null;
   }
 
   async list(options?: { limit?: number }): Promise<SnapshotSummary[]> {
@@ -159,6 +166,24 @@ export class FileSnapshotStore implements ISnapshotStore {
       return [];
     }
   }
+}
+
+function partialToSnapshot(partial: Partial<ExecutionSnapshot>): ExecutionSnapshot {
+  return {
+    completedAt: undefined,
+    completionReason: undefined,
+    error: undefined,
+    model: partial.model,
+    operationId: partial.operationId ?? '?',
+    provider: partial.provider,
+    startedAt: partial.startedAt ?? Date.now(),
+    steps: partial.steps ?? [],
+    totalCost: partial.totalCost ?? 0,
+    totalSteps: partial.steps?.length ?? 0,
+    totalTokens: partial.totalTokens ?? 0,
+    traceId: partial.traceId ?? '?',
+    ...partial,
+  } as ExecutionSnapshot;
 }
 
 function toSummary(snapshot: ExecutionSnapshot): SnapshotSummary {
