@@ -82,6 +82,7 @@ export class App {
     logger.info(` RAM: ${Math.round(os.totalmem() / 1024 / 1024 / 1024)} GB`);
     logger.info(`PATH: ${app.getAppPath()}`);
     logger.info(` lng: ${app.getLocale()}`);
+    logger.info(` bin: ${binDir}`);
     logger.info('----------------------------------------------');
     logger.info('Starting LobeHub...');
 
