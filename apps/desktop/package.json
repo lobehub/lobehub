@@ -41,8 +41,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.70",
-    "electron-liquid-glass": "^1.1.1",
-    "fflate": "^0.8.2"
+    "electron-liquid-glass": "^1.1.1"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -81,6 +80,7 @@
     "execa": "^9.6.1",
     "fast-glob": "^3.3.3",
     "fetch-socks": "^1.3.2",
+    "fflate": "^0.8.2",
     "fix-path": "^5.0.0",
     "get-port-please": "^3.2.0",
     "happy-dom": "^20.0.11",
