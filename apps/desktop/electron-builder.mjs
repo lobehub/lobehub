@@ -292,6 +292,8 @@ const config = {
     releaseNotes: process.env.RELEASE_NOTES || undefined,
   },
 
+  extraResources: [{ from: 'resources/bin', to: 'bin' }],
+
   win: {
     executableName: 'LobeHub',
   },

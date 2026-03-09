@@ -8,7 +8,7 @@ import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-insta
 import { macOS, windows } from 'electron-is';
 
 import { name } from '@/../../package.json';
-import { buildDir } from '@/const/dir';
+import { binDir, buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import type { IControlModule } from '@/controllers';
@@ -84,6 +84,13 @@ export class App {
     logger.info(` lng: ${app.getLocale()}`);
     logger.info('----------------------------------------------');
     logger.info('Starting LobeHub...');
+
+    // Append bundled binaries directory to PATH for fallback tool resolution
+    const pathSep = process.platform === 'win32' ? ';' : ':';
+    process.env.PATH = `${process.env.PATH}${pathSep}${binDir}`;
+
+    // Use native mode (pure Rust/CDP) so agent-browser works without Node.js
+    process.env.AGENT_BROWSER_NATIVE = '1';
 
     logger.debug('Initializing App');
     // Initialize store manager

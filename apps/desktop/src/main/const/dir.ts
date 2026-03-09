@@ -1,5 +1,6 @@
-import { app } from 'electron';
 import { join } from 'node:path';
+
+import { app } from 'electron';
 
 export const mainDir = join(__dirname);
 
@@ -8,6 +9,10 @@ export const preloadDir = join(mainDir, '../preload');
 export const resourcesDir = join(mainDir, '../../resources');
 
 export const buildDir = join(mainDir, '../../build');
+
+export const binDir = app.isPackaged
+  ? join(process.resourcesPath, 'bin')
+  : join(resourcesDir, 'bin');
 
 const appPath = app.getAppPath();
 
