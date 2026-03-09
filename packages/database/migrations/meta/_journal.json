@@ -623,6 +623,13 @@
       "when": 1772277762014,
       "tag": "0088_fix_benchmark_add_bot_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1772900000000,
+      "tag": "0089_enable_pg_search",
+      "breakpoints": true
     }
   ],
   "version": "6"
