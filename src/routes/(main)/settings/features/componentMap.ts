@@ -41,7 +41,7 @@ export const componentMap = {
   [SettingsTabs.Profile]: dynamic(() => import('../profile'), {
     loading: loading('Settings > Profile'),
   }),
-  [SettingsTabs.Usage]: dynamic(() => import('../stats'), {
+  [SettingsTabs.Usage]: dynamic(() => import('@/business/client/BusinessSettingPages/Usage'), {
     loading: loading('Settings > Usage'),
   }),
   [SettingsTabs.APIKey]: dynamic(() => import('../apikey'), {

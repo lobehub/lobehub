@@ -2,6 +2,7 @@ import Billing from '@/business/client/BusinessSettingPages/Billing';
 import Funds from '@/business/client/BusinessSettingPages/Funds';
 import Plans from '@/business/client/BusinessSettingPages/Plans';
 import Referral from '@/business/client/BusinessSettingPages/Referral';
+import Usage from '@/business/client/BusinessSettingPages/Usage';
 import { SettingsTabs } from '@/store/global/initialState';
 
 import About from '../about';
@@ -17,7 +18,6 @@ import Proxy from '../proxy';
 import Security from '../security';
 import ServiceModel from '../service-model';
 import Skill from '../skill';
-import Stats from '../stats';
 import Storage from '../storage';
 import SystemTools from '../system-tools';
 
@@ -35,7 +35,7 @@ export const componentMap = {
   [SettingsTabs.Storage]: Storage,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,
-  [SettingsTabs.Usage]: Stats,
+  [SettingsTabs.Usage]: Usage,
   [SettingsTabs.APIKey]: APIKey,
   [SettingsTabs.Security]: Security,
   [SettingsTabs.Skill]: Skill,
