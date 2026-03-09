@@ -66,18 +66,25 @@ export const persistMarketAuthResult = (payload: MarketAuthHandoffPayload): bool
 export const readMarketAuthResult = (state: string): MarketAuthHandoffPayload | null => {
   if (!isBrowser()) return null;
 
-  const rawValue = localStorage.getItem(getMarketAuthResultStorageKey(state));
-  if (!rawValue) return null;
-
   try {
+    const rawValue = localStorage.getItem(getMarketAuthResultStorageKey(state));
+    if (!rawValue) return null;
+
     return resolveMarketAuthHandoffPayload(JSON.parse(rawValue));
-  } catch {
+  } catch (error) {
+    console.error('[MarketAuthHandoff] Failed to read auth result:', error);
     return null;
   }
 };
 
-export const clearMarketAuthResult = (state: string) => {
-  if (!isBrowser()) return;
+export const clearMarketAuthResult = (state: string): boolean => {
+  if (!isBrowser()) return false;
 
-  localStorage.removeItem(getMarketAuthResultStorageKey(state));
+  try {
+    localStorage.removeItem(getMarketAuthResultStorageKey(state));
+    return true;
+  } catch (error) {
+    console.error('[MarketAuthHandoff] Failed to clear auth result:', error);
+    return false;
+  }
 };

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { persistMarketAuthResult } from './handoff';
+import { clearMarketAuthResult, persistMarketAuthResult, readMarketAuthResult } from './handoff';
 
-describe('persistMarketAuthResult', () => {
+describe('MarketAuth handoff storage helpers', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -22,6 +22,30 @@ describe('persistMarketAuthResult', () => {
     ).toBe(false);
 
     expect(setItemSpy).toHaveBeenCalledOnce();
+    expect(consoleErrorSpy).toHaveBeenCalledOnce();
+  });
+
+  it('should swallow storage read failures and return null', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage disabled');
+    });
+
+    expect(readMarketAuthResult('state_value')).toBeNull();
+
+    expect(getItemSpy).toHaveBeenCalledOnce();
+    expect(consoleErrorSpy).toHaveBeenCalledOnce();
+  });
+
+  it('should swallow storage clear failures and return false', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('storage disabled');
+    });
+
+    expect(clearMarketAuthResult('state_value')).toBe(false);
+
+    expect(removeItemSpy).toHaveBeenCalledOnce();
     expect(consoleErrorSpy).toHaveBeenCalledOnce();
   });
 });
