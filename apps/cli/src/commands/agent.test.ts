@@ -14,6 +14,10 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       removeAgent: { mutate: vi.fn() },
       updateAgentConfig: { mutate: vi.fn() },
     },
+    aiAgent: {
+      execAgent: { mutate: vi.fn() },
+      getOperationStatus: { query: vi.fn() },
+    },
   },
 }));
 
@@ -21,9 +25,19 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
 
+const { mockStreamAgentEvents } = vi.hoisted(() => ({
+  mockStreamAgentEvents: vi.fn(),
+}));
+
+const { mockGetAuthInfo } = vi.hoisted(() => ({
+  mockGetAuthInfo: vi.fn(),
+}));
+
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../api/http', () => ({ getAuthInfo: mockGetAuthInfo }));
+vi.mock('../utils/agentStream', () => ({ streamAgentEvents: mockStreamAgentEvents }));
 vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  log: { debug: vi.fn(), error: vi.fn(), heartbeat: vi.fn(), info: vi.fn(), warn: vi.fn() },
   setVerbose: vi.fn(),
 }));
 
@@ -35,7 +49,18 @@ describe('agent command', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    mockGetAuthInfo.mockResolvedValue({
+      accessToken: 'test-token',
+      headers: { 'Content-Type': 'application/json', 'Oidc-Auth': 'test-token' },
+      serverUrl: 'https://example.com',
+    });
+    mockStreamAgentEvents.mockResolvedValue(undefined);
     for (const method of Object.values(mockTrpcClient.agent)) {
+      for (const fn of Object.values(method)) {
+        (fn as ReturnType<typeof vi.fn>).mockReset();
+      }
+    }
+    for (const method of Object.values(mockTrpcClient.aiAgent)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
@@ -183,6 +208,189 @@ describe('agent command', () => {
 
       expect(mockTrpcClient.agent.duplicateAgent.mutate).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'a1', newTitle: 'Copy' }),
+      );
+    });
+  });
+
+  describe('run', () => {
+    it('should exec agent and connect to SSE stream', async () => {
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-123',
+        success: true,
+        topicId: 'topic-1',
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hello',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', prompt: 'Hello' }),
+      );
+      expect(mockStreamAgentEvents).toHaveBeenCalledWith(
+        'https://example.com/api/agent/stream?operationId=op-123',
+        expect.objectContaining({ 'Oidc-Auth': 'test-token' }),
+        expect.objectContaining({ json: undefined, verbose: undefined }),
+      );
+    });
+
+    it('should support --slug option', async () => {
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-456',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--slug',
+        'my-agent',
+        '--prompt',
+        'Do something',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ slug: 'my-agent', prompt: 'Do something' }),
+      );
+    });
+
+    it('should exit when neither --agent-id nor --slug provided', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'run', '--prompt', 'Hello']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--agent-id or --slug'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should exit when --prompt not provided', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'run', '--agent-id', 'a1']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--prompt'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should exit when exec fails', async () => {
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        error: 'Agent not found',
+        success: false,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'bad',
+        '--prompt',
+        'Hi',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Agent not found'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should pass --topic-id as appContext', async () => {
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-789',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--topic-id',
+        't1',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ appContext: { topicId: 't1' } }),
+      );
+    });
+
+    it('should pass --json to stream options', async () => {
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-j',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--json',
+      ]);
+
+      expect(mockStreamAgentEvents).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Object),
+        expect.objectContaining({ json: true }),
+      );
+    });
+  });
+
+  describe('status', () => {
+    it('should display operation status', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({
+        cost: { total: 0.0042 },
+        status: 'completed',
+        stepCount: 3,
+        usage: { total_tokens: 1500 },
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'status', 'op-123']);
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-123' }),
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Operation Status'));
+    });
+
+    it('should output JSON', async () => {
+      const data = { status: 'completed', stepCount: 2 };
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(data);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'status', 'op-123', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(data, null, 2));
+    });
+
+    it('should pass --history flag', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({ status: 'running' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'status', 'op-123', '--history']);
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledWith(
+        expect.objectContaining({ includeHistory: true }),
       );
     });
   });
