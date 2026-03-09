@@ -280,6 +280,29 @@ export class UpdaterManager {
   };
 
   /**
+   * Test mode: Simulate update found (shows "new version available" prompt)
+   */
+  public simulateUpdateFound = () => {
+    if (!isDev) return;
+
+    logger.info('Simulating update found...');
+
+    const mockUpdateInfo: UpdateInfo = {
+      releaseDate: new Date().toISOString(),
+      releaseNotes: `## Version 99.0.0 Release Notes\n- Added some great new features\n- Fixed bugs affecting usability\n- Optimized overall application performance\n- Updated dependency libraries\n`,
+      version: '99.0.0',
+    };
+
+    this.downloading = false;
+    this.updateAvailable = true;
+    this.setStage('checking');
+
+    setTimeout(() => {
+      this.setStage('available', { updateInfo: mockUpdateInfo });
+    }, 1000);
+  };
+
+  /**
    * Test mode: Simulate update available
    */
   public simulateUpdateAvailable = () => {

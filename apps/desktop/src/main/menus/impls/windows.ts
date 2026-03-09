@@ -215,6 +215,12 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       case 'checking': {
         return { enabled: false, label: t('common.checkingUpdates') };
       }
+      case 'available': {
+        return {
+          click: () => this.app.updaterManager.downloadUpdate(),
+          label: t('common.updateAvailable'),
+        };
+      }
       case 'downloading': {
         return { enabled: false, label: t('common.downloadingUpdate') };
       }

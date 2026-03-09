@@ -1,9 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import {
-  getElectronIpc,
-  type UpdaterState,
-  useWatchBroadcast,
-} from '@lobechat/electron-client-ipc';
+import type { UpdaterState } from '@lobechat/electron-client-ipc';
+import { getElectronIpc, useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Block, Button, Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -43,7 +40,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     autoUpdateService.getUpdaterState().then(setUpdaterState);
   }, [isDesktop]);
 
-  useWatchBroadcast('updaterStateChanged', (state: UpdaterState) => {
+  useWatchBroadcast('updaterStateChanged', (state) => {
     setUpdaterState(state);
   });
 
@@ -68,6 +65,17 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         return (
           <Button loading block={mobile}>
             {t('checkForUpdates')}
+          </Button>
+        );
+      }
+      case 'available': {
+        return (
+          <Button
+            block={mobile}
+            type="primary"
+            onClick={() => void autoUpdateService.downloadUpdate()}
+          >
+            {t('downloadNewVersion')}
           </Button>
         );
       }

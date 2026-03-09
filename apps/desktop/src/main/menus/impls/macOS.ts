@@ -361,6 +361,12 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             submenu: [
               {
                 click: () => {
+                  this.app.updaterManager.simulateUpdateFound();
+                },
+                label: t('dev.simulateUpdateFound'),
+              },
+              {
+                click: () => {
                   this.app.updaterManager.simulateUpdateAvailable();
                 },
                 label: t('dev.simulateAutoDownload'),
@@ -392,6 +398,12 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     switch (stage) {
       case 'checking': {
         return { enabled: false, label: t('common.checkingUpdates') };
+      }
+      case 'available': {
+        return {
+          click: () => this.app.updaterManager.downloadUpdate(),
+          label: t('common.updateAvailable'),
+        };
       }
       case 'downloading': {
         return { enabled: false, label: t('common.downloadingUpdate') };

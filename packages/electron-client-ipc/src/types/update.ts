@@ -24,7 +24,14 @@ export interface UpdateInfo {
   version: string;
 }
 
-export type UpdaterStage = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'latest' | 'error';
+export type UpdaterStage =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'latest'
+  | 'error';
 
 export interface UpdaterState {
   errorMessage?: string;

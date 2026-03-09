@@ -36,6 +36,7 @@ export default {
   'changelog': 'Changelog',
   'alreadyUpToDate': 'Already Up to Date',
   'checkForUpdates': 'Check for Updates',
+  'downloadNewVersion': 'Download Update',
   'downloadingUpdate': 'Downloading {{percent}}%',
   'restartToUpdate': 'Restart to Update',
   'clientDB.autoInit.title': 'Initializing PGlite Database',
