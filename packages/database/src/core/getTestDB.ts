@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -5,7 +6,6 @@ import { vector } from '@electric-sql/pglite/vector';
 import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite';
-import { migrate as pgliteMigrate } from 'drizzle-orm/pglite/migrator';
 import { Pool as NodePool } from 'pg';
 
 import { serverDBEnv } from '@/config/db';
@@ -19,6 +19,27 @@ const isServerDBMode = process.env.TEST_SERVER_DB === '1';
 
 let testClientDB: ReturnType<typeof pgliteDrizzle<typeof schema>> | null = null;
 let testServerDB: ReturnType<typeof nodeDrizzle<typeof schema>> | null = null;
+
+/**
+ * Run migrations manually for PGlite, skipping unsupported extensions (e.g. pg_search)
+ */
+const pgliteMigrateManual = async (pglite: PGlite): Promise<void> => {
+  const migrationFiles = readdirSync(migrationsFolder)
+    .filter((file) => file.endsWith('.sql'))
+    .sort();
+
+  for (const filename of migrationFiles) {
+    const filePath = join(migrationsFolder, filename);
+    const sql = readFileSync(filePath, 'utf8');
+
+    if (!sql.trim()) continue;
+
+    // PGlite doesn't support pg_search extension, skip related migrations
+    if (sql.includes('pg_search') || sql.includes('bm25')) continue;
+
+    await pglite.exec(sql);
+  }
+};
 
 export const getTestDB = async (): Promise<LobeChatDatabase> => {
   // Server DB mode (node-postgres)
@@ -45,7 +66,7 @@ export const getTestDB = async (): Promise<LobeChatDatabase> => {
   const pglite = new PGlite({ extensions: { vector } });
   testClientDB = pgliteDrizzle({ client: pglite, schema });
 
-  await pgliteMigrate(testClientDB, { migrationsFolder });
+  await pgliteMigrateManual(pglite);
 
   return testClientDB as unknown as LobeChatDatabase;
 };
