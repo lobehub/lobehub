@@ -9,15 +9,18 @@ import { apiKeys, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ApiKeyModel } from '../apiKey';
 
-process.env.KEY_VAULTS_SECRET =
-  process.env.KEY_VAULTS_SECRET || 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
-
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'api-key-model-test-user-id';
-const apiKeyModel = new ApiKeyModel(serverDB, userId);
+const validKeyVaultsSecret = 'ofQiJCXLF8mYemwfMWLOHoHimlPu91YmLfU7YZ4lreQ=';
+
+let apiKeyModel: ApiKeyModel;
+let originalKeyVaultsSecret: string | undefined;
 
 beforeEach(async () => {
+  originalKeyVaultsSecret = process.env.KEY_VAULTS_SECRET;
+  process.env.KEY_VAULTS_SECRET = validKeyVaultsSecret;
+  apiKeyModel = new ApiKeyModel(serverDB, userId);
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: 'user2' }]);
 });
@@ -25,6 +28,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
   await serverDB.delete(apiKeys).where(eq(apiKeys.userId, userId));
+  process.env.KEY_VAULTS_SECRET = originalKeyVaultsSecret;
 });
 
 describe('ApiKeyModel', () => {

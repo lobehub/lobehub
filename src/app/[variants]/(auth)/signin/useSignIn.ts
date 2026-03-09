@@ -205,7 +205,9 @@ export const useSignIn = () => {
 
       try {
         localStorage.setItem(LAST_AUTH_PROVIDER_KEY, provider);
-      } catch {}
+      } catch {
+        // Ignore localStorage errors (e.g., quota exceeded, private mode)
+      }
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
