@@ -1,8 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
-import { responsesAPIGrokModels } from '../../const/models';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import type { ChatStreamPayload } from '../../types';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createXAIImage } from './createImage';
 
@@ -17,26 +15,11 @@ export const isGrokReasoningModel = (model: string) =>
 
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
-  createImage: createXAIImage,
   chatCompletion: {
-    handlePayload: (payload) => {
-      const { enabledSearch, frequency_penalty, model, presence_penalty, ...rest } = payload;
-
-      if (responsesAPIGrokModels.has(model) || enabledSearch) {
-        return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
-      }
-
-      return {
-        ...rest,
-        frequency_penalty: isGrokReasoningModel(model) ? undefined : frequency_penalty,
-        model,
-        presence_penalty: isGrokReasoningModel(model) ? undefined : presence_penalty,
-        stream: true,
-      } as any;
-    },
+    useResponse: true,
   },
+  createImage: createXAIImage,
   debug: {
-    chatCompletion: () => process.env.DEBUG_XAI_CHAT_COMPLETION === '1',
     responses: () => process.env.DEBUG_XAI_RESPONSES === '1',
   },
   models: async ({ client }) => {
@@ -48,7 +31,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.XAI,
   responses: {
     handlePayload: (payload) => {
-      const { enabledSearch, tools, ...rest } = payload;
+      const { enabledSearch, frequency_penalty, model, presence_penalty, tools, ...rest } = payload;
 
       const xaiTools = enabledSearch
         ? [...(tools || []), { type: 'web_search' }, { type: 'x_search' }]
@@ -56,6 +39,9 @@ export const LobeXAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
+        frequency_penalty: isGrokReasoningModel(model) ? undefined : frequency_penalty,
+        model,
+        presence_penalty: isGrokReasoningModel(model) ? undefined : presence_penalty,
         stream: payload.stream ?? true,
         tools: xaiTools,
         include: ['reasoning.encrypted_content'],
