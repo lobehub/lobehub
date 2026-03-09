@@ -6,7 +6,7 @@ import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
 import { useChatStore } from '@/store/chat';
 
-const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools', 'typo', 'mainToken'];
+const leftActions: ActionKeys[] = ['model', 'search', 'memory', 'fileUpload', 'tools', 'typo', 'mainToken'];
 
 const rightActions: ActionKeys[] = [];
 
