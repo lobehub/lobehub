@@ -11,11 +11,13 @@ const XAI: ModelProviderCard = {
   modelsUrl: 'https://docs.x.ai/docs#models',
   name: 'xAI (Grok)',
   settings: {
+    disableBrowserRequest: true,
     proxyUrl: {
       placeholder: 'https://api.x.ai/v1',
     },
     sdkType: 'openai',
     showModelFetcher: true,
+    supportResponsesApi: true,
   },
   url: 'https://x.ai/api',
 };

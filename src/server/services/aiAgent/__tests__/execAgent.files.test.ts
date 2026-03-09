@@ -105,6 +105,13 @@ vi.mock('@/server/modules/Mecha', () => ({
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
 }));
 
+vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
+  deviceProxy: {
+    isConfigured: false,
+    queryDeviceList: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 vi.mock('model-bank', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelBankModule>();
   return {

@@ -7,6 +7,7 @@ const log = debug('context-engine:provider:SystemDateProvider');
 
 export interface SystemDateProviderConfig {
   enabled?: boolean;
+  timezone?: string | null;
 }
 
 export class SystemDateProvider extends BaseProvider {
@@ -27,13 +28,15 @@ export class SystemDateProvider extends BaseProvider {
       return this.markAsExecuted(clonedContext);
     }
 
+    const tz = this.config.timezone || 'UTC';
     const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
+
+    const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
+    const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
+    const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
     const dateStr = `${year}-${month}-${day}`;
 
-    const dateContent = `Current date: ${dateStr}`;
+    const dateContent = `Current date: ${dateStr} (${tz})`;
 
     const existingSystemMessage = clonedContext.messages.find((msg) => msg.role === 'system');
 

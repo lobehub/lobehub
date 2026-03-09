@@ -12,7 +12,7 @@ import { type ActionButtonsProps } from './types';
 const actionIconProps: Partial<Omit<ActionIconProps, 'size' | 'ref' | 'icon'>> = {
   tooltipProps: { placement: 'left' },
 };
-// 操作按钮组件
+// Action buttons component
 export const ActionButtons = memo<ActionButtonsProps>(
   ({
     onDelete,

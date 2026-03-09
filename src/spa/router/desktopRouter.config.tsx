@@ -41,10 +41,10 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/agent/integration'),
-                  'Desktop > Chat > Integration',
+                  () => import('@/routes/(main)/agent/channel'),
+                  'Desktop > Chat > Channel',
                 ),
-                path: 'integration',
+                path: 'channel',
               },
             ],
             element: dynamicLayout(

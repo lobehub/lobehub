@@ -1,0 +1,60 @@
+---
+title: Channels Overview
+description: >-
+  Connect your LobeHub agents to external messaging platforms like Discord,
+  Telegram, and Feishu/Lark, allowing users to interact with AI assistants
+  directly in their favorite chat apps.
+tags:
+  - Channels
+  - Message Channels
+  - Integration
+  - Discord
+  - Telegram
+  - Feishu
+  - Lark
+---
+
+# Channels
+
+<Callout type={'info'}>
+  This feature is currently in development and may not be fully stable. You can enable it by turning on **Developer Mode** in **Settings** → **Advanced Settings** → **Developer Mode**.
+</Callout>
+
+Channels allow you to connect your LobeHub agents to external messaging platforms. Once connected, users can interact with your AI assistant directly in the chat apps they already use — no need to visit LobeHub.
+
+## Supported Platforms
+
+| Platform                                     | Description                                                     |
+| -------------------------------------------- | --------------------------------------------------------------- |
+| [Discord](/docs/usage/channels/discord)      | Connect to Discord servers for channel chat and direct messages |
+| [Telegram](/docs/usage/channels/telegram)    | Connect to Telegram for private and group conversations         |
+| [Feishu / Lark](/docs/usage/channels/feishu) | Connect to Feishu (飞书) or Lark for team collaboration           |
+
+## How It Works
+
+Each channel integration works by linking a bot account on the target platform to a LobeHub agent. When a user sends a message to the bot, LobeHub processes it through the agent and sends the response back to the same conversation.
+
+- **Per-agent configuration** — Each agent can have its own set of channel connections, so different agents can serve different platforms or communities.
+- **Multiple channels simultaneously** — A single agent can be connected to Discord, Telegram, and Feishu/Lark at the same time. LobeHub routes messages to the correct agent automatically.
+- **Secure credential storage** — All bot tokens and app secrets are encrypted before being stored.
+
+## Getting Started
+
+1. Enable **Developer Mode** in LobeHub: **Settings** → **Advanced Settings** → **Developer Mode**
+2. Navigate to your agent's settings and select the **Channels** tab
+3. Choose a platform and follow the setup guide:
+   - [Discord](/docs/usage/channels/discord)
+   - [Telegram](/docs/usage/channels/telegram)
+   - [Feishu / Lark](/docs/usage/channels/feishu)
+
+## Feature Support
+
+Text messages are supported across all platforms. Some features vary by platform:
+
+| Feature                | Discord | Telegram | Feishu / Lark |
+| ---------------------- | ------- | -------- | ------------- |
+| Text messages          | Yes     | Yes      | Yes           |
+| Direct messages        | Yes     | Yes      | Yes           |
+| Group chats            | Yes     | Yes      | Yes           |
+| Reactions              | Yes     | Yes      | Partial       |
+| Image/file attachments | Yes     | Yes      | Yes           |

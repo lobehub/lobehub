@@ -485,8 +485,10 @@ export const aiAgentRouter = router({
         initialMessages: messages,
         modelRuntimeConfig,
         operationId,
-        toolManifestMap,
-        tools,
+        toolSet: {
+          manifestMap: toolManifestMap,
+          tools,
+        },
         userId: ctx.userId,
       });
 

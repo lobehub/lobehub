@@ -207,6 +207,8 @@ export interface MessagesEngineParams {
   // ========== System date ==========
   /** Whether to inject current date into system message (default: true) */
   enableSystemDate?: boolean;
+  /** User timezone for system date formatting (e.g. 'Asia/Shanghai') */
+  timezone?: string | null;
 
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */

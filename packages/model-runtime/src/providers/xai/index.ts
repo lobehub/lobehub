@@ -1,5 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
+import { responsesAPIGrokModels } from '../../const/models';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
@@ -21,7 +22,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
     handlePayload: (payload) => {
       const { enabledSearch, frequency_penalty, model, presence_penalty, ...rest } = payload;
 
-      if (enabledSearch) {
+      if (responsesAPIGrokModels.has(model) || enabledSearch) {
         return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
       }
 
@@ -57,6 +58,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
         ...rest,
         stream: payload.stream ?? true,
         tools: xaiTools,
+        include: ['reasoning.encrypted_content'],
       } as any;
     },
   },

@@ -1,8 +1,9 @@
-import { DataSyncConfig } from '@lobechat/electron-client-ipc';
-import retry from 'async-retry';
-import { session as electronSession, safeStorage } from 'electron';
 import querystring from 'node:querystring';
 import { URL } from 'node:url';
+
+import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
+import retry from 'async-retry';
+import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
 import { appendVercelCookie } from '@/utils/http-headers';

@@ -30,26 +30,26 @@ import { metaDataReducer } from './reducers/meta';
 
 export interface PublicAction {
   /**
-   * 自动完成代理描述
-   * @param id - 代理的 ID
-   * @returns 一个 Promise，用于异步操作完成后的处理
+   * Autocomplete agent description
+   * @param id - Agent ID
+   * @returns A Promise for handling after asynchronous operation completes
    */
   autocompleteAgentDescription: () => Promise<void>;
   autocompleteAgentTags: () => Promise<void>;
   /**
-   * 自动完成代理标题
-   * @param id - 代理的 ID
-   * @returns 一个 Promise，用于异步操作完成后的处理
+   * Autocomplete agent title
+   * @param id - Agent ID
+   * @returns A Promise for handling after asynchronous operation completes
    */
   autocompleteAgentTitle: () => Promise<void>;
   /**
-   * 自动完成助理元数据
+   * Autocomplete assistant metadata
    */
   autocompleteAllMeta: (replace?: boolean) => void;
   autocompleteMeta: (key: keyof MetaData) => void;
   /**
-   * 自动选择表情
-   * @param id - 表情的 ID
+   * Auto pick emoji
+   * @param id - Emoji ID
    */
   autoPickEmoji: () => Promise<void>;
 }
@@ -72,14 +72,14 @@ export interface Action extends PublicAction {
   toggleAgentPlugin: (pluginId: string, state?: boolean) => void;
 
   /**
-   * 更新加载状态
-   * @param key - SessionLoadingState 的键
-   * @param value - 加载状态的值
+   * Update loading state
+   * @param key - Key of SessionLoadingState
+   * @param value - Value of the loading state
    */
   updateLoadingState: (key: keyof LoadingState, value: boolean) => void;
   /**
-   * 更新保存状态
-   * @param status - 保存状态
+   * Update save status
+   * @param status - Save status
    */
   updateSaveStatus: (status: SaveStatus) => void;
 }
@@ -118,7 +118,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
 
     const preValue = meta.description;
 
-    // 替换为 ...
+    // Replace with ...
     dispatchMeta({ type: 'update', value: { description: '...' } });
 
     chatService.fetchPresetTaskResult({
@@ -145,7 +145,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
 
     const preValue = meta.tags;
 
-    // 替换为 ...
+    // Replace with ...
     dispatchMeta({ type: 'update', value: { tags: ['...'] } });
 
     // Get current agent for agentMeta
@@ -176,7 +176,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
 
     const previousTitle = meta.title;
 
-    // 替换为 ...
+    // Replace with ...
     dispatchMeta({ type: 'update', value: { title: '...' } });
 
     chatService.fetchPresetTaskResult({

@@ -58,6 +58,7 @@ export const defaultClients: ClientMetadata[] = [
     client_id: 'lobehub-cli',
     client_name: 'LobeHub CLI',
     grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'],
+    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
     response_types: [],
     token_endpoint_auth_method: 'none',
   },

@@ -1,4 +1,4 @@
-import { DataSyncConfig } from '@lobechat/electron-client-ipc';
+import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';

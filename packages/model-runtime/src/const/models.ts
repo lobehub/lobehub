@@ -48,6 +48,11 @@ export const responsesAPIModels = new Set([
 ]);
 
 /**
+ * Grok models use Responses API only
+ */
+export const responsesAPIGrokModels = new Set(['grok-4.20-multi-agent-experimental-beta-0304']);
+
+/**
  * Regex patterns for models that support context caching (3.5+)
  */
 export const contextCachingModelPatterns: RegExp[] = [

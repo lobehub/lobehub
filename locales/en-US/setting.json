@@ -692,6 +692,7 @@
   "tab.addCustomMcp": "Add Custom MCP Skill",
   "tab.addCustomMcp.desc": "Manually configure a custom MCP server",
   "tab.addCustomSkill": "Add",
+  "tab.advanced": "Advanced",
   "tab.agent": "Agent Service",
   "tab.all": "All",
   "tab.apikey": "API Key Management",

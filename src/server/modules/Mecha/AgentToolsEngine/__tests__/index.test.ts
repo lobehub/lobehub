@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -286,5 +288,135 @@ describe('createServerAgentToolsEngine', () => {
     });
 
     expect(result).toBeUndefined();
+  });
+
+  describe('Memory tool enable rules', () => {
+    it('should disable Memory tool by default (globalMemoryEnabled = false)', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [MemoryManifest.identifier] },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [MemoryManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(MemoryManifest.identifier);
+    });
+
+    it('should enable Memory tool when globalMemoryEnabled is true', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [MemoryManifest.identifier] },
+        globalMemoryEnabled: true,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [MemoryManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(MemoryManifest.identifier);
+    });
+  });
+
+  describe('LocalSystem tool enable rules', () => {
+    it('should disable LocalSystem tool when no device context is provided', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+    });
+
+    it('should enable LocalSystem tool when gateway configured AND device online', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        deviceContext: { gatewayConfigured: true, deviceOnline: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
+    });
+
+    it('should disable LocalSystem tool when gateway configured but device offline', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        deviceContext: { gatewayConfigured: true, deviceOnline: false },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+    });
+  });
+
+  describe('RemoteDevice tool enable rules', () => {
+    it('should enable RemoteDevice tool when gateway configured', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        deviceContext: { gatewayConfigured: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('should disable RemoteDevice tool when gateway not configured', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        deviceContext: { gatewayConfigured: false },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
   });
 });

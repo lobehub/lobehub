@@ -44,6 +44,7 @@ import { postProcessModelList } from '../../utils/postProcessModelList';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
+import { resolveModelSamplingParameters } from '../parameterResolver';
 import type { OpenAIStreamOptions } from '../streams';
 import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import { createOpenAICompatibleImage } from './createImage';
@@ -361,16 +362,26 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         }
 
         // Then perform factory-level processing
-        const postPayload = chatCompletion?.handlePayload
+        const handledPayload = chatCompletion?.handlePayload
           ? chatCompletion.handlePayload(processedPayload, this._options)
           : ({
               ...processedPayload,
               stream: processedPayload.stream ?? true,
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
-        if ((postPayload as any).apiMode === 'responses') {
+        if ((handledPayload as any).apiMode === 'responses') {
           return await this.handleResponseAPIMode(processedPayload, options);
         }
+
+        // Sanitize temperature/top_p conflict for Claude 4+ models routed via OpenAI-compatible API.
+        // normalizeTemperature is false here because OpenAI-compatible providers use the raw range.
+        const postPayload = {
+          ...handledPayload,
+          ...resolveModelSamplingParameters(handledPayload.model, handledPayload, {
+            normalizeTemperature: false,
+            preferTemperature: true,
+          }),
+        };
 
         const computedBaseURL =
           typeof this._options.baseURL === 'string' && this._options.baseURL
@@ -432,9 +443,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (customClient?.createChatCompletionStream) {
           log('using custom client for chat completion stream');
+          // Apply sampling sanitization to processedPayload for the custom client path.
+          // We use processedPayload (ChatStreamPayload type) here because
+          // createChatCompletionStream expects ChatStreamPayload, not the OpenAI SDK format.
           response = customClient.createChatCompletionStream(
             this.client,
-            processedPayload,
+            {
+              ...processedPayload,
+              ...resolveModelSamplingParameters(processedPayload.model, processedPayload, {
+                normalizeTemperature: false,
+                preferTemperature: true,
+              }),
+            },
             this,
           ) as any;
         } else {
@@ -979,6 +999,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         stream: !isStreaming ? undefined : isStreaming,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
         user: options?.user,
+        // Sanitize sampling params for Responses API path
+        ...resolveModelSamplingParameters(res.model, res, {
+          normalizeTemperature: false,
+          preferTemperature: true,
+        }),
       } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
 
       if (debugParams?.responses?.()) {

@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "适用于 GPT-5.1 系列；控制推理强度。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "适用于 GPT-5.2 Pro 系列；控制推理强度。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "适用于 GPT-5.2 系列；控制推理强度。",
+  "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "适用于 Grok 4.20 系列；控制推理强度。低/中档使用 4 个代理，高/超高使用 16 个代理。",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "适用于 Gemini 图像生成模型；控制生成图像的宽高比。",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "适用于 Nano Banana 2；控制生成图像的宽高比（支持超宽 1:4、4:1、1:8、8:1）。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "适用于 Gemini 3 图像生成模型；控制生成图像的分辨率。",

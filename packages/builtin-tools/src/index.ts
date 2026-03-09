@@ -10,6 +10,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { LobeToolsManifest } from '@lobechat/builtin-tool-tools';
@@ -129,6 +130,12 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     identifier: CalculatorManifest.identifier,
     manifest: CalculatorManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: RemoteDeviceManifest.identifier,
+    manifest: RemoteDeviceManifest,
     type: 'builtin',
   },
 ];

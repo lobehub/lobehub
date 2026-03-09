@@ -794,6 +794,7 @@ When I am ___, I need ___
   'systemAgent.translation.modelDesc': 'Specify the model used for translation',
   'systemAgent.translation.title': 'Message Translation Agent',
   'tab.about': 'About',
+  'tab.advanced': 'Advanced',
   'tab.addAgentSkill': 'Add Agent Skill',
   'tab.beta': 'Beta',
   'tab.beta.updateChannel.canary': 'Canary',

@@ -297,3 +297,173 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     expect(coordinator.tryClaimStep).toHaveBeenCalledWith('op-args', 42, 35);
   });
 });
+
+describe('AgentRuntimeService.executeStep - Redis failure in error handler', () => {
+  const createService = () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+    return service;
+  };
+
+  it('should still call onComplete when Redis fails in catch block (ECONNRESET scenario)', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+
+    // First loadAgentState call succeeds (returns running state to enter step execution)
+    // Second call in catch block fails (Redis ECONNRESET)
+    let loadCallCount = 0;
+    coordinator.loadAgentState = vi.fn().mockImplementation(() => {
+      loadCallCount++;
+      if (loadCallCount === 1) {
+        return Promise.resolve({
+          status: 'running',
+          stepCount: 5,
+          lastModified: new Date().toISOString(),
+          metadata: {},
+        });
+      }
+      return Promise.reject(new Error('Reached the max retries per request limit (which is 3)'));
+    });
+
+    // publishStreamEvent: first call (step_start) succeeds, subsequent calls fail
+    // Simulates Redis going down mid-execution
+    let publishCallCount = 0;
+    streamManager.publishStreamEvent = vi.fn().mockImplementation(() => {
+      publishCallCount++;
+      if (publishCallCount === 1) return Promise.resolve();
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    // saveAgentState fails (Redis is down)
+    coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('Redis ECONNRESET'));
+
+    const onComplete = vi.fn();
+    service.registerStepCallbacks('op-redis-fail', { onComplete });
+
+    // executeStep re-throws the original error after running callbacks
+    await expect(
+      service.executeStep({
+        operationId: 'op-redis-fail',
+        stepIndex: 6,
+        context: { phase: 'user_input' } as any,
+      }),
+    ).rejects.toThrow();
+
+    // onComplete MUST be called even when Redis is completely down
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op-redis-fail',
+        reason: 'error',
+      }),
+    );
+  });
+
+  it('should still trigger completion webhook when Redis fails in catch block', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+
+    let loadCallCount = 0;
+    coordinator.loadAgentState = vi.fn().mockImplementation(() => {
+      loadCallCount++;
+      if (loadCallCount === 1) {
+        return Promise.resolve({
+          status: 'running',
+          stepCount: 5,
+          lastModified: new Date().toISOString(),
+          metadata: {},
+        });
+      }
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    // First publishStreamEvent call (step_start) succeeds, subsequent fail
+    let publishCallCount = 0;
+    streamManager.publishStreamEvent = vi.fn().mockImplementation(() => {
+      publishCallCount++;
+      if (publishCallCount === 1) return Promise.resolve();
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('Redis ECONNRESET'));
+
+    // Spy on triggerCompletionWebhook
+    const triggerSpy = vi
+      .spyOn(service as any, 'triggerCompletionWebhook')
+      .mockResolvedValue(undefined);
+
+    // executeStep re-throws the original error after running callbacks
+    await expect(
+      service.executeStep({
+        operationId: 'op-redis-webhook',
+        stepIndex: 6,
+        context: { phase: 'user_input' } as any,
+      }),
+    ).rejects.toThrow();
+
+    // Completion webhook MUST be triggered even when Redis is down
+    expect(triggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'error' }),
+      'op-redis-webhook',
+      'error',
+    );
+  });
+
+  it('should preserve loaded state metadata when only saveAgentState fails', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+
+    const stateWithWebhook = {
+      status: 'running',
+      stepCount: 5,
+      lastModified: new Date().toISOString(),
+      metadata: { completionWebhook: 'https://example.com/webhook' },
+    };
+
+    // loadAgentState always succeeds (returns state with webhook metadata)
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(stateWithWebhook);
+
+    // saveAgentState fails (write-only Redis failure)
+    coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('Redis write failed'));
+
+    // publishStreamEvent: first call succeeds, subsequent fail
+    let publishCallCount = 0;
+    streamManager.publishStreamEvent = vi.fn().mockImplementation(() => {
+      publishCallCount++;
+      if (publishCallCount === 1) return Promise.resolve();
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    const onComplete = vi.fn();
+    service.registerStepCallbacks('op-save-fail', { onComplete });
+
+    await expect(
+      service.executeStep({
+        operationId: 'op-save-fail',
+        stepIndex: 6,
+        context: { phase: 'user_input' } as any,
+      }),
+    ).rejects.toThrow();
+
+    // onComplete must receive the full state with metadata (not a minimal fallback)
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finalState: expect.objectContaining({
+          metadata: expect.objectContaining({
+            completionWebhook: 'https://example.com/webhook',
+          }),
+          status: 'error',
+        }),
+        operationId: 'op-save-fail',
+        reason: 'error',
+      }),
+    );
+  });
+});

@@ -8,6 +8,10 @@ import { processMultiProviderModelList } from '../../utils/modelParse';
 // Ref: https://docs.z.ai/guides/capabilities/thinking-mode#preserved-thinking
 const supportPreservedThinkingModels = new Set(['z-ai/glm4.7', 'z-ai/glm5']);
 
+// Models that use enable_thinking parameter (without clear_thinking)
+// Ref: NVIDIA NIM
+const enableThinkingModels = new Set(['qwen/qwen3.5-397b-a17b']);
+
 export interface NvidiaModelCard {
   id: string;
 }
@@ -37,6 +41,8 @@ export const params = {
 
       // Check if model uses preserved thinking (enable_thinking + clear_thinking)
       const usePreservedThinking = model && supportPreservedThinkingModels.has(model);
+      // Check if model uses enable_thinking parameter (without clear_thinking)
+      const useEnableThinking = model && enableThinkingModels.has(model);
 
       const chatTemplateKwargs: Record<string, any> = {};
 
@@ -46,6 +52,9 @@ export const params = {
           // set clear_thinking to false to preserve reasoning content across turns
           chatTemplateKwargs.enable_thinking = thinkingFlag;
           chatTemplateKwargs.clear_thinking = false;
+        } else if (useEnableThinking) {
+          // Models using enable_thinking: use enable_thinking only
+          chatTemplateKwargs.enable_thinking = thinkingFlag;
         } else {
           // Other models: use thinking parameter
           chatTemplateKwargs.thinking = thinkingFlag;

@@ -1,6 +1,6 @@
-import { ActionIcon, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { MessageSquareDashed, Star } from 'lucide-react';
+import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,10 +8,12 @@ import { useTranslation } from 'react-i18next';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { CHANNEL_PROVIDERS } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
+import type { ChatTopicMetadata } from '@/types/topic';
 
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
@@ -49,11 +51,12 @@ interface TopicItemProps {
   active?: boolean;
   fav?: boolean;
   id?: string;
+  metadata?: ChatTopicMetadata;
   threadId?: string;
   title: string;
 }
 
-const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) => {
+const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, metadata }) => {
   const { t } = useTranslation('topic');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const addTab = useElectronStore((s) => s.addTab);
@@ -72,8 +75,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   const isUnreadCompleted = useChatStore(
     id ? operationSelectors.isTopicUnreadCompleted(id) : () => false,
   );
-
-  const [favoriteTopic] = useChatStore((s) => [s.favoriteTopic]);
 
   const { navigateToTopic, isInAgentSubRoute } = useTopicNavigation();
 
@@ -112,6 +113,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   }, [id, activeAgentId, addTab, navigateToTopic]);
 
   const dropdownMenu = useTopicItemDropdownMenu({
+    fav,
     id,
     toggleEditing,
   });
@@ -193,7 +195,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   }
 
   return (
-    <Flexbox style={{ position: 'relative' }}>
+    <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
         active={active && !threadId && !isInAgentSubRoute}
@@ -202,19 +204,18 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         href={href}
         loading={isLoading}
         title={title}
-        icon={
-          <ActionIcon
-            color={fav ? cssVar.colorWarning : undefined}
-            fill={fav ? cssVar.colorWarning : 'transparent'}
-            icon={Star}
-            size={'small'}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              favoriteTopic(id, !fav);
-            }}
-          />
-        }
+        icon={(() => {
+          if (metadata?.bot?.platform) {
+            const provider = CHANNEL_PROVIDERS.find((p) => p.id === metadata.bot!.platform);
+            if (provider) {
+              const ProviderIcon = provider.icon;
+              return <ProviderIcon color={provider.color} size={16} />;
+            }
+          }
+          return (
+            <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+          );
+        })()}
         slots={{
           iconPostfix: unreadNode,
         }}

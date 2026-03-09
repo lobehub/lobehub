@@ -190,6 +190,7 @@ export class GatewayManager {
     return new BotClass({
       ...provider.credentials,
       applicationId: provider.applicationId,
+      platform,
     });
   }
 }

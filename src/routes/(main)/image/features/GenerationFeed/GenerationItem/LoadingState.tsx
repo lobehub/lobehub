@@ -13,7 +13,7 @@ import { styles } from './styles';
 import { type LoadingStateProps } from './types';
 import { getThumbnailMaxWidth } from './utils';
 
-// 加载状态组件
+// Loading state component
 export const LoadingState = memo<LoadingStateProps>(
   ({ generation, generationBatch, aspectRatio, onDelete }) => {
     const isGenerating =

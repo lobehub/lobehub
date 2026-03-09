@@ -5,4 +5,7 @@ export interface PlatformBot {
   stop: () => Promise<void>;
 }
 
-export type PlatformBotClass = new (config: any) => PlatformBot;
+export type PlatformBotClass = (new (config: any) => PlatformBot) & {
+  /** Whether instances require a persistent connection (e.g. WebSocket). */
+  persistent?: boolean;
+};

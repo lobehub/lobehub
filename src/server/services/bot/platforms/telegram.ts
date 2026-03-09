@@ -68,7 +68,7 @@ export class Telegram implements PlatformBot {
     // without iterating all registered bots.
     // Always call setWebhook (it's idempotent) to ensure Telegram-side
     // secret_token stays in sync with the adapter config.
-    const baseUrl = (this.config.webhookProxyUrl || appEnv.APP_URL || '').replace(/\/$/, '');
+    const baseUrl = (this.config.webhookProxyUrl || appEnv.APP_URL || '').trim().replace(/\/$/, '');
     const webhookUrl = `${baseUrl}/api/agent/webhooks/telegram/${this.applicationId}`;
     await this.setWebhookInternal(webhookUrl);
 

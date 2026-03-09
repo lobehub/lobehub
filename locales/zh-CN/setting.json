@@ -692,6 +692,7 @@
   "tab.addCustomMcp": "添加自定义 MCP 技能",
   "tab.addCustomMcp.desc": "手动配置自定义 MCP 服务器",
   "tab.addCustomSkill": "添加",
+  "tab.advanced": "高级设置",
   "tab.agent": "助理服务",
   "tab.all": "全部",
   "tab.apikey": "API Key 管理",
