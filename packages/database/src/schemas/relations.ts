@@ -14,7 +14,7 @@ import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
 import { documents, files, knowledgeBases } from './file';
 import { generationBatches, generations, generationTopics } from './generation';
-import { messageGroups, messages, messagesFiles } from './message';
+import { messageGroups, messages, messagesFiles, messageTranslates } from './message';
 import { chunks, documentChunks, unstructuredChunks } from './rag';
 import { sessionGroups, sessions } from './session';
 import { threads, topicDocuments, topics } from './topic';
@@ -98,6 +98,10 @@ export const threadsRelations = relations(threads, ({ one }) => ({
 
 export const messagesRelations = relations(messages, ({ many, one }) => ({
   filesToMessages: many(messagesFiles),
+  translation: one(messageTranslates, {
+    fields: [messages.id],
+    references: [messageTranslates.id],
+  }),
 
   session: one(sessions, {
     fields: [messages.sessionId],

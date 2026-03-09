@@ -623,6 +623,13 @@
       "when": 1772277762014,
       "tag": "0088_fix_benchmark_add_bot_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1772723999146,
+      "tag": "0089_add_api_key_hash",
+      "breakpoints": true
     }
   ],
   "version": "6"
