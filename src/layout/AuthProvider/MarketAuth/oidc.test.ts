@@ -50,7 +50,41 @@ describe('MarketOIDC.startAuthorization', () => {
     vi.useRealTimers();
   });
 
-  it('should resolve from storage handoff when popup monitoring reports closed early', async () => {
+  it('should reject promptly when popup closes without a handoff result', async () => {
+    const client = new MarketOIDC({
+      baseUrl: 'https://market.lobehub.com',
+      clientId: 'lobechat-com',
+      redirectUri: 'http://localhost:3010/market-auth-callback',
+      scope: 'openid profile email',
+    });
+
+    sessionStorage.setItem('market_state', 'state_value');
+    vi.spyOn(client, 'buildAuthUrl').mockResolvedValue(
+      'https://market.lobehub.com/lobehub-oidc/auth',
+    );
+
+    let isClosed = false;
+    const popup = {
+      get closed() {
+        return isClosed;
+      },
+    } as Window;
+
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+
+    const authPromise = client.startAuthorization();
+    const rejection = expect(authPromise).rejects.toMatchObject({
+      code: 'popupClosed',
+      name: 'MarketAuthError',
+    });
+
+    isClosed = true;
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await rejection;
+  });
+
+  it('should resolve from storage handoff when popup closes after callback persistence', async () => {
     const client = new MarketOIDC({
       baseUrl: 'https://market.lobehub.com',
       clientId: 'lobechat-com',

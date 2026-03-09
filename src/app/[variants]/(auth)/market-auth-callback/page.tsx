@@ -94,6 +94,12 @@ const MarketAuthCallbackPage = () => {
       setStatus('error');
       setMessage(t('callback.messages.missingParams'));
 
+      persistMarketAuthResult({
+        error: 'Missing authorization parameters',
+        state: state || undefined,
+        type: 'MARKET_AUTH_ERROR',
+      });
+
       if (window.opener) {
         window.opener.postMessage(
           {

@@ -51,10 +51,16 @@ export const resolveMarketAuthHandoffPayload = (
   return null;
 };
 
-export const persistMarketAuthResult = (payload: MarketAuthHandoffPayload) => {
-  if (!isBrowser() || !payload.state) return;
+export const persistMarketAuthResult = (payload: MarketAuthHandoffPayload): boolean => {
+  if (!isBrowser() || !payload.state) return false;
 
-  localStorage.setItem(getMarketAuthResultStorageKey(payload.state), JSON.stringify(payload));
+  try {
+    localStorage.setItem(getMarketAuthResultStorageKey(payload.state), JSON.stringify(payload));
+    return true;
+  } catch (error) {
+    console.error('[MarketAuthHandoff] Failed to persist auth result:', error);
+    return false;
+  }
 };
 
 export const readMarketAuthResult = (state: string): MarketAuthHandoffPayload | null => {
