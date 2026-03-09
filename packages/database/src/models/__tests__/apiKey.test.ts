@@ -170,6 +170,17 @@ describe('ApiKeyModel', () => {
       expect(keys).toHaveLength(1);
       expect(keys[0].name).toBe('User 1 Key');
     });
+
+    it('should throw when API key decryption is not authentic', async () => {
+      await apiKeyModel.create({ name: 'Key 1', enabled: true });
+
+      process.env.KEY_VAULTS_SECRET = 'Q10pwdq00KXUu9R+c8A8p4PSlIRWi7KwgUophBtkHVk=';
+      const anotherApiKeyModel = new ApiKeyModel(serverDB, userId);
+
+      await expect(anotherApiKeyModel.query()).rejects.toThrow(
+        'Failed to decrypt API key. Please check whether KEY_VAULTS_SECRET is correct.',
+      );
+    });
   });
 
   describe('findByKey', () => {
