@@ -1,9 +1,13 @@
+import { readFileSync } from 'node:fs';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getAuthInfo } from '../api/http';
+import { replayAgentEvents, streamAgentEvents } from '../utils/agentStream';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
-import { log } from '../utils/logger';
+import { log, setVerbose } from '../utils/logger';
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
@@ -199,4 +203,143 @@ export function registerAgentCommand(program: Command) {
       const r = result as any;
       console.log(`${pc.green('✓')} Duplicated agent → ${pc.bold(r.agentId || r.id || 'done')}`);
     });
+
+  // ── run ──────────────────────────────────────────────
+
+  agent
+    .command('run')
+    .description('Run an agent with a prompt')
+    .option('-a, --agent-id <id>', 'Agent ID')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .option('-p, --prompt <text>', 'User prompt')
+    .option('-t, --topic-id <id>', 'Reuse an existing topic')
+    .option('--no-auto-start', 'Do not auto-start the agent')
+    .option('--json', 'Output full JSON event stream')
+    .option('-v, --verbose', 'Show detailed tool call info')
+    .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
+    .action(
+      async (options: {
+        agentId?: string;
+        autoStart?: boolean;
+        json?: boolean;
+        prompt?: string;
+        replay?: string;
+        slug?: string;
+        topicId?: string;
+        verbose?: boolean;
+      }) => {
+        if (options.verbose) setVerbose(true);
+
+        // Replay mode: render from saved JSON file, no network needed
+        if (options.replay) {
+          const data = readFileSync(options.replay, 'utf8');
+          const events = JSON.parse(data);
+          replayAgentEvents(events, { json: options.json, verbose: options.verbose });
+          return;
+        }
+
+        if (!options.agentId && !options.slug) {
+          log.error('Either --agent-id or --slug is required.');
+          process.exit(1);
+          return;
+        }
+        if (!options.prompt) {
+          log.error('--prompt is required.');
+          process.exit(1);
+          return;
+        }
+
+        const client = await getTrpcClient();
+
+        // 1. Exec agent to get operationId
+        const input: Record<string, any> = { prompt: options.prompt };
+        if (options.agentId) input.agentId = options.agentId;
+        if (options.slug) input.slug = options.slug;
+        if (options.topicId) input.appContext = { topicId: options.topicId };
+        if (options.autoStart === false) input.autoStart = false;
+
+        const result = await client.aiAgent.execAgent.mutate(input as any);
+        const r = result as any;
+
+        if (!r.success) {
+          log.error(`Failed to start agent: ${r.error || r.message || 'Unknown error'}`);
+          process.exit(1);
+        }
+
+        const operationId = r.operationId;
+        if (!options.json) {
+          log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
+        }
+
+        // 2. Connect to SSE stream
+        const { serverUrl, headers } = await getAuthInfo();
+        const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
+
+        await streamAgentEvents(streamUrl, headers, {
+          json: options.json,
+          verbose: options.verbose,
+        });
+      },
+    );
+
+  // ── status ──────────────────────────────────────────
+
+  agent
+    .command('status <operationId>')
+    .description('Check agent operation status')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .option('--history', 'Include step history')
+    .option('--history-limit <n>', 'Number of history entries', '10')
+    .action(
+      async (
+        operationId: string,
+        options: { history?: boolean; historyLimit?: string; json?: string | boolean },
+      ) => {
+        const client = await getTrpcClient();
+
+        const input: Record<string, any> = { operationId };
+        if (options.history) input.includeHistory = true;
+        if (options.historyLimit) input.historyLimit = Number.parseInt(options.historyLimit, 10);
+
+        const result = await client.aiAgent.getOperationStatus.query(input as any);
+        const r = result as any;
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(r, fields);
+          return;
+        }
+
+        console.log(pc.bold('Operation Status'));
+        console.log(`  ID:     ${operationId}`);
+        console.log(`  Status: ${colorStatus(r.status || r.state || 'unknown')}`);
+
+        if (r.stepCount !== undefined) console.log(`  Steps:  ${r.stepCount}`);
+        if (r.usage?.total_tokens) console.log(`  Tokens: ${r.usage.total_tokens}`);
+        if (r.cost?.total !== undefined) console.log(`  Cost:   $${r.cost.total.toFixed(4)}`);
+        if (r.error) console.log(`  Error:  ${pc.red(r.error)}`);
+        if (r.createdAt) console.log(`  Started: ${r.createdAt}`);
+        if (r.completedAt) console.log(`  Ended:   ${r.completedAt}`);
+      },
+    );
+}
+
+function colorStatus(status: string): string {
+  switch (status) {
+    case 'completed':
+    case 'success': {
+      return pc.green(status);
+    }
+    case 'failed':
+    case 'error': {
+      return pc.red(status);
+    }
+    case 'processing':
+    case 'running': {
+      return pc.yellow(status);
+    }
+    default: {
+      return pc.dim(status);
+    }
+  }
 }
