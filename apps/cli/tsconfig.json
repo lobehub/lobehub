@@ -14,6 +14,7 @@
     "isolatedModules": true,
     "paths": {
       "@lobechat/device-gateway-client": ["../../packages/device-gateway-client/src"],
+      "@lobechat/local-file-shell": ["../../packages/local-file-shell/src"],
       "@/*": ["../../src/*"]
     }
   },
