@@ -18,12 +18,6 @@ const vercelConfig = {
       'packages/database/migrations/**',
     ],
   },
-  outputFileTracingIncludes: {
-    '/api/webhooks/video/*': [
-      './node_modules/ffmpeg-static/ffmpeg',
-      './node_modules/.pnpm/ffmpeg-static@*/node_modules/ffmpeg-static/ffmpeg',
-    ],
-  },
 };
 const nextConfig = defineConfig({
   ...(isVercel ? vercelConfig : {}),
