@@ -254,14 +254,28 @@ describe('resolveModelSamplingParameters', () => {
     expect(result).toEqual({ temperature: 0.7, top_p: 0.9 });
   });
 
-  it('should treat null sampling values as undefined', () => {
+  it('should treat null sampling values as undefined and not include them in result', () => {
     const result = resolveModelSamplingParameters(
       'claude-haiku-4-5-20251001',
       { temperature: null, top_p: 0.9 },
       { normalizeTemperature: false, preferTemperature: true },
     );
 
-    expect(result).toEqual({ temperature: undefined, top_p: 0.9 });
+    // temperature was null (treated as not provided), so it should not appear in result
+    expect(result).toEqual({ top_p: 0.9 });
+    expect(result).not.toHaveProperty('temperature');
+  });
+
+  it('should not add spurious undefined keys when input omits fields', () => {
+    const result = resolveModelSamplingParameters(
+      'gpt-4o',
+      {},
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    expect(result).toEqual({});
+    expect(result).not.toHaveProperty('temperature');
+    expect(result).not.toHaveProperty('top_p');
   });
 });
 

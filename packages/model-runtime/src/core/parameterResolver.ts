@@ -260,12 +260,12 @@ export const resolveModelSamplingParameters = (
   model: string | undefined,
   config: Pick<ParameterConfig, 'temperature' | 'top_p'>,
   options: SamplingParameterResolverOptions = {},
-): { temperature: number | undefined; top_p: number | undefined } => {
+): { temperature?: number; top_p?: number } => {
+  const temperature = config.temperature ?? undefined;
+  const top_p = config.top_p ?? undefined;
+
   const resolved = resolveParameters(
-    {
-      temperature: config.temperature ?? undefined,
-      top_p: config.top_p ?? undefined,
-    },
+    { temperature, top_p },
     {
       hasConflict: !!model && hasTemperatureTopPConflict(model),
       normalizeTemperature: options.normalizeTemperature,
@@ -273,14 +273,18 @@ export const resolveModelSamplingParameters = (
     },
   );
 
-  // Always return both keys so that spreading the result onto a payload
-  // explicitly clears the conflicting field (e.g. sets top_p to undefined
-  // when temperature wins). Without this, a plain spread would leave the
-  // original top_p intact and the API would still receive both.
-  return {
-    temperature: resolved.temperature,
-    top_p: resolved.top_p,
-  };
+  // Only include a key if the input originally provided it.
+  // This ensures:
+  //  - Conflict case: if input has both, the dropped one is set to undefined
+  //    (e.g. { temperature: 0.4, top_p: undefined }), which overwrites the
+  //    original value when spread onto the payload.
+  //  - No-input case: if input didn't have a field, we don't add it, so
+  //    spreading won't introduce spurious undefined properties.
+  const result: { temperature?: number; top_p?: number } = {};
+  if (temperature !== undefined) result.temperature = resolved.temperature;
+  if (top_p !== undefined) result.top_p = resolved.top_p;
+
+  return result;
 };
 
 /**
