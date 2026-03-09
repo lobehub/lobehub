@@ -260,8 +260,8 @@ export const resolveModelSamplingParameters = (
   model: string | undefined,
   config: Pick<ParameterConfig, 'temperature' | 'top_p'>,
   options: SamplingParameterResolverOptions = {},
-): Pick<ResolvedParameters, 'temperature' | 'top_p'> => {
-  return resolveParameters(
+): { temperature: number | undefined; top_p: number | undefined } => {
+  const resolved = resolveParameters(
     {
       temperature: config.temperature ?? undefined,
       top_p: config.top_p ?? undefined,
@@ -272,6 +272,15 @@ export const resolveModelSamplingParameters = (
       preferTemperature: options.preferTemperature,
     },
   );
+
+  // Always return both keys so that spreading the result onto a payload
+  // explicitly clears the conflicting field (e.g. sets top_p to undefined
+  // when temperature wins). Without this, a plain spread would leave the
+  // original top_p intact and the API would still receive both.
+  return {
+    temperature: resolved.temperature,
+    top_p: resolved.top_p,
+  };
 };
 
 /**

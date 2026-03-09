@@ -240,7 +240,8 @@ describe('resolveModelSamplingParameters', () => {
       { normalizeTemperature: false, preferTemperature: true },
     );
 
-    expect(result).toEqual({ temperature: 0.7 });
+    // Always returns both keys so spreading onto a payload clears the conflicting field
+    expect(result).toEqual({ temperature: 0.7, top_p: undefined });
   });
 
   it('should keep both parameters for non-conflict models', () => {
@@ -260,7 +261,7 @@ describe('resolveModelSamplingParameters', () => {
       { normalizeTemperature: false, preferTemperature: true },
     );
 
-    expect(result).toEqual({ top_p: 0.9 });
+    expect(result).toEqual({ temperature: undefined, top_p: 0.9 });
   });
 });
 

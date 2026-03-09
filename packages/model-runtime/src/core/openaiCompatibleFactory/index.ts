@@ -443,7 +443,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (customClient?.createChatCompletionStream) {
           log('using custom client for chat completion stream');
-          // Also sanitize sampling params for custom client path (e.g. OpenRouter)
+          // Apply sampling sanitization to processedPayload for the custom client path.
+          // We use processedPayload (ChatStreamPayload type) here because
+          // createChatCompletionStream expects ChatStreamPayload, not the OpenAI SDK format.
           response = customClient.createChatCompletionStream(
             this.client,
             {
