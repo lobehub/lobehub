@@ -42,21 +42,22 @@ export class BackendProxyProtocolManager {
   private static readonly AUTH_REQUIRED_DEBOUNCE_MS = 1000;
 
   private notifyAuthorizationRequired() {
-    // Debounce: skip if a notification is already scheduled
+    // Trailing-edge debounce: coalesce rapid 401 bursts and fire AFTER the burst settles.
+    // This ensures the IPC event is sent after the renderer has had time to mount listeners.
     if (this.authRequiredDebounceTimer) {
-      return;
+      clearTimeout(this.authRequiredDebounceTimer);
     }
 
     this.authRequiredDebounceTimer = setTimeout(() => {
       this.authRequiredDebounceTimer = null;
-    }, BackendProxyProtocolManager.AUTH_REQUIRED_DEBOUNCE_MS);
 
-    const allWindows = BrowserWindow.getAllWindows();
-    for (const win of allWindows) {
-      if (!win.isDestroyed()) {
-        win.webContents.send('authorizationRequired');
+      const allWindows = BrowserWindow.getAllWindows();
+      for (const win of allWindows) {
+        if (!win.isDestroyed()) {
+          win.webContents.send('authorizationRequired');
+        }
       }
-    }
+    }, BackendProxyProtocolManager.AUTH_REQUIRED_DEBOUNCE_MS);
   }
 
   registerWithRemoteBaseUrl(
