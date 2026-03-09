@@ -412,4 +412,58 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
       'error',
     );
   });
+
+  it('should preserve loaded state metadata when only saveAgentState fails', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+
+    const stateWithWebhook = {
+      status: 'running',
+      stepCount: 5,
+      lastModified: new Date().toISOString(),
+      metadata: { completionWebhook: 'https://example.com/webhook' },
+    };
+
+    // loadAgentState always succeeds (returns state with webhook metadata)
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(stateWithWebhook);
+
+    // saveAgentState fails (write-only Redis failure)
+    coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('Redis write failed'));
+
+    // publishStreamEvent: first call succeeds, subsequent fail
+    let publishCallCount = 0;
+    streamManager.publishStreamEvent = vi.fn().mockImplementation(() => {
+      publishCallCount++;
+      if (publishCallCount === 1) return Promise.resolve();
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    const onComplete = vi.fn();
+    service.registerStepCallbacks('op-save-fail', { onComplete });
+
+    await expect(
+      service.executeStep({
+        operationId: 'op-save-fail',
+        stepIndex: 6,
+        context: { phase: 'user_input' } as any,
+      }),
+    ).rejects.toThrow();
+
+    // onComplete must receive the full state with metadata (not a minimal fallback)
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        finalState: expect.objectContaining({
+          metadata: expect.objectContaining({
+            completionWebhook: 'https://example.com/webhook',
+          }),
+          status: 'error',
+        }),
+        operationId: 'op-save-fail',
+        reason: 'error',
+      }),
+    );
+  });
 });

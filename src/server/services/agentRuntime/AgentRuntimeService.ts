@@ -936,18 +936,19 @@ export class AgentRuntimeService {
           error: formatErrorForState(error),
           status: 'error' as const,
         };
-        await this.coordinator.saveAgentState(operationId, finalStateWithError);
-      } catch (stateError) {
-        log(
-          '[%s] Failed to load/save error state (infra may be down): %O',
-          operationId,
-          stateError,
-        );
+      } catch (loadError) {
+        log('[%s] Failed to load error state (infra may be down): %O', operationId, loadError);
         // Fallback: construct a minimal error state so callbacks still receive useful info
         finalStateWithError = {
           error: formatErrorForState(error),
           status: 'error' as const,
         };
+      }
+
+      try {
+        await this.coordinator.saveAgentState(operationId, finalStateWithError);
+      } catch (saveError) {
+        log('[%s] Failed to save error state (infra may be down): %O', operationId, saveError);
       }
 
       // Trigger completion webhook on error (fire-and-forget)
