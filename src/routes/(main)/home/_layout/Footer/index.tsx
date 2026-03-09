@@ -20,7 +20,6 @@ import { Link } from 'react-router-dom';
 
 import ChangelogModal from '@/components/ChangelogModal';
 import HighlightNotification from '@/components/HighlightNotification';
-import LabsModal from '@/components/LabsModal';
 import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useGlobalStore } from '@/store/global';
@@ -42,7 +41,6 @@ const Footer = memo(() => {
   const { analytics } = useAnalytics();
   const { hideGitHub } = useServerConfigStore(featureFlagsSelectors);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const [isLabsModalOpen, setIsLabsModalOpen] = useState(false);
   const [shouldLoadChangelog, setShouldLoadChangelog] = useState(false);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
   const [isProductHuntCardOpen, setIsProductHuntCardOpen] = useState(false);
@@ -79,14 +77,6 @@ const Footer = memo(() => {
   }, [isWithinTimeWindow, isNotificationRead, trackProductHuntEvent]);
 
   const { open: openFeedbackModal } = useFeedbackModal();
-
-  const handleOpenLabsModal = () => {
-    setIsLabsModalOpen(true);
-  };
-
-  const handleCloseLabsModal = () => {
-    setIsLabsModalOpen(false);
-  };
 
   const handleOpenChangelogModal = () => {
     setShouldLoadChangelog(true);
@@ -163,12 +153,6 @@ const Footer = memo(() => {
         label: t('changelog'),
         onClick: handleOpenChangelogModal,
       },
-      {
-        icon: <Icon icon={FlaskConical} />,
-        key: 'labs',
-        label: t('labs'),
-        onClick: handleOpenLabsModal,
-      },
       ...(!hideGitHub
         ? [
             {
@@ -212,7 +196,6 @@ const Footer = memo(() => {
           <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
         </DropdownMenu>
       </Flexbox>
-      <LabsModal open={isLabsModalOpen} onClose={handleCloseLabsModal} />
       <ChangelogModal
         open={isChangelogModalOpen}
         shouldLoad={shouldLoadChangelog}

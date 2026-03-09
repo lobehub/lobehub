@@ -11,14 +11,22 @@ import { useTranslation } from 'react-i18next';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
+  const { t: tLabs } = useTranslation('labs');
 
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
+
+  const [isPreferenceInit, enableInputMarkdown, enableGroupChat, updateLab] = useUserStore((s) => [
+    preferenceSelectors.isPreferenceInit(s),
+    labPreferSelectors.enableInputMarkdown(s),
+    s.preference.lab?.enableGroupChat ?? false,
+    s.updateLab,
+  ]);
 
   if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
@@ -37,13 +45,43 @@ const Page = memo(() => {
     title: t('tab.advanced'),
   };
 
+  const labsGroup: FormGroupItemType = {
+    children: [
+      {
+        children: (
+          <Switch
+            checked={enableInputMarkdown}
+            loading={!isPreferenceInit}
+            onChange={(checked) => updateLab({ enableInputMarkdown: checked })}
+          />
+        ),
+        desc: tLabs('features.inputMarkdown.desc'),
+        label: tLabs('features.inputMarkdown.title'),
+        minWidth: undefined,
+      },
+      {
+        children: (
+          <Switch
+            checked={enableGroupChat}
+            loading={!isPreferenceInit}
+            onChange={(checked) => updateLab({ enableGroupChat: checked })}
+          />
+        ),
+        desc: tLabs('features.groupChat.desc'),
+        label: tLabs('features.groupChat.title'),
+        minWidth: undefined,
+      },
+    ],
+    title: tLabs('title'),
+  };
+
   return (
     <>
       <SettingHeader title={t('tab.advanced')} />
       <Form
         collapsible={false}
         initialValues={general}
-        items={[advancedGroup]}
+        items={[advancedGroup, labsGroup]}
         itemsType={'group'}
         variant={'filled'}
         onValuesChange={async (v) => {
