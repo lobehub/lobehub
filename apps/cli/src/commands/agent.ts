@@ -7,7 +7,7 @@ import { getTrpcClient } from '../api/client';
 import { getAuthInfo } from '../api/http';
 import { replayAgentEvents, streamAgentEvents } from '../utils/agentStream';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
-import { log } from '../utils/logger';
+import { log, setVerbose } from '../utils/logger';
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
@@ -228,6 +228,8 @@ export function registerAgentCommand(program: Command) {
         topicId?: string;
         verbose?: boolean;
       }) => {
+        if (options.verbose) setVerbose(true);
+
         // Replay mode: render from saved JSON file, no network needed
         if (options.replay) {
           const data = readFileSync(options.replay, 'utf8');

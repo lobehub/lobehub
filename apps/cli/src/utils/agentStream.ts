@@ -44,6 +44,11 @@ export async function streamAgentEvents(
   const jsonEvents: AgentStreamEvent[] = [];
   const ctx = createRenderContext();
 
+  // Declared outside the read loop so partial SSE frames that span
+  // chunk boundaries are not lost between reader.read() calls.
+  let eventType = '';
+  let eventData = '';
+
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -52,9 +57,6 @@ export async function streamAgentEvents(
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-
-      let eventType = '';
-      let eventData = '';
 
       for (const line of lines) {
         if (line.startsWith('event:')) {

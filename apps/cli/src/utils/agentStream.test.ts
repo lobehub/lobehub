@@ -24,6 +24,20 @@ function createSSEStream(events: string[]): ReadableStream<Uint8Array> {
   });
 }
 
+/** Create a stream that delivers content in separate chunks to simulate network splitting */
+function createChunkedSSEStream(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  });
+}
+
 function sseMessage(type: string, data: Record<string, any>): string {
   return `event:${type}\ndata:${JSON.stringify(data)}\n\n`;
 }
@@ -137,6 +151,28 @@ describe('streamAgentEvents', () => {
     await streamAgentEvents('https://example.com/stream', {});
 
     expect(log.heartbeat).toHaveBeenCalled();
+  });
+
+  it('should preserve SSE frame state across read boundaries', async () => {
+    const endEvent = JSON.stringify({
+      data: { stepCount: 1 },
+      operationId: 'op1',
+      stepIndex: 0,
+      timestamp: Date.now(),
+      type: 'agent_runtime_end',
+    });
+
+    // Split SSE message across two chunks: first chunk has event: + data:,
+    // second chunk has the terminating blank line.
+    const body = createChunkedSSEStream([`event:data\ndata:${endEvent}\n`, `\n`]);
+
+    fetchSpy.mockResolvedValue(new Response(body, { status: 200 }));
+
+    await streamAgentEvents('https://example.com/stream', {});
+
+    // If frame state was lost the event would be silently dropped,
+    // and the stream would end without printing the finish line.
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Agent finished'));
   });
 
   it('should exit on HTTP error', async () => {
