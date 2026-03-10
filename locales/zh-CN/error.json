@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "内容触发安全策略。请移除可能有害或不当的部分后重试",
   "response.GoogleAIBlockReason.SPII": "内容可能包含敏感个人身份信息。为保护隐私，请移除后重试",
   "response.GoogleAIBlockReason.default": "内容被阻止：{{blockReason}}。请调整后重试",
+  "response.InsufficientBudgetForModel": "剩余额度不足以使用此模型。请充值额度、升级订阅计划，或尝试使用费用更低的模型。",
   "response.InsufficientQuota": "配额已用尽。请检查余额/配额设置，或更换可用的 API Key 后重试",
   "response.InvalidAccessCode": "访问密码为空或不正确。请重新输入，或改用自定义 API Key",
   "response.InvalidBedrockCredentials": "Bedrock 鉴权失败。请检查 AccessKeyId/SecretAccessKey 后重试",

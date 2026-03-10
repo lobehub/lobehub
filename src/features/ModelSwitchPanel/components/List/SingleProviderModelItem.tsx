@@ -7,17 +7,21 @@ import { type ModelWithProviders } from '../../types';
 interface SingleProviderModelItemProps {
   data: ModelWithProviders;
   newLabel: string;
+  proBadgeLabel?: string;
 }
 
-export const SingleProviderModelItem = memo<SingleProviderModelItemProps>(({ data, newLabel }) => {
-  return (
-    <ModelItemRender
-      {...data.model}
-      {...data.model.abilities}
-      newBadgeLabel={newLabel}
-      showInfoTag={true}
-    />
-  );
-});
+export const SingleProviderModelItem = memo<SingleProviderModelItemProps>(
+  ({ data, newLabel, proBadgeLabel }) => {
+    return (
+      <ModelItemRender
+        {...data.model}
+        {...data.model.abilities}
+        newBadgeLabel={newLabel}
+        proBadgeLabel={proBadgeLabel}
+        showInfoTag={true}
+      />
+    );
+  },
+);
 
 SingleProviderModelItem.displayName = 'SingleProviderModelItem';

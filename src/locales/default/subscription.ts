@@ -113,6 +113,10 @@ export default {
   'limitation.expired.desc':
     'Your {{plan}} computing credits expired on {{expiredAt}}. Upgrade your plan now to get computing credits.',
   'limitation.expired.title': 'Computing Credits Expired',
+  'limitation.insufficientBudget.desc':
+    'Your remaining credits are not enough for the estimated cost of this model. Please top up credits or switch to a less expensive model.',
+  'limitation.insufficientBudget.retry': 'Retry',
+  'limitation.insufficientBudget.title': 'Insufficient Credits for This Model',
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',
   'limitation.hobby.desc':
