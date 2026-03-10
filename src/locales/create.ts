@@ -60,6 +60,8 @@ export const createI18nNext = (lang?: string) => {
         resources: {
           [DEFAULT_LANG]: defaultResources,
         },
+        // Keep backend loading enabled for namespaces that are not preloaded above.
+        partialBundledLanguages: true,
 
         interpolation: {
           escapeValue: false,
