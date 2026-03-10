@@ -24,7 +24,6 @@ import { agentCronJobService } from '@/services/agentCronJob';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -38,6 +37,7 @@ import CronJobScheduleConfig from './features/CronJobScheduleConfig';
 interface CronJobDraft {
   content: string;
   cronPattern: string;
+  customCronPattern?: string;
   description: string;
   hourlyInterval?: number; // For hourly: interval in hours (1, 2, 6, 12)
   maxExecutions?: number | null;
@@ -87,7 +87,6 @@ const CronJobDetailPage = memo(() => {
   const router = useQueryRoute();
   const { modal } = App.useApp();
   const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const isNewJob = cronId === 'new';
 
@@ -118,7 +117,7 @@ const CronJobDetailPage = memo(() => {
   const cronListAgentId = activeAgentId || aid;
 
   const { data: cronJob, isLoading } = useSWR(
-    enableBusinessFeatures && cronId && !isNewJob ? ['cronJob', cronId] : null,
+    cronId && !isNewJob ? ['cronJob', cronId] : null,
     async () => {
       if (!cronId || isNewJob) return null;
       const result = await agentCronJobService.getById(cronId);
@@ -144,7 +143,10 @@ const CronJobDetailPage = memo(() => {
         snapshot.triggerTime,
         snapshot.hourlyInterval,
         snapshot.weekdays,
+        snapshot.customCronPattern,
       );
+
+      if (!cronPattern) return null;
 
       return {
         content,
@@ -404,7 +406,7 @@ const CronJobDetailPage = memo(() => {
 
     setDraft(defaultDraft);
     draftRef.current = defaultDraft;
-    contentRef.current = '';
+    contentRef.current = defaultDraft.content;
     readyRef.current = true;
   }, [isNewJob, draft]);
 
@@ -428,6 +430,7 @@ const CronJobDetailPage = memo(() => {
     const nextDraft: CronJobDraft = {
       content: cronJob.content || '',
       cronPattern: cronJob.cronPattern,
+      customCronPattern: parsed.customCronPattern,
       description: cronJob.description || '',
       hourlyInterval: parsed.hourlyInterval,
       maxExecutions: cronJob.maxExecutions ?? null,
@@ -454,10 +457,6 @@ const CronJobDetailPage = memo(() => {
     readyRef.current = true;
     flushPendingSave();
   }, [cronJob, flushPendingSave]);
-
-  if (!enableBusinessFeatures) {
-    return null;
-  }
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -494,6 +493,7 @@ const CronJobDetailPage = memo(() => {
               />
 
               <CronJobScheduleConfig
+                customCronPattern={draft.customCronPattern}
                 hourlyInterval={draft.hourlyInterval}
                 maxExecutions={draft.maxExecutions}
                 scheduleType={draft.scheduleType}
@@ -505,7 +505,7 @@ const CronJobDetailPage = memo(() => {
 
               <CronJobContentEditor
                 enableRichRender={enableRichRender}
-                initialValue={cronJob?.content || ''}
+                initialValue={isNewJob ? draft.content : cronJob?.content || ''}
                 onChange={handleContentChange}
               />
 

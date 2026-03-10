@@ -10,6 +10,7 @@ import Agent from '../agent';
 import APIKey from '../apikey';
 import ChatAppearance from '../chat-appearance';
 import Common from '../common';
+import Credentials from '../credentials';
 import Hotkey from '../hotkey';
 import Image from '../image';
 import Memory from '../memory';
@@ -25,6 +26,7 @@ import TTS from '../tts';
 
 export const componentMap = {
   [SettingsTabs.Common]: Common,
+  [SettingsTabs.Credentials]: Credentials,
   [SettingsTabs.ChatAppearance]: ChatAppearance,
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.Image]: Image,

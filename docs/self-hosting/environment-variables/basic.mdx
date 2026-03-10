@@ -43,6 +43,25 @@ When using the `random` mode, a random API Key will be selected from the availab
 
 When using the `turn` mode, the API Keys will be retrieved in a polling manner according to the specified order.
 
+### `AGENT_CRON_DISPATCH_API_KEY`
+
+- Type: Optional
+- Description: API key for `/api/agent/cron/dispatch` endpoint. Required when using external schedulers (or Docker sidecar) to trigger cron dispatch execution.
+- Default: -
+- Example: `change_this_to_a_long_random_string`
+
+### `AGENT_CRON_DISPATCH_MAX_JOBS_PER_TICK`
+
+- Type: Optional
+- Description: Maximum number of enabled cron jobs scanned in one dispatcher tick.
+- Default: `100`
+
+### `AGENT_CRON_DISPATCH_CONCURRENCY`
+
+- Type: Optional
+- Description: Maximum number of due jobs dispatched in parallel in one tick.
+- Default: `5`
+
 ### `DEFAULT_AGENT_CONFIG`
 
 - Type: Optional

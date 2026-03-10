@@ -1,12 +1,13 @@
 import { type Dayjs } from 'dayjs';
 
-export type ScheduleType = 'daily' | 'hourly' | 'weekly';
+export type ScheduleType = 'custom' | 'daily' | 'hourly' | 'weekly';
 
 // Schedule type options
 export const SCHEDULE_TYPE_OPTIONS = [
-  { label: 'agentCronJobs.scheduleType.daily', value: 'daily' },
   { label: 'agentCronJobs.scheduleType.hourly', value: 'hourly' },
+  { label: 'agentCronJobs.scheduleType.daily', value: 'daily' },
   { label: 'agentCronJobs.scheduleType.weekly', value: 'weekly' },
+  { label: 'agentCronJobs.scheduleType.custom', value: 'custom' },
 ] as const;
 
 // Timezone options - covering major cities worldwide
@@ -82,65 +83,95 @@ export const WEEKDAY_LABELS: Record<number, string> = {
 };
 
 /**
- * Parse cron pattern to extract schedule info
+ * Parse cron pattern to extract schedule info for structured UI modes.
+ * Unrecognized-but-valid cron expressions will be treated as custom mode.
  * Format: minute hour day month weekday
  */
 export const parseCronPattern = (
   cronPattern: string,
 ): {
+  customCronPattern?: string;
   hourlyInterval?: number;
   scheduleType: ScheduleType;
   triggerHour: number;
   triggerMinute: number;
   weekdays?: number[];
 } => {
-  const parts = cronPattern.split(' ');
-  if (parts.length !== 5) {
-    return { scheduleType: 'daily', triggerHour: 0, triggerMinute: 0 };
-  }
+  const parts = cronPattern.trim().split(/\s+/);
 
-  const [minute, hour, , , weekday] = parts;
-  const rawMinute = minute === '*' ? 0 : Number.parseInt(minute);
-  // Normalize to nearest 30-minute interval (0 or 30)
-  const triggerMinute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  const customResult = {
+    customCronPattern: cronPattern,
+    scheduleType: 'custom' as const,
+    triggerHour: 0,
+    triggerMinute: 0,
+  };
 
-  // Hourly: 0 * * * * or 0 */N * * *
-  if (hour.startsWith('*/')) {
-    const interval = Number.parseInt(hour.slice(2));
+  if (parts.length !== 5) return customResult;
+
+  const [minute, hour, day, month, weekday] = parts;
+
+  // Structured modes currently only map from the common day/month wildcard families.
+  if (day !== '*' || month !== '*') return customResult;
+
+  const parsedMinute = Number.parseInt(minute, 10);
+
+  if (minute !== String(parsedMinute) || Number.isNaN(parsedMinute)) return customResult;
+  if (parsedMinute < 0 || parsedMinute > 59) return customResult;
+
+  // Hourly: M * * * * or M */N * * *
+  if (weekday === '*') {
+    if (hour === '*') {
+      return {
+        hourlyInterval: 1,
+        scheduleType: 'hourly',
+        triggerHour: 0,
+        triggerMinute: parsedMinute,
+      };
+    }
+
+    if (hour.startsWith('*/')) {
+      const interval = Number.parseInt(hour.slice(2), 10);
+      if (!Number.isNaN(interval) && interval > 0) {
+        return {
+          hourlyInterval: interval,
+          scheduleType: 'hourly',
+          triggerHour: 0,
+          triggerMinute: parsedMinute,
+        };
+      }
+      return customResult;
+    }
+
+    const parsedHour = Number.parseInt(hour, 10);
+    if (hour !== String(parsedHour) || Number.isNaN(parsedHour)) return customResult;
+    if (parsedHour < 0 || parsedHour > 23) return customResult;
+
     return {
-      hourlyInterval: interval,
-      scheduleType: 'hourly',
-      triggerHour: 0,
-      triggerMinute,
+      scheduleType: 'daily',
+      triggerHour: parsedHour,
+      triggerMinute: parsedMinute,
     };
   }
-  if (hour === '*') {
-    return {
-      hourlyInterval: 1,
-      scheduleType: 'hourly',
-      triggerHour: 0,
-      triggerMinute,
-    };
+
+  // Weekly: M H * * D[,D...]
+  const parsedHour = Number.parseInt(hour, 10);
+  if (hour !== String(parsedHour) || Number.isNaN(parsedHour)) return customResult;
+  if (parsedHour < 0 || parsedHour > 23) return customResult;
+
+  const weekdays = weekday
+    .split(',')
+    .map((item) => Number.parseInt(item, 10))
+    .map((value) => (value === 7 ? 0 : value));
+
+  if (weekdays.some((value) => Number.isNaN(value) || value < 0 || value > 6)) {
+    return customResult;
   }
 
-  const triggerHour = Number.parseInt(hour);
-
-  // Weekly: has specific weekday(s)
-  if (weekday !== '*') {
-    const weekdays = weekday.split(',').map((d) => Number.parseInt(d));
-    return {
-      scheduleType: 'weekly',
-      triggerHour,
-      triggerMinute,
-      weekdays,
-    };
-  }
-
-  // Daily: specific hour, any weekday
   return {
-    scheduleType: 'daily',
-    triggerHour,
-    triggerMinute,
+    scheduleType: 'weekly',
+    triggerHour: parsedHour,
+    triggerMinute: parsedMinute,
+    weekdays,
   };
 };
 
@@ -153,10 +184,13 @@ export const buildCronPattern = (
   triggerTime: Dayjs,
   hourlyInterval?: number,
   weekdays?: number[],
+  customCronPattern?: string,
 ): string => {
-  const rawMinute = triggerTime.minute();
-  // Normalize to 0 or 30
-  const minute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  if (scheduleType === 'custom') {
+    return customCronPattern?.trim() || '';
+  }
+
+  const minute = triggerTime.minute();
   const hour = triggerTime.hour();
 
   switch (scheduleType) {
@@ -171,7 +205,8 @@ export const buildCronPattern = (
       return `${minute} ${hour} * * *`;
     }
     case 'weekly': {
-      const days = weekdays && weekdays.length > 0 ? weekdays.sort().join(',') : '0,1,2,3,4,5,6';
+      const days =
+        weekdays && weekdays.length > 0 ? [...weekdays].sort().join(',') : '0,1,2,3,4,5,6';
       return `${minute} ${hour} * * ${days}`;
     }
   }

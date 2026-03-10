@@ -9,8 +9,10 @@
 import { type ToolExecutionContext } from '../types';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
+import { credentialsRuntime } from './credentials';
 import { memoryRuntime } from './memory';
 import { notebookRuntime } from './notebook';
+import { scheduledTaskRuntime } from './scheduledTask';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
 import { toolsActivatorRuntime } from './tools';
@@ -35,8 +37,10 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 registerRuntimes([
   webBrowsingRuntime,
   cloudSandboxRuntime,
+  credentialsRuntime,
   calculatorRuntime,
   notebookRuntime,
+  scheduledTaskRuntime,
   skillStoreRuntime,
   skillsRuntime,
   memoryRuntime,

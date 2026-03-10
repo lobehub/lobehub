@@ -10,6 +10,9 @@ export const componentMap = {
   [SettingsTabs.Common]: dynamic(() => import('../common'), {
     loading: loading('Settings > Common'),
   }),
+  [SettingsTabs.Credentials]: dynamic(() => import('../credentials'), {
+    loading: loading('Settings > Credentials'),
+  }),
   [SettingsTabs.ChatAppearance]: dynamic(() => import('../chat-appearance'), {
     loading: loading('Settings > ChatAppearance'),
   }),

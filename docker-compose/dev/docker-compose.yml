@@ -63,11 +63,11 @@ services:
     volumes:
       - rustfs-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
       interval: 5s
       timeout: 3s
       retries: 30
-    command: ["--access-key","${RUSTFS_ACCESS_KEY}","--secret-key","${RUSTFS_SECRET_KEY}","/data"]
+    command: ['--access-key','${RUSTFS_ACCESS_KEY}','--secret-key','${RUSTFS_SECRET_KEY}','/data']
     env_file:
       - .env
 
@@ -90,7 +90,7 @@ services:
         mc admin info rustfs || true;
         mc anonymous set-json "/bucket.config.json" "rustfs/lobe";
       '
-    restart: "no"
+    restart: 'no'
     networks:
       - lobe-network
     env_file:
@@ -108,6 +108,28 @@ services:
     restart: always
     networks:
       - lobe-network
+
+  cron-dispatcher:
+    image: curlimages/curl:8.16.0
+    container_name: lobe-cron-dispatcher-dev
+    profiles:
+      - cron
+    restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    env_file:
+      - .env
+    command: >
+      sh -c 'url="${CRON_DISPATCH_URL:-http://host.docker.internal:3010/api/agent/cron/dispatch}";
+        interval="${CRON_DISPATCH_INTERVAL_SECONDS:-60}";
+        while true; do
+          now=$$(date -u +"%Y-%m-%dT%H:%M:%SZ");
+          curl -fsS -X POST "$$url" \
+            -H "Authorization: Bearer $${AGENT_CRON_DISPATCH_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{}" || echo "[cron-dispatcher-dev] dispatch failed at $$now";
+          sleep "$$interval";
+        done'
 
 volumes:
   data:

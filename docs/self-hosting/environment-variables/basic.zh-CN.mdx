@@ -40,6 +40,25 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 
 使用 `turn` 模式下，将按照填写的顺序，轮询获取得到 API Key。
 
+### `AGENT_CRON_DISPATCH_API_KEY`
+
+- 类型：可选
+- 描述：`/api/agent/cron/dispatch` 接口的 API Key。当你使用外部调度器（或 Docker sidecar）触发 cron dispatcher 时需要配置。
+- 默认值：-
+- 示例：`change_this_to_a_long_random_string`
+
+### `AGENT_CRON_DISPATCH_MAX_JOBS_PER_TICK`
+
+- 类型：可选
+- 描述：单次 dispatcher tick 最多扫描的启用 cron 任务数量。
+- 默认值：`100`
+
+### `AGENT_CRON_DISPATCH_CONCURRENCY`
+
+- 类型：可选
+- 描述：单次 tick 内并行 dispatch 的最大任务数。
+- 默认值：`5`
+
 ### `DEFAULT_AGENT_CONFIG`
 
 - 类型：可选

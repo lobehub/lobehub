@@ -2,6 +2,7 @@ import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { CredentialsManifest } from '@lobechat/builtin-tool-credentials';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
@@ -10,6 +11,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { ScheduledTaskManifest } from '@lobechat/builtin-tool-scheduled-task';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { LobeToolsManifest } from '@lobechat/builtin-tool-tools';
@@ -24,7 +26,9 @@ import { type LobeBuiltinTool } from '@lobechat/types';
 export const defaultToolIds = [
   LobeToolsManifest.identifier,
   SkillsManifest.identifier,
+  ScheduledTaskManifest.identifier,
   SkillStoreManifest.identifier,
+  CredentialsManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
@@ -53,6 +57,12 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    hidden: true,
+    identifier: ScheduledTaskManifest.identifier,
+    manifest: ScheduledTaskManifest,
+    type: 'builtin',
+  },
+  {
     discoverable: isDesktop,
     hidden: !isDesktop,
     identifier: LocalSystemManifest.identifier,
@@ -74,6 +84,12 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: CredentialsManifest.identifier,
+    manifest: CredentialsManifest,
     type: 'builtin',
   },
   {

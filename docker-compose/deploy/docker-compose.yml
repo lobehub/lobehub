@@ -127,6 +127,27 @@ services:
       - .env
     restart: always
 
+  cron-dispatcher:
+    image: curlimages/curl:8.16.0
+    container_name: lobe-cron-dispatcher
+    network_mode: 'service:network-service'
+    depends_on:
+      lobe:
+        condition: service_started
+    env_file:
+      - .env
+    command: >
+      sh -c 'while true; do
+        now=$$(date -u +"%Y-%m-%dT%H:%M:%SZ");
+        curl -fsS -X POST "http://localhost:3210/api/agent/cron/dispatch" \
+          -H "Authorization: Bearer $${AGENT_CRON_DISPATCH_API_KEY}" \
+          -H "Content-Type: application/json" \
+          -d "{}" || echo "[cron-dispatcher] dispatch failed at $$now";
+        sleep 60;
+      done'
+
+    restart: always
+
 volumes:
   data:
     driver: local

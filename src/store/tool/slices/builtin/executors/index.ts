@@ -16,8 +16,10 @@ import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executo
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
+import { credentialsExecutor } from './lobe-credentials';
 import { notebookExecutor } from './lobe-notebook';
 import { pageAgentExecutor } from './lobe-page-agent';
+import { scheduledTaskExecutor } from './lobe-scheduled-task';
 import { skillStoreExecutor } from './lobe-skill-store';
 import { skillsExecutor } from './lobe-skills';
 import { toolsActivatorExecutor } from './lobe-tools';
@@ -129,6 +131,7 @@ registerExecutors([
   agentManagementExecutor,
   calculatorExecutor,
   cloudSandboxExecutor,
+  credentialsExecutor,
   groupAgentBuilderExecutor,
   groupManagementExecutor,
   gtdExecutor,
@@ -137,6 +140,7 @@ registerExecutors([
   memoryExecutor,
   notebookExecutor,
   pageAgentExecutor,
+  scheduledTaskExecutor,
   skillStoreExecutor,
   skillsExecutor,
   toolsActivatorExecutor,

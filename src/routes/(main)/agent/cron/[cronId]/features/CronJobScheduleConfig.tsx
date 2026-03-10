@@ -2,7 +2,7 @@
 
 import { Checkbox, Flexbox, FormGroup, Text } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
-import { Divider, InputNumber, TimePicker } from 'antd';
+import { Divider, Input, InputNumber, TimePicker } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -61,9 +61,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface CronJobScheduleConfigProps {
+  customCronPattern?: string;
   hourlyInterval?: number;
   maxExecutions?: number | null;
   onScheduleChange: (updates: {
+    customCronPattern?: string;
     hourlyInterval?: number;
     maxExecutions?: number | null;
     scheduleType?: ScheduleType;
@@ -89,6 +91,7 @@ const WEEKDAYS = [
 
 const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
   ({
+    customCronPattern,
     hourlyInterval,
     maxExecutions,
     onScheduleChange,
@@ -123,6 +126,10 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
             }))}
             onChange={(value: ScheduleType) =>
               onScheduleChange({
+                customCronPattern:
+                  value === 'custom'
+                    ? customCronPattern || `${triggerTime?.minute() ?? 0} * * * *`
+                    : undefined,
                 scheduleType: value,
                 weekdays: value === 'weekly' ? [1, 2, 3, 4, 5] : [],
               })
@@ -133,7 +140,7 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
         <Divider style={{ margin: 0 }} />
 
         {/* Time Row (for daily/weekly) */}
-        {scheduleType !== 'hourly' && (
+        {(scheduleType === 'daily' || scheduleType === 'weekly') && (
           <>
             <Flexbox horizontal align="center" className={styles.row} gap={24}>
               <Text className={styles.label}>{t('agentCronJobs.form.time')}</Text>
@@ -205,6 +212,22 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
                   </div>
                 ))}
               </Flexbox>
+            </Flexbox>
+            <Divider style={{ margin: 0 }} />
+          </>
+        )}
+
+        {/* Custom cron expression */}
+        {scheduleType === 'custom' && (
+          <>
+            <Flexbox horizontal align="center" className={styles.row} gap={24}>
+              <Text className={styles.label}>{t('agentCronJobs.form.cronExpression')}</Text>
+              <Input
+                placeholder={t('agentCronJobs.form.cronExpression.placeholder')}
+                style={{ width: 320 }}
+                value={customCronPattern}
+                onChange={(e) => onScheduleChange({ customCronPattern: e.target.value })}
+              />
             </Flexbox>
             <Divider style={{ margin: 0 }} />
           </>

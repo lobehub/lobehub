@@ -1,0 +1,144 @@
+---
+title: Agent Cron Dispatcher Local Deployment Checklist
+description: Implementation checklist to make scheduled agent tasks runnable in self-hosted Docker/Compose deployments.
+tags:
+  - LobeHub
+  - Cron
+  - Dispatcher
+  - Self-hosting
+  - Docker
+---
+
+# Agent Cron Dispatcher Local Deployment Checklist
+
+> Goal: make cron jobs truly executable in local/self-hosted deployments, not only manageable via UI/CRUD.
+
+## Baseline
+
+- Existing components: cron job schema, CRUD APIs, UI, topic tracking (`trigger='cron'` + `cronJobId`).
+- Dispatcher execution layer is now implemented in this branch.
+- Use this document as a deployment/verification checklist for self-hosted environments.
+
+---
+
+## 0) Freeze architecture decisions
+
+- [ ] Dispatcher is a **general platform capability**, not Moltbook-specific.
+- [ ] Architecture: `Cron definition (existing) + Dispatcher execution (new) + Agent runtime (existing)`.
+- [ ] MVP target: due triggering + idempotency + basic observability.
+
+---
+
+## 1) Implement dispatcher service
+
+Suggested files:
+
+- [ ] `src/server/services/agentCronDispatcher/index.ts`
+- [ ] `src/server/services/agentCronDispatcher/types.ts` (optional)
+
+Core logic:
+
+- [ ] Load enabled jobs via `AgentCronJobModel.getEnabledJobs(db)`.
+- [ ] Determine due jobs by `cronPattern + timezone + lastExecutedAt`.
+- [ ] Ensure due-time matching follows current dispatcher implementation (`evaluateCronJobDue`, timezone-aware).
+- [ ] Add Redis idempotency lock: `cron:job:{jobId}:slot:{YYYYMMDDHHmm}`, TTL 90\~180s.
+- [ ] Trigger execution with `AiAgentService.execAgent(...)` and pass:
+  - [ ] `trigger: 'cron'`
+  - [ ] `cronJobId: job.id`
+  - [ ] `userInterventionConfig: { approvalMode: 'headless' }` (recommended)
+- [ ] Update execution stats after successful scheduling.
+- [ ] Return structured summary: `scanned/eligible/triggered/skipped/failed`.
+
+---
+
+## 2) Add dispatcher API endpoint
+
+Suggested file:
+
+- [ ] `src/app/(backend)/api/agent/cron/dispatch/route.ts`
+
+Requirements:
+
+- [ ] `POST` runs one dispatch tick.
+- [ ] Auth by either:
+  - [ ] QStash signature, or
+  - [ ] `Authorization: Bearer <AGENT_CRON_DISPATCH_API_KEY>`
+- [ ] Optional `dryRun` mode.
+- [ ] Structured response for debugging.
+- [ ] Optional `GET` health check.
+
+---
+
+## 3) Environment variables
+
+Add:
+
+- [ ] `AGENT_CRON_DISPATCH_API_KEY`
+- [ ] `AGENT_CRON_DISPATCH_MAX_JOBS_PER_TICK` (suggested default: 100)
+- [ ] `AGENT_CRON_DISPATCH_CONCURRENCY` (suggested default: 5)
+
+Update examples:
+
+- [ ] `.env.example`
+- [ ] `docker-compose/deploy/.env.example`
+- [ ] `docker-compose/dev/.env.example`
+
+---
+
+## 4) Docker Compose scheduler sidecar (for self-hosting)
+
+- [ ] Add `cron-dispatcher` service in `docker-compose/deploy/docker-compose.yml`.
+- [ ] Trigger `POST /api/agent/cron/dispatch` every minute.
+- [ ] Use internal service URL (e.g. `http://network-service:3210/api/agent/cron/dispatch`).
+- [ ] Inject `AGENT_CRON_DISPATCH_API_KEY`.
+- [ ] Add retry + logs.
+
+---
+
+## 5) Observability
+
+- [ ] Debug namespace: `lobe-server:agent-cron-dispatcher`.
+- [ ] Tick-level logs: scanned / eligible / triggered / failed / duration.
+- [ ] Job-level logs: jobId / agentId / userId / slot / skipReason / operationId.
+
+---
+
+## 6) Testing
+
+Unit tests:
+
+- [ ] Due-time calculation (timezone, DST, lastExecutedAt).
+- [ ] Idempotency lock (no duplicate dispatch in same slot).
+- [ ] Stats update and auto-disable behavior.
+
+API tests:
+
+- [ ] Unauthorized returns 401.
+- [ ] Valid key returns 200.
+- [ ] `dryRun` does not trigger `execAgent`.
+
+Suggested commands:
+
+```bash
+bunx vitest run --silent='passed-only' 'src/server/services/agentCronDispatcher/**/*.test.ts'
+bunx vitest run --silent='passed-only' 'src/app/(backend)/api/agent/cron/dispatch/**/*.test.ts'
+```
+
+---
+
+## 7) Docs update
+
+- [ ] `docs/self-hosting/environment-variables/basic.mdx` (+ zh-CN)
+- [ ] `docs/usage/agent/scheduled-task.mdx` (+ zh-CN)
+
+Clarify that self-hosting needs a scheduler (Vercel Cron / QStash / Compose sidecar) for automatic execution.
+
+---
+
+## 8) Local acceptance criteria
+
+- [ ] Create a `*/30 * * * *` job.
+- [ ] Manual `POST /api/agent/cron/dispatch` triggers execution.
+- [ ] Topic is created with `trigger='cron'` and valid `metadata.cronJobId`.
+- [ ] `totalExecutions` increments and `remainingExecutions` decrements.
+- [ ] Repeated dispatches in the same minute do not double-trigger.

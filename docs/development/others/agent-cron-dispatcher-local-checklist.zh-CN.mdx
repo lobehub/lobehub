@@ -1,0 +1,156 @@
+---
+title: Agent Cron Dispatcher（本地部署）开发 Checklist
+description: 为 LobeHub 自部署（Docker/Compose）补齐定时任务自动执行能力的实施清单。
+tags:
+  - LobeHub
+  - Cron
+  - Dispatcher
+  - Self-hosting
+  - Docker
+---
+
+# Agent Cron Dispatcher（本地部署）开发 Checklist
+
+> 目标：让本地 Docker/Compose 部署也具备 **CronJob 自动触发执行** 能力，而不只停留在 CRUD/UI。
+
+## 当前结论（基线）
+
+- 已有：CronJob 数据模型、CRUD、UI、topic 追踪（`trigger='cron'` + `cronJobId`）。
+- 本分支已补齐：dispatcher 执行层与调度入口。
+- 本文用于自部署场景的部署 / 验收 checklist。
+
+---
+
+## 0) 设计决策冻结
+
+- [ ] Dispatcher 是 **general 能力**，不是 Moltbook 专属。
+- [ ] 架构：`Cron Job 定义层（已有） + Dispatcher 执行层（新增） + Agent Runtime（已有）`。
+- [ ] MVP 目标：到点触发 + 幂等防重 + 基础可观测。
+- [ ] Moltbook heartbeat 只是该能力的一个场景。
+
+---
+
+## 1) 新增 Dispatcher 服务（核心）
+
+建议新增文件：
+
+- [ ] `src/server/services/agentCronDispatcher/index.ts`
+- [ ] `src/server/services/agentCronDispatcher/types.ts`（可选）
+
+实现要点：
+
+- [ ] 从 `AgentCronJobModel.getEnabledJobs(db)` 拉取启用任务。
+- [ ] 基于 `cronPattern + timezone + lastExecutedAt` 判定 “本分钟是否应执行”。
+- [ ] 任务到点判定与当前实现保持一致（`evaluateCronJobDue`，含时区）。
+- [ ] Redis 幂等锁：`cron:job:{jobId}:slot:{YYYYMMDDHHmm}`，TTL 90\~180s。
+- [ ] 对命中任务调用：
+  - [ ] `new AiAgentService(db, job.userId).execAgent(...)`
+  - [ ] 传入 `trigger: 'cron'`
+  - [ ] 传入 `cronJobId: job.id`
+  - [ ] 建议 `userInterventionConfig: { approvalMode: 'headless' }`
+- [ ] operation 创建成功后调用 `AgentCronJobModel.updateExecutionStats(db, job.id)`。
+- [ ] 产出结构化结果：`scanned/eligible/triggered/skipped/failed`。
+
+---
+
+## 2) 新增调度入口 API（供外部 scheduler 调用）
+
+建议新增文件：
+
+- [ ] `src/app/(backend)/api/agent/cron/dispatch/route.ts`
+
+实现要点：
+
+- [ ] 提供 `POST` 执行一次 dispatcher tick。
+- [ ] 鉴权（任一通过）：
+  - [ ] QStash signature；
+  - [ ] `Authorization: Bearer <AGENT_CRON_DISPATCH_API_KEY>`。
+- [ ] 支持 `dryRun`（仅判定，不触发）。
+- [ ] 返回结构化 dispatch 结果。
+- [ ] 可选 `GET` 健康检查。
+
+---
+
+## 3) 环境变量与示例配置
+
+新增环境变量：
+
+- [ ] `AGENT_CRON_DISPATCH_API_KEY`
+- [ ] `AGENT_CRON_DISPATCH_MAX_JOBS_PER_TICK`（默认建议 100）
+- [ ] `AGENT_CRON_DISPATCH_CONCURRENCY`（默认建议 5）
+
+同步更新：
+
+- [ ] `.env.example`
+- [ ] `docker-compose/deploy/.env.example`
+- [ ] `docker-compose/dev/.env.example`
+
+---
+
+## 4) 本地 Docker Scheduler（关键）
+
+目标：无需 Vercel Cron，在 compose 环境内也能每分钟触发 dispatch。
+
+- [ ] 在 `docker-compose/deploy/docker-compose.yml` 增加 `cron-dispatcher` sidecar。
+- [ ] sidecar 每分钟调用：`POST /api/agent/cron/dispatch`。
+- [ ] 使用内网地址（例如 `http://network-service:3210/api/agent/cron/dispatch`）。
+- [ ] 注入 `AGENT_CRON_DISPATCH_API_KEY`。
+- [ ] 增加失败重试和日志输出。
+
+---
+
+## 5) 可观测性（MVP 级）
+
+- [ ] debug namespace：`lobe-server:agent-cron-dispatcher`
+- [ ] 每次 tick 打印：`scanned / eligible / triggered / failed / duration`
+- [ ] 每个任务打印：`jobId / agentId / userId / slot / skipReason / operationId`
+
+---
+
+## 6) 测试清单
+
+单测：
+
+- [ ] due 判定（时区、DST、lastExecutedAt）。
+- [ ] 幂等锁（同 slot 不重复触发）。
+- [ ] 执行统计回写（remainingExecutions、auto-disable）。
+
+API 测试：
+
+- [ ] 未鉴权返回 401。
+- [ ] 正确 API key 返回 200。
+- [ ] dryRun 不触发 execAgent。
+
+建议命令：
+
+```bash
+bunx vitest run --silent='passed-only' 'src/server/services/agentCronDispatcher/**/*.test.ts'
+bunx vitest run --silent='passed-only' 'src/app/(backend)/api/agent/cron/dispatch/**/*.test.ts'
+```
+
+---
+
+## 7) 文档更新
+
+- [ ] `docs/self-hosting/environment-variables/basic.mdx` 与 `basic.zh-CN.mdx`
+- [ ] `docs/usage/agent/scheduled-task.mdx` 与 `scheduled-task.zh-CN.mdx`
+
+补充说明：自部署要实现 “自动按计划执行”，需配置 scheduler（Vercel Cron / QStash / Compose sidecar）。
+
+---
+
+## 8) 本地验收标准
+
+- [ ] 创建 `*/30 * * * *` 任务。
+- [ ] 手动 `POST /api/agent/cron/dispatch` 能触发一次执行。
+- [ ] 生成 topic 且 `trigger='cron'`，`metadata.cronJobId` 正确。
+- [ ] `totalExecutions` 增长，`remainingExecutions` 递减。
+- [ ] 同一分钟内重复 dispatch 不会重复触发同一任务。
+
+---
+
+## 分阶段建议（便于本地迭代）
+
+- **Phase 1（MVP）**：dispatcher + dispatch API + 手动触发验证。
+- **Phase 2**：compose sidecar 每分钟触发 + 端到端稳定性。
+- **Phase 3**：可观测性增强、失败重试策略完善、文档完善。

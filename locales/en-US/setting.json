@@ -696,6 +696,7 @@
   "tab.apikey": "API Key Management",
   "tab.chatAppearance": "Chat Appearance",
   "tab.common": "Appearance",
+  "tab.credentials": "Credentials",
   "tab.experiment": "Experiment",
   "tab.hotkey": "Hotkeys",
   "tab.image": "Image Generation Service",

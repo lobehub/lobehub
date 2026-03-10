@@ -35,6 +35,7 @@ import debug from 'debug';
 import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
+import { mutate } from '@/libs/swr';
 import { aiAgentService } from '@/services/aiAgent';
 import { chatService } from '@/services/chat';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
@@ -807,6 +808,19 @@ export const createAgentExecutors = (context: {
 
         const executionTime = Math.round(performance.now() - startTime);
         const isSuccess = result && !result.error;
+
+        if (
+          isSuccess &&
+          chatToolPayload.identifier === 'lobe-scheduled-task' &&
+          ['setScheduledTask', 'deleteScheduledTask'].includes(chatToolPayload.apiName)
+        ) {
+          const operationContext = getOperationContext();
+          const targetAgentId = operationContext.agentId;
+
+          if (targetAgentId) {
+            await mutate(['cronTopicsWithJobInfo', targetAgentId]);
+          }
+        }
 
         log(
           '[%s][call_tool] Executing %s in %dms, result: %O',

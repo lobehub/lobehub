@@ -14,6 +14,7 @@ const DisplayContent = memo<{
   content: string;
   hasImages?: boolean;
   id: string;
+  isMessageGenerating?: boolean;
   isMultimodal?: boolean;
   isToolCallGenerating?: boolean;
   markdownProps?: Omit<MarkdownProps, 'className' | 'style' | 'children'>;
@@ -23,6 +24,7 @@ const DisplayContent = memo<{
     markdownProps,
     content,
     isToolCallGenerating,
+    isMessageGenerating,
     hasImages,
     isMultimodal,
     tempDisplayContent,
@@ -31,7 +33,9 @@ const DisplayContent = memo<{
     const message = normalizeThinkTags(processWithArtifact(content));
     if (isToolCallGenerating) return;
 
-    if ((!content && !hasImages) || content === LOADING_FLAT) return <ContentLoading id={id} />;
+    if ((!content && !hasImages) || content === LOADING_FLAT) {
+      return isMessageGenerating ? <ContentLoading id={id} /> : null;
+    }
 
     const contentParts = isMultimodal ? deserializeParts(tempDisplayContent || content) : null;
 

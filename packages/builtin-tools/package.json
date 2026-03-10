@@ -18,6 +18,7 @@
   "dependencies": {
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
+    "@lobechat/builtin-tool-credentials": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-group-management": "workspace:*",
     "@lobechat/builtin-tool-gtd": "workspace:*",
@@ -26,6 +27,7 @@
     "@lobechat/builtin-tool-memory": "workspace:*",
     "@lobechat/builtin-tool-notebook": "workspace:*",
     "@lobechat/builtin-tool-page-agent": "workspace:*",
+    "@lobechat/builtin-tool-scheduled-task": "workspace:*",
     "@lobechat/builtin-tool-skill-store": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-tools": "workspace:*",

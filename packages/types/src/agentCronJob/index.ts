@@ -1,5 +1,21 @@
 import { z } from 'zod';
 
+const cronAliasPattern = /^@(?:annually|yearly|monthly|weekly|daily|hourly|reboot)$/;
+const cronEveryPattern = /^@every\s+(?:\d+(?:ns|us|µs|ms|[hms]))+$/;
+const cronFieldPattern = /^(?:\*|\d+|\d+[/-]\d+)$/;
+
+const isValidCronField = (field: string): boolean => {
+  return field.split(',').every((part) => cronFieldPattern.test(part));
+};
+
+const isValidCronPattern = (value: string): boolean => {
+  if (cronAliasPattern.test(value) || cronEveryPattern.test(value)) return true;
+
+  const fields = value.trim().split(/\s+/);
+
+  return fields.length >= 5 && fields.length <= 7 && fields.every(isValidCronField);
+};
+
 // Execution conditions type
 export interface ExecutionConditions {
   maxExecutionsPerDay?: number;
@@ -11,65 +27,11 @@ export interface ExecutionConditions {
 }
 
 // Cron pattern validation schema
-export const cronPatternSchema = z
-  .string()
-  .regex(
-    /^(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|[hms]))+)|((((\d+,)+\d+|(\d+([/-])\d+)|\d+|\*) ?){5,7})$/,
-    'Invalid cron pattern',
-  );
+export const cronPatternSchema = z.string().refine(isValidCronPattern, 'Invalid cron pattern');
 
-// Minimum 30 minutes validation (using standard cron format)
-export const minimumIntervalSchema = z.string().refine((pattern) => {
-  // Standard cron format: minute hour day month weekday
-  // Parse pattern to validate minimum 30-minute interval
-  const parts = pattern.split(' ');
-  if (parts.length !== 5) {
-    return false;
-  }
-
-  const [minute, hour] = parts;
-
-  // Validate minute is 0 or 30 (we only allow 30-minute intervals)
-  const isValidMinute = minute === '0' || minute === '30' || minute === '*/30';
-
-  if (!isValidMinute) {
-    return false;
-  }
-
-  // Allow minute intervals >= 30 (e.g., */30, */45, */60)
-  if (minute.startsWith('*/')) {
-    const interval = parseInt(minute.slice(2));
-    if (!isNaN(interval) && interval >= 30) {
-      return true;
-    }
-    return false;
-  }
-
-  // Allow hourly patterns: {0|30} */N * * * where N >= 1
-  if ((minute === '0' || minute === '30') && hour.startsWith('*/')) {
-    const interval = parseInt(hour.slice(2));
-    if (!isNaN(interval) && interval >= 1) {
-      return true;
-    }
-    return false;
-  }
-
-  // Allow hourly patterns: {0|30} * * * * (every hour at :00 or :30)
-  if ((minute === '0' || minute === '30') && hour === '*') {
-    return true;
-  }
-
-  // Allow specific hour patterns: {0|30} N * * * (runs once per day)
-  // or {0|30} N * * {weekdays} (runs on specific weekdays)
-  if ((minute === '0' || minute === '30') && /^\d+$/.test(hour)) {
-    const h = parseInt(hour);
-    if (!isNaN(h) && h >= 0 && h <= 23) {
-      return true;
-    }
-  }
-
-  return false;
-}, 'Minimum execution interval is 30 minutes');
+// Backward-compatible alias: keep export name while removing artificial interval limits.
+// Cron validation now follows cronPatternSchema directly.
+export const minimumIntervalSchema = cronPatternSchema;
 
 // Execution conditions schema
 export const ExecutionConditionsSchema = z
@@ -89,7 +51,7 @@ export const ExecutionConditionsSchema = z
 export const InsertAgentCronJobSchema = z.object({
   agentId: z.string(),
   content: z.string(), // Allow empty content (when using editData for rich content)
-  cronPattern: minimumIntervalSchema,
+  cronPattern: cronPatternSchema,
   description: z.string().optional().nullable(),
   editData: z.record(z.string(), z.any()).optional().nullable(),
   enabled: z.boolean().optional().nullable(),

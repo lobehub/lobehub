@@ -186,6 +186,11 @@ export const useCategory = () => {
         label: t('tab.skill'),
       },
       {
+        icon: KeyIcon,
+        key: SettingsTabs.Credentials,
+        label: t('tab.credentials'),
+      },
+      {
         icon: BrainCircuit,
         key: SettingsTabs.Memory,
         label: t('tab.memory'),

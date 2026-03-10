@@ -16,6 +16,8 @@ tags:
 
 Scheduled tasks are jobs that run periodically in the cloud. In simple terms, you can configure an Agent to execute tasks based on your prompt at regular intervals — for example, checking social media content and sending notifications on a schedule. Instead of manually triggering the same workflow repeatedly, schedule it once and let it run automatically — daily, weekly, or hourly.
 
+> **Self-hosting note** To make scheduled tasks run automatically in self-hosted deployments, you also need a scheduler trigger (for example: Vercel Cron, QStash schedule, or a Docker sidecar that periodically calls the dispatcher endpoint).
+
 ## Creating a Task
 
 Find Scheduled Tasks in the left panel of the Agent conversation page, and click `Add Scheduled Task` to start creating a task.

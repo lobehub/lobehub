@@ -2,6 +2,7 @@ import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { CredentialsManifest } from '@lobechat/builtin-tool-credentials';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
@@ -10,6 +11,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { ScheduledTaskManifest } from '@lobechat/builtin-tool-scheduled-task';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { LobeToolsManifest } from '@lobechat/builtin-tool-tools';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
@@ -22,8 +24,10 @@ export const builtinToolIdentifiers: string[] = [
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   CloudSandboxManifest.identifier,
+  CredentialsManifest.identifier,
   PageAgentManifest.identifier,
   SkillsManifest.identifier,
+  ScheduledTaskManifest.identifier,
   GroupAgentBuilderManifest.identifier,
   GroupManagementManifest.identifier,
   GTDManifest.identifier,

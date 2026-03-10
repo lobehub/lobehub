@@ -14,7 +14,6 @@ import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import AgentCronJobs from '../AgentCronJobs';
 import AgentSettings from '../AgentSettings';
@@ -31,7 +30,6 @@ const ProfileEditor = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   const switchTopic = useChatStore((s) => s.switchTopic);
   const router = useQueryRoute();
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const handleCreateCronJob = useCallback(() => {
     if (!agentId) return;
@@ -96,18 +94,16 @@ const ProfileEditor = memo(() => {
             {t('startConversation')}
           </Button>
           <AgentPublishButton />
-          {enableBusinessFeatures && (
-            <Button icon={Clock} onClick={handleCreateCronJob}>
-              {t('agentCronJobs.addJob')}
-            </Button>
-          )}
+          <Button icon={Clock} onClick={handleCreateCronJob}>
+            {t('agentCronJobs.addJob')}
+          </Button>
         </Flexbox>
       </Flexbox>
       <Divider />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas />
       {/* Agent Cron Jobs Display (only show if jobs exist) */}
-      {enableBusinessFeatures && <AgentCronJobs />}
+      <AgentCronJobs />
       {/* Advanced Settings Modal */}
       <AgentSettings />
     </>
