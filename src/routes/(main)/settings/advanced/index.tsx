@@ -21,10 +21,9 @@ const Page = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  const [isPreferenceInit, enableInputMarkdown, enableGroupChat, updateLab] = useUserStore((s) => [
+  const [isPreferenceInit, enableInputMarkdown, updateLab] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
     labPreferSelectors.enableInputMarkdown(s),
-    s.preference.lab?.enableGroupChat ?? false,
     s.updateLab,
   ]);
 
@@ -57,18 +56,6 @@ const Page = memo(() => {
         ),
         desc: tLabs('features.inputMarkdown.desc'),
         label: tLabs('features.inputMarkdown.title'),
-        minWidth: undefined,
-      },
-      {
-        children: (
-          <Switch
-            checked={enableGroupChat}
-            loading={!isPreferenceInit}
-            onChange={(checked) => updateLab({ enableGroupChat: checked })}
-          />
-        ),
-        desc: tLabs('features.groupChat.desc'),
-        label: tLabs('features.groupChat.title'),
         minWidth: undefined,
       },
     ],
