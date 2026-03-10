@@ -10,7 +10,6 @@ import {
 import { App, Input } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon, FileText, FolderIcon } from 'lucide-react';
 import { type DragEvent } from 'react';
@@ -37,9 +36,6 @@ import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import ChunksBadge from './ChunkTag';
 import TruncatedFileName from './TruncatedFileName';
-
-// Initialize dayjs plugin once at module level
-dayjs.extend(relativeTime);
 
 export const FILE_DATE_WIDTH = 160;
 export const FILE_SIZE_WIDTH = 140;

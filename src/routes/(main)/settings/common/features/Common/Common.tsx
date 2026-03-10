@@ -1,8 +1,9 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon, ImageSelect, LobeSelect as Select, Skeleton } from '@lobehub/ui';
-import { Segmented, Switch } from 'antd';
+import { Flexbox, Form, Icon, ImageSelect, Skeleton } from '@lobehub/ui';
+import { Select, Switch } from '@lobehub/ui/base-ui';
+import { Segmented } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
@@ -168,14 +169,6 @@ const Common = memo(() => {
         label: t('settingCommon.liteMode.title'),
         minWidth: undefined,
         name: 'isLiteMode',
-        valuePropName: 'checked',
-      },
-      {
-        children: <Switch />,
-        desc: t('settingCommon.devMode.desc'),
-        label: t('settingCommon.devMode.title'),
-        minWidth: undefined,
-        name: 'isDevMode',
         valuePropName: 'checked',
       },
     ],

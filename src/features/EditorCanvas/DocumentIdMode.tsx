@@ -2,7 +2,7 @@
 
 import { type IEditor } from '@lobehub/editor';
 import { Alert, Skeleton } from '@lobehub/ui';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -12,6 +12,7 @@ import { editorSelectors } from '@/store/document/slices/editor';
 
 import { type EditorCanvasProps } from './EditorCanvas';
 import InternalEditor from './InternalEditor';
+import UnsavedChangesGuard from './UnsavedChangesGuard';
 
 /**
  * Loading skeleton for the editor
@@ -54,19 +55,25 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     autoSave = true,
     sourceType = 'page',
     onContentChange,
+    unsavedChangesGuard,
     style,
     ...editorProps
   }) => {
-    const { t } = useTranslation('file');
+    const { t } = useTranslation(['file', 'ui']);
 
     const storeUpdater = createStoreUpdater(useDocumentStore);
     storeUpdater('activeDocumentId', documentId);
     storeUpdater('editor', editor);
 
     // Get document store actions
-    const [onEditorInit, handleContentChangeStore, useFetchDocument, flushSave] = useDocumentStore(
-      (s) => [s.onEditorInit, s.handleContentChange, s.useFetchDocument, s.flushSave],
-    );
+    const [onEditorInit, handleContentChangeStore, useFetchDocument, performSave, flushSave] =
+      useDocumentStore((s) => [
+        s.onEditorInit,
+        s.handleContentChange,
+        s.useFetchDocument,
+        s.performSave,
+        s.flushSave,
+      ]);
 
     useSaveDocumentHotkey(flushSave);
 
@@ -75,6 +82,27 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
 
     // Check loading state via selector (document not yet in store)
     const isLoading = useDocumentStore(editorSelectors.isDocumentLoading(documentId));
+    const isDirty = useDocumentStore(editorSelectors.isDirty(documentId));
+    const shouldGuardUnsavedChanges = unsavedChangesGuard?.enabled ?? false;
+
+    const handleAutoSaveBeforeLeave = useCallback(async () => {
+      if (!shouldGuardUnsavedChanges) return true;
+
+      handleContentChangeStore();
+      await performSave(documentId);
+
+      const latestDocument = useDocumentStore.getState().documents[documentId];
+      return latestDocument ? !latestDocument.isDirty : true;
+    }, [documentId, handleContentChangeStore, performSave, shouldGuardUnsavedChanges]);
+
+    const unsavedGuardNode = (
+      <UnsavedChangesGuard
+        isDirty={shouldGuardUnsavedChanges && isDirty}
+        message={unsavedChangesGuard?.message || t('form.unsavedWarning', { ns: 'ui' })}
+        title={unsavedChangesGuard?.title || t('form.unsavedChanges', { ns: 'ui' })}
+        onAutoSave={handleAutoSaveBeforeLeave}
+      />
+    );
 
     // Handle content change
     const handleChange = () => {
@@ -83,6 +111,8 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     };
 
     const isEditorInitialized = !!editor?.getLexicalEditor();
+    const contentChangeLockRef = useRef(false);
+    const initRunIdRef = useRef(0);
 
     // 追踪已经为哪个 documentId 调用过 onEditorInit
     const initializedDocIdRef = useRef<string | null>(null);
@@ -97,22 +127,40 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         !isLoading &&
         initializedDocIdRef.current !== documentId
       ) {
+        const runId = ++initRunIdRef.current;
         initializedDocIdRef.current = documentId;
-        onEditorInit(editor);
+
+        // Lock content-change callback while hydrating document content into editor.
+        contentChangeLockRef.current = true;
+
+        void onEditorInit(editor).finally(() => {
+          queueMicrotask(() => {
+            if (initRunIdRef.current === runId) {
+              contentChangeLockRef.current = false;
+            }
+          });
+        });
       }
     }, [documentId, editor, isEditorInitialized, isLoading, onEditorInit]);
 
     // Show loading state
     if (isLoading) {
-      return <EditorSkeleton />;
+      return (
+        <>
+          {unsavedGuardNode}
+          <EditorSkeleton />
+        </>
+      );
     }
 
-    if (!editor) return null;
+    if (!editor) return unsavedGuardNode;
 
     return (
       <>
+        {unsavedGuardNode}
         {error && <EditorError error={error as Error} />}
         <InternalEditor
+          contentChangeLockRef={contentChangeLockRef}
           editor={editor}
           placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
           style={style}

@@ -62,8 +62,9 @@ import {
   messageTranslates,
   messageTTS,
   threads,
+  topics,
 } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 
@@ -100,6 +101,17 @@ export class MessageModel {
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.db = db;
+  }
+
+  /**
+   * Touch topics' updatedAt timestamp within a transaction
+   */
+  private async touchTopicUpdatedAt(trx: Transaction, topicIds: string[]) {
+    if (topicIds.length === 0) return;
+    await trx
+      .update(topics)
+      .set({ updatedAt: new Date() })
+      .where(and(inArray(topics.id, topicIds), eq(topics.userId, this.userId)));
   }
 
   // **************** Query *************** //
@@ -1287,6 +1299,11 @@ export class MessageModel {
         );
       }
 
+      // Touch topic's updatedAt when creating a message in a topic
+      if (message.topicId) {
+        await this.touchTopicUpdatedAt(trx, [message.topicId]);
+      }
+
       return item;
     });
   };
@@ -1297,7 +1314,15 @@ export class MessageModel {
       return { ...m, role: m.role as any, userId: this.userId };
     });
 
-    return this.db.insert(messages).values(messagesToInsert);
+    const topicIds = [...new Set(newMessages.map((m) => m.topicId).filter(Boolean))] as string[];
+
+    return this.db.transaction(async (trx) => {
+      const result = await trx.insert(messages).values(messagesToInsert);
+
+      await this.touchTopicUpdatedAt(trx, topicIds);
+
+      return result;
+    });
   };
 
   createMessageQuery = async (params: NewMessageQueryParams) => {
@@ -1335,10 +1360,16 @@ export class MessageModel {
           mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
         }
 
-        await trx
+        const [updated] = await trx
           .update(messages)
           .set({ ...message, ...(mergedMetadata && { metadata: mergedMetadata }) })
-          .where(and(eq(messages.id, id), eq(messages.userId, this.userId)));
+          .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+          .returning({ topicId: messages.topicId });
+
+        // Touch topic's updatedAt when updating a message
+        if (updated?.topicId) {
+          await this.touchTopicUpdatedAt(trx, [updated.topicId]);
+        }
       });
 
       return { success: true };

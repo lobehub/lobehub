@@ -71,7 +71,7 @@ const AgentPlugin = memo(() => {
 
   //  =========== Deprecated Plugin List =========== //
 
-  // 检查出不在 installedPlugins 中的插件
+  // Find plugins that are not in installedPlugins
   const deprecatedList = userEnabledPlugins
     .filter((pluginId) => !installedPlugins.some((p) => p.identifier === pluginId))
     .map((id) => ({

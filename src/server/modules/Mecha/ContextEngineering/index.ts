@@ -7,15 +7,24 @@ import { type ServerMessagesEngineParams } from './types';
  * Create server-side variable generators with runtime context
  * These are safe to use in Node.js environment
  */
-const createServerVariableGenerators = (model?: string, provider?: string) => ({
-  // Time-related variables
-  date: () => new Date().toLocaleDateString('en-US', { dateStyle: 'full' }),
-  datetime: () => new Date().toISOString(),
-  time: () => new Date().toLocaleTimeString('en-US', { timeStyle: 'medium' }),
-  // Model-related variables
-  model: () => model ?? '',
-  provider: () => provider ?? '',
-});
+const createServerVariableGenerators = (params: {
+  model?: string;
+  provider?: string;
+  timezone?: string;
+}) => {
+  const { model, provider, timezone } = params;
+  const tz = timezone || 'UTC';
+  return {
+    // Time-related variables (localized to user's timezone)
+    date: () => new Date().toLocaleDateString('en-US', { dateStyle: 'full', timeZone: tz }),
+    datetime: () => new Date().toLocaleString('en-US', { timeZone: tz }),
+    time: () => new Date().toLocaleTimeString('en-US', { timeStyle: 'medium', timeZone: tz }),
+    timezone: () => tz,
+    // Model-related variables
+    model: () => model ?? '',
+    provider: () => provider ?? '',
+  };
+};
 
 /**
  * Server-side messages engine function
@@ -58,6 +67,8 @@ export const serverMessagesEngine = async ({
   evalContext,
   agentManagementContext,
   pageContentContext,
+  additionalVariables,
+  userTimezone,
 }: ServerMessagesEngineParams): Promise<OpenAIChatMessage[]> => {
   const engine = new MessagesEngine({
     // Capability injection
@@ -99,6 +110,9 @@ export const serverMessagesEngine = async ({
     provider,
     systemRole,
 
+    // Timezone for system date provider
+    timezone: userTimezone,
+
     // Tools configuration
     toolsConfig: {
       manifests: toolsConfig?.manifests,
@@ -114,8 +128,13 @@ export const serverMessagesEngine = async ({
         }
       : undefined,
 
-    // Server-side variable generators (with model/provider context)
-    variableGenerators: createServerVariableGenerators(model, provider),
+    // Server-side variable generators (with model/provider context + device paths)
+    variableGenerators: {
+      ...createServerVariableGenerators({ model, provider, timezone: userTimezone }),
+      ...Object.fromEntries(
+        Object.entries(additionalVariables ?? {}).map(([k, v]) => [k, () => v]),
+      ),
+    },
 
     // Extended contexts
     ...(agentBuilderContext && { agentBuilderContext }),

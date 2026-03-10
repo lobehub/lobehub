@@ -1,3 +1,4 @@
+import { isChatGroupSessionId } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
@@ -234,7 +235,7 @@ export class AgentSliceActionImpl {
   ): SWRResponse<LobeAgentConfig> => {
     return useClientDataSWR<LobeAgentConfig>(
       // Only fetch when login status is explicitly true (not null/undefined)
-      isLogin === true && agentId && !agentId.startsWith('cg_')
+      isLogin === true && agentId && !isChatGroupSessionId(agentId)
         ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
         : null,
       async ([, id]: readonly [string, string]) => {

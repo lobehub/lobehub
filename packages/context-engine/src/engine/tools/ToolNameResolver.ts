@@ -62,7 +62,9 @@ export class ToolNameResolver {
   ): ChatToolPayload[] {
     return toolCalls
       .map((toolCall): ChatToolPayload | null => {
-        let [identifier, apiName, type] = toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+        const [initialIdentifier, apiName, type] =
+          toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+        let identifier = initialIdentifier;
 
         if (!apiName) return null;
 
@@ -84,7 +86,7 @@ export class ToolNameResolver {
           id: toolCall.id,
           identifier,
           thoughtSignature: toolCall.thoughtSignature,
-          type: (type ?? 'default') as any,
+          type: (type ?? manifests[identifier]?.type ?? 'default') as any,
         };
 
         // Step 2: Resolve hashed apiName if needed

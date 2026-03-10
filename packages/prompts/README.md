@@ -1,6 +1,6 @@
 # @lobechat/prompts
 
-This package contains prompt chains and templates for the LobeChat application, with comprehensive testing using promptfoo.
+This package contains prompt chains and templates for the LobeHub application, with comprehensive testing using promptfoo.
 
 ## Features
 

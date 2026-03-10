@@ -3,7 +3,15 @@ import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, sessions, topics, topicShares, users } from '../../schemas';
+import {
+  agents,
+  chatGroups,
+  chatGroupsAgents,
+  sessions,
+  topics,
+  topicShares,
+  users,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TopicShareModel } from '../topicShare';
 
@@ -74,6 +82,15 @@ describe('TopicShareModel', () => {
       await expect(topicShareModel.create('user2-topic')).rejects.toThrow(
         'Topic not found or not owned by user',
       );
+    });
+
+    it('should return existing share on conflict (duplicate topic)', async () => {
+      const first = await topicShareModel.create(topicId);
+      const second = await topicShareModel.create(topicId);
+
+      expect(second).toBeDefined();
+      expect(second.topicId).toBe(topicId);
+      expect(second.id).toBe(first.id);
     });
   });
 
@@ -313,6 +330,43 @@ describe('TopicShareModel', () => {
       await topicShareModel.deleteByTopicId('user2-topic');
       const stillExists = await topicShareModel2.getByTopicId('user2-topic');
       expect(stillExists).not.toBeNull();
+    });
+  });
+
+  describe('findByShareId with group topic', () => {
+    it('should return group members for a group topic share', async () => {
+      // Create a chat group with agents
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({ userId, title: 'Test Group' })
+        .returning();
+
+      const agent2Id = 'group-member-agent';
+      await serverDB.insert(agents).values({ id: agent2Id, userId, title: 'Group Agent' });
+      await serverDB
+        .insert(chatGroupsAgents)
+        .values({ chatGroupId: group.id, agentId: agent2Id, userId, order: 0 });
+
+      // Create a topic with groupId
+      const groupTopicId = 'group-topic-id';
+      await serverDB.insert(topics).values({
+        id: groupTopicId,
+        sessionId,
+        userId,
+        title: 'Group Topic',
+        groupId: group.id,
+      });
+
+      // Create a share
+      const share = await topicShareModel.create(groupTopicId);
+
+      // Find by share ID
+      const result = await TopicShareModel.findByShareId(serverDB, share.id);
+      expect(result).toBeDefined();
+      expect(result?.groupId).toBe(group.id);
+      expect(result?.groupMembers).toBeDefined();
+      expect(result?.groupMembers).toHaveLength(1);
+      expect(result?.groupMembers?.[0].id).toBe(agent2Id);
     });
   });
 });

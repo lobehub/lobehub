@@ -47,8 +47,8 @@ describe('TopicModel - Delete', () => {
           { id: 'topic2', sessionId: 'session2', userId: '345' },
         ]);
         await tx.insert(messages).values([
-          { id: 'message1', role: 'user', topicId: topicId, userId },
-          { id: 'message2', role: 'assistant', topicId: topicId, userId },
+          { id: 'message1', role: 'user', topicId, userId },
+          { id: 'message2', role: 'assistant', topicId, userId },
           { id: 'message3', role: 'user', topicId: 'topic2', userId: '345' },
         ]);
       });

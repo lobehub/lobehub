@@ -83,6 +83,43 @@ describe('Anthropic generateObject', () => {
       expect(result).toEqual({ age: 30, name: 'John' });
     });
 
+    it('should ignore whitespace-only system prompts', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                input: { status: 'ok' },
+                name: 'status_extractor',
+                type: 'tool_use',
+              },
+            ],
+          }),
+        },
+      };
+
+      const payload = {
+        messages: [
+          { content: '   \n\t  ', role: 'system' as const },
+          { content: 'Generate status', role: 'user' as const },
+        ],
+        model: 'claude-3-5-sonnet-20241022',
+        schema: {
+          name: 'status_extractor',
+          schema: { properties: { status: { type: 'string' } }, type: 'object' as const },
+        },
+      };
+
+      await createAnthropicGenerateObject(mockClient as any, payload);
+
+      expect(mockClient.messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: undefined,
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should handle system messages correctly', async () => {
       const mockClient = {
         messages: {

@@ -8,7 +8,9 @@ import {
   Coins,
   CreditCard,
   Database,
+  EllipsisIcon,
   EthernetPort,
+  FlaskConical,
   Gift,
   Image as ImageIcon,
   Info,
@@ -220,10 +222,20 @@ export const useCategory = () => {
         key: SettingsTabs.SystemTools,
         label: t('tab.systemTools'),
       },
+      isDesktop && {
+        icon: FlaskConical,
+        key: SettingsTabs.Beta,
+        label: t('tab.beta'),
+      },
       {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      {
+        icon: EllipsisIcon,
+        key: SettingsTabs.Advanced,
+        label: t('tab.advanced'),
       },
       !hideDocs && {
         icon: Info,

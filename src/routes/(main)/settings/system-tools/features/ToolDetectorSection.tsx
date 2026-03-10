@@ -33,6 +33,11 @@ const TOOL_CATEGORIES = {
       { descKey: 'settingSystemTools.tools.find.desc', name: 'find' },
     ],
   },
+  'browser-automation': {
+    descKey: 'settingSystemTools.category.browserAutomation.desc',
+    titleKey: 'settingSystemTools.category.browserAutomation',
+    tools: [{ descKey: 'settingSystemTools.tools.agentBrowser.desc', name: 'agent-browser' }],
+  },
 } as const;
 
 interface ToolStatusDisplayProps {

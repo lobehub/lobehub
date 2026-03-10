@@ -252,6 +252,56 @@ tags:
   <Image alt={'登录成功状态'} src={'/blog/assets28616219/9cb5150d-6e1e-4c59-9a18-4e418dce1a5d.webp'} />
 </Steps>
 
+## 平台限制
+
+<Callout type={'warning'}>
+  部署前请了解 Vercel 平台的以下限制。
+</Callout>
+
+**Serverless 函数超时：**
+
+| 套餐         | 超时时间  |
+| ---------- | ----- |
+| Hobby      | 10 秒  |
+| Pro        | 60 秒  |
+| Enterprise | 900 秒 |
+
+在 Hobby 套餐上，长时间运行的 AI 请求可能会超时。默认启用的流式响应有助于保持连接活跃。
+
+**不支持 WebSocket** — Vercel Serverless 函数不支持持久 WebSocket 连接，实时功能使用服务端发送事件（SSE）代替。
+
+**冷启动** — Serverless 函数在空闲后的首次请求可能较慢（1–3 秒），这是 Serverless 平台的正常行为。
+
+**文件大小限制** — 部署包：250 MB（压缩后）；函数包：50 MB。
+
+## 保持版本更新
+
+<Callout type={'warning'}>
+  如果你使用了一键部署按钮，Vercel 会创建一个**全新的**仓库，而非 Fork 原始仓库。这会导致无法自动同步上游更新。
+</Callout>
+
+若要接收 LobeHub 的后续更新：
+
+1. 在 Vercel 控制台**删除**当前项目（设置 → 删除项目）
+2. 在 GitHub 上手动 **Fork** [lobehub/lobe-chat](https://github.com/lobehub/lobe-chat)
+3. 将 Fork 后的仓库**导入**到 Vercel（新增项目 → 导入）
+4. 重新配置环境变量并部署
+5. 在 Fork 仓库的 GitHub **Actions** 标签页，启用 `upstream-sync` 工作流 —— 它会每日自动检查上游更新
+
+手动同步：Actions → Upstream Sync → Run workflow。
+
+## 故障排查
+
+**部署失败** — 在 Vercel 控制台 → 部署记录 → 点击失败的部署 → 构建日志中查看详情。常见原因：环境变量缺失、TypeScript 报错、内存不足（通过 `NODE_OPTIONS=--max-old-space-size=4096` 修复）。
+
+**函数超时** — 在 Hobby 套餐遇到超时时：升级到 Pro（60 秒超时）、使用更快的模型（如 GPT-4o-mini 代替 GPT-4o）、减少最大 token 数，或确认已启用流式响应。
+
+**数据库连接失败** — 检查 `DATABASE_URL` 格式。对于托管数据库，确保末尾追加了 `?sslmode=require`。检查数据库 IP 白名单是否包含 Vercel IP（或使用 `0.0.0.0/0` 开放访问）。本地测试：`psql "$DATABASE_URL"`。
+
+**502 网关错误** — 常见原因：函数超时、内存溢出、数据库连接池耗尽。使用连接池（PgBouncer）、减少并发连接数或查看数据库日志。
+
+**环境变量修改后未生效** — 在部署记录中点击某次部署的三点菜单 → 重新部署，选择 "不使用现有构建缓存"。
+
 ## 附录
 
 ### 服务端数据库环境变量一览

@@ -266,7 +266,7 @@ describe('LobeInternLMAI - custom features', () => {
 
       // Mock a model with abilities in model-bank
       vi.mock('model-bank', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('model-bank')>();
+        const actual = await importOriginal<Record<string, unknown>>();
         return {
           ...actual,
           LOBE_DEFAULT_MODEL_LIST: [

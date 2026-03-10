@@ -27,7 +27,7 @@ beforeEach(async () => {
     await trx.insert(sessions).values([{ id: '1', userId }]);
     await trx.insert(files).values({
       id: 'f1',
-      userId: userId,
+      userId,
       url: 'abc',
       name: 'file-1',
       fileType: 'image/png',
@@ -628,6 +628,37 @@ describe('MessageModel Statistics Tests', () => {
       expect(result1).toBe(true);
       expect(result2).toBe(false);
       expect(result3).toBe(true);
+    });
+  });
+
+  describe('countUpTo', () => {
+    it('should count messages up to a limit', async () => {
+      await serverDB.insert(messages).values([
+        { id: 'count-1', userId, role: 'user', content: 'msg 1' },
+        { id: 'count-2', userId, role: 'user', content: 'msg 2' },
+        { id: 'count-3', userId, role: 'user', content: 'msg 3' },
+      ]);
+
+      const result = await messageModel.countUpTo(5);
+      expect(result).toBe(3);
+    });
+
+    it('should return at most n', async () => {
+      await serverDB.insert(messages).values([
+        { id: 'count-a', userId, role: 'user', content: 'msg a' },
+        { id: 'count-b', userId, role: 'user', content: 'msg b' },
+        { id: 'count-c', userId, role: 'user', content: 'msg c' },
+      ]);
+
+      const result = await messageModel.countUpTo(2);
+      expect(result).toBe(2);
+    });
+
+    it('should return 0 for empty user', async () => {
+      const otherModel = new MessageModel(serverDB, 'empty-count-user');
+      await serverDB.insert(users).values({ id: 'empty-count-user' });
+      const result = await otherModel.countUpTo(10);
+      expect(result).toBe(0);
     });
   });
 });

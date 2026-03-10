@@ -1,0 +1,190 @@
+---
+title: Artifacts
+description: >-
+  Create and interact with dynamic, self-contained AI-generated content — React
+  apps, SVG graphics, HTML pages, Mermaid diagrams, and more — rendered live in
+  a dedicated preview panel.
+tags:
+  - LobeHub
+  - Artifacts
+  - Code Generation
+  - React
+  - SVG
+  - Visualization
+---
+
+# Artifacts
+
+LobeHub supports Claude-style Artifacts: when the AI generates substantial, self-contained content, it automatically opens in a dedicated preview panel on the right side of the screen. Instead of copying code from a chat bubble, you can interact with, iterate on, and export the result directly.
+
+## What Are Artifacts?
+
+Artifacts are AI-generated pieces of content that deserve their own dedicated space. They appear in a split-view panel where you can:
+
+- View live previews of generated content
+- Interact with applications and visualizations in real time
+- Iterate on the output conversationally
+- Export or copy the final result
+
+**What qualifies as an artifact:**
+
+- Substantial content (more than a few lines)
+- Self-contained and functional output
+- Something you'd want to iterate on or reuse
+- Content that benefits from a live preview
+
+**What doesn't need artifacts:**
+
+- Short code snippets or quick examples
+- Simple text answers
+- Explanatory content
+
+## Supported Artifact Types
+
+<Tabs>
+  <Tab title="SVG Graphics">
+    Create scalable, resolution-independent graphics and diagrams: charts, flowcharts, icons, infographics, and data visualizations.
+
+    **Example prompts:**
+
+    - "Create an SVG diagram showing the software development lifecycle"
+    - "Generate a pie chart showing market share distribution"
+
+    **Export options:** download as SVG, download as PNG, copy as image.
+  </Tab>
+
+  <Tab title="React Components">
+    Build live, interactive React applications that run directly in the browser: calculators, dashboards, mini web apps, and UI prototypes.
+
+    **Example prompts:**
+
+    - "Create a mortgage calculator with React"
+    - "Build an interactive to-do list app"
+    - "Make a typing speed test game"
+
+    **Features:** full React hooks support, real-time state management, responsive layouts.
+  </Tab>
+
+  <Tab title="HTML Pages">
+    Generate complete, styled HTML pages: landing pages, email templates, simple web pages, and formatted reports.
+
+    **Example prompts:**
+
+    - "Create a product landing page for a fitness app"
+    - "Design an HTML email newsletter template"
+  </Tab>
+
+  <Tab title="Mermaid Diagrams">
+    Create professional diagrams: flowcharts, sequence diagrams, class diagrams, state diagrams, Gantt charts, ER diagrams, and Git graphs.
+
+    **Example prompts:**
+
+    - "Create a sequence diagram for user authentication"
+    - "Draw a flowchart for the order processing workflow"
+  </Tab>
+
+  <Tab title="Code Files">
+    Generate standalone code in Python, JavaScript/TypeScript, shell scripts, configuration files (JSON, YAML), and more.
+
+    **Example prompts:**
+
+    - "Write a Python script to analyze CSV data"
+    - "Generate a GitHub Actions workflow file"
+
+    **Features:** syntax highlighting, one-click copy, side-by-side code and preview view.
+  </Tab>
+</Tabs>
+
+## Using Artifacts
+
+### Triggering Artifact Creation
+
+Just ask the AI to create substantial, standalone content:
+
+```
+"Create a React calculator app"
+"Generate an SVG chart showing quarterly sales"
+"Build an interactive timeline of key events"
+"Design a landing page for a coffee shop"
+```
+
+Artifacts are generated automatically when the AI determines the output is substantial and self-contained.
+
+### Viewing and Interacting
+
+When an artifact is created, the preview panel opens automatically on the right:
+
+<Tabs>
+  <Tab title="Preview Mode">
+    Shows the rendered output. Interactive apps run live, SVG graphics display at full quality, HTML pages render completely. Use this to see the result and interact with it.
+  </Tab>
+
+  <Tab title="Code Mode">
+    Shows the syntax-highlighted source code. Use this to copy code to your project or understand the implementation details.
+  </Tab>
+</Tabs>
+
+Switch between modes using the toggle at the top of the panel.
+
+### Iterating Conversationally
+
+Continue the chat to refine any artifact:
+
+```
+"Add a dark mode toggle"
+"Make the chart responsive for mobile"
+"Change the color scheme to blue and green"
+"Add error handling to the form"
+```
+
+Each update applies in real time — you see the change immediately in the preview panel.
+
+### Exporting
+
+Depending on the artifact type:
+
+- **Copy code** — Copy the complete source to clipboard
+- **Download SVG** — Save as `.svg`
+- **Download PNG** — Export as an image
+- **Copy as image** — Copy rendered output to clipboard
+- **Save HTML** — Download a complete web page
+
+## Use Cases
+
+**Rapid prototyping** — Build and test ideas without writing code: UI mockups, calculators, converters, form validation demos. Iterate in real time, then export to your project.
+
+**Data visualization** — Turn raw data into charts and dashboards. Share the data or describe it, ask for a chart, customize, then export for presentations or reports.
+
+**Learning and education** — Create interactive algorithm visualizations, step-by-step demonstrations, and practice exercises. Great for teachers building learning materials.
+
+**Design and creative** — Generate logo concepts, icon sets, diagrams, and decorative elements. Download as SVG for editing in your design tool.
+
+## Tips
+
+**Be specific in requests** — Detail prompts produce better artifacts. Specify colors, layout, functionality, and features upfront rather than asking for generic output.
+
+**Iterate incrementally** — Make one change at a time to keep the artifact stable. Large simultaneous changes can introduce bugs.
+
+**Test interactivity** — For interactive artifacts (React apps, forms), test all features before exporting. Ask for fixes on specific edge cases.
+
+**Use both modes** — Switch between Preview and Code mode to understand both the visual result and the implementation details.
+
+**Save what you like** — Copy or download artifacts you want to keep. They stay in your conversation history but are easier to access when saved separately.
+
+<Callout type={'warning'}>
+  Artifacts run in a sandboxed environment for security. Features that require external API calls or
+  sensitive browser permissions may not work inside the preview panel.
+</Callout>
+
+<Callout type={'info'}>
+  Not all models support artifacts. Claude models are the primary source of artifact generation.
+  Complex artifacts may take a moment to fully render as the AI generates the content.
+</Callout>
+
+<Cards>
+  <Card href={'/docs/usage/agent/sandbox'} title={'Cloud Sandbox'} />
+
+  <Card href={'/docs/usage/getting-started/page'} title={'Pages'} />
+
+  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+</Cards>

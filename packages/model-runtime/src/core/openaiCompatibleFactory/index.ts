@@ -38,10 +38,13 @@ import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
+import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
+import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
+import { resolveModelSamplingParameters } from '../parameterResolver';
 import type { OpenAIStreamOptions } from '../streams';
 import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import { createOpenAICompatibleImage } from './createImage';
@@ -108,6 +111,12 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       data: OpenAI.ChatCompletion,
     ) => ReadableStream<OpenAI.ChatCompletionChunk>;
     noUserId?: boolean;
+    /**
+     * Custom message converter for provider-specific message transformations
+     */
+    transformMessages?: (
+      messages: OpenAI.ChatCompletionMessageParam[],
+    ) => Promise<OpenAI.ChatCompletionMessageParam[]> | OpenAI.ChatCompletionMessageParam[];
     /**
      * If true, route chat requests to Responses API path directly
      */
@@ -359,16 +368,26 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         }
 
         // Then perform factory-level processing
-        const postPayload = chatCompletion?.handlePayload
+        const handledPayload = chatCompletion?.handlePayload
           ? chatCompletion.handlePayload(processedPayload, this._options)
           : ({
               ...processedPayload,
               stream: processedPayload.stream ?? true,
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
-        if ((postPayload as any).apiMode === 'responses') {
-          return this.handleResponseAPIMode(processedPayload, options);
+        if ((handledPayload as any).apiMode === 'responses') {
+          return await this.handleResponseAPIMode(processedPayload, options);
         }
+
+        // Sanitize temperature/top_p conflict for Claude 4+ models routed via OpenAI-compatible API.
+        // normalizeTemperature is false here because OpenAI-compatible providers use the raw range.
+        const postPayload = {
+          ...handledPayload,
+          ...resolveModelSamplingParameters(handledPayload.model, handledPayload, {
+            normalizeTemperature: false,
+            preferTemperature: true,
+          }),
+        };
 
         const computedBaseURL =
           typeof this._options.baseURL === 'string' && this._options.baseURL
@@ -412,9 +431,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           this.baseURL = targetBaseURL;
         }
 
-        const messages = await convertOpenAIMessages(postPayload.messages, {
-          forceImageBase64: chatCompletion?.forceImageBase64,
-        });
+        const messages = chatCompletion?.transformMessages
+          ? await chatCompletion.transformMessages(postPayload.messages)
+          : await convertOpenAIMessages(postPayload.messages, {
+              forceImageBase64: chatCompletion?.forceImageBase64,
+            });
 
         let response: Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
 
@@ -430,9 +451,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (customClient?.createChatCompletionStream) {
           log('using custom client for chat completion stream');
+          // Apply sampling sanitization to processedPayload for the custom client path.
+          // We use processedPayload (ChatStreamPayload type) here because
+          // createChatCompletionStream expects ChatStreamPayload, not the OpenAI SDK format.
           response = customClient.createChatCompletionStream(
             this.client,
-            processedPayload,
+            {
+              ...processedPayload,
+              ...resolveModelSamplingParameters(processedPayload.model, processedPayload, {
+                normalizeTemperature: false,
+                preferTemperature: true,
+              }),
+            },
             this,
           ) as any;
         } else {
@@ -452,7 +482,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           log('sending chat completion request with %d messages', messages.length);
 
           if (debugParams?.chatCompletion?.()) {
+            // eslint-disable-next-line no-console
             console.log('[requestPayload]');
+            // eslint-disable-next-line no-console
             console.log(JSON.stringify(finalPayload), '\n');
           }
 
@@ -564,7 +596,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const log = debug(`${this.logPrefix}:models`);
       log('fetching available models');
 
-      let resultModels: ChatModelCard[] = [];
+      let resultModels: ChatModelCard[];
       if (typeof models === 'function') {
         log('using custom models function');
         resultModels = await models({ client: this.client });
@@ -898,6 +930,27 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         }
       }
 
+      const errorMsg = errorResult.error?.message || errorResult.message;
+      if (isExceededContextWindowError(errorMsg)) {
+        log('context length exceeded detected from message');
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          provider: this.id,
+        });
+      }
+
+      if (isQuotaLimitError(errorMsg)) {
+        log('quota limit reached detected from message');
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          provider: this.id,
+        });
+      }
+
       log('returning generic error');
       return AgentRuntimeError.chat({
         endpoint: desensitizedEndpoint,
@@ -954,10 +1007,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         stream: !isStreaming ? undefined : isStreaming,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
         user: options?.user,
+        // Sanitize sampling params for Responses API path
+        ...resolveModelSamplingParameters(res.model, res, {
+          normalizeTemperature: false,
+          preferTemperature: true,
+        }),
       } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
 
       if (debugParams?.responses?.()) {
+        // eslint-disable-next-line no-console
         console.log('[requestPayload]');
+        // eslint-disable-next-line no-console
         console.log(JSON.stringify(postPayload), '\n');
       }
 

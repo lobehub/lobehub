@@ -52,9 +52,11 @@ const formatSize = (bytes: number): string => {
 
 const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReferenceState>>(
   ({ content, pluginState }) => {
-    const { encoding, path, size } = pluginState || {};
+    const { encoding, fullPath, path, size } = pluginState || {};
 
     if (!path || !content) return null;
+
+    const displayPath = fullPath || path;
 
     const ext = getFileExtension(path);
     const isMarkdown = ext === 'md' || ext === 'markdown';
@@ -64,12 +66,12 @@ const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReference
 
     return (
       <Flexbox className={styles.container} gap={8}>
-        <Flexbox align={'center'} horizontal justify={'space-between'}>
-          <Text as={'span'} code ellipsis fontSize={12}>
-            {path}
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
+          <Text code ellipsis as={'span'} fontSize={12}>
+            {displayPath}
           </Text>
           {sizeText && (
-            <Text as={'span'} code fontSize={12} type={'secondary'}>
+            <Text code noWrap as={'span'} fontSize={12} type={'secondary'}>
               {sizeText}
             </Text>
           )}
@@ -88,13 +90,13 @@ const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReference
             </Markdown>
           </Block>
         ) : (
-          <Block padding={0} variant={'outlined'}>
+          <Block padding={8} variant={'outlined'}>
             <Highlighter
-              language={getLanguage(ext)}
               showLanguage
+              wrap
+              language={getLanguage(ext)}
               style={{ maxHeight: 400, overflow: 'auto' }}
               variant={'borderless'}
-              wrap
             >
               {content}
             </Highlighter>

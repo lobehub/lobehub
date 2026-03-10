@@ -55,6 +55,6 @@ export function isApiKeyExpired(expiresAt: Date | null): boolean {
  */
 export function validateApiKeyFormat(key: string): boolean {
   // Check format: lb-{random}
-  const pattern = /^lb-[\da-f]{16}$/;
+  const pattern = /^lb-[\da-z]{16}$/;
   return pattern.test(key);
 }

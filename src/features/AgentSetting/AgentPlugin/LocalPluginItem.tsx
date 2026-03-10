@@ -25,7 +25,7 @@ const MarketList = memo<{ id: string }>(({ id }) => {
       <Switch
         loading={pluginManifestLoading[id]}
         checked={
-          // 如果在加载中，说明激活了
+          // If loading, it means it's activated
           pluginManifestLoading[id] || !hasPlugin ? false : plugins.includes(id)
         }
         onChange={(checked) => {

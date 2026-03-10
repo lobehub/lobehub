@@ -100,6 +100,7 @@
   "pageEditor.saving": "正在保存…",
   "pageEditor.titlePlaceholder": "无标题",
   "pageEditor.wordCount": "{{wordCount}} 字",
+  "pageList.actions.openInNewTab": "在新标签页中打开",
   "pageList.copyContent": "复制全文",
   "pageList.duplicate": "创建副本",
   "pageList.empty": "还没有文稿。点击上方按钮创建第一篇",

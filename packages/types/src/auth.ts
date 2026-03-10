@@ -1,4 +1,3 @@
-/* eslint-disable typescript-sort-keys/interface */
 export interface ClientSecretPayload {
   /**
    * Represents the user's API key

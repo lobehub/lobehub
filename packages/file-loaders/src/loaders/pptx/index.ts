@@ -93,14 +93,14 @@ export class PptxLoader implements FileLoaderInterface {
 
             const metadata = {
               pageCount: slideFiles.length, // Total number of slides found
-              slideNumber: slideNumber,
+              slideNumber,
               sourceFileName,
             };
 
             return {
               charCount: slideText.length,
               lineCount: lines.length,
-              metadata: metadata,
+              metadata,
               pageContent: slideText.trim(), // Trim final content
             };
           } catch (parseError) {
@@ -210,7 +210,7 @@ ${page.pageContent}
       metadata: {
         error: errorInfo,
         pageCount: 0,
-        sourceFileName: sourceFileName,
+        sourceFileName,
         ...(sourceFilePath && { sourceFilePath }), // Add specific path if available
       },
       pageContent: '', // Error pages have no content

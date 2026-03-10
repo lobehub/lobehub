@@ -73,7 +73,7 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
     return (
       <div className={styles.container}>
         {agents.map((agent: AgentSearchItem) => (
-          <Flexbox align={'center'} className={styles.agentItem} gap={12} horizontal key={agent.id}>
+          <Flexbox horizontal align={'center'} className={styles.agentItem} gap={12} key={agent.id}>
             <Avatar
               avatar={agent.avatar || DEFAULT_AVATAR}
               background={agent.backgroundColor || theme.colorBgContainer}
@@ -82,7 +82,7 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
               title={agent.title || undefined}
             />
             <Flexbox flex={1} gap={2}>
-              <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} gap={8}>
                 <span className={styles.agentTitle}>{agent.title || agent.id}</span>
                 {agent.isMarket && <span className={styles.marketBadge}>Market</span>}
               </Flexbox>

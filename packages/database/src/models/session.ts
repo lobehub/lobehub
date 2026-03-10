@@ -366,7 +366,7 @@ export class SessionModel {
     const { id: _, slug: __, ...config } = agent;
 
     return this.create({
-      config: config,
+      config,
       id: sessionId,
       session: {
         ...session,

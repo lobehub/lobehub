@@ -96,7 +96,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-const PendingState = memo(() => {
+const PendingState = memo(({ hint }: { hint?: string }) => {
   const { t } = useTranslation('eval');
   const { cx, styles } = useStyles();
 
@@ -119,7 +119,7 @@ const PendingState = memo(() => {
           <Icon icon={Clock} size={18} />
         </div>
       </div>
-      <div className={styles.hint}>{t('run.pending.hint')}</div>
+      <div className={styles.hint}>{hint}</div>
     </div>
   );
 });

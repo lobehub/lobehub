@@ -1,5 +1,5 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
-import { AgentRuntime, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
@@ -246,6 +246,7 @@ export class AgentRuntimeService {
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
+      activeDeviceId,
       operationId,
       initialContext,
       agentConfig,
@@ -253,11 +254,9 @@ export class AgentRuntimeService {
       userId,
       autoStart = true,
       stream,
-      tools,
       initialMessages = [],
       appContext,
-      toolManifestMap,
-      toolSourceMap,
+      toolSet,
       stepCallbacks,
       userInterventionConfig,
       completionWebhook,
@@ -266,10 +265,28 @@ export class AgentRuntimeService {
       discordContext,
       evalContext,
       maxSteps,
+      userMemory,
+      deviceSystemInfo,
+      userTimezone,
     } = params;
 
+    const operationToolSet = toolSet;
+
     try {
-      log('[%s] Creating new operation (autoStart: %s)', operationId, autoStart);
+      const memories = userMemory?.memories;
+      log(
+        '[%s] Creating new operation (autoStart: %s) with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d, memory=%s',
+        operationId,
+        autoStart,
+        agentConfig?.model,
+        agentConfig?.provider,
+        operationToolSet.tools?.length ?? 0,
+        initialMessages.length,
+        operationToolSet.manifestMap ? Object.keys(operationToolSet.manifestMap).length : 0,
+        memories
+          ? `{contexts:${memories.contexts?.length ?? 0},experiences:${memories.experiences?.length ?? 0},preferences:${memories.preferences?.length ?? 0},identities:${memories.identities?.length ?? 0},activities:${memories.activities?.length ?? 0},persona:${memories.persona ? 'yes' : 'no'}}`
+          : 'none',
+      );
 
       // Initialize operation state - create state before saving
       const initialState = {
@@ -280,8 +297,10 @@ export class AgentRuntimeService {
         // Use the passed initial messages
         messages: initialMessages,
         metadata: {
+          activeDeviceId,
           agentConfig,
           completionWebhook,
+          deviceSystemInfo,
           discordContext,
           evalContext,
           // need be removed
@@ -289,6 +308,8 @@ export class AgentRuntimeService {
           stepWebhook,
           stream,
           userId,
+          userMemory,
+          userTimezone,
           webhookDelivery,
           workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
@@ -297,11 +318,13 @@ export class AgentRuntimeService {
         // modelRuntimeConfig at state level for executor fallback
         modelRuntimeConfig,
         operationId,
+        operationToolSet,
         status: 'idle',
         stepCount: 0,
-        toolManifestMap,
-        toolSourceMap,
-        tools,
+        // Backward-compat: resolved tool fields read by RuntimeExecutors
+        toolManifestMap: operationToolSet.manifestMap,
+        toolSourceMap: operationToolSet.sourceMap,
+        tools: operationToolSet.tools,
         // User intervention config for headless mode in async tasks
         userInterventionConfig,
       } as Partial<AgentState>;
@@ -358,7 +381,6 @@ export class AgentRuntimeService {
     const { operationId, stepIndex, context, humanInput, approvedToolCall, rejectionReason } =
       params;
 
-    // Get registered callbacks
     const callbacks = this.getStepCallbacks(operationId);
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
@@ -483,6 +505,23 @@ export class AgentRuntimeService {
         });
         currentState = interventionResult.newState;
         currentContext = interventionResult.nextContext;
+      }
+
+      // Pre-step computation: extract device context from DB messages
+      // Follows front-end computeStepContext pattern — computed at step boundary, not inside executors
+      if (!currentState.metadata?.activeDeviceId) {
+        const deviceContext = await this.computeDeviceContext(currentState);
+        if (deviceContext && currentState.metadata) {
+          currentState.metadata.activeDeviceId = deviceContext.activeDeviceId;
+          currentState.metadata.devicePlatform = deviceContext.devicePlatform;
+          currentState.metadata.deviceSystemInfo = deviceContext.deviceSystemInfo;
+          log(
+            '[%s][%d] Pre-step: device context computed from messages (deviceId: %s)',
+            operationId,
+            stepIndex,
+            deviceContext.activeDeviceId,
+          );
+        }
       }
 
       // Execute step
@@ -701,6 +740,55 @@ export class AgentRuntimeService {
         }
       }
 
+      // Dev mode: record step snapshot to disk for agent-tracing CLI
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
+          const store = new FileSnapshotStore();
+
+          const partial = (await store.loadPartial(operationId)) ?? { steps: [] };
+
+          if (!partial.startedAt) {
+            partial.startedAt = Date.now();
+            partial.model =
+              (agentState?.metadata as any)?.agentConfig?.model ??
+              agentState?.modelRuntimeConfig?.model;
+            partial.provider =
+              (agentState?.metadata as any)?.agentConfig?.provider ??
+              agentState?.modelRuntimeConfig?.provider;
+          }
+
+          if (!partial.steps) partial.steps = [];
+          partial.steps.push({
+            completedAt: Date.now(),
+            content: stepPresentationData.content,
+            context: {
+              payload: currentContext?.payload,
+              phase: currentContext?.phase ?? 'unknown',
+              stepContext: currentContext?.stepContext,
+            },
+            events: stepResult.events as any,
+            executionTimeMs: stepPresentationData.executionTimeMs,
+            inputTokens: stepPresentationData.stepInputTokens,
+            messages: agentState?.messages,
+            messagesAfter: stepResult.newState.messages,
+            outputTokens: stepPresentationData.stepOutputTokens,
+            reasoning: stepPresentationData.reasoning,
+            startedAt: startAt,
+            stepIndex,
+            stepType: stepPresentationData.stepType,
+            toolsCalling: stepPresentationData.toolsCalling,
+            toolsResult: stepPresentationData.toolsResult,
+            totalCost: stepPresentationData.totalCost,
+            totalTokens: stepPresentationData.totalTokens,
+          });
+
+          await store.savePartial(operationId, partial);
+        } catch {
+          // agent-tracing not available, skip silently
+        }
+      }
+
       // Update step tracking in state metadata and trigger step webhook
       if (stepResult.newState.metadata?.stepWebhook) {
         const prevTracking = stepResult.newState.metadata._stepTracking || {};
@@ -770,6 +858,44 @@ export class AgentRuntimeService {
             log('[%s] onComplete callback error: %O', operationId, callbackError);
           }
         }
+
+        // Dev mode: finalize tracing snapshot
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
+            const store = new FileSnapshotStore();
+            const partial = await store.loadPartial(operationId);
+
+            if (partial) {
+              const snapshot = {
+                completedAt: Date.now(),
+                completionReason: reason,
+                error: stepResult.newState.error
+                  ? {
+                      message: String(
+                        stepResult.newState.error.message ?? stepResult.newState.error,
+                      ),
+                      type: String(stepResult.newState.error.type ?? 'unknown'),
+                    }
+                  : undefined,
+                model: partial.model,
+                operationId,
+                provider: partial.provider,
+                startedAt: partial.startedAt ?? Date.now(),
+                steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
+                totalCost: stepResult.newState.cost?.total ?? 0,
+                totalSteps: stepResult.newState.stepCount,
+                totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                traceId: operationId,
+              };
+
+              await store.save(snapshot as any);
+              await store.removePartial(operationId);
+            }
+          } catch {
+            // agent-tracing not available, skip silently
+          }
+        }
       }
 
       return {
@@ -781,30 +907,56 @@ export class AgentRuntimeService {
     } catch (error) {
       log('Step %d failed for operation %s: %O', stepIndex, operationId, error);
 
-      // Publish error event
-      await this.streamManager.publishStreamEvent(operationId, {
-        data: {
-          error: (error as Error).message,
-          phase: 'step_execution',
+      // Build error state — try loading current state from coordinator, but if that
+      // also fails (e.g. Redis ECONNRESET), fall back to a minimal error state so
+      // that completion callbacks and webhooks can still fire.
+      let finalStateWithError: any;
+      try {
+        await this.streamManager.publishStreamEvent(operationId, {
+          data: {
+            error: (error as Error).message,
+            phase: 'step_execution',
+            stepIndex,
+          },
           stepIndex,
-        },
-        stepIndex,
-        type: 'error',
-      });
+          type: 'error',
+        });
+      } catch (publishError) {
+        log(
+          '[%s] Failed to publish error event (infra may be down): %O',
+          operationId,
+          publishError,
+        );
+      }
 
-      // Build and save error state so it's persisted for later retrieval
-      const errorState = await this.coordinator.loadAgentState(operationId);
-      const finalStateWithError = {
-        ...errorState!,
-        error: formatErrorForState(error),
-        status: 'error' as const,
-      };
+      try {
+        const errorState = await this.coordinator.loadAgentState(operationId);
+        finalStateWithError = {
+          ...errorState!,
+          error: formatErrorForState(error),
+          status: 'error' as const,
+        };
+      } catch (loadError) {
+        log('[%s] Failed to load error state (infra may be down): %O', operationId, loadError);
+        // Fallback: construct a minimal error state so callbacks still receive useful info
+        finalStateWithError = {
+          error: formatErrorForState(error),
+          status: 'error' as const,
+        };
+      }
 
-      // Save the error state to coordinator so getOperationStatus can retrieve it
-      await this.coordinator.saveAgentState(operationId, finalStateWithError);
+      try {
+        await this.coordinator.saveAgentState(operationId, finalStateWithError);
+      } catch (saveError) {
+        log('[%s] Failed to save error state (infra may be down): %O', operationId, saveError);
+      }
 
       // Trigger completion webhook on error (fire-and-forget)
-      await this.triggerCompletionWebhook(finalStateWithError, operationId, 'error');
+      try {
+        await this.triggerCompletionWebhook(finalStateWithError, operationId, 'error');
+      } catch (webhookError) {
+        log('[%s] Failed to trigger completion webhook: %O', operationId, webhookError);
+      }
 
       // Also call onComplete callback when execution fails
       if (callbacks?.onComplete) {
@@ -1177,6 +1329,7 @@ export class AgentRuntimeService {
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
       discordContext: metadata?.discordContext,
+      userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
       messageModel: this.messageModel,
       operationId,
@@ -1195,6 +1348,41 @@ export class AgentRuntimeService {
     });
 
     return { agent, runtime };
+  }
+
+  /**
+   * Compute device context from DB messages at step boundary.
+   * Uses findInMessages visitor to scan tool messages for device activation.
+   */
+  private async computeDeviceContext(state: any) {
+    try {
+      const dbMessages = await this.messageModel.query({
+        agentId: state.metadata?.agentId,
+        threadId: state.metadata?.threadId,
+        topicId: state.metadata?.topicId,
+      });
+
+      return findInMessages(
+        dbMessages,
+        (msg) => {
+          const activeDeviceId = msg.pluginState?.metadata?.activeDeviceId;
+          if (activeDeviceId) {
+            return {
+              activeDeviceId,
+              devicePlatform: msg.pluginState?.metadata?.devicePlatform as string | undefined,
+              deviceSystemInfo: msg.pluginState?.metadata?.deviceSystemInfo as
+                | Record<string, string>
+                | undefined,
+            };
+          }
+        },
+        { role: 'tool' },
+      );
+    } catch (error) {
+      log('computeDeviceContext error: %O', error);
+    }
+
+    return undefined;
   }
 
   /**
@@ -1280,6 +1468,11 @@ export class AgentRuntimeService {
         (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
       )?.content;
 
+    // Extract first user prompt for downstream consumers (e.g., topic title summarization)
+    const userPrompt = state.messages?.find(
+      (m: { content?: string; role: string }) => m.role === 'user',
+    )?.content;
+
     const delivery = state.metadata?.webhookDelivery || 'fetch';
 
     await this.deliverWebhook(
@@ -1297,8 +1490,11 @@ export class AgentRuntimeService {
         status: state.status,
         steps: state.stepCount,
         toolCalls: state.usage?.tools?.totalCalls,
+        topicId: state.metadata?.topicId,
         totalTokens: state.usage?.llm?.tokens?.total,
         type: 'completion',
+        userId: state.metadata?.userId,
+        userPrompt,
       },
       delivery,
       operationId,

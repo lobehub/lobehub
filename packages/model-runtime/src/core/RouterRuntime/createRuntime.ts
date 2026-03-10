@@ -91,6 +91,7 @@ export interface RouteAttemptResult {
   durationMs: number;
   error?: unknown;
   model: string;
+  optionIndex: number;
   providerId: string;
   remark?: string;
   routerId?: string;
@@ -338,6 +339,14 @@ export const createRouterRuntime = ({
               channelId ?? '',
               remark ?? '',
             );
+          } else {
+            log(
+              'request success without fallback for model=%s apiType=%s channelId=%s remark=%s',
+              model,
+              resolvedApiType,
+              channelId ?? '',
+              remark ?? '',
+            );
           }
 
           params
@@ -346,6 +355,7 @@ export const createRouterRuntime = ({
               channelId,
               durationMs: Date.now() - startTime,
               model,
+              optionIndex: index,
               providerId: id,
               remark,
               routerId: matchedRouter.id,
@@ -367,6 +377,7 @@ export const createRouterRuntime = ({
               durationMs: Date.now() - startTime,
               error,
               model,
+              optionIndex: index,
               providerId: id,
               remark,
               routerId: matchedRouter.id,

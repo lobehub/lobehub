@@ -2,7 +2,6 @@ import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,8 +10,6 @@ import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
-
-dayjs.extend(relativeTime);
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   time: css`

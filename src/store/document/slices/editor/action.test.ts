@@ -278,6 +278,42 @@ describe('DocumentStore - Editor Actions', () => {
     });
   });
 
+  describe('handleContentChange', () => {
+    it('should mark document dirty when editorData changes even if markdown is unchanged', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Test';
+          if (type === 'json') return { type: 'doc', version: 2 };
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData: { type: 'doc', version: 1 },
+          sourceType: 'page',
+        });
+      });
+
+      expect(result.current.documents['doc-1'].isDirty).toBe(false);
+
+      act(() => {
+        result.current.handleContentChange();
+      });
+
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Test',
+        editorData: { type: 'doc', version: 2 },
+        isDirty: true,
+      });
+    });
+  });
+
   describe('setEditorState', () => {
     it('should set editor state', () => {
       const { result } = renderHook(() => useDocumentStore());

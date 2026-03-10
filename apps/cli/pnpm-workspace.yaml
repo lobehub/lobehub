@@ -1,0 +1,3 @@
+packages:
+  - '../../packages/device-gateway-client'
+  - '.'

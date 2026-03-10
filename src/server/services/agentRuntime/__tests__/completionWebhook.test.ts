@@ -116,8 +116,7 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
         operationId,
-        toolManifestMap: {},
-        tools: [],
+        toolSet: { manifestMap: {}, tools: [] },
         userId,
       });
 
@@ -136,8 +135,7 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
         operationId,
-        toolManifestMap: {},
-        tools: [],
+        toolSet: { manifestMap: {}, tools: [] },
         userId,
       });
 
@@ -167,8 +165,7 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
         operationId,
-        toolManifestMap: {},
-        tools: [],
+        toolSet: { manifestMap: {}, tools: [] },
         userId,
       });
     };
@@ -211,8 +208,7 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
         operationId,
-        toolManifestMap: {},
-        tools: [],
+        toolSet: { manifestMap: {}, tools: [] },
         userId,
       });
 
@@ -264,8 +260,7 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
         operationId,
-        toolManifestMap: {},
-        tools: [],
+        toolSet: { manifestMap: {}, tools: [] },
         userId,
       });
 

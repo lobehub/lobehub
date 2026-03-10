@@ -7,7 +7,6 @@ import { GroupManagementApiName } from './types';
 export const GroupManagementIdentifier = 'lobe-group-management';
 
 export const GroupManagementManifest: BuiltinToolManifest = {
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   api: [
     // ==================== Communication Coordination ====================
     {

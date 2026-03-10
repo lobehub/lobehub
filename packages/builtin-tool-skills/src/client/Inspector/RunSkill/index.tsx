@@ -26,7 +26,7 @@ export const RunSkillInspector = memo<BuiltinInspectorProps<RunSkillParams, RunS
 
       return (
         <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-skills.apiName.runSkill')}: </span>
+          <span>{t('builtins.lobe-skills.apiName.runSkill')}:</span>
           <span>{name}</span>
         </div>
       );
@@ -35,7 +35,7 @@ export const RunSkillInspector = memo<BuiltinInspectorProps<RunSkillParams, RunS
     return (
       <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
         <span>
-          <span>{t('builtins.lobe-skills.apiName.runSkill')}: </span>
+          <span>{t('builtins.lobe-skills.apiName.runSkill')}:</span>
           <span className={highlightTextStyles.primary}>{activatedName || name}</span>
         </span>
       </div>

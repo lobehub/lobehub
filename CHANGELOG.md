@@ -2,6 +2,66 @@
 
 # Changelog
 
+### [Version 2.1.39](https://github.com/lobehub/lobe-chat/compare/v2.1.38...v2.1.39)
+
+<sup>Released on **2026-03-09**</sup>
+
+#### 👷 Build System
+
+- **misc**: add api key hash column migration.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **misc**: add api key hash column migration, closes [#12862](https://github.com/lobehub/lobe-chat/issues/12862) ([4e6790e](https://github.com/lobehub/lobe-chat/commit/4e6790e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.38](https://github.com/lobehub/lobe-chat/compare/v2.1.37-canary.4...v2.1.38)
+
+<sup>Released on **2026-03-06**</sup>
+
+#### 👷 Build System
+
+- **ci**: fix changelog auto-generation in release workflow.
+
+#### 🐛 Bug Fixes
+
+- **misc**: when use trustclient not register market m2m token.
+- **ci**: correct stable renderer tar source path.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **ci**: fix changelog auto-generation in release workflow, closes [#12765](https://github.com/lobehub/lobe-chat/issues/12765) ([0b7c917](https://github.com/lobehub/lobe-chat/commit/0b7c917))
+
+#### What's fixed
+
+- **misc**: when use trustclient not register market m2m token, closes [#12762](https://github.com/lobehub/lobe-chat/issues/12762) ([400a020](https://github.com/lobehub/lobe-chat/commit/400a020))
+- **ci**: correct stable renderer tar source path, closes [#12755](https://github.com/lobehub/lobe-chat/issues/12755) ([d3550af](https://github.com/lobehub/lobe-chat/commit/d3550af))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.26](https://github.com/lobehub/lobe-chat/compare/v2.1.25...v2.1.26)
 
 <sup>Released on **2026-02-10**</sup>

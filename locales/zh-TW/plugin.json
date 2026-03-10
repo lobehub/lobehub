@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "配置插件後開始預覽",
   "dev.preview.title": "插件名稱預覽",
   "dev.save": "安裝插件",
+  "dev.saveError": "安裝失敗，請再試一次",
   "dev.saveSuccess": "插件設定保存成功",
   "dev.tabs.manifest": "功能描述清單 (Manifest)",
   "dev.tabs.meta": "插件元信息",

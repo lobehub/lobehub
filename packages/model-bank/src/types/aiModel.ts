@@ -250,6 +250,8 @@ export type ExtendParamsType =
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
+  | 'grok4_20ReasoningEffort'
+  | 'codexMaxReasoningEffort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'
@@ -257,6 +259,7 @@ export type ExtendParamsType =
   | 'thinkingLevel2'
   | 'thinkingLevel3'
   | 'thinkingLevel4'
+  | 'thinkingLevel5'
   | 'imageAspectRatio'
   | 'imageAspectRatio2'
   | 'imageResolution'
@@ -283,6 +286,8 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_1ReasoningEffort',
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
+  'grok4_20ReasoningEffort',
+  'codexMaxReasoningEffort',
   'textVerbosity',
   'thinking',
   'thinkingBudget',
@@ -290,6 +295,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'thinkingLevel2',
   'thinkingLevel3',
   'thinkingLevel4',
+  'thinkingLevel5',
   'imageAspectRatio',
   'imageAspectRatio2',
   'imageResolution',

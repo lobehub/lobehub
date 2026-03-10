@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { SkillContextProvider } from '../SkillContextProvider';
 import type { SkillMeta } from '../SkillContextProvider';
+import { SkillContextProvider } from '../SkillContextProvider';
 
 const createContext = (messages: any[]): PipelineContext => ({
   initialState: { messages: [] } as any,

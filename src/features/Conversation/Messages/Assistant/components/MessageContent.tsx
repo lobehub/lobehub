@@ -29,7 +29,7 @@ const MessageContent = memo<UIChatMessage>(
 
     const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && !!tools;
 
-    const showSearch = !!search && !!search.citations?.length;
+    const showSearch = !!search && (!!search.citations?.length || !!search.imageResults?.length);
     const showImageItems = !!imageList && imageList.length > 0;
 
     // remove \n to avoid empty content
@@ -67,7 +67,12 @@ const MessageContent = memo<UIChatMessage>(
     return (
       <Flexbox gap={8} id={id}>
         {showSearch && (
-          <SearchGrounding citations={search?.citations} searchQueries={search?.searchQueries} />
+          <SearchGrounding
+            citations={search?.citations}
+            imageResults={search?.imageResults}
+            imageSearchQueries={search?.imageSearchQueries}
+            searchQueries={search?.searchQueries}
+          />
         )}
         {showFileChunks && <FileChunks data={chunksList} />}
         {showReasoning && <Reasoning {...props.reasoning} id={id} />}

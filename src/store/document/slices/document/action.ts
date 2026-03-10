@@ -143,6 +143,7 @@ export class DocumentActionImpl {
         content: content ?? undefined,
         editorData,
         lastSavedContent: content ?? undefined,
+        lastSavedEditorData: editorData,
         sourceType,
         topicId,
       },

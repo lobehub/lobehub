@@ -1,5 +1,9 @@
 const menu = {
   'common.checkUpdates': 'Check for updates...',
+  'common.checkingUpdates': 'Checking for updates...',
+  'common.downloadingUpdate': 'Downloading update...',
+  'common.isLatestVersion': 'Already up to date',
+  'common.restartToUpdate': 'Restart to update',
   'context.copyImage': 'Copy Image',
   'context.copyImageAddress': 'Copy Image Address',
   'context.copyLink': 'Copy Link',

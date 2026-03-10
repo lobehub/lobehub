@@ -1,4 +1,4 @@
-import { Flexbox, Icon, SearchBar, Segmented } from '@lobehub/ui';
+import { Flexbox, Icon, SearchBar, Segmented, stopPropagation } from '@lobehub/ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import { Brain } from 'lucide-react';
 import { memo } from 'react';
@@ -35,6 +35,7 @@ export const Toolbar = memo<ToolbarProps>(
           value={searchKeyword}
           variant="borderless"
           onChange={(e) => onSearchKeywordChange(e.target.value)}
+          onKeyDown={stopPropagation}
         />
         <Segmented
           size="small"

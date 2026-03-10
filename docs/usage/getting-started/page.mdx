@@ -1,62 +1,135 @@
 ---
-title: Create and Configure Your AI Assistant
+title: Pages
 description: >-
-  A simple centralized configuration for prompts, model selection, knowledge
-  base, plugins, and more.
+  Co-write long-form documents with Agents — Markdown, real-time preview, and
+  persistent editing in one place.
 tags:
   - LobeHub
-  - LobeHub
-  - AI Assistant
-  - Assistant Organization
-  - Group Settings
-  - Assistant Search
-  - Assistant Pinning
+  - Pages
+  - Document Writing
+  - Markdown
+  - Agent Collaboration
+  - Real-time Editing
 ---
 
-# Docs
+# Pages
 
-LobeHub offers a professional writing space designed to help you focus on long-form content creation. Whether you're working on technical documentation, study notes, project proposals, or blog posts, the Docs feature has you covered. It supports Markdown formatting, provides real-time preview, and automatically saves every edit.
+Pages give you a dedicated space for long-form writing — technical docs, study notes, project proposals, or blog posts. Markdown support, real-time preview, and auto-save keep you focused on content. Summon an Agent at any time to help — it doesn't just suggest; it edits directly in your document, refines structure, adds paragraphs, and polishes your writing.
 
-You can summon the AI assistant at any time to help with writing. The assistant does more than just offer suggestions—it can directly edit your content, polish your writing, add paragraphs, improve structure, and insert examples.
+## Why Use Pages?
 
-## Understanding the Docs Feature
+Traditional AI chat forces you to copy-paste content between conversations, losing context each time. Pages fix that:
 
-Docs is LobeHub’s built-in writing environment, tailored for long-form writing and editing. Unlike the chat feature, Docs provides:
+- **Persistent workspace** — Each document exists independently, saved permanently, ready to continue anytime
+- **Shared context** — All Agents work on the same document with full page context
+- **Structured content** — Full Markdown support: headings, lists, code blocks, quotes, and more
+- **Flexible management** — Create, import, rename, duplicate — organize all your documents in one place
 
-- A persistent writing space: Each document exists independently, allowing you to return and continue editing at any time. Your content is saved permanently.
-- Structured content organization: Full Markdown support lets you organize your content with headings, lists, code blocks, quotes, and more—perfect for creating professional documents.
-- Flexible file management: Create, import, rename, duplicate—comprehensive file management tools help you efficiently organize all your documents.
+## Creating and Importing Pages
 
-### Creating and Importing Docs
+### Create a New Page
 
-## Create a New Document
-
-From the LobeHub main interface, go to “Docs” and click “New Document,” or use the dropdown menu from the new file icon on the homepage to quickly create one. Once created, you can start writing immediately. Your work is auto-saved, so you can close it anytime and pick up where you left off later.
+From the LobeHub main interface, go to **Pages** and click **New Page**, or use the dropdown from the new file icon. Start writing immediately — your work auto-saves, so you can close anytime and pick up later.
 
 ### Import a Markdown File
 
-If you already have a Markdown document, you can import it directly. In the Docs section, click “Upload Markdown File,” select your file, and it will be loaded into a new document for immediate editing.
+Already have a Markdown document? Import it directly. In the Pages section, click **Upload Markdown File**, select your file, and it loads into a new page for immediate editing.
 
-### Editing Documents
+### Editing Pages
 
-Docs are edited using Markdown. Markdown is a lightweight markup language that uses simple symbols to format text, allowing you to focus on content. You can also add an icon to your document, which will appear before the title.
+Pages use Markdown — a lightweight markup language with simple symbols for formatting, so you stay focused on content. You can add an icon to your page; it appears before the title.
 
-![clipboard-1768908943850-00bc4e05bc6bb.png](/blog/assets7caf7e0d83b8a4f3d177283bb0bc55d1.webp)
+![Add Document Icon to Page Title](/blog/assets7caf7e0d83b8a4f3d177283bb0bc55d1.webp)
 
 ### Command Palette
 
-While editing, press the / key to open the command palette. This is a quick-access tool that lets you insert various formatting elements with ease.
+Press `/` while editing to open the command palette — a quick-access tool for inserting formatting elements.
 
 ![Insert Command](/blog/assets7caf7e0d83b8a4f3d177283bb0bc55d1.webp)
 
-### Collaborate with Lobe AI
+## Collaborating with Agents
 
-While editing a document, click the AI assistant icon on the right side of the editor to open the assistant panel. The panel slides in from the right and displays alongside your document, allowing you to chat with the assistant while continuing to write.
+While editing, click the Agent icon on the right side of the editor to open the Agent panel. It slides in alongside your document so you can chat and write at the same time.
 
-By default, the “Docs Assistant” is used—an AI assistant optimized specifically for document writing. If you need help in a specific domain, you can switch to a custom assistant you’ve created via the top-left corner of the assistant panel.
+By default, the **Pages Agent** is used — optimized for document writing. Need domain-specific help? Switch to a custom Agent via the top-left corner of the panel.
 
-The assistant can directly edit the content within your document.
+### What the Pages Agent Can Do
 
-### Managing Documents
+The Agent understands your full document context and can:
 
-In the document list, you can rename documents, create duplicates, copy the full content, or delete them.
+- **Generate content** — Write sections, paragraphs, or entire documents from your instructions
+- **Refine writing** — Edit, rewrite, or improve style on request
+- **Research and expand** — Add facts, examples, or deeper explanations
+- **Format and structure** — Organize content with proper headings and flow
+- **Maintain consistency** — Keep voice, tone, and style aligned throughout
+
+### Using Multiple Agents
+
+Switch Agents in the panel to get different perspectives on the same document:
+
+- Ask a technical writer for clarity
+- Bring in a subject-matter expert for accuracy
+- Use a creative writer for engaging narratives
+
+### Managing Pages
+
+In the page list, you can rename, duplicate, copy full content, or delete pages.
+
+## Best Practices
+
+**Start with structure** — Outline your document with headings first, then ask the Agent to fill sections progressively:
+
+```markdown
+# Main Title
+
+## Introduction
+
+## Key Points
+
+### Point 1
+
+### Point 2
+
+## Conclusion
+```
+
+**Use clear instructions** — Be specific when working with the Agent:
+
+- ❌ "Make this better"
+- ✅ "Rewrite this section to be more concise and add a concrete example"
+
+**Iterate in sections** — Rather than generating an entire document at once, have the Agent write one section, review and refine it, then move to the next. Higher quality than bulk generation.
+
+**Leverage templates** — Duplicate successful previous documents to reuse their structure.
+
+## Keyboard Shortcuts
+
+| Shortcut       | Action               |
+| -------------- | -------------------- |
+| `Cmd/Ctrl + S` | Save document        |
+| `Cmd/Ctrl + B` | Bold                 |
+| `Cmd/Ctrl + I` | Italic               |
+| `Cmd/Ctrl + K` | Insert link          |
+| `/`            | Open command palette |
+
+## Use Cases
+
+- **Technical documentation** — API docs, guides, specs — with an Agent that understands code
+- **Research notes** — Compile and organize research with AI-assisted summaries and expansion
+- **Blog posts** — Draft, refine, and polish articles through iterative editing
+- **Project proposals** — Structure proposals and let the Agent clarify your thinking
+
+## Limitations
+
+- **Token limits** — Very long documents may require the Agent to work in sections due to context window limits
+- **Formatting consistency** — Agents may use slightly different formatting conventions; review and unify as needed
+- **Fact-checking** — Always verify AI-generated facts, especially statistics and technical claims
+- **Voice preservation** — For personal writing, guide the Agent explicitly on tone and style to maintain your voice
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/agent/agent-team'} title={'Agent Groups'} />
+
+  <Card href={'/docs/usage/agent/artifacts'} title={'Artifacts'} />
+</Cards>

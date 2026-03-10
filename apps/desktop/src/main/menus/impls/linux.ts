@@ -1,5 +1,5 @@
-/* eslint-disable unicorn/no-array-push-push */
-import { Menu, MenuItemConstructorOptions, app, clipboard, dialog, shell } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
+import { app, clipboard, dialog, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 
@@ -126,6 +126,8 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         label: t('view.title'),
         submenu: [
+          { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
+          { type: 'separator' },
           { label: t('view.resetZoom'), role: 'resetZoom' },
           { label: t('view.zoomIn'), role: 'zoomIn' },
           { label: t('view.zoomOut'), role: 'zoomOut' },

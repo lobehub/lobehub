@@ -39,11 +39,12 @@ afterEach(() => {
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
+  const tz = 'UTC';
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `Current date: ${year}-${month}-${day}`;
+  const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
+  const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
+  const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
+  return `Current date: ${year}-${month}-${day} (${tz})`;
 };
 
 describe('contextEngineering', () => {
@@ -464,7 +465,7 @@ describe('contextEngineering', () => {
         },
       ];
 
-      // Mock topic memories and global identities separately
+      // Mock topic memories and user persona separately
       vi.spyOn(memoryManager, 'resolveTopicMemories').mockReturnValue({
         activities: [],
         contexts: [
@@ -489,7 +490,7 @@ describe('contextEngineering', () => {
         experiences: [],
         preferences: [],
       });
-      vi.spyOn(memoryManager, 'resolveGlobalIdentities').mockReturnValue([]);
+      vi.spyOn(memoryManager, 'resolveUserPersona').mockReturnValue(undefined);
 
       const result = await contextEngineering({
         enableUserMemories: true,

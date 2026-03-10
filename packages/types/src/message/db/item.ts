@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import type { GroundingSearch } from '../../search';
 import type { MessageMetadata, ModelReasoning, ToolIntervention } from '../common';
 

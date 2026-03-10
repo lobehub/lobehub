@@ -1,4 +1,8 @@
-import {
+import type { ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+
+import type {
   GetCommandOutputParams,
   GetCommandOutputResult,
   KillCommandParams,
@@ -6,8 +10,6 @@ import {
   RunCommandParams,
   RunCommandResult,
 } from '@lobechat/electron-client-ipc';
-import { ChildProcess, spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '@/utils/logger';
 
@@ -21,7 +23,7 @@ const MAX_OUTPUT_LENGTH = 80_000;
 /**
  * Strip ANSI escape codes from terminal output
  */
-// eslint-disable-next-line no-control-regex
+// eslint-disable-next-line no-control-regex, regexp/no-obscure-range -- ANSI escape sequences use these ranges
 const ANSI_REGEX = /\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
 const stripAnsi = (str: string): string => str.replaceAll(ANSI_REGEX, '');
 
@@ -55,6 +57,7 @@ export default class ShellCommandCtr extends ControllerModule {
   @IpcMethod()
   async handleRunCommand({
     command,
+    cwd,
     description,
     run_in_background,
     timeout = 120_000,
@@ -79,6 +82,7 @@ export default class ShellCommandCtr extends ControllerModule {
         // Background execution
         const shellId = randomUUID();
         const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
+          cwd,
           env: process.env,
           shell: false,
         });
@@ -115,6 +119,7 @@ export default class ShellCommandCtr extends ControllerModule {
         // Synchronous execution with timeout
         return new Promise((resolve) => {
           const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
+            cwd,
             env: process.env,
             shell: false,
           });

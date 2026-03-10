@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import { z } from 'zod';
 
 import type { ConversationContext } from '../../conversation';

@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import type { Simplify } from 'type-fest';
 import { z } from 'zod';
 
@@ -24,20 +23,28 @@ export const VideoModelParamsMetaSchema = z.object({
 
   imageUrl: z
     .object({
+      /** Aspect ratio (width/height) constraints */
+      aspectRatio: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
       default: z.string().nullable().optional(),
       description: z.string().optional(),
+      height: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
       maxFileSize: z.number().optional(),
       type: z.tuple([z.literal('string'), z.literal('null')]).optional(),
+      width: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
     })
     .optional(),
 
   endImageUrl: z
     .object({
+      /** Aspect ratio (width/height) constraints */
+      aspectRatio: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
       default: z.string().nullable().optional(),
       description: z.string().optional(),
+      height: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
       maxFileSize: z.number().optional(),
       requiresImageUrl: z.boolean().optional(),
       type: z.tuple([z.literal('string'), z.literal('null')]).optional(),
+      width: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
     })
     .optional(),
 

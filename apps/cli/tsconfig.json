@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "paths": {
+      "@lobechat/device-gateway-client": ["../../packages/device-gateway-client/src"],
+      "@/*": ["../../src/*"]
+    }
+  },
+  "exclude": ["**/*.test.ts"],
+  "include": ["src"]
+}

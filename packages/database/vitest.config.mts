@@ -8,7 +8,6 @@ export default defineConfig({
   },
   test: {
     alias: {
-      /* eslint-disable sort-keys-fix/sort-keys-fix */
       '@/const': resolve(__dirname, '../const/src'),
       '@/utils/errorResponse': resolve(__dirname, '../../src/utils/errorResponse'),
       '@/utils': resolve(__dirname, '../utils/src'),
@@ -16,7 +15,29 @@ export default defineConfig({
       '@/libs/model-runtime': resolve(__dirname, '../model-runtime/src'),
       '@/types': resolve(__dirname, '../types/src'),
       '@': resolve(__dirname, '../../src'),
-      /* eslint-enable */
+
+    },
+    coverage: {
+      exclude: [
+        'src/server/**',
+        'src/repositories/dataImporter/deprecated/**',
+        'src/types/**',
+        'src/models/userMemory/sources/index.ts',
+        'src/models/userMemory/sources/shared.ts',
+        'src/models/ragEval/index.ts',
+        'src/models/agentEval/index.ts',
+        'src/repositories/userMemory/index.ts',
+        'src/models/_template.ts',
+        'src/models/__tests__/_test_template.ts',
+        'src/models/web-server.ts',
+        'src/core/web-server.ts',
+        'src/core/db-adaptor.ts',
+        'src/core/getTestDB.ts',
+        'src/index.ts',
+        'tests/**',
+        'vitest.config*.mts',
+      ],
+      reporter: ['text', 'json'],
     },
     environment: 'happy-dom',
     exclude: [

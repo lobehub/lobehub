@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import {
+import type {
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
 } from '../../../types/video';

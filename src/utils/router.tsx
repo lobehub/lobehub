@@ -15,6 +15,21 @@ import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useGlobalStore } from '@/store/global';
+import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
+
+async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
+  return importFn();
+}
+
+function resolveLazyModule<P>(module: { default: ComponentType<P> } | ComponentType<P>) {
+  if (typeof module === 'function') {
+    return { default: module };
+  }
+  if ('default' in module) {
+    return module as { default: ComponentType<P> };
+  }
+  return { default: module as unknown as ComponentType<P> };
+}
 
 /**
  * Helper function to create a dynamic page element directly for router configuration
@@ -33,15 +48,8 @@ export function dynamicElement<P = NonNullable<unknown>>(
   debugId?: string,
 ): ReactElement {
   const LazyComponent = lazy(async () => {
-    // eslint-disable-next-line @next/next/no-assign-module-variable
-    const module = await importFn();
-    if (typeof module === 'function') {
-      return { default: module };
-    }
-    if ('default' in module) {
-      return module as { default: ComponentType<P> };
-    }
-    return { default: module as unknown as ComponentType<P> };
+    const mod = await importModule(importFn);
+    return resolveLazyModule(mod);
   });
 
   // @ts-ignore
@@ -62,15 +70,8 @@ export function dynamicLayout<P = NonNullable<unknown>>(
   debugId?: string,
 ): ReactElement {
   const LazyComponent = lazy(async () => {
-    // eslint-disable-next-line @next/next/no-assign-module-variable
-    const module = await importFn();
-    if (typeof module === 'function') {
-      return { default: module };
-    }
-    if ('default' in module) {
-      return module as { default: ComponentType<P> };
-    }
-    return { default: module as unknown as ComponentType<P> };
+    const mod = await importModule(importFn);
+    return resolveLazyModule(mod);
   });
 
   // @ts-ignore
@@ -102,10 +103,13 @@ export interface ErrorBoundaryProps {
 export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const error = useRouteError() as Error;
   const navigate = useNavigate();
-
   const reset = useCallback(() => {
     navigate(resetPath);
   }, [navigate, resetPath]);
+
+  if (typeof window !== 'undefined' && isChunkLoadError(error)) {
+    notifyChunkError();
+  }
 
   return createElement(ErrorCapture, { error, reset });
 };
@@ -138,20 +142,6 @@ export const NavigatorRegistrar = memo(() => {
   return null;
 });
 
-/**
- * Route configuration object type (RouteObject-style for createBrowserRouter)
- */
-export interface RouteConfig {
-  children?: RouteConfig[];
-  element?: ReactElement;
-  errorElement?: ReactElement;
-  // HydrateFallback is ignored in declarative mode
-  HydrateFallback?: ComponentType;
-  index?: boolean;
-  loader?: (args: { params: Record<string, string | undefined> }) => unknown;
-  path?: string;
-}
-
 export interface CreateAppRouterOptions {
   basename?: string;
 }
@@ -168,11 +158,11 @@ export interface CreateAppRouterOptions {
  *   </SPAGlobalProvider>
  * );
  */
-export function createAppRouter(routes: RouteConfig[], options?: CreateAppRouterOptions) {
+export function createAppRouter(routes: RouteObject[], options?: CreateAppRouterOptions) {
   return createBrowserRouter(
     [
       {
-        children: routes as RouteObject[],
+        children: routes,
         element: (
           <BusinessGlobalProvider>
             <Outlet />

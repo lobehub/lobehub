@@ -153,27 +153,29 @@ describe('computeChatPricing', () => {
       const { breakdown, totalCost, totalCredits } = result!;
       expect(breakdown).toHaveLength(3); // Input, cache read, and output
 
-      // Verify cached tokens (over 200k threshold, use higher tier rate)
+      // Tier is determined by totalInputTokens (258,166 > 200k), so all units use higher tier rate
+
+      // Verify cached tokens
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(253_891);
-      expect(cached?.credits).toBe(158_682); // ceil(158681.875) = 158682
+      expect(cached?.credits).toBe(158_682); // ceil(253891 * 0.625) = 158682
       expect(cached?.segments).toEqual([{ quantity: 253_891, rate: 0.625, credits: 158_681.875 }]);
 
-      // Verify input cache miss tokens (calculated as totalInputTokens - inputCachedTokens = 4275)
+      // Verify input cache miss tokens
       const input = breakdown.find((item) => item.unit.name === 'textInput');
-      expect(input?.quantity).toBe(4_275); // 258_166 - 253_891 = 4_275 (cache miss)
-      expect(input?.credits).toBe(5_344); // ceil(5343.75) = 5344
-      expect(input?.segments).toEqual([{ quantity: 4_275, rate: 1.25, credits: 5_343.75 }]);
+      expect(input?.quantity).toBe(4_275);
+      expect(input?.credits).toBe(10_688); // ceil(4275 * 2.5) = 10688
+      expect(input?.segments).toEqual([{ quantity: 4_275, rate: 2.5, credits: 10_687.5 }]);
 
-      // Verify output tokens include reasoning tokens (under 200k threshold, use lower tier rate)
+      // Verify output tokens include reasoning tokens
       const output = breakdown.find((item) => item.unit.name === 'textOutput');
-      expect(output?.quantity).toBe(3_063); // 1462 + 1601 = 3063 (reasoning tokens included)
-      expect(output?.credits).toBe(30_630); // 3063 * 10 = 30630
-      expect(output?.segments).toEqual([{ quantity: 3_063, rate: 10, credits: 30_630 }]);
+      expect(output?.quantity).toBe(3_063); // 1462 + 1601 = 3063
+      expect(output?.credits).toBe(45_945); // 3063 * 15 = 45945
+      expect(output?.segments).toEqual([{ quantity: 3_063, rate: 15, credits: 45_945 }]);
 
-      // Verify corrected totals (no double counting of cached tokens)
-      expect(totalCredits).toBe(194_656); // 158682 + 5344 + 30630 = 194656
-      expect(totalCost).toBeCloseTo(0.194656, 6); // 194656 credits = $0.194656
+      // Verify totals
+      expect(totalCredits).toBe(215_315); // 158682 + 10688 + 45945 = 215315
+      expect(totalCost).toBeCloseTo(0.215315, 6);
     });
 
     it('supports multi-modal fixed units for Gemini 2.5 Flash Image Preview', () => {
@@ -269,28 +271,98 @@ describe('computeChatPricing', () => {
       const { breakdown, totalCost, totalCredits } = result!;
       expect(breakdown).toHaveLength(3); // Cache read, input, and output
 
-      // Verify cached tokens (cross-tier: over 200k threshold, use higher tier rate)
+      // Tier is determined by totalInputTokens (262,960 > 200k), so all units use higher tier rate
+
+      // Verify cached tokens
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(257_955);
-
-      expect(cached?.credits).toBe(161_222); // ceil(161221.875) = 161222
+      expect(cached?.credits).toBe(161_222); // ceil(257955 * 0.625) = 161222
       expect(cached?.segments).toEqual([{ quantity: 257_955, rate: 0.625, credits: 161_221.875 }]);
 
-      // Verify input cache miss tokens (under 200k tier, use lower rate)
+      // Verify input cache miss tokens
       const input = breakdown.find((item) => item.unit.name === 'textInput');
       expect(input?.quantity).toBe(5_005);
-      expect(input?.credits).toBe(6_257); // ceil(6256.25) = 6257
-      expect(input?.segments).toEqual([{ quantity: 5_005, rate: 1.25, credits: 6_256.25 }]);
+      expect(input?.credits).toBe(12_513); // ceil(5005 * 2.5) = 12513
+      expect(input?.segments).toEqual([{ quantity: 5_005, rate: 2.5, credits: 12_512.5 }]);
 
-      // Verify output tokens (under 200k threshold, use lower tier rate)
+      // Verify output tokens
       const output = breakdown.find((item) => item.unit.name === 'textOutput');
       expect(output?.quantity).toBe(1_744);
-      expect(output?.credits).toBe(17_440); // 1744 * 10 = 17440
-      expect(output?.segments).toEqual([{ quantity: 1_744, rate: 10, credits: 17_440 }]);
+      expect(output?.credits).toBe(26_160); // 1744 * 15 = 26160
+      expect(output?.segments).toEqual([{ quantity: 1_744, rate: 15, credits: 26_160 }]);
 
-      // Verify totals match actual billing log
-      expect(totalCredits).toBe(184_919); // 161222 + 6257 + 17440 = 184919
-      expect(totalCost).toBeCloseTo(0.184919, 6); // 184919 credits = $0.184919
+      // Verify totals
+      expect(totalCredits).toBe(199_895); // 161222 + 12513 + 26160 = 199895
+      expect(totalCost).toBeCloseTo(0.199895, 6);
+    });
+
+    it('bills tool-use (grounding) tokens at textInput rate when no explicit cache', () => {
+      // Simulates Google Search grounding: promptTokenCount=50 (user text),
+      // toolUsePromptTokenCount=7596 (search results fed back to model).
+      // The converter sets inputToolTokens=7596 and totalInputTokens=7646.
+      // inputTextTokens=50 represents ONLY the text modality from promptTokensDetails.
+      // textInput billing must use totalInputTokens (7646), not inputTextTokens (50).
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      const usage: ModelTokensUsage = {
+        inputTextTokens: 50, // Text modality from promptTokensDetails (user text only)
+        inputToolTokens: 7596, // toolUsePromptTokenCount from Google API (grounding results)
+        totalInputTokens: 7646, // promptTokenCount(50) + toolUsePromptTokenCount(7596)
+        outputTextTokens: 367,
+        totalOutputTokens: 367,
+        totalTokens: 8013,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+
+      const textInput = result?.breakdown.find((item) => item.unit.name === 'textInput');
+      // Must bill on totalInputTokens (7646) NOT inputTextTokens (50)
+      expect(textInput?.quantity).toBe(7646);
+      // rate=1 credit/token (representing $1/million tokens * millionTokens unit),
+      // ceil(7646 * 1) = 7646 credits
+      expect(textInput?.credits).toBe(7646);
+    });
+
+    it('bills tool-use tokens correctly when also using cache', () => {
+      // Simulates a scenario where both caching AND grounding are active.
+      // inputCacheMissTokens=50 (uncached user text),
+      // inputCachedTokens=7596 (cached grounding context),
+      // inputToolTokens=200 (explicit function call results)
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      const usage: ModelTokensUsage = {
+        inputCacheMissTokens: 50,
+        inputCachedTokens: 7596,
+        inputToolTokens: 200,
+        totalInputTokens: 7846,
+        outputTextTokens: 100,
+        totalOutputTokens: 100,
+        totalTokens: 7946,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+
+      const textInput = result?.breakdown.find((item) => item.unit.name === 'textInput');
+      // inputCacheMissTokens(50) + inputToolTokens(200) = 250
+      expect(textInput?.quantity).toBe(250);
+
+      const cached = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+      expect(cached?.quantity).toBe(7596);
     });
   });
 

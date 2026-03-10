@@ -41,7 +41,7 @@ describe('UsageCounter', () => {
       const { usage } = UsageCounter.accumulateLLM({
         cost: state.cost,
         model: 'gpt-4',
-        modelUsage: modelUsage,
+        modelUsage,
         provider: 'openai',
         usage: state.usage,
       });
@@ -63,7 +63,7 @@ describe('UsageCounter', () => {
       const { cost } = UsageCounter.accumulateLLM({
         cost: state.cost,
         model: 'gpt-4',
-        modelUsage: modelUsage,
+        modelUsage,
         provider: 'openai',
         usage: state.usage,
       });
@@ -183,7 +183,7 @@ describe('UsageCounter', () => {
       const { cost } = UsageCounter.accumulateLLM({
         cost: state.cost,
         model: 'claude-3-5-sonnet-20241022',
-        modelUsage: modelUsage,
+        modelUsage,
         provider: 'anthropic',
         usage: state.usage,
       });
@@ -248,7 +248,7 @@ describe('UsageCounter', () => {
       const { cost } = UsageCounter.accumulateLLM({
         cost: state.cost,
         model: 'gpt-4',
-        modelUsage: modelUsage,
+        modelUsage,
         provider: 'openai',
         usage: state.usage,
       });
@@ -270,21 +270,21 @@ describe('UsageCounter', () => {
       const result1 = UsageCounter.accumulateLLM({
         cost: state.cost,
         model: 'gpt-4',
-        modelUsage: modelUsage,
+        modelUsage,
         provider: 'openai',
         usage: state.usage,
       });
       const result2 = UsageCounter.accumulateLLM({
         cost: result1.cost,
         model: 'gpt-4',
-        modelUsage: modelUsage,
+        modelUsage,
         provider: 'openai',
         usage: result1.usage,
       });
       const result3 = UsageCounter.accumulateLLM({
         cost: result2.cost,
         model: 'claude-3-5-sonnet-20241022',
-        modelUsage: modelUsage,
+        modelUsage,
         provider: 'anthropic',
         usage: result2.usage,
       });

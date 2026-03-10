@@ -122,6 +122,14 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.gpt5_2ProReasoningEffort;
   }
 
+  if (modelExtendParams.includes('grok4_20ReasoningEffort') && chatConfig.grok4_20ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
+  }
+
   if (modelExtendParams.includes('effort') && chatConfig.effort) {
     extendParams.effort = chatConfig.effort;
   }
@@ -154,6 +162,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
 
   if (modelExtendParams.includes('thinkingLevel4') && chatConfig.thinkingLevel4) {
     extendParams.thinkingLevel = chatConfig.thinkingLevel4;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel5') && chatConfig.thinkingLevel5) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel5;
   }
 
   // URL context

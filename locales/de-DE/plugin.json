@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "Konfigurieren zur Vorschau",
   "dev.preview.title": "Skill-Name Vorschau",
   "dev.save": "Installieren",
+  "dev.saveError": "Installation fehlgeschlagen, bitte versuchen Sie es erneut",
   "dev.saveSuccess": "Einstellungen gespeichert",
   "dev.tabs.manifest": "Manifest",
   "dev.tabs.meta": "Metadaten",

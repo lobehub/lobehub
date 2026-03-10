@@ -1,6 +1,6 @@
 import type { DatasetFormat } from './types';
 
-const XLSX_MAGIC = [0x50, 0x4b, 0x03, 0x04]; // PK\x03\x04 (ZIP header)
+const XLSX_MAGIC = [0x50, 0x4B, 0x03, 0x04]; // PK\x03\x04 (ZIP header)
 
 export function detectFormat(
   input: Buffer | string | Uint8Array,

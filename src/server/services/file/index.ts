@@ -278,6 +278,57 @@ export class FileService {
     return { fileId: createdId, key, url };
   }
 
+  /**
+   * Download file from external URL, upload to S3, and create database record
+   * @param externalUrl - External file URL to download (e.g., Discord CDN)
+   * @param pathname - File storage path in S3 (must include file extension)
+   * @returns Contains key (storage path), fileId (database record ID) and url (proxy access path)
+   */
+  public async uploadFromUrl(
+    externalUrl: string,
+    pathname: string,
+  ): Promise<{ fileId: string; key: string; url: string }> {
+    const response = await fetch(externalUrl);
+
+    if (!response.ok) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Failed to download file from URL: ${response.status} ${response.statusText}`,
+      });
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // Upload to storage (S3 or local)
+    const { key } = await this.uploadMedia(pathname, buffer);
+
+    // Extract filename from pathname
+    const name = pathname.split('/').pop() || 'unknown';
+
+    // Calculate file metadata
+    const size = buffer.length;
+    const fileType =
+      response.headers.get('content-type') ||
+      inferContentTypeFromImageUrl(pathname) ||
+      'application/octet-stream';
+    const hash = sha256(buffer);
+
+    // Generate UUID for cleaner URLs
+    const fileId = uuid();
+
+    // Use common method to create file record
+    const { fileId: createdId, url } = await this.createFileRecord({
+      fileHash: hash,
+      fileType,
+      id: fileId,
+      name,
+      size,
+      url: key,
+    });
+
+    return { fileId: createdId, key, url };
+  }
+
   async downloadFileToLocal(
     fileId: string,
   ): Promise<{ cleanup: () => void; file: FileItem; filePath: string }> {

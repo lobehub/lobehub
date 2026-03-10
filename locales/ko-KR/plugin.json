@@ -346,6 +346,7 @@
   "dev.preview.empty.title": "기능 구성 후 미리보기 시작",
   "dev.preview.title": "기능 이름 미리보기",
   "dev.save": "기능 설치",
+  "dev.saveError": "설치에 실패했습니다. 다시 시도해 주세요.",
   "dev.saveSuccess": "기능 설정이 성공적으로 저장되었습니다",
   "dev.tabs.manifest": "기능 설명 파일 (Manifest)",
   "dev.tabs.meta": "기능 메타 정보",

@@ -351,7 +351,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: {.*"tps":.*,"ttft":.*}\n\n$/), // tps ttft should be calculated with elapsed time
+          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
@@ -427,7 +427,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10,"cost":0.000005}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: {.*"tps":.*,"ttft":.*}\n\n$/), // tps ttft should be calculated with elapsed time
+          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
@@ -784,6 +784,80 @@ describe('LobeOpenAICompatibleFactory', () => {
               status: 400,
             },
             errorType: AgentRuntimeErrorType.InsufficientQuota,
+            provider,
+          });
+        }
+      });
+
+      it('should detect ExceededContextWindow from error message text', async () => {
+        const apiError = new OpenAI.APIError(
+          400,
+          {
+            error: {
+              message:
+                "This model's maximum context length is 131072 tokens. However, your messages resulted in 140000 tokens.",
+            },
+            status: 400,
+          },
+          'Error message',
+          {},
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        try {
+          await instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'mistralai/mistral-7b-instruct:free',
+            temperature: 0,
+          });
+        } catch (e) {
+          expect(e).toEqual({
+            endpoint: defaultBaseURL,
+            error: {
+              error: {
+                message:
+                  "This model's maximum context length is 131072 tokens. However, your messages resulted in 140000 tokens.",
+              },
+              status: 400,
+            },
+            errorType: AgentRuntimeErrorType.ExceededContextWindow,
+            provider,
+          });
+        }
+      });
+
+      it('should detect QuotaLimitReached from error message text', async () => {
+        const apiError = new OpenAI.APIError(
+          429,
+          {
+            error: {
+              message: 'Resource has been exhausted (e.g. check quota).',
+            },
+            status: 429,
+          },
+          'Error message',
+          {},
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        try {
+          await instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'mistralai/mistral-7b-instruct:free',
+            temperature: 0,
+          });
+        } catch (e) {
+          expect(e).toEqual({
+            endpoint: defaultBaseURL,
+            error: {
+              error: {
+                message: 'Resource has been exhausted (e.g. check quota).',
+              },
+              status: 429,
+            },
+            errorType: AgentRuntimeErrorType.QuotaLimitReached,
             provider,
           });
         }

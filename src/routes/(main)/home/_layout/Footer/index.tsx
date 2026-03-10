@@ -1,6 +1,6 @@
 'use client';
 
-import { BRANDING_EMAIL, SOCIAL_URL } from '@lobechat/business-const';
+import { SOCIAL_URL } from '@lobechat/business-const';
 import { useAnalytics } from '@lobehub/analytics/react';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
@@ -12,7 +12,6 @@ import {
   FileClockIcon,
   FlaskConical,
   Github,
-  Mail,
   Rocket,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,7 +21,7 @@ import { Link } from 'react-router-dom';
 import ChangelogModal from '@/components/ChangelogModal';
 import HighlightNotification from '@/components/HighlightNotification';
 import LabsModal from '@/components/LabsModal';
-import { DOCUMENTS_REFER_URL, GITHUB, mailTo } from '@/const/url';
+import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useGlobalStore } from '@/store/global';
@@ -153,15 +152,6 @@ const Footer = memo(() => {
         label: (
           <a href={SOCIAL_URL.discord} rel="noopener noreferrer" target="_blank">
             {t('userPanel.discord')}
-          </a>
-        ),
-      },
-      {
-        icon: <Icon icon={Mail} />,
-        key: 'email',
-        label: (
-          <a href={mailTo(BRANDING_EMAIL.support)} rel="noopener noreferrer" target="_blank">
-            {t('userPanel.email')}
           </a>
         ),
       },

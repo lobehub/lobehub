@@ -1,14 +1,15 @@
-import { ActionIcon, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { MessageSquareDashed, Star } from 'lucide-react';
-import { memo, Suspense, useCallback, useMemo } from 'react';
+import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
+import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
 import ThreadList from '../../TopicListContent/ThreadList';
@@ -26,10 +27,9 @@ interface TopicItemProps {
 
 const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) => {
   const { t } = useTranslation('topic');
-  const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
   const toggleMobileTopic = useGlobalStore((s) => s.toggleMobileTopic);
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [activeGroupId, switchTopic] = useAgentGroupStore((s) => [s.activeGroupId, s.switchTopic]);
+  const addTab = useElectronStore((s) => s.addTab);
 
   // Construct href for cmd+click support
   const href = useMemo(() => {
@@ -42,8 +42,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
     id ? s.topicLoadingIds.includes(id) : false,
   ]);
 
-  const [favoriteTopic] = useChatStore((s) => [s.favoriteTopic]);
-
   const toggleEditing = useCallback(
     (visible?: boolean) => {
       useChatStore.setState({ topicRenamingId: visible && id ? id : '' });
@@ -51,18 +49,35 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
     [id],
   );
 
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleClick = useCallback(() => {
     if (editing) return;
-    switchTopic(id);
-    toggleMobileTopic(false);
+    if (isDesktop) {
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        switchTopic(id);
+        toggleMobileTopic(false);
+      }, 250);
+    } else {
+      switchTopic(id);
+      toggleMobileTopic(false);
+    }
   }, [editing, id, switchTopic, toggleMobileTopic]);
 
   const handleDoubleClick = useCallback(() => {
-    if (!id || !activeAgentId) return;
-    if (isDesktop) {
-      openTopicInNewWindow(activeAgentId, id);
+    if (!id || !activeGroupId || !isDesktop) return;
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
     }
-  }, [id, activeAgentId, openTopicInNewWindow]);
+    const reference = pluginRegistry.parseUrl(`/group/${activeGroupId}`, `topic=${id}`);
+    if (reference) {
+      addTab(reference);
+      switchTopic(id);
+      toggleMobileTopic(false);
+    }
+  }, [id, activeGroupId, addTab, switchTopic, toggleMobileTopic]);
 
   const dropdownMenu = useTopicItemDropdownMenu({
     id,
@@ -108,17 +123,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         loading={isLoading}
         title={title}
         icon={
-          <ActionIcon
-            color={fav ? cssVar.colorWarning : undefined}
-            fill={fav ? cssVar.colorWarning : 'transparent'}
-            icon={Star}
-            size={'small'}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              favoriteTopic(id, !fav);
-            }}
-          />
+          <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
         }
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}

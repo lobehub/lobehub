@@ -26,7 +26,6 @@ export interface CustomPluginParams {
     serverUrl: string;
   };
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
   manifestMode?: 'local' | 'url';
   manifestUrl?: string;
   /**

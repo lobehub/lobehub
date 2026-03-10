@@ -17,6 +17,7 @@ concurrency:
 jobs:
   release:
     name: Release
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
 
     services:
@@ -64,38 +65,6 @@ jobs:
 
       - name: Test App
         run: bun run test-app
-
-      - name: Extract version from tag
-        id: get-version
-        run: |
-          # Extract version from github.ref (refs/tags/v1.0.0 -> 1.0.0)
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📦 Release version: v$VERSION"
-
-      - name: Verify package.json version matches tag
-        run: |
-          VERSION="${{ steps.get-version.outputs.version }}"
-          echo "🔎 Checking package.json version equals tag: $VERSION"
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-            const expected = '$VERSION';
-            const actual = pkg.version;
-            if (actual !== expected) {
-              console.error('❌ Version mismatch: package.json=' + actual + ' tag=' + expected);
-              process.exit(1);
-            }
-            console.log('✅ Version OK:', actual);
-          "
-
-      - name: Release
-        run: bun run release
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Pass version to semantic-release
-          SEMANTIC_RELEASE_VERSION: ${{ steps.get-version.outputs.version }}
 
       - name: Workflow
         run: bun run workflow:readme

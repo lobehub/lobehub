@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -114,6 +115,63 @@ describe('ChatGroupModel', () => {
     it('should return empty array when no groups exist', async () => {
       const result = await chatGroupModel.query();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getGroupByForkedFromIdentifier', () => {
+    it('should return group id when a matching forkedFromIdentifier exists', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'forked-group-1',
+        userId,
+        title: 'Forked Group',
+        config: { forkedFromIdentifier: 'market-agent-123' },
+      });
+
+      const result = await chatGroupModel.getGroupByForkedFromIdentifier('market-agent-123');
+
+      expect(result).toBe('forked-group-1');
+    });
+
+    it('should return null when no group matches the forkedFromIdentifier', async () => {
+      const result = await chatGroupModel.getGroupByForkedFromIdentifier('non-existent-identifier');
+
+      expect(result).toBeNull();
+    });
+
+    it('should not return groups belonging to other users', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'other-forked-group',
+        userId: otherUserId,
+        title: 'Other User Forked Group',
+        config: { forkedFromIdentifier: 'market-agent-456' },
+      });
+
+      const result = await chatGroupModel.getGroupByForkedFromIdentifier('market-agent-456');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return the most recently updated group when multiple match', async () => {
+      await serverDB.insert(chatGroups).values([
+        {
+          id: 'forked-old',
+          userId,
+          title: 'Old Forked Group',
+          config: { forkedFromIdentifier: 'market-agent-789' },
+          updatedAt: new Date('2024-01-01T10:00:00Z'),
+        },
+        {
+          id: 'forked-new',
+          userId,
+          title: 'New Forked Group',
+          config: { forkedFromIdentifier: 'market-agent-789' },
+          updatedAt: new Date('2024-01-02T10:00:00Z'),
+        },
+      ]);
+
+      const result = await chatGroupModel.getGroupByForkedFromIdentifier('market-agent-789');
+
+      expect(result).toBe('forked-new');
     });
   });
 
@@ -237,7 +295,7 @@ describe('ChatGroupModel', () => {
         allowDM: true,
         revealDM: false,
       });
-      expect(result.id.startsWith('cg_')).toBe(true);
+      expect(result.id.startsWith(CHAT_GROUP_SESSION_ID_PREFIX)).toBe(true);
     });
 
     it('should create group with custom ID', async () => {

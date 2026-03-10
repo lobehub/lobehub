@@ -12,16 +12,19 @@ export interface WorkingModel {
 export interface AgentMemoryChatConfig {
   memory?: {
     effort?: UserMemoryEffort;
+    enabled?: boolean;
     toolPermission?: 'read-only' | 'read-write';
   };
 }
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   autoCreateTopicThreshold: number;
+  codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
+
   /**
    * Disable context caching
    */
@@ -33,7 +36,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
   enableAdaptiveThinking?: boolean;
-
   enableAutoCreateTopic?: boolean;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -71,6 +73,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
    */
@@ -113,6 +116,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
+  thinkingLevel5?: 'minimal' | 'low' | 'medium' | 'high';
   /**
    * Maximum length for tool execution result content (in characters)
    * This prevents context overflow when sending tool results back to LLM
@@ -136,6 +140,7 @@ export const MemoryChatConfigSchema = z.object({
   memory: z
     .object({
       effort: z.enum(['low', 'medium', 'high']).optional(),
+      enabled: z.boolean().optional(),
       toolPermission: z.enum(['read-only', 'read-write']).optional(),
     })
     .optional(),
@@ -144,6 +149,7 @@ export const MemoryChatConfigSchema = z.object({
 export const AgentChatConfigSchema = z
   .object({
     autoCreateTopicThreshold: z.number().default(2),
+    codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -161,6 +167,7 @@ export const AgentChatConfigSchema = z
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
+    grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),
@@ -183,6 +190,7 @@ export const AgentChatConfigSchema = z
     thinkingLevel2: z.enum(['low', 'high']).optional(),
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
+    thinkingLevel5: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     toolResultMaxLength: z.number().default(6000),
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),

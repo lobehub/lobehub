@@ -32,12 +32,14 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
   }
 
   const isSingleLine = (message || '').split('\n').length <= 2;
+  const isToolSingleLine = hasTools && isSingleLine;
 
   return (
     content && (
       <MarkdownMessage
         {...markdownProps}
-        className={cx(hasTools && isSingleLine && styles.pWithTool)}
+        animated={isToolSingleLine ? false : markdownProps.animated}
+        className={cx(isToolSingleLine && styles.pWithTool)}
       >
         {message}
       </MarkdownMessage>

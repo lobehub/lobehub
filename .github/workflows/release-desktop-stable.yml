@@ -236,7 +236,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           npm run desktop:package:app
-          tar -czf apps/desktop/release/lobehub-renderer.tar.gz -C out .
+          test -d apps/desktop/dist/renderer
+          tar -czf apps/desktop/release/lobehub-renderer.tar.gz -C apps/desktop/dist/renderer .
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
@@ -294,7 +295,7 @@ jobs:
           fi
           bun add --no-save yaml@2.8.1
 
-      - name: Merge latest-mac.yml files
+      - name: Merge mac YAML files
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files
@@ -349,16 +350,6 @@ jobs:
   # ============================================
   # 发布到 S3 更新服务器
   # ============================================
-  # S3 目录结构:
-  #   s3://bucket/
-  #     stable/
-  #       stable-mac.yml      ← electron-updater 检查更新 (stable channel)
-  #       stable.yml          ← Windows (stable channel)
-  #       stable-linux.yml    ← Linux (stable channel)
-  #       latest-mac.yml      ← fallback for GitHub provider
-  #       {version}/          ← 版本目录
-  #         *.dmg, *.zip, *.exe, ...
-  # ============================================
   publish-s3:
     needs: [merge-mac-files, check-stable]
     name: Publish to S3
@@ -366,117 +357,13 @@ jobs:
     # 手动触发时可选择跳过
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
     steps:
-      - name: Download merged artifacts
-        uses: actions/download-artifact@v7
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/desktop-publish-s3
         with:
-          name: merged-release
-          path: release
-
-      - name: List artifacts to upload
-        run: |
-          echo "📦 Artifacts to upload to S3:"
-          ls -lah release/
-          echo ""
-          echo "📋 Version: ${{ needs.check-stable.outputs.version }}"
-
-      - name: Upload to S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.UPDATE_S3_REGION || 'us-east-1' }}
-          S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
-          S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
-          VERSION: ${{ needs.check-stable.outputs.version }}
-        run: |
-          if [ -z "$S3_BUCKET" ]; then
-            echo "⚠️ UPDATE_S3_BUCKET is not configured, skipping S3 upload"
-            echo ""
-            echo "To enable S3 upload, configure the following secrets:"
-            echo "  - UPDATE_AWS_ACCESS_KEY_ID"
-            echo "  - UPDATE_AWS_SECRET_ACCESS_KEY"
-            echo "  - UPDATE_S3_BUCKET"
-            echo "  - UPDATE_S3_REGION (optional, defaults to us-east-1)"
-            echo "  - UPDATE_S3_ENDPOINT (optional, for S3-compatible services)"
-            exit 0
-          fi
-
-          # 构建端点参数
-          ENDPOINT_ARG=""
-          if [ -n "$S3_ENDPOINT" ]; then
-            ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
-            echo "📡 Using custom S3 endpoint: $S3_ENDPOINT"
-          fi
-
-          echo "🚀 Uploading to S3 bucket: $S3_BUCKET"
-          echo "📁 Target path: s3://$S3_BUCKET/stable/"
-          echo ""
-
-          # 1. 上传安装包到版本目录
-          echo "📦 Uploading release files to s3://$S3_BUCKET/stable/$VERSION/"
-          for file in release/*.dmg release/*.zip release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.snap release/*.tar.gz; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              echo "   ↗️ $filename"
-              aws s3 cp "$file" "s3://$S3_BUCKET/stable/$VERSION/$filename" $ENDPOINT_ARG
-            fi
-          done
-
-          # 2. 创建 stable*.yml (从 latest*.yml 复制，并修改 URL 加上版本目录前缀)
-          # electron-updater 在 channel=stable 时会找 stable-mac.yml
-          # S3 目录结构: stable/{version}/xxx.dmg，所以 URL 需要加上 {version}/ 前缀
-          echo ""
-          echo "📋 Creating stable*.yml files from latest*.yml..."
-          for yml in release/latest*.yml; do
-            if [ -f "$yml" ]; then
-              stable_name=$(basename "$yml" | sed 's/latest/stable/')
-              # 复制并修改 URL: 给所有 url 字段加上版本目录前缀
-              # url: xxx.dmg -> url: {VERSION}/xxx.dmg
-              sed "s|url: |url: $VERSION/|g" "$yml" > "release/$stable_name"
-              echo "   📄 Created $stable_name from $(basename $yml) with URL prefix: $VERSION/"
-            fi
-          done
-
-          # 3. 创建 renderer manifest (用于验证 renderer tar 完整性)
-          echo ""
-          echo "📋 Creating renderer manifest..."
-          RENDERER_TAR="release/lobehub-renderer.tar.gz"
-          if [ -f "$RENDERER_TAR" ]; then
-            RENDERER_SHA512=$(shasum -a 512 "$RENDERER_TAR" | awk '{print $1}' | xxd -r -p | base64)
-            RENDERER_SIZE=$(stat -f%z "$RENDERER_TAR" 2>/dev/null || stat -c%s "$RENDERER_TAR")
-            RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-            echo "version: $VERSION" > "release/stable-renderer.yml"
-            echo "files:" >> "release/stable-renderer.yml"
-            echo "  - url: $VERSION/lobehub-renderer.tar.gz" >> "release/stable-renderer.yml"
-            echo "    sha512: $RENDERER_SHA512" >> "release/stable-renderer.yml"
-            echo "    size: $RENDERER_SIZE" >> "release/stable-renderer.yml"
-            echo "path: $VERSION/lobehub-renderer.tar.gz" >> "release/stable-renderer.yml"
-            echo "sha512: $RENDERER_SHA512" >> "release/stable-renderer.yml"
-            echo "releaseDate: '$RELEASE_DATE'" >> "release/stable-renderer.yml"
-            echo "   📄 Created stable-renderer.yml with SHA512 checksum"
-          else
-            echo "   ⚠️ Renderer tar not found, skipping manifest creation"
-          fi
-
-          # 4. 上传 manifest 到根目录和版本目录
-          # 根目录: electron-updater 需要，会被每次发版覆盖
-          # 版本目录: 作为存档保留
-          echo ""
-          echo "📋 Uploading manifest files..."
-          for yml in release/stable*.yml release/latest*.yml; do
-            if [ -f "$yml" ]; then
-              filename=$(basename "$yml")
-              echo "   ↗️ $filename -> s3://$S3_BUCKET/stable/$filename"
-              aws s3 cp "$yml" "s3://$S3_BUCKET/stable/$filename" $ENDPOINT_ARG
-              echo "   ↗️ $filename -> s3://$S3_BUCKET/stable/$VERSION/$filename (archive)"
-              aws s3 cp "$yml" "s3://$S3_BUCKET/stable/$VERSION/$filename" $ENDPOINT_ARG
-            fi
-          done
-
-          echo ""
-          echo "✅ S3 upload completed!"
-          echo ""
-          echo "📋 Files in s3://$S3_BUCKET/stable/:"
-          aws s3 ls "s3://$S3_BUCKET/stable/" $ENDPOINT_ARG || true
-          echo ""
-          echo "📋 Files in s3://$S3_BUCKET/stable/$VERSION/:"
-          aws s3 ls "s3://$S3_BUCKET/stable/$VERSION/" $ENDPOINT_ARG || true
+          channel: stable
+          version: ${{ needs.check-stable.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}

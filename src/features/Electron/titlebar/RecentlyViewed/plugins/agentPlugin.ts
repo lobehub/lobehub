@@ -1,5 +1,7 @@
 import { MessageSquare } from 'lucide-react';
 
+import { useChatStore } from '@/store/chat';
+
 import { type AgentParams, type PageReference, type ResolvedPageData } from '../types';
 import { type PluginContext, type RecentlyViewedPlugin } from './types';
 import { createPageReference } from './types';
@@ -26,6 +28,10 @@ export const agentPlugin: RecentlyViewedPlugin<'agent'> = {
   matchUrl(pathname: string, searchParams: URLSearchParams): boolean {
     // Match /agent/:id but NOT when there's a topic param
     return AGENT_PATH_REGEX.test(pathname) && !searchParams.has('topic');
+  },
+
+  onActivate() {
+    useChatStore.getState().switchTopic(null);
   },
 
   parseUrl(pathname: string, _searchParams: URLSearchParams): PageReference<'agent'> | null {

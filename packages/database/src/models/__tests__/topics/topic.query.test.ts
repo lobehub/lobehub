@@ -187,6 +187,26 @@ describe('TopicModel - Query', () => {
       expect(result2).toHaveLength(1);
       expect(result2[0].id).toBe('topic1');
     });
+
+    it('should exclude topics with specified triggers via excludeTriggers', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'normal-topic', sessionId, userId, title: 'Normal' },
+        { id: 'cron-topic', sessionId, userId, title: 'Cron', trigger: 'cron' },
+        { id: 'null-trigger', sessionId, userId, title: 'Null Trigger' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        excludeTriggers: ['cron'],
+      });
+
+      // Should return topics with null trigger or triggers not in the exclude list
+      expect(result.items).toHaveLength(2);
+      const ids = result.items.map((t) => t.id);
+      expect(ids).toContain('normal-topic');
+      expect(ids).toContain('null-trigger');
+      expect(ids).not.toContain('cron-topic');
+    });
   });
 
   describe('query with agentId filter', () => {
@@ -1359,6 +1379,87 @@ describe('TopicModel - Query', () => {
       });
 
       expect(rows.map((t) => t.id)).toEqual(['cursor-topic-z', 'after-1', 'after-2']);
+    });
+  });
+
+  describe('getCronTopicsGroupedByCronJob', () => {
+    it('should return cron topics grouped by cronJobId', async () => {
+      const agentId = 'cron-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB.insert(agentsToSessions).values({ agentId, sessionId: session.id, userId });
+
+      await serverDB.insert(topics).values([
+        {
+          id: 'cron-topic-1',
+          userId,
+          sessionId: session.id,
+          agentId,
+          trigger: 'cron',
+          title: 'Cron Topic 1',
+          metadata: { cronJobId: 'job-a' },
+        },
+        {
+          id: 'cron-topic-2',
+          userId,
+          sessionId: session.id,
+          agentId,
+          trigger: 'cron',
+          title: 'Cron Topic 2',
+          metadata: { cronJobId: 'job-a' },
+        },
+        {
+          id: 'cron-topic-3',
+          userId,
+          sessionId: session.id,
+          agentId,
+          trigger: 'cron',
+          title: 'Cron Topic 3',
+          metadata: { cronJobId: 'job-b' },
+        },
+      ]);
+
+      const result = await topicModel.getCronTopicsGroupedByCronJob(agentId);
+
+      expect(result).toHaveLength(2);
+      const jobA = result.find((g) => g.cronJobId === 'job-a');
+      const jobB = result.find((g) => g.cronJobId === 'job-b');
+      expect(jobA?.topics).toHaveLength(2);
+      expect(jobB?.topics).toHaveLength(1);
+    });
+
+    it('should return empty array when no cron topics exist', async () => {
+      const agentId = 'no-cron-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+
+      const result = await topicModel.getCronTopicsGroupedByCronJob(agentId);
+      expect(result).toEqual([]);
+    });
+
+    it('should not return topics without cronJobId in metadata', async () => {
+      const agentId = 'cron-agent-no-meta';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB.insert(agentsToSessions).values({ agentId, sessionId: session.id, userId });
+
+      await serverDB.insert(topics).values({
+        id: 'cron-no-meta',
+        userId,
+        sessionId: session.id,
+        agentId,
+        trigger: 'cron',
+        title: 'No Meta',
+        metadata: {},
+      });
+
+      const result = await topicModel.getCronTopicsGroupedByCronJob(agentId);
+      expect(result).toEqual([]);
     });
   });
 });

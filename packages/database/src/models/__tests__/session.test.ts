@@ -262,6 +262,25 @@ describe('SessionModel', () => {
       // 断言结果
       expect(result).toBe(0);
     });
+
+    it('should count sessions with date range filter', async () => {
+      await serverDB.insert(sessions).values([
+        { id: 's1', userId, createdAt: new Date('2024-01-01') },
+        { id: 's2', userId, createdAt: new Date('2024-06-01') },
+        { id: 's3', userId, createdAt: new Date('2024-12-01') },
+      ]);
+
+      const rangeResult = await sessionModel.count({
+        range: ['2024-03-01', '2024-09-01'],
+      });
+      expect(rangeResult).toBe(1);
+
+      const startResult = await sessionModel.count({ startDate: '2024-05-01' });
+      expect(startResult).toBe(2);
+
+      const endResult = await sessionModel.count({ endDate: '2024-07-01' });
+      expect(endResult).toBe(2);
+    });
   });
 
   describe('queryByKeyword', () => {
@@ -1131,6 +1150,109 @@ describe('SessionModel', () => {
       expect(result3).toBeUndefined();
     });
 
+    it('should clean out undefined values from params during final cleanup', async () => {
+      // This test covers the final cleanup logic that removes undefined values from params
+      const sessionId = 'test-session-cleanup-undefined';
+      const agentId = 'test-agent-cleanup-undefined';
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({
+          id: sessionId,
+          userId,
+          type: 'agent',
+        });
+
+        await trx.insert(agents).values({
+          id: agentId,
+          userId,
+          model: 'gpt-3.5-turbo',
+          title: 'Test Agent',
+          params: {
+            temperature: 0.7,
+            top_p: 1,
+            presence_penalty: 0,
+          },
+        });
+
+        await trx.insert(agentsToSessions).values({
+          sessionId,
+          agentId,
+          userId,
+        });
+      });
+
+      // Update with some params set to undefined (delete them) and some set to new values
+      await sessionModel.updateConfig(sessionId, {
+        params: {
+          temperature: undefined,
+          presence_penalty: undefined,
+          top_p: 0.9,
+        },
+      });
+
+      // Verify: temperature and presence_penalty should be removed, top_p updated
+      const updatedAgent = await serverDB
+        .select()
+        .from(agents)
+        .where(and(eq(agents.id, agentId), eq(agents.userId, userId)));
+
+      expect(updatedAgent[0].params).toEqual({ top_p: 0.9 });
+      expect(updatedAgent[0].params).not.toHaveProperty('temperature');
+      expect(updatedAgent[0].params).not.toHaveProperty('presence_penalty');
+    });
+
+    it('should set params to undefined when all param values are removed', async () => {
+      // This test covers the branch where after cleanup, params object becomes empty
+      // and mergedValue.params is set to undefined.
+      // Note: when mergedValue.params is undefined, drizzle ORM does not update the column,
+      // so the database retains the original params value.
+      const sessionId = 'test-session-all-params-removed';
+      const agentId = 'test-agent-all-params-removed';
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({
+          id: sessionId,
+          userId,
+          type: 'agent',
+        });
+
+        await trx.insert(agents).values({
+          id: agentId,
+          userId,
+          model: 'gpt-3.5-turbo',
+          title: 'Test Agent',
+          params: {
+            temperature: 0.7,
+            top_p: 1,
+          },
+        });
+
+        await trx.insert(agentsToSessions).values({
+          sessionId,
+          agentId,
+          userId,
+        });
+      });
+
+      // Delete ALL params by setting them to undefined
+      await sessionModel.updateConfig(sessionId, {
+        params: {
+          temperature: undefined,
+          top_p: undefined,
+        },
+      });
+
+      // When all params are removed, mergedValue.params is set to undefined.
+      // Drizzle ORM skips undefined fields in .set(), so the DB column is not modified.
+      // The original params value is retained.
+      const updatedAgent = await serverDB
+        .select()
+        .from(agents)
+        .where(and(eq(agents.id, agentId), eq(agents.userId, userId)));
+
+      expect(updatedAgent[0].params).toEqual({ temperature: 0.7, top_p: 1 });
+    });
+
     it('should not update config for other users sessions', async () => {
       // Create agent for another user
       const sessionId = 'other-session';
@@ -1281,6 +1403,37 @@ describe('SessionModel', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('1'); // Most topics (2)
       expect(result[1].id).toBe('2'); // Second most topics (1)
+    });
+
+    it('should include inbox topics in ranking when topics have no sessionId', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: '1', userId }]);
+        await trx
+          .insert(agents)
+          .values([{ id: 'a1', userId, title: 'Agent 1', avatar: 'av1', backgroundColor: 'bg1' }]);
+        await trx.insert(agentsToSessions).values([{ sessionId: '1', agentId: 'a1', userId }]);
+
+        // Create topics: 1 for session, 3 for inbox (no sessionId)
+        await trx.insert(topics).values([
+          { id: 'inbox-t1', userId, sessionId: null },
+          { id: 'inbox-t2', userId, sessionId: null },
+          { id: 'inbox-t3', userId, sessionId: null },
+          { id: 'session-t1', sessionId: '1', userId },
+        ]);
+      });
+
+      const result = await sessionModel.rank();
+
+      // Should include both inbox and session entries
+      expect(result.length).toBeGreaterThanOrEqual(2);
+      // Inbox should have 3 topics and be ranked first
+      const inboxEntry = result.find((r) => r.id === 'inbox');
+      expect(inboxEntry).toBeDefined();
+      expect(inboxEntry?.count).toBe(3);
+      // Session should have 1 topic
+      const sessionEntry = result.find((r) => r.id === '1');
+      expect(sessionEntry).toBeDefined();
+      expect(sessionEntry?.count).toBe(1);
     });
 
     it('should handle sessions with no topics', async () => {

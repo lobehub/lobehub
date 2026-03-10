@@ -1,10 +1,10 @@
 # @lobechat/web-crawler
 
-LobeChat 内置的网页抓取模块，用于智能提取网页内容并转换为 Markdown 格式。
+LobeHub 内置的网页抓取模块，用于智能提取网页内容并转换为 Markdown 格式。
 
 ## 📝 简介
 
-`@lobechat/web-crawler` 是 LobeChat 的核心组件，负责网页内容的智能抓取与处理。它能够从各类网页中提取有价值的内容，过滤掉干扰元素，并生成结构化的 Markdown 文本。
+`@lobechat/web-crawler` 是 LobeHub 的核心组件，负责网页内容的智能抓取与处理。它能够从各类网页中提取有价值的内容，过滤掉干扰元素，并生成结构化的 Markdown 文本。
 
 ## 🛠️ 核心功能
 
@@ -48,7 +48,7 @@ const url = [
 
 ### 规则提交流程
 
-1. Fork [LobeChat 仓库](https://github.com/lobehub/lobe-chat)
+1. Fork [LobeHub 仓库](https://github.com/lobehub/lobe-chat)
 2. 添加或修改 URL 规则
 3. 提交 Pull Request 并描述：
 
@@ -58,4 +58,4 @@ const url = [
 
 ## 📌 注意事项
 
-这是 LobeHub 的内部模块（`"private": true`），专为 LobeChat 设计，不作为独立包发布使用。
+这是 LobeHub 的内部模块（`"private": true`），专为 LobeHub 设计，不作为独立包发布使用。

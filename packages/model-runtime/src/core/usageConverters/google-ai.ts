@@ -25,6 +25,9 @@ export const convertGoogleAIUsage = (
     candidatesDetails?.reduce((sum, detail) => sum + (detail?.tokenCount ?? 0), 0) ??
     0;
 
+  // toolUsePromptTokenCount represents tokens consumed for tool call prompts (input side)
+  const toolUseTokens = usage.toolUsePromptTokenCount;
+
   const outputImageTokens = getTokenCount(candidatesDetails, MediaModality.IMAGE) ?? 0;
   const textTokensFromDetails = getTokenCount(candidatesDetails, MediaModality.TEXT);
   const outputTextTokens =
@@ -39,10 +42,13 @@ export const convertGoogleAIUsage = (
     inputCachedTokens: usage.cachedContentTokenCount,
     inputImageTokens: getTokenCount(usage.promptTokensDetails, MediaModality.IMAGE),
     inputTextTokens: getTokenCount(usage.promptTokensDetails, MediaModality.TEXT),
+    inputToolTokens: toolUseTokens,
     outputImageTokens,
     outputReasoningTokens: reasoningTokens,
     outputTextTokens,
-    totalInputTokens: usage.promptTokenCount,
+    totalInputTokens: toolUseTokens
+      ? (usage.promptTokenCount ?? 0) + toolUseTokens
+      : usage.promptTokenCount,
     totalOutputTokens,
     totalTokens: usage.totalTokenCount,
   } satisfies ModelUsage;

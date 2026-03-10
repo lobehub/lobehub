@@ -135,6 +135,40 @@ describe('GenerationTopicModel', () => {
       expect(mockGetFullFileUrl).toHaveBeenCalledTimes(1);
     });
 
+    it('should filter topics by type when type parameter is provided', async () => {
+      await serverDB.insert(generationTopics).values([
+        {
+          id: 'image-topic',
+          userId,
+          title: 'Image Topic',
+          type: 'image',
+        },
+        {
+          id: 'video-topic',
+          userId,
+          title: 'Video Topic',
+          type: 'video',
+        },
+        {
+          id: 'image-topic-2',
+          userId,
+          title: 'Image Topic 2',
+          type: 'image',
+        },
+      ]);
+
+      const imageResult = await generationTopicModel.queryAll('image');
+
+      expect(imageResult).toHaveLength(2);
+      expect(imageResult.every((topic) => topic.type === 'image')).toBe(true);
+
+      const videoResult = await generationTopicModel.queryAll('video');
+
+      expect(videoResult).toHaveLength(1);
+      expect(videoResult[0].type).toBe('video');
+      expect(videoResult[0].id).toBe('video-topic');
+    });
+
     it('should return empty array if no topics exist', async () => {
       const result = await generationTopicModel.queryAll();
       expect(result).toHaveLength(0);
@@ -280,6 +314,55 @@ describe('GenerationTopicModel', () => {
 
       // Should return undefined because topic doesn't exist with this invalid ID
       expect(result).toBeUndefined();
+    });
+
+    it('should collect coverUrl from video generation assets when deleting topic', async () => {
+      const { id: topicId } = await generationTopicModel.create('Topic with video generations');
+
+      // Create a generation batch associated with this topic
+      const [batch] = await serverDB
+        .insert(generationBatches)
+        .values({
+          userId,
+          generationTopicId: topicId,
+          provider: 'test-provider',
+          model: 'test-model',
+          prompt: 'Test video generation',
+          width: 1280,
+          height: 720,
+        })
+        .returning();
+
+      // Create a video generation with coverUrl in the asset
+      await serverDB.insert(generations).values([
+        {
+          userId,
+          generationBatchId: batch.id,
+          asyncTaskId: null,
+          fileId: null,
+          seed: 99999,
+          asset: {
+            type: 'video',
+            url: 'video-file.mp4',
+            thumbnailUrl: 'video-thumb.jpg',
+            coverUrl: 'video-cover.jpg',
+            width: 1280,
+            height: 720,
+            duration: 5,
+          },
+        },
+      ]);
+
+      const result = await generationTopicModel.delete(topicId);
+
+      expect(result).toBeDefined();
+      const deleteResult = result!;
+
+      // Should collect url, thumbnailUrl, AND coverUrl from the video asset
+      expect(deleteResult.filesToDelete).toContain('video-file.mp4');
+      expect(deleteResult.filesToDelete).toContain('video-thumb.jpg');
+      expect(deleteResult.filesToDelete).toContain('video-cover.jpg');
+      expect(deleteResult.filesToDelete).toHaveLength(3);
     });
 
     it('should collect file URLs from batches and generations when deleting topic with data', async () => {

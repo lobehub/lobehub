@@ -121,7 +121,7 @@ const ToolTitle = memo<ToolTitleProps>(
             <span className={styles.paramKey}>{' ('}</span>
             {params.map(([key, value], index) => (
               <span key={key}>
-                <span className={styles.paramKey}>{key}: </span>
+                <span className={styles.paramKey}>{key}:</span>
                 <span className={styles.paramValue}>{formatParamValue(value)}</span>
                 {index < params.length - 1 && <span className={styles.paramKey}>, </span>}
               </span>

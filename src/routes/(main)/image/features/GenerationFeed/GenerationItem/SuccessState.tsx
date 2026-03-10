@@ -10,7 +10,7 @@ import { styles } from './styles';
 import { type SuccessStateProps } from './types';
 import { getThumbnailMaxWidth } from './utils';
 
-// 成功状态组件
+// Success state component
 export const SuccessState = memo<SuccessStateProps>(
   ({
     generation,
@@ -35,12 +35,12 @@ export const SuccessState = memo<SuccessStateProps>(
       >
         <ImageItem
           alt={prompt}
-          preview={{
-            src: generation.asset!.url,
-          }}
           style={{ height: '100%', width: '100%' }}
           // Thumbnail quality is too bad
           url={generation.asset!.url}
+          preview={{
+            src: generation.asset!.url,
+          }}
         />
         <ActionButtons
           showDownload

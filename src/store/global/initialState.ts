@@ -38,8 +38,10 @@ export enum GroupSettingsTabs {
 
 export enum SettingsTabs {
   About = 'about',
+  Advanced = 'advanced',
   Agent = 'agent',
   APIKey = 'apikey',
+  Beta = 'beta',
   Billing = 'billing',
   ChatAppearance = 'chat-appearance',
   Common = 'common',

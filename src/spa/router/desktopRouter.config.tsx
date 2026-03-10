@@ -1,14 +1,15 @@
 'use client';
 
+import { type RouteObject } from 'react-router-dom';
+
 import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
-import { type RouteConfig } from '@/utils/router';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 // Desktop router configuration (declarative mode)
-export const desktopRoutes: RouteConfig[] = [
+export const desktopRoutes: RouteObject[] = [
   {
     children: [
       // Chat routes (agent)
@@ -40,10 +41,10 @@ export const desktopRoutes: RouteConfig[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/agent/integration'),
-                  'Desktop > Chat > Integration',
+                  () => import('@/routes/(main)/agent/channel'),
+                  'Desktop > Chat > Channel',
                 ),
-                path: 'integration',
+                path: 'channel',
               },
             ],
             element: dynamicLayout(

@@ -407,6 +407,54 @@ describe('GenerationBatchModel', () => {
       });
     });
 
+    it('should transform config endImageUrl through FileService', async () => {
+      const [createdBatch] = await serverDB
+        .insert(generationBatches)
+        .values({
+          ...testBatch,
+          userId,
+          config: { endImageUrl: 'end-frame.jpg', prompt: 'test video prompt' },
+        })
+        .returning();
+
+      const results = await generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(
+        testTopic.id,
+      );
+
+      expect(results[0].config).toEqual({
+        endImageUrl: 'https://example.com/end-frame.jpg',
+        prompt: 'test video prompt',
+      });
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('end-frame.jpg');
+    });
+
+    it('should transform config with both imageUrl and endImageUrl through FileService', async () => {
+      const [createdBatch] = await serverDB
+        .insert(generationBatches)
+        .values({
+          ...testBatch,
+          userId,
+          config: {
+            imageUrl: 'start-frame.jpg',
+            endImageUrl: 'end-frame.jpg',
+            prompt: 'test video prompt',
+          },
+        })
+        .returning();
+
+      const results = await generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(
+        testTopic.id,
+      );
+
+      expect(results[0].config).toEqual({
+        imageUrl: 'https://example.com/start-frame.jpg',
+        endImageUrl: 'https://example.com/end-frame.jpg',
+        prompt: 'test video prompt',
+      });
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('start-frame.jpg');
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('end-frame.jpg');
+    });
+
     it('should handle config without imageUrls', async () => {
       const [createdBatch] = await serverDB
         .insert(generationBatches)

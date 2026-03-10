@@ -2,7 +2,7 @@ import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
-import { StraicoChatModel, StraicoModelsResponse } from './type';
+import type { StraicoChatModel, StraicoModelsResponse } from './type';
 
 const formatPrice = (pricing?: { coins?: number; words?: number }) => {
   if (!pricing || typeof pricing.coins !== 'number' || typeof pricing.words !== 'number') {
@@ -27,7 +27,7 @@ export const LobeStraicoAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.straico.com/v0',
   chatCompletion: {
     handlePayload: (payload) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars, unused-imports/no-unused-vars
+       
       const { model, ...rest } = payload;
 
       return {

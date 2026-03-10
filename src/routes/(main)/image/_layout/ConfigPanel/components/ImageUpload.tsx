@@ -12,6 +12,7 @@ import Image from '@/libs/next/Image';
 import { useDragAndDrop } from '@/routes/(main)/image/_layout/ConfigPanel/hooks/useDragAndDrop';
 import { useUploadFilesValidation } from '@/routes/(main)/image/_layout/ConfigPanel/hooks/useUploadFilesValidation';
 import { configPanelStyles } from '@/routes/(main)/image/_layout/ConfigPanel/style';
+import { type ImageConstraints } from '@/routes/(main)/image/_layout/ConfigPanel/utils/imageValidation';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
 
@@ -20,6 +21,8 @@ import { type FileUploadStatus } from '@/types/files/upload';
 export interface ImageUploadProps {
   // Callback when URL changes - supports both old API (string) and new API (object with dimensions)
   className?: string; // Image URL
+  /** Image dimension constraints with optional min/max for width and height */
+  imageConstraints?: ImageConstraints;
   maxFileSize?: number;
   onChange?: (
     data?:
@@ -426,13 +429,17 @@ SuccessDisplay.displayName = 'SuccessDisplay';
 // ======== Main Component ======== //
 
 const ImageUpload: FC<ImageUploadProps> = memo(
-  ({ value, onChange, style, className, maxFileSize, placeholderHeight }) => {
+  ({ value, onChange, style, className, maxFileSize, imageConstraints, placeholderHeight }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const [uploadState, setUploadState] = useState<UploadState | null>(null);
     const { t } = useTranslation('components');
     const { message } = App.useApp();
-    const { validateFiles } = useUploadFilesValidation(undefined, maxFileSize);
+    const { validateFiles, validateDimensions } = useUploadFilesValidation(
+      undefined,
+      maxFileSize,
+      imageConstraints,
+    );
 
     // Cleanup blob URLs to prevent memory leaks
     useEffect(() => {
@@ -453,6 +460,9 @@ const ImageUpload: FC<ImageUploadProps> = memo(
 
       // Validate file using unified validation hook
       if (!validateFiles([file])) return;
+
+      // Validate image dimensions
+      if (!(await validateDimensions(file))) return;
 
       // Create preview URL
       const previewUrl = URL.createObjectURL(file);
@@ -537,6 +547,9 @@ const ImageUpload: FC<ImageUploadProps> = memo(
 
       // Validate file using unified validation hook
       if (!validateFiles([file])) return;
+
+      // Validate image dimensions
+      if (!(await validateDimensions(file))) return;
 
       // Create preview URL
       const previewUrl = URL.createObjectURL(file);

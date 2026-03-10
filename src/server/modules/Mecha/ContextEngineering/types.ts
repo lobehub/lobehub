@@ -61,6 +61,10 @@ export interface ServerUserMemoryConfig {
  * instead of fetching from stores
  */
 export interface ServerMessagesEngineParams {
+  /** Additional variable values to merge with defaults (e.g. device paths) */
+  additionalVariables?: Record<string, string>;
+  /** User's timezone for time-related variables (e.g. 'Asia/Shanghai') */
+  userTimezone?: string;
   // ========== Extended contexts ==========
   /** Agent Builder context (optional, for editing agents) */
   agentBuilderContext?: AgentBuilderContext;

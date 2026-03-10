@@ -186,6 +186,18 @@ The script supports the following deployment modes; please choose the appropriat
   - Choose the access protocol: `http` or `https`
   - Regenerate secure keys: We highly recommend regenerating the secure keys; if you lack the key generation library required by the script, we suggest referring to the [Custom Deployment](#custom-deployment) section for key modifications.
 
+  <Callout type="tip">
+    **Single Domain Deployment**
+    If you only have one domain, you can distinguish services by different ports:
+    - Domain setup for the LobeHub service: `lobe.example.com:${PORT1}`
+    - Domain setup for the S3 service: `lobe.example.com:${PORT2}`
+    You need to configure forwarding rules for each port in the reverse proxy.
+
+    **Port Mode vs Domain Mode:**
+    - Port Mode: The script automatically uses default ports (3210/9000/9001)
+    - Domain Mode: You can customize ports (via reverse proxy configuration)
+  </Callout>
+
   <Callout type="warning">
     The following issues may impede access to your service:
 
@@ -250,11 +262,6 @@ curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/
 mv .env.example .env
 ```
 
-<Callout type="info">
-  This section does not cover all complete variables; remaining variables can be referenced in
-  [Deploying with the Server Database](/en/docs/self-hosting/server-database).
-</Callout>
-
 ### Prerequisites
 
 Generally, to fully run the LobeHub database version, you will need at least the following three services:
@@ -279,6 +286,10 @@ Now, we will introduce the necessary configurations for running these services:
 1. S3 Object Storage
 
 LobeHub needs to provide a public access URL for object files for the LLM service provider, so you need to configure the S3 Endpoint:
+
+<Callout type="tip">
+  Using `S3_ENDPOINT=http://rustfs:9000` directly will prevent conversation image uploads from working (browser cannot resolve container names), but avatar uploads are not affected.
+</Callout>
 
 ```env
 S3_ENDPOINT=https://s3.example.com
@@ -345,8 +356,163 @@ If `INTERNAL_APP_URL` is not set, it defaults to `APP_URL`.
 - `http://127.0.0.1:3210` - Alternative localhost address
 
 <Callout type="tip">
-  For Docker Compose deployments with `network_mode: 'service:network-service'`, use `http://localhost:3210` as the `INTERNAL_APP_URL`.
+  For Docker Compose deployments, we recommend using `http://lobe:3210` as the `INTERNAL_APP_URL` (using service name for container-to-container communication).
 </Callout>
+
+## Reverse Proxy Configuration
+
+For production deployments with a custom domain and HTTPS, configure a reverse proxy in front of LobeHub.
+
+**Nginx:**
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name lobehub.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:3210;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**Caddy** (automatically handles HTTPS with Let's Encrypt):
+
+```caddyfile
+lobehub.example.com {
+    reverse_proxy localhost:3210
+}
+```
+
+**Traefik** — add labels to the `lobe` service in `docker-compose.yml`:
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.lobehub.rule=Host(`lobehub.example.com`)"
+  - "traefik.http.routers.lobehub.entrypoints=websecure"
+  - "traefik.http.routers.lobehub.tls.certresolver=letsencrypt"
+```
+
+## Management Commands
+
+```sh
+# View logs (all services)
+docker compose logs -f
+
+# View logs for a specific service
+docker compose logs -f lobehub
+
+# Restart all services
+docker compose restart
+
+# Restart a specific service
+docker compose restart lobehub
+
+# Stop all services
+docker compose stop
+
+# Update to the latest version
+docker compose pull && docker compose up -d
+```
+
+## Backup and Restore
+
+**Database backup:**
+
+```sh
+docker compose exec postgresql pg_dump -U postgres lobechat > backup.sql
+```
+
+Restore from backup:
+
+```sh
+docker compose exec -T postgresql psql -U postgres lobechat < backup.sql
+```
+
+**File storage (RustFS) backup:**
+
+```sh
+docker compose exec rustfs tar czf /tmp/backup.tar.gz /data
+docker cp lobe-rustfs:/tmp/backup.tar.gz ./rustfs-backup.tar.gz
+```
+
+**Redis** — Redis automatically persists data with AOF. To manually save:
+
+```sh
+docker compose exec redis redis-cli BGSAVE
+```
+
+## Resource Requirements
+
+**Minimum (light usage):**
+
+- CPU: 2 cores
+- RAM: 4 GB
+- Storage: 20 GB
+
+**Recommended (production):**
+
+- CPU: 4+ cores
+- RAM: 8+ GB
+- Storage: 50+ GB (depending on file uploads)
+
+For high-traffic deployments, consider using managed database (Neon, Supabase, RDS), Redis cluster for caching, and a CDN for static assets.
+
+## Troubleshooting
+
+**Service won't start**
+
+Check service status and logs:
+
+```sh
+docker compose ps
+docker compose logs [service-name]
+```
+
+Common causes: port already in use (change `LOBE_PORT` in `.env`), insufficient disk space, or database connection failure.
+
+**Database connection error**
+
+Verify PostgreSQL is healthy:
+
+```sh
+docker compose exec postgresql pg_isready -U postgres
+```
+
+If unhealthy, check its logs: `docker compose logs postgresql`
+
+**File upload fails**
+
+Check RustFS service:
+
+```sh
+docker compose logs rustfs
+docker compose logs rustfs-init
+```
+
+Verify the bucket was created: `docker compose exec rustfs ls /data/lobe`
+
+**Running out of disk space**
+
+Check usage: `docker system df`
+
+Clean up unused resources (make sure to back up first):
+
+```sh
+docker system prune -a --volumes
+```
 
 ## Configuring Authentication
 

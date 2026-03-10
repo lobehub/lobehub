@@ -58,7 +58,7 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
       '~test-utils': resolve(__dirname, './tests/utils.tsx'),
       'lru_map': resolve(__dirname, './tests/mocks/lru_map'),
-      /* eslint-enable */
+
     },
     coverage: {
       all: false,
@@ -90,6 +90,7 @@ export default defineConfig({
       '**/public/**',
       '**/apps/desktop/**',
       '**/apps/mobile/**',
+      '**/apps/cli/**',
       '**/packages/**',
       '**/e2e/**',
     ],

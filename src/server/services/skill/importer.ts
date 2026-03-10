@@ -280,7 +280,10 @@ export class SkillImporter {
    * @param input - URL to SKILL.md file
    * @returns SkillImportResult with status: 'created' | 'updated' | 'unchanged'
    */
-  async importFromUrl(input: ImportUrlInput): Promise<SkillImportResult> {
+  async importFromUrl(
+    input: ImportUrlInput,
+    options?: { identifier?: string; source?: 'market' | 'user' },
+  ): Promise<SkillImportResult> {
     log('importFromUrl: starting with url=%s', input.url);
 
     // 1. Validate URL
@@ -368,7 +371,7 @@ export class SkillImporter {
       .replace(/^\//, '') // Remove leading slash
       .replace(/\.md$/i, '') // Remove .md extension
       .replaceAll('/', '.'); // Replace slashes with dots
-    const identifier = `url.${url.host}.${pathPart || 'skill'}`;
+    const identifier = options?.identifier || `url.${url.host}.${pathPart || 'skill'}`;
     log('importFromUrl: identifier=%s', identifier);
 
     // 5. Check for existing skill
@@ -446,7 +449,7 @@ export class SkillImporter {
       manifest: fullManifest,
       name: manifest.name,
       ...(resourceMap && { resources: resourceMap }),
-      source: 'market', // URL source marked as market
+      source: options?.source || 'market', // URL source defaults to market
       ...(zipFileHash && { zipFileHash }),
     });
     log('importFromUrl: created skill id=%s', skill.id);

@@ -29,6 +29,7 @@ export class PluginSliceActionImpl {
 
   togglePlugin = async (id: string, open?: boolean): Promise<void> => {
     const originConfig = agentSelectors.currentAgentConfig(this.#get());
+    if (!originConfig) return;
 
     const config = produce(originConfig, (draft) => {
       draft.plugins = produce(draft.plugins || [], (plugins) => {

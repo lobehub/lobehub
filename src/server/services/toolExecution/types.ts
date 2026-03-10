@@ -3,6 +3,8 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
 
 export interface ToolExecutionContext {
+  /** Target device ID for device proxy tool calls */
+  activeDeviceId?: string;
   /** Memory tool permission from agent chat config */
   memoryToolPermission?: 'read-only' | 'read-write';
   /** Server database for LobeHub Skills execution */

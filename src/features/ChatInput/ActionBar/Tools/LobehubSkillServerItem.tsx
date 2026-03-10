@@ -195,7 +195,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   }, [provider, cleanup, checkStatus, togglePlugin, effectiveAgentId]);
 
   const handleConnect = async () => {
-    // 只有已连接状态才阻止重新连接
+    // Only block reconnection when already connected
     if (server?.isConnected) return;
 
     setIsConnecting(true);

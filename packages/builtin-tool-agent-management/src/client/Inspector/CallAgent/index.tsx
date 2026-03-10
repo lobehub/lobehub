@@ -56,10 +56,10 @@ export const CallAgentInspector = memo<BuiltinInspectorProps<CallAgentParams>>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
         gap={8}
-        horizontal
       >
         <span className={styles.title}>{t(titleKey)}</span>
         {agentMeta && (

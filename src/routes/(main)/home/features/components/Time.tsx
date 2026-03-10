@@ -1,9 +1,6 @@
 import { Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
-
-dayjs.extend(relativeTime);
 
 export const Time = memo<{ date: string | number | Date }>(({ date }) => {
   return (

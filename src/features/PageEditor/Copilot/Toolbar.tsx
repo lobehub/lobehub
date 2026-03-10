@@ -4,6 +4,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
@@ -11,13 +12,10 @@ import { useGlobalStore } from '@/store/global';
 
 import TopicItem from './TopicSelector/TopicItem';
 
-interface CopilotToolbarProps {
-  agentId: string;
-}
-
-const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId }) => {
+const CopilotToolbar = memo(() => {
   const { t } = useTranslation('topic');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
+  const agentId = useConversationStore(conversationSelectors.agentId);
 
   useChatStore((s) => s.useFetchTopics)(true, { agentId });
 

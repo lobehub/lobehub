@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 import { z } from 'zod';
 
 import type { GroundingSearch } from '../../search';

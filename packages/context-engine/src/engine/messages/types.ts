@@ -116,11 +116,18 @@ export interface UserMemoryActivityItem {
 }
 
 export interface UserMemoryIdentityItem {
+  capturedAt?: string | Date | null;
   description?: string | null;
   id?: string;
   role?: string | null;
   /** Identity type: personal (role), professional (occupation), demographic (attribute) */
   type?: 'demographic' | 'personal' | 'professional' | string | null;
+  [key: string]: unknown;
+}
+
+export interface UserMemoryPersonaItem {
+  narrative?: string | null;
+  tagline?: string | null;
   [key: string]: unknown;
 }
 
@@ -133,6 +140,7 @@ export interface UserMemoryData {
   contexts: UserMemoryContextItem[];
   experiences: UserMemoryExperienceItem[];
   identities?: UserMemoryIdentityItem[];
+  persona?: UserMemoryPersonaItem;
   preferences: UserMemoryPreferenceItem[];
 }
 
@@ -199,6 +207,8 @@ export interface MessagesEngineParams {
   // ========== System date ==========
   /** Whether to inject current date into system message (default: true) */
   enableSystemDate?: boolean;
+  /** User timezone for system date formatting (e.g. 'Asia/Shanghai') */
+  timezone?: string | null;
 
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */

@@ -58,3 +58,27 @@ You can achieve various feature combinations using the above configuration synta
 | `commercial_hide_docs`    | Hides documentation and help menu including changelog, docs, and feedback (requires commercial license). | Disabled      |
 
 You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/main/src/config/featureFlags/schema.ts) to get the latest list of feature flags.
+
+## Standalone Feature Enable/Disable Variables
+
+In addition to the `FEATURE_FLAGS` system above, LobeHub provides dedicated environment variables to enable or disable specific features that depend on external infrastructure. These are standalone variables (not part of `FEATURE_FLAGS`):
+
+| Environment Variable     | Default | Description                                                      | Requires                 |
+| ------------------------ | ------- | ---------------------------------------------------------------- | ------------------------ |
+| `ENABLED_ARTIFACTS`      | `1`     | Enable the Artifacts panel (Claude-style code/SVG/React preview) | —                        |
+| `ENABLED_MCP`            | `1`     | Enable the Model Context Protocol plugin system                  | —                        |
+| `ENABLED_UPLOAD`         | `1`     | Enable file upload functionality                                 | S3-compatible storage    |
+| `ENABLED_KNOWLEDGE_BASE` | `1`     | Enable Knowledge Base and RAG features                           | S3 storage + PostgreSQL  |
+| `ENABLED_WEB_SEARCH`     | `1`     | Enable web search integration (online search)                    | Searxng or search plugin |
+
+Set to `0` to disable. For example, to disable file upload if you haven't configured S3:
+
+```bash
+ENABLED_UPLOAD=0
+ENABLED_KNOWLEDGE_BASE=0
+```
+
+<Callout type={'info'}>
+  `ENABLED_UPLOAD` and `ENABLED_KNOWLEDGE_BASE` should be disabled if you haven't configured
+  S3-compatible storage, as file operations will fail without it.
+</Callout>

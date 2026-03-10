@@ -1,17 +1,24 @@
-import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  type DeviceAttachment,
+  generateSystemPrompt,
+  RemoteDeviceManifest,
+} from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import { type LobeToolManifest } from '@lobechat/context-engine';
-import { type LobeChatDatabase } from '@lobechat/database';
-import {
-  type ChatTopicBotContext,
-  type ExecAgentParams,
-  type ExecAgentResult,
-  type ExecGroupAgentParams,
-  type ExecGroupAgentResult,
-  type ExecSubAgentTaskParams,
-  type ExecSubAgentTaskResult,
-  type UserInterventionConfig,
+import type { LobeToolManifest } from '@lobechat/context-engine';
+import type { LobeChatDatabase } from '@lobechat/database';
+import type {
+  ChatTopicBotContext,
+  ExecAgentParams,
+  ExecAgentResult,
+  ExecGroupAgentParams,
+  ExecGroupAgentResult,
+  ExecSubAgentTaskParams,
+  ExecSubAgentTaskResult,
+  UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -23,16 +30,21 @@ import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
+import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import {
   createServerAgentToolsEngine,
   type EvalContext,
   type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
+import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
+import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -81,6 +93,13 @@ interface InternalExecAgentParams extends ExecAgentParams {
   discordContext?: any;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  /** External file URLs to download, upload to S3, and attach to the user message */
+  files?: Array<{
+    mimeType?: string;
+    name?: string;
+    size?: number;
+    url: string;
+  }>;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
@@ -98,6 +117,12 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
   stream?: boolean;
+  /**
+   * Custom title for the topic.
+   * When provided (including empty string), overrides the default prompt-based title.
+   * When undefined, falls back to prompt.slice(0, 50).
+   */
+  title?: string;
   /** Topic creation trigger source ('cron' | 'chat' | 'api') */
   trigger?: string;
   /**
@@ -171,8 +196,10 @@ export class AiAgentService {
       botContext,
       discordContext,
       existingMessageIds = [],
+      files,
       stepCallbacks,
       stream,
+      title,
       trigger,
       cronJobId,
       evalContext,
@@ -210,7 +237,30 @@ export class AiAgentService {
       agentConfig.provider,
     );
 
-    // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
+    // 2. Merge builtin agent runtime config (systemRole, plugins)
+    // The DB only stores persist config. Runtime config (e.g. inbox systemRole) is generated dynamically.
+    const agentSlug = agentConfig.slug;
+    const builtinSlugs = Object.values(BUILTIN_AGENT_SLUGS) as string[];
+    if (agentSlug && builtinSlugs.includes(agentSlug)) {
+      const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
+        model: agentConfig.model,
+        plugins: agentConfig.plugins ?? [],
+      });
+      if (runtimeConfig) {
+        // Runtime systemRole takes effect only if DB has no user-customized systemRole
+        if (!agentConfig.systemRole && runtimeConfig.systemRole) {
+          agentConfig.systemRole = runtimeConfig.systemRole;
+          log('execAgent: merged builtin agent runtime systemRole for slug=%s', agentSlug);
+        }
+        // Runtime plugins merged (runtime plugins take priority if provided)
+        if (runtimeConfig.plugins && runtimeConfig.plugins.length > 0) {
+          agentConfig.plugins = runtimeConfig.plugins;
+          log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
+        }
+      }
+    }
+
+    // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     if (!topicId) {
       // Prepare metadata with cronJobId and botContext if provided
@@ -222,7 +272,8 @@ export class AiAgentService {
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
         metadata,
-        title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+        title:
+          title !== undefined ? title : prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
         trigger,
       });
       topicId = newTopic.id;
@@ -240,18 +291,18 @@ export class AiAgentService {
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
 
-    // 3. Get installed plugins from database
+    // 4. Get installed plugins from database
     const installedPlugins = await this.pluginModel.query();
     log('execAgent: got %d installed plugins', installedPlugins.length);
 
-    // 4. Get model abilities from model-bank for function calling support check
+    // 5. Get model abilities from model-bank for function calling support check
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
     const isModelSupportToolUse = (m: string, p: string) => {
       const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
       return info?.abilities?.functionCall ?? true;
     };
 
-    // 5. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
+    // 6. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
     let lobehubSkillManifests: LobeToolManifest[] = [];
     try {
       lobehubSkillManifests = await this.marketService.getLobehubSkillManifests();
@@ -260,7 +311,7 @@ export class AiAgentService {
     }
     log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
 
-    // 6. Fetch Klavis tool manifests from database
+    // 7. Fetch Klavis tool manifests from database
     let klavisManifests: LobeToolManifest[] = [];
     try {
       klavisManifests = await this.klavisService.getKlavisManifests();
@@ -269,10 +320,43 @@ export class AiAgentService {
     }
     log('execAgent: got %d klavis manifests', klavisManifests.length);
 
-    // 7. Create tools using Server AgentToolsEngine
+    // 8. Fetch user settings (memory config + timezone)
+    let globalMemoryEnabled = false;
+    let userTimezone: string | undefined;
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+      globalMemoryEnabled = memorySettings?.enabled !== false;
+      const generalSettings = settings?.general as { timezone?: string } | undefined;
+      userTimezone = generalSettings?.timezone;
+    } catch (error) {
+      log('execAgent: failed to fetch user settings: %O', error);
+    }
+    log(
+      'execAgent: globalMemoryEnabled=%s, timezone=%s',
+      globalMemoryEnabled,
+      userTimezone ?? 'default',
+    );
+
+    // 9. Create tools using Server AgentToolsEngine
     const hasEnabledKnowledgeBases =
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
+
+    // Build device context for ToolsEngine enableChecker
+    const gatewayConfigured = deviceProxy.isConfigured;
+    const boundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
+    let onlineDevices: DeviceAttachment[] = [];
+    if (gatewayConfigured) {
+      try {
+        onlineDevices = await deviceProxy.queryDeviceList(this.userId);
+        log('execAgent: found %d online device(s)', onlineDevices.length);
+      } catch (error) {
+        log('execAgent: failed to query device list: %O', error);
+      }
+    }
+    const deviceOnline = onlineDevices.length > 0;
 
     const toolsContext: ServerAgentToolsContext = {
       installedPlugins,
@@ -285,13 +369,22 @@ export class AiAgentService {
         chatConfig: agentConfig.chatConfig ?? undefined,
         plugins: agentConfig?.plugins ?? undefined,
       },
+      deviceContext: gatewayConfigured
+        ? { boundDeviceId, deviceOnline, gatewayConfigured: true }
+        : undefined,
+      globalMemoryEnabled,
       hasEnabledKnowledgeBases,
       model,
       provider,
     });
 
     // Generate tools and manifest map
-    const pluginIds = agentConfig.plugins || [];
+    // Include device tool IDs so ToolsEngine can process them via enableChecker
+    const pluginIds = [
+      ...(agentConfig.plugins || []),
+      LocalSystemManifest.identifier,
+      RemoteDeviceManifest.identifier,
+    ];
     log('execAgent: agent configured plugins: %O', pluginIds);
 
     const toolsResult = toolsEngine.generateToolsDetailed({
@@ -331,7 +424,54 @@ export class AiAgentService {
       klavisManifests.length,
     );
 
-    // 7.5. Build Agent Management context if agent-management tool is enabled
+    // Override RemoteDevice manifest's systemRole with dynamic device list prompt
+    // The manifest is already included/excluded by ToolsEngine enableChecker
+    if (toolManifestMap[RemoteDeviceManifest.identifier]) {
+      toolManifestMap[RemoteDeviceManifest.identifier] = {
+        ...toolManifestMap[RemoteDeviceManifest.identifier],
+        systemRole: generateSystemPrompt(onlineDevices),
+      };
+    }
+
+    // Derive activeDeviceId from device context:
+    // 1. If agent has a bound device and it's online, use it
+    // 2. In IM/Bot scenarios, auto-activate when exactly one device is online
+    const activeDeviceId = boundDeviceId
+      ? deviceOnline
+        ? boundDeviceId
+        : undefined
+      : (discordContext || botContext) && onlineDevices.length === 1
+        ? onlineDevices[0].deviceId
+        : undefined;
+
+    // 9.4. Fetch device system info for placeholder variable replacement
+    let deviceSystemInfo: Record<string, string> = {};
+    if (activeDeviceId) {
+      try {
+        const systemInfo = await deviceProxy.queryDeviceSystemInfo(this.userId, activeDeviceId);
+        if (systemInfo) {
+          const activeDevice = onlineDevices.find((d) => d.deviceId === activeDeviceId);
+          deviceSystemInfo = {
+            arch: systemInfo.arch,
+            desktopPath: systemInfo.desktopPath,
+            documentsPath: systemInfo.documentsPath,
+            downloadsPath: systemInfo.downloadsPath,
+            homePath: systemInfo.homePath,
+            musicPath: systemInfo.musicPath,
+            picturesPath: systemInfo.picturesPath,
+            platform: activeDevice?.platform ?? 'unknown',
+            userDataPath: systemInfo.userDataPath,
+            videosPath: systemInfo.videosPath,
+            workingDirectory: systemInfo.workingDirectory,
+          };
+          log('execAgent: fetched device system info for %s', activeDeviceId);
+        }
+      } catch (error) {
+        log('execAgent: failed to fetch device system info: %O', error);
+      }
+    }
+
+    // 9.5. Build Agent Management context if agent-management tool is enabled
     const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
     let agentManagementContext;
     if (isAgentManagementEnabled) {
@@ -423,31 +563,97 @@ export class AiAgentService {
       );
     }
 
-    // 8. Get existing messages if provided
+    // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
+    let userMemory: ServerUserMemoryConfig | undefined;
+
+    if (globalMemoryEnabled) {
+      try {
+        const personaModel = new UserPersonaModel(this.db, this.userId);
+        const persona = await personaModel.getLatestPersonaDocument();
+
+        if (persona?.persona) {
+          userMemory = {
+            fetchedAt: Date.now(),
+            memories: {
+              contexts: [],
+              experiences: [],
+              persona: {
+                narrative: persona.persona,
+                tagline: persona.tagline,
+              },
+              preferences: [],
+            },
+          };
+          log('execAgent: fetched user persona (version: %d)', persona.version);
+        }
+      } catch (error) {
+        log('execAgent: failed to fetch user persona: %O', error);
+      }
+    }
+
+    // 11. Get existing messages if provided
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
       historyMessages = await this.messageModel.query({
         sessionId: appContext?.sessionId,
         topicId: appContext?.topicId ?? undefined,
       });
-      if (existingMessageIds.length > 0) {
-        const idSet = new Set(existingMessageIds);
-        historyMessages = historyMessages.filter((msg) => idSet.has(msg.id));
-      }
+      const idSet = new Set(existingMessageIds);
+      historyMessages = historyMessages.filter((msg) => idSet.has(msg.id));
+    } else if (appContext?.topicId) {
+      // Follow-up message in existing topic: load all history for context
+      historyMessages = await this.messageModel.query({
+        sessionId: appContext?.sessionId,
+        topicId: appContext.topicId,
+      });
     }
 
-    // 9. Create user message in database
+    // 12. Upload external files to S3 and collect file IDs
+    let fileIds: string[] | undefined;
+    let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
+
+    if (files && files.length > 0) {
+      const fileService = new FileService(this.db, this.userId);
+      fileIds = [];
+      imageList = [];
+
+      for (const file of files) {
+        const ext = file.name?.split('.').pop() || 'bin';
+        const pathname = `files/${this.userId}/${nanoid()}/${file.name || `file.${ext}`}`;
+
+        try {
+          const result = await fileService.uploadFromUrl(file.url, pathname);
+          fileIds.push(result.fileId);
+
+          // Build imageList for vision-capable models
+          const mimeType = file.mimeType || '';
+          if (mimeType.startsWith('image/')) {
+            imageList.push({ alt: file.name || 'image', id: result.fileId, url: result.url });
+          }
+        } catch (error) {
+          log('execAgent: failed to upload file %s: %O', file.url, error);
+        }
+      }
+
+      if (fileIds.length > 0) {
+        log('execAgent: uploaded %d files to S3', fileIds.length);
+      }
+      if (imageList.length === 0) imageList = undefined;
+    }
+
+    // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
       content: prompt,
+      files: fileIds,
       role: 'user',
       threadId: appContext?.threadId ?? undefined,
       topicId,
     });
     log('execAgent: created user message %s', userMessageRecord.id);
 
-    // 10. Create assistant message placeholder in database
+    // 14. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -461,19 +667,19 @@ export class AiAgentService {
     });
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
 
-    // Create user message object for processing
-    const userMessage = { content: prompt, role: 'user' as const };
+    // Create user message object for processing (include imageList for vision models)
+    const userMessage = { content: prompt, imageList, role: 'user' as const };
 
     // Combine history messages with user message
     const allMessages = [...historyMessages, userMessage];
 
     log('execAgent: prepared evalContext for executor');
 
-    // 12. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
+    // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
     const timestamp = Date.now();
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
-    // 13. Create initial context
+    // 16. Create initial context
     const initialContext: AgentRuntimeContext = {
       payload: {
         // Pass assistant message ID so agent runtime knows which message to update
@@ -494,7 +700,7 @@ export class AiAgentService {
       },
     };
 
-    // 14. Log final operation parameters summary
+    // 17. Log final operation parameters summary
     log(
       'execAgent: creating operation %s with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d',
       operationId,
@@ -505,12 +711,15 @@ export class AiAgentService {
       Object.keys(toolManifestMap).length,
     );
 
-    // 15. Create operation using AgentRuntimeService
+    // 18. Create operation using AgentRuntimeService
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
       const result = await this.agentRuntimeService.createOperation({
+        activeDeviceId,
         agentConfig,
+        deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
+        userTimezone,
         appContext: {
           agentId: resolvedAgentId,
           groupId: appContext?.groupId,
@@ -524,16 +733,20 @@ export class AiAgentService {
         initialContext,
         initialMessages: allMessages,
         maxSteps,
-        stepWebhook,
         modelRuntimeConfig: { model, provider },
         operationId,
         stepCallbacks,
+        stepWebhook,
         stream,
-        toolManifestMap,
-        toolSourceMap,
-        tools,
+        toolSet: {
+          enabledToolIds: toolsResult.enabledToolIds,
+          manifestMap: toolManifestMap,
+          sourceMap: toolSourceMap,
+          tools,
+        },
         userId: this.userId,
         userInterventionConfig,
+        userMemory,
         webhookDelivery,
       });
 

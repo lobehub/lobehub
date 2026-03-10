@@ -59,7 +59,7 @@ export const CreateAgentStreaming = memo<BuiltinStreamingProps<CreateAgentParams
       {plugins && plugins.length > 0 && (
         <div className={styles.field}>
           <div className={styles.label}>Plugins</div>
-          <Flexbox gap={4} horizontal wrap={'wrap'}>
+          <Flexbox horizontal gap={4} wrap={'wrap'}>
             {plugins.map((plugin) => (
               <Tag key={plugin}>{plugin}</Tag>
             ))}

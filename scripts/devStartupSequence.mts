@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import net from 'node:net';
+import { resolve } from 'node:path';
 
 const NEXT_HOST = 'localhost';
 
@@ -17,7 +17,9 @@ const resolveNextPort = (): number => {
       const match = devNext.match(/(?:--port|-p)\s+(\d+)/);
       if (match) return Number(match[1]);
     }
-  } catch { /* fallback */ }
+  } catch {
+    /* fallback */
+  }
   return 3010;
 };
 
@@ -36,6 +38,7 @@ const runNpmScript = (scriptName: string) =>
   spawn(npmCommand, ['run', scriptName], {
     env: process.env,
     stdio: 'inherit',
+    shell: process.platform === 'win32',
   });
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

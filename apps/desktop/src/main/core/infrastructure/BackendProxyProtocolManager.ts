@@ -37,26 +37,27 @@ export class BackendProxyProtocolManager {
    * Debounce timer for authorization required notifications.
    * Prevents multiple rapid 401 responses from triggering duplicate notifications.
    */
-  // eslint-disable-next-line no-undef
+
   private authRequiredDebounceTimer: NodeJS.Timeout | null = null;
   private static readonly AUTH_REQUIRED_DEBOUNCE_MS = 1000;
 
   private notifyAuthorizationRequired() {
-    // Debounce: skip if a notification is already scheduled
+    // Trailing-edge debounce: coalesce rapid 401 bursts and fire AFTER the burst settles.
+    // This ensures the IPC event is sent after the renderer has had time to mount listeners.
     if (this.authRequiredDebounceTimer) {
-      return;
+      clearTimeout(this.authRequiredDebounceTimer);
     }
 
     this.authRequiredDebounceTimer = setTimeout(() => {
       this.authRequiredDebounceTimer = null;
-    }, BackendProxyProtocolManager.AUTH_REQUIRED_DEBOUNCE_MS);
 
-    const allWindows = BrowserWindow.getAllWindows();
-    for (const win of allWindows) {
-      if (!win.isDestroyed()) {
-        win.webContents.send('authorizationRequired');
+      const allWindows = BrowserWindow.getAllWindows();
+      for (const win of allWindows) {
+        if (!win.isDestroyed()) {
+          win.webContents.send('authorizationRequired');
+        }
       }
-    }
+    }, BackendProxyProtocolManager.AUTH_REQUIRED_DEBOUNCE_MS);
   }
 
   registerWithRemoteBaseUrl(
@@ -119,7 +120,6 @@ export class BackendProxyProtocolManager {
         }
         appendVercelCookie(headers);
 
-        // eslint-disable-next-line no-undef
         const requestInit: RequestInit & { duplex?: 'half' } = {
           headers,
           method: request.method,
@@ -141,13 +141,7 @@ export class BackendProxyProtocolManager {
         } catch (error) {
           this.logger.error(`${logPrefix} upstream fetch failed: ${rewrittenUrl}`, error);
 
-          return new Response('Upstream fetch failed, target url: ' + rewrittenUrl, {
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-            },
-            status: 502,
-            statusText: 'Bad Gateway',
-          });
+          throw error;
         }
 
         const responseHeaders = new Headers(upstreamResponse.headers);
@@ -183,7 +177,7 @@ export class BackendProxyProtocolManager {
         });
       } catch (error) {
         this.logger.error(`${logPrefix} protocol.handle error:`, error);
-        return null;
+        throw error;
       }
     });
 

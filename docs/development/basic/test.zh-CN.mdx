@@ -1,89 +1,558 @@
 ---
 title: 测试指南
-description: 了解 LobeHub 的单元测试和端到端测试策略，确保代码质量与稳定性。
+description: 了解 LobeHub 的测试策略，包括使用 Vitest 进行单元测试以及使用 Playwright + Cucumber 进行端到端测试。
 tags:
   - LobeHub
   - 单元测试
   - 端到端测试
   - 测试策略
+  - vitest
+  - Playwright
 ---
 
 # 测试指南
 
-LobeHub 的测试策略包括单元测试和端到端 (E2E) 测试。下面是每种测试的详细说明：
+LobeHub 的测试策略包括使用 [Vitest][vitest-url] 进行单元测试，以及使用 Playwright + Cucumber 进行端到端 (E2E) 测试。本指南介绍如何高效地编写和运行测试。
 
-## 单元测试
+## 概述
 
-单元测试用于测试应用中的独立单元（如组件、函数、工具函数等）的功能。我们使用 [vitest][vitest-url] 进行单元测试。
+我们的测试策略包括：
 
-要运行单元测试，可以使用以下命令：
+- **单元测试** — 使用 Vitest 测试函数、组件和状态存储
+- **E2E 测试** — 使用 Playwright + Cucumber 测试用户流程
+- **类型检查** — TypeScript 编译器（`bun run type-check`）
+- **代码规范** — ESLint、Stylelint
+
+## 快速参考
+
+### 命令
 
 ```bash
-npm run test
+# 运行指定的单元测试（推荐）
+bunx vitest run --silent='passed-only' 'path/to/test.test.ts'
+
+# 在包中运行测试（例如 database 包）
+cd packages/database && bunx vitest run --silent='passed-only' 'src/models/user.test.ts'
+
+# 类型检查
+bun run type-check
+
+# E2E 测试
+pnpm e2e
 ```
 
-这将运行所有的单元测试，并生成测试报告。
+<Callout type={'warning'}>
+  **切勿运行完整测试套件**（`bun run test`）—— 这会运行所有测试，耗时约 10 分钟。请始终使用
+  `bunx vitest run --silent='passed-only' '[file-path]'` 指定目标文件。
+</Callout>
 
-我们鼓励开发者在编写代码时，同时编写对应的单元测试，以确保代码的质量和稳定性。
+## 使用 Vitest 进行单元测试
 
-## 🚧 端到端测试
+### 测试文件结构
 
-端到端测试用于测试应用在真实环境中的功能和性能。它模拟用户的真实操作，并验证应用在不同场景下的表现。
+测试文件与被测代码并列放置，命名为 `<filename>.test.ts`：
 
-在 LobeHub 中，目前暂时没有集成端到端测试，我们会在后续迭代中逐步引入端到端测试。
+```
+src/utils/
+├── formatDate.ts
+└── formatDate.test.ts
+```
 
-## 开发测试
+### 编写测试用例
 
-### 1. 单元测试
+使用 `describe` 和 `it` 组织测试用例，使用 `beforeEach`/`afterEach` 管理测试前后的状态：
 
-单元测试是针对应用中的最小可测试单元进行的测试，通常是针对函数、组件或模块进行的测试。在 LobeHub 中，我们使用 [vitest][vitest-url] 进行单元测试。
+```typescript
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { formatDate } from './formatDate';
 
-#### 编写测试用例
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
-在编写单元测试之前，您需要创建一个与被测试文件相同的目录，并将测试文件命名为 `<filename>.test.ts`。例如，如果要测试 `src/utils/formatDate.ts` 文件，测试文件应命名为 `src/utils/formatDate.test.ts`。
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-在测试文件中，您可以使用 `describe` 和 `it` 函数来组织和编写测试用例。`describe` 函数用于创建测试套件，`it` 函数用于编写具体的测试用例。
-
-```ts
-import { formatNumber } from './formatNumber';
-
-describe('formatNumber', () => {
-  it('should format number with comma separator', () => {
-    const result = formatNumber(1000);
-    expect(result).toBe('1,000');
+describe('formatDate', () => {
+  describe('使用默认格式', () => {
+    it('应正确格式化日期', () => {
+      const date = new Date('2024-03-15');
+      const result = formatDate(date);
+      expect(result).toBe('Mar 15, 2024');
+    });
   });
 
-  it('should return the same number if it is less than 1000', () => {
-    const result = formatNumber(500);
-    expect(result).toBe('500');
+  describe('使用自定义格式', () => {
+    it('应使用自定义格式', () => {
+      const date = new Date('2024-03-15');
+      const result = formatDate(date, 'YYYY-MM-DD');
+      expect(result).toBe('2024-03-15');
+    });
   });
 });
 ```
 
-在测试用例中，您可以使用 `expect` 函数来断言测试结果是否符合预期。`expect` 函数可以与各种匹配器（matchers）一起使用，例如 `toBe`、`toEqual`、`toBeTruthy` 等。
+### 测试 React 组件
 
-#### 运行单元测试
+使用 `@testing-library/react` 测试组件行为：
 
-通过运行以下命令来执行单元测试：
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { UserProfile } from './UserProfile';
 
-```bash
-npm run test
+describe('UserProfile', () => {
+  it('应渲染用户名', () => {
+    render(<UserProfile name="Alice" />);
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+  });
+
+  it('点击按钮时应调用 onClick', () => {
+    const onClick = vi.fn();
+    render(<UserProfile name="Alice" onClick={onClick} />);
+
+    fireEvent.click(screen.getByRole('button'));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('应处理异步数据加载', async () => {
+    render(<UserProfile userId="123" />);
+
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+    });
+  });
+});
 ```
 
-这将运行所有的单元测试，并输出测试结果。
+### 测试 Zustand 状态存储
 
-## 测试策略
+在 `beforeEach` 中重置 store 状态，确保测试互相独立：
 
-为了编写有效的测试用例，您可以考虑以下测试策略：
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { act } from '@testing-library/react';
+import { useUserStore } from './index';
 
-- **边界条件测试**：测试输入的边界条件，例如最小值、最大值、空值等。
-- **异常情况测试**：测试处理异常情况的代码，例如错误处理、异常情况下的回退等。
-- **功能测试**：测试应用的各个功能模块是否正常工作，包括用户交互、数据处理等。
-- **兼容性测试**：测试应用在不同浏览器和设备上的兼容性。
-- **性能测试**：测试应用在不同负载下的性能表现，例如响应时间、资源占用等。
+beforeEach(() => {
+  useUserStore.setState({
+    users: {},
+    currentUserId: null,
+  });
+});
 
-同时，请确保您的测试用例具有良好的覆盖率，覆盖到应用中的关键代码和功能。
+describe('useUserStore', () => {
+  describe('addUser', () => {
+    it('应将用户添加到 store', () => {
+      const user = { id: '1', name: 'Alice' };
 
-通过合理编写和执行单元测试、集成测试和端到端测试，您可以提高应用的质量和稳定性，并及时发现和修复潜在的问题。
+      act(() => {
+        useUserStore.getState().addUser(user);
+      });
+
+      const state = useUserStore.getState();
+      expect(state.users['1']).toEqual(user);
+    });
+  });
+
+  describe('setCurrentUser', () => {
+    it('应更新当前用户 ID', () => {
+      act(() => {
+        useUserStore.getState().setCurrentUser('123');
+      });
+
+      expect(useUserStore.getState().currentUserId).toBe('123');
+    });
+  });
+});
+```
+
+### Mock（模拟）
+
+#### 优先使用 `vi.spyOn` 而非 `vi.mock`
+
+```typescript
+// ✅ 推荐 — spyOn 作用域明确，且会自动恢复
+vi.spyOn(messageService, 'createMessage').mockResolvedValue('msg_123');
+
+// ❌ 避免 — 全局 mock 容易在测试间产生污染
+vi.mock('@/services/message');
+```
+
+#### Mock 浏览器 API
+
+```typescript
+// Mock Image
+const mockImage = vi.fn(() => ({
+  addEventListener: vi.fn((event, handler) => {
+    if (event === 'load') setTimeout(handler, 0);
+  }),
+  removeEventListener: vi.fn(),
+}));
+vi.stubGlobal('Image', mockImage);
+
+// Mock URL.createObjectURL
+vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
+
+// Mock fetch
+global.fetch = vi.fn(() =>
+  Promise.resolve({
+    json: () => Promise.resolve({ data: 'test' }),
+    ok: true,
+  }),
+);
+```
+
+#### Mock 模块
+
+```typescript
+// Mock 外部库
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(() => Promise.resolve({ data: {} })),
+  },
+}));
+
+// Mock 内部模块
+vi.mock('@/utils/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+```
+
+### 测试异步代码
+
+```typescript
+import { waitFor } from '@testing-library/react';
+
+it('应异步加载数据', async () => {
+  await expect(fetchUser('123')).resolves.toEqual({ id: '123', name: 'Alice' });
+});
+
+it('应处理错误', async () => {
+  await expect(fetchUser('invalid')).rejects.toThrow('User not found');
+});
+```
+
+### 测试数据库代码
+
+针对包中的数据库和 ORM 测试：
+
+```bash
+# 客户端 DB 测试
+cd packages/database
+bunx vitest run --silent='passed-only' 'src/models/user.test.ts'
+
+# 服务端 DB 测试
+cd packages/database
+TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 'src/models/user.test.ts'
+```
+
+## 使用 Playwright 进行 E2E 测试
+
+### 运行 E2E 测试
+
+```bash
+# 运行所有 E2E 测试
+pnpm e2e
+
+# 交互模式（UI 界面）
+pnpm e2e:ui
+
+# 仅运行冒烟测试（快速验证）
+pnpm test:e2e:smoke
+```
+
+### E2E 测试结构
+
+E2E 测试位于 `e2e/` 目录下：
+
+```
+e2e/
+├── features/             # Cucumber feature 文件（.feature）
+│   ├── auth.feature
+│   └── chat.feature
+├── step-definitions/     # 步骤实现
+│   ├── auth.steps.ts
+│   └── chat.steps.ts
+├── support/              # 共享辅助函数和 hooks
+└── playwright.config.ts
+```
+
+### 编写 E2E 测试
+
+**Feature 文件** (`e2e/features/chat.feature`)：
+
+```gherkin
+Feature: 聊天功能
+
+  Scenario: 用户发送消息
+    Given 我已登录
+    And 我在聊天页面
+    When 我输入 "你好，AI！"
+    And 我点击发送按钮
+    Then 我应该在聊天中看到我的消息
+    And 我应该看到 AI 的回复
+```
+
+**步骤定义** (`e2e/step-definitions/chat.steps.ts`)：
+
+```typescript
+import { Given, When, Then } from '@cucumber/cucumber';
+import { expect } from '@playwright/test';
+
+Given('我在聊天页面', async function () {
+  await this.page.goto('/chat');
+});
+
+When('我输入 {string}', async function (message: string) {
+  await this.page.fill('[data-testid="chat-input"]', message);
+});
+
+When('我点击发送按钮', async function () {
+  await this.page.click('[data-testid="send-button"]');
+});
+
+Then('我应该在聊天中看到我的消息', async function () {
+  await expect(this.page.locator('.user-message').last()).toBeVisible();
+});
+```
+
+## 最佳实践
+
+### 1. 测试行为，而非实现细节
+
+```typescript
+// ✅ 推荐 — 测试用户可感知的行为
+it('应允许用户提交表单', () => {
+  render(<ContactForm />);
+
+  fireEvent.change(screen.getByLabelText('Name'), {
+    target: { value: 'Alice' },
+  });
+  fireEvent.click(screen.getByText('Submit'));
+
+  expect(screen.getByText('Form submitted')).toBeInTheDocument();
+});
+
+// ❌ 避免 — 测试内部实现细节
+it('输入变化时应调用 setState', () => {
+  const setState = vi.fn();
+  render(<ContactForm setState={setState} />);
+
+  fireEvent.change(screen.getByLabelText('Name'), {
+    target: { value: 'Alice' },
+  });
+
+  expect(setState).toHaveBeenCalled();
+});
+```
+
+### 2. 使用语义化查询
+
+```typescript
+// ✅ 推荐 — 语义化查询与用户感知一致
+screen.getByRole('button', { name: 'Submit' });
+screen.getByLabelText('Email address');
+screen.getByText('Welcome back');
+
+// ❌ 避免 — testId 应作为最后手段
+screen.getByTestId('submit-button');
+```
+
+### 3. 每次测试后清理状态
+
+```typescript
+import { beforeEach, afterEach, vi } from 'vitest';
+
+beforeEach(() => {
+  vi.clearAllMocks();   // 清除 mock 调用历史
+  vi.clearAllTimers();  // 使用 fake timers 时清除计时器
+});
+
+afterEach(() => {
+  vi.restoreAllMocks(); // 恢复原始实现
+});
+```
+
+### 4. 测试边界条件
+
+```typescript
+describe('validateEmail', () => {
+  it('应接受有效的电子邮件', () => {
+    expect(validateEmail('user@example.com')).toBe(true);
+  });
+
+  it('应拒绝空字符串', () => {
+    expect(validateEmail('')).toBe(false);
+  });
+
+  it('应拒绝不含 @ 的邮件', () => {
+    expect(validateEmail('user.example.com')).toBe(false);
+  });
+
+  it('应拒绝缺少域名的邮件', () => {
+    expect(validateEmail('user@')).toBe(false);
+  });
+});
+```
+
+### 5. 保持测试相互独立
+
+```typescript
+// ❌ 避免 — 测试之间共享状态，依赖执行顺序
+let userId: string;
+
+it('应创建用户', () => {
+  userId = createUser('Alice');
+  expect(userId).toBeDefined();
+});
+
+it('应获取用户', () => {
+  const user = getUser(userId); // 依赖上一个测试
+  expect(user.name).toBe('Alice');
+});
+
+// ✅ 推荐 — 每个测试自行准备数据
+it('应创建用户', () => {
+  const userId = createUser('Alice');
+  expect(userId).toBeDefined();
+});
+
+it('应获取用户', () => {
+  const userId = createUser('Bob');
+  const user = getUser(userId);
+  expect(user.name).toBe('Bob');
+});
+```
+
+## 常用模式
+
+### 测试 Hooks
+
+```typescript
+import { renderHook, act } from '@testing-library/react';
+import { useCounter } from './useCounter';
+
+it('应递增计数器', () => {
+  const { result } = renderHook(() => useCounter());
+
+  expect(result.current.count).toBe(0);
+
+  act(() => {
+    result.current.increment();
+  });
+
+  expect(result.current.count).toBe(1);
+});
+```
+
+### 测试 Context Provider
+
+```typescript
+import { render, screen } from '@testing-library/react';
+import { ThemeProvider } from './ThemeProvider';
+import { MyComponent } from './MyComponent';
+
+function renderWithTheme(component: React.ReactElement) {
+  return render(<ThemeProvider theme="dark">{component}</ThemeProvider>);
+}
+
+it('应使用主题', () => {
+  renderWithTheme(<MyComponent />);
+  expect(screen.getByRole('main')).toHaveClass('dark-theme');
+});
+```
+
+### 使用 MSW 测试 API 调用
+
+```typescript
+import { rest } from 'msw';
+import { setupServer } from 'msw/node';
+
+const server = setupServer(
+  rest.get('/api/user', (req, res, ctx) => {
+    return res(ctx.json({ id: '1', name: 'Alice' }));
+  }),
+);
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+it('应获取用户数据', async () => {
+  const user = await fetchUser('1');
+  expect(user.name).toBe('Alice');
+});
+```
+
+## 测试覆盖率
+
+### 生成覆盖率报告
+
+```bash
+bun run test-app:coverage
+```
+
+之后打开 `coverage/index.html` 查看报告。
+
+### 覆盖率目标
+
+| 类型    | 目标   |
+| ----- | ---- |
+| 关键路径  | 80%+ |
+| 工具函数  | 90%+ |
+| UI 组件 | 70%+ |
+
+## 调试测试
+
+### VS Code 调试
+
+在 `.vscode/launch.json` 中添加：
+
+```json
+{
+  "type": "node",
+  "request": "launch",
+  "name": "Debug Vitest",
+  "runtimeExecutable": "bun",
+  "runtimeArgs": ["x", "vitest", "run", "${file}"],
+  "console": "integratedTerminal"
+}
+```
+
+### Vitest UI
+
+```bash
+bunx vitest --ui
+```
+
+在浏览器中打开交互式测试资源管理器。
+
+### Console 日志
+
+```typescript
+it('应正常工作', () => {
+  console.log('调试:', value); // 在测试输出中显示
+  expect(value).toBe(expected);
+});
+```
+
+## CI/CD 集成
+
+GitHub Actions 会在每次 PR 时自动运行以下检查：
+
+1. 代码规范（ESLint、Stylelint）
+2. 类型检查
+3. 单元测试
+4. E2E 测试
+5. 构建验证
+
+所有检查通过后 PR 才可合并。
 
 [vitest-url]: https://vitest.dev/

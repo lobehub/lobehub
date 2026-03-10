@@ -41,7 +41,6 @@ export interface SkillRuntimeService {
     options: {
       config?: { description?: string; id?: string; name?: string };
       description: string;
-      runInClient?: boolean;
     },
   ) => Promise<CommandResult>;
   exportFile?: (path: string, filename: string) => Promise<ExportFileResult>;
@@ -67,7 +66,7 @@ export class SkillsExecutionRuntime {
   }
 
   async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
-    const { command, runInClient, description, config } = args;
+    const { command, description, config } = args;
 
     // Try new execScript method first (with cloud sandbox support)
     if (this.service.execScript) {
@@ -75,7 +74,6 @@ export class SkillsExecutionRuntime {
         const result = await this.service.execScript(command, {
           config,
           description,
-          runInClient,
         });
 
         const output = [result.output, result.stderr].filter(Boolean).join('\n');
@@ -106,7 +104,7 @@ export class SkillsExecutionRuntime {
     }
 
     try {
-      const result = await this.service.runCommand({ command, runInClient });
+      const result = await this.service.runCommand({ command });
 
       const output = [result.output, result.stderr].filter(Boolean).join('\n');
 
@@ -193,6 +191,7 @@ export class SkillsExecutionRuntime {
         state: {
           encoding: resource.encoding,
           fileType: resource.fileType,
+          fullPath: resource.fullPath,
           path: resource.path,
           size: resource.size,
         },

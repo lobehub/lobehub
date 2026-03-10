@@ -127,7 +127,9 @@ export class StreamingExecutorActionImpl {
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
 
     if (!agentConfigData || !agentConfigData.model) {
-      throw new Error(`[internal_createAgentState] Agent config not found or incomplete for agentId: ${effectiveAgentId}, scope: ${scope}`);
+      throw new Error(
+        `[internal_createAgentState] Agent config not found or incomplete for agentId: ${effectiveAgentId}, scope: ${scope}`,
+      );
     }
 
     log(
@@ -206,6 +208,12 @@ export class StreamingExecutorActionImpl {
         },
         modelRuntimeConfig,
         operationId: operationId ?? agentId,
+        operationToolSet: {
+          enabledToolIds,
+          manifestMap: toolManifestMap,
+          sourceMap: {},
+          tools: toolsDetailed.tools ?? [],
+        },
         toolManifestMap,
         userInterventionConfig,
       });

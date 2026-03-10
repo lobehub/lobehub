@@ -6,6 +6,7 @@ import {
   ChevronRight,
   FileText,
   Folder,
+  Library,
   MessageCircle,
   MessageSquare,
   Plug,
@@ -111,6 +112,10 @@ const SearchResults = memo<SearchResultsProps>(
           navigate(`/memory/preferences?preferenceId=${result.id}`);
           break;
         }
+        case 'knowledgeBase': {
+          navigate(`/resource/library/${result.id}`);
+          break;
+        }
       }
       onClose();
     };
@@ -147,6 +152,9 @@ const SearchResults = memo<SearchResultsProps>(
         case 'memory': {
           return <Brain size={16} />;
         }
+        case 'knowledgeBase': {
+          return <Library size={16} />;
+        }
       }
     };
 
@@ -181,6 +189,9 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'memory': {
           return t('cmdk.search.memory');
+        }
+        case 'knowledgeBase': {
+          return t('cmdk.search.knowledgeBase');
         }
       }
     };
@@ -232,6 +243,7 @@ const SearchResults = memo<SearchResultsProps>(
     const memoryResults = results.filter((r) => r.type === 'memory');
     const mcpResults = results.filter((r) => r.type === 'mcp');
     const pluginResults = results.filter((r) => r.type === 'plugin');
+    const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
 
     // Don't render anything if no results and not loading
@@ -358,6 +370,13 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group forceMount>
             {folderResults.map((result) => renderResultItem(result))}
             {renderSearchMore('folder', folderResults.length)}
+          </Command.Group>
+        )}
+
+        {knowledgeBaseResults.length > 0 && (
+          <Command.Group forceMount>
+            {knowledgeBaseResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('knowledgeBase', knowledgeBaseResults.length)}
           </Command.Group>
         )}
 

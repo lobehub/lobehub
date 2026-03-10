@@ -410,5 +410,22 @@ describe('TopicModel - Create', () => {
         `Topic with id ${topicId} not found`,
       );
     });
+
+    it('should duplicate a topic with no messages (empty messageIds)', async () => {
+      const topicId = 'topic-no-messages';
+
+      await serverDB
+        .insert(topics)
+        .values({ id: topicId, sessionId, userId, title: 'Empty Topic' });
+
+      const { topic: duplicated, messages: duplicatedMessages } = await topicModel.duplicate(
+        topicId,
+        'Duplicated Empty',
+      );
+
+      expect(duplicated.id).not.toBe(topicId);
+      expect(duplicated.title).toBe('Duplicated Empty');
+      expect(duplicatedMessages).toHaveLength(0);
+    });
   });
 });

@@ -11,12 +11,14 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
+import Grok420ReasoningEffortSlider from './Grok420ReasoningEffortSlider';
 import ImageAspectRatio2Select from './ImageAspectRatio2Select';
 import ImageAspectRatioSelect from './ImageAspectRatioSelect';
 import ImageResolution2Slider from './ImageResolution2Slider';
@@ -28,6 +30,7 @@ import ThinkingBudgetSlider from './ThinkingBudgetSlider';
 import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevel3Slider from './ThinkingLevel3Slider';
 import ThinkingLevel4Slider from './ThinkingLevel4Slider';
+import ThinkingLevel5Slider from './ThinkingLevel5Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
@@ -206,6 +209,28 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       },
     },
     {
+      children: <Grok420ReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'grok4_20ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <CodexMaxReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'codexMaxReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
       children: <TextVerbositySlider />,
       desc: 'text_verbosity',
       label: t('extendParams.textVerbosity.title'),
@@ -290,6 +315,17 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'horizontal',
       minWidth: undefined,
       name: 'thinkingLevel4',
+      style: {
+        paddingBottom: 0,
+      },
+      desc: 'thinkingLevel',
+    },
+    {
+      children: <ThinkingLevel5Slider />,
+      label: t('extendParams.thinkingLevel.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'thinkingLevel5',
       style: {
         paddingBottom: 0,
       },

@@ -11,7 +11,7 @@ import {
 } from '../../../schemas';
 import { AgentEvalRunModel } from '../run';
 
-let serverDB = await getTestDB();
+const serverDB = await getTestDB();
 
 const userId = 'run-test-user';
 const userId2 = 'run-test-user-2';

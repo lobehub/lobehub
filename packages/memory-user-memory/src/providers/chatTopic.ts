@@ -118,7 +118,7 @@ export class LobeChatTopicContextProvider implements MemoryContextProvider<
       context: topicContext,
       metadata: {},
       sourceId: this.options.topicId,
-      userId: userId,
+      userId,
     } satisfies BuiltContext;
   }
 }

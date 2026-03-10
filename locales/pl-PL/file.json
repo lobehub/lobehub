@@ -100,6 +100,7 @@
   "pageEditor.saving": "Zapisywanie...",
   "pageEditor.titlePlaceholder": "Bez tytułu",
   "pageEditor.wordCount": "{{wordCount}} słów",
+  "pageList.actions.openInNewTab": "Otwórz w nowej karcie",
   "pageList.copyContent": "Kopiuj cały tekst",
   "pageList.duplicate": "Duplikuj",
   "pageList.empty": "Brak stron. Kliknij przycisk powyżej, aby utworzyć pierwszą.",

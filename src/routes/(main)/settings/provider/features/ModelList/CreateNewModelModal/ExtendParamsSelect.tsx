@@ -5,11 +5,13 @@ import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/CodexMaxReasoningEffortSlider';
 import EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/EffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ReasoningEffortSlider';
+import Grok420ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok420ReasoningEffortSlider';
 import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatio2Select';
 import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
 import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolution2Slider';
@@ -21,6 +23,7 @@ import ThinkingBudgetSlider from '@/features/ModelSwitchPanel/components/Control
 import ThinkingLevel2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel2Slider';
 import ThinkingLevel3Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel3Slider';
 import ThinkingLevel4Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel4Slider';
+import ThinkingLevel5Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel5Slider';
 import ThinkingLevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevelSlider';
 import ThinkingSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingSlider';
 
@@ -71,6 +74,14 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'gpt5_2ProReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint',
+    key: 'grok4_20ReasoningEffort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint',
+    key: 'codexMaxReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint',
     key: 'textVerbosity',
   },
@@ -99,6 +110,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'thinkingLevel4',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint',
+    key: 'thinkingLevel5',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.urlContext.hint',
     key: 'urlContext',
   },
@@ -123,14 +138,17 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
 // Map variant keys to their base i18n title key (synced with ControlsForm.tsx)
 // This allows reusing existing i18n translations instead of adding new ones
 const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
+  codexMaxReasoningEffort: 'reasoningEffort',
   gpt5ReasoningEffort: 'reasoningEffort',
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
   gpt5_2ReasoningEffort: 'reasoningEffort',
+  grok4_20ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
   thinkingLevel2: 'thinkingLevel',
   thinkingLevel3: 'thinkingLevel',
   thinkingLevel4: 'thinkingLevel',
+  thinkingLevel5: 'thinkingLevel',
 };
 
 type PreviewMeta = {
@@ -141,6 +159,11 @@ type PreviewMeta = {
 };
 
 const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
+  codexMaxReasoningEffort: {
+    labelSuffix: ' (Codex)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
   effort: { labelSuffix: ' (Opus 4.6)', previewWidth: 280, tag: 'output_config.effort' },
   enableAdaptiveThinking: {
@@ -157,6 +180,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     tag: 'reasoning_effort',
   },
   gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
+  grok4_20ReasoningEffort: {
+    labelSuffix: ' (Grok 4.20)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
   imageAspectRatio: { labelSuffix: '', previewWidth: 350, tag: 'aspect_ratio' },
   imageAspectRatio2: { labelSuffix: ' (Nano Banana 2)', previewWidth: 350, tag: 'aspect_ratio' },
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
@@ -170,6 +198,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   thinkingLevel2: { labelSuffix: ' (3 Pro)', previewWidth: 200, tag: 'thinkingLevel' },
   thinkingLevel3: { labelSuffix: ' (Gemini 3.1)', previewWidth: 200, tag: 'thinkingLevel' },
   thinkingLevel4: { labelSuffix: ' (Nano Banana 2)', previewWidth: 200, tag: 'thinkingLevel' },
+  thinkingLevel5: { labelSuffix: ' (3.1 Flash-Lite)', previewWidth: 280, tag: 'thinkingLevel' },
   urlContext: { labelSuffix: ' (Gemini)', previewWidth: 400, tag: 'urlContext' },
 };
 
@@ -253,6 +282,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   // Preview controls use controlled mode with default values (no store access)
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
+      codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
       disableContextCaching: <Switch checked disabled />,
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,
@@ -261,6 +291,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
       gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
+      grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,
@@ -274,6 +305,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       thinkingLevel2: <ThinkingLevel2Slider value="high" />,
       thinkingLevel3: <ThinkingLevel3Slider value="high" />,
       thinkingLevel4: <ThinkingLevel4Slider value="minimal" />,
+      thinkingLevel5: <ThinkingLevel5Slider value="minimal" />,
       urlContext: <Switch checked disabled />,
     }),
     [],
