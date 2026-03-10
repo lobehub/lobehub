@@ -2,6 +2,7 @@ import { getCachedTextInputUnitRate } from '@lobechat/utils';
 import { Accordion, AccordionItem, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
+
 import {
   ArrowDownToDot,
   ArrowUpFromDot,
@@ -27,9 +28,11 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { formatTokenNumber } from '@/utils/format';
 import { formatPriceByCurrency, getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/index';
 
+import ControlsForm from './ControlsForm';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionText: css`
@@ -39,6 +42,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     padding-block-end: 8px;
+  `,
+  extraControls: css`
+    padding: 8px;
+
+    .ant-form-item:first-child {
+      padding-block: 0 4px;
+    }
+
+    .ant-form-item:last-child {
+      padding-block: 4px 0;
+    }
+
+    .ant-divider {
+      display: none;
+    }
   `,
   row: css`
     padding-block: 4px;
@@ -214,7 +232,15 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, prov
     return providerData?.children.find((m) => m.id === modelId);
   }, [enabledList, modelId, provider]);
 
-  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const hasExtendParams = useAiInfraStore(
+    aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
+  );
+
+  const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
+    const keys: string[] = [];
+    if (hasExtendParams) keys.push('config');
+    return keys;
+  });
 
   const hasPricing = !!model?.pricing;
   const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;
@@ -234,7 +260,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, prov
   return (
     <Flexbox className={styles.container}>
       {/* Sections */}
-      {(hasPricing || hasContext || hasAbilities) && (
+      {(hasPricing || hasContext || hasAbilities || hasExtendParams) && (
         <Accordion
           expandedKeys={expandedKeys}
           gap={8}
@@ -426,6 +452,32 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, prov
                   </Flexbox>
                 ))}
               </Flexbox>
+            </AccordionItem>
+          )}
+          {/* Model Config */}
+          {hasExtendParams && provider && (
+            <AccordionItem
+              itemKey="config"
+              paddingBlock={6}
+              paddingInline={8}
+              title={
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <div
+                    style={{
+                      background: '#52c41a',
+                      borderRadius: 2,
+                      flexShrink: 0,
+                      height: 14,
+                      width: 3,
+                    }}
+                  />
+                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.config')}</span>
+                </Flexbox>
+              }
+            >
+              <div className={styles.extraControls}>
+                <ControlsForm model={modelId} provider={provider} />
+              </div>
             </AccordionItem>
           )}
         </Accordion>
