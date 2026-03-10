@@ -1,6 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
 import { ipcMain } from 'electron';
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Base context for IPC methods
 export interface IpcContext {

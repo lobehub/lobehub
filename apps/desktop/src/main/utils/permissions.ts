@@ -52,7 +52,7 @@ function getMacPermissionsModule(): typeof import('node-mac-permissions') | null
 
   if (!macPermissionsModule) {
     // Dynamic require to prevent module loading on non-macOS platforms
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     macPermissionsModule = require('node-mac-permissions');
   }
 
