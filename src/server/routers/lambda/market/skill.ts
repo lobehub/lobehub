@@ -91,7 +91,7 @@ export const skillRouter = router({
       log('getSkillList input: %O', input);
 
       try {
-        return await ctx.marketService.searchSkill(input);
+        return await ctx.marketService.searchSkill(input ?? {});
       } catch (error) {
         log('Error fetching skill list: %O', error);
         throw new TRPCError({

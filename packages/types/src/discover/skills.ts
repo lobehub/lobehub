@@ -8,14 +8,14 @@ import type {
 } from '@lobehub/market-sdk';
 
 export enum SkillCategory {
-  AILLMs = 'ai-llms',
   AgentToAgentProtocols = 'agent-to-agent-protocols',
+  AILLMs = 'ai-llms',
   All = 'all',
   AppleAppsServices = 'apple-apps-services',
   BrowserAutomation = 'browser-automation',
-  CLIUtilities = 'cli-utilities',
   CalendarScheduling = 'calendar-scheduling',
   ClawdbotTools = 'clawdbot-tools',
+  CLIUtilities = 'cli-utilities',
   CodingAgentsIDEs = 'coding-agents-ides',
   Communication = 'communication',
   DataAnalytics = 'data-analytics',
@@ -24,8 +24,8 @@ export enum SkillCategory {
   Gaming = 'gaming',
   GitGitHub = 'git-github',
   HealthFitness = 'health-fitness',
-  IOSMacOSDevelopment = 'ios-macos-development',
   ImageVideoGeneration = 'image-video-generation',
+  IOSMacOSDevelopment = 'ios-macos-development',
   MarketingSales = 'marketing-sales',
   MediaStreaming = 'media-streaming',
   Moltbook = 'moltbook',
@@ -90,7 +90,7 @@ export interface DiscoverSkillDetail extends MarketSkillDetail {
   };
   homepage?: string;
   ratingDistribution?: SkillRatingDistribution;
-  related: DiscoverSkillItem[];
+  related?: DiscoverSkillItem[];
 }
 
 export type SkillCategoryItem = MarketSkillCategory;

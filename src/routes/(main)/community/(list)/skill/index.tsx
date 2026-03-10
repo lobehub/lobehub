@@ -26,7 +26,7 @@ const SkillPage = memo(() => {
 
   if (isLoading || !data) return <Loading />;
 
-  const { items, page: currentPage, pageSize, total: totalCount } = data;
+  const { items, currentPage, pageSize, totalCount } = data;
 
   return (
     <Flexbox gap={32} width={'100%'}>
