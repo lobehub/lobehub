@@ -30,13 +30,25 @@ import ModelDetailPanel from '../ModelDetailPanel';
 interface MultipleProvidersModelItemProps {
   activeKey: string;
   data: ModelWithProviders;
+  isModelRestricted?: (modelId: string) => boolean;
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  onRestrictedModelClick?: () => void;
+  proLabel?: string;
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
-  ({ activeKey, data, newLabel, onModelChange, onClose }) => {
+  ({
+    activeKey,
+    data,
+    isModelRestricted,
+    newLabel,
+    onModelChange,
+    onClose,
+    onRestrictedModelClick,
+    proLabel,
+  }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -44,16 +56,31 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     const activeProvider = data.providers.find((p) => menuKey(p.id, data.model.id) === activeKey);
     const isActive = !!activeProvider;
 
+    const restricted = isModelRestricted?.(data.model.id);
+
     return (
-      <DropdownMenuSubmenuRoot open={submenuOpen} onOpenChange={setSubmenuOpen}>
+      <DropdownMenuSubmenuRoot
+        open={submenuOpen}
+        onOpenChange={(open) => {
+          if (restricted && open) return;
+          setSubmenuOpen(open);
+        }}
+      >
         <DropdownMenuSubmenuTrigger
           className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
           style={{ paddingBlock: 8, paddingInline: 8 }}
+          onClick={() => {
+            if (restricted) {
+              onRestrictedModelClick?.();
+              onClose();
+            }
+          }}
         >
           <ModelItemRender
             {...data.model}
             {...data.model.abilities}
             newBadgeLabel={newLabel}
+            proBadgeLabel={restricted ? proLabel : undefined}
             showInfoTag={true}
           />
         </DropdownMenuSubmenuTrigger>
@@ -76,6 +103,11 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                     <DropdownMenuItem
                       key={key}
                       onClick={async () => {
+                        if (restricted) {
+                          onRestrictedModelClick?.();
+                          onClose();
+                          return;
+                        }
                         await onModelChange(data.model.id, p.id);
                         onClose();
                       }}
