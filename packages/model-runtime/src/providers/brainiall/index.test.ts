@@ -6,7 +6,7 @@ import { testProvider } from '../../providerTestUtils';
 import { LobeBrainiallAI, params } from './index';
 
 const provider = ModelProvider.Brainiall;
-const defaultBaseURL = 'https://apim-ai-apis.azure-api.net/v1';
+const defaultBaseURL = 'https://api.brainiall.com/v1';
 
 testProvider({
   Runtime: LobeBrainiallAI,
@@ -33,7 +33,7 @@ describe('LobeBrainiallAI - custom features', () => {
     it('should export params with correct structure', () => {
       expect(params).toBeDefined();
       expect(params.provider).toBe(ModelProvider.Brainiall);
-      expect(params.baseURL).toBe('https://apim-ai-apis.azure-api.net/v1');
+      expect(params.baseURL).toBe('https://api.brainiall.com/v1');
       expect(params.debug).toBeDefined();
       expect(params.chatCompletion).toBeDefined();
       expect(params.models).toBeDefined();
@@ -115,11 +115,11 @@ describe('LobeBrainiallAI - custom features', () => {
         ok: true,
       });
 
-      const client = { apiKey: 'test-key', baseURL: 'https://apim-ai-apis.azure-api.net/v1' };
+      const client = { apiKey: 'test-key', baseURL: 'https://api.brainiall.com/v1' };
       const models = await params.models!({ client: client as any });
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://apim-ai-apis.azure-api.net/v1/models',
+        'https://api.brainiall.com/v1/models',
         {
           headers: {
             Accept: 'application/json',
@@ -138,7 +138,7 @@ describe('LobeBrainiallAI - custom features', () => {
         statusText: 'Unauthorized',
       });
 
-      const client = { apiKey: 'invalid-key', baseURL: 'https://apim-ai-apis.azure-api.net/v1' };
+      const client = { apiKey: 'invalid-key', baseURL: 'https://api.brainiall.com/v1' };
 
       await expect(params.models!({ client: client as any })).rejects.toThrow(
         'Failed to fetch Brainiall models: 401 Unauthorized',
@@ -153,7 +153,7 @@ describe('LobeBrainiallAI - custom features', () => {
         ok: true,
       });
 
-      const client = { apiKey: 'test-key', baseURL: 'https://apim-ai-apis.azure-api.net/v1' };
+      const client = { apiKey: 'test-key', baseURL: 'https://api.brainiall.com/v1' };
       const models = await params.models!({ client: client as any });
 
       expect(models).toBeDefined();
@@ -167,7 +167,7 @@ describe('LobeBrainiallAI - custom features', () => {
         ok: true,
       });
 
-      const client = { apiKey: 'test-key', baseURL: 'https://apim-ai-apis.azure-api.net/v1' };
+      const client = { apiKey: 'test-key', baseURL: 'https://api.brainiall.com/v1' };
       const models = await params.models!({ client: client as any });
 
       expect(models).toBeDefined();
@@ -179,11 +179,11 @@ describe('LobeBrainiallAI - custom features', () => {
         ok: true,
       });
 
-      const client = { apiKey: 'test-key', baseURL: 'https://apim-ai-apis.azure-api.net/v1///' };
+      const client = { apiKey: 'test-key', baseURL: 'https://api.brainiall.com/v1///' };
       await params.models!({ client: client as any });
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://apim-ai-apis.azure-api.net/v1/models',
+        'https://api.brainiall.com/v1/models',
         expect.any(Object),
       );
     });
@@ -198,7 +198,7 @@ describe('LobeBrainiallAI - custom features', () => {
       await params.models!({ client: client as any });
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://apim-ai-apis.azure-api.net/v1/models',
+        'https://api.brainiall.com/v1/models',
         expect.any(Object),
       );
     });
@@ -217,7 +217,7 @@ describe('LobeBrainiallAI - custom features', () => {
         ok: true,
       });
 
-      const client = { apiKey: 'test-key', baseURL: 'https://apim-ai-apis.azure-api.net/v1' };
+      const client = { apiKey: 'test-key', baseURL: 'https://api.brainiall.com/v1' };
       await params.models!({ client: client as any });
 
       expect(global.fetch).toHaveBeenCalled();
