@@ -3,7 +3,7 @@ import { z } from 'zod';
 // ==================== Message Translation Query Types ====================
 
 /**
- * 翻译消息查询请求参数
+ * Message translation query request parameters
  */
 export interface MessageTranslateQueryRequest {
   messageId: string;
@@ -14,14 +14,14 @@ export const MessageTranslateQueryRequestSchema = z.object({
 });
 
 /**
- * 翻译消息 params 请求参数
+ * Message translation params request parameters
  */
 export type MessageTranslateParams = MessageTranslateQueryRequest;
 
 // ==================== Message Translation Trigger Types ====================
 
 /**
- * 翻译消息 body 请求参数
+ * Message translation body request parameters
  */
 export interface MessageTranslateBody {
   from?: string;
@@ -38,14 +38,14 @@ export const MessageTranslateTriggerRequestSchema = z.object({
 });
 
 /**
- * 翻译消息完整请求参数
+ * Full message translation trigger request parameters
  */
 export type MessageTranslateTriggerRequest = MessageTranslateQueryRequest & MessageTranslateBody;
 
 // ==================== Message Translation Update Types ====================
 
 /**
- * 更新翻译信息请求参数
+ * Update translation info request parameters
  */
 export type MessageTranslateInfoUpdate = MessageTranslateTriggerRequest & {
   content?: string;
@@ -58,7 +58,7 @@ export const MessageTranslateInfoUpdateSchema = MessageTranslateTriggerRequestSc
 // ==================== Message Translation Response Types ====================
 
 /**
- * 翻译消息响应参数
+ * Message translation response parameters
  */
 export interface MessageTranslateResponse {
   clientId: string | null;

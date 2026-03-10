@@ -12,13 +12,13 @@ import {
   UpdateAgentGroupRequestSchema,
 } from '../types/agent-group.type';
 
-// AgentGroup 相关路由（助理分类）
+// AgentGroup-related routes (agent groups)
 const AgentGroupRoutes = new Hono();
 
 /**
- * 获取助理分类列表
+ * Get agent group list
  * GET /api/v1/agent-groups
- * 需要助理读取权限
+ * Requires agent read permission
  */
 AgentGroupRoutes.get(
   '/',
@@ -31,9 +31,9 @@ AgentGroupRoutes.get(
 );
 
 /**
- * 创建助理分类
+ * Create an agent group
  * POST /api/v1/agent-groups
- * 需要助理创建权限
+ * Requires agent create permission
  */
 AgentGroupRoutes.post(
   '/',
@@ -47,9 +47,9 @@ AgentGroupRoutes.post(
 );
 
 /**
- * 根据 ID 获取助理分类详情
+ * Get agent group details by ID
  * GET /api/v1/agent-groups/:id
- * 需要助理读取权限
+ * Requires agent read permission
  */
 AgentGroupRoutes.get(
   '/:id',
@@ -63,9 +63,9 @@ AgentGroupRoutes.get(
 );
 
 /**
- * 更新助理分类
+ * Update an agent group
  * PATCH /api/v1/agent-groups/:id
- * 需要助理更新权限
+ * Requires agent update permission
  */
 AgentGroupRoutes.patch(
   '/:id',
@@ -80,13 +80,13 @@ AgentGroupRoutes.patch(
 );
 
 /**
- * 删除助理分类
+ * Delete an agent group
  * DELETE /api/v1/agent-groups/:id
- * 需要助理删除权限
+ * Requires agent delete permission
  *
- * 行为说明:
- * - 删除指定的助理分类
- * - 分类内助理不会被删除，会自动变为未分类状态（sessionGroupId 设为 null）
+ * Behavior:
+ * - Deletes the specified agent group
+ * - Agents within the group are not deleted; they become uncategorized (sessionGroupId set to null)
  */
 AgentGroupRoutes.delete(
   '/:id',

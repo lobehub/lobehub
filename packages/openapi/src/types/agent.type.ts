@@ -8,7 +8,7 @@ import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 // ==================== Agent CRUD Types ====================
 
 /**
- * 创建 Agent 请求参数
+ * Create Agent request parameters
  */
 export interface CreateAgentRequest {
   avatar?: string;
@@ -53,7 +53,7 @@ export const CreateAgentRequestSchema = z.object({
 });
 
 /**
- * 更新 Agent 请求参数
+ * Update Agent request parameters
  */
 export type UpdateAgentRequest = CreateAgentRequest & {
   id: string;
@@ -62,7 +62,7 @@ export type UpdateAgentRequest = CreateAgentRequest & {
 export const UpdateAgentRequestSchema = CreateAgentRequestSchema.partial();
 
 /**
- * 删除 Agent 请求参数
+ * Delete Agent request parameters
  */
 export interface AgentDeleteRequest {
   agentId: string;
@@ -77,7 +77,7 @@ export const AgentDeleteRequestSchema = z.object({
 // ==================== Agent Batch Operations ====================
 
 /**
- * 批量删除 Agent 请求参数
+ * Batch delete Agents request parameters
  */
 export interface BatchDeleteAgentsRequest {
   agentIds: string[];
@@ -85,7 +85,7 @@ export interface BatchDeleteAgentsRequest {
 }
 
 /**
- * 批量更新 Agent 请求参数
+ * Batch update Agents request parameters
  */
 export interface BatchUpdateAgentsRequest {
   agentIds: string[];
@@ -99,7 +99,7 @@ export interface BatchUpdateAgentsRequest {
 }
 
 /**
- * 批量操作结果类型
+ * Batch operation result type
  */
 export interface BatchOperationResult {
   errors?: Array<{
@@ -114,21 +114,21 @@ export interface BatchOperationResult {
 // ==================== Agent Session Relations ====================
 
 /**
- * Agent-Session 关联操作请求参数
+ * Agent-Session link operation request parameters
  */
 export interface AgentSessionLinkRequest {
   sessionId: string;
 }
 
 /**
- * Agent-Session 批量关联操作请求参数
+ * Agent-Session batch link operation request parameters
  */
 export interface AgentSessionBatchLinkRequest {
   sessionIds: string[];
 }
 
 /**
- * 为 Agent 创建 Session 请求参数
+ * Create Session for Agent request parameters
  */
 export interface CreateSessionForAgentRequest {
   agentId: string;
@@ -139,7 +139,7 @@ export interface CreateSessionForAgentRequest {
 }
 
 /**
- * Agent-Session 关联关系响应类型
+ * Agent-Session relationship response type
  */
 export interface AgentSessionRelation {
   agentId: string;
@@ -156,14 +156,14 @@ export interface AgentSessionRelation {
 // ==================== Agent Response Types ====================
 
 /**
- * Agent 列表响应类型
+ * Agent list response type
  */
 export type AgentListResponse = PaginationQueryResponse<{
   agents: AgentItem[];
 }>;
 
 /**
- * Agent 详情响应类型，包含完整的配置信息
+ * Agent detail response type, includes complete configuration information
  */
 export interface AgentDetailResponse extends AgentItem {
   agentsFiles?: Array<{

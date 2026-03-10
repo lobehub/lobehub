@@ -1,8 +1,8 @@
-// 引入 zod 用于通用 schema
+// Import zod for common schemas
 import type { LobeChatDatabase } from '@/database/type';
 
 /**
- * 标准API响应格式
+ * Standard API response format
  */
 export interface ApiResponse<T = any> {
   data?: T;
@@ -13,17 +13,17 @@ export interface ApiResponse<T = any> {
 }
 
 /**
- * 服务接口基类
+ * Service interface base class
  */
 export interface IBaseService {
   /**
-   * 数据库实例
+   * Database instance
    */
   db?: LobeChatDatabase;
 }
 
 /**
- * 服务方法返回类型
+ * Service method return type
  */
 export type ServiceResult<T = any> = Promise<T>;
 
@@ -53,7 +53,7 @@ export interface TBatchTarget {
   targetUserIds?: string[];
 }
 
-// ==================== 导出所有类型 ====================
+// ==================== Export All Types ====================
 export * from './agent.type';
 export * from './agent-group.type';
 export * from './chat.type';

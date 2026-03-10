@@ -19,7 +19,7 @@ const MODEL_TYPES = [
 ] as const;
 
 /**
- * 模型列表查询参数
+ * Model list query parameters
  */
 export interface ModelsListQuery extends IPaginationQuery {
   enabled?: boolean;

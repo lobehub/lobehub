@@ -7,19 +7,19 @@ import urlJoin from 'url-join';
 import { fileEnv } from '@/envs/file';
 
 /**
- * 给文件添加URL前缀
- * @param file 文件对象
- * @returns 添加了URL前缀的文件对象
+ * Add URL prefix to a file
+ * @param file File object
+ * @returns File object with URL prefix added
  */
 export function addFileUrlPrefix<T extends { url?: string }>(file: T): T {
-  // 从 fileEnv 中获取公共域名前缀
+  // Get the public domain prefix from fileEnv
   const publicDomain = fileEnv.S3_PUBLIC_DOMAIN;
 
   if (!publicDomain) {
     return file;
   }
 
-  // 如果已经有完整的URL，直接返回
+  // If the URL is already a full URL, return it directly
   if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
     return file;
   }
@@ -31,17 +31,17 @@ export function addFileUrlPrefix<T extends { url?: string }>(file: T): T {
 }
 
 /**
- * 批量给文件数组添加URL前缀
- * @param files 文件数组
- * @returns 添加了URL前缀的文件数组
+ * Add URL prefix to an array of files
+ * @param files Array of file objects
+ * @returns Array of file objects with URL prefix added
  */
 export function addFilesUrlPrefix<T extends { path?: string; url?: string }>(files: T[]): T[] {
   return files.map(addFileUrlPrefix);
 }
 
 /**
- * 通用的 multipart/form-data 解析器
- * 当原生 formData() 失败时的备用方案
+ * Generic multipart/form-data parser
+ * Fallback when the native formData() fails
  */
 export async function parseFormData(c: Context): Promise<FormData> {
   const contentType = c.req.header('content-type') || '';
@@ -49,7 +49,7 @@ export async function parseFormData(c: Context): Promise<FormData> {
     throw new Error('Content-Type 必须是 multipart/form-data');
   }
 
-  // 优先使用 formidable（流式、健壮），失败时回退到原生 formData()
+  // Prefer formidable (streaming, robust); fall back to native formData() on failure
   try {
     const webReq = c.req.raw as Request;
     const webBody = webReq.body;
@@ -57,14 +57,14 @@ export async function parseFormData(c: Context): Promise<FormData> {
       throw new Error('解析失败：当前请求缺少可读的 body 流');
     }
 
-    // 将 Web ReadableStream 转为 Node Readable（Node 18+）
+    // Convert Web ReadableStream to Node Readable (Node 18+)
     const nodeReadable =
       typeof Readable?.fromWeb === 'function' ? Readable.fromWeb(webBody as any) : null;
     if (!nodeReadable) {
       throw new Error('解析失败：运行时不支持 Readable.fromWeb，将不进行回退');
     }
 
-    // 构造最小化 Node-like IncomingMessage 供 formidable 使用
+    // Construct a minimal Node-like IncomingMessage for formidable
     const fakeReq: any = nodeReadable;
     fakeReq.headers = Object.fromEntries((webReq.headers as any) || []);
     fakeReq.method = webReq.method;
@@ -76,7 +76,7 @@ export async function parseFormData(c: Context): Promise<FormData> {
         const chunks: Buffer[] = [];
         pass.on('data', (d: Buffer) => chunks.push(Buffer.isBuffer(d) ? d : Buffer.from(d)));
         pass.on('end', function (this: any) {
-          // 把合并后的 buffer 暂存，供 parse 回调读取
+          // Store the merged buffer temporarily for the parse callback to read
           this._buffer = Buffer.concat(chunks);
         });
         return pass;
@@ -96,13 +96,13 @@ export async function parseFormData(c: Context): Promise<FormData> {
 
     const fd = new FormData();
 
-    // 追加普通字段（多值逐项 append）
+    // Append regular fields (append each value individually for multi-value fields)
     for (const [name, value] of Object.entries(fields)) {
       if (Array.isArray(value)) value.forEach((v) => fd.append(name, String(v)));
       else fd.append(name, String(value));
     }
 
-    // 追加文件字段（兼容单值/多值）
+    // Append file fields (compatible with single-value and multi-value)
     for (const [name, entry] of Object.entries(files)) {
       const list = Array.isArray(entry) ? entry : [entry];
       for (const f of list) {
@@ -124,7 +124,7 @@ export async function parseFormData(c: Context): Promise<FormData> {
 
     return fd;
   } catch (e) {
-    // 保持失败即抛错，让上层按统一异常处理返回
+    // Re-throw the error to let the caller handle it via unified exception handling
     throw e instanceof Error ? e : new Error('parseFormData 解析失败');
   }
 }

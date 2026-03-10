@@ -15,10 +15,10 @@ import {
   MessagesListQuerySchema,
 } from '../types/message.type';
 
-// Messages 相关路由
+// Messages-related routes
 const MessageRoutes = new Hono();
 
-// GET /api/v1/messages/count - 统计消息数量 (支持各种过滤条件)
+// GET /api/v1/messages/count - Get message count (supports various filter conditions)
 MessageRoutes.get(
   '/count',
   requireAuth,
@@ -33,7 +33,7 @@ MessageRoutes.get(
   },
 );
 
-// GET /api/v1/messages - 获取消息列表 (支持各种过滤和搜索)
+// GET /api/v1/messages - Get message list (supports various filters and search)
 MessageRoutes.get(
   '/',
   requireAuth,
@@ -48,7 +48,7 @@ MessageRoutes.get(
   },
 );
 
-// GET /api/v1/messages/:id - 根据消息ID获取消息详情 (需要消息读取权限)
+// GET /api/v1/messages/:id - Get message details by message ID (requires message read permission)
 MessageRoutes.get(
   '/:id',
   requireAuth,
@@ -63,7 +63,7 @@ MessageRoutes.get(
   },
 );
 
-// POST /api/v1/messages - 创建新消息 (需要消息写入权限)
+// POST /api/v1/messages - Create a new message (requires message write permission)
 MessageRoutes.post(
   '/',
   requireAuth,
@@ -79,7 +79,7 @@ MessageRoutes.post(
   },
 );
 
-// POST /api/v1/messages/replies - 创建用户消息并生成 AI 回复 (需要消息写入权限)
+// POST /api/v1/messages/replies - Create a user message and generate an AI reply (requires message write permission)
 MessageRoutes.post(
   '/replies',
   requireAuth,
@@ -94,7 +94,7 @@ MessageRoutes.post(
   },
 );
 
-// DELETE /api/v1/messages/:id - 删除单个消息 (需要消息删除权限)
+// DELETE /api/v1/messages/:id - Delete a single message (requires message delete permission)
 MessageRoutes.delete(
   '/:id',
   requireAuth,
@@ -109,7 +109,7 @@ MessageRoutes.delete(
   },
 );
 
-// DELETE /api/v1/messages - 批量删除消息 (需要消息删除权限)
+// DELETE /api/v1/messages - Batch delete messages (requires message delete permission)
 MessageRoutes.delete(
   '/',
   requireAuth,

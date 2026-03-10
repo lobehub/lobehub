@@ -1,10 +1,10 @@
-// 引入 zod 用于通用 schema
+// Import zod for common schemas
 import { z } from 'zod';
 
-// ==================== 通用分页查询参数 ====================
+// ==================== Common Pagination Query Parameters ====================
 
 /**
- * 通用分页查询参数接口
+ * Common pagination query parameter interface
  */
 export interface IPaginationQuery {
   keyword?: string;
@@ -13,14 +13,14 @@ export interface IPaginationQuery {
 }
 
 /**
- * 通用分页查询参数 Schema
+ * Common pagination query parameter Schema
  */
 export const PaginationQuerySchema = z.object({
   keyword: z
     .string()
     .optional()
     .transform((val) => {
-      if (!val) return ''; // 允许为空，转换为空字符串
+      if (!val) return ''; // Allow empty value, convert to empty string
       return val.trim();
     })
     .refine((val) => val.length <= 100, '搜索关键词长度不能超过100个字符'),

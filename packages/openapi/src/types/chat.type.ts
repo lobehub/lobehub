@@ -4,7 +4,7 @@ import { z } from 'zod';
 // ==================== Chat Service Types ====================
 
 /**
- * 聊天服务参数
+ * Chat service parameters
  */
 export interface ChatServiceParams {
   frequency_penalty?: number;
@@ -38,7 +38,7 @@ export const ChatServiceParamsSchema = z.object({
 });
 
 /**
- * 聊天响应
+ * Chat response
  */
 export interface ChatServiceResponse {
   content: string;
@@ -54,7 +54,7 @@ export interface ChatServiceResponse {
 // ==================== Translation Service Types ====================
 
 /**
- * 翻译服务参数
+ * Translation service parameters
  */
 export interface TranslateServiceParams {
   from?: string;
@@ -76,7 +76,7 @@ export const TranslateServiceParamsSchema = z.object({
 // ==================== Message Generation Types ====================
 
 /**
- * 消息生成参数
+ * Message generation parameters
  */
 export interface MessageGenerationParams {
   agentId?: string;
@@ -128,12 +128,12 @@ export const MessageGenerationParamsSchema = z.object({
 // ==================== Configuration Types ====================
 
 /**
- * 支持的AI提供商
+ * Supported AI providers
  */
 export type AIProvider = 'openai' | 'anthropic' | 'google' | 'groq' | 'vertexai';
 
 /**
- * Chat Service配置
+ * Chat Service configuration
  */
 export interface ChatServiceConfig {
   defaultModel?: string;

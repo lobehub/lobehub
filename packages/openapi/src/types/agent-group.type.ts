@@ -3,10 +3,10 @@ import { z } from 'zod';
 import type { SessionGroupItem } from '@/database/schemas';
 
 // ==================== Agent Group CRUD Types ====================
-// 助理分类（使用 sessionGroups 表存储）相关类型定义
+// Agent group (stored in sessionGroups table) related type definitions
 
 /**
- * 创建助理分类请求参数
+ * Create agent group request parameters
  */
 export interface CreateAgentGroupRequest {
   name: string;
@@ -19,7 +19,7 @@ export const CreateAgentGroupRequestSchema = z.object({
 });
 
 /**
- * 更新助理分类请求参数
+ * Update agent group request parameters
  */
 export interface UpdateAgentGroupRequest {
   id: string;
@@ -33,7 +33,7 @@ export const UpdateAgentGroupRequestSchema = z.object({
 });
 
 /**
- * 删除助理分类请求参数
+ * Delete agent group request parameters
  */
 export interface DeleteAgentGroupRequest {
   id: string;
@@ -42,7 +42,7 @@ export interface DeleteAgentGroupRequest {
 // ==================== Agent Group Response Types ====================
 
 /**
- * 助理分类列表响应类型
+ * Agent group list response type
  */
 export type AgentGroupListResponse = SessionGroupItem[];
 

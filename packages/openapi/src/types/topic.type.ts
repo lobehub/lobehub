@@ -73,7 +73,7 @@ export interface TopicResponse extends TopicItem {
 }
 
 /**
- * Topic 列表响应类型
+ * Topic list response type
  */
 export type TopicListResponse = PaginationQueryResponse<{
   topics: TopicResponse[];

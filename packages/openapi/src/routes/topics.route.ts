@@ -15,10 +15,10 @@ import {
   TopicUpdateRequestSchema,
 } from '../types/topic.type';
 
-// Topic 相关路由
+// Topic-related routes
 const TopicsRoutes = new Hono();
 
-// GET /api/v1/topics - 获取话题列表（支持分页和 agent/group 过滤）
+// GET /api/v1/topics - Get topic list (supports pagination and agent/group filtering)
 TopicsRoutes.get(
   '/',
   requireAuth,
@@ -33,7 +33,7 @@ TopicsRoutes.get(
   },
 );
 
-// POST /api/v1/topics - 创建新的话题
+// POST /api/v1/topics - Create a new topic
 TopicsRoutes.post(
   '/',
   requireAuth,
@@ -48,7 +48,7 @@ TopicsRoutes.post(
   },
 );
 
-// GET /api/v1/topics/:id - 获取指定话题
+// GET /api/v1/topics/:id - Get topic by ID
 TopicsRoutes.get(
   '/:id',
   requireAuth,
@@ -63,7 +63,7 @@ TopicsRoutes.get(
   },
 );
 
-// PATCH /api/v1/topics/:id - 更新话题
+// PATCH /api/v1/topics/:id - Update topic
 TopicsRoutes.patch(
   '/:id',
   requireAuth,
@@ -79,7 +79,7 @@ TopicsRoutes.patch(
   },
 );
 
-// DELETE /api/v1/topics/:id - 删除话题
+// DELETE /api/v1/topics/:id - Delete topic
 TopicsRoutes.delete(
   '/:id',
   requireAuth,

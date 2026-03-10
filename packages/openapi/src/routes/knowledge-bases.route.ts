@@ -19,13 +19,13 @@ import {
 const app = new Hono();
 
 /**
- * 获取知识库列表
+ * Get knowledge base list
  * GET /knowledge-bases
  *
  * Query parameters:
- * - page: number (optional) - 页码，默认1
- * - pageSize: number (optional) - 每页数量，默认20，最大100
- * - keyword: string (optional) - 搜索关键词（匹配名称或描述）
+ * - page: number (optional) - Page number, default 1
+ * - pageSize: number (optional) - Items per page, default 20, max 100
+ * - keyword: string (optional) - Search keyword (matches name or description)
  */
 app.get(
   '/',
@@ -39,15 +39,15 @@ app.get(
 );
 
 /**
- * 创建知识库
+ * Create a knowledge base
  * POST /knowledge-bases
  * Content-Type: application/json
  *
  * Request body:
  * {
- *   "name": "知识库名称",
- *   "description": "知识库描述（可选）",
- *   "avatar": "头像URL（可选）"
+ *   "name": "Knowledge base name",
+ *   "description": "Knowledge base description (optional)",
+ *   "avatar": "Avatar URL (optional)"
  * }
  */
 app.post(
@@ -62,11 +62,11 @@ app.post(
 );
 
 /**
- * 获取知识库详情
+ * Get knowledge base details
  * GET /knowledge-bases/:id
  *
  * Path parameters:
- * - id: string (required) - 知识库ID
+ * - id: string (required) - Knowledge base ID
  */
 app.get(
   '/:id',
@@ -80,18 +80,18 @@ app.get(
 );
 
 /**
- * 更新知识库
+ * Update a knowledge base
  * PATCH /knowledge-bases/:id
  * Content-Type: application/json
  *
  * Path parameters:
- * - id: string (required) - 知识库ID
+ * - id: string (required) - Knowledge base ID
  *
  * Request body:
  * {
- *   "name": "新名称（可选）",
- *   "description": "新描述（可选）",
- *   "avatar": "新头像URL（可选）"
+ *   "name": "New name (optional)",
+ *   "description": "New description (optional)",
+ *   "avatar": "New avatar URL (optional)"
  * }
  */
 app.patch(
@@ -107,11 +107,11 @@ app.patch(
 );
 
 /**
- * 删除知识库
+ * Delete a knowledge base
  * DELETE /knowledge-bases/:id
  *
  * Path parameters:
- * - id: string (required) - 知识库ID
+ * - id: string (required) - Knowledge base ID
  */
 app.delete(
   '/:id',
@@ -125,20 +125,20 @@ app.delete(
 );
 
 /**
- * 获取指定知识库下的文件列表
+ * Get the file list for a specific knowledge base
  * GET /knowledge-bases/:id/files
  *
  * Path parameters:
- * - id: string (required) - 知识库ID
+ * - id: string (required) - Knowledge base ID
  *
  * Query parameters:
- * - page: number (optional) - 页码；仅传 page 时，默认 pageSize=20
- * - pageSize: number (optional) - 每页数量，默认最大100；仅传 pageSize 时，默认 page=1
- * - fileType: string (optional) - 文件类型过滤
- * - keyword: string (optional) - 搜索关键词（匹配文件名）
+ * - page: number (optional) - Page number; when only page is provided, defaults pageSize=20
+ * - pageSize: number (optional) - Items per page, max 100; when only pageSize is provided, defaults page=1
+ * - fileType: string (optional) - File type filter
+ * - keyword: string (optional) - Search keyword (matches file name)
  *
- * 说明：
- * - 未提供 page 和 pageSize 时，不进行分页，返回全部数据
+ * Notes:
+ * - When neither page nor pageSize is provided, returns all data without pagination
  */
 app.get(
   '/:id/files',
@@ -156,7 +156,7 @@ app.get(
 );
 
 /**
- * 批量为知识库添加文件关联
+ * Batch add file associations to a knowledge base
  * POST /knowledge-bases/:id/files/batch
  */
 app.post(
@@ -172,7 +172,7 @@ app.post(
 );
 
 /**
- * 批量移除知识库与文件的关联
+ * Batch remove file associations from a knowledge base
  * DELETE /knowledge-bases/:id/files/batch
  */
 app.delete(
@@ -188,7 +188,7 @@ app.delete(
 );
 
 /**
- * 批量将文件从当前知识库移动到目标知识库
+ * Batch move files from the current knowledge base to a target knowledge base
  * POST /knowledge-bases/:id/files/move
  */
 app.post(

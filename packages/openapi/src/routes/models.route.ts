@@ -13,10 +13,10 @@ import {
   UpdateModelRequestSchema,
 } from '../types/model.type';
 
-// Models 相关路由
+// Models-related routes
 const ModelRoutes = new Hono();
 
-// GET /api/v1/models - 获取模型列表 (支持分页、过滤和分组)
+// GET /api/v1/models - Get model list (supports pagination, filtering, and grouping)
 ModelRoutes.get(
   '/',
   requireAuth,
@@ -28,7 +28,7 @@ ModelRoutes.get(
   },
 );
 
-// POST /api/v1/models - 创建模型
+// POST /api/v1/models - Create a model
 ModelRoutes.post(
   '/',
   requireAuth,
@@ -40,7 +40,7 @@ ModelRoutes.post(
   },
 );
 
-// GET /api/v1/models/:providerId/:modelId - 获取模型详情
+// GET /api/v1/models/:providerId/:modelId - Get model details
 ModelRoutes.get(
   '/:providerId/:modelId',
   requireAuth,
@@ -52,7 +52,7 @@ ModelRoutes.get(
   },
 );
 
-// PATCH /api/v1/models/:providerId/:modelId - 更新模型
+// PATCH /api/v1/models/:providerId/:modelId - Update a model
 ModelRoutes.patch(
   '/:providerId/:modelId',
   requireAuth,

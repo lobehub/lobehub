@@ -19,18 +19,18 @@ import {
 const app = new Hono();
 
 /**
- * 获取文件列表
+ * Get file list
  * GET /files
  *
  * Query parameters:
- * - page: number (optional) - 页码，默认1
- * - pageSize: number (optional) - 每页数量，默认20，最大100
- * - fileType: string (optional) - 文件类型过滤
- * - keyword: string (optional) - 搜索关键词
- * - userId: string (optional) - 用户ID，如果提供则获取指定用户文件
- * - knowledgeBaseId: string (optional) - 知识库ID，筛选属于指定知识库的文件
- * - updatedAtStart: string (optional) - 更新时间起始（ISO 8601格式，如：2024-01-01T00:00:00Z）
- * - updatedAtEnd: string (optional) - 更新时间结束（ISO 8601格式，如：2024-12-31T23:59:59Z）
+ * - page: number (optional) - Page number, default 1
+ * - pageSize: number (optional) - Items per page, default 20, max 100
+ * - fileType: string (optional) - File type filter
+ * - keyword: string (optional) - Search keyword
+ * - userId: string (optional) - User ID; if provided, returns files for the specified user
+ * - knowledgeBaseId: string (optional) - Knowledge base ID, filter files belonging to the specified knowledge base
+ * - updatedAtStart: string (optional) - Update time start (ISO 8601 format, e.g. 2024-01-01T00:00:00Z)
+ * - updatedAtEnd: string (optional) - Update time end (ISO 8601 format, e.g. 2024-12-31T23:59:59Z)
  */
 app.get(
   '/',
@@ -44,19 +44,19 @@ app.get(
 );
 
 /**
- * 文件上传并返回相应的文件
- * 文件的 URL 根据 S3 类型自动生成，是否可以访问取决于 S3 的权限设置
+ * Upload a file and return the corresponding file record
+ * The file URL is auto-generated based on the S3 type; accessibility depends on S3 permission settings
  * POST /files
  * Content-Type: multipart/form-data
  *
  * Form fields:
- * - file: File (required) - 要上传的文件
- * - knowledgeBaseId: string (optional) - 知识库ID
- * - agentId: string (optional) - Agent ID，优先解析为 sessionId 并关联文件
- * - sessionId: string (optional) - 会话ID，如果提供则创建文件和会话的关联关系
- * - skipCheckFileType: boolean (optional) - 是否跳过文件类型检查
- * - directory: string (optional) - 上传目录
- * - skipExist: boolean (optional) - 是否跳过已存在的解析结果，默认false
+ * - file: File (required) - The file to upload
+ * - knowledgeBaseId: string (optional) - Knowledge base ID
+ * - agentId: string (optional) - Agent ID; resolved to sessionId first for file association
+ * - sessionId: string (optional) - Session ID; if provided, creates a file-session association
+ * - skipCheckFileType: boolean (optional) - Whether to skip file type check
+ * - directory: string (optional) - Upload directory
+ * - skipExist: boolean (optional) - Whether to skip existing parse results, default false
  */
 app.post(
   '/',
@@ -69,11 +69,11 @@ app.post(
 );
 
 /**
- * 获取文件详情
+ * Get file details
  * GET /files/:id
  *
  * Path parameters:
- * - id: string (required) - 文件ID
+ * - id: string (required) - File ID
  */
 app.get(
   '/:id',
@@ -87,14 +87,14 @@ app.get(
 );
 
 /**
- * 获取文件访问URL
+ * Get file access URL
  * GET /files/:id/url
  *
  * Path parameters:
- * - id: string (required) - 文件ID
+ * - id: string (required) - File ID
  *
  * Query parameters:
- * - expiresIn: number (optional) - URL过期时间（秒），默认3600
+ * - expiresIn: number (optional) - URL expiration time (seconds), default 3600
  */
 app.get(
   '/:id/url',
@@ -109,15 +109,15 @@ app.get(
 );
 
 /**
- * 更新文件
+ * Update a file
  * PATCH /files/:id
  *
  * Path parameters:
- * - id: string (required) - 文件ID
+ * - id: string (required) - File ID
  *
  * Request body (JSON):
  * {
- *   "knowledgeBaseId": "kb-id" | null (optional) - 知识库ID，传 null 表示取消关联
+ *   "knowledgeBaseId": "kb-id" | null (optional) - Knowledge base ID; pass null to remove association
  * }
  */
 app.patch(
@@ -133,11 +133,11 @@ app.patch(
 );
 
 /**
- * 删除文件
+ * Delete a file
  * DELETE /files/:id
  *
  * Path parameters:
- * - id: string (required) - 文件ID
+ * - id: string (required) - File ID
  */
 app.delete(
   '/:id',
@@ -151,19 +151,19 @@ app.delete(
 );
 
 /**
- * 解析文件内容
+ * Parse file content
  * POST /files/:id/parses
  *
  * Path parameters:
- * - id: string (required) - 文件ID
+ * - id: string (required) - File ID
  *
  * Query parameters:
- * - skipExist: boolean (optional) - 是否跳过已存在的解析结果，默认false
+ * - skipExist: boolean (optional) - Whether to skip existing parse results, default false
  *
- * 功能：
- * - 解析文档文件的文本内容（PDF、Word、Excel等）
- * - 支持跳过已解析的文件，避免重复解析
- * - 返回解析后的文本内容和元数据
+ * Features:
+ * - Parses the text content of document files (PDF, Word, Excel, etc.)
+ * - Supports skipping already-parsed files to avoid duplicate parsing
+ * - Returns the parsed text content and metadata
  */
 app.post(
   '/:id/parses',
@@ -178,15 +178,15 @@ app.post(
 );
 
 /**
- * 触发文件分块任务（可选：自动触发嵌入）
+ * Trigger file chunking task (optional: auto-trigger embedding)
  * POST /files/:id/chunks
  *
  * Path parameters:
- * - id: string (required) - 文件ID
+ * - id: string (required) - File ID
  *
  * Request body (JSON):
- * - skipExist?: boolean - 是否跳过已存在的分块任务/结果
- * - autoEmbedding?: boolean - 分块成功后是否自动触发嵌入
+ * - skipExist?: boolean - Whether to skip existing chunking tasks/results
+ * - autoEmbedding?: boolean - Whether to automatically trigger embedding after chunking succeeds
  */
 app.post(
   '/:id/chunks',
@@ -201,16 +201,16 @@ app.post(
 );
 
 /**
- * 查询文件分块结果和状态
+ * Query file chunking results and status
  * GET /files/:id/chunks
  *
  * Path parameters:
- * - id: string (required) - 文件ID
+ * - id: string (required) - File ID
  *
- * 功能：
- * - 查询文件分块任务状态（进行中/成功/失败）
- * - 返回当前分块数量
- * - 同时返回嵌入任务状态等相关信息
+ * Features:
+ * - Query file chunking task status (in progress / succeeded / failed)
+ * - Returns the current chunk count
+ * - Also returns embedding task status and other related information
  */
 app.get(
   '/:id/chunks',
@@ -224,18 +224,18 @@ app.get(
 );
 
 /**
- * 批量文件上传
+ * Batch file upload
  * POST /files/batches
  * Content-Type: multipart/form-data
  *
  * Form fields:
- * - files: File[] (required) - 要上传的文件列表
- * - knowledgeBaseId: string (optional) - 知识库ID
- * - agentId: string (optional) - Agent ID，优先解析为 sessionId 并关联文件
- * - sessionId: string (optional) - 会话ID，如果提供则创建文件和会话的关联关系
- * - skipCheckFileType: boolean (optional) - 是否跳过文件类型检查
- * - directory: string (optional) - 上传目录
- * - skipExist: boolean (optional) - 是否跳过已存在的解析结果，默认false
+ * - files: File[] (required) - List of files to upload
+ * - knowledgeBaseId: string (optional) - Knowledge base ID
+ * - agentId: string (optional) - Agent ID; resolved to sessionId first for file association
+ * - sessionId: string (optional) - Session ID; if provided, creates a file-session association
+ * - skipCheckFileType: boolean (optional) - Whether to skip file type check
+ * - directory: string (optional) - Upload directory
+ * - skipExist: boolean (optional) - Whether to skip existing parse results, default false
  */
 app.post(
   '/batches',
@@ -248,7 +248,7 @@ app.post(
 );
 
 /**
- * 批量获取文件详情
+ * Batch get file details
  * POST /files/queries
  * Content-Type: application/json
  *
@@ -257,9 +257,9 @@ app.post(
  *   "fileIds": ["file1", "file2", "file3"]
  * }
  *
- * 功能：
- * - 根据文件ID列表批量获取文件详情
- * - 返回成功和失败的统计信息
+ * Features:
+ * - Batch retrieve file details by a list of file IDs
+ * - Returns success and failure statistics
  */
 app.post(
   '/queries',

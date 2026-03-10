@@ -17,9 +17,9 @@ import {
 const UserRoutes = new Hono();
 
 /**
- * 获取当前登录用户信息
+ * Get current logged-in user information
  * GET /api/v1/users/me
- * 需要认证，但不需要特殊权限
+ * Requires authentication but no special permission
  */
 UserRoutes.get('/me', requireAuth, async (c) => {
   const userController = new UserController();
@@ -27,9 +27,9 @@ UserRoutes.get('/me', requireAuth, async (c) => {
 });
 
 /**
- * 获取系统中的用户列表 (支持搜索)
+ * Get the list of users in the system (supports search)
  * GET /api/v1/users?keyword=xxx&page=1&pageSize=10
- * 需要用户管理权限
+ * Requires user management permission
  */
 UserRoutes.get(
   '/',
@@ -43,9 +43,9 @@ UserRoutes.get(
 );
 
 /**
- * 创建新用户
+ * Create a new user
  * POST /api/v1/users
- * 需要用户创建权限
+ * Requires user create permission
  */
 UserRoutes.post(
   '/',
@@ -59,9 +59,9 @@ UserRoutes.post(
 );
 
 /**
- * 根据ID获取用户详情
+ * Get user details by ID
  * GET /api/v1/users/:id
- * 需要用户读取权限
+ * Requires user read permission
  */
 UserRoutes.get(
   '/:id',
@@ -75,9 +75,9 @@ UserRoutes.get(
 );
 
 /**
- * 更新用户信息 (RESTful 部分更新)
+ * Update user information (RESTful partial update)
  * PATCH /api/v1/users/:id
- * 需要用户更新权限
+ * Requires user update permission
  */
 UserRoutes.patch(
   '/:id',
@@ -92,9 +92,9 @@ UserRoutes.patch(
 );
 
 /**
- * 删除用户
+ * Delete a user
  * DELETE /api/v1/users/:id
- * 需要用户删除权限
+ * Requires user delete permission
  */
 UserRoutes.delete(
   '/:id',
@@ -108,9 +108,9 @@ UserRoutes.delete(
 );
 
 /**
- * 获取用户角色信息
+ * Get user role information
  * GET /api/v1/users/:id/roles
- * 需要用户角色查看权限
+ * Requires user role read permission
  */
 UserRoutes.get(
   '/:id/roles',
@@ -124,9 +124,9 @@ UserRoutes.get(
 );
 
 /**
- * 更新用户关联的角色
+ * Update the roles associated with a user
  * PATCH /api/v1/users/:id/roles
- * 需要用户角色分配权限
+ * Requires user role assignment permission
  */
 UserRoutes.patch(
   '/:id/roles',
@@ -141,9 +141,9 @@ UserRoutes.patch(
 );
 
 /**
- * 清空用户的角色列表
+ * Clear all roles for a user
  * DELETE /api/v1/users/:id/roles
- * 需要用户角色更新权限
+ * Requires user role update permission
  */
 UserRoutes.delete(
   '/:id/roles',

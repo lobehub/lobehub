@@ -13,13 +13,13 @@ import {
   UpdateAgentRequestSchema,
 } from '../types/agent.type';
 
-// Agent 相关路由
+// Agent-related routes
 const AgentRoutes = new Hono();
 
 /**
- * 获取系统中的 Agent 列表
+ * Get the list of Agents in the system
  * GET /api/v1/agents
- * 需要 Agent 读取权限
+ * Requires Agent read permission
  */
 AgentRoutes.get(
   '/',
@@ -36,9 +36,9 @@ AgentRoutes.get(
 );
 
 /**
- * 创建智能体
+ * Create an Agent
  * POST /api/v1/agents
- * 需要 Agent 创建权限
+ * Requires Agent create permission
  */
 AgentRoutes.post(
   '/',
@@ -55,9 +55,9 @@ AgentRoutes.post(
 );
 
 /**
- * 根据 ID 获取 Agent 详情
+ * Get Agent details by ID
  * GET /api/v1/agents/:id
- * 需要 Agent 读取权限
+ * Requires Agent read permission
  */
 AgentRoutes.get(
   '/:id',
@@ -74,9 +74,9 @@ AgentRoutes.get(
 );
 
 /**
- * 更新智能体
+ * Update an Agent
  * PUT /api/v1/agents/:id
- * 需要 Agent 更新权限
+ * Requires Agent update permission
  */
 AgentRoutes.patch(
   '/:id',
@@ -94,9 +94,9 @@ AgentRoutes.patch(
 );
 
 /**
- * 删除智能体
+ * Delete an Agent
  * DELETE /api/v1/agents/:id
- * 需要 Agent 删除权限（仅管理员）
+ * Requires Agent delete permission (admin only)
  */
 AgentRoutes.delete(
   '/:id',
