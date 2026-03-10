@@ -5,7 +5,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export const params = {
-  baseURL: 'https://api.brainiall.com/v1',
+  baseURL: 'https://apim-ai-apis.azure-api.net/v1',
   chatCompletion: {
     handlePayload: (payload) => {
       const { model, ...rest } = payload;
@@ -21,7 +21,7 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_BRAINIALL_CHAT_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    const base = (client as any).baseURL || 'https://api.brainiall.com/v1';
+    const base = (client as any).baseURL || 'https://apim-ai-apis.azure-api.net/v1';
     const url = `${base.replace(/\/+$/, '')}/models`;
 
     const res = await fetch(url, {

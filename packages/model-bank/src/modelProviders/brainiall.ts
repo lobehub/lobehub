@@ -10,7 +10,7 @@ const Brainiall: ModelProviderCard = {
   name: 'Brainiall',
   settings: {
     proxyUrl: {
-      placeholder: 'https://api.brainiall.com/v1',
+      placeholder: 'https://apim-ai-apis.azure-api.net/v1',
     },
     sdkType: 'openai',
     showModelFetcher: true,
