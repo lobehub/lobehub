@@ -672,8 +672,14 @@ export const createRuntimeExecutors = (
 
       const newState = structuredClone(state);
 
+      // Append state to content so AI model can see resource IDs for multi-step workflows
+      let modelContent = executionResult.content;
+      if (executionResult.state && Object.keys(executionResult.state).length > 0) {
+        modelContent += `\n\n${JSON.stringify(executionResult.state)}`;
+      }
+
       newState.messages.push({
-        content: executionResult.content,
+        content: modelContent,
         role: 'tool',
         tool_call_id: chatToolPayload.id,
       });
@@ -993,7 +999,17 @@ export const createRuntimeExecutors = (
     // Use conversation-flow parse to resolve branching into linear flat list
     // parse() handles assistantGroup, compare, supervisor, etc. virtual message types
     const { flatList } = parse(latestMessages);
-    newState.messages = flatList;
+
+    // Append pluginState to content for tool messages so AI model can see resource IDs
+    newState.messages = flatList.map((msg) => {
+      if (msg.role === 'tool' && msg.pluginState && Object.keys(msg.pluginState).length > 0) {
+        return {
+          ...msg,
+          content: `${msg.content}\n\n${JSON.stringify(msg.pluginState)}`,
+        };
+      }
+      return msg;
+    });
 
     log(
       `[${operationLogId}][call_tools_batch] Refreshed ${newState.messages.length} messages from database`,
