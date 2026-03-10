@@ -102,7 +102,9 @@ export class ResponsesService extends BaseService {
       status: 'completed' as const,
       usage: {
         input_tokens: 0,
+        input_tokens_details: { cached_tokens: 0 },
         output_tokens: 0,
+        output_tokens_details: { reasoning_tokens: 0 },
         total_tokens: 0,
       },
     };
@@ -134,30 +136,47 @@ export class ResponsesService extends BaseService {
     status: ResponseObject['status'];
     usage?: ResponseUsage;
   }): ResponseObject {
+    const p = opts.params as Record<string, any>;
     return {
+      background: p.background ?? false,
       completed_at: opts.completedAt ?? null,
       created_at: opts.createdAt,
       error: opts.error ?? null,
+      frequency_penalty: p.frequency_penalty ?? 0,
       id: opts.id,
       incomplete_details: null,
       instructions: opts.params.instructions ?? null,
       max_output_tokens: opts.params.max_output_tokens ?? null,
-      metadata: opts.params.metadata ?? null,
+      max_tool_calls: p.max_tool_calls ?? null,
+      metadata: opts.params.metadata ?? {},
       model: opts.params.model,
       object: 'response',
       output: opts.output,
       output_text: opts.outputText,
-      parallel_tool_calls: opts.params.parallel_tool_calls ?? null,
+      parallel_tool_calls: opts.params.parallel_tool_calls ?? true,
+      presence_penalty: p.presence_penalty ?? 0,
       previous_response_id: opts.params.previous_response_id ?? null,
+      prompt_cache_key: p.prompt_cache_key ?? null,
       reasoning: opts.params.reasoning ?? null,
+      safety_identifier: p.safety_identifier ?? null,
+      service_tier: p.service_tier ?? 'default',
       status: opts.status,
-      temperature: opts.params.temperature ?? null,
-      tool_choice: opts.params.tool_choice ?? null,
-      tools: opts.params.tools ?? [],
-      top_p: opts.params.top_p ?? null,
-      truncation: opts.params.truncation ?? null,
-      usage: opts.usage ?? null,
+      store: p.store ?? true,
+      temperature: opts.params.temperature ?? 1,
+      text: { format: { type: 'text' } },
+      tool_choice: opts.params.tool_choice ?? 'auto',
+      tools: opts.params.tools?.map((t: any) => ({ ...t, strict: t.strict ?? null })) ?? [],
+      top_logprobs: p.top_logprobs ?? 0,
+      top_p: opts.params.top_p ?? 1,
+      truncation: opts.params.truncation ?? 'disabled',
+      usage: {
+        input_tokens: opts.usage?.input_tokens ?? 0,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens: opts.usage?.output_tokens ?? 0,
+        output_tokens_details: { reasoning_tokens: 0 },
+        total_tokens: opts.usage?.total_tokens ?? 0,
+      },
       user: opts.params.user ?? null,
-    };
+    } as any;
   }
 }

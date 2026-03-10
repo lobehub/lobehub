@@ -47,13 +47,15 @@ export type InputContentPart = z.infer<typeof InputContentPartSchema>;
 
 // ==================== Item Types ====================
 
-export const MessageItemSchema = z.object({
-  content: z.array(ContentPartSchema),
-  id: z.string().optional(),
-  role: z.enum(['user', 'assistant', 'system', 'developer']),
-  status: z.enum(['completed', 'in_progress']).optional(),
-  type: z.literal('message'),
-});
+export const MessageItemSchema = z
+  .object({
+    content: z.union([z.string(), z.array(ContentPartSchema)]),
+    id: z.string().optional(),
+    role: z.enum(['user', 'assistant', 'system', 'developer']),
+    status: z.enum(['completed', 'in_progress']).optional(),
+    type: z.literal('message'),
+  })
+  .passthrough();
 export type MessageItem = z.infer<typeof MessageItemSchema>;
 
 export const FunctionCallItemSchema = z.object({
@@ -158,37 +160,41 @@ export type ReasoningConfig = z.infer<typeof ReasoningConfigSchema>;
 
 // ==================== Request Schema ====================
 
-export const CreateResponseRequestSchema = z.object({
-  input: z.union([z.string(), z.array(InputItemSchema)]),
-  instructions: z.string().nullish(),
-  max_output_tokens: z.number().int().positive().nullish(),
-  metadata: z.record(z.string()).nullish(),
-  model: z.string(),
-  parallel_tool_calls: z.boolean().nullish(),
-  previous_response_id: z.string().nullish(),
-  reasoning: ReasoningConfigSchema.nullish(),
-  stream: z.boolean().nullish(),
-  temperature: z.number().min(0).max(2).nullish(),
-  tool_choice: z
-    .union([
-      z.enum(['auto', 'required', 'none']),
-      z.object({ name: z.string(), type: z.literal('function') }),
-    ])
-    .nullish(),
-  tools: z.array(ToolSchema).nullish(),
-  top_p: z.number().min(0).max(1).nullish(),
-  truncation: TruncationSchema.nullish(),
-  user: z.string().nullish(),
-});
+export const CreateResponseRequestSchema = z
+  .object({
+    input: z.union([z.string(), z.array(InputItemSchema)]),
+    instructions: z.string().nullish(),
+    max_output_tokens: z.number().int().positive().nullish(),
+    metadata: z.record(z.string()).nullish(),
+    model: z.string(),
+    parallel_tool_calls: z.boolean().nullish(),
+    previous_response_id: z.string().nullish(),
+    reasoning: ReasoningConfigSchema.nullish(),
+    stream: z.boolean().nullish(),
+    temperature: z.number().min(0).max(2).nullish(),
+    tool_choice: z
+      .union([
+        z.enum(['auto', 'required', 'none']),
+        z.object({ name: z.string(), type: z.literal('function') }),
+      ])
+      .nullish(),
+    tools: z.array(ToolSchema).nullish(),
+    top_p: z.number().min(0).max(1).nullish(),
+    truncation: TruncationSchema.nullish(),
+    user: z.string().nullish(),
+  })
+  .passthrough();
 
 export type CreateResponseRequest = z.infer<typeof CreateResponseRequestSchema>;
 
 // ==================== Response Object ====================
 
 export interface ResponseObject {
+  background?: boolean | null;
   completed_at?: number | null;
   created_at: number;
   error?: ResponseError | null;
+  frequency_penalty?: number | null;
   id: string;
   incomplete_details?: { reason: string } | null;
   instructions?: string | null;
@@ -199,14 +205,18 @@ export interface ResponseObject {
   output: OutputItem[];
   output_text: string;
   parallel_tool_calls?: boolean | null;
+  presence_penalty?: number | null;
   previous_response_id?: string | null;
   reasoning?: ReasoningConfig | null;
+  service_tier?: string | null;
   status: ResponseStatus;
+  store?: boolean | null;
   temperature?: number | null;
+  text?: { format?: { type: string } };
   tool_choice?: CreateResponseRequest['tool_choice'];
   tools?: Tool[];
   top_p?: number | null;
-  truncation?: Truncation | null;
+  truncation?: string | null;
   usage?: ResponseUsage | null;
   user?: string | null;
 }
