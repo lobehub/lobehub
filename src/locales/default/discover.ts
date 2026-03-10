@@ -1093,6 +1093,16 @@ export default {
 
   'skills.hero.guide.human': 'I am Human',
 
+  'skills.sorts.createdAt': 'Recently Published',
+
+  'skills.sorts.installCount': 'Downloads',
+
+  'skills.sorts.name': 'Name',
+
+  'skills.sorts.stars': 'GitHub Stars',
+
+  'skills.sorts.updatedAt': 'Recently Updated',
+
   'tab.assistant': 'Agent',
 
   'tab.home': 'Home',
