@@ -1,7 +1,36 @@
 import { type DesktopOnboardingScreen } from './types';
 import { isDesktopOnboardingScreen } from './types';
 
+export const DESKTOP_ONBOARDING_COMPLETED_KEY = 'lobechat:desktop:onboarding:completed:v1';
 export const DESKTOP_ONBOARDING_SCREEN_KEY = 'lobechat:desktop:onboarding:screen:v1';
+
+/**
+ * Check if user has ever completed onboarding ( persisted in localStorage)
+ * This is different from dataSyncConfig.active - it remains true after sign-out
+ */
+export const getDesktopOnboardingCompleted = () => {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    return window.localStorage.getItem(DESKTOP_ONBOARDING_COMPLETED_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Mark onboarding as completed
+ */
+export const setDesktopOnboardingCompleted = () => {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    window.localStorage.setItem(DESKTOP_ONBOARDING_COMPLETED_KEY, '1');
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Get the persisted onboarding screen (for restoring after app restart)

@@ -16,6 +16,7 @@ import WelcomeStep from './features/WelcomeStep';
 import {
   clearDesktopOnboardingScreen,
   getDesktopOnboardingScreen,
+  setDesktopOnboardingCompleted,
   setDesktopOnboardingScreen,
 } from './storage';
 import { DesktopOnboardingScreen, isDesktopOnboardingScreen } from './types';
@@ -144,8 +145,8 @@ const DesktopOnboardingPage = memo(() => {
       const next = flow[idx + 1];
 
       if (!next) {
-        // Complete onboarding - clear persisted screen state
-        // Note: onboarding completion is now determined by dataSyncConfig.active in main process
+        // Complete onboarding - mark as completed and clear persisted screen state
+        setDesktopOnboardingCompleted();
         clearDesktopOnboardingScreen();
 
         // Restore window minimum size before hard reload (cleanup won't run due to hard navigation)
