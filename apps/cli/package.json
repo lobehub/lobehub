@@ -21,6 +21,7 @@
   "dependencies": {
     "@trpc/client": "^11.8.1",
     "commander": "^13.1.0",
+    "debug": "^4.4.0",
     "diff": "^8.0.3",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1",
