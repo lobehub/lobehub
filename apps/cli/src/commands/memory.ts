@@ -35,21 +35,8 @@ export function registerMemoryCommand(program: Command) {
       const allResults: Record<string, any[]> = {};
 
       for (const cat of categoriesToFetch) {
-        const getter = `get${capitalize(cat)}` as string;
-        const getterPlural = `${getter}s` as string;
-
-        // Try plural first (getIdentities, getActivities, etc.), then singular
-        const router = client.userMemory as any;
         try {
-          if (router[getterPlural]) {
-            allResults[cat] = await router[getterPlural].query();
-          } else if (router[getter]) {
-            allResults[cat] = await router[getter].query();
-          } else {
-            // Try the special name patterns
-            const items = await fetchCategory(client, cat);
-            allResults[cat] = items;
-          }
+          allResults[cat] = await fetchCategory(client, cat);
         } catch {
           allResults[cat] = [];
         }
@@ -112,8 +99,11 @@ export function registerMemoryCommand(program: Command) {
 
       try {
         const result = await (client.userMemory as any).createIdentity.mutate(input);
-        const id = result?.id || 'unknown';
-        console.log(`${pc.green('✓')} Created identity memory ${pc.bold(id)}`);
+        const memoryId = result?.userMemoryId || 'unknown';
+        const identityId = result?.identityId || 'unknown';
+        console.log(
+          `${pc.green('✓')} Created identity memory ${pc.bold(memoryId)} (identity: ${pc.bold(identityId)})`,
+        );
       } catch (error: any) {
         log.error(`Failed to create identity: ${error.message}`);
         process.exit(1);

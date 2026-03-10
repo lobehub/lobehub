@@ -271,9 +271,7 @@ export class AiInfraRepos {
       return allModels.some((model) => model.providerId === provider.id && model.type === 'image');
     });
     const enabledVideoAiProviders = enabledAiProviders.filter((provider) => {
-      return allModels.some(
-        (model) => model.providerId === provider.id && model.type === 'video',
-      );
+      return allModels.some((model) => model.providerId === provider.id && model.type === 'video');
     });
 
     return {
@@ -393,6 +391,7 @@ export class AiInfraRepos {
       enabled?: boolean;
       limit?: number;
       offset?: number;
+      type?: string;
     },
   ) => {
     const aiModels = await this.aiModelModel.getModelListByProviderId(providerId);
@@ -408,6 +407,10 @@ export class AiInfraRepos {
 
     if (typeof options?.enabled === 'boolean') {
       list = list.filter((m) => m.enabled === options.enabled);
+    }
+
+    if (options?.type) {
+      list = list.filter((m) => m.type === options.type);
     }
 
     if (typeof options?.offset === 'number' || typeof options?.limit === 'number') {

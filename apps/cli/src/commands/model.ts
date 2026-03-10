@@ -15,20 +15,29 @@ export function registerModelCommand(program: Command) {
     .description('List models for a provider')
     .option('-L, --limit <n>', 'Maximum number of items', '50')
     .option('--enabled', 'Only show enabled models')
+    .option(
+      '--type <type>',
+      'Filter by model type (chat|embedding|tts|stt|image|video|text2music|realtime)',
+    )
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (
         providerId: string,
-        options: { enabled?: boolean; json?: string | boolean; limit?: string },
+        options: { enabled?: boolean; json?: string | boolean; limit?: string; type?: string },
       ) => {
         const client = await getTrpcClient();
 
         const input: Record<string, any> = { id: providerId };
         if (options.limit) input.limit = Number.parseInt(options.limit, 10);
         if (options.enabled) input.enabled = true;
+        if (options.type) input.type = options.type;
 
         const result = await client.aiModel.getAiProviderModelList.query(input as any);
-        const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+        let items = Array.isArray(result) ? result : ((result as any).items ?? []);
+
+        if (options.type) {
+          items = items.filter((m: any) => m.type === options.type);
+        }
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -83,6 +92,65 @@ export function registerModelCommand(program: Command) {
       if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
     });
 
+  // ── create ────────────────────────────────────────────
+
+  model
+    .command('create')
+    .description('Create a new model')
+    .requiredOption('--id <id>', 'Model ID')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--display-name <name>', 'Display name')
+    .option(
+      '--type <type>',
+      'Model type (chat|embedding|tts|stt|image|video|text2music|realtime)',
+      'chat',
+    )
+    .action(
+      async (options: { displayName?: string; id: string; provider: string; type?: string }) => {
+        const client = await getTrpcClient();
+
+        const input: Record<string, any> = {
+          id: options.id,
+          providerId: options.provider,
+          type: options.type || 'chat',
+        };
+        if (options.displayName) input.displayName = options.displayName;
+
+        const resultId = await client.aiModel.createAiModel.mutate(input as any);
+        console.log(`${pc.green('✓')} Created model ${pc.bold(resultId || options.id)}`);
+      },
+    );
+
+  // ── edit ─────────────────────────────────────────────
+
+  model
+    .command('edit <id>')
+    .description('Update model info')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--display-name <name>', 'Display name')
+    .option('--type <type>', 'Model type (chat|embedding|tts|stt|image|video|text2music|realtime)')
+    .action(
+      async (id: string, options: { displayName?: string; provider: string; type?: string }) => {
+        if (!options.displayName && !options.type) {
+          log.error('No changes specified. Use --display-name or --type.');
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+
+        const value: Record<string, any> = {};
+        if (options.displayName) value.displayName = options.displayName;
+        if (options.type) value.type = options.type;
+
+        await client.aiModel.updateAiModel.mutate({
+          id,
+          providerId: options.provider,
+          value: value as any,
+        });
+        console.log(`${pc.green('✓')} Updated model ${pc.bold(id)}`);
+      },
+    );
+
   // ── toggle ────────────────────────────────────────────
 
   model
@@ -129,5 +197,63 @@ export function registerModelCommand(program: Command) {
       const client = await getTrpcClient();
       await client.aiModel.removeAiModel.mutate({ id, providerId: options.provider });
       console.log(`${pc.green('✓')} Deleted model ${pc.bold(id)}`);
+    });
+
+  // ── batch-toggle ────────────────────────────────────
+
+  model
+    .command('batch-toggle <ids...>')
+    .description('Enable or disable multiple models at once')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--enable', 'Enable the models')
+    .option('--disable', 'Disable the models')
+    .action(
+      async (ids: string[], options: { disable?: boolean; enable?: boolean; provider: string }) => {
+        if (options.enable === undefined && options.disable === undefined) {
+          log.error('Specify --enable or --disable.');
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+        const enabled = options.enable === true;
+
+        await client.aiModel.batchToggleAiModels.mutate({
+          enabled,
+          id: options.provider,
+          models: ids,
+        } as any);
+        console.log(
+          `${pc.green('✓')} ${enabled ? 'Enabled' : 'Disabled'} ${ids.length} model(s) for provider ${pc.bold(options.provider)}`,
+        );
+      },
+    );
+
+  // ── clear ───────────────────────────────────────────
+
+  model
+    .command('clear')
+    .description('Clear models for a provider')
+    .requiredOption('--provider <providerId>', 'Provider ID')
+    .option('--remote', 'Only clear remote/fetched models')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(async (options: { provider: string; remote?: boolean; yes?: boolean }) => {
+      const label = options.remote ? 'remote models' : 'all models';
+      if (!options.yes) {
+        const confirmed = await confirm(
+          `Are you sure you want to clear ${label} for provider ${options.provider}?`,
+        );
+        if (!confirmed) {
+          console.log('Cancelled.');
+          return;
+        }
+      }
+
+      const client = await getTrpcClient();
+      if (options.remote) {
+        await client.aiModel.clearRemoteModels.mutate({ providerId: options.provider } as any);
+      } else {
+        await client.aiModel.clearModelsByProvider.mutate({ providerId: options.provider } as any);
+      }
+      console.log(`${pc.green('✓')} Cleared ${label} for provider ${pc.bold(options.provider)}`);
     });
 }

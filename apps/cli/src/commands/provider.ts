@@ -166,6 +166,14 @@ export function registerProviderCommand(program: Command) {
           show?: boolean;
         },
       ) => {
+        // lobehub is a platform-managed provider, users cannot configure its API key or base URL
+        if (id === 'lobehub' && (options.apiKey !== undefined || options.baseUrl !== undefined)) {
+          log.error(
+            `Provider "lobehub" is managed by the LobeHub platform. You cannot set --api-key or --base-url for it.`,
+          );
+          process.exit(1);
+        }
+
         const client = await getTrpcClient();
 
         // Show current config

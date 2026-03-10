@@ -35,7 +35,7 @@ describe('lh generate - E2E', () => {
       const output = run('gen text "Reply with just the word OK"');
       expect(output).toBeTruthy();
       expect(output.length).toBeGreaterThan(0);
-    });
+    }, 60_000);
 
     it('should generate text with --json flag', () => {
       const output = run('gen text "Reply with just the word OK" --json');
@@ -43,27 +43,27 @@ describe('lh generate - E2E', () => {
       // OpenAI format
       expect(parsed).toHaveProperty('model');
       expect(parsed.choices?.[0]?.message?.content || parsed.content?.[0]?.text).toBeTruthy();
-    });
+    }, 60_000);
 
     it('should generate text with system prompt', () => {
       const output = run('gen text "Say hello" -s "You must reply in French only"');
       expect(output).toBeTruthy();
-    });
+    }, 60_000);
 
     it('should generate text with --stream flag', () => {
       const output = run('gen text "Reply with just the word OK" --stream');
       expect(output).toBeTruthy();
-    });
+    }, 60_000);
 
     it('should generate text with custom model', () => {
       const output = run('gen text "Reply with just OK" -m "openai/gpt-4o-mini"');
       expect(output).toBeTruthy();
-    });
+    }, 60_000);
 
     it('should generate text with temperature option', () => {
       const output = run('gen text "Reply with just the number 42" --temperature 0');
       expect(output).toContain('42');
-    });
+    }, 60_000);
   });
 
   // ── list ──────────────────────────────────────────────

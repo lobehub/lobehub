@@ -51,12 +51,20 @@ export function registerVideoCommand(parent: Command) {
 
         const data = r.data || r;
         console.log(`${pc.green('✓')} Video generation started`);
-        if (data.generationId) {
-          console.log(`  Generation ID: ${pc.bold(data.generationId)}`);
+        if (data.batch?.id) console.log(`  Batch ID: ${pc.bold(data.batch.id)}`);
+
+        const generations = data.generations || [];
+        if (generations.length > 0) {
+          for (const gen of generations) {
+            if (gen.asyncTaskId) {
+              console.log(`  Generation ${pc.bold(gen.id)} → Task ${pc.dim(gen.asyncTaskId)}`);
+            }
+          }
+          console.log();
+          console.log(
+            pc.dim('Use "lh generate status <generationId> <taskId>" to check progress.'),
+          );
         }
-        console.log(
-          pc.dim('Video generation runs asynchronously. Check status or wait for notification.'),
-        );
       },
     );
 }
