@@ -1,12 +1,29 @@
 'use client';
 
+import { DEFAULT_INBOX_AVATAR, SESSION_CHAT_URL } from '@lobechat/const';
 import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
-import { Block, Button, Flexbox, Highlighter, Icon, Markdown, Segmented, Select, Text } from '@lobehub/ui';
+import {
+  Avatar,
+  Block,
+  Button,
+  Flexbox,
+  Highlighter,
+  Icon,
+  Markdown,
+  Segmented,
+  Select,
+  Text,
+} from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
-import { BotIcon, CheckIcon, CopyIcon, UserRoundIcon } from 'lucide-react';
+import { BotIcon, UserRoundIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 
 import Title from '../../../../components/Title';
 import VsCodeIcon from './VsCodeIcon';
@@ -99,9 +116,11 @@ const genLayout = (
 const Platform = memo<PlatformProps>(
   ({ lite, identifier, mobile, expandCodeByDefault, downloadUrl }) => {
     const { t } = useTranslation('discover');
+    const navigate = useNavigate();
+    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+    const sendMessage = useChatStore((s) => s.sendMessage);
     const [active, setActive] = useState<PlatformType>(PlatformType.Claude);
     const [mode, setMode] = useState<GuideMode>('agent');
-    const [copied, setCopied] = useState(false);
 
     const options = [
       {
@@ -176,11 +195,18 @@ const Platform = memo<PlatformProps>(
 
     const agentPrompt = `Curl https://lobehub.com/skills/${identifier}/skill.md, then follow the instructions to set up LobeHub Skills Marketplace and install the skill. Once installed, read the SKILL.md file in the installed directory and follow its instructions to complete the task.`;
 
-    const handleCopyPrompt = useCallback(() => {
-      navigator.clipboard.writeText(agentPrompt);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }, [agentPrompt]);
+    const handleUseOnLobeAI = useCallback(() => {
+      if (!inboxAgentId) return;
+
+      // Send message to LobeAI
+      sendMessage({
+        context: { agentId: inboxAgentId },
+        message: agentPrompt,
+      });
+
+      // Navigate to LobeAI chat session
+      navigate(SESSION_CHAT_URL(inboxAgentId, mobile));
+    }, [agentPrompt, inboxAgentId, mobile, navigate, sendMessage]);
 
     return (
       <Block gap={lite ? 0 : 16} padding={4} variant={lite ? 'outlined' : 'borderless'}>
@@ -228,14 +254,12 @@ const Platform = memo<PlatformProps>(
             <Flexbox padding={8}>
               <Button
                 block
-                icon={<Icon icon={copied ? CheckIcon : CopyIcon} />}
+                icon={<Avatar avatar={DEFAULT_INBOX_AVATAR} size={18} />}
                 size={'large'}
                 type={'primary'}
-                onClick={handleCopyPrompt}
+                onClick={handleUseOnLobeAI}
               >
-                {copied
-                  ? t('skills.details.sidebar.agent.copied')
-                  : t('skills.details.sidebar.agent.copyPrompt')}
+                {t('skills.details.sidebar.agent.useOnLobeAI')}
               </Button>
             </Flexbox>
           </Flexbox>
