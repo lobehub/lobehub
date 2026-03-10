@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.1-canary.5",
+  "version": "0.0.1-canary.8",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js"
@@ -21,7 +21,8 @@
   "dependencies": {
     "@trpc/client": "^11.8.1",
     "commander": "^13.1.0",
-    "diff": "^7.0.0",
+    "debug": "^4.4.0",
+    "diff": "^8.0.3",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1",
     "superjson": "^2.2.6",
@@ -29,7 +30,7 @@
   },
   "devDependencies": {
     "@lobechat/device-gateway-client": "workspace:*",
-    "@types/diff": "^6.0.0",
+    "@lobechat/local-file-shell": "workspace:*",
     "@types/node": "^22.13.5",
     "@types/ws": "^8.18.1",
     "tsup": "^8.4.0",

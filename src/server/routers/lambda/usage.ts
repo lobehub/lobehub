@@ -14,6 +14,17 @@ const usageProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 });
 
 export const usageRouter = router({
+  findAndGroupByDateRange: usageProcedure
+    .input(
+      z.object({
+        endAt: z.string(),
+        startAt: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return await ctx.usageRecordService.findAndGroupByDateRange(input.startAt, input.endAt);
+    }),
+
   findAndGroupByDay: usageProcedure
     .input(
       z.object({

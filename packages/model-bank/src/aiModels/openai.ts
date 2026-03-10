@@ -89,8 +89,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      'GPT-5.4 pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
-    displayName: 'GPT-5.4 pro',
+      'GPT-5.4 Pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
+    displayName: 'GPT-5.4 Pro',
     id: 'gpt-5.4-pro',
     maxOutput: 128_000,
     pricing: {

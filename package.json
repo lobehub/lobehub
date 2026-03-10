@@ -152,6 +152,11 @@
     ]
   },
   "overrides": {
+    "@types/react": "19.2.13",
+    "better-auth": "1.4.6",
+    "better-call": "1.1.8",
+    "drizzle-orm": "^0.45.1",
+    "fast-xml-parser": "5.4.2",
     "pdfjs-dist": "5.4.530",
     "stylelint-config-clean-order": "7.0.0"
   },
@@ -226,6 +231,7 @@
     "@lobechat/eval-rubric": "workspace:*",
     "@lobechat/fetch-sse": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
+    "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/observability-otel": "workspace:*",
@@ -510,7 +516,10 @@
       "@types/react": "19.2.13",
       "better-auth": "1.4.6",
       "better-call": "1.1.8",
-      "drizzle-orm": "^0.45.1"
+      "drizzle-orm": "^0.45.1",
+      "fast-xml-parser": "5.4.2",
+      "pdfjs-dist": "5.4.530",
+      "stylelint-config-clean-order": "7.0.0"
     }
   }
 }

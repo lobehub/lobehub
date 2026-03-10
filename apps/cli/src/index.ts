@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 import { Command } from 'commander';
 
 import { registerAgentCommand } from './commands/agent';
@@ -20,12 +22,15 @@ import { registerSkillCommand } from './commands/skill';
 import { registerStatusCommand } from './commands/status';
 import { registerTopicCommand } from './commands/topic';
 
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
+
 const program = new Command();
 
 program
   .name('lh')
   .description('LobeHub CLI - manage and connect to LobeHub services')
-  .version('0.1.0');
+  .version(version);
 
 registerLoginCommand(program);
 registerLogoutCommand(program);

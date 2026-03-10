@@ -28,14 +28,26 @@ import { SingleProviderModelItem } from './SingleProviderModelItem';
 
 interface ListItemRendererProps {
   activeKey: string;
+  isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  onRestrictedModelClick?: () => void;
+  proLabel?: string;
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ activeKey, item, newLabel, onModelChange, onClose }) => {
+  ({
+    activeKey,
+    isModelRestricted,
+    item,
+    newLabel,
+    onModelChange,
+    onClose,
+    onRestrictedModelClick,
+    proLabel,
+  }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [detailOpen, setDetailOpen] = useState(false);
@@ -114,6 +126,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'provider-model-item': {
         const key = menuKey(item.provider.id, item.model.id);
         const isActive = key === activeKey;
+        const restricted = isModelRestricted?.(item.model.id, item.provider.id);
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
@@ -122,6 +135,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
                 style={{ paddingBlock: 8, paddingInline: 8 }}
                 onClick={async () => {
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
                   setDetailOpen(false);
                   onModelChange(item.model.id, item.provider.id);
                   onClose();
@@ -132,6 +150,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   {...item.model.abilities}
                   showInfoTag
                   newBadgeLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -150,6 +169,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const singleProvider = item.data.providers[0];
         const key = menuKey(singleProvider.id, item.data.model.id);
         const isActive = key === activeKey;
+        const restricted = isModelRestricted?.(item.data.model.id, singleProvider.id);
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
@@ -158,12 +178,21 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
                 style={{ paddingBlock: 8, paddingInline: 8 }}
                 onClick={async () => {
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
                   setDetailOpen(false);
                   onModelChange(item.data.model.id, singleProvider.id);
                   onClose();
                 }}
               >
-                <SingleProviderModelItem data={item.data} newLabel={newLabel} />
+                <SingleProviderModelItem
+                  data={item.data}
+                  newLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
+                />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={16}>
@@ -183,9 +212,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             <MultipleProvidersModelItem
               activeKey={activeKey}
               data={item.data}
+              isModelRestricted={isModelRestricted}
               newLabel={newLabel}
+              proLabel={proLabel}
               onClose={onClose}
               onModelChange={onModelChange}
+              onRestrictedModelClick={onRestrictedModelClick}
             />
           </Flexbox>
         );

@@ -54,6 +54,7 @@
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
+    "@lobechat/local-file-shell": "workspace:*",
     "@lobehub/i18n-cli": "^1.25.1",
     "@modelcontextprotocol/sdk": "^1.24.3",
     "@t3-oss/env-core": "^0.13.8",
