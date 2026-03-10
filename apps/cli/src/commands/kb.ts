@@ -328,7 +328,7 @@ export function registerKbCommand(program: Command) {
       const fileBuffer = fs.readFileSync(resolved);
 
       // Compute SHA-256 hash
-      const hash = crypto.createHash('sha256').update(fileBuffer).digest('base64');
+      const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
 
       // Detect MIME type from extension
       const ext = path.extname(fileName).toLowerCase().slice(1);

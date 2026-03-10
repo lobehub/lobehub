@@ -64,27 +64,27 @@ apps/cli/src/
 
 ## Command Groups
 
-| Command       | Alias | Description                                           |
-| ------------- | ----- | ----------------------------------------------------- |
-| `lh login`    | -     | Authenticate via OIDC Device Code Flow                |
-| `lh logout`   | -     | Clear stored credentials                              |
-| `lh connect`  | -     | Device gateway connection & daemon management         |
-| `lh status`   | -     | Quick gateway connectivity check                      |
-| `lh agent`    | -     | Agent CRUD, run, status                               |
-| `lh generate` | `gen` | Content generation (text, image, video, tts, asr)     |
-| `lh doc`      | -     | Document CRUD                                         |
-| `lh file`     | -     | File list, view, delete, recent                       |
-| `lh kb`       | -     | Knowledge base CRUD, folders, docs, upload, tree view |
-| `lh memory`   | -     | User memory CRUD + extraction                         |
-| `lh message`  | -     | Message list, search, delete, count, heatmap          |
-| `lh topic`    | -     | Topic CRUD + search + recent                          |
-| `lh skill`    | -     | Skill CRUD + import (GitHub/URL/market)               |
-| `lh model`    | -     | Model list, view, toggle, delete                      |
-| `lh provider` | -     | Provider list, view, toggle, delete                   |
-| `lh plugin`   | -     | Plugin install, uninstall, update                     |
-| `lh search`   | -     | Global search across all types                        |
-| `lh whoami`   | -     | Current user info                                     |
-| `lh usage`    | -     | Monthly/daily usage statistics                        |
+| Command       | Alias | Description                                                 |
+| ------------- | ----- | ----------------------------------------------------------- |
+| `lh login`    | -     | Authenticate via OIDC Device Code Flow                      |
+| `lh logout`   | -     | Clear stored credentials                                    |
+| `lh connect`  | -     | Device gateway connection & daemon management               |
+| `lh status`   | -     | Quick gateway connectivity check                            |
+| `lh agent`    | -     | Agent CRUD, run, status                                     |
+| `lh generate` | `gen` | Content generation (text, image, video, tts, asr, download) |
+| `lh doc`      | -     | Document CRUD, batch-create, parse, topic linking           |
+| `lh file`     | -     | File list, view, delete, recent                             |
+| `lh kb`       | -     | Knowledge base CRUD, folders, docs, upload, tree view       |
+| `lh memory`   | -     | User memory CRUD + extraction                               |
+| `lh message`  | -     | Message list, search, delete, count, heatmap                |
+| `lh topic`    | -     | Topic CRUD + search + recent                                |
+| `lh skill`    | -     | Skill CRUD + import (GitHub/URL/market)                     |
+| `lh model`    | -     | Model CRUD, toggle, batch-toggle, clear                     |
+| `lh provider` | -     | Provider CRUD, config, test, toggle                         |
+| `lh plugin`   | -     | Plugin install, uninstall, update                           |
+| `lh search`   | -     | Global search across all types                              |
+| `lh whoami`   | -     | Current user info                                           |
+| `lh usage`    | -     | Monthly/daily usage statistics                              |
 
 ## Adding a New Command
 
@@ -221,10 +221,8 @@ cd apps/cli && bun run cli:link
 
 See `references/` for each command group:
 
-- **Authentication**: `references/auth.md` (login, logout)
-- **Connection & Gateway**: `references/connect.md` (connect, status, daemon)
 - **Agent**: `references/agent.md` (CRUD, run, status)
-- **Content Generation**: `references/generate.md` (text, image, video, tts, asr)
+- **Content Generation**: `references/generate.md` (text, image, video, tts, asr, download)
 - **Knowledge & Files**: `references/knowledge.md` (kb, file, doc)
 - **Conversation**: `references/conversation.md` (topic, message)
 - **Memory**: `references/memory.md` (memory management, extraction)

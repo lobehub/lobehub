@@ -9,17 +9,16 @@ Manage conversation topics (threads).
 ### `lh topic list`
 
 ```bash
-lh topic list [--agent-id [--session-id [-L [--page [--json [fields]] < id > ] < id > ] < n > ] < n > ]
+lh topic list [--agent-id [-L [--page [--json [fields]] < id > ] < n > ] < n > ]
 ```
 
-| Option              | Description       | Default |
-| ------------------- | ----------------- | ------- |
-| `--agent-id <id>`   | Filter by agent   | -       |
-| `--session-id <id>` | Filter by session | -       |
-| `-L, --limit <n>`   | Page size         | `30`    |
-| `--page <n>`        | Page number       | `1`     |
+| Option            | Description     | Default |
+| ----------------- | --------------- | ------- |
+| `--agent-id <id>` | Filter by agent | -       |
+| `-L, --limit <n>` | Page size       | `30`    |
+| `--page <n>`      | Page number     | `1`     |
 
-**Table columns**: ID, TITLE, FAVORITE, UPDATED
+**Table columns**: ID, TITLE, FAV, UPDATED
 
 ### `lh topic search <keywords>`
 
@@ -30,15 +29,14 @@ lh topic search [--json [fields]] < keywords > [--agent-id < id > ]
 ### `lh topic create`
 
 ```bash
-lh topic create -t [--session-id [--favorite] < title > [--agent-id < id > ] < id > ]
+lh topic create -t [--favorite] < title > [--agent-id < id > ]
 ```
 
-| Option                | Description            | Required |
-| --------------------- | ---------------------- | -------- |
-| `-t, --title <title>` | Topic title            | Yes      |
-| `--agent-id <id>`     | Associate with agent   | No       |
-| `--session-id <id>`   | Associate with session | No       |
-| `--favorite`          | Mark as favorite       | No       |
+| Option                | Description          | Required |
+| --------------------- | -------------------- | -------- |
+| `-t, --title <title>` | Topic title          | Yes      |
+| `--agent-id <id>`     | Associate with agent | No       |
+| `--favorite`          | Mark as favorite     | No       |
 
 ### `lh topic edit <id>`
 
@@ -76,15 +74,17 @@ Manage chat messages within topics.
 lh message list [options] [--json [fields]]
 ```
 
-| Option              | Description       | Default |
-| ------------------- | ----------------- | ------- |
-| `--topic-id <id>`   | Filter by topic   | -       |
-| `--agent-id <id>`   | Filter by agent   | -       |
-| `--session-id <id>` | Filter by session | -       |
-| `-L, --limit <n>`   | Page size         | `30`    |
-| `--page <n>`        | Page number       | `1`     |
+| Option            | Description             | Default |
+| ----------------- | ----------------------- | ------- |
+| `--topic-id <id>` | Filter by topic         | -       |
+| `--agent-id <id>` | Filter by agent         | -       |
+| `-L, --limit <n>` | Page size               | `30`    |
+| `--page <n>`      | Page number             | `1`     |
+| `--user`          | Only show user messages | -       |
 
 **Table columns**: ID, ROLE, CONTENT, CREATED
+
+**Note**: When `--topic-id` or `--agent-id` is provided, uses `message.getMessages`; otherwise uses `message.listAll`.
 
 ### `lh message search <keywords>`
 
