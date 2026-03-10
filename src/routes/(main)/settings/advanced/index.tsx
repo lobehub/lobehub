@@ -2,7 +2,7 @@
 
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, Icon, Skeleton } from '@lobehub/ui';
-import { Switch } from '@lobehub/ui/base-ui';
+import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
