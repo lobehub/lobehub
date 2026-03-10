@@ -152,6 +152,7 @@
     ]
   },
   "overrides": {
+    "fast-xml-parser": "5.4.2",
     "pdfjs-dist": "5.4.530",
     "stylelint-config-clean-order": "7.0.0"
   },
