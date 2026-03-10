@@ -340,7 +340,7 @@
   "switchToMonthly.title": "월간 결제로 전환",
   "switchToYearly.desc": "전환 후 차액 결제 시 즉시 연간 결제가 적용됩니다. 시작일은 기존 플랜을 기준으로 합니다.",
   "switchToYearly.title": "연간 결제로 전환",
-  "tab.billing": "결제 관리",
+  "tab.billing": "청구 관리",
   "tab.funds": "크레딧 관리",
   "tab.plans": "구독 플랜",
   "tab.referral": "추천 보상",
