@@ -155,14 +155,42 @@ export function registerConfigCommand(program: Command) {
       const mode = options.daily ? 'Daily' : 'Monthly';
       printBoxTable(columns, rows, `LobeHub Token Usage Report - ${mode} (${monthLabel})`);
 
-      // Calendar heatmap
-      const calendarData = activeLogs.map((log: any) => ({
-        day: log.day || '',
-        value: log.totalTokens || 0,
-      }));
+      // Calendar heatmap - fetch past 12 months
+      const now = new Date();
+      const rangeStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate() + 1);
+      let yearLogs: any[];
+
+      try {
+        // Try single-request endpoint first
+        yearLogs = await client.usage.findAndGroupByDateRange.query({
+          endAt: now.toISOString().slice(0, 10),
+          startAt: rangeStart.toISOString().slice(0, 10),
+        });
+      } catch {
+        // Fallback: fetch each month concurrently
+        const monthKeys: string[] = [];
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          monthKeys.push(d.toISOString().slice(0, 7));
+        }
+        const results = await Promise.all(
+          monthKeys.map((mo) => client.usage.findAndGroupByDay.query({ mo })),
+        );
+        yearLogs = results.flat();
+      }
+
+      const calendarData = (Array.isArray(yearLogs) ? yearLogs : [])
+        .filter((log: any) => log.day)
+        .map((log: any) => ({
+          day: log.day,
+          value: log.totalTokens || 0,
+        }));
+
+      const yearTotal = calendarData.reduce((acc: number, d: any) => acc + d.value, 0);
+
       printCalendarHeatmap(calendarData, {
-        label: `Total: ${formatNumber(sumTotal)} tokens · ${formatCost(sumCost)}`,
-        title: 'Activity',
+        label: `Past 12 months: ${formatNumber(yearTotal)} tokens`,
+        title: 'Activity (past 12 months)',
       });
     });
 }

@@ -6,6 +6,7 @@ import { registerConfigCommand } from './config';
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     usage: {
+      findAndGroupByDateRange: { query: vi.fn() },
       findAndGroupByDay: { query: vi.fn() },
       findByMonth: { query: vi.fn() },
     },
@@ -34,6 +35,8 @@ describe('config command', () => {
     mockTrpcClient.user.getUserState.query.mockReset();
     mockTrpcClient.usage.findByMonth.query.mockReset();
     mockTrpcClient.usage.findAndGroupByDay.query.mockReset();
+    mockTrpcClient.usage.findAndGroupByDateRange.query.mockReset();
+    mockTrpcClient.usage.findAndGroupByDateRange.query.mockResolvedValue([]);
   });
 
   afterEach(() => {
