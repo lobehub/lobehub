@@ -862,6 +862,7 @@
   "tools.plugins.management": "技能管理",
   "tools.plugins.noEnabled": "暂无启用技能",
   "tools.plugins.store": "添加技能",
+  "tools.search": "搜索技能...",
   "tools.skillActivateMode.auto.desc": "AI 可自主激活工具、运行技能，并从商店安装新技能",
   "tools.skillActivateMode.auto.title": "自动",
   "tools.skillActivateMode.manual.desc": "仅用户选择的工具和技能对 AI 可用",

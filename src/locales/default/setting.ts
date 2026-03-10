@@ -1097,6 +1097,7 @@ When I am ___, I need ___
   'tools.plugins.management': 'Skill Management',
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
+  'tools.search': 'Search skills...',
   'tools.skillActivateMode.auto.desc':
     'AI can autonomously activate tools, run skills, and install new skills from the store',
   'tools.skillActivateMode.auto.title': 'Auto',
