@@ -1,5 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
-
 /**
  * RBAC Permission Actions Definition
  * Defines all executable permission action types in the system
@@ -222,17 +220,3 @@ export type RBAC_PERMISSIONS_KEY = keyof typeof RBAC_PERMISSIONS;
  * ALL permission scope
  */
 export const ALL_SCOPE = 'ALL';
-
-/**
- * RBAC Role Constants Definition
- */
-export const SYSTEM_DEFAULT_ROLES = {
-  SUPER_ADMIN: 'super_admin',
-} as const;
-
-/**
- * Role Description Mapping
- */
-export const ROLE_DESCRIPTIONS = {
-  [SYSTEM_DEFAULT_ROLES.SUPER_ADMIN]: 'Administrator with all system permissions',
-} as const;

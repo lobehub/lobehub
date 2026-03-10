@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path from 'node:path';
 
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
@@ -18,10 +18,14 @@ dotenvExpand.expand(dotenv.config()); // Load .env
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}` })); // Load .env.[env] and override
 dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })); // Load .env.[env].local and override
 
-const migrationsFolder = join(__dirname, '../../packages/database/migrations');
+const migrationsFolder = path.join(__dirname, '../../packages/database/migrations');
 
 const runMigrations = async () => {
-  const { serverDB } = await import('../../packages/database/src/server');
+  const [{ getServerDB }, { initializeRBAC }] = await Promise.all([
+    import('../../packages/database/src/server'),
+    import('../../packages/database/src/initializeRBAC'),
+  ]);
+  const serverDB = await getServerDB();
 
   const time = Date.now();
   if (process.env.DATABASE_DRIVER === 'node') {
@@ -30,7 +34,9 @@ const runMigrations = async () => {
     await neonMigrate(serverDB, { migrationsFolder });
   }
 
-  console.log('✅ database migration pass. use: %s ms', Date.now() - time);
+  await initializeRBAC(serverDB);
+
+  console.log('✅ database migration and RBAC bootstrap pass. use: %s ms', Date.now() - time);
 
   process.exit(0);
 };
