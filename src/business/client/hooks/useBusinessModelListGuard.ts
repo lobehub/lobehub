@@ -1,5 +1,5 @@
 export interface BusinessModelListGuard {
-  isModelRestricted?: (modelId: string) => boolean;
+  isModelRestricted?: (modelId: string, providerId: string) => boolean;
   onRestrictedModelClick?: () => void;
 }
 

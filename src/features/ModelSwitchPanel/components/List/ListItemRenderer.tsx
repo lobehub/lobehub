@@ -28,7 +28,7 @@ import { SingleProviderModelItem } from './SingleProviderModelItem';
 
 interface ListItemRendererProps {
   activeKey: string;
-  isModelRestricted?: (modelId: string) => boolean;
+  isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
   onClose: () => void;
@@ -126,7 +126,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'provider-model-item': {
         const key = menuKey(item.provider.id, item.model.id);
         const isActive = key === activeKey;
-        const restricted = isModelRestricted?.(item.model.id);
+        const restricted = isModelRestricted?.(item.model.id, item.provider.id);
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
@@ -169,7 +169,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const singleProvider = item.data.providers[0];
         const key = menuKey(singleProvider.id, item.data.model.id);
         const isActive = key === activeKey;
-        const restricted = isModelRestricted?.(item.data.model.id);
+        const restricted = isModelRestricted?.(item.data.model.id, singleProvider.id);
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
