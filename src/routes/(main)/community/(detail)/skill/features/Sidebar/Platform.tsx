@@ -1,6 +1,6 @@
 'use client';
 
-import { Claude, Cline, Cursor, OpenAI, VsCode } from '@lobehub/icons';
+import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
 import { Block, Button, Flexbox, Highlighter, Icon, Markdown, Segmented, Select, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
@@ -9,6 +9,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Title from '../../../../components/Title';
+import VsCodeIcon from './VsCodeIcon';
 
 type GuideMode = 'agent' | 'human';
 
@@ -119,7 +120,7 @@ const Platform = memo<PlatformProps>(
         value: PlatformType.Cursor,
       },
       {
-        icon: <VsCode className={'anticon'} size={18} />,
+        icon: <VsCodeIcon className={'anticon'} size={18} />,
         label: 'VsCode',
         value: PlatformType.VsCode,
       },
@@ -185,7 +186,9 @@ const Platform = memo<PlatformProps>(
       <Block gap={lite ? 0 : 16} padding={4} variant={lite ? 'outlined' : 'borderless'}>
         <Segmented
           block
-          onChange={(value) => setMode(value as GuideMode)}
+          style={{ marginBottom: 8 }}
+          value={mode}
+          variant={'filled'}
           options={[
             {
               icon: <Icon icon={BotIcon} />,
@@ -198,9 +201,7 @@ const Platform = memo<PlatformProps>(
               value: 'human',
             },
           ]}
-          style={{ marginBottom: 8 }}
-          value={mode}
-          variant={'filled'}
+          onChange={(value) => setMode(value as GuideMode)}
         />
 
         {mode === 'agent' ? (
@@ -213,14 +214,14 @@ const Platform = memo<PlatformProps>(
               <Title level={3}>{t('skills.details.sidebar.agent.title')}</Title>
             )}
             <Highlighter
+              fullFeatured
+              wrap
               className={cx(lite && styles.lite)}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={'Agent prompt'}
-              fullFeatured
               language={'bash'}
               style={{ fontSize: 12 }}
               variant={lite ? 'borderless' : 'outlined'}
-              wrap
             >
               {agentPrompt}
             </Highlighter>
@@ -228,9 +229,9 @@ const Platform = memo<PlatformProps>(
               <Button
                 block
                 icon={<Icon icon={copied ? CheckIcon : CopyIcon} />}
-                onClick={handleCopyPrompt}
                 size={'large'}
                 type={'primary'}
+                onClick={handleCopyPrompt}
               >
                 {copied
                   ? t('skills.details.sidebar.agent.copied')
@@ -242,24 +243,24 @@ const Platform = memo<PlatformProps>(
           <>
             {mobile || lite ? (
               <Select
-                onSelect={(v) => setActive(v as PlatformType)}
+                value={active}
+                variant={'filled'}
                 options={options.map((item) => ({
                   ...item,
                   label: (
-                    <Flexbox align={'center'} gap={8} horizontal>
+                    <Flexbox horizontal align={'center'} gap={8}>
                       {item.icon} {item.label}
                     </Flexbox>
                   ),
                 }))}
-                value={active}
-                variant={'filled'}
+                onSelect={(v) => setActive(v as PlatformType)}
               />
             ) : (
               <Segmented
                 block
-                onChange={(v) => setActive(v as PlatformType)}
                 options={options}
                 value={active}
+                onChange={(v) => setActive(v as PlatformType)}
               />
             )}
             <Flexbox>
@@ -270,10 +271,10 @@ const Platform = memo<PlatformProps>(
             </Flexbox>
             {lite && <Divider dashed style={{ margin: 0 }} />}
             <Highlighter
+              fullFeatured
               className={cx(lite && styles.lite)}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={t('skills.details.sidebar.installCommand')}
-              fullFeatured
               language={'bash'}
               style={{ fontSize: 12 }}
               variant={lite ? 'borderless' : 'outlined'}
@@ -282,10 +283,10 @@ const Platform = memo<PlatformProps>(
             </Highlighter>
             {lite && <Divider dashed style={{ margin: 0 }} />}
             <Highlighter
+              fullFeatured
               className={cx(lite && styles.lite)}
               defaultExpand={false}
               fileName={t('skills.details.sidebar.directoryLayout')}
-              fullFeatured
               language={'text'}
               style={{ fontSize: 12 }}
               variant={lite ? 'borderless' : 'outlined'}

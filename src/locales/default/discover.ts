@@ -871,69 +871,104 @@ export default {
 
   'skillEmpty.title': 'No Skills found',
 
-  'skills.categories.all.description': 'All Skills',
+  'skills.categories.agent-to-agent-protocols.description': 'Inter-agent communication, orchestration, and protocol skills',
+  'skills.categories.agent-to-agent-protocols.name': 'Agent-to-Agent Protocols',
 
+  'skills.categories.ai-llms.description': 'AI model integrations, LLM tooling, and prompt engineering skills',
+  'skills.categories.ai-llms.name': 'AI & LLMs',
+
+  'skills.categories.all.description': 'All Skills',
   'skills.categories.all.name': 'All',
 
-  'skills.categories.business.description': 'Business and Enterprise Services',
+  'skills.categories.apple-apps-services.description': 'Apple ecosystem apps, services, and platform integrations',
+  'skills.categories.apple-apps-services.name': 'Apple Apps & Services',
 
-  'skills.categories.business.name': 'Business Services',
+  'skills.categories.browser-automation.description': 'Browser control, web scraping, and UI automation skills',
+  'skills.categories.browser-automation.name': 'Browser & Automation',
 
-  'skills.categories.developer.description': 'Developer-related Tools and Services',
+  'skills.categories.calendar-scheduling.description': 'Calendar management, meeting scheduling, and time coordination skills',
+  'skills.categories.calendar-scheduling.name': 'Calendar & Scheduling',
 
-  'skills.categories.developer.name': 'Developer Tools',
+  'skills.categories.clawdbot-tools.description': 'Skills and utilities built for the Clawdbot ecosystem',
+  'skills.categories.clawdbot-tools.name': 'Clawdbot Tools',
 
-  'skills.categories.gaming-entertainment.description': 'Games, Entertainment, and Leisure Activities',
+  'skills.categories.cli-utilities.description': 'Command-line tools, shell scripting, and terminal utilities',
+  'skills.categories.cli-utilities.name': 'CLI Utilities',
 
-  'skills.categories.gaming-entertainment.name': 'Gaming & Entertainment',
+  'skills.categories.coding-agents-ides.description': 'Skills for coding agents, IDEs, and AI-assisted development',
+  'skills.categories.coding-agents-ides.name': 'Coding Agents & IDEs',
 
-  'skills.categories.health-wellness.description': 'Health, Fitness, and Wellness',
+  'skills.categories.communication.description': 'Messaging, email, chat platforms, and communication workflow skills',
+  'skills.categories.communication.name': 'Communication',
 
-  'skills.categories.health-wellness.name': 'Health & Wellness',
+  'skills.categories.data-analytics.description': 'Data analysis, visualization, and business intelligence skills',
+  'skills.categories.data-analytics.name': 'Data & Analytics',
 
-  'skills.categories.lifestyle.description': 'Personal Lifestyle, Habits, and Daily Activities',
+  'skills.categories.devops-cloud.description': 'DevOps pipelines, cloud infrastructure, and deployment skills',
+  'skills.categories.devops-cloud.name': 'DevOps & Cloud',
 
-  'skills.categories.lifestyle.name': 'Lifestyle',
+  'skills.categories.finance.description': 'Finance, banking, payments, and financial data skills',
+  'skills.categories.finance.name': 'Finance',
 
-  'skills.categories.media-generate.description': 'Media Generation, Editing, and Processing',
+  'skills.categories.gaming.description': 'Game data, achievements, leaderboards, and gaming platform skills',
+  'skills.categories.gaming.name': 'Gaming',
 
-  'skills.categories.media-generate.name': 'Media Generation',
+  'skills.categories.git-github.description': 'Git version control and GitHub platform integrations',
+  'skills.categories.git-github.name': 'Git & GitHub',
 
-  'skills.categories.news.description': 'News Aggregation, Reporting, and Information Services',
+  'skills.categories.health-fitness.description': 'Health tracking, fitness planning, and wellness skills',
+  'skills.categories.health-fitness.name': 'Health & Fitness',
 
-  'skills.categories.news.name': 'News & Information',
+  'skills.categories.image-video-generation.description': 'AI image generation, video creation, and visual media skills',
+  'skills.categories.image-video-generation.name': 'Image & Video Generation',
 
-  'skills.categories.productivity.description': 'Task Management, Notes, and Productivity Tools',
+  'skills.categories.ios-macos-development.description': 'iOS and macOS app development, Xcode, and Swift tooling skills',
+  'skills.categories.ios-macos-development.name': 'iOS & macOS Development',
 
-  'skills.categories.productivity.name': 'Productivity Tools',
+  'skills.categories.marketing-sales.description': 'Marketing campaigns, sales workflows, and growth automation skills',
+  'skills.categories.marketing-sales.name': 'Marketing & Sales',
 
-  'skills.categories.science-education.description': 'Scientific Research, Learning, and Educational Tools',
+  'skills.categories.media-streaming.description': 'Media playback, streaming platforms, and content delivery skills',
+  'skills.categories.media-streaming.name': 'Media & Streaming',
 
-  'skills.categories.science-education.name': 'Science & Education',
+  'skills.categories.moltbook.description': 'Moltbook platform integrations and notebook automation skills',
+  'skills.categories.moltbook.name': 'Moltbook',
 
-  'skills.categories.social.description': 'Social Networks and Communication',
+  'skills.categories.notes-pkm.description': 'Note-taking, personal knowledge management, and second-brain skills',
+  'skills.categories.notes-pkm.name': 'Notes & PKM',
 
-  'skills.categories.social.name': 'Social Media',
+  'skills.categories.pdf-documents.description': 'PDF processing, document parsing, and file management skills',
+  'skills.categories.pdf-documents.name': 'PDF & Documents',
 
-  'skills.categories.stocks-finance.description': 'Financial Markets, Trading, and Investment',
+  'skills.categories.personal-development.description': 'Personal growth, habit building, and self-improvement skills',
+  'skills.categories.personal-development.name': 'Personal Development',
 
-  'skills.categories.stocks-finance.name': 'Stocks & Finance',
+  'skills.categories.productivity-tasks.description': 'Task management, workflow automation, and productivity skills',
+  'skills.categories.productivity-tasks.name': 'Productivity & Tasks',
 
-  'skills.categories.tools.description': 'General-purpose Practical Tools and Services',
+  'skills.categories.search-research.description': 'Web search, data retrieval, and research automation skills',
+  'skills.categories.search-research.name': 'Search & Research',
 
-  'skills.categories.tools.name': 'Utility Tools',
+  'skills.categories.security-passwords.description': 'Security auditing, password management, and privacy protection skills',
+  'skills.categories.security-passwords.name': 'Security & Passwords',
 
-  'skills.categories.travel-transport.description': 'Travel Planning and Transportation',
+  'skills.categories.self-hosted-automation.description': 'Self-hosted services, home lab automation, and infrastructure skills',
+  'skills.categories.self-hosted-automation.name': 'Self-Hosted & Automation',
 
-  'skills.categories.travel-transport.name': 'Travel & Transport',
+  'skills.categories.shopping-ecommerce.description': 'E-commerce integrations, shopping automation, and retail skills',
+  'skills.categories.shopping-ecommerce.name': 'Shopping & E-commerce',
 
-  'skills.categories.weather.description': 'Weather Forecasting and Meteorological Services',
+  'skills.categories.smart-home-iot.description': 'Smart home automation, IoT device control, and home management skills',
+  'skills.categories.smart-home-iot.name': 'Smart Home & IoT',
 
-  'skills.categories.weather.name': 'Weather',
+  'skills.categories.speech-transcription.description': 'Speech recognition, audio transcription, and voice interface skills',
+  'skills.categories.speech-transcription.name': 'Speech & Transcription',
 
-  'skills.categories.web-search.description': 'Web Search and Information Retrieval',
+  'skills.categories.transportation.description': 'Transportation, logistics, routing, and mobility skills',
+  'skills.categories.transportation.name': 'Transportation',
 
-  'skills.categories.web-search.name': 'Information Retrieval',
+  'skills.categories.web-frontend-development.description': 'Web development, frontend frameworks, and UI tooling skills',
+  'skills.categories.web-frontend-development.name': 'Web & Frontend Development',
 
   'skills.details.nav.needHelp': 'Need Help?',
 

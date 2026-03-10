@@ -1,9 +1,11 @@
 'use client';
 
-import { Block, Empty, Flexbox, MaterialFileTypeIcon, Table, Text } from '@lobehub/ui';
+import { Block, Empty, Flexbox, MaterialFileTypeIcon, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
+
+import InlineTable from '@/components/InlineTable';
 
 import { useDetailContext } from '../../DetailProvider';
 
@@ -51,7 +53,11 @@ const Resources = memo(() => {
 
   return (
     <Block style={{ overflow: 'hidden' }} variant={'outlined'}>
-      <Table
+      <InlineTable
+        dataSource={dataSource}
+        pagination={false}
+        rowKey={'name'}
+        size={'middle'}
         columns={[
           {
             dataIndex: 'name',
@@ -59,7 +65,7 @@ const Resources = memo(() => {
             render: (text) => {
               const link = getResourceLink(text);
               const node = (
-                <Flexbox align={'center'} gap={16} horizontal>
+                <Flexbox horizontal align={'center'} gap={16}>
                   <MaterialFileTypeIcon
                     fallbackUnknownType={false}
                     filename={text}
@@ -84,7 +90,7 @@ const Resources = memo(() => {
             title: t('skills.details.resources.table.name'),
           },
           {
-            align: 'end' as const,
+            align: 'end',
             dataIndex: 'size',
             key: 'size',
             render: (value) => {
@@ -109,10 +115,6 @@ const Resources = memo(() => {
             title: t('skills.details.resources.table.size'),
           },
         ]}
-        dataSource={dataSource}
-        pagination={false}
-        rowKey={'name'}
-        size={'middle'}
       />
     </Block>
   );

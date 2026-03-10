@@ -4,9 +4,9 @@ import { Flexbox, Markdown } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useDetailContext } from '../DetailProvider';
 import Sidebar from '../Sidebar';
 import { SkillNavKey } from '../types';
-import { useDetailContext } from '../DetailProvider';
 import Installation from './Installation';
 import Nav from './Nav';
 import Overview from './Overview';
@@ -40,7 +40,7 @@ const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         horizontal={!isMobile}
         style={isMobile ? { flexDirection: 'column-reverse' } : undefined}
       >
-        <Flexbox flex={1} style={{ overflow: 'hidden' }} width={'100%'}>
+        <Flexbox flex={1} style={{ minWidth: 0 }} width={'100%'}>
           {activeTab === SkillNavKey.Overview && <Overview>{skillContent}</Overview>}
           {activeTab === SkillNavKey.Installation && <Installation mobile={isMobile} />}
           {activeTab === SkillNavKey.Skill && skillContent}

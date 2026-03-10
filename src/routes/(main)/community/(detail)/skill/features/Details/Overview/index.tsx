@@ -1,13 +1,12 @@
 'use client';
 
-import { Collapse, Flexbox, Markdown, ScrollShadow, Tag, Text } from '@lobehub/ui';
+import { Collapse, Flexbox, Markdown, ScrollShadow, Tag } from '@lobehub/ui';
 import qs from 'query-string';
-import { type PropsWithChildren, memo } from 'react';
+import { memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
-import Title from '../../../../../components/Title';
 import List from '../../../../../(list)/skill/features/List';
+import Title from '../../../../../components/Title';
 import { useDetailContext } from '../../DetailProvider';
 
 const Overview = memo<PropsWithChildren>(({ children }) => {
@@ -23,11 +22,14 @@ const Overview = memo<PropsWithChildren>(({ children }) => {
       <Collapse
         defaultActiveKey={['summary']}
         expandIconPlacement={'end'}
+        variant={'outlined'}
         items={[
           {
             children: (
               <ScrollShadow height={240} offset={16} padding={16} size={16}>
-                {children}
+                <Flexbox horizontal gap={12}>
+                  {children}
+                </Flexbox>
               </ScrollShadow>
             ),
             key: 'summary',
@@ -37,10 +39,9 @@ const Overview = memo<PropsWithChildren>(({ children }) => {
         padding={{
           body: 0,
         }}
-        variant={'outlined'}
       />
       {tags.length > 0 && (
-        <Flexbox gap={8} horizontal wrap={'wrap'}>
+        <Flexbox horizontal gap={8} wrap={'wrap'}>
           {tags.map((tag) => (
             <Tag key={tag}>{tag}</Tag>
           ))}
