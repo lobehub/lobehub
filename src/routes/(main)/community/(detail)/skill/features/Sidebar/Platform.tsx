@@ -237,7 +237,7 @@ const Platform = memo<PlatformProps>(
                 {t('skills.details.sidebar.agent.title')}
               </Text>
             ) : (
-              <Title level={3}>{t('skills.details.sidebar.agent.title')}</Title>
+              <Title>{t('skills.details.sidebar.agent.title')}</Title>
             )}
             <Highlighter
               fullFeatured
@@ -288,9 +288,7 @@ const Platform = memo<PlatformProps>(
               />
             )}
             <Flexbox>
-              {!lite && (
-                <Title level={3}>{t('skills.details.sidebar.platform.title', { platform })}</Title>
-              )}
+              {!lite && <Title>{t('skills.details.sidebar.platform.title', { platform })}</Title>}
               <Markdown variant={'chat'}>{steps}</Markdown>
             </Flexbox>
             {lite && <Divider dashed style={{ margin: 0 }} />}
@@ -331,7 +329,7 @@ const Platform = memo<PlatformProps>(
                     target={'_blank'}
                     type={'primary'}
                   >
-                    {t('plugins.download')}
+                    {t('skills.details.sidebar.downloadSkill')}
                   </Button>
                 </Flexbox>
               </>

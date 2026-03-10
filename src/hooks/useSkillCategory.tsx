@@ -246,7 +246,7 @@ export const useSkillCategory = () => {
   );
 };
 
-export const useSkillCategoryItem = (key?: SkillCategory) => {
+export const useSkillCategoryItem = (key?: string) => {
   const items = useSkillCategory();
   if (!key) return;
   return items.find((item) => item.key === key);
