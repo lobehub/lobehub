@@ -78,6 +78,7 @@ const qwenChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
+      video: true,
       vision: true,
     },
     config: {
@@ -130,6 +131,7 @@ const qwenChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
+      video: true,
       vision: true,
     },
     config: {
@@ -789,6 +791,7 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -837,6 +840,7 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -885,6 +889,7 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -933,6 +938,7 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -1349,6 +1355,7 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
       vision: true,
     },
     config: {
@@ -1496,6 +1503,7 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
       vision: true,
     },
     config: {
@@ -1831,6 +1839,7 @@ const qwenChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
+      video: true,
       vision: true,
     },
     config: {
@@ -1859,6 +1868,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     config: {
@@ -1882,6 +1892,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -1902,6 +1913,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     config: {
@@ -1926,6 +1938,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     config: {

@@ -299,6 +299,7 @@ const stepfunChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      video: true,
       vision: true,
     },
     contextWindowTokens: 32_000,

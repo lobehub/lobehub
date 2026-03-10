@@ -1,4 +1,4 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64, videoUrlToBase64 } from '@lobechat/utils';
 import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,11 +9,13 @@ import {
   convertMessageContent,
   convertOpenAIMessages,
   convertOpenAIResponseInputs,
+  type ExtendedChatCompletionContentPart,
 } from './openai';
 
 // 模拟依赖
 vi.mock('@lobechat/utils', () => ({
   imageUrlToBase64: vi.fn(),
+  videoUrlToBase64: vi.fn(),
 }));
 vi.mock('../../utils/uriParser');
 
@@ -96,6 +98,91 @@ describe('convertMessageContent', () => {
     });
 
     expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
+  });
+
+  it('should convert video URL to base64 when necessary', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'base64String',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual({
+      type: 'video_url',
+      video_url: { url: 'data:video/mp4;base64,base64String' },
+    });
+
+    expect(parseDataUri).toHaveBeenCalledWith('https://example.com/video.mp4');
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+  });
+
+  it('should not convert video URL when not necessary', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual(content);
+    expect(videoUrlToBase64).not.toHaveBeenCalled();
+  });
+
+  it('should convert video URL when forceVideoBase64 is true', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertMessageContent(content, { forceVideoBase64: true });
+
+    expect(result).toEqual({
+      type: 'video_url',
+      video_url: { url: 'data:video/mp4;base64,forcedBase64' },
+    });
+
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+  });
+
+  it('should return original content when video conversion fails', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockRejectedValue(new Error('Conversion failed'));
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual(content);
+
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
   });
 });
 
@@ -329,6 +416,106 @@ describe('convertOpenAIResponseInputs', () => {
             image_url: 'data:image/jpeg;base64,test123',
           },
         ],
+      },
+    ]);
+  });
+
+  it('应该正确转换包含视频的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'data:video/mp4;base64,test123',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is a video' },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,test123',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('应该正确转换包含图片和视频的混合消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is an image and a video' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: 'data:image/jpeg;base64,test123',
+            },
+          },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'data:video/mp4;base64,test456',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is an image and a video' },
+          {
+            type: 'input_image',
+            image_url: 'data:image/jpeg;base64,test123',
+          },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,test456',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('应该正确处理带有无效 video_url 的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: '',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: 'Here is a video' }],
       },
     ]);
   });

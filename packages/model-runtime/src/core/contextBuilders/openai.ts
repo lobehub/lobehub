@@ -1,4 +1,4 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64, videoUrlToBase64 } from '@lobechat/utils';
 import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
@@ -6,14 +6,22 @@ import { disableStreamModels, systemToUserModels } from '../../const/models';
 import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
+export type ExtendedChatCompletionContentPart = {
+  type: 'video_url';
+  video_url: {
+    url: string;
+  };
+};
+
 type ConvertMessageContentOptions = {
   forceImageBase64?: boolean;
+  forceVideoBase64?: boolean;
 };
 
 export const convertMessageContent = async (
-  content: OpenAI.ChatCompletionContentPart,
+  content: OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart,
   options?: ConvertMessageContentOptions,
-): Promise<OpenAI.ChatCompletionContentPart> => {
+): Promise<OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart> => {
   if (content.type === 'image_url') {
     const { type } = parseDataUri(content.image_url.url);
 
@@ -27,6 +35,27 @@ export const convertMessageContent = async (
         ...content,
         image_url: { ...content.image_url, url: `data:${mimeType};base64,${base64}` },
       };
+    }
+  }
+
+  if (content.type === 'video_url') {
+    const { type } = parseDataUri(content.video_url.url);
+
+    const shouldUseBase64 =
+      options?.forceVideoBase64 || process.env.LLM_VISION_VIDEO_USE_BASE64 === '1';
+
+    if (type === 'url' && shouldUseBase64) {
+      try {
+        const { base64, mimeType } = await videoUrlToBase64(content.video_url.url);
+
+        return {
+          ...content,
+          video_url: { ...content.video_url, url: `data:${mimeType};base64,${base64}` },
+        };
+      } catch (error) {
+        console.warn('Failed to convert video to base64:', error);
+        return content;
+      }
     }
   }
 
@@ -131,6 +160,16 @@ export const convertOpenAIResponseInputs = async (
                     return { ...c, type: 'output_text' };
                   }
                   return { ...c, type: 'input_text' };
+                }
+                if (c.type === 'video_url') {
+                  const video = await convertMessageContent(c);
+                  if (!('video_url' in video) || !video.video_url?.url) {
+                    return undefined;
+                  }
+                  return {
+                    video_url: video.video_url.url,
+                    type: 'input_video',
+                  };
                 }
                 const image = await convertMessageContent(c as OpenAI.ChatCompletionContentPart);
                 if (!(image as OpenAI.ChatCompletionContentPartImage).image_url?.url) {
