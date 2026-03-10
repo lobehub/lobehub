@@ -38,7 +38,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     contextWindowTokens: 200_000,
     description: "Claude Sonnet 4.5 is Anthropic's most intelligent model to date.",
     displayName: 'Claude Sonnet 4.5',
-    enabled: true,
     id: 'claude-sonnet-4-5-20250929',
     maxOutput: 8192,
     pricing: {
@@ -158,7 +157,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     description:
       "Claude Opus 4.5 is Anthropic's flagship model, combining excellent intelligence and scalable performance for the highest-quality reasoning tasks.",
     displayName: 'Claude Opus 4.5',
-    enabled: true,
     id: 'claude-opus-4-5-20251101',
     maxOutput: 64_000,
     pricing: {

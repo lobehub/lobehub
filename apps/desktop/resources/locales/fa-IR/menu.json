@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "بررسی به‌روزرسانی...",
+  "common.checkingUpdates": "در حال بررسی به‌روزرسانی...",
+  "common.downloadingUpdate": "در حال دانلود به‌روزرسانی...",
+  "common.isLatestVersion": "قبلاً به‌روز است",
+  "common.restartToUpdate": "برای به‌روزرسانی مجدداً راه‌اندازی کنید",
   "context.copyImage": "کپی تصویر",
   "context.copyImageAddress": "کپی آدرس تصویر",
   "context.copyLink": "کپی لینک",
