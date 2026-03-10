@@ -25,6 +25,7 @@ declare global {
     lobeEnv?: {
       darwinMajorVersion?: number;
       isMacTahoe?: boolean;
+      platform?: NodeJS.Platform;
     };
   }
 

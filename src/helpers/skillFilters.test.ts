@@ -7,8 +7,16 @@ describe('skillFilters', () => {
     expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: false })).toBe(false);
   });
 
-  it('should enable agent-browser on desktop environment', () => {
-    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
+  it('should enable agent-browser on desktop (non-Windows) environment', () => {
+    expect(
+      shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true, isWindows: false }),
+    ).toBe(true);
+  });
+
+  it('should disable agent-browser on desktop Windows', () => {
+    expect(
+      shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true, isWindows: true }),
+    ).toBe(false);
   });
 
   it('should keep non-desktop-only skills enabled', () => {
