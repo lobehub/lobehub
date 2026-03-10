@@ -9,7 +9,8 @@ export interface StoredCredentials {
   refreshToken?: string;
 }
 
-const CREDENTIALS_DIR = path.join(os.homedir(), '.lobehub');
+const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
+const CREDENTIALS_DIR = path.join(os.homedir(), LOBEHUB_DIR_NAME);
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
 
 // Derive an encryption key from machine-specific info

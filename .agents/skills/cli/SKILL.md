@@ -8,11 +8,11 @@ disable-model-invocation: true
 
 ## Overview
 
-LobeHub CLI (`@lobehub/cli`) is a command-line tool for managing and interacting with LobeHub services. The binary is named `lh` and is built with Commander.js + TypeScript.
+LobeHub CLI (`@lobehub/cli`) is a command-line tool for managing and interacting with LobeHub services. Built with Commander.js + TypeScript.
 
 - **Package**: `apps/cli/`
 - **Entry**: `apps/cli/src/index.ts`
-- **Binary**: `lh`
+- **Binaries**: `lh`, `lobe`, `lobehub` (all aliases for the same CLI)
 - **Build**: tsup
 - **Runtime**: Node.js / Bun
 
@@ -64,27 +64,27 @@ apps/cli/src/
 
 ## Command Groups
 
-| Command       | Alias | Description                                       |
-| ------------- | ----- | ------------------------------------------------- |
-| `lh login`    | -     | Authenticate via OIDC Device Code Flow            |
-| `lh logout`   | -     | Clear stored credentials                          |
-| `lh connect`  | -     | Device gateway connection & daemon management     |
-| `lh status`   | -     | Quick gateway connectivity check                  |
-| `lh agent`    | -     | Agent CRUD, run, status                           |
-| `lh generate` | `gen` | Content generation (text, image, video, tts, asr) |
-| `lh doc`      | -     | Document CRUD                                     |
-| `lh file`     | -     | File list, view, delete, recent                   |
-| `lh kb`       | -     | Knowledge base management                         |
-| `lh memory`   | -     | User memory CRUD + extraction                     |
-| `lh message`  | -     | Message list, search, delete, count, heatmap      |
-| `lh topic`    | -     | Topic CRUD + search + recent                      |
-| `lh skill`    | -     | Skill CRUD + import (GitHub/URL/market)           |
-| `lh model`    | -     | Model list, view, toggle, delete                  |
-| `lh provider` | -     | Provider list, view, toggle, delete               |
-| `lh plugin`   | -     | Plugin install, uninstall, update                 |
-| `lh search`   | -     | Global search across all types                    |
-| `lh whoami`   | -     | Current user info                                 |
-| `lh usage`    | -     | Monthly/daily usage statistics                    |
+| Command       | Alias | Description                                           |
+| ------------- | ----- | ----------------------------------------------------- |
+| `lh login`    | -     | Authenticate via OIDC Device Code Flow                |
+| `lh logout`   | -     | Clear stored credentials                              |
+| `lh connect`  | -     | Device gateway connection & daemon management         |
+| `lh status`   | -     | Quick gateway connectivity check                      |
+| `lh agent`    | -     | Agent CRUD, run, status                               |
+| `lh generate` | `gen` | Content generation (text, image, video, tts, asr)     |
+| `lh doc`      | -     | Document CRUD                                         |
+| `lh file`     | -     | File list, view, delete, recent                       |
+| `lh kb`       | -     | Knowledge base CRUD, folders, docs, upload, tree view |
+| `lh memory`   | -     | User memory CRUD + extraction                         |
+| `lh message`  | -     | Message list, search, delete, count, heatmap          |
+| `lh topic`    | -     | Topic CRUD + search + recent                          |
+| `lh skill`    | -     | Skill CRUD + import (GitHub/URL/market)               |
+| `lh model`    | -     | Model list, view, toggle, delete                      |
+| `lh provider` | -     | Provider list, view, toggle, delete                   |
+| `lh plugin`   | -     | Plugin install, uninstall, update                     |
+| `lh search`   | -     | Global search across all types                        |
+| `lh whoami`   | -     | Current user info                                     |
+| `lh usage`    | -     | Monthly/daily usage statistics                        |
 
 ## Adding a New Command
 
@@ -185,6 +185,8 @@ if (!options.yes) {
 | Daemon Status | `~/.lobehub/daemon.status`    | Connection status JSON         |
 | Daemon Log    | `~/.lobehub/daemon.log`       | Daemon output log              |
 
+The base directory (`~/.lobehub/`) can be overridden with the `LOBEHUB_CLI_HOME` env var (e.g. `LOBEHUB_CLI_HOME=.lobehub-dev` for dev mode isolation).
+
 ## Key Dependencies
 
 - `commander` - CLI framework
@@ -199,14 +201,17 @@ if (!options.yes) {
 ## Development
 
 ```bash
-# Run directly (dev mode)
+# Run directly (dev mode, uses ~/.lobehub-dev for credentials)
 cd apps/cli && bun run dev -- <command>
 
 # Build
 cd apps/cli && bun run build
 
-# Test
+# Test (unit tests)
 cd apps/cli && bun run test
+
+# E2E tests (requires authenticated CLI)
+cd apps/cli && bunx vitest run e2e/kb.e2e.test.ts
 
 # Link globally for testing
 cd apps/cli && bun run cli:link

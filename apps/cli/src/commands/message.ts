@@ -14,9 +14,9 @@ export function registerMessageCommand(program: Command) {
     .description('List messages')
     .option('--topic-id <id>', 'Filter by topic ID')
     .option('--agent-id <id>', 'Filter by agent ID')
-    .option('--session-id <id>', 'Filter by session ID')
     .option('-L, --limit <n>', 'Page size', '30')
     .option('--page <n>', 'Page number', '1')
+    .option('--user', 'Only show user messages')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (options: {
@@ -24,20 +24,38 @@ export function registerMessageCommand(program: Command) {
         json?: string | boolean;
         limit?: string;
         page?: string;
-        sessionId?: string;
         topicId?: string;
+        user?: boolean;
       }) => {
         const client = await getTrpcClient();
 
-        const input: Record<string, any> = {};
-        if (options.topicId) input.topicId = options.topicId;
-        if (options.agentId) input.agentId = options.agentId;
-        if (options.sessionId) input.sessionId = options.sessionId;
-        if (options.limit) input.pageSize = Number.parseInt(options.limit, 10);
-        if (options.page) input.current = Number.parseInt(options.page, 10);
+        const hasFilter = options.topicId || options.agentId;
+        const pageSize = options.limit ? Number.parseInt(options.limit, 10) : undefined;
+        const current = options.page ? Number.parseInt(options.page, 10) : undefined;
 
-        const result = await client.message.getMessages.query(input as any);
-        const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+        let items: any[];
+
+        if (hasFilter) {
+          const input: Record<string, any> = {};
+          if (options.topicId) input.topicId = options.topicId;
+          if (options.agentId) input.agentId = options.agentId;
+          if (pageSize) input.pageSize = pageSize;
+          if (current) input.current = current;
+
+          const result = await client.message.getMessages.query(input as any);
+          items = Array.isArray(result) ? result : ((result as any).items ?? []);
+        } else {
+          const input: Record<string, any> = {};
+          if (pageSize) input.pageSize = pageSize;
+          if (current) input.current = current;
+
+          const result = await client.message.listAll.query(input as any);
+          items = Array.isArray(result) ? result : [];
+        }
+
+        if (options.user) {
+          items = items.filter((m: any) => m.role === 'user');
+        }
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;

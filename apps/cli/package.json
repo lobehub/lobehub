@@ -3,7 +3,9 @@
   "version": "0.0.1-canary.8",
   "type": "module",
   "bin": {
-    "lh": "./dist/index.js"
+    "lh": "./dist/index.js",
+    "lobe": "./dist/index.js",
+    "lobehub": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -12,7 +14,7 @@
     "build": "npx tsup",
     "cli:link": "bun link",
     "cli:unlink": "bun unlink",
-    "dev": "bun src/index.ts",
+    "dev": "LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts",
     "prepublishOnly": "npm run build",
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",

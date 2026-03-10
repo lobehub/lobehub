@@ -57,36 +57,33 @@ lh skill delete < id > [--yes]
 lh skill search [fields]] < query > [--json
 ```
 
-### Import Commands
+### `lh skill install <source>` (alias: `lh skill i`)
 
-#### `lh skill import-github`
-
-Import a skill from a GitHub repository.
+Install a skill. Auto-detects source type from the input:
 
 ```bash
-lh skill import-github --url < gitUrl > [--branch < branch > ]
+# GitHub (URL or owner/repo shorthand)
+lh skill install lobehub/skill-repo
+lh skill install https://github.com/lobehub/skill-repo
+lh skill install lobehub/skill-repo --branch dev
+
+# ZIP URL
+lh skill install https://example.com/skill.zip
+
+# Marketplace identifier
+lh skill install my-cool-skill
+lh skill i my-cool-skill
 ```
 
-| Option              | Description        | Required            |
-| ------------------- | ------------------ | ------------------- |
-| `--url <gitUrl>`    | Git repository URL | Yes                 |
-| `--branch <branch>` | Branch name        | No (default branch) |
+| Option              | Description               | Notes    |
+| ------------------- | ------------------------- | -------- |
+| `--branch <branch>` | Branch name (GitHub only) | Optional |
 
-#### `lh skill import-url`
+**Detection rules**:
 
-Import a skill from a ZIP file URL.
-
-```bash
-lh skill import-url --url <zipUrl>
-```
-
-#### `lh skill import-market`
-
-Import a skill from the LobeHub skill marketplace.
-
-```bash
-lh skill import-market -i <identifier>
-```
+- `https://github.com/...` or `owner/repo` → GitHub
+- Other `https://...` URLs → ZIP URL
+- Everything else → marketplace identifier
 
 ### Resource Commands
 

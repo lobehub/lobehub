@@ -33,6 +33,7 @@ import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
 import { klavisRouter } from './klavis';
+import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
 import { marketRouter } from './market';
 import { messageRouter } from './message';
@@ -80,6 +81,7 @@ export const lambdaRouter = router({
   image: imageRouter,
   importer: importerRouter,
   klavis: klavisRouter,
+  knowledge: knowledgeRouter,
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,

@@ -10,7 +10,8 @@ export interface StoredSettings {
   serverUrl?: string;
 }
 
-const SETTINGS_DIR = path.join(os.homedir(), '.lobehub');
+const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
+const SETTINGS_DIR = path.join(os.homedir(), LOBEHUB_DIR_NAME);
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 
 function normalizeUrl(url: string | undefined): string | undefined {

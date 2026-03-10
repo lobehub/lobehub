@@ -1055,12 +1055,17 @@ export class MessageModel {
     return result[0];
   };
 
-  queryAll = async () => {
+  queryAll = async (params?: { current?: number; pageSize?: number }) => {
+    const { current = 0, pageSize = 100 } = params ?? {};
+    const offset = current * pageSize;
+
     const result = await this.db
       .select()
       .from(messages)
-      .orderBy(messages.createdAt)
-      .where(eq(messages.userId, this.userId));
+      .where(eq(messages.userId, this.userId))
+      .orderBy(desc(messages.createdAt))
+      .limit(pageSize)
+      .offset(offset);
 
     return result as DBMessageItem[];
   };
