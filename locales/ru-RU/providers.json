@@ -9,7 +9,7 @@
   "azureai.description": "Azure предоставляет передовые ИИ-модели, включая серии GPT-3.5 и GPT-4, для работы с различными типами данных и сложными задачами, с акцентом на безопасность, надежность и устойчивость.",
   "baichuan.description": "Baichuan AI специализируется на базовых моделях с высокой производительностью в области китайских знаний, обработки длинного контекста и креативной генерации. Модели (Baichuan 4, Baichuan 3 Turbo, Baichuan 3 Turbo 128k) оптимизированы под различные сценарии и предлагают высокую ценность.",
   "bedrock.description": "Amazon Bedrock предоставляет предприятиям передовые языковые и визуальные модели, включая Anthropic Claude и Meta Llama 3.1, от легковесных до высокопроизводительных решений для задач текста, общения и изображений.",
-  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
+  "brainiall.description": "Brainiall provides access to 33 AI models including Claude, DeepSeek, Llama, Qwen, Mistral, and more through a single OpenAI-compatible API. Get started at app.brainiall.com.",
   "bfl.description": "Ведущая исследовательская лаборатория в области передового ИИ, создающая визуальную инфраструктуру будущего.",
   "cerebras.description": "Cerebras — это платформа инференса, построенная на системе CS-3, ориентированная на сверхнизкую задержку и высокую пропускную способность для задач в реальном времени, таких как генерация кода и агентные задачи.",
   "cloudflare.description": "Запускайте модели машинного обучения с поддержкой GPU без серверов по всей глобальной сети Cloudflare.",

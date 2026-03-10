@@ -9,7 +9,7 @@
   "azureai.description": "Azure cung cấp các mô hình AI tiên tiến, bao gồm GPT-3.5 và GPT-4, cho nhiều loại dữ liệu và tác vụ phức tạp, tập trung vào AI an toàn, đáng tin cậy và bền vững.",
   "baichuan.description": "Baichuan AI tập trung vào các mô hình nền tảng với hiệu suất mạnh mẽ về tri thức tiếng Trung, xử lý ngữ cảnh dài và khả năng sáng tạo. Các mô hình như Baichuan 4, Baichuan 3 Turbo, Baichuan 3 Turbo 128k được tối ưu cho nhiều tình huống và mang lại giá trị cao.",
   "bedrock.description": "Amazon Bedrock cung cấp cho doanh nghiệp các mô hình ngôn ngữ và thị giác tiên tiến, bao gồm Anthropic Claude và Meta Llama 3.1, từ nhẹ đến hiệu suất cao cho các tác vụ văn bản, trò chuyện và hình ảnh.",
-  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
+  "brainiall.description": "Brainiall provides access to 33 AI models including Claude, DeepSeek, Llama, Qwen, Mistral, and more through a single OpenAI-compatible API. Get started at app.brainiall.com.",
   "bfl.description": "Phòng nghiên cứu AI tiên phong hàng đầu xây dựng hạ tầng thị giác cho tương lai.",
   "cerebras.description": "Cerebras là nền tảng suy luận dựa trên hệ thống CS-3, tập trung vào độ trễ cực thấp và thông lượng cao cho các tác vụ thời gian thực như tạo mã và tác nhân AI.",
   "cloudflare.description": "Chạy các mô hình ML sử dụng GPU không máy chủ trên mạng toàn cầu của Cloudflare.",

@@ -9,7 +9,7 @@
   "azureai.description": "O Azure fornece modelos avançados de IA, incluindo as séries GPT-3.5 e GPT-4, para diversos tipos de dados e tarefas complexas, com foco em IA segura, confiável e sustentável.",
   "baichuan.description": "A Baichuan AI foca em modelos fundamentais com alto desempenho em conhecimento da língua chinesa, processamento de contexto longo e geração criativa. Seus modelos (Baichuan 4, Baichuan 3 Turbo, Baichuan 3 Turbo 128k) são otimizados para diferentes cenários e oferecem excelente custo-benefício.",
   "bedrock.description": "O Amazon Bedrock oferece às empresas modelos avançados de linguagem e visão, incluindo Anthropic Claude e Meta Llama 3.1, abrangendo desde opções leves até de alto desempenho para tarefas de texto, chat e imagem.",
-  "brainiall.description": "Brainiall is an LLM Gateway providing access to 113+ models from 17 providers including Claude, DeepSeek, Llama, Qwen, Mistral, and more, all through a single OpenAI-compatible API powered by AWS Bedrock.",
+  "brainiall.description": "Brainiall provides access to 33 AI models including Claude, DeepSeek, Llama, Qwen, Mistral, and more through a single OpenAI-compatible API. Get started at app.brainiall.com.",
   "bfl.description": "Um laboratório de pesquisa em IA de ponta que constrói a infraestrutura visual do futuro.",
   "cerebras.description": "A Cerebras é uma plataforma de inferência baseada em seu sistema CS-3, focada em baixa latência e alto desempenho para cargas de trabalho em tempo real como geração de código e agentes.",
   "cloudflare.description": "Execute modelos de ML com GPU sem servidor na rede global da Cloudflare.",
