@@ -14,7 +14,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { builtinTools, defaultToolIds } from '@lobechat/builtin-tools';
+import { alwaysOnToolIds, builtinTools, defaultToolIds } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
 import debug from 'debug';
@@ -116,6 +116,11 @@ export const createServerAgentToolsEngine = (
     defaultToolIds,
     enableChecker: createEnableChecker({
       rules: {
+        // User-selected plugins
+        ...Object.fromEntries((agentConfig.plugins ?? []).map((id) => [id, true])),
+        // Always-on builtin tools
+        ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+        // System-level rules (may override user selection for specific tools)
         [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
         [LocalSystemManifest.identifier]:
           !!deviceContext?.gatewayConfigured && !!deviceContext?.deviceOnline,

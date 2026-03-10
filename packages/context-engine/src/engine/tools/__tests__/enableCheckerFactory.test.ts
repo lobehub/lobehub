@@ -18,10 +18,10 @@ const makeParams = (pluginId: string, overrides: Record<string, any> = {}) => ({
 
 describe('createEnableChecker', () => {
   describe('default behavior', () => {
-    it('should enable all tools by default', () => {
+    it('should disable tools by default when no rule matches', () => {
       const checker = createEnableChecker({});
 
-      expect(checker(makeParams('any-tool'))).toBe(true);
+      expect(checker(makeParams('any-tool'))).toBe(false);
     });
   });
 
@@ -32,7 +32,7 @@ describe('createEnableChecker', () => {
       });
 
       expect(checker(makeParams('web-search'))).toBe(false);
-      expect(checker(makeParams('other-tool'))).toBe(true);
+      expect(checker(makeParams('other-tool'))).toBe(false);
     });
 
     it('should enable tools matching a true rule', () => {
@@ -55,7 +55,7 @@ describe('createEnableChecker', () => {
       expect(checker(makeParams('local-system'))).toBe(false);
       expect(checker(makeParams('web-search'))).toBe(false);
       expect(checker(makeParams('knowledge-base'))).toBe(true);
-      expect(checker(makeParams('unrelated-tool'))).toBe(true);
+      expect(checker(makeParams('unrelated-tool'))).toBe(false);
     });
   });
 
@@ -167,8 +167,8 @@ describe('createEnableChecker', () => {
       // Rule blocks
       expect(checker(makeParams('rule-blocked'))).toBe(false);
 
-      // Default enables
-      expect(checker(makeParams('other-tool'))).toBe(true);
+      // Default disables
+      expect(checker(makeParams('other-tool'))).toBe(false);
     });
   });
 });

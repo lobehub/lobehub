@@ -20,7 +20,7 @@ export interface EnableCheckerConfig {
   /**
    * Tool-specific enable rules, keyed by pluginId.
    * If a pluginId is present in this map, its value determines whether the tool is enabled.
-   * If not present, the tool is enabled by default.
+   * If not present, the tool is disabled by default.
    */
   rules?: Record<string, boolean>;
 }
@@ -46,7 +46,7 @@ export function createEnableChecker(config: EnableCheckerConfig): PluginEnableCh
       return config.rules[pluginId];
     }
 
-    // 4. Default: enabled
-    return true;
+    // 4. Default: disabled (tools must be explicitly enabled via rules)
+    return false;
   };
 }

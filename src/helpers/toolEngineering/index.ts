@@ -4,7 +4,7 @@
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { defaultToolIds } from '@lobechat/builtin-tools';
+import { alwaysOnToolIds, defaultToolIds } from '@lobechat/builtin-tools';
 import { isDesktop } from '@lobechat/const';
 import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -84,6 +84,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 export const createAgentToolsEngine = (workingModel: WorkingModel) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
+  const userPlugins = agentSelectors.currentAgentPlugins(agentState);
 
   return createToolsEngine({
     defaultToolIds,
@@ -102,6 +103,11 @@ export const createAgentToolsEngine = (workingModel: WorkingModel) => {
         return undefined; // fall through to rules
       },
       rules: {
+        // User-selected plugins
+        ...Object.fromEntries(userPlugins.map((id) => [id, true])),
+        // Always-on builtin tools
+        ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+        // System-level rules (may override user selection for specific tools)
         [KnowledgeBaseManifest.identifier]: agentSelectors.hasEnabledKnowledgeBases(agentState),
         [MemoryManifest.identifier]: agentChatConfigSelectors.isMemoryToolEnabled(agentState),
         [WebBrowsingManifest.identifier]: searchConfig.useApplicationBuiltinSearchTool,
