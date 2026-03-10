@@ -2,7 +2,7 @@
 
 ## Knowledge Base (`lh kb`)
 
-Manage knowledge bases for RAG (Retrieval-Augmented Generation).
+Manage knowledge bases for RAG (Retrieval-Augmented Generation). Supports directory tree structure with folders, documents, and file uploads.
 
 **Source**: `apps/cli/src/commands/kb.ts`
 
@@ -20,7 +20,9 @@ lh kb list [--json [fields]]
 lh kb view [fields]] < id > [--json
 ```
 
-**Displays**: Name, description, associated files.
+**Displays**: Name, description, full directory tree with all files and documents (recursively fetched). Shows indented tree structure with item type (File/Doc), file type, and size.
+
+**API**: Uses `file.getKnowledgeItems` to recursively fetch items. Folders (`custom/folder` fileType) are traversed in parallel via `Promise.all` for performance.
 
 ### `lh kb create`
 
@@ -34,13 +36,15 @@ lh kb create -n [--avatar < name > [-d < desc > ] < url > ]
 | `-d, --description <desc>` | Description         | No       |
 | `--avatar <url>`           | Avatar URL          | No       |
 
-**Output**: Created KB ID.
+**Output**: Created KB ID. Note: backend returns ID as a string directly (not an object).
 
 ### `lh kb edit <id>`
 
 ```bash
 lh kb edit [-d [--avatar < id > [-n < name > ] < desc > ] < url > ]
 ```
+
+Requires at least one change flag. Errors if none specified.
 
 ### `lh kb delete <id>`
 
@@ -59,11 +63,71 @@ lh kb delete [--yes] < id > [--remove-files]
 lh kb add-files <kbId> --ids <fileId1> <fileId2> ...
 ```
 
+Link existing files to a knowledge base.
+
 ### `lh kb remove-files <knowledgeBaseId>`
 
 ```bash
 lh kb remove-files <kbId> --ids <fileId1> <fileId2> ... [--yes]
 ```
+
+Unlink files from a knowledge base.
+
+### `lh kb mkdir <knowledgeBaseId>`
+
+```bash
+lh kb mkdir < kbId > -n < name > [--parent < folderId > ]
+```
+
+Create a folder in a knowledge base. Uses `document.createDocument` with `fileType: 'custom/folder'`.
+
+| Option                | Description      | Required |
+| --------------------- | ---------------- | -------- |
+| `-n, --name <name>`   | Folder name      | Yes      |
+| `--parent <parentId>` | Parent folder ID | No       |
+
+### `lh kb create-doc <knowledgeBaseId>`
+
+```bash
+lh kb create-doc [--parent < kbId > -t < title > [-c < content > ] < folderId > ]
+```
+
+Create a document in a knowledge base. Uses `document.createDocument` with `fileType: 'custom/document'`.
+
+| Option                 | Description      | Required |
+| ---------------------- | ---------------- | -------- |
+| `-t, --title <title>`  | Document title   | Yes      |
+| `-c, --content <text>` | Document content | No       |
+| `--parent <parentId>`  | Parent folder ID | No       |
+
+### `lh kb move <id>`
+
+```bash
+lh kb move < id > --type < file | doc > [--parent < folderId > ]
+```
+
+Move a file or document to a different folder (or to root if `--parent` is omitted).
+
+| Option                | Description                      | Default |
+| --------------------- | -------------------------------- | ------- |
+| `--type <type>`       | Item type: `file` or `doc`       | `file`  |
+| `--parent <parentId>` | Target folder ID (omit for root) | -       |
+
+Uses `document.updateDocument` for docs, `file.updateFile` for files.
+
+### `lh kb upload <knowledgeBaseId> <filePath>`
+
+```bash
+lh kb upload <kbId> <filePath> [--parent <folderId>]
+```
+
+Upload a local file to a knowledge base via S3 presigned URL.
+
+| Option                | Description      |
+| --------------------- | ---------------- |
+| `--parent <parentId>` | Parent folder ID |
+
+**Flow**: Compute SHA-256 hash → get presigned URL via `upload.createS3PreSignedUrl` → PUT to S3 → create file record via `file.createFile`.
 
 ---
 
