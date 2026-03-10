@@ -106,6 +106,14 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   searchMode?: SearchMode;
 
   /**
+   * Skill activate mode:
+   * - 'auto': Default tools (LobeTools, Skills, SkillStore, etc.) are always active,
+   *   allowing AI to autonomously activate tools, run skills, and install new skills.
+   * - 'manual': Only user-selected tools/skills are active, giving precise control.
+   */
+  skillActivateMode?: 'auto' | 'manual';
+
+  /**
    * Output text verbosity control
    */
   textVerbosity?: 'low' | 'medium' | 'high';
@@ -186,6 +194,7 @@ export const AgentChatConfigSchema = z
       })
       .optional(),
     searchMode: z.enum(['off', 'on', 'auto']).optional(),
+    skillActivateMode: z.enum(['auto', 'manual']).optional(),
     textVerbosity: z.enum(['low', 'medium', 'high']).optional(),
     thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
     thinkingBudget: z.number().optional(),

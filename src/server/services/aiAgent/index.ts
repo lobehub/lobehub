@@ -403,9 +403,13 @@ export class AiAgentService {
     ];
     log('execAgent: agent configured plugins: %O', pluginIds);
 
+    // When skillActivateMode is 'manual', skip default tools to give user precise control
+    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
+
     const toolsResult = toolsEngine.generateToolsDetailed({
       model,
       provider,
+      skipDefaultTools: isManualMode,
       toolIds: pluginIds,
     });
 

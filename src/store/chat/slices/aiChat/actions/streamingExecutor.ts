@@ -171,11 +171,14 @@ export class StreamingExecutorActionImpl {
       { model: agentConfigData.model, provider: agentConfigData.provider! },
       effectivePluginIds,
     );
+    // When skillActivateMode is 'manual', skipDefaultTools gives user precise control
+    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
+
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools,
+      skipDefaultTools: disableTools || isManualMode,
       toolIds: mergedToolIds,
     });
 
