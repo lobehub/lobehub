@@ -30,7 +30,7 @@ const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     setSearchParams(searchParams, { replace: true });
   };
 
-  const skillContent = <Markdown variant={'chat'}>{content}</Markdown>;
+  const skillContent = <Markdown variant={'chat'}>{content ?? ''}</Markdown>;
 
   return (
     <Flexbox gap={24}>
