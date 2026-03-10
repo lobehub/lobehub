@@ -5,27 +5,27 @@ export const DESKTOP_ONBOARDING_COMPLETED_KEY = 'lobechat:desktop:onboarding:com
 export const DESKTOP_ONBOARDING_SCREEN_KEY = 'lobechat:desktop:onboarding:screen:v1';
 
 /**
- * Check if user has ever completed onboarding ( persisted in localStorage)
- * This is different from dataSyncConfig.active - it remains true after sign-out
+ * Check if user has completed onboarding in this session
+ * Uses sessionStorage so it clears when the browser session ends
  */
 export const getDesktopOnboardingCompleted = () => {
   if (typeof window === 'undefined') return false;
 
   try {
-    return window.localStorage.getItem(DESKTOP_ONBOARDING_COMPLETED_KEY) === '1';
+    return window.sessionStorage.getItem(DESKTOP_ONBOARDING_COMPLETED_KEY) === '1';
   } catch {
     return false;
   }
 };
 
 /**
- * Mark onboarding as completed
+ * Mark onboarding as completed for this session
  */
 export const setDesktopOnboardingCompleted = () => {
   if (typeof window === 'undefined') return false;
 
   try {
-    window.localStorage.setItem(DESKTOP_ONBOARDING_COMPLETED_KEY, '1');
+    window.sessionStorage.setItem(DESKTOP_ONBOARDING_COMPLETED_KEY, '1');
     return true;
   } catch {
     return false;
