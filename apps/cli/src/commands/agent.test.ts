@@ -10,6 +10,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       createAgent: { mutate: vi.fn() },
       duplicateAgent: { mutate: vi.fn() },
       getAgentConfigById: { query: vi.fn() },
+      getBuiltinAgent: { query: vi.fn() },
       queryAgents: { query: vi.fn() },
       removeAgent: { mutate: vi.fn() },
       updateAgentConfig: { mutate: vi.fn() },
@@ -136,6 +137,27 @@ describe('agent command', () => {
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
+
+    it('should support --slug option', async () => {
+      mockTrpcClient.agent.getBuiltinAgent.query.mockResolvedValue({
+        id: 'resolved-id',
+        model: 'gpt-4',
+        title: 'Inbox Agent',
+      });
+      mockTrpcClient.agent.getAgentConfigById.query.mockResolvedValue({
+        id: 'resolved-id',
+        model: 'gpt-4',
+        title: 'Inbox Agent',
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'view', '--slug', 'inbox']);
+
+      expect(mockTrpcClient.agent.getBuiltinAgent.query).toHaveBeenCalledWith({ slug: 'inbox' });
+      expect(mockTrpcClient.agent.getAgentConfigById.query).toHaveBeenCalledWith({
+        agentId: 'resolved-id',
+      });
+    });
   });
 
   describe('create', () => {
@@ -185,6 +207,32 @@ describe('agent command', () => {
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('No changes'));
       expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should support --slug option', async () => {
+      mockTrpcClient.agent.getBuiltinAgent.query.mockResolvedValue({
+        id: 'resolved-id',
+        title: 'Inbox Agent',
+      });
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        '--slug',
+        'inbox',
+        '--model',
+        'gemini-3-pro',
+      ]);
+
+      expect(mockTrpcClient.agent.getBuiltinAgent.query).toHaveBeenCalledWith({ slug: 'inbox' });
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'resolved-id',
+        value: { model: 'gemini-3-pro' },
+      });
     });
   });
 

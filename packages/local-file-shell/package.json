@@ -1,0 +1,13 @@
+{
+  "name": "@lobechat/local-file-shell",
+  "version": "1.0.0",
+  "private": true,
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/file-loaders": "workspace:*",
+    "diff": "^8.0.2",
+    "fast-glob": "^3.3.3"
+  }
+}

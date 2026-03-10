@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Your content was blocked for safety policy reasons. Please adjust your request to avoid potentially harmful or inappropriate content.",
   "response.GoogleAIBlockReason.SPII": "Your content may contain sensitive personally identifiable information (PII). To protect privacy, please remove any sensitive details and try again.",
   "response.GoogleAIBlockReason.default": "Content blocked: {{blockReason}}. Please adjust your request and try again.",
+  "response.InsufficientBudgetForModel": "Your remaining credits are insufficient for this model. Please top up credits, upgrade your plan, or try a less expensive model.",
   "response.InsufficientQuota": "Sorry, the quota for this key has been reached. Please check if your account balance is sufficient or try again after increasing the key's quota.",
   "response.InvalidAccessCode": "Invalid access code or empty. Please enter the correct access code or add a custom API Key.",
   "response.InvalidBedrockCredentials": "Bedrock authentication failed. Please check the AccessKeyId/SecretAccessKey and retry.",
