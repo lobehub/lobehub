@@ -245,6 +245,8 @@ export default {
   'providerModels.item.modelConfig.displayName.title': 'Model Display Name',
   'providerModels.item.modelConfig.extendParams.extra':
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
+  'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint':
+    'For Codex models; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
   'providerModels.item.modelConfig.extendParams.options.effort.hint':
@@ -261,6 +263,8 @@ export default {
     'For GPT-5.2 Pro series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
     'For GPT-5.2 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
+    'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':

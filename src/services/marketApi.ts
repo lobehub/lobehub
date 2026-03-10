@@ -242,7 +242,7 @@ export class MarketApiService {
     pageSize: number;
     total: number;
   }> {
-    await discoverService.injectMPToken();
+    await discoverService.safeInjectMPToken();
 
     return lambdaClient.market.skill.searchSkill.query(params);
   }

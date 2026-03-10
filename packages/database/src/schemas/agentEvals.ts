@@ -43,6 +43,7 @@ const evalModes = [
   'similar',
   'levenshtein',
   'rubric',
+  'external',
 ] as const;
 
 // ============================================
@@ -181,7 +182,7 @@ export const agentEvalRuns = pgTable(
     name: text('name'),
 
     status: text('status', {
-      enum: ['idle', 'pending', 'running', 'completed', 'failed', 'aborted'],
+      enum: ['idle', 'pending', 'running', 'completed', 'failed', 'aborted', 'external'],
     })
       .default('idle')
       .notNull(),
@@ -228,7 +229,7 @@ export const agentEvalRunTopics = pgTable(
       .notNull(),
 
     status: text('status', {
-      enum: ['pending', 'running', 'passed', 'failed', 'error', 'timeout'],
+      enum: ['pending', 'running', 'passed', 'failed', 'error', 'timeout', 'external', 'completed'],
     }),
 
     score: real('score'),

@@ -40,7 +40,6 @@ describe('credentials', () => {
     accessToken: 'test-access-token',
     expiresAt: Math.floor(Date.now() / 1000) + 3600,
     refreshToken: 'test-refresh-token',
-    serverUrl: 'https://app.lobehub.com',
   };
 
   describe('saveCredentials + loadCredentials', () => {
@@ -73,7 +72,6 @@ describe('credentials', () => {
     it('should handle credentials without optional fields', () => {
       const minimal: StoredCredentials = {
         accessToken: 'tok',
-        serverUrl: 'https://test.com',
       };
 
       saveCredentials(minimal);

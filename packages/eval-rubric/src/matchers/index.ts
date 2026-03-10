@@ -4,8 +4,10 @@ import { matchAnyOf } from './anyOf';
 import { matchContains } from './contains';
 import { matchEndsWith } from './endsWith';
 import { matchEquals } from './equals';
+import { matchExternal } from './external';
 import { matchJsonSchema } from './jsonSchema';
 import { matchLevenshtein } from './levenshtein';
+import { matchLLMEq } from './llmEq';
 import { matchLLMRubric } from './llmRubric';
 import { matchNumeric } from './numeric';
 import { matchRegex } from './regex';
@@ -18,10 +20,15 @@ export type { GenerateObjectPayload, MatchContext, MatchResult } from './types';
  * Run a single rubric matcher against actual vs expected
  */
 export const match = async (
-  params: { actual: string; expected: string | undefined; rubric: EvalBenchmarkRubric },
+  params: {
+    input: string;
+    actual: string;
+    expected: string | undefined;
+    rubric: EvalBenchmarkRubric;
+  },
   context?: MatchContext,
 ): Promise<MatchResult> => {
-  const { actual, expected, rubric } = params;
+  const { actual, expected, rubric, input } = params;
   const { type, config } = rubric;
 
   switch (type) {
@@ -57,12 +64,20 @@ export const match = async (
       return matchLevenshtein(actual, expected, config);
     }
 
+    case 'answer-relevance': {
+      return matchLLMEq(input, actual, expected, rubric, context);
+    }
+
     case 'llm-rubric': {
       return matchLLMRubric(actual, expected, rubric, context);
     }
 
     case 'json-schema': {
       return matchJsonSchema(actual, config);
+    }
+
+    case 'external': {
+      return matchExternal();
     }
 
     default: {

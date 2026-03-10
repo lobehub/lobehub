@@ -140,8 +140,9 @@ function renderInlineStats(params: {
   if (totalTokens <= 0) return { footer: '', header };
 
   const stats = `${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}`;
-  // Discord uses -# for small text; Telegram renders it as literal text
-  const footer = platform === 'telegram' ? `\n\n${stats}` : `\n\n-# ${stats}`;
+  // Discord uses -# for small text; other platforms render it as literal text
+  const useSmallText = !platform || platform === 'discord';
+  const footer = useSmallText ? `\n\n-# ${stats}` : `\n\n${stats}`;
 
   return { footer, header };
 }
@@ -258,8 +259,9 @@ export function renderFinalReply(
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
   const calls = llmCalls > 1 || toolCalls > 0 ? ` | llm×${llmCalls} | tools×${toolCalls}` : '';
   const stats = `${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
-  // Discord uses -# for small text; Telegram renders it as literal text
-  const footer = platform === 'telegram' ? stats : `-# ${stats}`;
+  // Discord uses -# for small text; other platforms render it as literal text
+  const useSmallText = !platform || platform === 'discord';
+  const footer = useSmallText ? `-# ${stats}` : stats;
   return `${content.trimEnd()}\n\n${footer}`;
 }
 

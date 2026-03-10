@@ -1,5 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
+import { transformSiliconCloudMessages } from '../../core/contextBuilders/siliconcloud';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatCompletionErrorPayload } from '../../types';
@@ -68,8 +69,7 @@ export const params = {
         return {
           error: status,
           errorType: AgentRuntimeErrorType.ProviderBizError,
-          message:
-            '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
+          message: '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
         };
       }
 
@@ -115,6 +115,7 @@ export const params = {
       }
       return result;
     },
+    transformMessages: transformSiliconCloudMessages,
   },
   constructorOptions: {
     fetch: siliconFetch,

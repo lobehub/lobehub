@@ -12,6 +12,7 @@
     "agent-tracing": "./src/cli/index.ts"
   },
   "dependencies": {
-    "commander": "^13.1.0"
+    "commander": "^13.1.0",
+    "gpt-tokenizer": "^3.4.0"
   }
 }

@@ -1,25 +1,42 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.1-canary.1",
-  "private": true,
+  "version": "0.0.1-canary.5",
+  "type": "module",
   "bin": {
-    "lh": "./src/index.ts"
+    "lh": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "npx tsup",
+    "cli:link": "bun link",
+    "cli:unlink": "bun unlink",
+    "dev": "bun src/index.ts",
+    "prepublishOnly": "npm run build",
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@lobechat/device-gateway-client": "workspace:*",
+    "@trpc/client": "^11.8.1",
     "commander": "^13.1.0",
     "diff": "^7.0.0",
     "fast-glob": "^3.3.3",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "superjson": "^2.2.6",
+    "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@lobechat/device-gateway-client": "workspace:*",
     "@types/diff": "^6.0.0",
     "@types/node": "^22.13.5",
+    "@types/ws": "^8.18.1",
+    "tsup": "^8.4.0",
     "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }

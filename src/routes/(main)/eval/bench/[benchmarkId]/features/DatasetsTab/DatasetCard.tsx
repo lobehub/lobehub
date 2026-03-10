@@ -238,6 +238,7 @@ const DatasetCard = memo<DatasetCardProps>(
             ) : (
               <TestCaseTable
                 readOnly
+                datasetEvalMode={dataset.evalMode}
                 diffFilter={diffFilter}
                 pagination={pagination}
                 search={search}

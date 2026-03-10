@@ -104,7 +104,9 @@ const RunDetail = memo(() => {
           {runDetail.status === 'running' ? (
             <RunningState />
           ) : runDetail.status === 'pending' ? (
-            <PendingState />
+            <PendingState hint={t('run.pending.hint')} />
+          ) : runDetail.status === 'external' ? (
+            <PendingState hint={t('run.external.hint')} />
           ) : (
             <IdleState run={runDetail} />
           )}

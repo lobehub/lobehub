@@ -8,6 +8,7 @@ import {
   Coins,
   CreditCard,
   Database,
+  EllipsisIcon,
   EthernetPort,
   FlaskConical,
   Gift,
@@ -230,6 +231,11 @@ export const useCategory = () => {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      {
+        icon: EllipsisIcon,
+        key: SettingsTabs.Advanced,
+        label: t('tab.advanced'),
       },
       !hideDocs && {
         icon: Info,

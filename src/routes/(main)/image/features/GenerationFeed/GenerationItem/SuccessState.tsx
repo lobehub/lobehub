@@ -10,7 +10,7 @@ import { styles } from './styles';
 import { type SuccessStateProps } from './types';
 import { getThumbnailMaxWidth } from './utils';
 
-// 成功状态组件
+// Success state component
 export const SuccessState = memo<SuccessStateProps>(
   ({
     generation,

@@ -15,7 +15,7 @@ const handler = async (req: NextRequest) => {
   log(`Received ${req.method.toUpperCase()} request: %s %s`, req.method, req.url);
   log('Path: %s, Pathname: %s', requestUrl.pathname, requestUrl.pathname);
 
-  // 声明响应收集器
+  // Declare the response collector
   let responseCollector;
 
   try {
@@ -24,7 +24,7 @@ const handler = async (req: NextRequest) => {
       return new NextResponse('OIDC is not enabled', { status: 404 });
     }
 
-    // 获取 OIDC Provider 实例
+    // Get the OIDC Provider instance
     const provider = await getOIDCProvider();
 
     log(`Calling provider.callback() for ${req.method}`); // Log the method
@@ -41,11 +41,11 @@ const handler = async (req: NextRequest) => {
         return;
       }
 
-      // 使用辅助方法创建响应收集器
+      // Use helper method to create the response collector
       responseCollector = createNodeResponse(resolve);
       const nodeResponse = responseCollector.nodeResponse;
 
-      // 使用辅助方法创建 Node.js 请求对象，现在需要 await
+      // Use helper method to create the Node.js request object, now requires await
       createNodeRequest(req).then((nodeRequest) => {
         log('Calling the obtained middleware...');
         middleware(nodeRequest, nodeResponse, (error?: Error) => {
@@ -66,7 +66,7 @@ const handler = async (req: NextRequest) => {
 
     log('Promise surrounding middleware call resolved.');
 
-    // 访问最终的响应状态
+    // Access the final response status
     if (!responseCollector) {
       throw new Error('ResponseCollector was not initialized.');
     }

@@ -18,6 +18,7 @@
   "favorite": "نشان‌کردن",
   "groupMode.ascMessages": "مرتب‌سازی بر اساس تعداد پیام (صعودی)",
   "groupMode.byTime": "گروه‌بندی بر اساس زمان",
+  "groupMode.byUpdatedTime": "گروه‌بندی بر اساس زمان به‌روزرسانی",
   "groupMode.descMessages": "مرتب‌سازی بر اساس تعداد پیام (نزولی)",
   "groupMode.flat": "بدون گروه‌بندی",
   "groupTitle.byTime.month": "این ماه",

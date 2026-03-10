@@ -1,20 +1,54 @@
 ---
 title: Scheduled Tasks
 description: >-
-  Learn how to use scheduled tasks, including how to create, edit, and delete
-  them.
+  Schedule agents to run tasks automatically at specified times — recurring
+  reports, monitoring, content generation, and time-based workflows.
 tags:
   - LobeHub
   - CronJob
   - Scheduled Tasks
-  - Create
-  - Edit
-  - Delete
+  - Automation
+  - Task Scheduling
 ---
 
 # Scheduled Tasks
 
-Scheduled tasks are jobs that run periodically in the cloud. In simple terms, you can configure an Agent to execute tasks based on your prompt at regular intervals — for example, checking social media content and sending notifications on a schedule. Instead of manually triggering the same workflow repeatedly, schedule it once and let it run automatically — daily, weekly, or hourly.
+Scheduled tasks are jobs that run periodically in the cloud. Configure an Agent to execute tasks based on your prompt at regular intervals — daily, weekly, or hourly. Instead of manually triggering the same workflow repeatedly, schedule it once and let it run automatically.
+
+## What Are Scheduled Tasks?
+
+A scheduled task is an automated agent run that:
+
+- **Runs automatically**: Executes at your specified time without manual triggering
+- **Follows a schedule**: Daily, weekly, hourly, or custom patterns
+- **Maintains context**: Each run creates a conversation with full agent context
+- **Works while you're away**: Runs even when you're not logged in
+- **Sends notifications**: Alerts you when tasks complete (if configured)
+
+## Why Use Scheduled Tasks?
+
+### Recurring Tasks
+
+Automate tasks that need to happen regularly:
+
+- Daily market research summaries
+- Weekly competitive analysis reports
+- Monthly performance reviews
+- Hourly monitoring and alerts
+
+### Time-Based Workflows
+
+Execute tasks at optimal times:
+
+- Generate reports first thing Monday morning
+- Send summaries at end of business day
+- Run analysis during off-peak hours
+
+### Consistency and Reliability
+
+- Never forget routine tasks
+- Maintain regular cadence for important workflows
+- Reduce manual overhead
 
 ## Creating a Task
 
@@ -22,35 +56,67 @@ Find Scheduled Tasks in the left panel of the Agent conversation page, and click
 
 ![Create Task](https://file.rene.wang/clipboard-1770261091677-74b74e4d6bf23.png)
 
-### Configuration Fields
+<Steps>
+  ### Select an Agent
 
-**Task Name** — Give your task a descriptive name so you can identify it at a glance:
+  Navigate to the agent you want to schedule. Open the agent profile or settings panel.
 
-- ✅ "Daily Market Summary - 9am EST"
-- ✅ "Weekly Competitor Analysis"
-- ❌ "Task 1"
+  ### Access Scheduling
 
-**Task Content** — Enter the prompt or instructions for the Agent to execute each time the task runs. Be specific and complete — this exact prompt runs every scheduled execution. For example:
+  Look for the **Scheduled Tasks** section and click **Add Scheduled Task**.
 
-```
-Analyze today's top tech news and summarize:
-1. Major product launches
-2. Funding announcements
-3. Industry trends
-Format as a brief executive summary.
-```
+  ### Configure the Task
 
-**Frequency** — Choose how often the task runs:
+  #### Task Name
 
-- **Daily** — Every day at a specified time
-- **Weekly** — Specific days of the week at a specified time (you can select multiple days)
-- **Hourly** — Every 1, 2, 6, 12, or 24 hours
+  Give your task a descriptive name so you can identify it at a glance:
 
-**Time and Timezone** — Specify the exact time of day and your timezone so the task runs at the correct local time. Times are in 24-hour format. Timezone selection is especially important for teams across multiple regions.
+  - ✅ "Daily Market Summary - 9am EST"
+  - ✅ "Weekly Competitor Analysis"
+  - ❌ "Task 1"
 
-**Max Executions** — Optionally limit how many times the task runs total. Leave unlimited for ongoing tasks. Set a number (e.g., 30) for time-limited campaigns — the task disables automatically after reaching the limit.
+  #### Task Content
 
-After creation, you can modify the scheduled task configuration at any time.
+  Enter the prompt or instructions for the Agent to execute each time the task runs. Be specific and complete — this exact prompt runs every scheduled execution:
+
+  ```
+  Analyze today's top tech news and summarize:
+  1. Major product launches
+  2. Funding announcements
+  3. Industry trends
+  Format as a brief executive summary.
+  ```
+
+  #### Frequency
+
+  Choose how often the task runs:
+
+  - **Daily** — Every day at a specified time
+  - **Weekly** — Specific days of the week at a specified time (you can select multiple days)
+  - **Hourly** — Every 1, 2, 6, 12, or 24 hours
+
+  ### Set the Time
+
+  Specify the exact time of day and your timezone so the task runs at the correct local time. Times are in 24-hour format.
+
+  For **weekly** schedules, select which days of the week to run. You can select multiple days (e.g., Monday, Wednesday, Friday).
+
+  For **hourly** schedules, set the interval and the minute when it runs.
+
+  ### Configure Advanced Options
+
+  #### Timezone
+
+  Select your timezone so tasks run at the correct local time. Especially important for teams across multiple regions.
+
+  #### Max Executions
+
+  Optionally limit how many times the task runs total. Leave unlimited for ongoing tasks. Set a number (e.g., 30) for time-limited campaigns — the task disables automatically after reaching the limit.
+
+  ### Save and Enable
+
+  Click **Save** to create the scheduled task. New tasks are typically enabled by default. After creation, you can modify the configuration at any time.
+</Steps>
 
 ## Schedule Configuration Examples
 
@@ -94,6 +160,45 @@ If you temporarily don't need a scheduled task, you can disable it. After disabl
 
 If you no longer need a scheduled task, you can delete it. After deletion, the task's execution plan and prompt configuration are removed, and the system will no longer trigger any subsequent executions. Past conversation history is preserved.
 
+## Use Cases
+
+<Tabs>
+  <Tab title="News & Research">
+    - **Daily tech news digest**: Summarize top stories every morning
+    - **Competitor tracking**: Weekly analysis of competitor announcements
+    - **Industry trends**: Monthly deep-dive into emerging trends
+    - **Academic monitoring**: Track new papers in your field
+  </Tab>
+
+  <Tab title="Content Generation">
+    - **Social media drafts**: Daily post ideas based on current events
+    - **Newsletter content**: Weekly roundup of relevant topics
+    - **Blog post outlines**: Bi-weekly topic suggestions
+    - **Report drafts**: Auto-generate periodic report templates
+  </Tab>
+
+  <Tab title="Reporting & Analytics">
+    - **Daily metrics summary**: KPI updates each morning
+    - **Weekly performance review**: Analyze data and surface insights
+    - **Monthly executive summary**: High-level overview for leadership
+    - **Anomaly detection**: Flag unusual patterns in data
+  </Tab>
+
+  <Tab title="Personal Productivity">
+    - **Morning briefing**: Weather, calendar, priorities at 7am
+    - **End-of-day review**: Summarize accomplishments at 5pm
+    - **Weekly planning**: Sunday evening prep for the week ahead
+    - **Reminder notifications**: Important milestones and check tasks
+  </Tab>
+
+  <Tab title="Monitoring & Alerts">
+    - **Hourly health checks**: Monitor systems or metrics
+    - **Social media monitoring**: Track brand mentions and sentiment
+    - **Price tracking**: Watch for changes in competitors or markets
+    - **Security alerts**: High-frequency checks for critical issues
+  </Tab>
+</Tabs>
+
 ## Best Practices
 
 **Write clear, self-contained prompts** — The task prompt runs without any prior conversation context. Every detail the Agent needs must be in the prompt itself:
@@ -107,31 +212,82 @@ If you no longer need a scheduled task, you can delete it. After deletion, the t
 
 **Set max executions for experiments** — When testing a new scheduled task, set a max execution count of 5–10 so it doesn't run indefinitely if the prompt doesn't work as expected.
 
-**Timezone awareness** — Always set the correct timezone. A task scheduled for "9:00 AM" defaults to the server timezone, which may differ from your local time. Misconfigured timezones are a common source of unexpected run times.
+**Timezone awareness** — Always set the correct timezone. A task scheduled for "9:00 AM" defaults to the server timezone, which may differ from your local time. Account for daylight saving time changes.
 
-## Use Cases
+**Monitor results regularly** — Review scheduled run outputs to check if the agent is producing useful results and refine prompts based on actual outputs.
 
-### Periodic Social Media Monitoring with Notifications
+## Advanced Scheduling
 
-Set up scheduled tasks to periodically check social media content related to specified platforms or keywords. The task automatically fetches the latest updates, filters information that meets the criteria, and generates summaries when important updates are detected. Suitable for brand reputation monitoring, competitor tracking, and creator content update alerts.
+### Custom Cron Patterns
 
-### Periodic Summary and Report Generation
+For advanced users, some interfaces support custom cron expressions:
 
-For work that requires regular review — data analysis, project progress tracking, or content performance evaluation — use scheduled tasks to automatically complete aggregation and analysis. The task collects relevant information at specified times and outputs structured conclusions, helping you continuously track trend changes.
+```
+0 9 * * 1-5    # Monday-Friday at 9:00am
+0 */6 * * *    # Every 6 hours
+0 0 1 * *      # First day of every month at midnight
+```
 
-### Scheduled Reminder Notifications
+### Chaining Scheduled Tasks
 
-Set up reminders in advance for important milestones, periodic check tasks, or items needing attention. LobeHub automatically generates reminder messages and notifies you via email or other methods without manual triggering.
+Create workflows by scheduling multiple agents in sequence:
+
+1. **Agent A** (8am): Gather data
+2. **Agent B** (9am): Analyze data from Agent A
+3. **Agent C** (10am): Generate report from Agent B's analysis
+
+Coordinate timing so each task has inputs ready.
+
+### Conditional Execution
+
+Advanced setups may support conditions:
+
+- Only run if certain criteria are met
+- Skip runs on holidays
+- Adjust frequency based on results
+
+## Notifications and Integrations
+
+Depending on your workspace configuration:
+
+- **Email notifications**: Get alerts when runs complete
+- **Webhook integrations**: Send results to other tools
+- **Slack/Discord bots**: Post summaries to team channels
+- **Export options**: Download or share run outputs
+
+Check your workspace settings for available integration options.
 
 ## Troubleshooting
 
-**Task didn't run at expected time** — Check the timezone setting. The scheduled time is relative to your configured timezone, not necessarily your local timezone. Also verify the task is in "enabled" status.
+<AccordionGroup>
+  <Accordion title="Task Didn't Run at Expected Time">
+    **Check if the task is enabled** — Disabled tasks won't execute. Toggle it back on if needed.
 
-**Unexpected run times** — Verify you haven't confused AM/PM in 24-hour format (e.g., 17:00 = 5:00 PM, not 5:00 AM).
+    **Verify the schedule configuration** — Is the time correct in your timezone? For weekly schedules, are the right days selected? Has it reached max executions?
 
-**Poor quality outputs** — The scheduled prompt runs without conversational context. Rewrite the prompt to be fully self-contained, including all necessary context, data sources, and formatting instructions.
+    **Check for errors** — Look at the conversation history for failed runs.
+  </Accordion>
 
-**Too many runs** — Set a `Max Executions` limit when experimenting with new tasks. Delete and recreate a task if it has exceeded expectations.
+  <Accordion title="Unexpected Run Times">
+    **Timezone mismatch** — Ensure the task timezone matches your expectations. Verify you haven't confused AM/PM in 24-hour format (e.g., 17:00 = 5:00 PM).
+
+    **Daylight Saving Time** — Some timezones shift with DST. Tasks may run an hour earlier/later after DST changes.
+  </Accordion>
+
+  <Accordion title="Poor Quality Outputs">
+    **Refine your prompt** — Be more specific about what you want. Add examples of good outputs. Specify format and length.
+
+    **Wrong agent** — Ensure the agent is properly configured for the task and has necessary plugins or knowledge bases.
+  </Accordion>
+
+  <Accordion title="Too Many Runs">
+    **Reduce frequency** — Change from hourly to daily, or daily to weekly.
+
+    **Set max executions** — Limit total runs to avoid runaway tasks.
+
+    **Disable temporarily** — Turn off the task while you reassess.
+  </Accordion>
+</AccordionGroup>
 
 <Cards>
   <Card href={'/docs/usage/agent/web-search'} title={'Web Search'} />

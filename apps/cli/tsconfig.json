@@ -13,8 +13,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "paths": {
-      "@lobechat/device-gateway-client": ["../../packages/device-gateway-client/src"]
+      "@lobechat/device-gateway-client": ["../../packages/device-gateway-client/src"],
+      "@/*": ["../../src/*"]
     }
   },
+  "exclude": ["**/*.test.ts"],
   "include": ["src"]
 }

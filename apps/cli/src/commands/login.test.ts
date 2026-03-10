@@ -1,12 +1,19 @@
+import fs from 'node:fs';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { saveCredentials } from '../auth/credentials';
+import { loadSettings, saveSettings } from '../settings';
 import { log } from '../utils/logger';
-import { registerLoginCommand } from './login';
+import { registerLoginCommand, resolveCommandExecutable } from './login';
 
 vi.mock('../auth/credentials', () => ({
   saveCredentials: vi.fn(),
+}));
+vi.mock('../settings', () => ({
+  loadSettings: vi.fn().mockReturnValue(null),
+  saveSettings: vi.fn(),
 }));
 
 vi.mock('../utils/logger', () => ({
@@ -18,23 +25,35 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-// Mock child_process.exec to prevent browser opening
+// Mock child_process to prevent browser opening
 vi.mock('node:child_process', () => ({
+  default: {
+    exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
+    execFile: vi.fn((_cmd: string, _args: string[], cb: any) => cb?.(null)),
+  },
   exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
+  execFile: vi.fn((_cmd: string, _args: string[], cb: any) => cb?.(null)),
 }));
 
 describe('login command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  const originalPath = process.env.PATH;
+  const originalPathext = process.env.PATHEXT;
+  const originalSystemRoot = process.env.SystemRoot;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn());
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    vi.mocked(loadSettings).mockReturnValue(null);
   });
 
   afterEach(() => {
     vi.useRealTimers();
     exitSpy.mockRestore();
+    process.env.PATH = originalPath;
+    process.env.PATHEXT = originalPathext;
+    process.env.SystemRoot = originalSystemRoot;
     vi.restoreAllMocks();
   });
 
@@ -105,10 +124,54 @@ describe('login command', () => {
       expect.objectContaining({
         accessToken: 'new-token',
         refreshToken: 'refresh-tok',
-        serverUrl: 'https://app.lobehub.com',
       }),
     );
+    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://app.lobehub.com' });
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Login successful'));
+  });
+
+  it('should persist custom server into settings', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program, ['--server', 'https://test.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://test.com' });
+  });
+
+  it('should preserve existing gateway when logging into the same server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://test.com',
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program, ['--server', 'https://test.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://test.com',
+    });
+  });
+
+  it('should clear existing gateway when logging into a different server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://old.example.com',
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program, ['--server', 'https://new.example.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://new.example.com' });
   });
 
   it('should strip trailing slash from server URL', async () => {
@@ -123,12 +186,6 @@ describe('login command', () => {
   });
 
   it('should handle device auth failure', async () => {
-    // For early-exit tests, process.exit must throw to stop code execution
-    // (otherwise code continues past exit and accesses undefined deviceAuth)
-    exitSpy.mockImplementation(() => {
-      throw new Error('exit');
-    });
-
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -136,21 +193,17 @@ describe('login command', () => {
     } as any);
 
     const program = createProgram();
-    await runLoginAndAdvanceTimers(program).catch(() => {});
+    await runLoginAndAdvanceTimers(program);
 
     expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to start'));
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle network error on device auth', async () => {
-    exitSpy.mockImplementation(() => {
-      throw new Error('exit');
-    });
-
     vi.mocked(fetch).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
     const program = createProgram();
-    await runLoginAndAdvanceTimers(program).catch(() => {});
+    await runLoginAndAdvanceTimers(program);
 
     expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to reach'));
     expect(exitSpy).toHaveBeenCalledWith(1);
@@ -246,5 +299,18 @@ describe('login command', () => {
 
     expect(log.error).toHaveBeenCalledWith(expect.stringContaining('expired'));
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('should resolve Windows executable via PATHEXT', () => {
+    process.env.PATH = 'C:\\Tools';
+    process.env.PATHEXT = '.EXE;.CMD';
+    process.env.SystemRoot = 'C:\\Windows';
+
+    vi.spyOn(fs, 'existsSync').mockImplementation(
+      (targetPath) => String(targetPath).toLowerCase() === 'c:\\tools\\rundll32.exe',
+    );
+
+    const resolved = resolveCommandExecutable('rundll32', 'win32');
+    expect(resolved?.toLowerCase()).toBe('c:\\tools\\rundll32.exe');
   });
 });

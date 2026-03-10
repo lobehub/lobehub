@@ -27,7 +27,7 @@ const log = debug('lobe-agent:service');
  * Agent config with required id field.
  * Used when returning agent config from database (id is always present).
  */
-export type AgentConfigWithId = LobeAgentConfig & { id: string };
+export type AgentConfigWithId = LobeAgentConfig & { id: string; slug?: string | null };
 
 interface AgentWelcomeData {
   openQuestions: string[];

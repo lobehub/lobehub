@@ -18,6 +18,7 @@
   "favorite": "Yêu thích",
   "groupMode.ascMessages": "Sắp xếp theo số tin nhắn tăng dần",
   "groupMode.byTime": "Nhóm theo thời gian",
+  "groupMode.byUpdatedTime": "Nhóm theo Thời gian Cập nhật",
   "groupMode.descMessages": "Sắp xếp theo số tin nhắn giảm dần",
   "groupMode.flat": "Không nhóm",
   "groupTitle.byTime.month": "Tháng này",

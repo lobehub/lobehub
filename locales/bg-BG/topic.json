@@ -18,6 +18,7 @@
   "favorite": "Любима",
   "groupMode.ascMessages": "Сортирай по нарастващ брой съобщения",
   "groupMode.byTime": "Групирай по време",
+  "groupMode.byUpdatedTime": "Групиране по време на актуализация",
   "groupMode.descMessages": "Сортирай по намаляващ брой съобщения",
   "groupMode.flat": "Без групиране",
   "groupTitle.byTime.month": "Този месец",

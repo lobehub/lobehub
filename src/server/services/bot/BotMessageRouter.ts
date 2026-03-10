@@ -1,6 +1,7 @@
 import { createDiscordAdapter } from '@chat-adapter/discord';
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { createTelegramAdapter } from '@chat-adapter/telegram';
+import { createLarkAdapter } from '@lobechat/adapter-lark';
 import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
 
@@ -51,6 +52,18 @@ function createAdapterForPlatform(
         }),
       };
     }
+    case 'lark':
+    case 'feishu': {
+      return {
+        [platform]: createLarkAdapter({
+          appId: credentials.appId,
+          appSecret: credentials.appSecret,
+          encryptKey: credentials.encryptKey,
+          platform: platform as 'lark' | 'feishu',
+          verificationToken: credentials.verificationToken,
+        }),
+      };
+    }
     default: {
       return null;
     }
@@ -94,6 +107,10 @@ export class BotMessageRouter {
         }
         case 'telegram': {
           return this.handleTelegramWebhook(req, appId);
+        }
+        case 'lark':
+        case 'feishu': {
+          return this.handleChatSdkWebhook(req, platform, appId);
         }
         default: {
           return new Response('No bot configured for this platform', { status: 404 });
@@ -241,6 +258,46 @@ export class BotMessageRouter {
     return new Response('No bot configured for Telegram', { status: 404 });
   }
 
+  // ------------------------------------------------------------------
+  // Generic Chat SDK webhook routing (Lark/Feishu)
+  // ------------------------------------------------------------------
+
+  private async handleChatSdkWebhook(
+    req: Request,
+    platform: string,
+    appId?: string,
+  ): Promise<Response> {
+    log('handleChatSdkWebhook: platform=%s, appId=%s', platform, appId);
+
+    const bodyBuffer = await req.arrayBuffer();
+
+    // Direct lookup by applicationId
+    if (appId) {
+      const key = `${platform}:${appId}`;
+      const bot = this.botInstances.get(key);
+      if (bot?.webhooks && platform in bot.webhooks) {
+        return (bot.webhooks as any)[platform](this.cloneRequest(req, bodyBuffer));
+      }
+      log('handleChatSdkWebhook: no bot registered for %s', key);
+      return new Response(`No bot configured for ${platform}`, { status: 404 });
+    }
+
+    // Fallback: try all registered bots for this platform
+    for (const [key, bot] of this.botInstances) {
+      if (!key.startsWith(`${platform}:`)) continue;
+      if (bot.webhooks && platform in bot.webhooks) {
+        try {
+          const resp = await (bot.webhooks as any)[platform](this.cloneRequest(req, bodyBuffer));
+          if (resp.status !== 401) return resp;
+        } catch {
+          // try next
+        }
+      }
+    }
+
+    return new Response(`No bot configured for ${platform}`, { status: 404 });
+  }
+
   private cloneRequest(req: Request, body: ArrayBuffer): Request {
     return new Request(req.url, {
       body,
@@ -294,7 +351,7 @@ export class BotMessageRouter {
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
 
       // Load all supported platforms
-      for (const platform of ['discord', 'telegram']) {
+      for (const platform of ['discord', 'telegram', 'lark', 'feishu']) {
         const providers = await AgentBotProviderModel.findEnabledByPlatform(
           serverDB,
           platform,
@@ -307,7 +364,7 @@ export class BotMessageRouter {
           const { agentId, userId, applicationId, credentials } = provider;
           const key = `${platform}:${applicationId}`;
 
-          if (this.botInstances.has(key)) {
+          if (this.agentMap.has(key)) {
             log('Skipping provider %s: already registered', key);
             continue;
           }
@@ -422,16 +479,17 @@ export class BotMessageRouter {
       });
     });
 
-    // Telegram-only: handle messages in unsubscribed threads that aren't @mentions.
-    // This covers Telegram private chats where users message the bot directly.
+    // Telegram/Lark: handle messages in unsubscribed threads that aren't @mentions.
+    // This covers direct messages where users message the bot without an explicit @mention.
     // Discord relies solely on onNewMention/onSubscribedMessage — registering a
     // catch-all there would cause unsolicited replies in active channels.
-    if (platform === 'telegram') {
+    if (platform === 'telegram' || platform === 'lark' || platform === 'feishu') {
       bot.onNewMessage(/./, async (thread, message) => {
         if (message.author.isBot === true) return;
 
         log(
-          'onNewMessage (telegram catch-all): agent=%s, author=%s, thread=%s, text=%s',
+          'onNewMessage (%s catch-all): agent=%s, author=%s, thread=%s, text=%s',
+          platform,
           agentId,
           message.author.userName,
           thread.id,

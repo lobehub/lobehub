@@ -36,10 +36,24 @@ export class GatewayService {
     userId: string,
   ): Promise<'started' | 'queued'> {
     if (isVercel) {
-      const queue = new BotConnectQueue();
-      await queue.push(platform, applicationId, userId);
-      log('Queued bot connect %s:%s', platform, applicationId);
-      return 'queued';
+      const BotClass = platformBotRegistry[platform];
+      const isPersistent = BotClass?.persistent === true;
+
+      if (isPersistent) {
+        // Persistent platforms (e.g. Discord WebSocket) cannot run in a
+        // serverless function — queue for the long-running cron gateway.
+        const queue = new BotConnectQueue();
+        await queue.push(platform, applicationId, userId);
+        log('Queued bot connect %s:%s', platform, applicationId);
+        return 'queued';
+      }
+
+      // Webhook-based platforms (Telegram, Lark, etc.) only need a single HTTP
+      // call, so we can run directly in a Vercel serverless function.
+      const manager = createGatewayManager({ registry: platformBotRegistry });
+      await manager.startBot(platform, applicationId, userId);
+      log('Started bot %s:%s (direct)', platform, applicationId);
+      return 'started';
     }
 
     let manager = getGatewayManager();

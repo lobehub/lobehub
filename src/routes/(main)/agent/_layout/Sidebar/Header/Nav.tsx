@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { BlocksIcon, MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
+import { MessageSquarePlusIcon, RadioTowerIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -25,7 +25,7 @@ const Nav = memo(() => {
   const agentId = params.aid;
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
-  const isIntegrationActive = pathname.includes('/integration');
+  const isIntegrationActive = pathname.includes('/channel');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
@@ -64,11 +64,11 @@ const Nav = memo(() => {
       {!hideProfile && isDevMode && (
         <NavItem
           active={isIntegrationActive}
-          icon={BlocksIcon}
+          icon={RadioTowerIcon}
           title={t('tab.integration')}
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
-            router.push(urlJoin('/agent', agentId!, 'integration'));
+            router.push(urlJoin('/agent', agentId!, 'channel'));
           }}
         />
       )}

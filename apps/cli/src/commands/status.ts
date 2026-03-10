@@ -2,6 +2,8 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
+import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
+import { loadSettings, saveSettings } from '../settings';
 import { log, setVerbose } from '../utils/logger';
 
 interface StatusOptions {
@@ -20,18 +22,33 @@ export function registerStatusCommand(program: Command) {
     .option('--token <jwt>', 'JWT access token')
     .option('--service-token <token>', 'Service token (requires --user-id)')
     .option('--user-id <id>', 'User ID (required with --service-token)')
-    .option('--gateway <url>', 'Gateway URL', 'https://device-gateway.lobehub.com')
+    .option('--gateway <url>', 'Device gateway URL')
     .option('--timeout <ms>', 'Connection timeout in ms', '10000')
     .option('-v, --verbose', 'Enable verbose logging')
     .action(async (options: StatusOptions) => {
       if (options.verbose) setVerbose(true);
 
       const auth = await resolveToken(options);
+      const settings = loadSettings();
+      const gatewayUrl = options.gateway?.replace(/\/$/, '') || settings?.gatewayUrl;
+
+      if (!gatewayUrl && settings?.serverUrl) {
+        log.error(
+          `Current login uses custom --server ${settings?.serverUrl}. Please also provide '--gateway <url>' for the device gateway.`,
+        );
+        process.exit(1);
+        throw new Error('process.exit');
+      }
+
+      if (options.gateway && gatewayUrl) {
+        saveSettings({ ...settings, gatewayUrl });
+      }
+
       const timeout = Number.parseInt(options.timeout || '10000', 10);
 
       const client = new GatewayClient({
         autoReconnect: false,
-        gatewayUrl: options.gateway,
+        gatewayUrl: gatewayUrl || OFFICIAL_GATEWAY_URL,
         logger: log,
         token: auth.token,
         userId: auth.userId,

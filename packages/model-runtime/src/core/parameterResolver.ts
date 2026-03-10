@@ -1,3 +1,5 @@
+import { hasTemperatureTopPConflict } from '../const/models';
+
 /**
  * Chat completion parameter configuration
  */
@@ -5,23 +7,23 @@ interface ParameterConfig {
   /**
    * Frequency penalty (reduces repetition)
    */
-  frequency_penalty?: number;
+  frequency_penalty?: number | null;
   /**
    * Maximum tokens to generate
    */
-  max_tokens?: number;
+  max_tokens?: number | null;
   /**
    * Presence penalty (reduces topic repetition)
    */
-  presence_penalty?: number;
+  presence_penalty?: number | null;
   /**
    * Temperature value (0-2 range, controls randomness)
    */
-  temperature?: number;
+  temperature?: number | null;
   /**
    * Top P value (0-1 range, nucleus sampling)
    */
-  top_p?: number;
+  top_p?: number | null;
 }
 
 /**
@@ -172,7 +174,11 @@ export const resolveParameters = (
     maxTokensRange,
   } = options;
 
-  const { temperature, top_p, frequency_penalty, presence_penalty, max_tokens } = config;
+  const temperature = config.temperature ?? undefined;
+  const top_p = config.top_p ?? undefined;
+  const frequency_penalty = config.frequency_penalty ?? undefined;
+  const presence_penalty = config.presence_penalty ?? undefined;
+  const max_tokens = config.max_tokens ?? undefined;
 
   const result: ResolvedParameters = {};
 
@@ -216,6 +222,67 @@ export const resolveParameters = (
   if (max_tokens !== undefined) {
     result.max_tokens = applyRangeConstraint(max_tokens, maxTokensRange);
   }
+
+  return result;
+};
+
+interface SamplingParameterResolverOptions {
+  /**
+   * Whether to normalize temperature (divide by 2)
+   * @default true
+   */
+  normalizeTemperature?: boolean;
+  /**
+   * Whether to prefer temperature over top_p when both are set and there's a conflict
+   * @default true
+   */
+  preferTemperature?: boolean;
+}
+
+/**
+ * High-level helper that resolves temperature and top_p for a given model.
+ *
+ * Automatically detects whether the model has a temperature/top_p conflict
+ * (e.g. Claude 4+ series) and delegates to `resolveParameters` with the
+ * appropriate conflict flag. This avoids duplicating the model-detection +
+ * parameter-resolution pattern across multiple call sites.
+ *
+ * @example
+ * // Claude 4+ with both params → keeps temperature only
+ * resolveModelSamplingParameters('claude-sonnet-4-5-20250929', { temperature: 0.8, top_p: 0.9 })
+ * // → { temperature: 0.4 }   (temperature / 2, top_p omitted)
+ *
+ * // Non-conflict model → keeps both
+ * resolveModelSamplingParameters('claude-3-haiku-20240307', { temperature: 0.8, top_p: 0.9 })
+ * // → { temperature: 0.4, top_p: 0.9 }
+ */
+export const resolveModelSamplingParameters = (
+  model: string | undefined,
+  config: Pick<ParameterConfig, 'temperature' | 'top_p'>,
+  options: SamplingParameterResolverOptions = {},
+): { temperature?: number; top_p?: number } => {
+  const temperature = config.temperature ?? undefined;
+  const top_p = config.top_p ?? undefined;
+
+  const resolved = resolveParameters(
+    { temperature, top_p },
+    {
+      hasConflict: !!model && hasTemperatureTopPConflict(model),
+      normalizeTemperature: options.normalizeTemperature,
+      preferTemperature: options.preferTemperature,
+    },
+  );
+
+  // Only include a key if the input originally provided it.
+  // This ensures:
+  //  - Conflict case: if input has both, the dropped one is set to undefined
+  //    (e.g. { temperature: 0.4, top_p: undefined }), which overwrites the
+  //    original value when spread onto the payload.
+  //  - No-input case: if input didn't have a field, we don't add it, so
+  //    spreading won't introduce spurious undefined properties.
+  const result: { temperature?: number; top_p?: number } = {};
+  if (temperature !== undefined) result.temperature = resolved.temperature;
+  if (top_p !== undefined) result.top_p = resolved.top_p;
 
   return result;
 };

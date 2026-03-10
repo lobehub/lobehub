@@ -49,13 +49,12 @@ export const useDesktopUserStateRedirect = () => {
     [dataSyncConfig.remoteServerUrl, logout],
   );
 
-  return useCallback(
-    (state: UserInitializationState) => {
-      if (!getDesktopOnboardingCompleted()) return;
-      // Desktop onboarding is handled by desktop-only flow.
-    },
-    [openExternalAndLogout],
-  );
+  return useCallback(() => {
+    if (!getDesktopOnboardingCompleted()) {
+      redirectIfNotOn(window.location.pathname, '/desktop-onboarding');
+      return;
+    }
+  }, [openExternalAndLogout]);
 };
 
 export const useWebUserStateRedirect = () =>

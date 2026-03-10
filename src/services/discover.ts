@@ -47,6 +47,29 @@ class DiscoverService {
   private _isRetrying = false;
   private _tokenRefreshPromise: Promise<void> | null = null;
 
+  private isMarketTrustedClientEnabled = (): boolean => {
+    if (typeof window === 'undefined' || !window.global_serverConfigStore) return false;
+    try {
+      const state = window.global_serverConfigStore.getState();
+      return state.serverConfig.enableMarketTrustedClient || false;
+    } catch {
+      return false;
+    }
+  };
+
+  safeInjectMPToken = async () => {
+    // If trusted client is enabled, authentication is handled by backend
+    // No need to inject M2M token from client side
+    if (this.isMarketTrustedClientEnabled()) return;
+
+    try {
+      await this.injectMPToken();
+    } catch (error) {
+      // Log error but don't block the request
+      console.warn('Failed to inject MP token, continuing without it:', error);
+    }
+  };
+
   // ============================== Assistant Market ==============================
   getAssistantCategories = async (
     params: CategoryListQuery & { source?: AssistantMarketSource } = {},
@@ -82,7 +105,7 @@ class DiscoverService {
   };
 
   getAssistantList = async (params: AssistantQueryParams = {}): Promise<AssistantListResponse> => {
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     const locale = globalHelpers.getCurrentLanguage();
     return lambdaClient.market.getAssistantList.query(
@@ -134,7 +157,7 @@ class DiscoverService {
   };
 
   getMcpList = async (params: McpQueryParams = {}): Promise<McpListResponse> => {
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     const locale = globalHelpers.getCurrentLanguage();
     return lambdaClient.market.getMcpList.query({
@@ -146,7 +169,7 @@ class DiscoverService {
   };
 
   getMCPPluginList = async (params: MCPPluginListParams): Promise<McpListResponse> => {
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     const locale = globalHelpers.getCurrentLanguage();
 
@@ -197,7 +220,7 @@ class DiscoverService {
     const allow = userGeneralSettingsSelectors.telemetry(useUserStore.getState());
 
     if (!allow) return;
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     const reportData = {
       errorCode: success ? undefined : errorCode,
@@ -223,7 +246,7 @@ class DiscoverService {
 
     if (!allow) return;
 
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     lambdaClient.market.reportCall.mutate(cleanObject(reportData)).catch((reportError) => {
       console.warn('Failed to report call:', reportError);
@@ -234,7 +257,7 @@ class DiscoverService {
     const allow = userGeneralSettingsSelectors.telemetry(useUserStore.getState());
     if (!allow) return;
 
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     const payload = cleanObject({
       ...eventData,
@@ -255,7 +278,7 @@ class DiscoverService {
 
     if (!allow) return;
 
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     lambdaClient.market.reportAgentInstall.mutate({ identifier }).catch((reportError) => {
       console.warn('Failed to report agent installation:', reportError);
@@ -266,7 +289,7 @@ class DiscoverService {
     const allow = userGeneralSettingsSelectors.telemetry(useUserStore.getState());
     if (!allow) return;
 
-    await this.injectMPToken();
+    await this.safeInjectMPToken();
 
     const payload = cleanObject({
       ...eventData,

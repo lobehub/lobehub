@@ -1352,7 +1352,7 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3.5-flash-2026-02-23',
+      deploymentName: 'qwen3.5-flash', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
@@ -2768,6 +2768,56 @@ const qwenImageModels: AIImageModelCard[] = [
       units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-12-19',
+    type: 'image',
+  },
+  {
+    description:
+      'The Qwen-Image-2.0 series full-version model integrates image generation and image editing into a unified capability. It supports more professional text rendering with up to 1k token instruction capacity, delivers more delicate and realistic visual textures, enables fine-grained depiction of realistic scenes, and demonstrates stronger semantic alignment with prompts. The full-version model provides the strongest text rendering capability and the highest level of realism within the 2.0 series.',
+    displayName: 'Qwen Image 2.0 Pro',
+    id: 'qwen-image-2.0-pro',
+    enabled: true,
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1024, max: 4096, min: 256, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 4096, min: 256, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-03-03',
+    type: 'image',
+  },
+  {
+    description:
+      'The Qwen-Image-2.0 series accelerated version model integrates image generation and image editing into a unified capability. It supports more professional text rendering with up to 1k token instruction capacity, provides more refined and realistic visual textures, enables fine-grained depiction of realistic scenes, and demonstrates stronger semantic adherence to prompts. The accelerated version effectively achieves the optimal balance between model quality and performance.',
+    displayName: 'Qwen Image 2.0',
+    id: 'qwen-image-2.0',
+    enabled: true,
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1024, max: 4096, min: 256, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 4096, min: 256, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-03-03',
     type: 'image',
   },
   {

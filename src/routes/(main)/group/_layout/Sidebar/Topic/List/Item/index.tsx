@@ -1,6 +1,6 @@
-import { ActionIcon, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { MessageSquareDashed, Star } from 'lucide-react';
+import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,8 +41,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
     id ? s.topicRenamingId === id : false,
     id ? s.topicLoadingIds.includes(id) : false,
   ]);
-
-  const [favoriteTopic] = useChatStore((s) => [s.favoriteTopic]);
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
@@ -125,17 +123,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         loading={isLoading}
         title={title}
         icon={
-          <ActionIcon
-            color={fav ? cssVar.colorWarning : undefined}
-            fill={fav ? cssVar.colorWarning : 'transparent'}
-            icon={Star}
-            size={'small'}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              favoriteTopic(id, !fav);
-            }}
-          />
+          <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
         }
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}

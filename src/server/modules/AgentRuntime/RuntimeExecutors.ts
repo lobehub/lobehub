@@ -6,7 +6,15 @@ import {
   type InstructionExecutor,
   UsageCounter,
 } from '@lobechat/agent-runtime';
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  buildStepToolDelta,
+  type LobeToolManifest,
+  type OperationToolSet,
+  type ResolvedToolSet,
+  ToolNameResolver,
+  ToolResolver,
+} from '@lobechat/context-engine';
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
@@ -45,6 +53,7 @@ export interface RuntimeExecutorContext {
   toolExecutionService: ToolExecutionService;
   topicId?: string;
   userId?: string;
+  userTimezone?: string;
 }
 
 export const createRuntimeExecutors = (
@@ -63,9 +72,38 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
-    // forceFinish: strip tools so LLM produces pure text output
-    // Otherwise fallback to state's tools if not in payload
-    const tools = state.forceFinish ? undefined : llmPayload.tools || state.tools;
+    // Resolve tools via ToolResolver (unified tool injection)
+    const activeDeviceId = state.metadata?.activeDeviceId;
+    const operationToolSet: OperationToolSet = state.operationToolSet ?? {
+      enabledToolIds: [],
+      manifestMap: state.toolManifestMap ?? {},
+      sourceMap: state.toolSourceMap ?? {},
+      tools: state.tools ?? [],
+    };
+
+    const stepDelta = buildStepToolDelta({
+      activeDeviceId,
+      forceFinish: state.forceFinish,
+      localSystemManifest: LocalSystemManifest as unknown as LobeToolManifest,
+      operationManifestMap: operationToolSet.manifestMap,
+    });
+
+    const toolResolver = new ToolResolver();
+    const resolved: ResolvedToolSet = toolResolver.resolve(
+      operationToolSet,
+      stepDelta,
+      state.activatedStepTools ?? [],
+    );
+
+    const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+
+    if (stepDelta.activatedTools.length > 0) {
+      log(
+        `[${operationId}:${stepIndex}] ToolResolver injected %d step-level tools: %o`,
+        stepDelta.activatedTools.length,
+        stepDelta.activatedTools.map((t) => t.id),
+      );
+    }
 
     if (!model || !provider) {
       throw new Error('Model and provider are required for call_llm instruction');
@@ -137,6 +175,8 @@ export const createRuntimeExecutors = (
         const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
         const contextEngineInput = {
+          additionalVariables: state.metadata?.deviceSystemInfo,
+          userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
               const info = LOBE_DEFAULT_MODEL_LIST.find(
@@ -182,7 +222,8 @@ export const createRuntimeExecutors = (
           provider,
           systemRole: agentConfig.systemRole ?? undefined,
           toolsConfig: {
-            tools: agentConfig.plugins ?? [],
+            manifests: Object.values(resolved.manifestMap),
+            tools: resolved.enabledToolIds,
           },
           userMemory: state.metadata?.userMemory,
         };
@@ -336,11 +377,11 @@ export const createRuntimeExecutors = (
             }
           },
           onToolsCalling: async ({ toolsCalling: raw }) => {
-            const resolved = new ToolNameResolver().resolve(raw, state.toolManifestMap);
-            // Add source field from toolSourceMap for routing tool execution
-            const payload = resolved.map((p) => ({
+            const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
+            // Add source field from resolved sourceMap for routing tool execution
+            const payload = resolvedCalls.map((p) => ({
               ...p,
-              source: state.toolSourceMap?.[p.identifier],
+              source: resolved.sourceMap[p.identifier],
             }));
             // log(`[${operationLogId}][toolsCalling]`, payload);
             toolsCalling = payload;
@@ -567,12 +608,23 @@ export const createRuntimeExecutors = (
       const agentConfig = state.metadata?.agentConfig;
       const toolResultMaxLength = agentConfig?.chatConfig?.toolResultMaxLength;
 
+      // Build effective manifest map (operation + step-level activations)
+      const effectiveManifestMap = {
+        ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+        ...Object.fromEntries(
+          (state.activatedStepTools ?? [])
+            .filter((a) => a.manifest)
+            .map((a) => [a.id, a.manifest!]),
+        ),
+      };
+
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+        activeDeviceId: state.metadata?.activeDeviceId,
         memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
         serverDB: ctx.serverDB,
-        toolManifestMap: state.toolManifestMap,
+        toolManifestMap: effectiveManifestMap,
         toolResultMaxLength,
         topicId: ctx.topicId,
         userId: ctx.userId,
@@ -643,6 +695,34 @@ export const createRuntimeExecutors = (
 
       newState.usage = usage;
       if (cost) newState.cost = cost;
+
+      // Persist ToolsActivator discovery results to state.activatedStepTools
+      const discoveredTools = executionResult.state?.activatedTools as
+        | Array<{ identifier: string }>
+        | undefined;
+      if (discoveredTools?.length) {
+        const existingIds = new Set(
+          (newState.activatedStepTools ?? []).map((t: { id: string }) => t.id),
+        );
+        const newActivations = discoveredTools
+          .filter((t) => !existingIds.has(t.identifier))
+          .map((t) => ({
+            activatedAtStep: state.stepCount,
+            id: t.identifier,
+            manifest: effectiveManifestMap[t.identifier],
+            source: 'discovery' as const,
+          }));
+
+        if (newActivations.length > 0) {
+          newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
+
+          log(
+            `[${operationLogId}] Persisted %d tool activations to state: %o`,
+            newActivations.length,
+            newActivations.map((a) => a.id),
+          );
+        }
+      }
 
       // Find current tool statistics
       const currentToolStats = usage.tools.byTool.find((t) => t.name === toolName);
@@ -746,10 +826,24 @@ export const createRuntimeExecutors = (
 
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
+          // Build effective manifest map (operation + step-level activations)
+          const batchManifestMap = {
+            ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+            ...Object.fromEntries(
+              (state.activatedStepTools ?? [])
+                .filter((a) => a.manifest)
+                .map((a) => [a.id, a.manifest!]),
+            ),
+          };
+
+          const batchAgentConfig = state.metadata?.agentConfig;
+
           const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
-            memoryToolPermission: state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
+            activeDeviceId: state.metadata?.activeDeviceId,
+            memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
             serverDB: ctx.serverDB,
-            toolManifestMap: state.toolManifestMap,
+            toolManifestMap: batchManifestMap,
+            toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
             topicId: ctx.topicId,
             userId: ctx.userId,
           });
@@ -848,6 +942,40 @@ export const createRuntimeExecutors = (
         });
         newState.usage = usage;
         if (cost) newState.cost = cost;
+      }
+    }
+
+    // Persist ToolsActivator discovery results from batch tool executions
+    const batchEffectiveManifestMap = {
+      ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+      ...Object.fromEntries(
+        (state.activatedStepTools ?? []).filter((a) => a.manifest).map((a) => [a.id, a.manifest!]),
+      ),
+    };
+    const existingActivationIds = new Set(
+      (newState.activatedStepTools ?? []).map((t: { id: string }) => t.id),
+    );
+    for (const result of toolResults) {
+      const discovered = result.data?.state?.activatedTools as
+        | Array<{ identifier: string }>
+        | undefined;
+      if (discovered?.length) {
+        const newActivations = discovered
+          .filter((t) => !existingActivationIds.has(t.identifier))
+          .map((t) => ({
+            activatedAtStep: state.stepCount,
+            id: t.identifier,
+            manifest: batchEffectiveManifestMap[t.identifier],
+            source: 'discovery' as const,
+          }));
+
+        for (const activation of newActivations) {
+          existingActivationIds.add(activation.id);
+        }
+
+        if (newActivations.length > 0) {
+          newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
+        }
       }
     }
 

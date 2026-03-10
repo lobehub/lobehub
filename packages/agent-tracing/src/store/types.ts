@@ -4,6 +4,8 @@ export interface ISnapshotStore {
   get: (traceId: string) => Promise<ExecutionSnapshot | null>;
   getLatest: () => Promise<ExecutionSnapshot | null>;
   list: (options?: { limit?: number }) => Promise<SnapshotSummary[]>;
+  /** List in-progress partial snapshot filenames */
+  listPartials: () => Promise<string[]>;
   /** Load in-progress partial snapshot */
   loadPartial: (operationId: string) => Promise<Partial<ExecutionSnapshot> | null>;
 

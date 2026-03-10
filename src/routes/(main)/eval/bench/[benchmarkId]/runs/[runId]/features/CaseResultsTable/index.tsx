@@ -67,6 +67,8 @@ const StatusBadge = memo<{ record: any }>(({ record }) => {
   const { t } = useTranslation('eval');
   const status: string | null | undefined = record.status;
 
+  // return <div>{status}</div>;
+
   if (!status || status === 'pending')
     return <Badge status="default" text={<BadgeText>{t('run.status.pending')}</BadgeText>} />;
 
@@ -86,6 +88,17 @@ const StatusBadge = memo<{ record: any }>(({ record }) => {
   if (status === 'timeout')
     return <Badge color="orange" text={<BadgeText>{t('run.status.timeout')}</BadgeText>} />;
 
+  if (status === 'external') {
+    const badge = <Badge color="purple" text={<BadgeText>{t('run.status.external')}</BadgeText>} />;
+    return <Tooltip title={t('run.status.external.tooltip')}>{badge}</Tooltip>;
+  }
+
+  if (status === 'completed') {
+    // 完成代表运行完成 + 评测完成，不代表结果一定通过
+    const badge = <Badge color="blue" text={<BadgeText>{t('run.status.completed')}</BadgeText>} />;
+    return <Tooltip title={t('run.status.completed.tooltip')}>{badge}</Tooltip>;
+  }
+
   return <Badge status="default" text={<BadgeText>{status}</BadgeText>} />;
 });
 
@@ -99,15 +112,29 @@ const ThreadDots = memo<{ threads: EvalThreadResult[] }>(({ threads }) => (
 
       if (thread.passed === true) {
         color = cssVar.colorSuccess;
+      } else if (thread.passed === false) {
+        color = cssVar.colorError;
+      }
+
+      if (thread.status === 'external') {
+        color = cssVar.colorWarning;
+      }
+
+      if (thread.status === 'completed') {
+        color = cssVar.colorPrimary;
       }
 
       const label = thread.error
         ? 'error'
         : thread.passed === true
           ? 'passed'
-          : thread.passed === false
+          : thread.passed === false && thread.status !== 'completed'
             ? 'failed'
-            : 'pending';
+            : thread.status === 'external'
+              ? 'Awaiting for external evaluation'
+              : thread.status === 'completed'
+                ? 'completed'
+                : 'pending';
 
       return (
         <Tooltip key={thread.threadId} title={label}>
@@ -406,6 +433,8 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               { label: t('table.filter.error'), value: 'error' },
               { label: t('table.filter.running'), value: 'running' },
               { label: t('run.status.pending'), value: 'pending' },
+              { label: t('run.status.external'), value: 'external' },
+              { label: t('run.status.completed'), value: 'completed' },
             ]}
             onChange={setStatusFilter}
           />

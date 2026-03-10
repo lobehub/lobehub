@@ -20,7 +20,7 @@ const PluginSwitch = memo<{ identifier: string }>(({ identifier }) => {
       <Switch
         loading={pluginManifestLoading[identifier]}
         checked={
-          // 如果在加载中，说明激活了
+          // If loading, it means it's activated
           pluginManifestLoading[identifier] || !hasPlugin
             ? false
             : userEnabledPlugins.includes(identifier)

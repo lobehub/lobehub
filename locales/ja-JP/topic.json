@@ -18,6 +18,7 @@
   "favorite": "お気に入り",
   "groupMode.ascMessages": "メッセージ総数順",
   "groupMode.byTime": "時間順にグループ化",
+  "groupMode.byUpdatedTime": "更新日時でグループ化",
   "groupMode.descMessages": "メッセージ総数逆順",
   "groupMode.flat": "グループ化しない",
   "groupTitle.byTime.month": "今月",
