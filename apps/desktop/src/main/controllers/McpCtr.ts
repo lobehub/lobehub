@@ -2,6 +2,7 @@ import { exec } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { promisify } from 'node:util';
+
 import superjson from 'superjson';
 
 import FileService from '@/services/fileSrv';
@@ -415,14 +416,14 @@ export default class McpCtr extends ControllerModule {
       let version = output;
 
       if (dependency.versionParsingRequired) {
-        const versionMatch = output.match(/[Vv]?(\d+(\.\d+)*)/);
+        const versionMatch = output.match(/V?(\d+(\.\d+)*)/i);
         if (versionMatch) version = versionMatch[0];
       }
 
       let meetRequirement = true;
 
       if (dependency.requiredVersion) {
-        const currentVersion = String(version).replace(/^[Vv]/, '');
+        const currentVersion = String(version).replace(/^V/i, '');
         const currentNum = Number.parseFloat(currentVersion);
 
         const requirementMatch = String(dependency.requiredVersion).match(/([<=>]+)?(\d+(\.\d+)*)/);

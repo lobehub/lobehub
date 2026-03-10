@@ -1,13 +1,11 @@
 'use client';
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { lazy, memo, Suspense, useEffect } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
-import { isDesktop } from '@/const/version';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { getDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
 import { useAgentStore } from '@/store/agent';
 import { useGlobalStore } from '@/store/global';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -66,17 +64,6 @@ const StoreInitialization = memo(() => {
   useInitBuiltinAgent(INBOX_SESSION_ID, { isLogin: isLoginOnInit });
 
   const onUserStateSuccess = useUserStateRedirect();
-
-  // Desktop onboarding redirect: must run on mount, independent of API success,
-  // because the API call itself will 401 when not authenticated.
-  useEffect(() => {
-    if (isDesktop && !getDesktopOnboardingCompleted()) {
-      const { pathname } = window.location;
-      if (!pathname.startsWith('/desktop-onboarding')) {
-        window.location.href = '/desktop-onboarding';
-      }
-    }
-  }, []);
 
   // init user state
   useInitUserState(isLoginOnInit, serverConfig, {

@@ -1,4 +1,5 @@
 import * as os from 'node:os';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { LinuxContentSearchImpl } from '../impl/linux';

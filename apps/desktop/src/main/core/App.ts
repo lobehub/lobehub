@@ -240,7 +240,7 @@ export class App {
     // Initialize global shortcuts: globalShortcut must be called after app.whenReady()
     this.shortcutManager.initialize();
 
-    this.browserManager.initializeBrowsers();
+    await this.browserManager.initializeBrowsers();
 
     // Initialize tray manager
     if (process.platform === 'win32') {
