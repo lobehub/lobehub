@@ -42,6 +42,11 @@ const messageLoadingIds = (s: State) => s.messageLoadingIds;
 const isAIGenerating = (s: State) => s.operationState.isAIGenerating;
 
 /**
+ * Check if input should be in loading state (from sendMessage through AI generation)
+ */
+const isInputLoading = (s: State) => s.operationState.isInputLoading;
+
+/**
  * Get send message error for this context (if any)
  */
 const sendMessageError = (s: State) => s.operationState.sendMessageError;
@@ -138,6 +143,7 @@ const isThreadMode = (_s: State) => {
 export const messageStateSelectors = {
   hasThreadBySourceMsgId,
   isAIGenerating,
+  isInputLoading,
   isMessageCollapsed,
   isMessageContinuing,
   isMessageCreating,

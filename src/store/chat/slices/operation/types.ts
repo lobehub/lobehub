@@ -208,3 +208,13 @@ export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
   'execAgentRuntime',
   'execServerAgentRuntime',
 ];
+
+/**
+ * Operation types that should block input and show loading state
+ * Superset of AI_RUNTIME_OPERATION_TYPES, also includes sendMessage
+ * since the input should be in loading state from the moment user sends until AI finishes
+ */
+export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
+  ...AI_RUNTIME_OPERATION_TYPES,
+  'sendMessage',
+];

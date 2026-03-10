@@ -110,8 +110,8 @@ const ChatInput = memo<ChatInputProps>(
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
 
-    // Generation state from ConversationStore (bridged from ChatStore)
-    const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
+    // Loading state from ConversationStore (bridged from ChatStore)
+    const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
 
     // Send message error from ConversationStore
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
@@ -124,7 +124,7 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const disabled = isInputEmpty || isUploadingFiles || isAIGenerating;
+    const disabled = isInputEmpty || isUploadingFiles || isInputLoading;
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
@@ -135,7 +135,7 @@ const ChatInput = memo<ChatInputProps>(
         const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
 
-        if (currentIsUploading || isAIGenerating) return;
+        if (currentIsUploading || isInputLoading) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
@@ -158,12 +158,12 @@ const ChatInput = memo<ChatInputProps>(
         // Fire and forget - send with captured message
         await sendMessage({ files: currentFileList, message, pageSelections });
       },
-      [isAIGenerating, sendMessage],
+      [isInputLoading, sendMessage],
     );
 
     const sendButtonProps: SendButtonProps = {
       disabled,
-      generating: isAIGenerating,
+      generating: isInputLoading,
       onStop: stopGenerating,
       ...customSendButtonProps,
     };
