@@ -7,7 +7,7 @@ import { testProvider } from '../../providerTestUtils';
 import { LobeSenseNovaAI, params } from './index';
 
 const provider = ModelProvider.SenseNova;
-const defaultBaseURL = 'https://api.sensenova.cn/compatible-mode/v1';
+const defaultBaseURL = 'https://api.sensenova.cn/compatible-mode/v2';
 
 // Basic provider tests
 testProvider({
@@ -23,17 +23,17 @@ testProvider({
 
 // Custom feature tests
 describe('LobeSenseNovaAI - custom features', () => {
-  let instance: InstanceType<typeof LobeSenseNovaAI>;
+  let _instance: InstanceType<typeof LobeSenseNovaAI>;
 
   beforeEach(() => {
-    instance = new LobeSenseNovaAI({ apiKey: 'test_api_key' });
+    _instance = new LobeSenseNovaAI({ apiKey: 'test_api_key' });
     vi.clearAllMocks();
   });
 
   describe('params object', () => {
     it('should export params with correct structure', () => {
       expect(params).toBeDefined();
-      expect(params.baseURL).toBe('https://api.sensenova.cn/compatible-mode/v1');
+      expect(params.baseURL).toBe('https://api.sensenova.cn/compatible-mode/v2');
       expect(params.provider).toBe('sensenova');
       expect(params.chatCompletion).toBeDefined();
       expect(params.debug).toBeDefined();
@@ -453,7 +453,7 @@ describe('LobeSenseNovaAI - custom features', () => {
     it('should fetch and process model list', async () => {
       const mockClient = {
         apiKey: 'test',
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
@@ -475,7 +475,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect function call capability by keyword 1202', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-1202' }, { id: 'normal-model' }],
@@ -493,7 +493,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect vision capability by keyword vision', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-vision' }, { id: 'normal-model' }],
@@ -511,7 +511,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect vision capability by keyword sensenova-v6', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'sensenova-v6' }, { id: 'sensenova-v5' }],
@@ -529,7 +529,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect reasoning capability by keyword deepseek-r1', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'deepseek-r1' }, { id: 'deepseek' }],
@@ -547,7 +547,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect reasoning capability by keyword reasoner', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-reasoner' }, { id: 'model' }],
@@ -565,7 +565,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should merge with LOBE_DEFAULT_MODEL_LIST when model is known', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'SenseChat-5' }],
@@ -583,7 +583,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should use default values for unknown models', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'unknown-model-xyz' }],
@@ -602,7 +602,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should handle case-insensitive model matching', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'SENSECHAT-5' }],
@@ -617,7 +617,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should merge abilities from known model', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'test-model' }],
@@ -636,7 +636,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should handle API errors gracefully', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockRejectedValue(new Error('API Error')),
         },
@@ -647,7 +647,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should handle empty model list', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [],
@@ -661,7 +661,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should change client baseURL to models endpoint', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'test-model' }],
@@ -675,7 +675,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect multiple ability keywords in one model', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-1202-vision-reasoner' }],
@@ -693,7 +693,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should prioritize keyword detection over known model abilities', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'custom-1202-model' }],
@@ -710,7 +710,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should use OR logic for combining keyword and known model abilities', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [

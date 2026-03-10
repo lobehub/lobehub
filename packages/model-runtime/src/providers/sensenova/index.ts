@@ -10,7 +10,7 @@ export interface SenseNovaModelCard {
 }
 
 export const params = {
-  baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+  baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
   chatCompletion: {
     handlePayload: (payload) => {
       const {
@@ -32,7 +32,7 @@ export const params = {
             : undefined,
         max_new_tokens: max_tokens !== undefined && max_tokens > 0 ? max_tokens : undefined,
         messages: messages.map((message) =>
-          message.role !== 'user' || !model || !/^Sense(Nova-V6|Chat-Vision)/.test(model)
+          message.role !== 'user' || !model || !/^Sense(?:Nova-V6|Chat-Vision)/.test(model)
             ? message
             : { ...message, content: convertSenseNovaMessage(message.content) },
         ) as any[],
