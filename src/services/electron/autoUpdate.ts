@@ -23,6 +23,10 @@ class AutoUpdateService {
     return ensureElectronIpc().autoUpdate.getUpdateChannel();
   };
 
+  getBuildChannel = async (): Promise<string> => {
+    return ensureElectronIpc().autoUpdate.getBuildChannel();
+  };
+
   setUpdateChannel = async (channel: UpdateChannel): Promise<void> => {
     return ensureElectronIpc().autoUpdate.setUpdateChannel(channel);
   };

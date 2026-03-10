@@ -96,10 +96,9 @@ function updatePackageJson() {
         break;
       }
       case 'canary': {
-        packageJson.productName = 'LobeHub-Canary';
+        packageJson.productName = 'LobeHub';
         packageJson.name = 'lobehub-desktop-canary';
-        console.log('🐤 Setting as Canary version.');
-        updateAppIcon('nightly');
+        console.log('🐤 Setting as Canary version (same app name and icon as stable).');
         break;
       }
     }

@@ -89,8 +89,8 @@ const protocolScheme = getProtocolScheme();
 
 // Determine icon file based on version type
 const getIconFileName = () => {
-  if (isStable) return 'Icon';
-  // nightly, canary share pre-release icon
+  if (isStable || isCanary) return 'Icon';
+  // nightly uses pre-release icon
   return 'Icon-nightly';
 };
 

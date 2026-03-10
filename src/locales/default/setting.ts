@@ -797,6 +797,7 @@ When I am ___, I need ___
   'tab.advanced': 'Advanced',
   'tab.addAgentSkill': 'Add Agent Skill',
   'tab.beta': 'Beta',
+  'tab.beta.updateChannel.beta': 'Beta',
   'tab.beta.updateChannel.canary': 'Canary',
   'tab.beta.updateChannel.canaryDesc':
     'Triggered on every PR merge, multiple builds per day. Most unstable.',

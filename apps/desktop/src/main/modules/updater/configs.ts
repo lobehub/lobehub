@@ -6,6 +6,8 @@ import { getDesktopEnv } from '@/env';
 // Build-time default channel, can be overridden at runtime via store
 const rawChannel = getDesktopEnv().UPDATE_CHANNEL || 'stable';
 const VALID_CHANNELS = new Set<UpdateChannel>(['stable', 'nightly', 'canary']);
+/** Raw build channel for display (stable, nightly, canary, beta) */
+export const BUILD_CHANNEL: string = rawChannel;
 export const UPDATE_CHANNEL: UpdateChannel = VALID_CHANNELS.has(rawChannel as UpdateChannel)
   ? (rawChannel as UpdateChannel)
   : rawChannel === 'beta'
