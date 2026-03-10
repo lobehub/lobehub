@@ -15,11 +15,11 @@ export interface RunCommandOptions {
 }
 
 export async function runCommand(
-  { command, description, run_in_background, timeout = 120_000 }: RunCommandParams,
+  { command, cwd, description, run_in_background, timeout = 120_000 }: RunCommandParams,
   { processManager, logger }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
-  logger?.debug(`${logPrefix} Starting`, { background: run_in_background, timeout });
+  logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
   const effectiveTimeout = Math.min(Math.max(timeout, 1000), 600_000);
   const shellConfig = getShellConfig(command);
@@ -28,6 +28,7 @@ export async function runCommand(
     if (run_in_background) {
       const shellId = randomUUID();
       const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
+        cwd,
         env: process.env,
         shell: false,
       });
@@ -59,6 +60,7 @@ export async function runCommand(
     } else {
       return new Promise<RunCommandResult>((resolve) => {
         const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
+          cwd,
           env: process.env,
           shell: false,
         });
@@ -90,6 +92,7 @@ export async function runCommand(
           if (!killed) {
             clearTimeout(timeoutHandle);
             const success = code === 0;
+            logger?.info?.(`${logPrefix} Command completed`, { code, success });
             resolve({
               exit_code: code || 0,
               output: truncateOutput(stdout + stderr),
@@ -102,6 +105,7 @@ export async function runCommand(
 
         childProcess.on('error', (error) => {
           clearTimeout(timeoutHandle);
+          logger?.error(`${logPrefix} Command failed:`, error);
           resolve({
             error: error.message,
             stderr: truncateOutput(stderr),

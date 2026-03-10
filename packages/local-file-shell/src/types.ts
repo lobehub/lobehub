@@ -2,6 +2,7 @@
 
 export interface RunCommandParams {
   command: string;
+  cwd?: string;
   description?: string;
   run_in_background?: boolean;
   timeout?: number;
@@ -130,6 +131,33 @@ export interface SearchFilesParams {
 export interface SearchFilesResult {
   name: string;
   path: string;
+}
+
+export interface MoveFileItem {
+  newPath: string;
+  oldPath: string;
+}
+
+export interface MoveFilesParams {
+  items: MoveFileItem[];
+}
+
+export interface MoveFileResultItem {
+  error?: string;
+  newPath?: string;
+  sourcePath: string;
+  success: boolean;
+}
+
+export interface RenameFileParams {
+  newName: string;
+  path: string;
+}
+
+export interface RenameFileResult {
+  error?: string;
+  newPath: string;
+  success: boolean;
 }
 
 export interface GrepContentParams {
