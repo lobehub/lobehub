@@ -24,7 +24,6 @@ import {
   type DiscoverPluginDetail,
   type DiscoverProviderDetail,
   type DiscoverSkillDetail,
-  type DiscoverSkillItem,
   type DiscoverUserProfile,
   type GroupAgentQueryParams,
   type IdentifiersResponse,
@@ -575,7 +574,8 @@ class DiscoverService {
     });
 
     // Note: skill event reporting can be added when the backend supports it
-    console.debug('Skill event:', payload);
+    // Payload prepared for future backend integration
+    void payload;
   };
 
   // ============================== Group Agent Market ==============================

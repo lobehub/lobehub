@@ -63,9 +63,9 @@ const Nav = memo<{
           label:
             resourcesCount > 1 ? (
               <Flexbox
+                horizontal
                 align={'center'}
                 gap={6}
-                horizontal
                 style={{
                   display: 'inline-flex',
                 }}
@@ -88,9 +88,9 @@ const Nav = memo<{
           label:
             versionCount > 1 ? (
               <Flexbox
+                horizontal
                 align={'center'}
                 gap={6}
-                horizontal
                 style={{
                   display: 'inline-flex',
                 }}
@@ -110,9 +110,9 @@ const Nav = memo<{
   return mobile ? (
     nav
   ) : (
-    <Flexbox align={'center'} className={styles.nav} horizontal justify={'space-between'}>
+    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
       {nav}
-      <Flexbox gap={12} horizontal>
+      <Flexbox horizontal gap={12}>
         <a
           className={styles.link}
           href="https://discord.gg/AYFPHvv2jT"
@@ -122,19 +122,19 @@ const Nav = memo<{
           {t('skills.details.nav.needHelp')}
         </a>
         {source && (
-          <>
-            <a className={styles.link} href={source} rel="noopener noreferrer" target={'_blank'}>
-              {t('skills.details.nav.viewSourceCode')}
-            </a>
-            <a
-              className={styles.link}
-              href={urlJoin(issueTarget as string, 'issues')}
-              rel="noopener noreferrer"
-              target={'_blank'}
-            >
-              {t('skills.details.nav.reportIssue')}
-            </a>
-          </>
+          <a className={styles.link} href={source} rel="noopener noreferrer" target={'_blank'}>
+            {t('skills.details.nav.viewSourceCode')}
+          </a>
+        )}
+        {issueTarget && (
+          <a
+            className={styles.link}
+            href={urlJoin(issueTarget, 'issues')}
+            rel="noopener noreferrer"
+            target={'_blank'}
+          >
+            {t('skills.details.nav.reportIssue')}
+          </a>
         )}
       </Flexbox>
     </Flexbox>

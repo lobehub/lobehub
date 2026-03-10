@@ -1,16 +1,7 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import {
-  ActionIcon,
-  Avatar,
-  Block,
-  Flexbox,
-  Icon,
-  stopPropagation,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, Flexbox, Icon, stopPropagation, Tag, Text } from '@lobehub/ui';
 import { Spotlight } from '@lobehub/ui/awesome';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ClockIcon, FileTextIcon, StarIcon } from 'lucide-react';
@@ -154,9 +145,9 @@ const SkillItem = memo<DiscoverSkillItem>(
             </Flexbox>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
-            {homepage && (
+            {github?.url && (
               <a
-                href={homepage}
+                href={github.url}
                 rel="noopener noreferrer"
                 target={'_blank'}
                 onClick={stopPropagation}
@@ -185,11 +176,11 @@ const SkillItem = memo<DiscoverSkillItem>(
             <Tag
               icon={<Icon icon={FileTextIcon} />}
               size={'small'}
+              variant={'filled'}
               style={{
                 color: 'inherit',
                 fontSize: 'inherit',
               }}
-              variant={'filled'}
             >
               {(resourcesCount || 0) + 1}
             </Tag>

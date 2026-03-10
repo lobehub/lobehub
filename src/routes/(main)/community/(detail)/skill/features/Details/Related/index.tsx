@@ -5,8 +5,8 @@ import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Title from '../../../../../components/Title';
 import List from '../../../../../(list)/skill/features/List';
+import Title from '../../../../../components/Title';
 import { useDetailContext } from '../../DetailProvider';
 
 const Related = memo(() => {

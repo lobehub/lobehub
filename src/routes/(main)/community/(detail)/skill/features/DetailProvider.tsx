@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, createContext, memo, useContext } from 'react';
+import { createContext, memo, type ReactNode, use } from 'react';
 
 import { type DiscoverSkillDetail } from '@/types/discover';
 
@@ -10,10 +10,10 @@ export const DetailContext = createContext<DetailContextConfig>({});
 
 export const DetailProvider = memo<{ children: ReactNode; config?: DetailContextConfig }>(
   ({ children, config = {} }) => {
-    return <DetailContext.Provider value={config}>{children}</DetailContext.Provider>;
+    return <DetailContext value={config}>{children}</DetailContext>;
   },
 );
 
 export const useDetailContext = () => {
-  return useContext(DetailContext);
+  return use(DetailContext);
 };

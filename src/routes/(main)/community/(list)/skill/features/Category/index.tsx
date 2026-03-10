@@ -6,8 +6,8 @@ import { memo, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { withSuspense } from '@/components/withSuspense';
-import { useSkillCategory } from '@/hooks/useSkillCategory';
 import { useQuery } from '@/hooks/useQuery';
+import { useSkillCategory } from '@/hooks/useSkillCategory';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
 import { SkillCategory, SkillSorts } from '@/types/discover';

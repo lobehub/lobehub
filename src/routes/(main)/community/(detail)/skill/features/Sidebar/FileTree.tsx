@@ -2,8 +2,8 @@
 
 import { Flexbox, Icon, MaterialFileTypeIcon, Text } from '@lobehub/ui';
 import { type GetProps, Tree } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import type { DataNode } from 'antd/es/tree';
+import { createStaticStyles } from 'antd-style';
 import { ChevronDown } from 'lucide-react';
 import qs from 'query-string';
 import { type Key, memo, useMemo, useState } from 'react';
@@ -145,15 +145,15 @@ const FileTree = memo(() => {
         {t('skills.details.sidebar.files')}
       </Title>
       <Tree
+        showIcon
+        showLine
         className={styles.tree}
         defaultExpandAll={Object.entries(resources || {})?.length <= 10}
         expandedKeys={expand}
-        onExpand={onExpand}
-        onSelect={onSelect}
-        showIcon
-        showLine
         switcherIcon={<Icon icon={ChevronDown} size={14} />}
         treeData={treeData}
+        onExpand={onExpand}
+        onSelect={onSelect}
       />
     </Flexbox>
   );
