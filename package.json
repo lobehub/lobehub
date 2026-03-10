@@ -152,6 +152,11 @@
     ]
   },
   "overrides": {
+    "@types/react": "19.2.13",
+    "better-auth": "1.4.6",
+    "better-call": "1.1.8",
+    "drizzle-orm": "^0.45.1",
+    "fast-xml-parser": "5.4.2",
     "pdfjs-dist": "5.4.530",
     "stylelint-config-clean-order": "7.0.0"
   },
@@ -510,7 +515,10 @@
       "@types/react": "19.2.13",
       "better-auth": "1.4.6",
       "better-call": "1.1.8",
-      "drizzle-orm": "^0.45.1"
+      "drizzle-orm": "^0.45.1",
+      "fast-xml-parser": "5.4.2",
+      "pdfjs-dist": "5.4.530",
+      "stylelint-config-clean-order": "7.0.0"
     }
   }
 }
