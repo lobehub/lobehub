@@ -1,10 +1,23 @@
 import { type ChatToolPayload } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
+import { type CloudMCPParams, type ToolCallContent } from '@/libs/mcp';
+import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
+import {
+  DEFAULT_TOOL_RESULT_MAX_LENGTH,
+  truncateToolResult,
+} from '@/server/utils/truncateToolResult';
+
+import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type PluginGatewayService } from '../pluginGateway';
 import { type BuiltinToolsExecutor } from './builtin';
-import { type ToolExecutionContext, type ToolExecutionResult, type ToolExecutionResultResponse } from './types';
+import {
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolExecutionResultResponse,
+} from './types';
 
 const log = debug('lobe-server:tool-execution-service');
 
@@ -61,8 +74,26 @@ export class ToolExecutionService {
 
       const executionTime = Date.now() - startTime;
 
+      // Truncate result content to prevent context overflow
+      // Use agent-specific config if provided, otherwise use default
+      const truncatedContent = truncateToolResult(data.content, context.toolResultMaxLength);
+
+      // Log if content was truncated
+      if (truncatedContent !== data.content) {
+        const maxLength = context.toolResultMaxLength ?? DEFAULT_TOOL_RESULT_MAX_LENGTH;
+        log(
+          'Tool result truncated for %s:%s - original: %d chars, truncated: %d chars (limit: %d)',
+          identifier,
+          apiName,
+          data.content.length,
+          truncatedContent.length,
+          maxLength,
+        );
+      }
+
       return {
         ...data,
+        content: truncatedContent,
         executionTime,
       };
 
@@ -70,10 +101,12 @@ export class ToolExecutionService {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       log('Error executing tool %s:%s: %O', identifier, apiName, error);
+      const errorMessage = (error as Error).message;
+
       return {
-        content: (error as Error).message,
+        content: truncateToolResult(errorMessage),
         error: {
-          message: (error as Error).message,
+          message: errorMessage,
         },
         executionTime,
         success: false,
@@ -117,12 +150,20 @@ export class ToolExecutionService {
       };
     }
 
-    // Construct MCPClientParams from the mcp config
-
-    log('Calling MCP service with params for: %s:%s', identifier, apiName);
+    log(
+      'Calling MCP service with params for: %s:%s (type: %s)',
+      identifier,
+      apiName,
+      mcpParams.type,
+    );
 
     try {
-      // Call the MCP service
+      // Check if this is a cloud MCP endpoint
+      if (mcpParams.type === 'cloud') {
+        return await this.executeCloudMCPTool(payload, context, mcpParams);
+      }
+
+      // For stdio/http/sse types, use standard MCP service
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
@@ -142,6 +183,59 @@ export class ToolExecutionService {
         content: (error as Error).message,
         error: {
           code: 'MCP_EXECUTION_ERROR',
+          message: (error as Error).message,
+        },
+        success: false,
+      };
+    }
+  }
+
+  private async executeCloudMCPTool(
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+
+    _mcpParams: CloudMCPParams,
+  ): Promise<ToolExecutionResult> {
+    const { identifier, apiName, arguments: args } = payload;
+
+    log('Executing Cloud MCP tool: %s:%s via cloud gateway', identifier, apiName);
+
+    try {
+      // Create DiscoverService with user context
+      const discoverService = new DiscoverService({
+        userInfo: context.userId ? { userId: context.userId } : undefined,
+      });
+
+      // Parse arguments
+      const apiParams = safeParseJSON(args) || {};
+
+      // Call cloud MCP endpoint via Market API
+      // Returns CloudGatewayResponse: { content: ToolCallContent[], isError?: boolean }
+      const cloudResult = await discoverService.callCloudMcpEndpoint({
+        apiParams,
+        identifier,
+        toolName: apiName,
+      });
+
+      const cloudResultContent = (cloudResult?.content ?? []) as ToolCallContent[];
+
+      // Convert content blocks to string (same as market router does)
+      const content = contentBlocksToString(cloudResultContent);
+      const state = { ...cloudResult, content: cloudResultContent };
+
+      log('Cloud MCP tool execution successful for: %s:%s', identifier, apiName);
+
+      return {
+        content,
+        state,
+        success: !cloudResult?.isError,
+      };
+    } catch (error) {
+      log('Cloud MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
+      return {
+        content: (error as Error).message,
+        error: {
+          code: 'CLOUD_MCP_EXECUTION_ERROR',
           message: (error as Error).message,
         },
         success: false,

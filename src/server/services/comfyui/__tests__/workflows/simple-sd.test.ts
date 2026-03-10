@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { PromptBuilder } from '@saintno/comfyui-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -91,7 +90,7 @@ describe('buildSimpleSDWorkflow - Universal SD Support', () => {
     it('should detect SD3.5 model family', async () => {
       const modelName = TEST_SD35_MODELS.MEDIUM;
       const params = {
-        cfg: 4.0,
+        cfg: 4,
         height: 1024,
         prompt: 'SD3.5 family test',
         steps: 28,
@@ -155,7 +154,7 @@ describe('buildSimpleSDWorkflow - Universal SD Support', () => {
     it('should not attach VAE for SD3 models (built-in VAE)', async () => {
       const modelName = TEST_SD35_MODELS.LARGE;
       const params = {
-        cfg: 4.0,
+        cfg: 4,
         height: 1024,
         prompt: 'SD3 built-in VAE test',
         steps: 28,
@@ -329,7 +328,7 @@ describe('buildSimpleSDWorkflow - Universal SD Support', () => {
   describe('Parameter Validation Tests', () => {
     it('should handle different CFG values by model family', async () => {
       const testCases = [
-        { model: TEST_SD35_MODELS.MEDIUM, cfg: 4.0, family: 'SD3' },
+        { model: TEST_SD35_MODELS.MEDIUM, cfg: 4, family: 'SD3' },
         { model: TEST_SDXL_MODELS.BASE, cfg: 7.5, family: 'SDXL' },
         { model: TEST_CUSTOM_SD, cfg: 7.5, family: 'SD1' },
       ];

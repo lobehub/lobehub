@@ -1,8 +1,9 @@
-import type { LayersEnum } from './shared';
 import type { MemorySourceType } from './list';
+import type { LayersEnum } from './shared';
 
 export type MemoryExtractionAgent =
   | 'gatekeeper'
+  | 'layer-activity'
   | 'layer-context'
   | 'layer-experience'
   | 'layer-identity'

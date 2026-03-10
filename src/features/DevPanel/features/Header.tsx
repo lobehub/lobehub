@@ -1,6 +1,8 @@
-import { ActionIcon, type ActionIconProps, Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { type ActionIconProps, type FlexboxProps } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import React, { type ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import React from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
@@ -18,20 +20,19 @@ interface HeaderProps extends Omit<FlexboxProps, 'title' | 'children'> {
 }
 
 const Header = ({ title, actions = [], extra, ...rest }: HeaderProps) => {
-
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={styles.header}
       flex={'none'}
       height={46}
-      horizontal
       justify={'space-between'}
       paddingInline={16}
       {...rest}
     >
       <div className={styles.title}>{title}</div>
-      <Flexbox align={'center'} gap={4} horizontal>
+      <Flexbox horizontal align={'center'} gap={4}>
         {extra}
         {actions.map((action, index) => (
           <ActionIcon {...action} key={index} size={{ blockSize: 28, size: 16 }} />

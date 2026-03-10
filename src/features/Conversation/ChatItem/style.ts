@@ -51,8 +51,5 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
 
       background: ${cssVar.colorPrimary};
     `,
-    newScreen: css`
-      min-height: calc(-300px + 100dvh);
-    `,
   };
 });

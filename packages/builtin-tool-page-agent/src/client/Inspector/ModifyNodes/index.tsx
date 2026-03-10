@@ -5,7 +5,8 @@ import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { DiffIcon, Minus, Plus } from 'lucide-react';
-import { type ReactNode, memo, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { oneLineEllipsis, shinyTextStyles } from '@/styles';
@@ -29,8 +30,11 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
 
     // Count operations by type
     const counts = useMemo(() => {
-      const operations = args?.operations || partialArgs?.operations || [];
-      return operations.reduce(
+      const ops = args?.operations || partialArgs?.operations;
+      // During streaming, operations may be a partial object instead of array
+      if (!Array.isArray(ops)) return { insert: 0, modify: 0, remove: 0 };
+
+      return ops.reduce(
         (acc, op) => {
           switch (op.action) {
             case 'insert': {
@@ -70,7 +74,7 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
     const statsParts: ReactNode[] = [];
     if (counts.insert > 0) {
       statsParts.push(
-        <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12} key="insert">
+        <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12} key="insert">
           <Icon icon={Plus} size={12} />
           {counts.insert}
         </Text>,
@@ -78,7 +82,7 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
     }
     if (counts.modify > 0) {
       statsParts.push(
-        <Text as={'span'} code color={cssVar.colorWarning} fontSize={12} key="modify">
+        <Text code as={'span'} color={cssVar.colorWarning} fontSize={12} key="modify">
           <Icon icon={DiffIcon} size={12} />
           {counts.modify}
         </Text>,
@@ -86,7 +90,7 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
     }
     if (counts.remove > 0) {
       statsParts.push(
-        <Text as={'span'} code color={cssVar.colorError} fontSize={12} key="remove">
+        <Text code as={'span'} color={cssVar.colorError} fontSize={12} key="remove">
           <Icon icon={Minus} size={12} />
           {counts.remove}
         </Text>,

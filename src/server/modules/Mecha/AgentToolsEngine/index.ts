@@ -11,17 +11,18 @@
  */
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { builtinTools, defaultToolIds } from '@lobechat/builtin-tools';
+import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
 
-import { builtinTools } from '@/tools';
-
-import type {
-  ServerAgentToolsContext,
-  ServerAgentToolsEngineConfig,
-  ServerCreateAgentToolsEngineParams,
+import {
+  type ServerAgentToolsContext,
+  type ServerAgentToolsEngineConfig,
+  type ServerCreateAgentToolsEngineParams,
 } from './types';
 
 export type {
@@ -50,11 +51,11 @@ export const createServerToolsEngine = (
 
   // Get plugin manifests from installed plugins (from database)
   const pluginManifests = context.installedPlugins
-    .map((plugin) => plugin.manifest as LobeChatPluginManifest)
+    .map((plugin) => plugin.manifest as LobeToolManifest)
     .filter(Boolean);
 
   // Get all builtin tool manifests
-  const builtinManifests = builtinTools.map((tool) => tool.manifest as LobeChatPluginManifest);
+  const builtinManifests = builtinTools.map((tool) => tool.manifest as LobeToolManifest);
 
   // Combine all manifests
   const allManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
@@ -87,40 +88,41 @@ export const createServerAgentToolsEngine = (
   context: ServerAgentToolsContext,
   params: ServerCreateAgentToolsEngineParams,
 ): ToolsEngine => {
-  const { agentConfig, model, provider, hasEnabledKnowledgeBases = false } = params;
-  const searchMode = agentConfig.chatConfig?.searchMode ?? 'off';
+  const {
+    additionalManifests,
+    agentConfig,
+    deviceContext,
+    globalMemoryEnabled = false,
+    hasEnabledKnowledgeBases = false,
+    model,
+    provider,
+  } = params;
+  const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
 
   log(
-    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s',
+    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s, additionalManifests=%d, deviceGateway=%s',
     model,
     provider,
     searchMode,
+    additionalManifests?.length ?? 0,
+    !!deviceContext?.gatewayConfigured,
   );
 
   return createServerToolsEngine(context, {
+    // Pass additional manifests (e.g., LobeHub Skills)
+    additionalManifests,
     // Add default tools based on configuration
-    defaultToolIds: [WebBrowsingManifest.identifier, KnowledgeBaseManifest.identifier],
-    // Create search-aware enableChecker for this request
-    enableChecker: ({ pluginId }) => {
-      // Filter LocalSystem tool on server (it's desktop-only)
-      if (pluginId === LocalSystemManifest.identifier) {
-        return false;
-      }
-
-      // For WebBrowsingManifest, apply search logic
-      if (pluginId === WebBrowsingManifest.identifier) {
-        // TODO: Check model builtin search capability when needed
-        return isSearchEnabled;
-      }
-
-      // For KnowledgeBaseManifest, only enable if knowledge is enabled
-      if (pluginId === KnowledgeBaseManifest.identifier) {
-        return hasEnabledKnowledgeBases;
-      }
-
-      // For all other plugins, enable by default
-      return true;
-    },
+    defaultToolIds,
+    enableChecker: createEnableChecker({
+      rules: {
+        [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
+        [LocalSystemManifest.identifier]:
+          !!deviceContext?.gatewayConfigured && !!deviceContext?.deviceOnline,
+        [MemoryManifest.identifier]: globalMemoryEnabled,
+        [RemoteDeviceManifest.identifier]: !!deviceContext?.gatewayConfigured,
+        [WebBrowsingManifest.identifier]: isSearchEnabled,
+      },
+    }),
   });
 };

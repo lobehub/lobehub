@@ -1,5 +1,5 @@
 import { createNanoId } from '../../../utils/idGenerator';
-import { UserMemorySource } from './shared';
+import type { UserMemorySource } from './shared';
 
 export interface BenchmarkLoCoMoPart {
   content: string;
@@ -63,7 +63,7 @@ export class UserMemorySourceBenchmarkLoCoMoModel {
     return { id };
   }
 
-  async replaceParts(sourceId: string, parts: BenchmarkLoCoMoPart[]) {
+  replaceParts(sourceId: string, parts: BenchmarkLoCoMoPart[]) {
     const store = this.getPartStore();
     store.delete(sourceId);
     if (!parts.length) return;

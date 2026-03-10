@@ -1,7 +1,8 @@
-import dynamic from '@/libs/next/dynamic';
-import { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo } from 'react';
 
 import { useModelHasContextWindowToken } from '@/hooks/useModelHasContextWindowToken';
+import dynamic from '@/libs/next/dynamic';
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors, threadSelectors } from '@/store/chat/selectors';
 

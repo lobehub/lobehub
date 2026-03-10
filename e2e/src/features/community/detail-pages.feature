@@ -11,7 +11,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-001 @P1
   Scenario: Load assistant detail page and verify content
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     And I wait for the page to fully load
     When I click on the first assistant card
     Then I should be on an assistant detail page
@@ -22,7 +22,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-002 @P1
   Scenario: Navigate back from assistant detail page
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     And I wait for the page to fully load
     And I click on the first assistant card
     When I click the back button

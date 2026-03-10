@@ -1,9 +1,9 @@
-import { produce } from 'immer';
 import { expect } from 'vitest';
 
-import { ChatTopic } from '@/types/topic';
+import { type ChatTopic } from '@/types/topic';
 
-import { ChatTopicDispatch, topicReducer } from './reducer';
+import { type ChatTopicDispatch } from './reducer';
+import { topicReducer } from './reducer';
 
 describe('topicReducer', () => {
   let state: ChatTopic[];

@@ -1,9 +1,10 @@
-import { consola } from 'consola';
-import { writeJSONSync } from 'fs-extra';
-import matter from 'gray-matter';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { consola } from 'consola';
+import { writeJSONSync } from 'fs-extra';
+import matter from 'gray-matter';
 import pMap from 'p-map';
 
 import { uploader } from './uploader';
@@ -27,6 +28,8 @@ const CHECK_CDN = [
   'https://miro.medium.com/v2/',
   'https://images.unsplash.com/',
   'https://github.com/user-attachments/assets',
+  'https://i.imgur.com/',
+  'https://file.rene.wang',
 ];
 
 const CACHE_FILE = resolve(root, 'docs', '.cdn.cache.json');
@@ -61,7 +64,7 @@ class ImageCDNUploader {
     const links: string[][] = posts.map((post) => {
       const mdx = readFileSync(post, 'utf8');
       const { content, data } = matter(mdx);
-      let inlineLinks: string[] = extractHttpsLinks(content);
+      const inlineLinks: string[] = extractHttpsLinks(content);
 
       // 添加特定字段中的图片链接
       if (data?.image) inlineLinks.push(data.image);
@@ -174,20 +177,26 @@ class ImageCDNUploader {
     let count = 0;
     changelogIndex.community = changelogIndex.community.map((post) => {
       if (!post.image) return post;
-      count++;
-      return {
-        ...post,
-        image: this.cache[post.image] || post.image,
-      };
+      if (this.cache[post.image]) {
+        count++;
+        return {
+          ...post,
+          image: this.cache[post.image],
+        };
+      }
+      return post;
     });
 
     changelogIndex.cloud = changelogIndex.cloud.map((post) => {
       if (!post.image) return post;
-      count++;
-      return {
-        ...post,
-        image: this.cache[post.image] || post.image,
-      };
+      if (this.cache[post.image]) {
+        count++;
+        return {
+          ...post,
+          image: this.cache[post.image],
+        };
+      }
+      return post;
     });
 
     writeJSONSync(changelogIndexPath, changelogIndex, { spaces: 2 });
@@ -208,6 +217,10 @@ class ImageCDNUploader {
     } else {
       consola.info('No new images to upload.');
     }
+
+    // 替换文章和 changelog index 中的图片链接
+    this.replaceLinksInPosts();
+    this.replaceLinksInChangelogIndex();
   }
 }
 

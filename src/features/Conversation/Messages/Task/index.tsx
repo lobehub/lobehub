@@ -7,8 +7,8 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
 import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
+import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -19,6 +19,7 @@ import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
 import { AssistantActionsBar } from './Actions';
+import ClientTaskDetail from './ClientTaskDetail';
 import TaskDetailPanel from './TaskDetailPanel';
 
 interface TaskMessageProps {
@@ -35,7 +36,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
   const actionsConfig = useConversationStore((s) => s.actionsBar?.assistant);
 
-  const { agentId, error, role, content, createdAt, metadata, taskDetail } = item;
+  const { agentId, groupId, error, role, content, createdAt, metadata, taskDetail } = item;
 
   const avatar = useAgentMeta(agentId);
 
@@ -43,7 +44,11 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const newScreen = useNewScreen({ creating, isLatestItem });
+  const { minHeight } = useNewScreen({
+    creating: generating || creating,
+    isLatestItem,
+    messageId: id,
+  });
 
   const errorContent = useErrorContent(error);
 
@@ -69,34 +74,43 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
 
   return (
     <ChatItem
+      showTitle
       aboveMessage={null}
-      actions={
-        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
-      }
       avatar={{ ...avatar, title }}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
       editing={editing}
-      error={
-        errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
-      }
       id={id}
       loading={generating}
       message={message}
-      newScreen={newScreen}
-      onAvatarClick={onAvatarClick}
-      onDoubleClick={onDoubleClick}
+      newScreenMinHeight={minHeight}
       placement={'left'}
-      showTitle
       time={createdAt}
       titleAddon={<Tag>{t('task.subtask')}</Tag>}
+      actions={
+        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
+      }
+      error={
+        errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
+      }
+      onAvatarClick={onAvatarClick}
+      onDoubleClick={onDoubleClick}
     >
-      <TaskDetailPanel
-        content={content}
-        instruction={metadata?.instruction}
-        messageId={id}
-        taskDetail={taskDetail}
-      />
+      {taskDetail?.clientMode ? (
+        <ClientTaskDetail
+          agentId={agentId !== 'supervisor' ? agentId : undefined}
+          groupId={groupId}
+          messageId={id}
+          taskDetail={taskDetail}
+        />
+      ) : (
+        <TaskDetailPanel
+          content={content}
+          instruction={metadata?.instruction}
+          messageId={id}
+          taskDetail={taskDetail}
+        />
+      )}
     </ChatItem>
   );
 }, isEqual);

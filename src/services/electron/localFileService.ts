@@ -10,6 +10,7 @@ import {
   type KillCommandParams,
   type KillCommandResult,
   type ListLocalFileParams,
+  type ListLocalFilesResult,
   type LocalFileItem,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
@@ -22,6 +23,8 @@ import {
   type RenameLocalFileParams,
   type RunCommandParams,
   type RunCommandResult,
+  type ShowSaveDialogParams,
+  type ShowSaveDialogResult,
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 
@@ -29,7 +32,7 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class LocalFileService {
   // File Operations
-  async listLocalFiles(params: ListLocalFileParams): Promise<LocalFileItem[]> {
+  async listLocalFiles(params: ListLocalFileParams): Promise<ListLocalFilesResult> {
     return ensureElectronIpc().localSystem.listLocalFiles(params);
   }
 
@@ -89,6 +92,11 @@ class LocalFileService {
 
   async globFiles(params: GlobFilesParams): Promise<GlobFilesResult> {
     return ensureElectronIpc().localSystem.handleGlobFiles(params);
+  }
+
+  // Dialog
+  async showSaveDialog(params: ShowSaveDialogParams): Promise<ShowSaveDialogResult> {
+    return ensureElectronIpc().localSystem.handleShowSaveDialog(params);
   }
 
   // Helper methods

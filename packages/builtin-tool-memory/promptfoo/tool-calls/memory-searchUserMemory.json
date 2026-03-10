@@ -1,0 +1,40 @@
+{
+  "description": "Retrieve memories based on a search query. Use this to recall previously saved information.",
+  "name": "searchUserMemory",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "query": {
+        "type": "string"
+      },
+      "topK": {
+        "additionalProperties": false,
+        "properties": {
+          "contexts": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "experiences": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "preferences": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "contexts",
+          "experiences",
+          "preferences"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "query",
+      "topK"
+    ],
+    "type": "object"
+  }
+}

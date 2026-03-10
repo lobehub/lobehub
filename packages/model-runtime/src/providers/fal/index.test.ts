@@ -2,7 +2,7 @@
 import { fal } from '@fal-ai/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImagePayload } from '../../types';
+import type { CreateImagePayload } from '../../types';
 import { LobeFalAI } from './index';
 
 // Mock the fal client
@@ -423,7 +423,7 @@ describe('LobeFalAI', () => {
             prompt: 'Test with undefined values',
             imageUrl: undefined,
             steps: undefined,
-            cfg: 5.0,
+            cfg: 5,
           } as any,
         };
 
@@ -436,7 +436,7 @@ describe('LobeFalAI', () => {
             enable_safety_checker: false,
             num_images: 1,
             prompt: 'Test with undefined values',
-            guidance_scale: 5.0,
+            guidance_scale: 5,
           },
         });
       });
@@ -679,7 +679,7 @@ describe('LobeFalAI', () => {
             prompt: 'Edit with custom settings',
             imageUrls: ['https://example.com/input.jpg'],
             steps: 30,
-            cfg: 8.0,
+            cfg: 8,
           },
         };
 
@@ -694,7 +694,7 @@ describe('LobeFalAI', () => {
             prompt: 'Edit with custom settings',
             image_urls: ['https://example.com/input.jpg'],
             num_inference_steps: 30,
-            guidance_scale: 8.0,
+            guidance_scale: 8,
           },
         });
       });

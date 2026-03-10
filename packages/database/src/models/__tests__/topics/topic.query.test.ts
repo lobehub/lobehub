@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../../core/getTestDB';
 import {
   agents,
   agentsToSessions,
@@ -9,9 +10,8 @@ import {
   topics,
   users,
 } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
-import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'topic-query-user';
 const userId2 = 'topic-query-user-2';
@@ -186,6 +186,26 @@ describe('TopicModel - Query', () => {
 
       expect(result2).toHaveLength(1);
       expect(result2[0].id).toBe('topic1');
+    });
+
+    it('should exclude topics with specified triggers via excludeTriggers', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'normal-topic', sessionId, userId, title: 'Normal' },
+        { id: 'cron-topic', sessionId, userId, title: 'Cron', trigger: 'cron' },
+        { id: 'null-trigger', sessionId, userId, title: 'Null Trigger' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        excludeTriggers: ['cron'],
+      });
+
+      // Should return topics with null trigger or triggers not in the exclude list
+      expect(result.items).toHaveLength(2);
+      const ids = result.items.map((t) => t.id);
+      expect(ids).toContain('normal-topic');
+      expect(ids).toContain('null-trigger');
+      expect(ids).not.toContain('cron-topic');
     });
   });
 
@@ -1281,6 +1301,11 @@ describe('TopicModel - Query', () => {
   });
 
   describe('listTopicsForMemoryExtractor', () => {
+    beforeEach(async () => {
+      // Clear topics from previous tests to ensure isolation
+      await serverDB.delete(topics);
+    });
+
     it('should paginate pending topics and skip extracted ones by default', async () => {
       await serverDB.insert(topics).values([
         {
@@ -1299,14 +1324,16 @@ describe('TopicModel - Query', () => {
         { createdAt: new Date('2024-01-04T00:00:00Z'), id: 't4', userId: userId2 },
       ] satisfies Array<typeof topics.$inferInsert>);
 
+      // t1 is skipped because it has userMemoryExtractStatus: 'completed'
+      // t4 is skipped because it belongs to a different user
       const page1 = await topicModel.listTopicsForMemoryExtractor({ limit: 1 });
-      expect(page1.map((t) => t.id)).toEqual(['t1']);
+      expect(page1.map((t) => t.id)).toEqual(['t2']);
 
       const page2 = await topicModel.listTopicsForMemoryExtractor({
         cursor: { createdAt: page1[0].createdAt, id: page1[0].id },
         limit: 5,
       });
-      expect(page2.map((t) => t.id)).toEqual(['t2', 't3']);
+      expect(page2.map((t) => t.id)).toEqual(['t3']);
     });
 
     it('should include extracted topics when ignoreExtracted is true', async () => {
@@ -1352,6 +1379,87 @@ describe('TopicModel - Query', () => {
       });
 
       expect(rows.map((t) => t.id)).toEqual(['cursor-topic-z', 'after-1', 'after-2']);
+    });
+  });
+
+  describe('getCronTopicsGroupedByCronJob', () => {
+    it('should return cron topics grouped by cronJobId', async () => {
+      const agentId = 'cron-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB.insert(agentsToSessions).values({ agentId, sessionId: session.id, userId });
+
+      await serverDB.insert(topics).values([
+        {
+          id: 'cron-topic-1',
+          userId,
+          sessionId: session.id,
+          agentId,
+          trigger: 'cron',
+          title: 'Cron Topic 1',
+          metadata: { cronJobId: 'job-a' },
+        },
+        {
+          id: 'cron-topic-2',
+          userId,
+          sessionId: session.id,
+          agentId,
+          trigger: 'cron',
+          title: 'Cron Topic 2',
+          metadata: { cronJobId: 'job-a' },
+        },
+        {
+          id: 'cron-topic-3',
+          userId,
+          sessionId: session.id,
+          agentId,
+          trigger: 'cron',
+          title: 'Cron Topic 3',
+          metadata: { cronJobId: 'job-b' },
+        },
+      ]);
+
+      const result = await topicModel.getCronTopicsGroupedByCronJob(agentId);
+
+      expect(result).toHaveLength(2);
+      const jobA = result.find((g) => g.cronJobId === 'job-a');
+      const jobB = result.find((g) => g.cronJobId === 'job-b');
+      expect(jobA?.topics).toHaveLength(2);
+      expect(jobB?.topics).toHaveLength(1);
+    });
+
+    it('should return empty array when no cron topics exist', async () => {
+      const agentId = 'no-cron-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+
+      const result = await topicModel.getCronTopicsGroupedByCronJob(agentId);
+      expect(result).toEqual([]);
+    });
+
+    it('should not return topics without cronJobId in metadata', async () => {
+      const agentId = 'cron-agent-no-meta';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB.insert(agentsToSessions).values({ agentId, sessionId: session.id, userId });
+
+      await serverDB.insert(topics).values({
+        id: 'cron-no-meta',
+        userId,
+        sessionId: session.id,
+        agentId,
+        trigger: 'cron',
+        title: 'No Meta',
+        metadata: {},
+      });
+
+      const result = await topicModel.getCronTopicsGroupedByCronJob(agentId);
+      expect(result).toEqual([]);
     });
   });
 });

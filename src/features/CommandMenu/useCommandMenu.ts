@@ -1,14 +1,16 @@
 import { useDebounce } from 'ahooks';
 import { useTheme as useNextThemesTheme } from 'next-themes';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
-import { useCreateMenuItems } from '@/app/[variants]/(main)/home/_layout/hooks';
-import type { SearchResult } from '@/database/repositories/search';
+import { isDesktop } from '@/const/version';
+import { type SearchResult } from '@/database/repositories/search';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useGroupWizard } from '@/layout/GlobalProvider/GroupWizardProvider';
 import { lambdaClient } from '@/libs/trpc/client';
+import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
+import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
 import { useChatStore } from '@/store/chat';
@@ -17,15 +19,16 @@ import { globalHelpers } from '@/store/global/helpers';
 import { useHomeStore } from '@/store/home';
 
 import { useCommandMenuContext } from './CommandMenuContext';
-import type { ThemeMode } from './types';
+import { type ThemeMode } from './types';
 
 /**
  * Shared methods for CommandMenu
  */
 export const useCommandMenu = () => {
-  const [open, setOpen] = useGlobalStore((s) => [s.status.showCommandMenu, s.updateSystemStatus]);
+  const [open] = useGlobalStore((s) => [s.status.showCommandMenu]);
   const {
     mounted,
+    onClose,
     search,
     setSearch,
     pages,
@@ -35,6 +38,8 @@ export const useCommandMenu = () => {
     page,
     menuContext: context,
     pathname,
+    selectedAgent,
+    setSelectedAgent,
   } = useCommandMenuContext();
 
   const navigate = useNavigate();
@@ -92,48 +97,70 @@ export const useCommandMenu = () => {
     }
   }, [open]);
 
-  const closeCommandMenu = () => {
-    setOpen({ showCommandMenu: false });
-  };
+  const closeCommandMenu = useCallback(() => {
+    onClose();
+  }, [onClose]);
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
-    closeCommandMenu();
-  };
+  const handleNavigate = useCallback(
+    (path: string) => {
+      navigate(path);
+      onClose();
+    },
+    [navigate, onClose],
+  );
 
-  const handleExternalLink = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
-    closeCommandMenu();
-  };
+  const handleExternalLink = useCallback(
+    async (url: string) => {
+      if (isDesktop) {
+        await electronSystemService.openExternalLink(url);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+      onClose();
+    },
+    [onClose],
+  );
 
-  const handleThemeChange = (theme: ThemeMode) => {
-    setTheme(theme);
-    closeCommandMenu();
-  };
+  const handleThemeChange = useCallback(
+    (theme: ThemeMode) => {
+      setTheme(theme);
+      onClose();
+    },
+    [setTheme, onClose],
+  );
 
-  const handleAskLobeAI = () => {
+  const handleAskLobeAI = useCallback(() => {
     // Navigate to inbox agent with the message query parameter
     if (inboxAgentId && search.trim()) {
       const message = encodeURIComponent(search.trim());
       navigate(`/agent/${inboxAgentId}?message=${message}`);
-      closeCommandMenu();
+      onClose();
     }
-  };
+  }, [inboxAgentId, search, navigate, onClose]);
 
-  const handleAIPainting = () => {
+  const handleAIPainting = useCallback(() => {
     // Navigate to painting page with search as prompt
     if (search.trim()) {
       const prompt = encodeURIComponent(search.trim());
       navigate(`/image?prompt=${prompt}`);
-      closeCommandMenu();
+      onClose();
     }
-  };
+  }, [search, navigate, onClose]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     setPages((prev) => prev.slice(0, -1));
-  };
+  }, [setPages]);
 
-  const handleCreateSession = async () => {
+  const handleSendToSelectedAgent = useCallback(() => {
+    if (selectedAgent && search.trim()) {
+      const message = encodeURIComponent(search.trim());
+      navigate(`/agent/${selectedAgent.id}?message=${message}`);
+      setSelectedAgent(undefined);
+      onClose();
+    }
+  }, [selectedAgent, search, navigate, setSelectedAgent, onClose]);
+
+  const handleCreateSession = useCallback(async () => {
     const result = await createAgent({});
     await refreshAgentList();
 
@@ -142,32 +169,32 @@ export const useCommandMenu = () => {
       navigate(`/agent/${result.agentId}`);
     }
 
-    closeCommandMenu();
-  };
+    onClose();
+  }, [createAgent, refreshAgentList, navigate, onClose]);
 
-  const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
+  const openNewTopicOrSaveTopic = useChatStore((s) => s.openNewTopicOrSaveTopic);
 
-  const handleCreateTopic = async () => {
+  const handleCreateTopic = useCallback(() => {
     openNewTopicOrSaveTopic();
-    closeCommandMenu();
-  };
+    onClose();
+  }, [openNewTopicOrSaveTopic, onClose]);
 
-  const handleCreateLibrary = async () => {
-    closeCommandMenu();
+  const handleCreateLibrary = useCallback(() => {
+    onClose();
     openCreateLibraryModal({
       onSuccess: (id) => {
         navigate(`/resource/library/${id}`);
       },
     });
-  };
+  }, [onClose, openCreateLibraryModal, navigate]);
 
-  const handleCreatePage = async () => {
+  const handleCreatePage = useCallback(async () => {
     await createPage();
-    closeCommandMenu();
-  };
+    onClose();
+  }, [createPage, onClose]);
 
-  const handleCreateAgentTeam = async () => {
-    closeCommandMenu();
+  const handleCreateAgentTeam = useCallback(() => {
+    onClose();
     openGroupWizard({
       onCreateCustom: async (selectedAgents) => {
         await createGroupWithMembers(selectedAgents);
@@ -176,7 +203,7 @@ export const useCommandMenu = () => {
         await createGroupFromTemplate(templateId, selectedMemberTitles);
       },
     });
-  };
+  }, [onClose, openGroupWizard, createGroupWithMembers, createGroupFromTemplate]);
 
   return {
     closeCommandMenu,
@@ -190,6 +217,7 @@ export const useCommandMenu = () => {
     handleCreateTopic,
     handleExternalLink,
     handleNavigate,
+    handleSendToSelectedAgent,
     handleThemeChange,
     hasSearch,
     isSearching,
@@ -201,7 +229,9 @@ export const useCommandMenu = () => {
     search,
     searchQuery,
     searchResults: searchResults || ([] as SearchResult[]),
+    selectedAgent,
     setSearch,
+    setSelectedAgent,
     setTypeFilter,
     typeFilter,
   };

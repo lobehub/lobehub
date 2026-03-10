@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ModelParamsSchema } from '../standard-parameters';
+import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -18,7 +18,7 @@ export const AiModelTypeSchema = z.enum([
   'tts',
   'stt',
   'image',
-  'text2video',
+  'video',
   'text2music',
   'realtime',
 ] as const);
@@ -144,7 +144,10 @@ export type PricingUnitName =
   | 'imageGeneration' // for image generation models
   | 'imageInput'
   | 'imageInput_cacheRead'
-  | 'imageOutput';
+  | 'imageOutput'
+
+  // Video-based pricing units
+  | 'videoGeneration';
 
 export type PricingUnitType =
   | 'millionTokens' // per 1M tokens
@@ -189,6 +192,10 @@ export interface Pricing {
    * Fallback approximate per-image price (USD) when detailed pricing table is unavailable
    */
   approximatePricePerImage?: number;
+  /**
+   * Fallback approximate per-video price (USD) when detailed pricing table is unavailable
+   */
+  approximatePricePerVideo?: number;
   currency?: ModelPriceCurrency;
   units: PricingUnit[];
 }
@@ -235,19 +242,28 @@ export type ModelSearchImplementType = 'tool' | 'params' | 'internal';
 export type ExtendParamsType =
   | 'reasoningBudgetToken'
   | 'enableReasoning'
+  | 'enableAdaptiveThinking'
   | 'disableContextCaching'
+  | 'effort'
   | 'reasoningEffort'
   | 'gpt5ReasoningEffort'
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
+  | 'grok4_20ReasoningEffort'
+  | 'codexMaxReasoningEffort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'
   | 'thinkingLevel'
   | 'thinkingLevel2'
+  | 'thinkingLevel3'
+  | 'thinkingLevel4'
+  | 'thinkingLevel5'
   | 'imageAspectRatio'
+  | 'imageAspectRatio2'
   | 'imageResolution'
+  | 'imageResolution2'
   | 'urlContext';
 
 export interface AiModelSettings {
@@ -258,6 +274,42 @@ export interface AiModelSettings {
   searchImpl?: ModelSearchImplementType;
   searchProvider?: string;
 }
+
+export const ExtendParamsTypeSchema = z.enum([
+  'reasoningBudgetToken',
+  'enableReasoning',
+  'enableAdaptiveThinking',
+  'disableContextCaching',
+  'effort',
+  'reasoningEffort',
+  'gpt5ReasoningEffort',
+  'gpt5_1ReasoningEffort',
+  'gpt5_2ReasoningEffort',
+  'gpt5_2ProReasoningEffort',
+  'grok4_20ReasoningEffort',
+  'codexMaxReasoningEffort',
+  'textVerbosity',
+  'thinking',
+  'thinkingBudget',
+  'thinkingLevel',
+  'thinkingLevel2',
+  'thinkingLevel3',
+  'thinkingLevel4',
+  'thinkingLevel5',
+  'imageAspectRatio',
+  'imageAspectRatio2',
+  'imageResolution',
+  'imageResolution2',
+  'urlContext',
+]);
+
+export const ModelSearchImplementTypeSchema = z.enum(['tool', 'params', 'internal']);
+
+export const AiModelSettingsSchema = z.object({
+  extendParams: z.array(ExtendParamsTypeSchema).optional(),
+  searchImpl: ModelSearchImplementTypeSchema.optional(),
+  searchProvider: z.string().optional(),
+});
 
 export interface AIChatModelCard extends AIBaseModelCard {
   abilities?: ModelAbilities;
@@ -279,6 +331,12 @@ export interface AIImageModelCard extends AIBaseModelCard {
   pricing?: Pricing;
   resolutions?: string[];
   type: 'image';
+}
+
+export interface AIVideoModelCard extends AIBaseModelCard {
+  parameters?: VideoModelParamsSchema;
+  pricing?: Pricing;
+  type: 'video';
 }
 
 export interface AITTSModelCard extends AIBaseModelCard {
@@ -344,6 +402,7 @@ export const CreateAiModelSchema = z.object({
   id: z.string(),
   providerId: z.string(),
   releasedAt: z.string().optional(),
+  settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 
   // checkModel: z.string().optional(),
@@ -380,6 +439,7 @@ export const UpdateAiModelSchema = z.object({
     .optional(),
   contextWindowTokens: z.number().nullable().optional(),
   displayName: z.string().nullable().optional(),
+  settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 });
 

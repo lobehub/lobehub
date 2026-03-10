@@ -1,0 +1,13 @@
+description: User persona prompt regression
+
+providers:
+  - id: openai:chat:gpt-5-mini
+    config:
+      tools: file://../../response-formats/persona-tools.json
+      tool_choice: required
+
+prompts:
+  - file://./prompt.ts
+
+tests:
+  - file://./tests/cases.ts

@@ -3,10 +3,11 @@
 import { Flexbox } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import Image from '@/libs/next/Image';
-import { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo } from 'react';
 
 import { SkeletonSwitch } from '@/components/Skeleton';
+import Image from '@/libs/next/Image';
 
 interface LabCardProps {
   checked: boolean;
@@ -72,7 +73,7 @@ const LabCard = memo<PropsWithChildren<LabCardProps>>(
           <div className={styles.row}>
             <div className={styles.thumb}>
               {cover && (
-                <Image alt={title} fill src={cover} style={{ objectFit: 'cover' }} unoptimized />
+                <Image fill unoptimized alt={title} src={cover} style={{ objectFit: 'cover' }} />
               )}
             </div>
             <Flexbox gap={6}>

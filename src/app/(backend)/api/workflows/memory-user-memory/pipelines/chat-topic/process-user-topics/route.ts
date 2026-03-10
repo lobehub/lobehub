@@ -2,13 +2,13 @@ import { MemorySourceType } from '@lobechat/types';
 import { Client } from '@upstash/qstash';
 import { serve } from '@upstash/workflow/nextjs';
 
-import type { ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
+import { type ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
-  MemoryExtractionExecutor,
-  type MemoryExtractionPayloadInput,
-  MemoryExtractionWorkflowService,
   buildWorkflowPayloadInput,
+  MemoryExtractionExecutor,
+  MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 import { forEachBatchSequential } from '@/server/services/memory/userMemory/topicBatching';
@@ -97,6 +97,8 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
 
       const cursor = 'cursor' in topicBatch ? topicBatch.cursor : undefined;
 
+      // TODO: follow the new pattern of process-topic
+      // remove the batch sequential, replace it with context.invoke(...) pattern
       await forEachBatchSequential(ids, TOPIC_BATCH_SIZE, async (topicIds, batchIndex) => {
         // NOTICE: We trigger via QStash instead of context.invoke because invoke only swaps the last path
         // segment with the workflowId. If we invoked directly from /process-user-topics, child workflow
@@ -105,6 +107,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
           `memory:user-memory:extract:users:${userId}:process-topics-batch:${batchIndex}`,
           () =>
             MemoryExtractionWorkflowService.triggerProcessTopics(
+              userId,
               {
                 ...buildWorkflowPayloadInput(params),
                 topicCursor: undefined,

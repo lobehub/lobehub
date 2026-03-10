@@ -1,7 +1,8 @@
 'use client';
 
 import { type TaskDetail } from '@lobechat/types';
-import { Flexbox, Icon, IconProps, Tag } from '@lobehub/ui';
+import { type IconProps } from '@lobehub/ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Footprints, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -93,14 +94,14 @@ const MetricsRow = memo<MetricsRowProps>(
 
     if (variant === 'detail') {
       return (
-        <Flexbox align="center" gap={12} horizontal justify="space-between" paddingBlock={'8px 0'}>
+        <Flexbox horizontal align="center" gap={12} justify="space-between" paddingBlock={'8px 0'}>
           {/* Left: Duration */}
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
           </Flexbox>
 
           {/* Right: Steps, Tool Calls, Cost */}
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             {metrics.map((metric, index) => (
               <MetricItem
                 icon={metric.icon}
@@ -116,16 +117,16 @@ const MetricsRow = memo<MetricsRowProps>(
 
     // Compact variant
     return (
-      <Flexbox align="center" gap={12} horizontal justify="space-between" wrap="wrap">
+      <Flexbox horizontal align="center" gap={12} justify="space-between" wrap="wrap">
         {/* Left: Duration */}
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
         </Flexbox>
 
         {/* Right: Steps, Tool Calls, Cost */}
-        <Flexbox align="center" gap={12} horizontal>
+        <Flexbox horizontal align="center" gap={12}>
           {metrics.map((metric, index) => (
-            <Flexbox align="center" gap={12} horizontal key={index}>
+            <Flexbox horizontal align="center" gap={12} key={index}>
               {index > 0 && <div className={styles.separator} />}
               <MetricItem icon={metric.icon} label={metric.label} value={metric.value} />
             </Flexbox>

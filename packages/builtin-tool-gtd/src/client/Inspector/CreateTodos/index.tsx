@@ -39,7 +39,7 @@ export const CreateTodosInspector = memo<
     <div className={cx(oneLineEllipsis, isArgumentsStreaming && shinyTextStyles.shinyText)}>
       <span className={styles.title}>{t('builtins.lobe-gtd.apiName.createTodos')}</span>
       {count > 0 && (
-        <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12}>
+        <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12}>
           <Icon icon={Plus} size={12} />
           {count}
         </Text>

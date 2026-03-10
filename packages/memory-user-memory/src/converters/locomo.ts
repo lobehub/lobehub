@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
 import type { MemorySourceType } from '@lobechat/types';
 import { MemorySourceType as MemorySourceTypeEnum } from '@lobechat/types';
 import dayjs from 'dayjs';
@@ -78,7 +79,9 @@ const parseDate = (value?: string) => {
     if (parsed.isValid()) return parsed.toISOString();
   }
 
-  console.warn(`[locomo converter] failed to parse date "${value}" with custom format, falling back to Date parser`);
+  console.warn(
+    `[locomo converter] failed to parse date "${value}" with custom format, falling back to Date parser`,
+  );
   const fallback = new Date(value);
   return Number.isNaN(fallback.getTime()) ? undefined : fallback.toISOString();
 };
@@ -97,7 +100,7 @@ const buildTurnText = (turn: LocomoTurn, includeImageCaptions?: boolean) => {
 };
 
 const extractSessions = (conversation: Record<string, unknown>): LocomoSession[] => {
-  const sessions: { order: number, session: LocomoSession; }[] = [];
+  const sessions: { order: number; session: LocomoSession }[] = [];
 
   Object.entries(conversation).forEach(([key, value]) => {
     const match = key.match(SESSION_KEY_REGEX);
@@ -109,9 +112,7 @@ const extractSessions = (conversation: Record<string, unknown>): LocomoSession[]
     sessions.push({ order: Number.parseInt(match[1], 10), session: { dateTime, id: key, turns } });
   });
 
-  return sessions
-    .sort((a, b) => a.order - b.order)
-    .map(({ session }) => session);
+  return sessions.sort((a, b) => a.order - b.order).map(({ session }) => session);
 };
 
 const resolveRole = (
@@ -136,24 +137,28 @@ export const buildIngestPayload = (
   const sessions = extractSessions(sample.conversation);
   const sessionPayloads: IngestSessionPayload[] = sessions.map((session) => {
     if (!session.dateTime) {
-      console.warn(`[locomo converter] session ${session.id} is missing dateTime, turns will have no createdAt`);
+      console.warn(
+        `[locomo converter] session ${session.id} is missing dateTime, turns will have no createdAt`,
+      );
     }
 
-    console.log(`[locomo converter] processing sample ${sample.sample_id} session ${session.id} (on ${session.dateTime ?? 'unknown dateTime'}) with ${session.turns.length} turns`);
+    console.log(
+      `[locomo converter] processing sample ${sample.sample_id} session ${session.id} (on ${session.dateTime ?? 'unknown dateTime'}) with ${session.turns.length} turns`,
+    );
 
     return {
-    sessionId: session.id,
-    timestamp: parseDate(session.dateTime),
-    turns: session.turns.map((turn) => ({
-      createdAt: parseDate(session.dateTime),
-      diaId: turn.dia_id,
-      imageCaption: normalizeArray(turn.blip_caption).join('\n') || undefined,
-      imageUrls: normalizeArray(turn.img_url).length ? normalizeArray(turn.img_url) : undefined,
-      role: resolveRole(turn.speaker, speakerA, speakerB, options.speakerRoles),
-      speaker: turn.speaker,
-      text: buildTurnText(turn, options.includeImageCaptions),
-    })),
-  }
+      sessionId: session.id,
+      timestamp: parseDate(session.dateTime),
+      turns: session.turns.map((turn) => ({
+        createdAt: parseDate(session.dateTime),
+        diaId: turn.dia_id,
+        imageCaption: normalizeArray(turn.blip_caption).join('\n') || undefined,
+        imageUrls: normalizeArray(turn.img_url).length ? normalizeArray(turn.img_url) : undefined,
+        role: resolveRole(turn.speaker, speakerA, speakerB, options.speakerRoles),
+        speaker: turn.speaker,
+        text: buildTurnText(turn, options.includeImageCaptions),
+      })),
+    };
   });
 
   return {
@@ -178,7 +183,5 @@ export const loadLocomoFile = (filePath: string): LocomoQASample[] => {
   return parsed as LocomoQASample[];
 };
 
-export const convertLocomoFile = (
-  filePath: string,
-  options: BuildIngestOptions,
-): IngestPayload[] => loadLocomoFile(filePath).map((sample) => buildIngestPayload(sample, options));
+export const convertLocomoFile = (filePath: string, options: BuildIngestOptions): IngestPayload[] =>
+  loadLocomoFile(filePath).map((sample) => buildIngestPayload(sample, options));

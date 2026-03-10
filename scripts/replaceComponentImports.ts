@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 interface ReplaceConfig {
@@ -230,7 +230,7 @@ function parseArgs(): ReplaceConfig | null {
   if (!componentsStr || !fromPackage || !toPackage) {
     console.error('❌ 错误: 必须指定 --components, --from 和 --to 参数');
     console.error('使用 --help 查看帮助信息');
-    // eslint-disable-next-line unicorn/no-process-exit
+
     process.exit(1);
   }
 

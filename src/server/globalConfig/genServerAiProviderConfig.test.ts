@@ -1,10 +1,11 @@
+import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { genServerAiProvidersConfig } from './genServerAiProviderConfig';
 
 // Mock dependencies using importOriginal to preserve real provider data
 vi.mock('model-bank', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('model-bank')>();
+  const actual = await importOriginal<typeof ModelBankModule>();
   return {
     ...actual,
     // Keep the original exports but we can override specific ones if needed

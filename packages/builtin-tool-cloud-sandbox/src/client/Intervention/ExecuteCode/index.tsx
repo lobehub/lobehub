@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -29,11 +29,11 @@ const ExecuteCode = memo<BuiltinInterventionProps<ExecuteCodeParams>>(({ args })
       </Flexbox>
       {code && (
         <Highlighter
+          wrap
           language={language}
           showLanguage={false}
           style={{ padding: '4px 8px' }}
           variant={'outlined'}
-          wrap
         >
           {code}
         </Highlighter>

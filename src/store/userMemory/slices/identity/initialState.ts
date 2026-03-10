@@ -1,7 +1,6 @@
-import { type DisplayIdentityMemory } from '@/database/repositories/userMemory';
-import type { TypesEnum } from '@/types/userMemory';
+import { type IdentityListItem, type IdentityListSort } from '@lobechat/types';
 
-import type { IdentityForInjection } from '../../types';
+import { type IdentityForInjection } from '../../types';
 
 export interface IdentitySliceState {
   /** Global identities fetched at app initialization for injection into chat context */
@@ -10,14 +9,16 @@ export interface IdentitySliceState {
   globalIdentitiesFetchedAt?: number;
   /** Whether global identities have been initialized */
   globalIdentitiesInit: boolean;
-  identities: DisplayIdentityMemory[];
+  identities: IdentityListItem[];
   identitiesHasMore: boolean;
   identitiesInit: boolean;
   identitiesPage: number;
   identitiesQuery?: string;
+  identitiesRelationships?: string[];
   identitiesSearchLoading?: boolean;
+  identitiesSort?: IdentityListSort;
   identitiesTotal: number;
-  identitiesTypes?: TypesEnum[];
+  identitiesTypes?: string[];
 }
 
 export const identityInitialState: IdentitySliceState = {
@@ -29,6 +30,8 @@ export const identityInitialState: IdentitySliceState = {
   identitiesInit: false,
   identitiesPage: 1,
   identitiesQuery: undefined,
+  identitiesRelationships: undefined,
+  identitiesSort: undefined,
   identitiesTotal: 0,
   identitiesTypes: undefined,
 };

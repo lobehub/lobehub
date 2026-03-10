@@ -25,7 +25,7 @@ helloWorld();`;
   });
 
   it('split long', async () => {
-    const code = fs.readFileSync(join(__dirname, `./long.txt`), 'utf-8');
+    const code = fs.readFileSync(join(__dirname, `./long.txt`), 'utf8');
 
     const result = await CodeLoader(code, 'js');
 

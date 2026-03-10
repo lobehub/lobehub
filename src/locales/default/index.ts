@@ -1,11 +1,9 @@
-import { businessLocales } from '@/business/locales/index';
-
+import agent from './agent';
 import agentGroup from './agentGroup';
 import auth from './auth';
 import authError from './authError';
 import changelog from './changelog';
 import chat from './chat';
-import clerk from './clerk';
 import color from './color';
 import common from './common';
 import components from './components';
@@ -14,6 +12,7 @@ import discover from './discover';
 import editor from './editor';
 import electron from './electron';
 import error from './error';
+import eval_ from './eval';
 import file from './file';
 import home from './home';
 import hotkey from './hotkey';
@@ -35,25 +34,28 @@ import ragEval from './ragEval';
 import setting from './setting';
 import spend from './spend';
 import subscription from './subscription';
+import suggestQuestions from './suggestQuestions';
 import thread from './thread';
 import tool from './tool';
 import topic from './topic';
 import ui from './ui';
+import video from './video';
 import welcome from './welcome';
 
 const resources = {
+  agent,
   agentGroup,
   auth,
   authError,
   changelog,
   chat,
-  clerk,
   color,
   common,
   components,
   'desktop-onboarding': desktopOnboarding,
   discover,
   editor,
+  'eval': eval_,
   electron,
   error,
   file,
@@ -79,13 +81,13 @@ const resources = {
   setting,
   spend,
   subscription,
+  suggestQuestions,
   thread,
   tool,
   topic,
   ui,
+  video,
   welcome,
-
-  ...businessLocales,
 } as const;
 
 export default resources;

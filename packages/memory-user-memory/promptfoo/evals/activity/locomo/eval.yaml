@@ -1,0 +1,13 @@
+description: LoCoMo regression for activity layer with relative time resolution
+
+providers:
+  - id: openai:chat:gpt-5-mini
+    config:
+      response_format: file://../../../response-formats/activity.json
+      temperature: 0
+
+prompts:
+  - file://./prompt.ts
+
+tests:
+  - file://./tests/cases.ts

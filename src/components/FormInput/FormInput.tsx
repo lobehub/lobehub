@@ -1,4 +1,5 @@
-import { Input, type InputProps as Props } from '@lobehub/ui';
+import { type InputProps as Props } from '@lobehub/ui';
+import { Input } from '@lobehub/ui';
 import { type InputRef } from 'antd/es/input/Input';
 import { memo, useEffect, useRef, useState } from 'react';
 
@@ -18,6 +19,7 @@ const FormInput = memo<FormInputProps>(({ onChange, value: defaultValue, ...prop
 
   return (
     <Input
+      ref={ref}
       onBlur={() => {
         onChange?.(value);
       }}
@@ -34,7 +36,6 @@ const FormInput = memo<FormInputProps>(({ onChange, value: defaultValue, ...prop
         if (isChineseInput.current) return;
         onChange?.(value);
       }}
-      ref={ref}
       {...props}
       value={value}
     />

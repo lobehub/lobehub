@@ -305,14 +305,14 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
 
     it('should handle Docker Compose deployment with service names', async () => {
       mockAppEnv.APP_URL = 'https://public.example.com';
-      mockAppEnv.INTERNAL_APP_URL = 'http://lobe-chat-database:3210';
+      mockAppEnv.INTERNAL_APP_URL = 'http://lobehub:3210';
 
       await createAsyncServerClient('docker-user');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
 
-      expect(httpLinkOptions.url).toBe('http://lobe-chat-database:3210/trpc/async');
+      expect(httpLinkOptions.url).toBe('http://lobehub:3210/trpc/async');
     });
 
     it('should handle deployment without CDN (INTERNAL_APP_URL not set)', async () => {

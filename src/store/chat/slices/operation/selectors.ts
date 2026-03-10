@@ -1,7 +1,8 @@
-import type { ChatStoreState } from '@/store/chat/initialState';
+import { type ChatStoreState } from '@/store/chat/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { AI_RUNTIME_OPERATION_TYPES, type Operation, type OperationType } from './types';
+import { type Operation, type OperationType } from './types';
+import { AI_RUNTIME_OPERATION_TYPES } from './types';
 
 // === Basic Queries ===
 /**
@@ -234,6 +235,27 @@ const isAgentRuntimeRunningByContext =
   };
 
 // === Backward Compatibility ===
+
+/**
+ * Check if a specific agent has running AI runtime operations
+ * Used for agent list item loading states where we need per-agent granularity
+ */
+const isAgentRunning =
+  (agentId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of AI_RUNTIME_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      const hasRunning = operationIds.some((id) => {
+        const op = s.operations[id];
+        return (
+          op && op.status === 'running' && !op.metadata.isAborting && op.context.agentId === agentId
+        );
+      });
+      if (hasRunning) return true;
+    }
+    return false;
+  };
+
 /**
  * Check if agent runtime is running (including both main window and thread)
  * Checks both client-side (execAgentRuntime) and server-side (execServerAgentRuntime) operations
@@ -451,6 +473,26 @@ const isSendingMessage = (s: ChatStoreState): boolean => {
   return hasRunningOperationType('sendMessage')(s);
 };
 
+// === Unread Completion ===
+
+/**
+ * Check if an agent has unread completed generation
+ */
+const isAgentUnreadCompleted =
+  (agentId: string) =>
+  (s: ChatStoreState): boolean => {
+    return s.unreadCompletedAgentIds.has(agentId);
+  };
+
+/**
+ * Check if a topic has unread completed generation
+ */
+const isTopicUnreadCompleted =
+  (topicId: string) =>
+  (s: ChatStoreState): boolean => {
+    return s.unreadCompletedTopicIds.has(topicId);
+  };
+
 /**
  * Operation Selectors
  */
@@ -477,7 +519,9 @@ export const operationSelectors = {
 
   isAborting,
 
+  isAgentRunning,
   isAgentRuntimeRunning,
+  isAgentUnreadCompleted,
   isAgentRuntimeRunningByContext,
   isAnyMessageLoading,
   isContinuing,
@@ -493,4 +537,5 @@ export const operationSelectors = {
   isMessageRegenerating,
   isRegenerating,
   isSendingMessage,
+  isTopicUnreadCompleted,
 };

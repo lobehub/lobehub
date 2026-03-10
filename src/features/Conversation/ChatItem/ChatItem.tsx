@@ -39,7 +39,7 @@ const ChatItem = memo<ChatItemProps>(
     disabled = false,
     id,
     style,
-    newScreen,
+    newScreenMinHeight,
     ...rest
   }) => {
     const isUser = placement === 'right';
@@ -53,8 +53,8 @@ const ChatItem = memo<ChatItemProps>(
       <Avatar
         alt={avatarProps?.alt || avatar.title || 'avatar'}
         loading={loading}
-        onClick={onAvatarClick}
         shape={'square'}
+        onClick={onAvatarClick}
         {...avatarProps}
         avatar={avatar}
       />
@@ -63,15 +63,12 @@ const ChatItem = memo<ChatItemProps>(
     return (
       <Flexbox
         align={isUser ? 'flex-end' : 'flex-start'}
-        className={cx(
-          'message-wrapper',
-          styles.container,
-          newScreen && styles.newScreen,
-          className,
-        )}
+        className={cx('message-wrapper', styles.container, className)}
+        data-message-id={id}
         gap={8}
         paddingBlock={8}
         style={{
+          minHeight: newScreenMinHeight,
           paddingInlineStart: isUser ? 36 : 0,
           ...style,
         }}
@@ -106,6 +103,7 @@ const ChatItem = memo<ChatItemProps>(
               editing={editing}
               id={id!}
               message={message}
+              variant={isUser ? 'bubble' : undefined}
               messageExtra={
                 <>
                   {errorContent}
@@ -113,7 +111,6 @@ const ChatItem = memo<ChatItemProps>(
                 </>
               }
               onDoubleClick={onDoubleClick}
-              variant={isUser ? 'bubble' : undefined}
             >
               {children}
             </MessageContent>

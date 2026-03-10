@@ -9,8 +9,8 @@ import {
   sortItemsByPriority,
 } from '@/features/MCP/calculateScore';
 import { useScoreList } from '@/features/MCP/useScoreList';
+import Title from '@/routes/(main)/community/features/Title';
 
-import Title from '../../../app/[variants]/(main)/community/features/Title';
 import { useDetailContext } from '../DetailProvider';
 import GithubBadge from './GithubBadge';
 import ScoreList from './ScoreList';
@@ -55,13 +55,13 @@ const Score = memo(() => {
       {/* 总分显示 */}
       <TotalScore
         isValidated={isValidated}
+        scoreResult={scoreResult}
         scoreItems={scoreListItems.map((item) => ({
           check: item.check,
           required: item.required,
           title: item.title,
           weight: item.weight,
         }))}
-        scoreResult={scoreResult}
       />
 
       {/* 评分明细 */}

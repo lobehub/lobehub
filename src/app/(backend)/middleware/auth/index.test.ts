@@ -3,14 +3,12 @@ import { ChatErrorType } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as EnvsAuthModule from '@/envs/auth';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-import { RequestHandler, checkAuth } from './index';
+import { type RequestHandler } from './index';
+import { checkAuth } from './index';
 import { checkAuthMethod } from './utils';
-
-vi.mock('@clerk/nextjs/server', () => ({
-  getAuth: vi.fn(),
-}));
 
 vi.mock('@/utils/errorResponse', () => ({
   createErrorResponse: vi.fn(),
@@ -22,6 +20,21 @@ vi.mock('./utils', () => ({
 
 vi.mock('@lobechat/utils/server', () => ({
   getXorPayload: vi.fn(),
+}));
+
+vi.mock('@/envs/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof EnvsAuthModule>();
+  return {
+    ...actual,
+  };
+});
+
+vi.mock('@/auth', () => ({
+  auth: {
+    api: {
+      getSession: vi.fn().mockResolvedValue(null),
+    },
+  },
 }));
 
 describe('checkAuth', () => {

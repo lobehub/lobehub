@@ -5,8 +5,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { useElectronStore } from '@/store/electron';
 
+import { getCachedDataForReference } from './cachedData';
 import { getRouteMetadata } from './routeMetadata';
 
 /**
@@ -31,6 +33,7 @@ export const useNavigationHistory = () => {
   const canGoBackFn = useElectronStore((s) => s.canGoBack);
   const canGoForwardFn = useElectronStore((s) => s.canGoForward);
   const getCurrentEntry = useElectronStore((s) => s.getCurrentEntry);
+  const addRecentPage = useElectronStore((s) => s.addRecentPage);
 
   // Track previous location to avoid duplicate entries
   const prevLocationRef = useRef<string | null>(null);
@@ -39,9 +42,6 @@ export const useNavigationHistory = () => {
   const canGoBack = historyCurrentIndex > 0;
   const canGoForward = historyCurrentIndex < historyEntries.length - 1;
 
-  /**
-   * Go back in history
-   */
   const goBack = useCallback(() => {
     if (!canGoBackFn()) return;
 
@@ -51,9 +51,6 @@ export const useNavigationHistory = () => {
     }
   }, [canGoBackFn, storeGoBack, navigate]);
 
-  /**
-   * Go forward in history
-   */
   const goForward = useCallback(() => {
     if (!canGoForwardFn()) return;
 
@@ -99,6 +96,17 @@ export const useNavigationHistory = () => {
       url: currentUrl,
     });
 
+    // Only add to recent pages if NOT a dynamic title route
+    // Dynamic title routes will be added when the real title is available
+    if (!metadata.useDynamicTitle) {
+      // Parse URL into a page reference using plugins
+      const reference = pluginRegistry.parseUrl(location.pathname, location.search);
+      if (reference) {
+        const cached = getCachedDataForReference(reference);
+        addRecentPage(reference, cached);
+      }
+    }
+
     prevLocationRef.current = currentUrl;
   }, [
     location.pathname,
@@ -107,6 +115,7 @@ export const useNavigationHistory = () => {
     setIsNavigatingHistory,
     getCurrentEntry,
     pushHistory,
+    addRecentPage,
     t,
   ]);
 
@@ -129,7 +138,27 @@ export const useNavigationHistory = () => {
       ...currentEntry,
       title: currentPageTitle,
     });
-  }, [currentPageTitle, getCurrentEntry, replaceHistory, location.pathname]);
+
+    // Add or update in recent pages (dynamic title routes are added here, not on route change)
+    // Parse URL into a page reference using plugins
+    const reference = pluginRegistry.parseUrl(location.pathname, location.search);
+    if (reference) {
+      // Get cached data with the dynamic title
+      const cached = getCachedDataForReference(reference);
+      // Override with the current page title if available
+      const cachedWithTitle = cached
+        ? { ...cached, title: currentPageTitle }
+        : { title: currentPageTitle };
+      addRecentPage(reference, cachedWithTitle);
+    }
+  }, [
+    currentPageTitle,
+    getCurrentEntry,
+    replaceHistory,
+    addRecentPage,
+    location.pathname,
+    location.search,
+  ]);
 
   // Listen to broadcast events from main process (Electron menu)
   useWatchBroadcast('historyGoBack', () => {

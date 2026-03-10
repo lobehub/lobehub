@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 
@@ -16,7 +17,7 @@ vi.mock('@/services/chatGroup', () => ({
 }));
 
 vi.mock('@/libs/swr', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/libs/swr')>();
+  const actual = await importOriginal<typeof SwrModule>();
   return { ...actual, mutate: vi.fn().mockResolvedValue(undefined) };
 });
 

@@ -1,6 +1,5 @@
-import { MarketSDK } from '@lobehub/market-sdk';
-
-import { generateTrustedClientToken, type TrustedClientUserInfo } from '@/libs/trusted-client';
+import { type TrustedClientUserInfo } from '@/libs/trusted-client';
+import { MarketService } from '@/server/services/market';
 
 import { trpc } from '../init';
 
@@ -10,53 +9,45 @@ interface ContextWithMarketUserInfo {
 }
 
 /**
- * Middleware that initializes MarketSDK with proper authentication.
+ * Middleware that initializes MarketService with proper authentication.
  * This requires marketUserInfo middleware to be applied first.
  *
  * Provides:
- * - ctx.marketSDK: Initialized MarketSDK instance with trustedClientToken and optional accessToken
- * - ctx.trustedClientToken: The generated trusted client token (if available)
+ * - ctx.marketSDK: MarketSDK instance for backward compatibility
+ * - ctx.marketService: MarketService instance (recommended)
  */
 export const marketSDK = trpc.middleware(async (opts) => {
   const ctx = opts.ctx as ContextWithMarketUserInfo;
 
-  // Generate trusted client token if user info is available
-  const trustedClientToken = ctx.marketUserInfo
-    ? generateTrustedClientToken(ctx.marketUserInfo)
-    : undefined;
-
-  // Initialize MarketSDK with both authentication methods
-  const market = new MarketSDK({
+  // Initialize MarketService with authentication
+  const marketService = new MarketService({
     accessToken: ctx.marketAccessToken,
-    baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-    trustedClientToken,
+    userInfo: ctx.marketUserInfo,
   });
 
   return opts.next({
     ctx: {
-      marketSDK: market,
-      trustedClientToken,
+      marketSDK: marketService.market, // Backward compatibility
+      marketService, // New recommended way
     },
   });
 });
 
 /**
  * Middleware that requires authentication for Market API access.
- * This middleware ensures that either accessToken or trustedClientToken is available.
+ * This middleware ensures that either accessToken or marketUserInfo is available.
  * It should be used after marketUserInfo and marketSDK middlewares.
  *
  * Throws UNAUTHORIZED error if neither authentication method is available.
  */
 export const requireMarketAuth = trpc.middleware(async (opts) => {
-  const ctx = opts.ctx as ContextWithMarketUserInfo & {
-    trustedClientToken?: string;
-  };
+  const ctx = opts.ctx as ContextWithMarketUserInfo;
 
   // Check if any authentication is available
   const hasAccessToken = !!ctx.marketAccessToken;
-  const hasTrustedToken = !!ctx.trustedClientToken;
+  const hasUserInfo = !!ctx.marketUserInfo;
 
-  if (!hasAccessToken && !hasTrustedToken) {
+  if (!hasAccessToken && !hasUserInfo) {
     const { TRPCError } = await import('@trpc/server');
     throw new TRPCError({
       code: 'UNAUTHORIZED',

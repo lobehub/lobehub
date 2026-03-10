@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 // https://developer.qiniu.com/aitokenapi
 
@@ -73,6 +73,30 @@ const qiniuChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-10-27',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 163_840,
+    description:
+      'DeepSeek Math V2 is a model that has made significant breakthroughs in mathematical reasoning capabilities. Its core innovation lies in the "self-verification" training mechanism, and it has achieved gold medal levels in several top mathematics competitions.',
+    displayName: 'DeepSeek Math V2',
+    enabled: true,
+    id: 'deepseek/deepseek-math-v2',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-27',
     settings: {
       searchImpl: 'params',
     },

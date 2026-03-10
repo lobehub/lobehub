@@ -1,5 +1,5 @@
 import { type AgentItem, type LobeAgentConfig, type MetaData } from '@lobechat/types';
-import type { PartialDeep } from 'type-fest';
+import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -74,6 +74,14 @@ class AgentService {
    */
   getAgentByMarketIdentifier = async (marketIdentifier: string): Promise<string | null> => {
     return lambdaClient.agent.getAgentByMarketIdentifier.query({ marketIdentifier });
+  };
+
+  /**
+   * Get an agent by forkedFromIdentifier stored in params
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
+    return lambdaClient.agent.getAgentByForkedFromIdentifier.query({ forkedFromIdentifier });
   };
 
   /**

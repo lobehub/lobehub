@@ -1,24 +1,36 @@
 import debug from 'debug';
-import { type NextRequest, NextResponse, after } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
 import { serverDB } from '@/database/server';
-import { correctOIDCUrl } from '@/utils/server/correctOIDCUrl';
+import { appEnv } from '@/envs/app';
 
 const log = debug('lobe-oidc:callback:desktop');
 
 const errorPathname = '/oauth/callback/error';
 
 /**
- * 安全地构建重定向URL，使用经过验证的 correctOIDCUrl 防止开放重定向攻击
+ * Safely build redirect URL - directly use APP_URL as target
  */
 const buildRedirectUrl = (req: NextRequest, pathname: string): URL => {
-  // 使用 req.nextUrl 作为基础URL，然后通过 correctOIDCUrl 进行验证和修正
-  const baseUrl = req.nextUrl.clone();
-  baseUrl.pathname = pathname;
+  // Use unified environment variable management
+  if (appEnv.APP_URL) {
+    try {
+      const baseUrl = new URL(appEnv.APP_URL);
+      baseUrl.pathname = pathname;
+      log('Using APP_URL for redirect: %s', baseUrl.toString());
+      return baseUrl;
+    } catch (error) {
+      log('Error parsing APP_URL, using fallback: %O', error);
+    }
+  }
 
-  // correctOIDCUrl 会验证 X-Forwarded-* 头部并防止开放重定向攻击
-  return correctOIDCUrl(req, baseUrl);
+  // Fallback: use req.nextUrl
+  log('Warning: APP_URL not configured, using req.nextUrl as fallback');
+  const fallbackUrl = req.nextUrl.clone();
+  fallbackUrl.pathname = pathname;
+  return fallbackUrl;
 };
 
 export const GET = async (req: NextRequest) => {
@@ -50,7 +62,7 @@ export const GET = async (req: NextRequest) => {
 
     const successUrl = buildRedirectUrl(req, '/oauth/callback/success');
 
-    // 添加调试日志
+    // Add debug logging
     log('Request host header: %s', req.headers.get('host'));
     log('Request x-forwarded-host: %s', req.headers.get('x-forwarded-host'));
     log('Request x-forwarded-proto: %s', req.headers.get('x-forwarded-proto'));

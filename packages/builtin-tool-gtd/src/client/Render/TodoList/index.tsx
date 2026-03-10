@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Checkbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleArrowRight } from 'lucide-react';
@@ -68,12 +68,12 @@ const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, status }) => {
     <Checkbox
       backgroundColor={cssVar.colorSuccess}
       checked={isCompleted}
+      shape={'circle'}
+      style={{ borderWidth: 1.5, cursor: 'default' }}
       classNames={{
         text: cx(styles.textTodo, isCompleted && styles.textCompleted),
         wrapper: styles.itemRow,
       }}
-      shape={'circle'}
-      style={{ borderWidth: 1.5, cursor: 'default' }}
       textProps={{
         type: isCompleted ? 'secondary' : undefined,
       }}

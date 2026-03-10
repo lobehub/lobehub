@@ -1,17 +1,15 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
-import {
-  type OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 
 export interface InternLMModelCard {
   id: string;
 }
 
 export const params = {
-  baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+  baseURL: 'https://chat.intern-ai.org.cn/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
       return {

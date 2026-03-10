@@ -5,7 +5,6 @@ import { getServerDBConfig } from '@/config/db';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { lambdaRouter } from '@/server/routers/lambda';
 
-export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const serverDBEnv = getServerDBConfig();
@@ -21,7 +20,6 @@ const handler = async (req: Request, { jwtPayload }: { jwtPayload?: any }) => {
 
     const caller = createCaller({
       jwtPayload,
-      nextAuth: undefined, // WebAPI routes don't have nextAuth session
       userId: jwtPayload?.userId, // Required for userAuth middleware
     });
 

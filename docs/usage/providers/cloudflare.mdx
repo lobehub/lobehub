@@ -1,8 +1,10 @@
 ---
-title: Using Cloudflare Workers AI in LobeChat
-description: Learn how to integrate and utilize Cloudflare Workers AI Models in LobeChat.
+title: Using Cloudflare Workers AI in LobeHub
+description: >-
+  Learn how to configure and use the Cloudflare Workers AI API Key in LobeHub to
+  start chatting and interacting.
 tags:
-  - LobeChat
+  - LobeHub
   - Cloudflare
   - Workers AI
   - Provider
@@ -10,51 +12,49 @@ tags:
   - Web UI
 ---
 
-# Using Cloudflare Workers AI in LobeChat
+# Using Cloudflare Workers AI in LobeHub
 
-<Image cover src={'https://github.com/user-attachments/assets/91fe32a8-e5f0-47ff-b8ae-d036c8a7bff1'} />
+<Image cover src={'/blog/assets1837dd567f75fcc083553a1078c0f088.webp'} />
 
-[Cloudflare Workers AI](https://www.cloudflare.com/developer-platform/products/workers-ai/) is a service that integrates AI capabilities into the Cloudflare Workers serverless computing platform. Its core functionality lies in delivering fast, scalable computing power through Cloudflare's global network, thereby reducing operational overhead.
+[Cloudflare Workers AI](https://www.cloudflare.com/developer-platform/products/workers-ai/) is a service that integrates AI capabilities into the Cloudflare Workers serverless computing platform. Its core advantage lies in delivering fast and scalable compute power through Cloudflare’s global network, significantly reducing operational overhead.
 
-This document will guide you on how to use Cloudflare Workers AI in LobeChat:
+This guide will walk you through how to use Cloudflare Workers AI in LobeHub:
 
 <Steps>
-  ### Step 1: Obtain Your Cloudflare Workers AI API Key
+  ### Step 1: Obtain a Cloudflare Workers AI API Key
 
   - Visit the [Cloudflare website](https://www.cloudflare.com/) and sign up for an account.
-  - Log in to the [Cloudflare dashboard](https://dash.cloudflare.com/).
-  - In the left-hand menu, locate the `AI` > `Workers AI` option.
+  - Log in to the [Cloudflare Dashboard](https://dash.cloudflare.com/).
+  - In the left-hand menu, navigate to `AI` > `Workers AI`.
 
-  <Image alt={'Cloudflare Workers AI'} inStep src={'https://github.com/user-attachments/assets/4257e123-9018-4562-ac66-0f39278906f5'} />
+  <Image alt={'Cloudflare Workers AI'} inStep src={'/blog/assetsadbc0db573a0f581b22c30ecf243f721.webp'} />
 
-  - In the `Using REST API` section, click the `Create Workers AI API Token` button.
-  - In the drawer dialog, copy and save your `API token`.
-  - Also, copy and save your `Account ID`.
+  - Under the "Use REST API" section, click the `Create Workers AI API Token` button.
+  - In the sidebar that appears, copy and save your `API Token`.
+  - Also copy and save your `Account ID`.
 
-  <Image alt={'Cloudflare Workers AI API Token'} inStep src={'https://github.com/user-attachments/assets/f54c912d-3ee9-4f85-b8bf-619790e51b49'} />
+  <Image alt={'Cloudflare Workers AI API Token'} inStep src={'/blog/assets620c308554394e72034d27ea743f8bff.webp'} />
 
   <Callout type={'warning'}>
-    - Please store your API token securely, as it will only be displayed once. If you accidentally
-      lose it, you will need to create a new token.
+    - Be sure to store your API token securely, as it will only be shown once. If you lose it, you’ll need to generate a new one.
   </Callout>
 
-  ### Step 2: Configure Cloudflare Workers AI in LobeChat
+  ### Step 2: Configure Cloudflare Workers AI in LobeHub
 
-  - Go to the `Settings` interface in LobeChat.
-  - Under `AI Service Provider`, find the `Cloudflare` settings.
+  - Open the `Settings` panel in LobeHub.
+  - Under `AI Providers`, locate the `Cloudflare` configuration section.
 
-  <Image alt={'Input API Token'} inStep src={'https://github.com/user-attachments/assets/82a7ebe0-69ad-43b6-8767-1316b443fa03'} />
+  <Image alt={'Enter Access Token'} inStep src={'/blog/assets5374759bfe39ca7fc864e72ddfce98d0.webp'} />
 
   - Enter the `API Token` you obtained.
-  - Input your `Account ID`.
-  - Choose a Cloudflare Workers AI model for your AI assistant to start the conversation.
+  - Enter your `Account ID`.
+  - Choose a Cloudflare Workers AI model for your AI assistant to start chatting.
 
-  <Image alt={'Choose Cloudflare Workers AI Model and Start Conversation'} inStep src={'https://github.com/user-attachments/assets/09be499c-3b04-4dd6-a161-6e8ebe788354'} />
+  <Image alt={'Select Cloudflare Workers AI model and start chatting'} inStep src={'/blog/assets65003d69fa745e7cac376a79ea4bb742.webp'} />
 
   <Callout type={'warning'}>
-    You may incur charges while using the API service, please refer to Cloudflare's pricing policy for
-    details.
+    You may incur charges from the API provider during usage. Please refer to Cloudflare’s pricing policy for details.
   </Callout>
 </Steps>
 
-At this point, you can start conversing with the model provided by Cloudflare Workers AI in LobeChat.
+You’re all set! You can now start using Cloudflare Workers AI models for conversations in LobeHub.

@@ -23,8 +23,9 @@ const FilePreviewModal = memo<FilePreviewModalProps>(({ file, open, onClose }) =
       destroyOnHidden
       footer={null}
       height={'80vh'}
-      onCancel={onClose}
       open={open}
+      title={file.file.name}
+      width={'min(90vw, 1024px)'}
       styles={{
         body: {
           height: '80vh',
@@ -32,8 +33,7 @@ const FilePreviewModal = memo<FilePreviewModalProps>(({ file, open, onClose }) =
           padding: 0,
         },
       }}
-      title={file.file.name}
-      width={'min(90vw, 1024px)'}
+      onCancel={onClose}
     >
       <FileViewer
         chunkCount={null}

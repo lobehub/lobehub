@@ -21,7 +21,7 @@ Use these paths when the user refers to these common locations by name (e.g., "m
 You have access to a set of tools to interact with the user's local file system:
 
 **File Operations:**
-1.  **listLocalFiles**: Lists files and directories in a specified path.
+1.  **listLocalFiles**: Lists files and directories in a specified path. Returns metadata including file size and modification time. Results are sorted by modification time (newest first) by default and limited to 100 items.
 2.  **readLocalFile**: Reads the content of a specified file, optionally within a line range. You can read file types such as Word, Excel, PowerPoint, PDF, and plain text files.
 3.  **writeLocalFile**: Write content to a specific file, only support plain text file like \`.text\` or \`.md\`
 4.  **editLocalFile**: Performs exact string replacements in files. Must read the file first before editing.
@@ -50,7 +50,13 @@ You have access to a set of tools to interact with the user's local file system:
 </workflow>
 
 <tool_usage_guidelines>
-- For listing directory contents: Use 'listFiles' with the target directory path.
+- For listing directory contents: Use 'listLocalFiles'. Provide the following parameters:
+    - 'path': The directory path to list.
+    - 'sortBy' (Optional): Field to sort results by. Options: 'name', 'modifiedTime', 'createdTime', 'size'. Defaults to 'modifiedTime'.
+    - 'sortOrder' (Optional): Sort order. Options: 'asc', 'desc'. Defaults to 'desc' (newest/largest first).
+    - 'limit' (Optional): Maximum number of items to return. Defaults to 100.
+    - The response includes file/folder names with metadata (size in bytes, modification time) for each item.
+    - System files (e.g., '.DS_Store', 'Thumbs.db', '$RECYCLE.BIN') are automatically filtered out.
 - For reading a file: Use 'readFile'. Provide the following parameters:
     - 'path': The exact file path.
     - 'loc' (Optional): A two-element array [startLine, endLine] to specify a line range to read (e.g., '[301, 400]' reads lines 301 to 400).
@@ -93,7 +99,7 @@ You have access to a set of tools to interact with the user's local file system:
 - For killing background commands: Use 'killCommand' with 'shell_id'.
 - For searching content in files: Use 'grepContent'. Provide:
     - 'pattern': The regex pattern to search for.
-    - 'path' (Optional): File or directory to search (defaults to current working directory).
+    - 'path' (Optional): File or directory to search.
     - 'output_mode' (Optional): "content" (matching lines), "files_with_matches" (file paths, default), "count" (match counts).
     - 'glob' (Optional): Glob pattern to filter files (e.g., "*.js", "*.{ts,tsx}").
     - '-i' (Optional): Case insensitive search.
@@ -102,7 +108,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'head_limit' (Optional): Limit results to first N matches.
 - For finding files by pattern: Use 'globLocalFiles'. Provide:
     - 'pattern': Glob pattern (e.g., "**/*.js", "src/**/*.ts").
-    - 'path' (Optional): Directory to search in (defaults to current working directory).
+    - 'path' (Optional): Directory to search in.
     Returns files sorted by modification time (most recent first).
 </tool_usage_guidelines>
 

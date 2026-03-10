@@ -1,6 +1,8 @@
 import { PythonInterpreter } from '@lobechat/python-interpreter';
 import { type CodeInterpreterResponse } from '@lobechat/types';
 
+import { pythonEnv } from '@/envs/python';
+
 class PythonService {
   async runPython(
     code: string,
@@ -9,8 +11,8 @@ class PythonService {
   ): Promise<CodeInterpreterResponse | undefined> {
     if (typeof Worker === 'undefined') return;
     const interpreter = await new PythonInterpreter!({
-      pyodideIndexUrl: process.env.NEXT_PUBLIC_PYODIDE_INDEX_URL!,
-      pypiIndexUrl: process.env.NEXT_PUBLIC_PYPI_INDEX_URL!,
+      pyodideIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_INDEX_URL!,
+      pypiIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_PIP_INDEX_URL!,
     });
     await interpreter.init();
     await interpreter.installPackages(packages.filter((p) => p !== ''));

@@ -1,6 +1,6 @@
 # 🤯 LobeHub Desktop Application
 
-LobeHub Desktop is a cross-platform desktop application for [LobeChat](https://github.com/lobehub/lobe-chat), built with Electron, providing a more native desktop experience and functionality.
+LobeHub Desktop is a cross-platform desktop application for [LobeHub](https://github.com/lobehub/lobe-chat), built with Electron, providing a more native desktop experience and functionality.
 
 ## ✨ Features
 
@@ -11,7 +11,7 @@ LobeHub Desktop is a cross-platform desktop application for [LobeChat](https://g
 - **🔒 Secure & Reliable**: macOS notarized, encrypted token storage, secure OAuth flow
 - **📦 Multiple Release Channels**: Stable, beta, and nightly build versions
 - **⚡ Advanced Window Management**: Multi-window architecture with theme synchronization
-- **🔗 Remote Server Sync**: Secure data synchronization with remote LobeChat instances
+- **🔗 Remote Server Sync**: Secure data synchronization with remote LobeHub instances
 - **🎯 Developer Tools**: Built-in development panel and comprehensive debugging tools
 
 ## 🚀 Development Setup
@@ -29,7 +29,7 @@ LobeHub Desktop is a cross-platform desktop application for [LobeChat](https://g
 pnpm install-isolated
 
 # Start development server
-pnpm electron:dev
+pnpm dev
 
 # Type checking
 pnpm type-check
@@ -51,19 +51,20 @@ cp .env.desktop .env
 
 ### Build Commands
 
-| Command            | Description                             |
-| ------------------ | --------------------------------------- |
-| `pnpm build`       | Build for all platforms                 |
-| `pnpm build:mac`   | Build for macOS (Intel + Apple Silicon) |
-| `pnpm build:win`   | Build for Windows                       |
-| `pnpm build:linux` | Build for Linux                         |
-| `pnpm build-local` | Local development build                 |
+| Command                    | Description                                 |
+| -------------------------- | ------------------------------------------- |
+| `pnpm build:main`          | Build main/preload (dist output only)       |
+| `pnpm package:mac`         | Package for macOS (Intel + Apple Silicon)   |
+| `pnpm package:win`         | Package for Windows                         |
+| `pnpm package:linux`       | Package for Linux                           |
+| `pnpm package:local`       | Local packaging build (no ASAR)             |
+| `pnpm package:local:reuse` | Local packaging build reusing existing dist |
 
 ### Development Workflow
 
 ```bash
 # 1. Development
-pnpm electron:dev # Start with hot reload
+pnpm dev # Start with hot reload
 
 # 2. Code Quality
 pnpm lint       # ESLint checking
@@ -74,8 +75,8 @@ pnpm type-check # TypeScript validation
 pnpm test # Run Vitest tests
 
 # 4. Build & Package
-pnpm build       # Production build
-pnpm build-local # Local testing build
+pnpm build:main    # Production build (dist only)
+pnpm package:local # Local testing package
 ```
 
 ## 🎯 Release Channels
@@ -346,7 +347,7 @@ Desktop application development involves complex cross-platform considerations a
 
 ### Contribution Process
 
-1. Fork the [LobeChat repository](https://github.com/lobehub/lobe-chat)
+1. Fork the [LobeHub repository](https://github.com/lobehub/lobe-chat)
 2. Set up the desktop development environment following our setup guide
 3. Make your changes to the desktop application
 4. Submit a Pull Request describing:

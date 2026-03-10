@@ -1,0 +1,66 @@
+---
+title: Configure Okta Identity Verification Service for LobeHub
+description: >-
+  Learn how to configure Okta Identity Verification Service for LobeHub for your
+  organization, including creating applications, adding users, and configuring
+  environment variables.
+tags:
+  - Okta
+  - Identity Verification
+  - Single Sign-On
+  - Environment Variables
+  - User Management
+  - SSO Integrations
+  - Social Login
+---
+
+# Configure Okta Identity Verification Service
+
+<Steps>
+  ### Create Okta Application
+
+  Register and log in to [Okta][okta-client-page], open the "Applications" subtab in the left navigation bar, and click "Applications" to switch to the application management interface. click "Create App Integration" in the upper left corner to create an application.
+
+  Select "OIDC - OpenID Connect" in Sign-In Method and then select "Web Application" in Application Type.
+
+  Fill in the following settings:
+
+  | Setting Name           | Description                                                                                                  | Sample Information                            |
+  | ---------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+  | App Integration Name   | The Application Name your users will see                                                                     | LobeHub Instance                              |
+  | Sign-in redirect URIs  | Okta sends the authentication response and ID token for the user's sign-in request to these URIs             | (http(s)://your-domain/api/auth/callback/okta |
+  | Sign-out redirect URIs | After your application contacts Okta to close the user session, Okta redirects the user to one of these URIs | (http(s)://your-domain                        |
+
+  <Callout type={'important'}>
+    You can fill in or modify all the fields after deployment, but make sure the filled URL is
+    consistent with the deployed URL.
+  </Callout>
+
+  ### Add Users
+
+  Click on the "Assignments" in the top navigation bar to enter the user management interface, where you can create or assign users in your organization to log in to LobeHub.
+
+  ### Configure Environment Variables
+
+  When deploying LobeHub, you need to configure the following environment variables:
+
+  | Environment Variable      | Type     | Description                                                                                                                                                                                         |
+  | ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | Required | Key used to encrypt Auth.js session tokens. You can generate a key using the following command: `openssl rand -base64 32`                                                                           |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LoboChat. Use `okta` for Okta.                                                                                                                               |
+  | `AUTH_OKTA_ID`            | Required | Client ID of the Okta application                                                                                                                                                                   |
+  | `AUTH_OKTA_SECRET`        | Required | Client Secret of the Okta application                                                                                                                                                               |
+  | `AUTH_OKTA_ISSUER`        | Required | Domain of the Okta application, `https://example.oktapreview.com`                                                                                                                                   |
+  | `AUTH_URL`                | Optional | The URL is used to specify the callback address for the execution of OAuth authentication in Auth.js. It needs to be set only when the default address is incorrect. `https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    You can refer to the related variable details at [📘Environment Variables](/docs/self-hosting/environment-variable/auth#okta).
+  </Callout>
+</Steps>
+
+<Callout>
+  After successful deployment, users will be able to authenticate and use LobeHub using the users
+  configured in Okta.
+</Callout>
+
+[okta-client-page]: https://login.okta.com

@@ -16,7 +16,7 @@
 
 <!-- Link to the issue that is fixed by this PR -->
 
-<!-- Example: Fixes #123, Closes #456, Related to #789 -->
+<!-- Example: Fixes #xxx, Closes #xxx, Related to #xxx -->
 
 #### 🔀 Description of Change
 

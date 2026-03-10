@@ -1,4 +1,5 @@
-import { LocalQueueServiceImpl, type QueueServiceImpl, createQueueServiceModule } from './impls';
+import { type QueueServiceImpl } from './impls';
+import { createQueueServiceModule, LocalQueueServiceImpl } from './impls';
 import { type HealthCheckResult, type QueueMessage, type QueueStats } from './types';
 
 /**
@@ -77,9 +78,8 @@ export class QueueService {
   }): number {
     const { stepIndex, hasErrors, hasToolCalls, priority } = params;
 
-    let baseDelay = 1000; // 1 second base delay
-
     // Adjust based on priority
+    let baseDelay: number;
     switch (priority) {
       case 'high': {
         baseDelay = 200;
@@ -90,7 +90,7 @@ export class QueueService {
         break;
       }
       default: {
-        baseDelay = 1000;
+        baseDelay = 1000; // 1 second base delay
       }
     }
 

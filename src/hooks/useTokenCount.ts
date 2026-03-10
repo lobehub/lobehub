@@ -22,7 +22,7 @@ export const useTokenCount = (input: string = '') => {
       debouncedEncode(input || '');
     });
 
-    // 清理函数
+    // Cleanup function
     return () => {
       debouncedEncode.cancel();
     };

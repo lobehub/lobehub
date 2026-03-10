@@ -1,20 +1,16 @@
-import {
-  UserMemoryContextWithoutVectors,
-  UserMemoryExperienceWithoutVectors,
-  UserMemoryPreferenceWithoutVectors,
+import type { UserMemoryListItem, UserMemoryWithoutVectors } from './base';
+import type { UserMemoryIdentitiesListItem, UserMemoryIdentityWithoutVectors } from './identity';
+import type {
+  UserMemoryActivitiesListItem,
+  UserMemoryActivityWithoutVectors,
   UserMemoryContextsListItem,
+  UserMemoryContextWithoutVectors,
   UserMemoryExperiencesListItem,
+  UserMemoryExperienceWithoutVectors,
   UserMemoryPreferencesListItem,
-} from './layers'
-import {
-  UserMemoryIdentityWithoutVectors,
-  UserMemoryIdentitiesListItem,
-} from './identity'
-import {
-  UserMemoryListItem,
-  UserMemoryWithoutVectors,
-} from './base'
-import { LayersEnum } from './shared';
+  UserMemoryPreferenceWithoutVectors,
+} from './layers';
+import type { LayersEnum } from './shared';
 
 export interface TopicSource {
   agentId: string | null;
@@ -34,13 +30,13 @@ export enum MemorySourceType {
 export interface ContextMemorySimple {
   context: UserMemoryContextsListItem;
   layer: LayersEnum.Context;
-  memory: UserMemoryListItem
+  memory: UserMemoryListItem;
 }
 
 export interface ContextMemoryDetail {
   context: UserMemoryContextWithoutVectors;
   layer: LayersEnum.Context;
-  memory: UserMemoryWithoutVectors
+  memory: UserMemoryWithoutVectors;
   source?: MemorySource;
   sourceType?: MemorySourceType;
 }
@@ -87,14 +83,30 @@ export interface IdentityMemoryDetail {
   sourceType?: MemorySourceType;
 }
 
+export interface ActivityMemorySimple {
+  activity: UserMemoryActivitiesListItem;
+  layer: LayersEnum.Activity;
+  memory: UserMemoryListItem;
+}
+
+export interface ActivityMemoryDetail {
+  activity: UserMemoryActivityWithoutVectors;
+  layer: LayersEnum.Activity;
+  memory: UserMemoryWithoutVectors;
+  source?: MemorySource;
+  sourceType?: MemorySourceType;
+}
+
 export type UserMemoryItemSimple =
   | ContextMemorySimple
   | ExperienceMemorySimple
   | IdentityMemorySimple
-  | PreferenceMemorySimple;
+  | PreferenceMemorySimple
+  | ActivityMemorySimple;
 
 export type UserMemoryDetail =
   | ContextMemoryDetail
   | ExperienceMemoryDetail
   | IdentityMemoryDetail
-  | PreferenceMemoryDetail;
+  | PreferenceMemoryDetail
+  | ActivityMemoryDetail;

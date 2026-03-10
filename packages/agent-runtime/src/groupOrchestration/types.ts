@@ -32,6 +32,11 @@ export interface SupervisorInstructionCallAgent {
 export interface SupervisorInstructionParallelCallAgents {
   payload: {
     agentIds: string[];
+    /**
+     * Whether to disable tools for broadcast agents
+     * When true, agents will respond without calling any tools
+     */
+    disableTools?: boolean;
     instruction?: string;
     /**
      * The tool message ID that triggered the broadcast
@@ -43,12 +48,12 @@ export interface SupervisorInstructionParallelCallAgents {
 }
 
 /**
- * Instruction to execute an async task for an agent
+ * Instruction to execute an async task for an agent (server-side)
  */
 export interface SupervisorInstructionExecAsyncTask {
   payload: {
     agentId: string;
-    task: string;
+    instruction: string;
     timeout?: number;
     /** Task title (shown in UI, used as thread title) */
     title?: string;
@@ -58,13 +63,29 @@ export interface SupervisorInstructionExecAsyncTask {
 }
 
 /**
+ * Instruction to execute an async task for an agent on the client (desktop only)
+ * Used when task requires local tools like file system or shell commands
+ */
+export interface SupervisorInstructionExecClientAsyncTask {
+  payload: {
+    agentId: string;
+    instruction: string;
+    timeout?: number;
+    /** Task title (shown in UI, used as thread title) */
+    title?: string;
+    toolMessageId: string;
+  };
+  type: 'exec_client_async_task';
+}
+
+/**
  * Instruction to execute multiple async tasks in parallel
  */
 export interface SupervisorInstructionBatchExecAsyncTasks {
   payload: {
     tasks: Array<{
       agentId: string;
-      task: string;
+      instruction: string;
       timeout?: number;
       /** Task title (shown in UI, used as thread title) */
       title?: string;
@@ -101,6 +122,7 @@ export type SupervisorInstruction =
   | SupervisorInstructionCallAgent
   | SupervisorInstructionParallelCallAgents
   | SupervisorInstructionExecAsyncTask
+  | SupervisorInstructionExecClientAsyncTask
   | SupervisorInstructionBatchExecAsyncTasks
   | SupervisorInstructionDelegate
   | SupervisorInstructionFinish;
@@ -118,10 +140,11 @@ export interface ExecutorResultSupervisorDecided {
      * - 'speak': Call a single agent
      * - 'broadcast': Call multiple agents in parallel
      * - 'delegate': Delegate to another agent
-     * - 'execute_task': Execute an async task
+     * - 'execute_task': Execute a single async task
+     * - 'execute_tasks': Execute multiple async tasks in parallel
      * - 'finish': End the orchestration
      */
-    decision: 'speak' | 'broadcast' | 'delegate' | 'execute_task' | 'finish';
+    decision: 'speak' | 'broadcast' | 'delegate' | 'execute_task' | 'execute_tasks' | 'finish';
     /**
      * Parameters for the decision
      */
@@ -269,7 +292,7 @@ export interface IGroupOrchestrationSupervisor {
    * @param state - Current agent state
    * @returns The next instruction to execute
    */
-  decide(result: ExecutorResult, state: AgentState): Promise<SupervisorInstruction>;
+  decide: (result: ExecutorResult, state: AgentState) => Promise<SupervisorInstruction>;
 }
 
 /**

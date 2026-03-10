@@ -1,0 +1,14 @@
+description: Regression benchmark for activity layer structured extraction
+
+providers:
+  - id: openai:chat:google/gemini-2.5-pro
+    config:
+      tools: file://../../../../tool-calls/memory-addPreferenceMemory.json
+      tool_choice:
+        type: any
+
+prompts:
+  - file://./prompt.ts
+
+tests:
+  - file://./tests/cases.ts

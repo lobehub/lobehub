@@ -2,42 +2,79 @@
 
 import { FILE_URL } from '@lobechat/business-const';
 import { Notion } from '@lobehub/icons';
-import { Button, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui';
+import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { type ChangeEvent } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { message } from '@/components/AntdStaticMethods';
-import DragUpload from '@/components/DragUpload';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
+import { FilesTabs } from '@/types/files';
 
 import useNotionImport from './hooks/useNotionImport';
 import useUploadFolder from './hooks/useUploadFolder';
+
+const getAcceptedFileTypes = (category: FilesTabs): string | undefined => {
+  switch (category) {
+    case FilesTabs.Videos: {
+      return 'video/*';
+    }
+    case FilesTabs.Audios: {
+      return 'audio/*';
+    }
+    case FilesTabs.Documents: {
+      return '.pdf,.doc,.docx,.md,.markdown,.xls,.xlsx';
+    }
+    case FilesTabs.Images: {
+      return 'image/*';
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
 
 const AddButton = () => {
   const { t } = useTranslation('file');
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
 
-  const [libraryId, currentFolderId, setCurrentViewItemId, setMode, setPendingRenameItemId] =
-    useResourceManagerStore((s) => [
-      s.libraryId,
-      s.currentFolderId,
-      s.setCurrentViewItemId,
-      s.setMode,
-      s.setPendingRenameItemId,
-    ]);
+  const [
+    libraryId,
+    category,
+    currentFolderId,
+    setCategory,
+    setCurrentViewItemId,
+    setMode,
+    setPendingRenameItemId,
+  ] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.currentFolderId,
+    s.setCategory,
+    s.setCurrentViewItemId,
+    s.setMode,
+    s.setPendingRenameItemId,
+  ]);
 
   const handleOpenPageEditor = useCallback(async () => {
+    // Navigate to "All" category first if not already there
+    if (category !== FilesTabs.All) {
+      setCategory(FilesTabs.All);
+    }
+
     // Create a new page and wait for server sync - ensures page editor can load the document
     const untitledTitle = t('pageList.untitled');
     const realId = await createResourceAndSync({
@@ -52,9 +89,23 @@ const AddButton = () => {
     // Switch to page view mode with real ID
     setCurrentViewItemId(realId);
     setMode('page');
-  }, [createResourceAndSync, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
+  }, [
+    category,
+    createResourceAndSync,
+    currentFolderId,
+    libraryId,
+    setCategory,
+    setCurrentViewItemId,
+    setMode,
+    t,
+  ]);
 
   const handleCreateFolder = useCallback(async () => {
+    // Navigate to "All" category first if not already there
+    if (category !== FilesTabs.All) {
+      setCategory(FilesTabs.All);
+    }
+
     // Create folder and wait for sync to complete before triggering rename
     try {
       // Get current resource list to check for duplicate folder names
@@ -95,7 +146,15 @@ const AddButton = () => {
       message.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
-  }, [createResourceAndSync, currentFolderId, libraryId, setPendingRenameItemId, t]);
+  }, [
+    category,
+    createResourceAndSync,
+    currentFolderId,
+    libraryId,
+    setCategory,
+    setPendingRenameItemId,
+    t,
+  ]);
 
   const {
     handleCloseNotionGuide,
@@ -121,6 +180,13 @@ const AddButton = () => {
     t,
     uploadFolderWithStructure,
   });
+  const handleFolderUploadWithClose = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setMenuOpen(false);
+      return handleFolderUpload(event);
+    },
+    [handleFolderUpload],
+  );
 
   const items = useMemo<MenuProps['items']>(
     () => [
@@ -144,23 +210,27 @@ const AddButton = () => {
         type: 'divider',
       },
       {
+        closeOnClick: false,
         icon: <Icon icon={FileUp} />,
         key: 'upload-file',
         label: (
           <Upload
+            accept={getAcceptedFileTypes(category)}
+            multiple={true}
+            showUploadList={false}
             beforeUpload={async (file) => {
+              setMenuOpen(false);
               await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
 
               return false;
             }}
-            multiple={true}
-            showUploadList={false}
           >
             <div>{t('header.actions.uploadFile')}</div>
           </Upload>
         ),
       },
       {
+        closeOnClick: false,
         icon: <Icon icon={FolderUp} />,
         key: 'upload-folder',
         label: <label htmlFor="folder-upload-input">{t('header.actions.uploadFolder')}</label>,
@@ -176,22 +246,6 @@ const AddButton = () => {
             label: 'Notion',
             onClick: handleOpenNotionGuide,
           },
-          // {
-          //   icon: <Icon icon={Notion} />,
-          //   key: 'connect-google-drive',
-          //   label: 'Google Drive',
-          //   onClick: () => {
-          //     // TODO: Implement Google Drive connection
-          //   },
-          // },
-          // {
-          //   icon: <Icon icon={Notion} />,
-          //   key: 'connect-onedrive',
-          //   label: 'OneDrive',
-          //   onClick: () => {
-          //     // TODO: Implement OneDrive connection
-          //   },
-          // },
         ],
         icon: <Icon icon={Link} />,
         key: 'connect',
@@ -199,6 +253,7 @@ const AddButton = () => {
       },
     ],
     [
+      category,
       currentFolderId,
       handleCreateFolder,
       handleOpenPageEditor,
@@ -211,7 +266,13 @@ const AddButton = () => {
 
   return (
     <>
-      <DropdownMenu items={items} placement="bottomRight" trigger="both">
+      <DropdownMenu
+        items={items}
+        open={menuOpen}
+        placement="bottomRight"
+        trigger="both"
+        onOpenChange={setMenuOpen}
+      >
         <Button data-no-highlight icon={Plus} type="primary">
           {t('addLibrary')}
         </Button>
@@ -221,30 +282,26 @@ const AddButton = () => {
         cover={<GuideVideo height={269} src={FILE_URL.importFromNotionGuide} width={358} />}
         desc={t('header.actions.notionGuide.desc')}
         okText={t('header.actions.notionGuide.ok')}
-        onCancel={handleCloseNotionGuide}
-        onOk={handleStartNotionImport}
         open={notionGuideOpen}
         title={t('header.actions.notionGuide.title')}
-      />
-      <DragUpload
-        enabledFiles
-        onUploadFiles={(files) => pushDockFileList(files, libraryId, currentFolderId ?? undefined)}
+        onCancel={handleCloseNotionGuide}
+        onOk={handleStartNotionImport}
       />
       <input
-        id="folder-upload-input"
         multiple
-        onChange={handleFolderUpload}
+        id="folder-upload-input"
         style={{ display: 'none' }}
         type="file"
         // @ts-expect-error - webkitdirectory is not in the React types
         webkitdirectory=""
+        onChange={handleFolderUploadWithClose}
       />
       <input
         accept=".zip"
-        onChange={handleNotionImport}
         ref={notionInputRef}
         style={{ display: 'none' }}
         type="file"
+        onChange={handleNotionImport}
       />
     </>
   );

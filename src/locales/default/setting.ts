@@ -1,12 +1,41 @@
 export default {
   '_cloud.officialProvider': '{{name}} Official Model Service',
   'about.title': 'About',
+  'accountDeletion.cancelButton': 'Cancel Deletion',
+  'accountDeletion.cancelConfirmTitle': 'Cancel account deletion request?',
+  'accountDeletion.cancelFailed': 'Failed to cancel deletion request',
+  'accountDeletion.cancelSuccess': 'Deletion request cancelled',
+  'accountDeletion.confirmCheckbox':
+    'I have read and understood the above, and confirm to proceed with account deletion',
+  'accountDeletion.confirmContent':
+    'After submission, you will enter a <0>72-hour</0> cooling-off period during which you can cancel at any time. Once the period ends, your account data will be permanently deleted, unpaid invoices will be canceled immediately, and paid fees will not be refunded. Your registration and deletion records will be retained for compliance purposes.',
+  'accountDeletion.confirmOk': 'Delete Account',
+  'accountDeletion.confirmRequired': 'Please confirm you understand the consequences',
+  'accountDeletion.confirmTitle': 'Delete Account?',
+  'accountDeletion.desc':
+    'Permanently delete your account and all associated data. This action cannot be undone.',
+  'accountDeletion.pendingDesc': 'Your account is scheduled for deletion',
+  'accountDeletion.pendingMessage': 'Your account will be deleted in {{hours}} hours',
+  'accountDeletion.reasonPlaceholder': 'Please tell us why you want to delete your account...',
+  'accountDeletion.reasonRequired': 'Please provide a reason for deletion',
+  'accountDeletion.requestButton': 'Request Account Deletion',
+  'accountDeletion.requestFailed': 'Failed to request account deletion',
+  'accountDeletion.requestSuccess': 'Deletion request submitted',
+  'accountDeletion.sectionTitle': 'Account Deletion',
+  'accountDeletion.title': 'Delete Account',
   'advancedSettings': 'Advanced Settings',
   'agentCronJobs.addJob': 'Add Scheduled Task',
+  'agentCronJobs.clearTopics': 'Clear Topics',
+  'agentCronJobs.clearTopicsFailed': 'Failed to clear topics',
+  'agentCronJobs.confirmClearTopics': 'Are you sure you want to clear {{count}} topics?',
   'agentCronJobs.confirmDelete': 'Are you sure you want to delete this scheduled task?',
+  'agentCronJobs.confirmDeleteCronJob':
+    'Are you sure you want to delete this scheduled task? All associated topics will also be deleted.',
   'agentCronJobs.content': 'Task Content',
   'agentCronJobs.create': 'Create',
   'agentCronJobs.createSuccess': 'Scheduled task created successfully',
+  'agentCronJobs.deleteCronJob': 'Delete Scheduled Task',
+  'agentCronJobs.deleteFailed': 'Failed to delete scheduled task',
   'agentCronJobs.deleteJob': 'Delete Task',
   'agentCronJobs.deleteSuccess': 'Scheduled task deleted successfully',
   'agentCronJobs.description': 'Automate your agent with scheduled executions',
@@ -15,11 +44,20 @@ export default {
   'agentCronJobs.empty.description': 'Create your first scheduled task to automate your agent',
   'agentCronJobs.empty.title': 'No scheduled tasks yet',
   'agentCronJobs.enable': 'Enable',
+  'agentCronJobs.form.at': 'at',
   'agentCronJobs.form.content.placeholder': 'Enter the prompt or instruction for the agent',
+  'agentCronJobs.form.every': 'Every',
+  'agentCronJobs.form.frequency': 'Frequency',
+  'agentCronJobs.form.hours': 'hour(s)',
+  'agentCronJobs.form.maxExecutions': 'Stop after',
   'agentCronJobs.form.maxExecutions.placeholder': 'Leave empty for unlimited',
   'agentCronJobs.form.name.placeholder': 'Enter task name',
+  'agentCronJobs.form.time': 'Time',
   'agentCronJobs.form.timeRange.end': 'End Time',
   'agentCronJobs.form.timeRange.start': 'Start Time',
+  'agentCronJobs.form.times': 'times',
+  'agentCronJobs.form.timezone': 'Timezone',
+  'agentCronJobs.form.unlimited': 'Run continuously',
   'agentCronJobs.form.validation.contentRequired': 'Task content is required',
   'agentCronJobs.form.validation.invalidTimeRange': 'Start time must be before end time',
   'agentCronJobs.form.validation.nameRequired': 'Task name is required',
@@ -36,7 +74,11 @@ export default {
   'agentCronJobs.noExecutionResults': 'No execution results',
   'agentCronJobs.remainingExecutions': 'Remaining: {{count}}',
   'agentCronJobs.save': 'Save',
+  'agentCronJobs.saveAsNew': 'Save as New',
   'agentCronJobs.schedule': 'Schedule',
+  'agentCronJobs.scheduleType.daily': 'Daily',
+  'agentCronJobs.scheduleType.hourly': 'Hourly',
+  'agentCronJobs.scheduleType.weekly': 'Weekly',
   'agentCronJobs.status.depleted': 'Depleted',
   'agentCronJobs.status.disabled': 'Disabled',
   'agentCronJobs.status.enabled': 'Enabled',
@@ -45,13 +87,33 @@ export default {
   'agentCronJobs.unlimited': 'Unlimited',
   'agentCronJobs.unnamedTask': 'Unnamed Task',
   'agentCronJobs.updateSuccess': 'Scheduled task updated successfully',
+  'agentCronJobs.weekday.friday': 'Friday',
+  'agentCronJobs.weekday.monday': 'Monday',
+  'agentCronJobs.weekday.saturday': 'Saturday',
+  'agentCronJobs.weekday.short.friday': 'Fri',
+  'agentCronJobs.weekday.short.monday': 'Mon',
+  'agentCronJobs.weekday.short.saturday': 'Sat',
+  'agentCronJobs.weekday.short.sunday': 'Sun',
+  'agentCronJobs.weekday.short.thursday': 'Thu',
+  'agentCronJobs.weekday.short.tuesday': 'Tue',
+  'agentCronJobs.weekday.short.wednesday': 'Wed',
+  'agentCronJobs.weekday.sunday': 'Sunday',
+  'agentCronJobs.weekday.thursday': 'Thursday',
+  'agentCronJobs.weekday.tuesday': 'Tuesday',
+  'agentCronJobs.weekday.wednesday': 'Wednesday',
   'agentCronJobs.weekdays': 'Weekdays',
+  'agentCronJobs.weekdays.fri': 'Fri',
+  'agentCronJobs.weekdays.mon': 'Mon',
+  'agentCronJobs.weekdays.sat': 'Sat',
+  'agentCronJobs.weekdays.sun': 'Sun',
+  'agentCronJobs.weekdays.thu': 'Thu',
+  'agentCronJobs.weekdays.tue': 'Tue',
+  'agentCronJobs.weekdays.wed': 'Wed',
   'agentInfoDescription.basic.avatar': 'Avatar',
   'agentInfoDescription.basic.description': 'Description',
   'agentInfoDescription.basic.name': 'Name',
   'agentInfoDescription.basic.tags': 'Tags',
   'agentInfoDescription.basic.title': 'Agent info',
-
   'agentInfoDescription.chat.enableHistoryCount': 'Enable Message History Count',
   'agentInfoDescription.chat.historyCount': 'Message History Count',
   'agentInfoDescription.chat.no': 'No',
@@ -70,7 +132,49 @@ export default {
   'agentInfoDescription.role.systemRole': 'Agent Profile',
   'agentInfoDescription.role.title': 'Agent Profile',
   'agentInfoDescription.value.unset': 'Not Set',
+
   'agentInfoDescription.value.untitled': 'Untitled Agent',
+  'agentSkillDetail.addedAt': 'Added',
+  'agentSkillDetail.publishedAt': 'Published',
+  'agentSkillDetail.repository': 'GitHub Repository',
+  'agentSkillDetail.skillContent': 'Skill Content',
+  'agentSkillDetail.sourceUrl': 'Skill Import Source',
+  'agentSkillDetail.updatedAt': 'Updated',
+  'agentSkillEdit.descriptionDesc':
+    'A brief summary of what the skill does, helping the agent understand when to use it',
+  'agentSkillEdit.fileReadonly':
+    'This file is read-only. Only skill description and instructions can be edited.',
+  'agentSkillEdit.instructions': 'Instructions',
+  'agentSkillEdit.instructionsDesc':
+    'The core instructions in Markdown that define the skill behavior and workflow',
+  'agentSkillEdit.instructionsPlaceholder': 'Enter the skill instructions in Markdown format...',
+  'agentSkillEdit.nameDesc': 'The unique identifier for this skill, not editable after creation',
+  'agentSkillEdit.saveSuccess': 'Skill updated successfully',
+  'agentSkillEdit.title': 'Skill Settings',
+  'agentSkillItem.deleteConfirm.desc':
+    'Are you sure you want to delete the agent skill "{{name}}"? This action cannot be undone.',
+  'agentSkillItem.deleteConfirm.title': 'Delete Agent Skill',
+  'agentSkillModal.content': 'Skill Content',
+  'agentSkillModal.contentPlaceholder': 'Enter skill content in Markdown format...',
+  'agentSkillModal.description': 'Description',
+  'agentSkillModal.descriptionPlaceholder': 'Briefly describe this skill',
+  'agentSkillModal.github.desc': 'Import skills directly from a public GitHub repository.',
+  'agentSkillModal.github.title': 'Import from GitHub',
+  'agentSkillModal.github.urlPlaceholder': 'https://github.com/username/repo',
+  'agentSkillModal.importError': 'Import failed: {{error}}',
+  'agentSkillModal.importSuccess': 'Agent Skill imported successfully',
+  'agentSkillModal.upload.desc': 'Upload a local .zip or .skill file to install.',
+  'agentSkillModal.upload.dragText': 'Drag and drop or click to upload',
+  'agentSkillModal.upload.requirementSkillMd':
+    'SKILL.md contains skill name and description in YAML format',
+  'agentSkillModal.upload.requirementZip': '.zip or .skill file with SKILL.md in root directory',
+  'agentSkillModal.upload.requirements': 'File Requirements',
+  'agentSkillModal.upload.title': 'Upload Skill',
+  'agentSkillModal.upload.uploading': 'Uploading...',
+  'agentSkillModal.url.desc': 'Import a skill by providing a direct link to a SKILL.md file.',
+  'agentSkillModal.url.title': 'Import from URL',
+  'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
+  'agentSkillTag': 'Agent Skill',
   'agentTab.chat': 'Chat Preferences',
   'agentTab.meta': 'Agent info',
   'agentTab.modal': 'Model Settings',
@@ -84,7 +188,7 @@ export default {
   'checking': 'Checking...',
   'checkingPermissions': 'Checking permissions...',
   'danger.clear.action': 'Clear Now',
-  'danger.clear.confirm': 'Clear all chat data? This can’t be undone.',
+  'danger.clear.confirm': "Clear all chat data? This can't be undone.",
   'danger.clear.desc':
     'Delete all data, including agents, files, messages, and skills. Your account will NOT be deleted.',
   'danger.clear.success': 'All session messages have been cleared',
@@ -98,7 +202,7 @@ export default {
   'defaultAgent.model.desc': 'Default model used when creating a new Agent',
   'defaultAgent.model.title': 'Model',
   'defaultAgent.title': 'Default Agent Settings',
-  'group.aiConfig': 'Model',
+  'group.aiConfig': 'Agent',
   'group.common': 'General',
   'group.profile': 'Account',
   'group.subscription': 'Subscription',
@@ -114,6 +218,7 @@ export default {
   'header.sessionDesc': 'Agent Profile and session preferences',
   'header.sessionWithName': 'Session Settings · {{name}}',
   'header.title': 'Settings',
+  'hotkey.clearBinding': 'Clear binding',
   'hotkey.conflicts': 'Conflicts with existing hotkeys',
   'hotkey.errors.CONFLICT': 'Hotkey conflict: This hotkey is already assigned to another function',
   'hotkey.errors.INVALID_FORMAT':
@@ -232,12 +337,26 @@ export default {
     'Your Group has been submitted for review. Once approved, it will go live automatically.',
   'marketPublish.resultModal.title': 'Submission Successful',
   'marketPublish.resultModal.view': 'View in Community',
+  'marketPublish.status.underReview': 'Under Review',
   'marketPublish.submit.button': 'Share to Community',
   'marketPublish.submit.tooltip': 'Share this Agent to the Community',
   'marketPublish.submitGroup.tooltip': 'Share this Group to the Community',
   'marketPublish.upload.button': 'Publish New Version',
   'marketPublish.upload.tooltip': 'Publish a new version to Agent Community',
   'marketPublish.uploadGroup.tooltip': 'Publish a new version to Group Community',
+  'marketPublish.validation.confirmPublish': 'Are you sure you want to publish to the market?',
+  'marketPublish.validation.emptyName': 'Cannot publish: Name is required',
+  'marketPublish.validation.emptySystemRole': 'Cannot publish: System Role is required',
+  'marketPublish.validation.underReview':
+    'Your new version is currently under review. Please wait for approval before publishing a new version.',
+  'memory.effort.desc': 'Control how aggressively the AI retrieves and updates memory.',
+  'memory.effort.high': 'High — Proactive retrieval and updates',
+  'memory.effort.level.high': 'High',
+  'memory.effort.level.low': 'Low',
+  'memory.effort.level.medium': 'Medium',
+  'memory.effort.low': 'Low — Minimal memory operations',
+  'memory.effort.medium': 'Medium — Balanced behavior',
+  'memory.effort.title': 'Aggressiveness',
   'memory.enabled.desc':
     'Allow LobeHub to extract preferences and info from conversations and use them later. You can view, edit, or clear memory anytime.',
   'memory.enabled.title': 'Enable Memory',
@@ -348,6 +467,8 @@ export default {
   'settingChat.enableAutoCreateTopic.desc':
     'Whether to automatically create a topic during the conversation, only effective in temporary topics',
   'settingChat.enableAutoCreateTopic.title': 'Auto Create Topic',
+  'settingChat.enableAutoScrollOnStreaming.desc': 'Override global setting for this assistant',
+  'settingChat.enableAutoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChat.enableCompressHistory.title': 'Enable Automatic Summary of Chat History',
   'settingChat.enableHistoryCount.alias': 'Unlimited',
   'settingChat.enableHistoryCount.limited': 'Include only {{number}} conversation messages',
@@ -365,6 +486,9 @@ export default {
   'settingChat.inputTemplate.title': 'User Input Preprocessing',
   'settingChat.submit': 'Update Chat Preferences',
   'settingChat.title': 'Chat Settings',
+  'settingChatAppearance.autoScrollOnStreaming.desc':
+    'Automatically scroll to bottom when AI is generating response',
+  'settingChatAppearance.autoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChatAppearance.fontSize.desc': 'Font size of messages',
   'settingChatAppearance.fontSize.marks.normal': 'Standard',
   'settingChatAppearance.fontSize.title': 'Font Size',
@@ -461,6 +585,9 @@ export default {
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
   'settingImage.defaultCount.title': 'AI Art',
+  'settingModel.enableContextCompression.desc':
+    'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
+  'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
   'settingModel.enableMaxTokens.title': 'Enable Max Tokens Limit',
   'settingModel.enableReasoningEffort.title': 'Enable Reasoning Effort Adjustment',
   'settingModel.frequencyPenalty.desc':
@@ -513,6 +640,23 @@ export default {
   'settingSystem.oauth.signout.confirm': 'Confirm sign out?',
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
+  'settingSystemTools.autoSelectDesc': 'The best available tool will be automatically selected',
+  'settingSystemTools.category.contentSearch': 'Content Search',
+  'settingSystemTools.category.contentSearch.desc': 'Tools for searching text content within files',
+  'settingSystemTools.category.fileSearch': 'File Search',
+  'settingSystemTools.category.fileSearch.desc': 'Tools for finding files by name or pattern',
+  'settingSystemTools.detecting': 'Detecting...',
+  'settingSystemTools.redetect': 'Re-detect',
+  'settingSystemTools.status.available': 'Available',
+  'settingSystemTools.status.notDetected': 'Not detected',
+  'settingSystemTools.status.unavailable': 'Unavailable',
+  'settingSystemTools.title': 'System Tools',
+  'settingSystemTools.tools.ag.desc': 'The Silver Searcher - fast code searching tool',
+  'settingSystemTools.tools.fd.desc': 'fd - fast and user-friendly alternative to find',
+  'settingSystemTools.tools.find.desc': 'Unix find - standard file search command',
+  'settingSystemTools.tools.grep.desc': 'GNU grep - standard text search tool',
+  'settingSystemTools.tools.mdfind.desc': 'macOS Spotlight search (fast indexed search)',
+  'settingSystemTools.tools.rg.desc': 'ripgrep - extremely fast text search tool',
   'settingTTS.openai.sttModel': 'OpenAI Speech-to-Text Model',
   'settingTTS.openai.title': 'OpenAI',
   'settingTTS.openai.ttsModel': 'OpenAI Text-to-Speech Model',
@@ -539,6 +683,35 @@ export default {
     'Select a voice for the current agent, different TTS services support different voices',
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
+  'skillStore.button': 'Skill Store',
+  'skillStore.empty': 'Browse the Skill store. Install one to get started, add more later.',
+  'skillStore.emptySearch': 'No matching Skills',
+  'skillStore.networkError': 'Network error, please try again',
+  'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
+  'skillStore.tabs.community': 'Community',
+  'skillStore.tabs.custom': 'Custom',
+  'skillStore.tabs.lobehub': 'LobeHub',
+  'skillStore.title': 'Skill Store',
+  'skillStore.wantMore.action': 'Submit a request →',
+  'skillStore.wantMore.feedback.message': `## Skill Name
+[Please fill in]
+
+## Use Case
+When I am ___, I need ___
+
+## Expected Features
+1.
+2.
+3.
+
+## Reference Examples
+(Optional) Are there any similar tools or features for reference?
+
+---
+💡 Tip: The more specific your description, the better we can meet your needs`,
+  'skillStore.wantMore.feedback.title':
+    '[Skill Request] Summarize the skill you need in one sentence',
+  'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
   'startConversation': 'Start Conversation',
   'storage.actions.export.button': 'Export',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',
@@ -621,32 +794,108 @@ export default {
   'systemAgent.translation.modelDesc': 'Specify the model used for translation',
   'systemAgent.translation.title': 'Message Translation Agent',
   'tab.about': 'About',
+  'tab.advanced': 'Advanced',
+  'tab.addAgentSkill': 'Add Agent Skill',
+  'tab.beta': 'Beta',
+  'tab.beta.updateChannel.canary': 'Canary',
+  'tab.beta.updateChannel.canaryDesc':
+    'Triggered on every PR merge, multiple builds per day. Most unstable.',
+  'tab.beta.updateChannel.desc':
+    'By default, get notifications for stable updates. Nightly and Canary channels receive pre-release builds that may be unstable for production work.',
+  'tab.beta.updateChannel.nightly': 'Nightly',
+  'tab.beta.updateChannel.nightlyDesc': 'Automated daily builds with the latest changes.',
+  'tab.beta.updateChannel.stable': 'Stable',
+  'tab.beta.updateChannel.stableDesc': 'Production-ready releases.',
+  'tab.beta.updateChannel.title': 'Update Channel',
+  'tab.addCustomMcp': 'Add Custom MCP Skill',
+  'tab.addCustomMcp.desc': 'Manually configure a custom MCP server',
+  'tab.addCustomSkill': 'Add',
   'tab.agent': 'Agent Service',
+  'tab.all': 'All',
   'tab.apikey': 'API Key Management',
   'tab.chatAppearance': 'Chat Appearance',
   'tab.common': 'Appearance',
   'tab.experiment': 'Experiment',
   'tab.hotkey': 'Hotkeys',
   'tab.image': 'Image Generation Service',
+  'tab.importFromGithub': 'Import from GitHub',
+  'tab.importFromGithub.desc': 'Import from a public GitHub repository',
+  'tab.importFromUrl': 'Import from URL',
+  'tab.importFromUrl.desc': 'Import via a direct link to SKILL.md',
   'tab.llm': 'Language Model',
+  'tab.manualFill': 'Manually Fill In',
+  'tab.manualFill.desc': 'Configure a custom MCP skill manually',
   'tab.memory': 'Memory',
   'tab.profile': 'My Account',
   'tab.provider': 'AI Service Provider',
   'tab.proxy': 'Network Proxy',
   'tab.security': 'Security',
+  'tab.skill': 'Skill Management',
+  'tab.skillDesc': 'Manage your connected skills and integrations',
+  'tab.skillDetail': 'Skill Details',
+  'tab.skillEmpty': 'No skills connected yet',
+  'tab.skillInstalled': 'Installed Skills',
+  'tab.skillIntegration': 'Integration',
   'tab.stats': 'Analytics',
   'tab.storage': 'Data Storage',
   'tab.sync': 'Cloud Sync',
+  'tab.systemTools': 'System Tools',
   'tab.tts': 'Text-to-Speech',
+  'tab.uploadZip': 'Upload Zip',
+  'tab.uploadZip.desc': 'Upload a local .zip or .skill file',
   'tab.usage': 'Usage Statistics',
   'tools.add': 'Add Skill',
   'tools.builtins.groupName': 'Built-ins',
+  'tools.builtins.install': 'Install',
+  'tools.builtins.installed': 'Installed',
+  'tools.builtins.lobe-artifacts.description':
+    'Generate and preview interactive UI components and visualizations',
+  'tools.builtins.lobe-artifacts.readme':
+    'Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.',
+  'tools.builtins.lobe-artifacts.title': 'Artifacts',
+  'tools.builtins.lobe-calculator.title': 'Calculator',
+  'tools.builtins.lobe-calculator.description':
+    'Perform mathematical calculations, solve equations, and work with symbolic expressions',
+  'tools.builtins.lobe-calculator.readme':
+    'Advanced mathematical calculator supporting basic arithmetic, algebraic equations, calculus operations, and symbolic math. Includes base conversion, equation solving, differentiation, integration, and more.',
+  'tools.builtins.lobe-cloud-sandbox.description':
+    'Execute code, run commands, and manage files in a secure cloud environment',
+  'tools.builtins.lobe-cloud-sandbox.readme':
+    'Execute Python, JavaScript, and TypeScript code in an isolated cloud environment. Run shell commands, manage files, search content with regex, and export results securely.',
+  'tools.builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
+  'tools.builtins.lobe-gtd.description': 'Plan goals and track progress with GTD methodology',
+  'tools.builtins.lobe-gtd.readme':
+    'Plan goals and track progress using GTD methodology. Create strategic plans, manage todo lists with status tracking, and execute long-running async tasks.',
+  'tools.builtins.lobe-gtd.title': 'GTD Tools',
+  'tools.builtins.lobe-local-system.description':
+    'Access and manage local files, run shell commands on your desktop',
+  'tools.builtins.lobe-local-system.readme':
+    'Access your local filesystem on desktop. Read, write, search, and organize files. Execute shell commands with background task support and grep content with regex patterns.',
+  'tools.builtins.lobe-local-system.title': 'Local System',
+  'tools.builtins.lobe-notebook.description': 'Create and manage documents in the topic notebook',
+  'tools.builtins.lobe-notebook.readme':
+    'Create and manage persistent documents within conversation topics. Save notes, reports, articles, and markdown content that stays accessible across sessions.',
+  'tools.builtins.lobe-notebook.title': 'Notebook',
+  'tools.builtins.lobe-user-memory.description':
+    'Remember user preferences, activities, and experiences across conversations',
+  'tools.builtins.lobe-user-memory.readme':
+    'Build a personalized knowledge base about you. Remember preferences, track activities and experiences, store identity information, and recall relevant context in future conversations.',
+  'tools.builtins.lobe-user-memory.title': 'Memory',
+  'tools.builtins.notInstalled': 'Not Installed',
+  'tools.builtins.uninstall': 'Uninstall',
+  'tools.builtins.uninstallConfirm.desc':
+    'Are you sure you want to uninstall {{name}}? This skill will be removed from the current agent.',
+  'tools.builtins.uninstallConfirm.title': 'Uninstall {{name}}',
+  'tools.builtins.uninstalled': 'Uninstalled',
   'tools.disabled': 'The current model does not support function calls and cannot use the skill',
   'tools.klavis.addServer': 'Add Server',
   'tools.klavis.authCompleted': 'Authentication Completed',
   'tools.klavis.authFailed': 'Authentication Failed',
   'tools.klavis.authRequired': 'Authentication Required',
+  'tools.klavis.connect': 'Connect',
   'tools.klavis.connected': 'Connected',
+  'tools.klavis.disconnect': 'Disconnect',
+  'tools.klavis.disconnected': 'Disconnected',
   'tools.klavis.error': 'Error',
   'tools.klavis.groupName': 'Klavis Tools',
   'tools.klavis.manage': 'Manage Klavis',
@@ -659,18 +908,183 @@ export default {
   'tools.klavis.serverCreatedFailed': 'Failed to create server',
   'tools.klavis.serverRemoved': 'Server removed',
   'tools.klavis.servers': 'servers',
+
+  'tools.klavis.servers.airtable.description':
+    'Airtable is a cloud-based database and spreadsheet platform that combines the flexibility of a spreadsheet with the power of a database, enabling teams to organize, track, and collaborate on projects with customizable views and powerful automation features',
+
+  'tools.klavis.servers.airtable.readme':
+    'Integrate with Airtable to manage your databases and workflows. Query records, create entries, update data, and automate operations with customizable views and powerful tracking features.',
+
+  'tools.klavis.servers.cal-com.description':
+    'Cal.com is an open-source scheduling platform that helps you schedule meetings without the back-and-forth emails. Manage event types, bookings, availability, and integrate with calendars for seamless appointment scheduling',
+
+  'tools.klavis.servers.cal-com.readme':
+    'Connect to Cal.com to manage your scheduling and appointments. View availability, book meetings, manage event types, and automate your calendar through natural conversation.',
+
+  'tools.klavis.servers.clickup.description':
+    'ClickUp is a comprehensive project management and productivity platform that helps teams organize tasks, manage projects, and collaborate effectively with customizable workflows and powerful tracking features',
+
+  'tools.klavis.servers.clickup.readme':
+    'Connect to ClickUp to manage tasks, track projects, and organize your work. Create tasks, update statuses, manage custom workflows, and collaborate with your team through natural language commands.',
+
+  'tools.klavis.servers.confluence.description':
+    'Confluence is a team workspace where knowledge and collaboration meet',
+
+  'tools.klavis.servers.confluence.readme':
+    'Connect to Confluence to access and manage team documentation. Search pages, create content, organize spaces, and build your knowledge base through conversational AI assistance.',
+
+  'tools.klavis.servers.dropbox.description':
+    'Complete file management solution for Dropbox cloud storage. Upload, download, organize files and folders, manage sharing and collaboration, handle file versions, create file requests, and perform batch operations on your Dropbox files and folders',
+
+  'tools.klavis.servers.dropbox.readme':
+    'Integrate with Dropbox to access and manage your files. Upload, download, share files, manage folders, handle file versions, and organize your cloud storage through conversational AI.',
+
+  'tools.klavis.servers.figma.description':
+    'Figma is a collaborative interface design tool for web and mobile applications.',
+
+  'tools.klavis.servers.figma.readme':
+    'Connect to Figma to access design files and collaborate on projects. View designs, export assets, browse components, and manage your design workflow through natural conversation.',
+
+  'tools.klavis.servers.github.description': 'Enhanced GitHub MCP Server',
+
+  'tools.klavis.servers.github.readme':
+    'Connect to GitHub to manage repositories, issues, pull requests, and code. Search code, review changes, create branches, and collaborate on software development projects through conversational AI.',
+
+  // Klavis Servers i18n
+  'tools.klavis.servers.gmail.description': 'Gmail is a free email service provided by Google',
+
+  'tools.klavis.servers.gmail.readme':
+    'Bring the power of Gmail directly into your AI assistant. Read, compose, and send emails, search your inbox, manage labels, and organize your communications—all through natural conversation.',
+
+  'tools.klavis.servers.google-calendar.description':
+    'Google Calendar is a time-management and scheduling calendar service',
+
+  'tools.klavis.servers.google-calendar.readme':
+    'Integrate Google Calendar to view, create, and manage your events seamlessly. Schedule meetings, set reminders, check availability, and coordinate your time—all through natural language commands.',
+
+  'tools.klavis.servers.google-docs.description':
+    'Google Docs is a word processor included as part of the free, web-based Google Docs Editors suite',
+
+  'tools.klavis.servers.google-docs.readme':
+    'Integrate with Google Docs to create, edit, and manage documents. Write content, format text, collaborate in real-time, and access your documents through natural conversation.',
+
+  'tools.klavis.servers.google-drive.description': 'Google Drive is a cloud storage service',
+
+  'tools.klavis.servers.google-drive.readme':
+    'Connect to Google Drive to access, organize, and manage your files. Search documents, upload files, share content, and navigate your cloud storage efficiently through AI assistance.',
+
+  'tools.klavis.servers.google-sheets.description':
+    'Google Sheets is a web-based spreadsheet application that allows users to create, edit, and collaborate on spreadsheets online',
+
+  'tools.klavis.servers.google-sheets.readme':
+    'Connect to Google Sheets to read, write, and analyze spreadsheet data. Perform calculations, generate reports, create charts, and manage tabular data collaboratively with AI assistance.',
+
+  'tools.klavis.servers.hubspot.description':
+    'HubSpot is a developer and marketer of software products for inbound marketing, sales, and customer service',
+
+  'tools.klavis.servers.hubspot.readme':
+    'Integrate with HubSpot to manage contacts, deals, and marketing campaigns. Access CRM data, track pipelines, automate workflows, and streamline your sales and marketing operations.',
+
+  'tools.klavis.servers.jira.description':
+    'Jira is a project management and issue tracking tool developed by Atlassian',
+
+  'tools.klavis.servers.jira.readme':
+    'Integrate with Jira to manage issues, track progress, and organize sprints. Create tickets, update statuses, query project data, and streamline your development workflow through natural conversation.',
+
+  'tools.klavis.servers.notion.description':
+    'Notion is a collaborative productivity and note-taking application',
+
+  'tools.klavis.servers.notion.readme':
+    'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
+
+  'tools.klavis.servers.onedrive.description':
+    'OneDrive is a file hosting service and synchronization service operated by Microsoft',
+
+  'tools.klavis.servers.onedrive.readme':
+    'Connect to OneDrive to access and manage your Microsoft cloud files. Upload, download, share files, organize folders, and collaborate on documents through AI-powered assistance.',
+
+  'tools.klavis.servers.outlook-mail.description':
+    'Outlook Mail is a web-based suite of webmail, contacts, tasks, and calendaring services from Microsoft.',
+
+  'tools.klavis.servers.outlook-mail.readme':
+    'Integrate with Outlook Mail to read, send, and manage your Microsoft emails. Search messages, compose emails, manage folders, and organize your inbox through natural conversation.',
+
+  'tools.klavis.servers.salesforce.description':
+    "Salesforce is the world's leading customer relationship management (CRM) platform that helps businesses connect with customers, partners, and potential customers",
+
+  'tools.klavis.servers.salesforce.readme':
+    'Connect to Salesforce to manage customer relationships and sales data. Query records, update opportunities, track leads, and automate your CRM workflows through natural language commands.',
+
+  'tools.klavis.servers.slack.description':
+    'Slack is a messaging app for business that connects people to the information they need',
+
+  'tools.klavis.servers.slack.readme':
+    'Integrate with Slack to send messages, search conversations, and manage channels. Connect with your team, automate communication workflows, and access workspace information through natural language.',
+
+  'tools.klavis.servers.supabase.description': 'Supabase official MCP Server',
+
+  'tools.klavis.servers.supabase.readme':
+    'Integrate with Supabase to manage your database and backend services. Query data, manage authentication, handle storage, and interact with your application backend through natural conversation.',
+
+  'tools.klavis.servers.whatsapp.description':
+    'WhatsApp Business API integration that enables sending text messages, media, and managing conversations with customers. Perfect for customer support, marketing campaigns, and automated messaging workflows through the official WhatsApp Business platform.',
+
+  'tools.klavis.servers.whatsapp.readme':
+    'Integrate with WhatsApp Business to send messages, manage conversations, and engage with customers. Automate messaging workflows and handle communications through conversational AI.',
+
+  'tools.klavis.servers.youtube.description':
+    'YouTube is a video-sharing platform where users can upload, share, and discover content. Access video information, transcripts, and metadata programmatically.',
+
+  'tools.klavis.servers.youtube.readme':
+    'Connect to YouTube to search videos, access transcripts, and retrieve video information. Analyze content, extract metadata, and discover videos through natural conversation.',
+
+  'tools.klavis.servers.zendesk.description': 'Zendesk is a customer service software company',
+
+  'tools.klavis.servers.zendesk.readme':
+    'Integrate with Zendesk to manage support tickets and customer interactions. Create, update, and track support requests, access customer data, and streamline your support operations.',
+
   'tools.klavis.tools': 'tools',
+
   'tools.klavis.verifyAuth': 'I have completed authentication',
+
   'tools.lobehubSkill.authorize': 'Authorize',
+
   'tools.lobehubSkill.connect': 'Connect',
+
+  'tools.lobehubSkill.connected': 'Connected',
+
+  'tools.lobehubSkill.disconnect': 'Disconnect',
+
+  'tools.lobehubSkill.disconnectConfirm.desc':
+    "You can still continue previous chats that reference {{name}} content. However, the assistant won't be able to access new content or perform new tasks.",
+
+  'tools.lobehubSkill.disconnectConfirm.title': 'Disconnect {{name}}?',
+
+  'tools.lobehubSkill.disconnected': 'Disconnected',
+
   'tools.lobehubSkill.error': 'Error',
+  // LobeHub Skill Providers i18n
+  'tools.lobehubSkill.providers.linear.description':
+    'Linear is a modern issue tracking and project management tool designed for high-performance teams to build better software faster',
+  'tools.lobehubSkill.providers.linear.readme':
+    'Bring the power of Linear directly into your AI assistant. Create and update issues, manage sprints, track project progress, and streamline your development workflow—all through natural conversation.',
+  'tools.lobehubSkill.providers.microsoft.description':
+    'Outlook Calendar is an integrated scheduling tool within Microsoft Outlook that enables users to create appointments, organize meetings with others, and manage their time and events effectively.',
+  'tools.lobehubSkill.providers.microsoft.readme':
+    'Integrate with Outlook Calendar to view, create, and manage your events seamlessly. Schedule meetings, check availability, set reminders, and coordinate your time—all through natural language commands.',
+  'tools.lobehubSkill.providers.twitter.description':
+    'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
+  'tools.lobehubSkill.providers.twitter.readme':
+    'Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.',
+
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',
   'tools.plugins.enabled': 'Enabled: {{num}}',
   'tools.plugins.groupName': 'Skills',
+  'tools.plugins.management': 'Skill Management',
   'tools.plugins.noEnabled': 'No skills enabled',
-  'tools.plugins.store': 'Skill Store',
+  'tools.plugins.store': 'Add skill',
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Extension Tools',

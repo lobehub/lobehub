@@ -4,13 +4,14 @@ import { isCommandPressed } from '@lobechat/utils';
 import {
   INSERT_MENTION_COMMAND,
   INSERT_TABLE_COMMAND,
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactLinkHighlightPlugin,
   ReactListPlugin,
   ReactMathPlugin,
   ReactTablePlugin,
+  ReactVirtualBlockPlugin,
 } from '@lobehub/editor';
 import { Editor, FloatMenu, SlashMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
@@ -99,6 +100,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
               ReactHRPlugin,
               ReactLinkHighlightPlugin,
               ReactTablePlugin,
+              ReactVirtualBlockPlugin,
               Editor.withProps(ReactMathPlugin, {
                 renderComp: expand
                   ? undefined
@@ -117,11 +119,14 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
   return (
     <Editor
       autoFocus
+      pasteAsPlainText
       className={className}
       content={''}
       editor={editor}
-      pasteAsPlainText
       {...richRenderProps}
+      placeholder={<Placeholder />}
+      type={'text'}
+      variant={'chat'}
       mentionOption={
         enableMention
           ? {
@@ -148,55 +153,6 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
             }
           : undefined
       }
-      onBlur={() => {
-        disableScope(HotkeyEnum.AddUserMessage);
-      }}
-      onChange={() => {
-        updateMarkdownContent();
-      }}
-      onCompositionEnd={() => {
-        isChineseInput.current = false;
-      }}
-      onCompositionStart={() => {
-        isChineseInput.current = true;
-      }}
-      onContextMenu={async ({ event: e, editor }) => {
-        if (isDesktop) {
-          e.preventDefault();
-          const { electronSystemService } = await import('@/services/electron/system');
-
-          const selectionValue = editor.getSelectionDocument('markdown') as unknown as string;
-          const hasSelection = !!selectionValue;
-
-          await electronSystemService.showContextMenu('editor', {
-            hasSelection,
-            value: selectionValue,
-          });
-        }
-      }}
-      onFocus={() => {
-        enableScope(HotkeyEnum.AddUserMessage);
-      }}
-      onInit={(editor) => storeApi.setState({ editor })}
-      onPressEnter={({ event: e }) => {
-        if (e.shiftKey || isChineseInput.current) return;
-        // when user like alt + enter to add ai message
-        if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
-        const commandKey = isCommandPressed(e);
-        // when user like cmd + enter to send message
-        if (useCmdEnterToSend) {
-          if (commandKey) {
-            send();
-            return true;
-          }
-        } else {
-          if (!commandKey) {
-            send();
-            return true;
-          }
-        }
-      }}
-      placeholder={<Placeholder />}
       slashOption={{
         items: [
           {
@@ -219,8 +175,52 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       style={{
         minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
       }}
-      type={'text'}
-      variant={'chat'}
+      onInit={(editor) => storeApi.setState({ editor })}
+      onBlur={() => {
+        disableScope(HotkeyEnum.AddUserMessage);
+      }}
+      onChange={() => {
+        updateMarkdownContent();
+      }}
+      onCompositionEnd={() => {
+        isChineseInput.current = false;
+      }}
+      onCompositionStart={() => {
+        isChineseInput.current = true;
+      }}
+      onContextMenu={async ({ event: e, editor }) => {
+        if (isDesktop) {
+          e.preventDefault();
+          const { electronSystemService } = await import('@/services/electron/system');
+
+          const selectionText = editor.getSelectionDocument('markdown') as unknown as string;
+
+          await electronSystemService.showContextMenu('editor', {
+            selectionText: selectionText || undefined,
+          });
+        }
+      }}
+      onFocus={() => {
+        enableScope(HotkeyEnum.AddUserMessage);
+      }}
+      onPressEnter={({ event: e }) => {
+        if (e.shiftKey || isChineseInput.current) return;
+        // when user like alt + enter to add ai message
+        if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
+        const commandKey = isCommandPressed(e);
+        // when user like cmd + enter to send message
+        if (useCmdEnterToSend) {
+          if (commandKey) {
+            send();
+            return true;
+          }
+        } else {
+          if (!commandKey) {
+            send();
+            return true;
+          }
+        }
+      }}
     />
   );
 });

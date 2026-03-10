@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // https://cloud.infini-ai.com/genstudio/model
 // All models are currently free

@@ -1,24 +1,23 @@
-import { PluginQueryParams, SystemDependency } from '@lobehub/market-sdk';
+import type { PluginQueryParams, SystemDependency } from '@lobehub/market-sdk';
 import { z } from 'zod';
 
-import { MCPErrorType } from '@/libs/mcp';
+import type { MCPErrorType } from '@/libs/mcp';
 
-import { McpConnectionType } from '../discover/mcp';
-import { CustomPluginMetadata } from '../tool/plugin';
+import type { McpConnectionType } from '../discover/mcp';
+import type { CustomPluginMetadata } from '../tool/plugin';
 
 /* eslint-disable typescript-sort-keys/string-enum */
 export enum MCPInstallStep {
-  FETCHING_MANIFEST = 'FETCHING_MANIFEST',
   CHECKING_INSTALLATION = 'CHECKING_INSTALLATION',
-  DEPENDENCIES_REQUIRED = 'DEPENDENCIES_REQUIRED',
-  GETTING_SERVER_MANIFEST = 'GETTING_SERVER_MANIFEST',
-  CONFIGURATION_REQUIRED = 'CONFIGURATION_REQUIRED',
-  INSTALLING_PLUGIN = 'INSTALLING_PLUGIN',
   COMPLETED = 'COMPLETED',
+  CONFIGURATION_REQUIRED = 'CONFIGURATION_REQUIRED',
+  DEPENDENCIES_REQUIRED = 'DEPENDENCIES_REQUIRED',
   ERROR = 'Error',
+  FETCHING_MANIFEST = 'FETCHING_MANIFEST',
+  GETTING_SERVER_MANIFEST = 'GETTING_SERVER_MANIFEST',
+  INSTALLING_PLUGIN = 'INSTALLING_PLUGIN',
 }
 
-/* eslint-enable */
 export interface CheckMcpInstallParams {
   /**
    * Installation details

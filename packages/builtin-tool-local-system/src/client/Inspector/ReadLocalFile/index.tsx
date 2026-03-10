@@ -1,20 +1,21 @@
 'use client';
 
-import { type LocalReadFileParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { LocalReadFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type LocalReadFileState } from '../../..';
+import type { LocalReadFileState } from '../../..';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 const styles = createStaticStyles(({ css }) => ({
   lineRange: css`
     flex-shrink: 0;
     margin-inline-start: 4px;
+    font-size: 12px;
     opacity: 0.7;
   `,
 }));

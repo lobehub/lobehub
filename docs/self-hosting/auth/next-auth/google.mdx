@@ -1,0 +1,81 @@
+---
+title: Configuration of Google SSO Authentication Service for LobeHub
+description: >-
+  Learn how to configure Google SSO Authentication Service for LobeHub, create
+  OAuth applications, add users, and set up environment variables for seamless
+  integration.
+tags:
+  - Google SSO
+  - OAuth 2.0
+  - LobeHub
+  - Authentication
+  - Google Cloud
+---
+
+# Configuration of Google SSO Authentication Service
+
+<Steps>
+  ### Create a Google Cloud OAuth 2.0 Client
+
+  In your [Google Cloud Console][google-cloud-console], navigate to **APIs & Services > Credentials**.
+
+  Click on **Create Credentials** and select **OAuth client ID**.
+
+  If you haven't already set up a consent screen, you will be prompted to do so. Complete the OAuth consent screen setup (specify app name, support email, and add authorized users if needed).
+
+  Select **Web application** as the application type.
+
+  In the **Authorized redirect URIs** section, enter:
+
+  ```bash
+  https://your-domain/api/auth/callback/google
+  ```
+
+  <Callout type={'info'}>
+    - You can add or modify redirect URIs after registration, but make sure the URL matches your deployed LobeHub instance.
+    - Replace "your-domain" with your actual domain.
+  </Callout>
+
+  Click **Create**.
+
+  After creation, copy the **Client ID** and **Client Secret**.
+
+  <Image alt="Google OAuth Setup" inStep src="https://developers.google.com/static/identity/images/gsi/web/gcs-signin-2.png" />
+
+  ### Add Users (Optional for Internal Use Only)
+
+  If your application is in **Testing** or **Internal** publishing status, add user emails in the OAuth consent screen under **Test users**.
+  Users not added here will not be able to authenticate.
+
+  ### Configure Environment Variables
+
+  When deploying LobeHub, configure the following environment variables:
+
+  | Environment Variable      | Type     | Description                                                                                                          |
+  | ------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+  | `NEXT_AUTH_SECRET`        | Required | Key to encrypt Auth.js session tokens. Generate using: `openssl rand -base64 32`                                     |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeHub. Use `google` for Google SSO.                                         |
+  | `AUTH_GOOGLE_ID`          | Required | Client ID from Google Cloud OAuth.                                                                                   |
+  | `AUTH_GOOGLE_SECRET`      | Required | Client Secret from Google Cloud OAuth.                                                                               |
+  | `AUTH_URL`                | Required | Specifies the callback address for Auth.js when performing OAuth authentication. E.g. `https://your-domain/api/auth` |
+
+  <Callout type={'tip'}>
+    See [📘 environment variables](/docs/self-hosting/environment-variable#google) for more details on these variables.
+  </Callout>
+</Steps>
+
+<Callout>
+  After successful deployment, users can sign in to LobeHub using their Google accounts (those added as Test Users, if not in production).
+</Callout>
+
+## Advanced Configuration
+
+See the [Google Identity Platform Documentation][google-identity-docs] for advanced options, scopes, and consent screen configuration.
+
+## Related Resources
+
+- [Quickstart: Configure a Google OAuth client][google-oauth-quickstart]
+
+[google-cloud-console]: https://console.cloud.google.com/apis/credentials
+[google-identity-docs]: https://developers.google.com/identity
+[google-oauth-quickstart]: https://developers.google.com/identity/protocols/oauth2/web-server#creatingcred

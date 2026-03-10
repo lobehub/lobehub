@@ -1,4 +1,3 @@
-// import { FileStore } from '../../store';
 import { type FilesStoreState } from '@/store/file/initialState';
 
 const showSimilaritySearchResult = (s: FilesStoreState) => s.isSimilaritySearch;

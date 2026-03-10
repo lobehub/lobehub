@@ -1,7 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import { DocumentItem, NewTopicDocument, documents, topicDocuments } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { DocumentItem, NewTopicDocument } from '../schemas';
+import { documents, topicDocuments } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export interface TopicDocumentWithDetails extends DocumentItem {
   associatedAt: Date;

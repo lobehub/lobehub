@@ -1,12 +1,12 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { and, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
+import type { AgentItem } from '../schemas';
 import {
-  AgentItem,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -16,7 +16,7 @@ import {
   knowledgeBases,
   sessions,
 } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase } from '../type';
 
 export class AgentModel {
   private userId: string;
@@ -379,6 +379,23 @@ export class AgentModel {
     return result?.id ?? null;
   };
 
+  /**
+   * Get an agent by the forkedFromIdentifier stored in params
+   * @param forkedFromIdentifier - The source agent's market identifier
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
+    const result = await this.db.query.agents.findFirst({
+      columns: { id: true },
+      orderBy: (agents, { desc }) => [desc(agents.updatedAt)],
+      where: and(
+        eq(agents.userId, this.userId),
+        sql`${agents.params}->>'forkedFromIdentifier' = ${forkedFromIdentifier}`,
+      ),
+    });
+    return result?.id ?? null;
+  };
+
   updateConfig = async (agentId: string, data: PartialDeep<AgentItem> | undefined | null) => {
     if (!data || Object.keys(data).length === 0) return;
 
@@ -409,7 +426,7 @@ export class AgentModel {
     }
 
     // Build data to be merged, excluding params (processed separately)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { params: _params, ...restData } = data;
     const mergedValue = merge(agent, restData);
 
@@ -430,7 +447,7 @@ export class AgentModel {
     }
 
     // Remove timestamp fields to let Drizzle's $onUpdate handle them automatically
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { updatedAt: _, accessedAt: __, createdAt: ___, ...updateData } = mergedValue;
 
     return this.db

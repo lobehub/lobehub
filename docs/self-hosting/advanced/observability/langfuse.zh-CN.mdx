@@ -1,17 +1,17 @@
 ---
-title: LobeChat 的可观测性和追踪
-description: 使用 Langfuse 为你的 LobeChat 应用增强开源可观测性和追踪功能。自动捕获每个请求的详细追踪和指标，以优化和调试你的对话。
+title: LobeHub 的可观测性和追踪
+description: 使用 Langfuse 为你的 LobeHub 应用增强开源可观测性和追踪功能。自动捕获每个请求的详细追踪和指标，以优化和调试你的对话。
 tags:
   - 可观测性
   - 追踪
   - Langfuse
 ---
 
-# 使用 Langfuse 监控你的 LobeChat 应用
+# 使用 Langfuse 监控你的 LobeHub 应用
 
 ## 什么是 Langfuse？
 
-[Langfuse](https://langfuse.com/) 是一个 **开源的 LLM 可观测性平台**。启用 Langfuse 集成后，你可以追踪应用数据，以开发、监控和优化 LobeChat 的使用，包括：
+[Langfuse](https://langfuse.com/) 是一个 **开源的 LLM 可观测性平台**。启用 Langfuse 集成后，你可以追踪应用数据，以开发、监控和优化 LobeHub 的使用，包括：
 
 - 应用 [追踪](https://langfuse.com/docs/tracing)
 - 使用模式
@@ -25,13 +25,13 @@ tags:
 
   通过注册 [Langfuse Cloud](https://cloud.langfuse.com) 或 [自托管](https://langfuse.com/docs/deployment/self-host) Langfuse 来获取你的 Langfuse API 密钥。
 
-  ### 设置 LobeChat
+  ### 设置 LobeHub
 
-  有多种方式可以 [自托管 LobeChat](https://lobehub.com/docs/self-hosting/start)。在本示例中，我们将使用 Docker Desktop 部署。
+  有多种方式可以 [自托管 LobeHub](https://lobehub.com/docs/self-hosting/start)。在本示例中，我们将使用 Docker Desktop 部署。
 
   <Tabs items={["环境变量", "Docker Desktop 示例"]}>
     <Tab>
-      在部署 LobeChat 之前，使用你在上一步创建的 Langfuse API 密钥设置以下四个环境变量。
+      在部署 LobeHub 之前，使用你在上一步创建的 Langfuse API 密钥设置以下四个环境变量。
 
       ```sh
       ENABLE_LANGFUSE = '1'
@@ -44,25 +44,25 @@ tags:
     <Tab>
       在运行 Docker 容器之前，在 Docker Desktop 中设置环境变量，并填入你在上一步创建的 Langfuse API 密钥。
 
-      <Image alt={'Docker Desktop 中的环境变量'} src={'https://langfuse.com/images/docs/lobechat-docker-desktop-env.png'} />
+      <Image alt={'Docker Desktop 中的环境变量'} src={'https://langfuse.com/images/docs/LobeHub-docker-desktop-env.png'} />
     </Tab>
   </Tabs>
 
   ### 在设置中启用分析功能
 
-  当 LobeChat 运行后，进入 **设置** 中的 **关于** 选项卡，并启用分析功能。这是将追踪数据发送到 Langfuse 所必需的。
+  当 LobeHub 运行后，进入 **设置** 中的 **关于** 选项卡，并启用分析功能。这是将追踪数据发送到 Langfuse 所必需的。
 
-  <Image alt={'LobeChat 设置'} src={'https://langfuse.com/images/docs/lobechat-settings.png'} />
+  <Image alt={'LobeHub 设置'} src={'https://langfuse.com/images/docs/LobeHub-settings.png'} />
 
   ### 在 Langfuse 中查看聊天追踪
 
-  设置好 LLM 模型密钥后，你就可以开始与 LobeChat 进行交互。
+  设置好 LLM 模型密钥后，你就可以开始与 LobeHub 进行交互。
 
-  <Image alt={'LobeChat 对话'} src={'https://langfuse.com/images/docs/lobechat-converstation.png'} />
+  <Image alt={'LobeHub 对话'} src={'https://langfuse.com/images/docs/LobeHub-converstation.png'} />
 
   所有对话都会被自动追踪并发送到 Langfuse。你可以在 Langfuse UI 的 [追踪部分](https://langfuse.com/docs/tracing) 查看这些数据。
 
-  <Image alt={'LobeChat Trace 示例'} src={'https://langfuse.com/images/docs/lobechat-example-trace.png'} />
+  <Image alt={'LobeHub Trace 示例'} src={'https://langfuse.com/images/docs/LobeHub-example-trace.png'} />
 </Steps>
 
 ## 反馈

@@ -1,6 +1,6 @@
 import { nanoid } from '@lobechat/utils';
 
-import type { Operation, OperationType } from '@/store/chat/slices/operation/types';
+import { type Operation, type OperationType } from '@/store/chat/slices/operation/types';
 
 /**
  * Create a mock Operation object for testing
@@ -60,7 +60,7 @@ export const createCompletedOperation = (
 export const createFailedOperation = (
   type: OperationType,
   context: Record<string, any> = {},
-  // eslint-disable-next-line unicorn/no-object-as-default-parameter
+
   error: { message: string; type: string } = { message: 'Test error', type: 'TestError' },
 ): Operation => {
   return createMockOperation(type, context, {

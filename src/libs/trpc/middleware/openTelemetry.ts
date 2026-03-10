@@ -1,23 +1,26 @@
-import type { Attributes, Span } from '@lobechat/observability-otel/api';
-import { SpanKind, SpanStatusCode, diag, trace } from '@lobechat/observability-otel/api';
+import { env } from 'node:process';
+
+import { type Attributes, type Span } from '@lobechat/observability-otel/api';
+import { context, diag, SpanKind, SpanStatusCode, trace } from '@lobechat/observability-otel/api';
 import {
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_MESSAGE,
   ATTR_EXCEPTION_STACKTRACE,
+  createAttributesForMetrics,
   DEFAULT_ERROR_CODE,
   DEFAULT_SUCCESS_STATUS,
-  TRPCAttribute,
-  createAttributesForMetrics,
   getPayloadSize,
   serverDurationHistogram,
   serverRequestSizeHistogram,
   serverRequestsPerRpcHistogram,
   serverResponseSizeHistogram,
   serverResponsesPerRpcHistogram,
+  TRPCAttribute,
   tRPCConventionFromPathAndType,
 } from '@lobechat/observability-otel/trpc';
 import { TRPCError } from '@trpc/server';
-import { env } from 'node:process';
+
+import { injectSpanTraceHeaders } from '@/libs/observability/traceparent';
 
 import { name } from '../../../../package.json';
 import { trpc } from '../lambda/init';
@@ -62,7 +65,7 @@ const finalizeSpanWithError = (span: Span, error: unknown) => {
   }
 };
 
-export const openTelemetry = trpc.middleware(async ({ path, type, next, getRawInput }) => {
+export const openTelemetry = trpc.middleware(async ({ ctx, path, type, next, getRawInput }) => {
   if (!env.ENABLE_TELEMETRY) {
     diag.debug(name, 'telemetry disabled', env.ENABLE_TELEMETRY);
 
@@ -76,15 +79,24 @@ export const openTelemetry = trpc.middleware(async ({ path, type, next, getRawIn
   const input = getRawInput();
   const requestSize = getPayloadSize(input);
 
-  const span = tracer.startSpan(spanName, {
-    attributes: baseAttributes,
-    kind: SpanKind.SERVER,
-  });
+  const span = tracer.startSpan(
+    spanName,
+    {
+      attributes: baseAttributes,
+      kind: SpanKind.SERVER,
+    },
+    ctx?.traceContext,
+  );
+
+  // attach trace headers for downstream consumers (traceparent/tracestate)
+  if (ctx?.resHeaders) {
+    injectSpanTraceHeaders(ctx.resHeaders, span);
+  }
 
   const startTimestamp = Date.now();
 
   try {
-    const result = await next();
+    const result = await context.with(trace.setSpan(context.active(), span), async () => next());
     diag.debug(name, 'tRPC instrumentation', 'requestHandled');
 
     const responseSize = getPayloadSize(result.ok ? result.data : result.error);

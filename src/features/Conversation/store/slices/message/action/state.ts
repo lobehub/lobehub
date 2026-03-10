@@ -1,8 +1,10 @@
 import { copyToClipboard } from '@lobehub/ui';
 import { produce } from 'immer';
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
-import type { Store as ConversationStore } from '../../../action';
+import { messageService } from '@/services/message';
+
+import { type Store as ConversationStore } from '../../../action';
 import { dataSelectors } from '../../data/selectors';
 
 /**
@@ -11,6 +13,11 @@ import { dataSelectors } from '../../data/selectors';
  * Handles message state operations like loading, collapsed, etc.
  */
 export interface MessageStateAction {
+  /**
+   * Cancel compression and restore original messages
+   */
+  cancelCompression: (id: string) => Promise<void>;
+
   /**
    * Copy message content to clipboard
    */
@@ -25,6 +32,11 @@ export interface MessageStateAction {
    * Modify message content (with optimistic update)
    */
   modifyMessageContent: (id: string, content: string) => Promise<void>;
+
+  /**
+   * Toggle compressed group expanded state
+   */
+  toggleCompressedGroupExpanded: (id: string, expanded?: boolean) => Promise<void>;
 
   /**
    * Toggle tool inspect expanded state
@@ -43,6 +55,26 @@ export const messageStateSlice: StateCreator<
   [],
   MessageStateAction
 > = (set, get) => ({
+  cancelCompression: async (id) => {
+    const message = dataSelectors.getDisplayMessageById(id)(get());
+    if (!message || message.role !== 'compressedGroup') return;
+
+    const { context, replaceMessages } = get();
+    if (!context.agentId || !context.topicId) return;
+
+    // Call service to cancel compression
+    const { messages } = await messageService.cancelCompression({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      messageGroupId: id,
+      threadId: context.threadId,
+      topicId: context.topicId,
+    });
+
+    // Replace messages with restored original messages
+    replaceMessages(messages);
+  },
+
   copyMessage: async (id, content) => {
     const { hooks } = get();
 
@@ -85,6 +117,40 @@ export const messageStateSlice: StateCreator<
     if (hooks.onMessageModified) {
       hooks.onMessageModified(id, content, originalContent);
     }
+  },
+
+  toggleCompressedGroupExpanded: async (id, expanded) => {
+    const message = dataSelectors.getDisplayMessageById(id)(get());
+    if (!message || message.role !== 'compressedGroup') return;
+
+    const { context, internal_dispatchMessage, replaceMessages } = get();
+    if (!context.agentId || !context.topicId) return;
+
+    // If expanded is not provided, toggle current state
+    const currentExpanded = (message.metadata as any)?.expanded ?? false;
+    const nextExpanded = expanded ?? !currentExpanded;
+
+    // Optimistic update
+    internal_dispatchMessage({
+      id,
+      type: 'updateMessageGroupMetadata',
+      value: { expanded: nextExpanded },
+    });
+
+    // Persist to server and get updated messages
+    const { messages } = await messageService.updateMessageGroupMetadata({
+      context: {
+        agentId: context.agentId,
+        groupId: context.groupId,
+        threadId: context.threadId,
+        topicId: context.topicId,
+      },
+      expanded: nextExpanded,
+      messageGroupId: id,
+    });
+
+    // Sync with server data
+    replaceMessages(messages);
   },
 
   toggleInspectExpanded: async (id, expanded) => {

@@ -1,4 +1,5 @@
-import { Form, type FormItemProps, SliderWithInput } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Form, SliderWithInput } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
 import { debounce } from 'es-toolkit/compat';
 import { memo, useEffect } from 'react';
@@ -33,7 +34,7 @@ const Controls = memo<ControlsProps>(({ updating, setUpdating }) => {
     });
   }, [enableHistoryCount, historyCount, form]);
 
-  let items: FormItemProps[] = [
+  const items: FormItemProps[] = [
     {
       children: <Switch loading={updating} size={'small'} />,
       label: t('settingChat.enableHistoryCount.title'),
@@ -51,12 +52,12 @@ const Controls = memo<ControlsProps>(({ updating, setUpdating }) => {
           size={'small'}
           step={1}
           style={{ marginBlock: 8, paddingLeft: 4 }}
+          unlimitedInput={true}
           styles={{
             input: {
               maxWidth: 64,
             },
           }}
-          unlimitedInput={true}
         />
       ),
       name: 'historyCount',
@@ -67,22 +68,22 @@ const Controls = memo<ControlsProps>(({ updating, setUpdating }) => {
   return (
     <Form
       form={form}
+      items={items}
+      itemsType={'flat'}
       initialValues={{
         enableHistoryCount,
         historyCount,
       }}
-      items={items}
-      itemsType={'flat'}
-      onValuesChange={debounce(async (values) => {
-        setUpdating(true);
-        await updateAgentChatConfig(values);
-        setUpdating(false);
-      }, 500)}
       styles={{
         group: {
           background: 'transparent',
         },
       }}
+      onValuesChange={debounce(async (values) => {
+        setUpdating(true);
+        await updateAgentChatConfig(values);
+        setUpdating(false);
+      }, 500)}
     />
   );
 });

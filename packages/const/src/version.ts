@@ -1,10 +1,10 @@
 import { BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
 
-import pkg from '@/../package.json';
+import pkg from '../../../package.json';
 
 export const CURRENT_VERSION = pkg.version;
 
-export const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
+export const isDesktop = typeof __ELECTRON__ !== 'undefined' && !!__ELECTRON__;
 
 // @ts-ignore
 export const isCustomBranding = BRANDING_NAME !== 'LobeHub';

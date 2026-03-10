@@ -8,11 +8,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { UserMemoryModel } from '@/database/models/userMemory/model';
-import { getServerDB } from '@/database/server';
 import { userMemories } from '@/database/schemas';
+import { getServerDB } from '@/database/server';
+import { selectNonVectorColumns } from '@/database/utils/columns';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { LayersEnum } from '@/types/userMemory';
-import { selectNonVectorColumns } from '@/database/utils/columns';
 
 const bodySchema = z.object({
   layer: z.nativeEnum(LayersEnum).optional(),
@@ -23,13 +23,13 @@ const bodySchema = z.object({
 });
 
 export const POST = async (req: Request) => {
-  const { webhookHeaders, featureFlags } = parseMemoryExtractionConfig();
+  const { webhook, featureFlags } = parseMemoryExtractionConfig();
   if (!featureFlags.enableBenchmarkLoCoMo) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  if (webhookHeaders && Object.keys(webhookHeaders).length > 0) {
-    for (const [key, value] of Object.entries(webhookHeaders)) {
+  if (webhook?.headers && Object.keys(webhook?.headers).length > 0) {
+    for (const [key, value] of Object.entries(webhook?.headers)) {
       const headerValue = req.headers.get(key);
       if (headerValue !== value) {
         return NextResponse.json(
@@ -44,8 +44,9 @@ export const POST = async (req: Request) => {
     const json = await req.json();
     const parsed = bodySchema.parse(json);
 
-    console.log('[locomo-dev-search] parsed body', parsed);
-    const userId = parsed.userId || (parsed.sampleId ? `locomo-user-${parsed.sampleId}` : undefined);
+    console.info('[locomo-dev-search] parsed body', parsed);
+    const userId =
+      parsed.userId || (parsed.sampleId ? `locomo-user-${parsed.sampleId}` : undefined);
     if (!userId) {
       return NextResponse.json({ error: 'userId or sampleId is required' }, { status: 400 });
     }
@@ -65,11 +66,11 @@ export const POST = async (req: Request) => {
     );
 
     const [embedding] =
-    (await runtime.embeddings({
-      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: parsed.query,
-      model: config.embedding.model,
-    })) || [];
+      (await runtime.embeddings({
+        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        input: parsed.query,
+        model: config.embedding.model,
+      })) || [];
 
     if (!embedding) {
       return NextResponse.json(
@@ -77,24 +78,27 @@ export const POST = async (req: Request) => {
         { status: 500 },
       );
     }
-    console.log('[locomo-dev-search] generated embedding');
+    console.info('[locomo-dev-search] generated embedding');
 
     const searchResult = await model.searchWithEmbedding({
       embedding,
       limits: {
+        activities: topK,
         contexts: topK,
         experiences: topK,
         preferences: topK,
       },
     });
-    console.log('[locomo-dev-search] searched result');
+    console.info('[locomo-dev-search] searched result');
 
     const identities = await model.getAllIdentities();
-    console.log('[locomo-dev-search] fetched identities');
+    console.info('[locomo-dev-search] fetched identities');
 
     const memoryIds = [
       ...searchResult.contexts
-        .map((context) => Array.isArray(context.userMemoryIds) ? (context.userMemoryIds as string[])[0] : undefined)
+        .map((context) =>
+          Array.isArray(context.userMemoryIds) ? (context.userMemoryIds as string[])[0] : undefined,
+        )
         .filter((id): id is string => !!id),
       ...searchResult.experiences
         .map((experience) => experience.userMemoryId)
@@ -102,9 +106,10 @@ export const POST = async (req: Request) => {
       ...searchResult.preferences
         .map((preference) => preference.userMemoryId)
         .filter((id): id is string => !!id),
-      ...identities
-        .map((identity) => identity.userMemoryId)
+      ...searchResult.activities
+        .map((activity) => activity.userMemoryId)
         .filter((id): id is string => !!id),
+      ...identities.map((identity) => identity.userMemoryId).filter((id): id is string => !!id),
     ];
 
     const uniqueMemoryIds = Array.from(new Set(memoryIds));
@@ -113,10 +118,10 @@ export const POST = async (req: Request) => {
       uniqueMemoryIds.length === 0
         ? []
         : await db
-          .select(selectNonVectorColumns(userMemories))
-          .from(userMemories)
-          .where(and(eq(userMemories.userId, userId), inArray(userMemories.id, uniqueMemoryIds)));
-    console.log('[locomo-dev-search] fetched memories');
+            .select(selectNonVectorColumns(userMemories))
+            .from(userMemories)
+            .where(and(eq(userMemories.userId, userId), inArray(userMemories.id, uniqueMemoryIds)));
+    console.info('[locomo-dev-search] fetched memories');
 
     const memoryMap = new Map(memories.map((memory) => [memory.id, memory]));
 
@@ -179,13 +184,28 @@ export const POST = async (req: Request) => {
       })
       .filter(Boolean);
 
+    const activityItems = searchResult.activities
+      .map((activity) => {
+        const memory = activity.userMemoryId ? memoryMap.get(activity.userMemoryId) : undefined;
+        if (!memory) return undefined;
+
+        return {
+          activity,
+          id: activity.userMemoryId,
+          layer: LayersEnum.Activity,
+          memory,
+        };
+      })
+      .filter(Boolean);
+
     const items = [
       ...contextItems.slice(0, topK),
       ...experienceItems.slice(0, topK),
       ...preferenceItems.slice(0, topK),
+      ...activityItems.slice(0, topK),
       ...identityItems,
     ];
-    console.log('[locomo-dev-search] compiled items');
+    console.info('[locomo-dev-search] compiled items');
 
     return NextResponse.json({
       items,

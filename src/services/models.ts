@@ -25,10 +25,8 @@ export type ProgressCallback = (progress: ModelProgressInfo) => void;
 export type ErrorCallback = (error: { message: string }) => void;
 
 export class ModelsService {
-  // Controller for aborting downloads
   private _abortController: AbortController | null = null;
 
-  // Get model list
   getModels = async (provider: string): Promise<ChatModelCard[] | undefined> => {
     const headers = await createHeaderWithAuth({
       headers: { 'Content-Type': 'application/json' },
@@ -66,7 +64,6 @@ export class ModelsService {
     { onProgress }: { onError?: ErrorCallback; onProgress?: ProgressCallback } = {},
   ): Promise<void> => {
     try {
-      // Create a new AbortController
       this._abortController = new AbortController();
       const signal = this._abortController.signal;
 
@@ -78,7 +75,6 @@ export class ModelsService {
       const runtimeProvider = resolveRuntimeProvider(provider);
       const enableFetchOnClient = isEnableFetchOnClient(provider);
 
-      console.log('enableFetchOnClient：', enableFetchOnClient);
       let res: Response;
       if (enableFetchOnClient) {
         const agentRuntime = await initializeWithClientStore({
@@ -99,7 +95,6 @@ export class ModelsService {
         throw await getMessageError(res);
       }
 
-      // Process response stream
       if (res.body) {
         await this.processModelPullStream(res, { onProgress });
       }
@@ -112,14 +107,11 @@ export class ModelsService {
       console.error('download model error:', error);
       throw error;
     } finally {
-      // Clean up AbortController
       this._abortController = null;
     }
   };
 
-  // Abort model download
   abortPull = () => {
-    // Use AbortController to abort download
     if (this._abortController) {
       this._abortController.abort();
       this._abortController = null;
@@ -136,17 +128,13 @@ export class ModelsService {
     response: Response,
     { onProgress, onError }: { onError?: ErrorCallback; onProgress?: ProgressCallback },
   ): Promise<void> => {
-    // Process response stream
     const reader = response.body?.getReader();
     if (!reader) return;
 
-    // Read and process stream data
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      // Parse progress data
       const progressText = new TextDecoder().decode(value);
       // One line may contain multiple progress updates
       const progressUpdates = progressText.trim().split('\n');
@@ -161,11 +149,7 @@ export class ModelsService {
         }
 
         if (progress.status === 'canceled') {
-          console.log('progress:', progress);
-          // const abortError = new Error('abort');
-          // abortError.name = 'AbortError';
-          //
-          // throw abortError;
+          console.info('progress:', progress);
         }
 
         if (progress.status === 'error') {
@@ -173,7 +157,6 @@ export class ModelsService {
           throw new Error(progress.error);
         }
 
-        // Call progress callback
         if (progress.completed !== undefined || progress.status) {
           onProgress?.(progress);
         }

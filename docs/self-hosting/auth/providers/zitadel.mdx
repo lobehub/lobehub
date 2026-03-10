@@ -1,0 +1,73 @@
+---
+title: Configuring ZITADEL Authentication for LobeHub
+description: >-
+  Learn how to configure ZITADEL SSO for LobeHub, including creating an
+  application and setting up environment variables.
+tags:
+  - ZITADEL
+  - Authentication
+  - LobeHub
+  - Single Sign-On
+  - OIDC
+---
+
+# Configuring ZITADEL Authentication
+
+[ZITADEL](https://zitadel.com/) is an open-source identity infrastructure with built-in multi-tenancy.
+
+<Steps>
+  ### Create Application in ZITADEL
+
+  1. Log in to ZITADEL Console
+  2. Go to your project (or create a new one)
+  3. Click **New** to create a new application
+  4. Select **Web** as the application type
+  5. Configure:
+     - Name: `LobeHub`
+     - Authentication Method: `CODE` (for confidential clients)
+  6. Add redirect URI:
+
+  <Callout type={'info'}>
+    **Callback URL Format**: `https://your-domain.com/api/auth/callback/zitadel`
+  </Callout>
+
+  7. After creation, note down the **Client ID** and generate a **Client Secret**
+
+  ### Get Issuer URL
+
+  The issuer URL is your ZITADEL instance URL, typically:
+
+  - Cloud: `https://your-instance.zitadel.cloud`
+  - Self-hosted: `https://your-zitadel-domain`
+
+  ### Configure Environment Variables
+
+  When deploying LobeHub, you need to configure the following environment variables:
+
+  | Environment Variable  | Type     | Description                                                                   |
+  | --------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`         | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`  | Required | SSO provider for LobeHub. Use `zitadel` for ZITADEL                           |
+  | `AUTH_ZITADEL_ID`     | Required | Client ID from ZITADEL application                                            |
+  | `AUTH_ZITADEL_SECRET` | Required | Client Secret from ZITADEL application                                        |
+  | `AUTH_ZITADEL_ISSUER` | Required | ZITADEL issuer URL (e.g., `https://your-instance.zitadel.cloud`)              |
+
+  <Callout type={'info'}>
+    **Alternative Environment Variables**: For backward compatibility, the following aliases are also supported:
+
+    - `ZITADEL_CLIENT_ID` / `ZITADEL_CLIENT_SECRET` / `ZITADEL_ISSUER`
+  </Callout>
+
+  <Callout type={'tip'}>
+    Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#zitadel) for detailed information on these variables.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After successful deployment, users will be able to authenticate with ZITADEL and use LobeHub.
+</Callout>
+
+## Related Resources
+
+- [ZITADEL Documentation](https://zitadel.com/docs)
+- [ZITADEL Application Setup](https://zitadel.com/docs/guides/integrate/login-users)

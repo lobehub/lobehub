@@ -18,7 +18,7 @@ const Footer = () => {
   const { t } = useTranslation('tool');
 
   return (
-    <Flexbox gap={8} horizontal paddingBlock={12} paddingInline={12}>
+    <Flexbox horizontal gap={8} paddingBlock={12} paddingInline={12}>
       <Button
         icon={LucideNotepadText}
         loading={isAgentRuntimeRunning}
@@ -33,12 +33,12 @@ const Footer = () => {
       <ActionIcon
         icon={PlusSquareIcon}
         loading={isAgentRuntimeRunning}
+        title={t('search.createNewSearch')}
         onClick={() => {
           if (!messageId) return;
 
           saveSearchResult(messageId);
         }}
-        title={t('search.createNewSearch')}
       />
     </Flexbox>
   );

@@ -1,27 +1,51 @@
 import { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { type QueryIdentityRolesResult } from '@/database/models/userMemory';
 import { useClientDataSWR } from '@/libs/swr';
 import { userMemoryService } from '@/services/userMemory';
+import { type StoreSetter } from '@/store/types';
 
-import type { UserMemoryStore } from '../../store';
+import { type PersonaData } from '../../initialState';
+import { type UserMemoryStore } from '../../store';
 
 const FETCH_TAGS_KEY = 'useFetchTags';
+const FETCH_PERSONA_KEY = 'useFetchPersona';
 const n = (namespace: string) => namespace;
 
-export interface HomeAction {
-  useFetchTags: () => SWRResponse<QueryIdentityRolesResult>;
-}
+type Setter = StoreSetter<UserMemoryStore>;
+export const createHomeSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
+  new HomeActionImpl(set, get, _api);
 
-export const createHomeSlice: StateCreator<
-  UserMemoryStore,
-  [['zustand/devtools', never]],
-  [],
-  HomeAction
-> = (set) => ({
-  useFetchTags: () =>
-    useClientDataSWR(
+export class HomeActionImpl {
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    void get;
+  }
+
+  useFetchPersona = (isLogin = true): SWRResponse<PersonaData | null> => {
+    return useClientDataSWR(
+      isLogin ? FETCH_PERSONA_KEY : null,
+      () => userMemoryService.getPersona(),
+      {
+        onSuccess: (data: PersonaData | null | undefined) => {
+          this.#set(
+            {
+              persona: data ?? undefined,
+              personaInit: true,
+            },
+            false,
+            n('useFetchPersona/onSuccess'),
+          );
+        },
+      },
+    );
+  };
+
+  useFetchTags = (): SWRResponse<QueryIdentityRolesResult> => {
+    return useClientDataSWR(
       FETCH_TAGS_KEY,
       () =>
         userMemoryService.queryIdentityRoles({
@@ -30,7 +54,7 @@ export const createHomeSlice: StateCreator<
         }),
       {
         onSuccess: (data: QueryIdentityRolesResult | undefined) => {
-          set(
+          this.#set(
             {
               roles: data?.roles.map((item) => ({ count: item.count, tag: item.role })) || [],
               tags: data?.tags || [],
@@ -41,5 +65,8 @@ export const createHomeSlice: StateCreator<
           );
         },
       },
-    ),
-});
+    );
+  };
+}
+
+export type HomeAction = Pick<HomeActionImpl, keyof HomeActionImpl>;

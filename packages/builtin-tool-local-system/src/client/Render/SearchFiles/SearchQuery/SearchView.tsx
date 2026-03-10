@@ -30,18 +30,18 @@ interface SearchBarProps {
 const SearchBar = memo<SearchBarProps>(({ defaultQuery, resultsNumber, searching }) => {
   const { t } = useTranslation('tool');
   return (
-    <Flexbox align={'center'} distribution={'space-between'} gap={40} height={26} horizontal>
+    <Flexbox horizontal align={'center'} distribution={'space-between'} gap={40} height={26}>
       <Flexbox
+        horizontal
         align={'center'}
         className={cx(styles.query, searching && shinyTextStyles.shinyText)}
         gap={8}
-        horizontal
       >
         <Icon icon={SearchIcon} />
         {defaultQuery}
       </Flexbox>
 
-      <Flexbox align={'center'} className={styles.font} horizontal>
+      <Flexbox horizontal align={'center'} className={styles.font}>
         <div>{t('search.searchResult')}</div>
         {resultsNumber}
       </Flexbox>

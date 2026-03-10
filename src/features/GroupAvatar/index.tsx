@@ -1,6 +1,7 @@
 'use client';
 
-import { GroupAvatar, GroupAvatarProps, Skeleton } from '@lobehub/ui';
+import { type GroupAvatarProps } from '@lobehub/ui';
+import { GroupAvatar, Skeleton } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 
@@ -9,11 +10,12 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 interface GroupAvatarComponentProps extends GroupAvatarProps {
+  background?: string;
   loading?: boolean;
 }
 
 const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
-  ({ size = 28, avatars = [], loading, ...rest }) => {
+  ({ size = 28, avatars = [], background, loading, ...rest }) => {
     const [userAvatar, nickName, username] = useUserStore((s) => [
       userProfileSelectors.userAvatar(s),
       userProfileSelectors.nickName(s),
@@ -43,13 +45,18 @@ const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
     return (
       <GroupAvatar
         avatarShape={'square'}
+        cornerShape={'square'}
+        size={size}
         avatars={groupAvatars.map((agent: any) => ({
           avatar: agent.avatar || DEFAULT_AVATAR,
           background: agent?.backgroundColor || undefined,
           ...agent,
         }))}
-        cornerShape={'square'}
-        size={size}
+        style={
+          background && background !== 'rgba(0,0,0,0)'
+            ? { background, borderRadius: '22%' }
+            : undefined
+        }
         {...rest}
       />
     );

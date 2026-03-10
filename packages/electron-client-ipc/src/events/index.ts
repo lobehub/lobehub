@@ -1,13 +1,13 @@
-import { NavigationBroadcastEvents } from './navigation';
-import { ProtocolBroadcastEvents } from './protocol';
-import { RemoteServerBroadcastEvents } from './remoteServer';
-import { SystemBroadcastEvents } from './system';
-import { AutoUpdateBroadcastEvents } from './update';
+import type { NavigationBroadcastEvents } from './navigation';
+import type { ProtocolBroadcastEvents } from './protocol';
+import type { RemoteServerBroadcastEvents } from './remoteServer';
+import type { SystemBroadcastEvents } from './system';
+import type { AutoUpdateBroadcastEvents } from './update';
 
 /**
  * main -> render broadcast events
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+
 export interface MainBroadcastEvents
   extends
     AutoUpdateBroadcastEvents,
@@ -22,5 +22,9 @@ export type MainBroadcastParams<T extends MainBroadcastEventKey> = Parameters<
   MainBroadcastEvents[T]
 >[0];
 
-export type { MarketAuthorizationParams } from './remoteServer';
+export type {
+  AuthorizationPhase,
+  AuthorizationProgress,
+  MarketAuthorizationParams,
+} from './remoteServer';
 export type { OpenSettingsWindowOptions } from './windows';

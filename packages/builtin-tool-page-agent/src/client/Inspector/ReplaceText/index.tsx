@@ -59,7 +59,7 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
               {to || t('builtins.lobe-page-agent.apiName.replaceText.empty')}
             </span>
             {count > 0 && (
-              <Text as={'span'} code fontSize={12} type={'secondary'}>
+              <Text code as={'span'} fontSize={12} type={'secondary'}>
                 {' '}
                 ({t('builtins.lobe-page-agent.apiName.replaceText.count', { count })})
               </Text>

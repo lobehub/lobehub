@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { MemorySourceType } from '@lobechat/types';
+import { describe, expect, it } from 'vitest';
 
 import { LobeChatTopicContextProvider } from './chatTopic';
 
@@ -34,7 +34,7 @@ describe('LobeChatTopicContextProvider', () => {
       topicId: 'topic-1',
     });
 
-    const result = await provider.buildContext(job);
+    const result = await provider.buildContext(job.userId);
 
     expect(result.context).toContain(
       '<chat_topic created_at="2024-03-01T09:00:00.000Z" id="topic-1" message_count="2" last_message_at="2024-03-01T10:01:00.000Z" updated_at="2024-03-01T10:02:00.000Z">',

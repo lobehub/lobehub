@@ -5,7 +5,8 @@ import { ThreadModel } from '@/database/models/thread';
 import { insertThreadSchema } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { type ThreadItem, createThreadSchema } from '@/types/topic/thread';
+import { type ThreadItem } from '@/types/topic/thread';
+import { createThreadSchema } from '@/types/topic/thread';
 
 const threadProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -21,6 +22,7 @@ const threadProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
 export const threadRouter = router({
   createThread: threadProcedure.input(createThreadSchema).mutation(async ({ input, ctx }) => {
     const thread = await ctx.threadModel.create({
+      metadata: input.metadata,
       parentThreadId: input.parentThreadId,
       sourceMessageId: input.sourceMessageId,
       title: input.title,
@@ -38,6 +40,7 @@ export const threadRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const thread = await ctx.threadModel.create({
+        metadata: input.metadata,
         parentThreadId: input.parentThreadId,
         sourceMessageId: input.sourceMessageId,
         title: input.message.content.slice(0, 20),

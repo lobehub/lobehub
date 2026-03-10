@@ -1,19 +1,20 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Form } from 'antd';
-import { useRouter, useSearchParams } from '@/libs/next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
-import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
+import { type CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
+import { type ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
+import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
+
+const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
 
 type Step = 'email' | 'password';
 
@@ -31,14 +32,25 @@ export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const enableMagicLink = useServerConfigStore(serverConfigSelectors.enableMagicLink);
+  const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
+  const disableEmailPassword = useAuthServerConfigStore(
+    (s) => s.serverConfig.disableEmailPassword || false,
+  );
   const [form] = Form.useForm<SignInFormValues>();
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
-  const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
-  const oAuthSSOProviders = useServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
+  const [isSocialOnly, setIsSocialOnly] = useState(false);
+  const [lastAuthProvider] = useState(() => {
+    try {
+      return localStorage.getItem(LAST_AUTH_PROVIDER_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
+  const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
   const { ssoProviders, preSocialSigninCheck, getAdditionalData } = useBusinessSignin();
 
   useEffect(() => {
@@ -142,7 +154,8 @@ export const useSignIn = () => {
         return;
       }
 
-      message.info(t('betterAuth.signin.socialOnlyHint'));
+      // User has no password and magic link is disabled, they can only sign in via social
+      setIsSocialOnly(true);
     } catch (error) {
       console.error('Error checking user:', error);
       message.error(t('betterAuth.signin.error'));
@@ -190,6 +203,12 @@ export const useSignIn = () => {
         return;
       }
 
+      try {
+        localStorage.setItem(LAST_AUTH_PROVIDER_KEY, provider);
+      } catch {
+        // Ignore localStorage errors (e.g., quota exceeded, private mode)
+      }
+
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
       const result = isBuiltinProvider(normalizedProvider)
@@ -215,6 +234,7 @@ export const useSignIn = () => {
   const handleBackToEmail = () => {
     setStep('email');
     setEmail('');
+    setIsSocialOnly(false);
   };
 
   const handleGoToSignup = () => {
@@ -238,7 +258,17 @@ export const useSignIn = () => {
     }
   };
 
+  const resolvedProviders = ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders;
+  const sortedProviders = lastAuthProvider
+    ? [...resolvedProviders].sort((a, b) => {
+        if (a === lastAuthProvider) return -1;
+        if (b === lastAuthProvider) return 1;
+        return 0;
+      })
+    : resolvedProviders;
+
   return {
+    disableEmailPassword,
     email,
     form,
     handleBackToEmail,
@@ -247,8 +277,10 @@ export const useSignIn = () => {
     handleGoToSignup,
     handleSignIn,
     handleSocialSignIn,
+    isSocialOnly,
+    lastAuthProvider,
     loading,
-    oAuthSSOProviders: ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders,
+    oAuthSSOProviders: sortedProviders,
     serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,
     socialLoading,
     step,

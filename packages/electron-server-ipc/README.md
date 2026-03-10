@@ -62,7 +62,7 @@ IPC server implementations need to handle various communication scenarios and ed
 
 ### Contribution Process
 
-1. Fork the [LobeChat repository](https://github.com/lobehub/lobe-chat)
+1. Fork the [LobeHub repository](https://github.com/lobehub/lobe-chat)
 2. Implement your improvements to the IPC server package
 3. Submit a Pull Request describing:
 

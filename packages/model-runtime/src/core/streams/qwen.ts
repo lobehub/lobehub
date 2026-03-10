@@ -1,17 +1,19 @@
-import OpenAI from 'openai';
-import {
+import type OpenAI from 'openai';
+import type {
   ChatCompletionContentPart,
   ChatCompletionContentPartText,
 } from 'openai/resources/index.mjs';
 import type { Stream } from 'openai/streaming';
 
-import { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks } from '../../types';
 import { convertOpenAIUsage } from '../usageConverters';
-import {
+import type {
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
   StreamToolCallChunkData,
+} from './protocol';
+import {
   convertIterableToStream,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
@@ -46,7 +48,7 @@ export const transformQwenStream = (
   if (Array.isArray(item.delta?.content)) {
     const part = item.delta.content[0];
     const process = (part: ChatCompletionContentPart): ChatCompletionContentPartText => {
-      let [key, value] = Object.entries(part)[0];
+      const [key, value] = Object.entries(part)[0];
       if (key === 'image') {
         return {
           text: `![image](${value})`,
@@ -70,16 +72,25 @@ export const transformQwenStream = (
 
   if (item.delta?.tool_calls) {
     return {
-      data: item.delta.tool_calls.map((value, index): StreamToolCallChunkData => {
-        // Store first tool call's info in streamContext for subsequent chunks
-        // (similar pattern to OpenAI stream handling)
-        if (streamContext && !streamContext.tool && value.id && value.function?.name) {
-          streamContext.tool = {
+      data: item.delta.tool_calls.map((value, arrayIndex): StreamToolCallChunkData => {
+        // Get the actual tool index from the chunk, fallback to array position
+        const toolIndex = typeof value.index !== 'undefined' ? value.index : arrayIndex;
+
+        // Store tool call info in streamContext.tools map by index for parallel tool calls
+        // This allows us to correctly track multiple tools being called in parallel
+        if (streamContext && value.id && value.function?.name) {
+          if (!streamContext.tools) {
+            streamContext.tools = {};
+          }
+          streamContext.tools[toolIndex] = {
             id: value.id,
-            index: typeof value.index !== 'undefined' ? value.index : index,
+            index: toolIndex,
             name: value.function.name,
           };
         }
+
+        // Get stored tool info for this index (for incremental chunks without id)
+        const storedTool = streamContext?.tools?.[toolIndex];
 
         return {
           // Qwen models may send tool_calls in two separate chunks:
@@ -91,10 +102,10 @@ export const transformQwenStream = (
             arguments: value.function?.arguments ?? '',
             name: value.function?.name ?? null,
           },
-          // For incremental chunks without id, use the stored tool id from streamContext
-          id:
-            value.id || streamContext?.tool?.id || generateToolCallId(index, value.function?.name),
-          index: typeof value.index !== 'undefined' ? value.index : index,
+          // For incremental chunks without id, use the stored tool id from streamContext.tools
+          // based on the tool index to correctly associate arguments with the right tool call
+          id: value.id || storedTool?.id || generateToolCallId(toolIndex, value.function?.name),
+          index: toolIndex,
           type: value.type || 'function',
         };
       }),
@@ -135,7 +146,7 @@ export const transformQwenStream = (
 export const QwenAIStream = (
   stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
   // TODO: preserve for RFC 097
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, unused-imports/no-unused-vars
+
   {
     callbacks,
     inputStartAt,
@@ -149,7 +160,7 @@ export const QwenAIStream = (
   return readableStream
     .pipeThrough(
       createTokenSpeedCalculator(transformQwenStream, {
-        enableStreaming: enableStreaming,
+        enableStreaming,
         inputStartAt,
         streamStack: streamContext,
       }),

@@ -1,13 +1,6 @@
 import type { Message, PipelineContext, ProcessorOptions } from '../types';
 import { BaseProcessor } from './BaseProcessor';
-
-const SYSTEM_CONTEXT_START = '<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->';
-const SYSTEM_CONTEXT_END = '<!-- END SYSTEM CONTEXT -->';
-const CONTEXT_INSTRUCTION = `<context.instruction>following part contains context information injected by the system. Please follow these instructions:
-
-1. Always prioritize handling user-visible content.
-2. the context is only required when user's queries rely on it.
-</context.instruction>`;
+import { CONTEXT_INSTRUCTION, SYSTEM_CONTEXT_END, SYSTEM_CONTEXT_START } from './constants';
 
 /**
  * Base Provider for appending content to the last user message

@@ -1,44 +1,64 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { expo } from '@better-auth/expo';
 import { passkey } from '@better-auth/passkey';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { createNanoId, idGenerator, serverDB } from '@lobechat/database';
 import * as schema from '@lobechat/database/schemas';
 import bcrypt from 'bcryptjs';
-import { emailHarmony } from 'better-auth-harmony';
-import { validateEmail } from 'better-auth-harmony/email';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { verifyPassword as defaultVerifyPassword } from 'better-auth/crypto';
-import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
+import { type BetterAuthOptions } from 'better-auth/minimal';
+import { betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
+import { emailHarmony } from 'better-auth-harmony';
+import { validateEmail } from 'better-auth-harmony/email';
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
 import { businessEmailValidator } from '@/business/server/better-auth';
+import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import {
+  getChangeEmailVerificationTemplate,
   getMagicLinkEmailTemplate,
   getResetPasswordEmailTemplate,
   getVerificationEmailTemplate,
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
+import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { EmailService } from '@/server/services/email';
 import { UserService } from '@/server/services/user';
 
+// Configure HTTP proxy for OAuth provider requests in development (e.g., Google token exchange)
+// Node.js native fetch doesn't respect system proxy settings
+// Ref: https://github.com/better-auth/better-auth/issues/7396
+if (process.env.NODE_ENV === 'development') {
+  const proxyUrl =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy;
+
+  if (proxyUrl) {
+    const proxyAgent = new ProxyAgent(proxyUrl);
+    setGlobalDispatcher(proxyAgent);
+  }
+}
+
 // Email verification link expiration time (in seconds)
 // Default is 1 hour (3600 seconds) as per Better Auth documentation
 const VERIFICATION_LINK_EXPIRES_IN = 3600;
 
 /**
- * Safely extract hostname from AUTH_URL for passkey rpID.
- * Returns undefined if AUTH_URL is not set (e.g., in e2e tests).
+ * Safely extract hostname from APP_URL for passkey rpID.
+ * Returns undefined if APP_URL is not set (e.g., in e2e tests).
  */
 const getPasskeyRpID = (): string | undefined => {
-  if (!authEnv.NEXT_PUBLIC_AUTH_URL) return undefined;
+  if (!appEnv.APP_URL) return undefined;
   try {
-    return new URL(authEnv.NEXT_PUBLIC_AUTH_URL).hostname;
+    return new URL(appEnv.APP_URL).hostname;
   } catch {
     return undefined;
   }
@@ -46,19 +66,20 @@ const getPasskeyRpID = (): string | undefined => {
 
 /**
  * Get passkey origins array.
- * Returns undefined if AUTH_URL is not set (e.g., in e2e tests).
+ * Returns undefined if APP_URL is not set (e.g., in e2e tests).
  */
 const getPasskeyOrigins = (): string[] | undefined => {
-  if (!authEnv.NEXT_PUBLIC_AUTH_URL) return undefined;
-  return [
-    // Web origin
-    authEnv.NEXT_PUBLIC_AUTH_URL,
-  ];
+  if (!appEnv.APP_URL) return undefined;
+  try {
+    return [new URL(appEnv.APP_URL).origin];
+  } catch {
+    return undefined;
+  }
 };
 const MAGIC_LINK_EXPIRES_IN = 900;
 // OTP expiration time (in seconds) - 5 minutes for mobile OTP verification
 const OTP_EXPIRES_IN = 300;
-const enableMagicLink = authEnv.ENABLE_MAGIC_LINK;
+const enableMagicLink = authEnv.AUTH_ENABLE_MAGIC_LINK;
 const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
@@ -81,14 +102,14 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       },
     },
 
-    // Use renamed env vars (fallback to next-auth vars is handled in src/envs/auth.ts)
-    baseURL: authEnv.NEXT_PUBLIC_AUTH_URL,
+    baseURL: appEnv.APP_URL,
     secret: authEnv.AUTH_SECRET,
     trustedOrigins: getTrustedOrigins(enabledSSOProviders),
 
     emailAndPassword: {
       autoSignIn: true,
-      enabled: true,
+      disableSignUp: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
+      enabled: !authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
       maxPasswordLength: 64,
       minPasswordLength: 8,
       requireEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
@@ -129,11 +150,19 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           return;
         }
 
-        const template = getVerificationEmailTemplate({
-          expiresInSeconds: VERIFICATION_LINK_EXPIRES_IN,
-          url,
-          userName: user.name,
-        });
+        // Use different template for change-email vs signup verification
+        const isChangeEmail = request?.url?.includes('/change-email');
+        const template = isChangeEmail
+          ? getChangeEmailVerificationTemplate({
+              expiresInSeconds: VERIFICATION_LINK_EXPIRES_IN,
+              url,
+              userName: user.name,
+            })
+          : getVerificationEmailTemplate({
+              expiresInSeconds: VERIFICATION_LINK_EXPIRES_IN,
+              url,
+              userName: user.name,
+            });
 
         const emailService = new EmailService();
         await emailService.sendMail({
@@ -150,6 +179,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         enabled: true,
         maxAge: 10 * 60, // Cache duration in seconds
       },
+      // Keep a DB-backed fallback when Redis secondary storage entries are unexpectedly missing.
+      storeSessionInDatabase: true,
     },
     database: drizzleAdapter(serverDB, {
       provider: 'pg',
@@ -186,6 +217,9 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       },
     },
     user: {
+      changeEmail: {
+        enabled: true,
+      },
       additionalFields: {
         username: {
           required: false,
@@ -219,8 +253,15 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         },
       },
     },
+    rateLimit: {
+      customRules: {
+        '/request-password-reset': { max: 3, window: 60 },
+        '/send-verification-email': { max: 3, window: 60 },
+      },
+    },
     plugins: [
       ...customOptions.plugins,
+      emailWhitelist(),
       expo(),
       emailHarmony({ allowNormalizedSignin: false, validator: customEmailValidator }),
       admin(),

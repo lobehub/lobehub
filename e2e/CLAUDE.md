@@ -298,12 +298,11 @@ HEADLESS=false pnpm exec cucumber-js --config cucumber.config.js --tags "@smoke"
 运行测试需要以下环境变量：
 
 ```bash
-BASE_URL=http://localhost:3010   # 测试服务器地址
-DATABASE_URL=postgresql://...    # 数据库连接
-DATABASE_DRIVER=node             # 数据库驱动
-KEY_VAULTS_SECRET=...            # 密钥
-BETTER_AUTH_SECRET=...           # Auth 密钥
-NEXT_PUBLIC_ENABLE_BETTER_AUTH=1 # 启用 Better Auth
+BASE_URL=http://localhost:3010 # 测试服务器地址
+DATABASE_URL=postgresql://...  # 数据库连接
+DATABASE_DRIVER=node           # 数据库驱动
+KEY_VAULTS_SECRET=...          # 密钥
+AUTH_SECRET=...                # Auth 密钥
 
 # 可选：S3 相关（如果测试涉及文件上传）
 S3_ACCESS_KEY_ID=e2e-mock-access-key

@@ -1,16 +1,16 @@
 import type { PartialDeep } from 'type-fest';
 
-import { IFeatureFlagsState } from '@/config/featureFlags';
+import type { IFeatureFlagsState } from '@/config/featureFlags';
 
-import { ChatModelCard } from './llm';
-import {
+import type { ChatModelCard } from './llm';
+import type {
   GlobalLLMProviderKey,
   UserDefaultAgent,
   UserImageConfig,
   UserSystemAgentConfig,
 } from './user/settings';
 
-export type GlobalMemoryLayer = 'context' | 'experience' | 'identity' | 'preference';
+export type GlobalMemoryLayer = 'activity' | 'context' | 'experience' | 'identity' | 'preference';
 
 export interface MemoryAgentPublicConfig {
   baseURL?: string;
@@ -49,18 +49,18 @@ export type ServerLanguageModel = Partial<Record<GlobalLLMProviderKey, ServerMod
 export interface GlobalServerConfig {
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
+  disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;
+  /**
+   * @deprecated
+   */
+  enabledOAuthSSO?: boolean;
   enableEmailVerification?: boolean;
   enableKlavis?: boolean;
   enableLobehubSkill?: boolean;
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableUploadFileToServer?: boolean;
-  enabledAccessCode?: boolean;
-  /**
-   * @deprecated
-   */
-  enabledOAuthSSO?: boolean;
   image?: PartialDeep<UserImageConfig>;
   memory?: GlobalMemoryConfig;
   oAuthSSOProviders?: string[];

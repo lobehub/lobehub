@@ -2,11 +2,12 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { LobeChatDatabase } from '../../type';import { uuid } from '@/utils/uuid';
+import { uuid } from '@/utils/uuid';
 
-import { chunks, embeddings, fileChunks, files, unstructuredChunks, users } from '../../schemas';
-import { ChunkModel } from '../chunk';
 import { getTestDB } from '../../core/getTestDB';
+import { chunks, embeddings, fileChunks, files, unstructuredChunks, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { ChunkModel } from '../chunk';
 import { codeEmbedding, designThinkingQuery, designThinkingQuery2 } from './fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -541,7 +542,7 @@ content in Table html is below:
       const chunkResult = await serverDB
         .insert(chunks)
         .values(
-          Array(24)
+          Array.from({ length: 24 })
             .fill(0)
             .map((_, i) => ({ text: `Test Chunk ${i}`, userId })),
         )

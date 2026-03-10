@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type ListLocalFilesState } from '../../../types';
+import type { ListLocalFilesState } from '../../../types';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 interface ListLocalFilesParams {
@@ -34,7 +34,7 @@ export const ListLocalFilesInspector = memo<
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-cloud-sandbox.apiName.listLocalFiles')}: </span>
-        <FilePathDisplay filePath={path} isDirectory />
+        <FilePathDisplay isDirectory filePath={path} />
       </div>
     );
   }
@@ -46,7 +46,7 @@ export const ListLocalFilesInspector = memo<
   return (
     <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
       <span>{t('builtins.lobe-cloud-sandbox.apiName.listLocalFiles')}: </span>
-      <FilePathDisplay filePath={path} isDirectory />
+      <FilePathDisplay isDirectory filePath={path} />
       {!isLoading &&
         pluginState?.files &&
         (hasResults ? (

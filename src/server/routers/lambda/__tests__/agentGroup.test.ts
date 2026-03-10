@@ -171,6 +171,7 @@ describe('agentGroupRouter', () => {
           config: { ...DEFAULT_CHAT_GROUP_CHAT_CONFIG, allowDM: true },
         },
         ['agent-1', 'agent-2'],
+        undefined,
       );
       expect(result).toEqual({
         agentIds: ['agent-1', 'agent-2'],

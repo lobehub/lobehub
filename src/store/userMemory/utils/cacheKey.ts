@@ -1,4 +1,4 @@
-import type { RetrieveMemoryParams } from '@/types/userMemory';
+import { type RetrieveMemoryParams } from '@/types/userMemory';
 
 export const userMemoryCacheKey = (params: RetrieveMemoryParams): string => {
   const { query, topK } = params;

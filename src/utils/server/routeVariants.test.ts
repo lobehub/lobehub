@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_LANG } from '@/const/locale';
-import { DynamicLayoutProps } from '@/types/next';
+import { type DynamicLayoutProps } from '@/types/next';
 
-import { DEFAULT_VARIANTS, IRouteVariants, RouteVariants } from './routeVariants';
+import { type IRouteVariants } from './routeVariants';
+import { DEFAULT_VARIANTS, RouteVariants } from './routeVariants';
 
 describe('RouteVariants', () => {
   describe('DEFAULT_VARIANTS', () => {

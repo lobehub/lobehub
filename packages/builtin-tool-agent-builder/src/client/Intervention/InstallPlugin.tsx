@@ -1,10 +1,9 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { CheckCircle } from 'lucide-react';
-import Image from 'next/image';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +11,7 @@ import { useToolStore } from '@/store/tool';
 import {
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
+  mcpStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
@@ -44,6 +44,14 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
       lobehubSkillStoreSelectors.getServers(s).find((srv) => srv.identifier === identifier),
     );
 
+    // Get Market MCP plugin info
+    const marketPlugin = useToolStore((s) => mcpStoreSelectors.getPluginById(identifier)(s));
+
+    // Get Builtin tool info
+    const builtinTool = useToolStore((s) =>
+      s.builtinTools.find((tool) => tool.identifier === identifier),
+    );
+
     // Check if it's a Klavis tool
     const klavisTypeInfo = KLAVIS_SERVER_TYPES.find((t) => t.identifier === identifier);
     const isKlavis = source === 'official' && !!klavisTypeInfo;
@@ -56,9 +64,9 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
     if (isPluginInstalled) {
       return (
         <Flexbox
+          horizontal
           align="center"
           gap={12}
-          horizontal
           style={{
             background: 'var(--lobe-fill-tertiary)',
             borderRadius: 8,
@@ -90,21 +98,20 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
           gap={12}
           style={{ background: 'var(--lobe-fill-tertiary)', borderRadius: 8, padding: 16 }}
         >
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             {icon ? (
-              <Image
+              <img
                 alt={klavisTypeInfo?.label || identifier}
                 height={40}
                 src={icon}
                 style={{ borderRadius: 8 }}
-                unoptimized
                 width={40}
               />
             ) : (
               <Avatar avatar="☁️" size={40} style={{ borderRadius: 8 }} />
             )}
             <Flexbox flex={1} gap={4}>
-              <Flexbox align="center" gap={8} horizontal>
+              <Flexbox horizontal align="center" gap={8}>
                 <span style={{ fontWeight: 600 }}>{klavisTypeInfo?.label || identifier}</span>
                 <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>Klavis</span>
               </Flexbox>
@@ -133,21 +140,20 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
           gap={12}
           style={{ background: 'var(--lobe-fill-tertiary)', borderRadius: 8, padding: 16 }}
         >
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             {icon ? (
-              <Image
+              <img
                 alt={lobehubSkillProviderInfo?.label || identifier}
                 height={40}
                 src={icon}
                 style={{ borderRadius: 8 }}
-                unoptimized
                 width={40}
               />
             ) : (
               <Avatar avatar="🔗" size={40} style={{ borderRadius: 8 }} />
             )}
             <Flexbox flex={1} gap={4}>
-              <Flexbox align="center" gap={8} horizontal>
+              <Flexbox horizontal align="center" gap={8}>
                 <span style={{ fontWeight: 600 }}>
                   {lobehubSkillProviderInfo?.label || identifier}
                 </span>
@@ -166,19 +172,33 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
       );
     }
 
-    // Render MCP marketplace plugin
+    // Render MCP marketplace plugin or Builtin tool
     // Note: The actual installation happens in ExecutionRuntime after user approves
+    const pluginName = marketPlugin?.name || builtinTool?.manifest?.meta?.title || identifier;
+    const pluginIcon = marketPlugin?.icon || builtinTool?.manifest?.meta?.avatar;
+    const pluginType = source === 'market' ? 'MCP Plugin' : 'Builtin Tool';
+
     return (
       <Flexbox
         gap={12}
         style={{ background: 'var(--lobe-fill-tertiary)', borderRadius: 8, padding: 16 }}
       >
-        <Flexbox align="center" gap={12} horizontal>
-          <Avatar avatar="🔧" size={40} style={{ borderRadius: 8 }} />
+        <Flexbox horizontal align="center" gap={12}>
+          {pluginIcon && typeof pluginIcon === 'string' && pluginIcon.startsWith('http') ? (
+            <img
+              alt={pluginName}
+              height={40}
+              src={pluginIcon}
+              style={{ borderRadius: 8 }}
+              width={40}
+            />
+          ) : (
+            <Avatar avatar={pluginIcon || '🔧'} size={40} style={{ borderRadius: 8 }} />
+          )}
           <Flexbox flex={1} gap={4}>
-            <Flexbox align="center" gap={8} horizontal>
-              <span style={{ fontWeight: 600 }}>{identifier}</span>
-              <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>MCP Plugin</span>
+            <Flexbox horizontal align="center" gap={8}>
+              <span style={{ fontWeight: 600 }}>{pluginName}</span>
+              <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>{pluginType}</span>
             </Flexbox>
             <span style={{ color: 'var(--lobe-text-secondary)', fontSize: 12 }}>
               {t('agentBuilder.installPlugin.clickApproveToInstall')}

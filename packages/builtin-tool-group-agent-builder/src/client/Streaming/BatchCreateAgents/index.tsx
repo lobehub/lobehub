@@ -64,7 +64,7 @@ export const BatchCreateAgentsStreaming = memo<BuiltinStreamingProps<BatchCreate
     return (
       <Block variant={'outlined'} width="100%">
         {agents.map((agent, index) => (
-          <Flexbox align={'flex-start'} className={styles.item} gap={8} horizontal key={index}>
+          <Flexbox horizontal align={'flex-start'} className={styles.item} gap={8} key={index}>
             <div className={styles.index}>{index + 1}.</div>
             <Avatar
               avatar={agent.avatar}
@@ -76,7 +76,7 @@ export const BatchCreateAgentsStreaming = memo<BuiltinStreamingProps<BatchCreate
               <span className={styles.title}>{agent.title}</span>
               {agent.description && <span className={styles.description}>{agent.description}</span>}
               {agent.tools && agent.tools.length > 0 && (
-                <Flexbox gap={4} horizontal style={{ marginTop: 8 }} wrap={'wrap'}>
+                <Flexbox horizontal gap={4} style={{ marginTop: 8 }} wrap={'wrap'}>
                   {agent.tools.map((tool) => (
                     <ToolTag identifier={tool} key={tool} />
                   ))}

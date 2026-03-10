@@ -1,0 +1,107 @@
+---
+title: Cloud Sandbox
+description: >-
+  Agents execute code and process files in a secure cloud environment — run
+  Python/JS, generate docs, create charts. Real execution, not just snippets.
+tags:
+  - LobeHub
+  - Cloud Sandbox
+  - Code Execution
+  - File Generation
+  - Data Processing
+---
+
+# Cloud Sandbox
+
+Cloud Sandbox lets Agents run code and process files in a secure, isolated cloud environment. Instead of only suggesting code, your Agent executes it — and returns real output, downloadable documents, and charts you can iterate on in real time. From data analysis to report generation, code debugging to file conversion, Cloud Sandbox turns your Agent into a true execution partner.
+
+## What Is Cloud Sandbox?
+
+A securely isolated cloud execution environment. When you need actual results — not just code snippets — the Agent runs the code in the sandbox and returns the output. Your local machine stays untouched; all execution happens in the cloud.
+
+## What Cloud Sandbox Can Do
+
+### Execute Code
+
+The Agent runs Python, JavaScript, and TypeScript in the sandbox and returns real execution output — not just code text. Common libraries (e.g., pandas, matplotlib for Python; lodash for JavaScript) are available. The Agent can install additional packages as needed.
+
+### Generate Files
+
+The Agent creates PDFs, Excel spreadsheets, Word documents, images, charts, and more — with download links. Download and use them directly in your workflow.
+
+### Process Data
+
+The Agent reads, analyzes, and transforms data files. Upload CSV, JSON, or other formats — the Agent can clean, summarize, visualize, and export the results.
+
+### Run Commands
+
+The Agent executes shell commands to install dependencies, manipulate files, and perform complex operations. Useful for multi-step workflows that combine scripts and system tools.
+
+## Enabling Cloud Sandbox
+
+Cloud Sandbox is a built-in Skill. Enable it for your Agent before use.
+
+**From Agent Profile** — Go to the Agent Profile page, click **+ Add Skill**, and check **Cloud Sandbox**.
+
+**In a conversation** — Click the Skill icon below the chat input and check **Cloud Sandbox**.
+
+## Using Cloud Sandbox
+
+### Ask the Agent to Execute Code
+
+Describe the task; the Agent writes and runs the code:
+
+- "Write a Python script to calculate the average and standard deviation of this dataset."
+- "Implement a quicksort algorithm in JavaScript and run a test."
+- "Run this code and show me the output."
+- "Use pandas to analyze this CSV and show the top 5 rows by revenue."
+
+### Ask the Agent to Generate Documents
+
+Describe the content; the Agent generates the document and provides a download link:
+
+- "Generate a PDF report with the analysis of this data."
+- "Convert this content into a Word document."
+- "Create an Excel spreadsheet to organize this information."
+- "Make a bar chart from this sales data and export it as PNG."
+
+### Ask the Agent to Process Data
+
+Provide data or files; the Agent processes and returns results:
+
+- "Analyze this sales data and create a trend chart."
+- "Convert this JSON file to CSV format."
+- "Clean this dataset by removing duplicates."
+- "Merge these two CSV files on the 'id' column."
+
+## Use Cases
+
+**Data analysis** — Upload a dataset, ask for summary statistics, visualizations, or trend analysis. Get charts and tables you can share in reports or presentations.
+
+**Report automation** — Generate weekly reports, invoices, or summaries from structured data. The Agent produces PDFs or Excel files ready to send.
+
+**Code prototyping** — Test algorithms, validate logic, or debug snippets without leaving the conversation. See real output instead of guessing.
+
+**File conversion** — Convert between formats (JSON ↔ CSV, Markdown → PDF) or batch-process files. No need to write one-off scripts yourself.
+
+## Understanding the Environment
+
+**Isolated execution** — The sandbox runs on a secure cloud server, completely separate from your local machine. Nothing the Agent does in the sandbox affects your local file system.
+
+**Session-based storage** — Files in the sandbox are temporary and tied to the current conversation. If the session ends or stays inactive for a long time, sandbox files may be cleared. Download files you need using the links the Agent provides.
+
+**Automatic export** — When the Agent generates files, they're automatically exported with download links. No extra steps — you get documents, charts, and data files directly from the execution.
+
+## Tips
+
+- **Be specific about format** — "Export as CSV" or "Save as PDF" helps the Agent choose the right output format.
+- **Iterate in the same conversation** — "Make the chart blue" or "Add a title to the report" — the Agent has context and can refine the output.
+- **Download important files promptly** — Session-based storage means files may not persist indefinitely. Grab what you need while the conversation is active.
+
+<Cards>
+  <Card href={'/docs/usage/agent/artifacts'} title={'Artifacts'} />
+
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/agent/scheduled-task'} title={'Scheduled Tasks'} />
+</Cards>

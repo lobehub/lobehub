@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 const LobeHub: ModelProviderCard = {
   chatModels: [],
@@ -19,4 +19,9 @@ const LobeHub: ModelProviderCard = {
 
 export default LobeHub;
 
-export const planCardModels = ['gpt-4o-mini', 'deepseek-reasoner', 'claude-3-5-sonnet-latest'];
+export const planCardModels = [
+  'claude-sonnet-4-6',
+  'gemini-3.1-pro-preview',
+  'gpt-5.4',
+  'deepseek-chat',
+];

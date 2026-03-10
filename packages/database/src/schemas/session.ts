@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { boolean, index, integer, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -29,6 +28,7 @@ export const sessionGroups = pgTable(
       table.clientId,
       table.userId,
     ),
+    userIdIdx: index('session_groups_user_id_idx').on(table.userId),
   }),
 );
 

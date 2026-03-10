@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { Langfuse } from 'langfuse';
-import { CreateLangfuseTraceBody } from 'langfuse-core';
+import { type CreateLangfuseTraceBody } from 'langfuse-core';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as server from '@/envs/langfuse';

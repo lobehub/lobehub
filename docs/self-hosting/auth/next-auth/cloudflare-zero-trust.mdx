@@ -1,0 +1,67 @@
+---
+title: Configuring Cloudflare Zero Trust Authentication Service for LobeHub
+description: >-
+  Learn how to configure Cloudflare Zero Trust for Single Sign-On (SSO) for
+  LobeHub, including creating an application provider, setting environment
+  variables, and deployment instructions.
+tags:
+  - Cloudflare Zero Trust
+  - Single Sign-On (SSO)
+  - LobeHub Authentication
+  - Environment Variables
+  - Deployment Instructions
+---
+
+# Configuring Cloudflare Zero Trust Authentication Service
+
+## Cloudflare Zero Trust Configuration Flow
+
+<Steps>
+  ### Creating an Application in Cloudflare Zero Trust
+
+  We assume you are already familiar with using the Cloudflare Zero Trust platform and that your LobeHub instance is deployed at `https://chat.example.com`.
+
+  First, we need to visit `https://one.dash.cloudflare.com/` and navigate to `Access - Applications`.
+
+  ![Cloudflare Zero Trust Access - Applications](/blog/assetsc74cf5c8daee1515c37a85bce087f0d6.webp)
+
+  Now, on the current page, click `Add an application` and select `SaaS`.
+
+  ![Add Application - Select SaaS](/blog/assetse717764a3618df4e56212e447a6c20cd.webp)
+
+  In the `Application` text box, enter the application name, such as `LobeHub SSO`. Then click `Select OIDC`, followed by clicking `Add application`.
+
+  ![Add LobeHub SSO Application](/blog/assets0ceb7e446f9a850df283093563ba7803.webp)
+
+  At this point, you have successfully created a SaaS application named `LobeHub SSO` in Cloudflare Zero Trust.
+
+  Next, we need to enter `https://chat.example.com/api/auth/callback/cloudflare-zero-trust` in the `Redirect URLs` field (note that `chat.example.com` should be replaced with your instance's address).
+
+  ![Configure Redirect URLs](/blog/assets4aaf8d5d092608b649230e0e6fc92df6.webp)
+
+  Finally, scroll down the page and record the following three values: `Client secret`, `Client ID`, and `Issuer`. You will need these for setting the environment variables when deploying LobeHub.
+
+  ![Client ID, Client Secret and Issuer](/blog/assets66b0dfa56c1f5b3063b5ba740dd3ef8d.webp)
+
+  ### Configure Environment Variables
+
+  When deploying LobeHub, you need to configure the following environment variables:
+
+  | Environment Variable                | Type     | Description                                                                                                                                                                                                         |
+  | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`                       | Required | The secret used to encrypt Auth.js session tokens. You can generate a secret using the following command: `openssl rand -base64 32`                                                                                 |
+  | `NEXT_AUTH_SSO_PROVIDERS`           | Required | Select the SSO provider for LoboChat. Use `cloudflare-zero-trust` for Cloudflare Zero Trust.                                                                                                                        |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`     | Required | The Client ID from the Cloudflare Zero Trust application provider details page                                                                                                                                      |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_SECRET` | Required | The Client Secret from the Cloudflare Zero Trust application provider details page                                                                                                                                  |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER` | Required | The OpenID Configuration Issuer from the Cloudflare Zero Trust application provider details page                                                                                                                    |
+  | `AUTH_URL`                          | Required | This URL is used to specify the callback address for Auth.js when performing OAuth authentication. It only needs to be set when the default generated redirect address is incorrect. `https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    Go to  [📘 Environment Variables](/docs/self-hosting/environment-variable#Cloudflare%20Zero%20Trust) for details about the variables.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After a successful deployment, users will be able to use LobeHub by authenticating with the users
+  configured in Cloudflare Zero Trust.
+</Callout>

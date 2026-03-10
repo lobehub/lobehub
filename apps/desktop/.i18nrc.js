@@ -1,14 +1,14 @@
 const { defineConfig } = require('@lobehub/i18n-cli');
 
 module.exports = defineConfig({
-  entry: 'resources/locales/zh-CN',
-  entryLocale: 'zh-CN',
+  entry: 'resources/locales/en',
+  entryLocale: 'en',
   output: 'resources/locales',
   outputLocales: [
     'ar',
     'bg-BG',
     'zh-TW',
-    'en',
+    'zh-CN',
     'ru-RU',
     'ja-JP',
     'ko-KR',

@@ -1,7 +1,9 @@
-import { ActionIcon, DropdownMenu, type DropdownMenuProps, Icon } from '@lobehub/ui';
+import { type DropdownMenuProps } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
-import { FC, useMemo } from 'react';
+import { type FC } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const themeIcons = {
@@ -43,7 +45,7 @@ const ThemeButton: FC<{ placement?: DropdownMenuProps['placement']; size?: numbe
   );
 
   return (
-    <DropdownMenu items={items} nativeButton={false} placement={placement}>
+    <DropdownMenu items={items} placement={placement}>
       <ActionIcon
         icon={themeIcons[(theme as 'dark' | 'light' | 'system') || 'system']}
         size={size || { blockSize: 32, size: 16 }}

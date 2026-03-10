@@ -1,5 +1,7 @@
-import { PluginItem, PluginListResponse } from '@lobehub/market-sdk';
-import { PluginItemDetail } from '@lobehub/market-types';
+import type { PluginItem, PluginListResponse } from '@lobehub/market-sdk';
+import type { PluginItemDetail } from '@lobehub/market-types';
+
+import type { DiscoverAssistantItem } from './assistants';
 
 export enum McpCategory {
   All = 'all',
@@ -18,7 +20,7 @@ export enum McpCategory {
   Tools = 'tools',
   TravelTransport = 'travel-transport',
   Weather = 'weather',
-  WebSearch = 'web-search'
+  WebSearch = 'web-search',
 }
 
 export enum McpSorts {
@@ -28,10 +30,11 @@ export enum McpSorts {
   IsValidated = 'isValidated',
   RatingCount = 'ratingCount',
   Recommended = 'recommended',
-  UpdatedAt = 'updatedAt'
+  UpdatedAt = 'updatedAt',
 }
 
 export enum McpNavKey {
+  Agents = 'agents',
   Deployment = 'deployment',
   Overview = 'overview',
   Related = 'related',
@@ -62,6 +65,7 @@ export interface McpQueryParams {
 export type McpListResponse = PluginListResponse;
 
 export interface DiscoverMcpDetail extends PluginItemDetail {
+  agents?: DiscoverAssistantItem[];
   haveCloudEndpoint?: boolean;
   isClaimed?: boolean;
   related: DiscoverMcpItem[];

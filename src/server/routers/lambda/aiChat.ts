@@ -1,8 +1,5 @@
-import {
-  AiSendMessageServerSchema,
-  type SendMessageServerResponse,
-  StructureOutputSchema,
-} from '@lobechat/types';
+import { type SendMessageServerResponse } from '@lobechat/types';
+import { AiSendMessageServerSchema, StructureOutputSchema } from '@lobechat/types';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -72,7 +69,6 @@ export const aiChatRouter = router({
         if (!!context.sessionId) sessionId = context.sessionId;
       }
 
-      let messageId: string;
       let topicId = input.topicId!;
       let threadId = input.threadId;
       let createdThreadId: string | undefined;
@@ -123,11 +119,18 @@ export const aiChatRouter = router({
 
       // create user message
       log('creating user message with content length: %d', input.newUserMessage.content.length);
+
+      // Build user message metadata with pageSelections if present
+      const userMessageMetadata = input.newUserMessage.pageSelections?.length
+        ? { pageSelections: input.newUserMessage.pageSelections }
+        : undefined;
+
       const userMessageItem = await ctx.messageModel.create({
         agentId: input.agentId,
         content: input.newUserMessage.content,
         files: input.newUserMessage.files,
         groupId: input.groupId,
+        metadata: userMessageMetadata,
         parentId: input.newUserMessage.parentId,
         role: 'user',
         sessionId,
@@ -135,7 +138,7 @@ export const aiChatRouter = router({
         topicId,
       });
 
-      messageId = userMessageItem.id;
+      const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);
 
       // create assistant message

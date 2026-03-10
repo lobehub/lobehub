@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:GroupAgentBuilderContextInjector');
@@ -262,8 +262,10 @@ ${parts.join('\n')}
 /**
  * Group Agent Builder Context Injector
  * Responsible for injecting current group context when Group Agent Builder tool is enabled
+ *
+ * Extends BaseFirstUserContentProvider to consolidate with other first-user-message injectors
  */
-export class GroupAgentBuilderContextInjector extends BaseProvider {
+export class GroupAgentBuilderContextInjector extends BaseFirstUserContentProvider {
   readonly name = 'GroupAgentBuilderContextInjector';
 
   constructor(
@@ -273,19 +275,17 @@ export class GroupAgentBuilderContextInjector extends BaseProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
-
+  protected buildContent(): string | null {
     // Skip if Group Agent Builder is not enabled
     if (!this.config.enabled) {
       log('Group Agent Builder not enabled, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
     // Skip if no group context
     if (!this.config.groupContext) {
       log('No group context provided, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
     // Format group context
@@ -295,34 +295,21 @@ export class GroupAgentBuilderContextInjector extends BaseProvider {
     // Skip if no content to inject
     if (!formattedContent) {
       log('No content to inject after formatting');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Find the first user message index
-    const firstUserIndex = clonedContext.messages.findIndex((msg) => msg.role === 'user');
+    log('Group Agent Builder context prepared for injection');
+    return formattedContent;
+  }
 
-    if (firstUserIndex === -1) {
-      log('No user messages found, skipping injection');
-      return this.markAsExecuted(clonedContext);
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    const result = await super.doProcess(context);
+
+    // Update metadata if content was injected
+    if (this.config.enabled && this.config.groupContext) {
+      result.metadata.groupAgentBuilderContextInjected = true;
     }
 
-    // Insert a new user message with group context before the first user message
-    const groupContextMessage = {
-      content: formattedContent,
-      createdAt: Date.now(),
-      id: `group-agent-builder-context-${Date.now()}`,
-      meta: { injectType: 'group-agent-builder-context', systemInjection: true },
-      role: 'user' as const,
-      updatedAt: Date.now(),
-    };
-
-    clonedContext.messages.splice(firstUserIndex, 0, groupContextMessage);
-
-    // Update metadata
-    clonedContext.metadata.groupAgentBuilderContextInjected = true;
-
-    log('Group Agent Builder context injected as new user message');
-
-    return this.markAsExecuted(clonedContext);
+    return result;
   }
 }

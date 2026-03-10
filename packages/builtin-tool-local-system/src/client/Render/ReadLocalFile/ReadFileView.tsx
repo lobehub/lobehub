@@ -1,4 +1,4 @@
-import { type LocalReadFileResult } from '@lobechat/electron-client-ipc';
+import type { LocalReadFileResult } from '@lobechat/electron-client-ipc';
 import { ActionIcon, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { AlignLeft, Asterisk, ExternalLink, FolderOpen } from 'lucide-react';
@@ -78,6 +78,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   previewText: css`
+    overflow: auto;
+
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     line-height: 1.6;
     word-break: break-all;
@@ -110,43 +113,43 @@ const ReadFileView = memo<ReadFileViewProps>(
       <Flexbox className={styles.container} gap={12}>
         <Flexbox>
           <Flexbox
+            horizontal
             align={'center'}
             className={styles.header}
             gap={12}
-            horizontal
             justify={'space-between'}
           >
-            <Flexbox align={'center'} flex={1} gap={0} horizontal style={{ overflow: 'hidden' }}>
+            <Flexbox horizontal align={'center'} flex={1} gap={0} style={{ overflow: 'hidden' }}>
               <FileIcon fileName={filename} fileType={fileType} size={16} variant={'raw'} />
               <Flexbox horizontal>
-                <Text className={styles.fileName} ellipsis>
+                <Text ellipsis className={styles.fileName}>
                   {filename}
                 </Text>
                 {/* Actions on Hover */}
-                <Flexbox className={styles.actions} gap={2} horizontal style={{ marginLeft: 8 }}>
+                <Flexbox horizontal className={styles.actions} gap={2} style={{ marginLeft: 8 }}>
                   <ActionIcon
                     icon={ExternalLink}
-                    onClick={handleOpenFile}
                     size="small"
                     title={t('localFiles.openFile')}
+                    onClick={handleOpenFile}
                   />
                   <ActionIcon
                     icon={FolderOpen}
-                    onClick={handleOpenFolder}
                     size="small"
                     title={t('localFiles.openFolder')}
+                    onClick={handleOpenFolder}
                   />
                 </Flexbox>
               </Flexbox>
             </Flexbox>
-            <Flexbox align={'center'} className={styles.meta} gap={16} horizontal>
-              <Flexbox align={'center'} gap={4} horizontal>
+            <Flexbox horizontal align={'center'} className={styles.meta} gap={16}>
+              <Flexbox horizontal align={'center'} gap={4}>
                 <Icon icon={Asterisk} size={'small'} />
                 <span>
                   {charCount} / <span className={styles.lineCount}>{totalCharCount}</span>
                 </span>
               </Flexbox>
-              <Flexbox align={'center'} gap={4} horizontal>
+              <Flexbox horizontal align={'center'} gap={4}>
                 <Icon icon={AlignLeft} size={'small'} />
                 <span>
                   L{loc?.[0]}-{loc?.[1]} /{' '}
@@ -157,7 +160,7 @@ const ReadFileView = memo<ReadFileViewProps>(
           </Flexbox>
 
           {/* Path */}
-          <Text className={styles.path} ellipsis type={'secondary'}>
+          <Text ellipsis className={styles.path} type={'secondary'}>
             {displayPath}
           </Text>
         </Flexbox>

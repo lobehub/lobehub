@@ -1,9 +1,10 @@
-import type { RetrieveMemoryParams, RetrieveMemoryResult } from '@lobechat/types';
+import { type RetrieveMemoryParams, type RetrieveMemoryResult } from '@lobechat/types';
 
-import type { UserMemoryStoreState } from './initialState';
+import { type UserMemoryStoreState } from './initialState';
 import { userMemoryCacheKey } from './utils/cacheKey';
 
 const EMPTY_RESULT: RetrieveMemoryResult = {
+  activities: [],
   contexts: [],
   experiences: [],
   preferences: [],

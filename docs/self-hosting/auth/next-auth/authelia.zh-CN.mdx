@@ -1,0 +1,70 @@
+---
+title: 在 LobeHub 中配置 Authelia 身份验证服务
+description: 学习如何在 LobeHub 中配置 Authelia 身份验证服务，包括创建提供程序、配置环境变量和部署 LobeHub。详细步骤和必要环境变量设置。
+tags:
+  - Authelia
+  - 身份验证
+  - 单点登录
+  - 环境变量
+  - LobeHub
+---
+
+# 配置 Authelia 身份验证服务
+
+## Authelia 配置流程
+
+<Steps>
+  ### 创建 Authelia 提供应用
+
+  我们现在默认您已经了解了如何使用 Authelia。假设您的 LobeHub 实例部署在 `https://lobe.example.com/` 中。注意，目前只有 `localhost` 支持 HTTP 访问，其他域名需要启用 TLS，否则 Authelia 默认将主动中断身份认证。
+
+  现在，我们打开 Authelia 实例的配置文件进行编辑：
+
+  在 `identity_providers`-> `oidc` 下新增一个 `lobe-chat` 的项目：
+
+  ```yaml
+  ...
+  identity_providers:
+    oidc:
+      ...
+      ## The other portions of the mandatory OpenID Connect 1.0 configuration go here.
+      ## See: https://www.authelia.com/c/oidc
+      - id: lobe-chat
+        description: LobeHub
+        secret: '$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKn50cFzzvE9RXV88h1wJn5KGiHrD0YKtZaR/nCb2CJPOsKaPK0hjf.9yHxzQGZziziccp6Yng'  # The digest of 'insecure_secret'.
+        public: false
+        authorization_policy: two_factor
+        redirect_uris:
+          - https://chat.example.com/api/auth/callback/authelia
+        scopes:
+          - openid
+          - profile
+          - email
+        userinfo_signing_algorithm: none
+  ```
+
+  请您确保 `secret` 和 `redirect_urls` 替换成您自己的值。注意！Authelia 中配置 `secret` 是密文，即加盐哈希值。其对应的明文稍后需要填写在 LobeHub 中。
+
+  保存配置文件，然后重启 Authelia 服务。现在我们完成了 Authelia 的配置工作。
+
+  ### 配置环境变量
+
+  在部署 LobeHub 时，你需要配置以下环境变量：
+
+  | 环境变量                      | 类型 | 描述                                                                                               |
+  | ------------------------- | -- | ------------------------------------------------------------------------------------------------ |
+  | `AUTH_SECRET`             | 必选 | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令生成秘钥： `openssl rand -base64 32`                                    |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必选 | 选择 LoboChat 的单点登录提供商。使用 Authelia 请填写 `authelia`。                                                 |
+  | `AUTH_AUTHELIA_ID`        | 必选 | 刚刚在 Authelia 配置的 `id`，示例值是 `lobe-chat`                                                           |
+  | `AUTH_AUTHELIA_SECRET`    | 必选 | 刚刚在 Authelia 配置的 `secret` 对应的明文，示例值是 `insecure_secret`                                           |
+  | `AUTH_AUTHELIA_ISSUER`    | 必选 | 您的 Authelia 的网址，例如 `https://sso.example.com`                                                     |
+  | `AUTH_URL`                | 必选 | 该 URL 用于指定 Auth.js 在执行 OAuth 验证时的回调地址，当默认生成的重定向地址发生不正确时才需要设置。`https://chat.example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variable#Authelia) 可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以使用 Authelia 中配置的用户通过身份认证并使用 LobeHub。
+</Callout>

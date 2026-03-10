@@ -18,7 +18,7 @@
  * import { mutate } from '@/libs/swr';
  * ```
  */
-import type { ScopedMutator } from 'swr/_internal';
+import { type ScopedMutator } from 'swr/_internal';
 
 // Mutable container to hold the scoped mutate reference
 // Using an object allows us to update the reference while keeping the same export

@@ -211,10 +211,10 @@ export class BrowserManager {
     const identifier = options.identifier;
     this.browsers.set(identifier, browser);
 
-    // 记录 WebContents 和 identifier 的映射
+    // Record the mapping between WebContents and identifier
     this.webContentsMap.set(browser.browserWindow.webContents, identifier);
 
-    // 当窗口关闭时清理映射
+    // Clean up the mapping when the window is closed
     browser.browserWindow.on('close', () => {
       if (browser.webContents) this.webContentsMap.delete(browser.webContents);
     });
@@ -250,9 +250,14 @@ export class BrowserManager {
     browser?.setWindowSize(size);
   }
 
-  setWindowResizable(identifier: string, resizable: boolean) {
+  getWindowSize(identifier: string) {
     const browser = this.browsers.get(identifier);
-    browser?.setWindowResizable(resizable);
+    return browser?.browserWindow.getBounds();
+  }
+
+  setWindowMinimumSize(identifier: string, size: { height?: number; width?: number }) {
+    const browser = this.browsers.get(identifier);
+    browser?.setWindowMinimumSize(size);
   }
 
   getIdentifierByWebContents(webContents: WebContents): string | null {

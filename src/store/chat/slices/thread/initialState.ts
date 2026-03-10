@@ -1,4 +1,5 @@
-import { type IThreadType, type ThreadItem, ThreadType } from '@lobechat/types';
+import { type IThreadType, type ThreadItem } from '@lobechat/types';
+import { ThreadType } from '@lobechat/types';
 
 export interface ChatThreadState {
   activeThreadId?: string;
@@ -17,11 +18,11 @@ export interface ChatThreadState {
   threadLoadingIds: string[];
   threadMaps: Record<string, ThreadItem[]>;
   threadRenamingId?: string;
+  threadsInit?: boolean;
   /**
    * when open thread creator, set the message id to it
    */
   threadStartMessageId?: string | null;
-  threadsInit?: boolean;
 }
 
 export const initialThreadState: ChatThreadState = {

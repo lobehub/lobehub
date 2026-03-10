@@ -12,7 +12,7 @@ interface PageExplorerProps {
 /**
  * Dedicated for the /page route
  *
- * Work together with a sidebar src/app/[variants]/(main)/page/_layout/Body/index.tsx
+ * Work together with a sidebar @/features/Pages/PageLayout/Body
  */
 const PageExplorer = memo<PageExplorerProps>(({ pageId }) => {
   const updatePageOptimistically = usePageStore((s) => s.updatePageOptimistically);
@@ -41,10 +41,10 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId }) => {
     <PageEditor
       emoji={emoji}
       key={pageId}
-      onEmojiChange={handleEmojiChange}
-      onTitleChange={handleTitleChange}
       pageId={pageId}
       title={title}
+      onEmojiChange={handleEmojiChange}
+      onTitleChange={handleTitleChange}
     />
   );
 });

@@ -1,12 +1,7 @@
-import { businessErrorsLocales } from '@/business/locales/errors';
-
 export default {
-  'clerkAuth.loginSuccess.action': 'Continue Session',
-  'clerkAuth.loginSuccess.desc':
-    "{{greeting}}, it's great to continue serving you. Let's pick up where we left off.",
-  'clerkAuth.loginSuccess.title': 'Welcome back, {{nickName}}',
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
+  'error.stack': 'Error Stack',
   'error.retry': 'Reload',
   'error.title': 'Oops, something went wrong..',
   'fetchError.detail': 'Error details',
@@ -111,6 +106,10 @@ export default {
     'Sorry, the message could not be sent successfully. Please copy the content and try sending it again. This message will not be retained after refreshing the page.',
   'response.ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  'response.ExceededContextWindowCloud':
+    'The conversation is too long to process. Please edit your last message to reduce input or delete some messages and try again.',
+  'response.QuotaLimitReachedCloud':
+    'The model service is currently under heavy load. Please try again later.',
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
   'response.GoogleAIBlockReason.BLOCKLIST':
@@ -137,8 +136,6 @@ export default {
     'Invalid access code or empty. Please enter the correct access code or add a custom API Key.',
   'response.InvalidBedrockCredentials':
     'Bedrock authentication failed. Please check the AccessKeyId/SecretAccessKey and retry.',
-  'response.InvalidClerkUser':
-    'Sorry, you are not currently logged in. Please log in or register an account to continue.',
   'response.InvalidComfyUIArgs':
     'Invalid ComfyUI configuration. Please check the settings and try again.',
   'response.InvalidGithubToken':
@@ -235,8 +232,9 @@ export default {
     'The current deployment mode does not support uploading non-image files. To upload files in {{ext}} format, please switch to server database deployment or use the {{cloud}} service.',
   'upload.networkError':
     "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
+  'upload.storageLimitExceeded':
+    'Your file storage has reached the plan limit. Please upgrade your plan or delete unused files to free up space.',
   'upload.title': 'File upload failed. Please check your network connection or try again later',
   'upload.unknownError': 'Error reason: {{reason}}',
   'upload.uploadFailed': 'File upload failed.',
-  ...businessErrorsLocales,
 };

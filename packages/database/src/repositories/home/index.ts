@@ -1,4 +1,8 @@
-import { SidebarAgentItem, SidebarAgentListResponse, SidebarGroup } from '@lobechat/types';
+import {
+  type SidebarAgentItem,
+  type SidebarAgentListResponse,
+  type SidebarGroup,
+} from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, desc, eq, ilike, inArray, not, or } from 'drizzle-orm';
 
@@ -10,7 +14,7 @@ import {
   sessionGroups,
   sessions,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import { type LobeChatDatabase } from '../../type';
 
 // Re-export types for backward compatibility
 export type {
@@ -41,6 +45,7 @@ export class HomeRepository {
       .select({
         agentSessionGroupId: agents.sessionGroupId,
         avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
         pinned: agents.pinned,
@@ -59,6 +64,8 @@ export class HomeRepository {
     // 2. Query all chatGroups (group chats)
     const chatGroupList = await this.db
       .select({
+        avatar: chatGroups.avatar,
+        backgroundColor: chatGroups.backgroundColor,
         description: chatGroups.description,
         groupId: chatGroups.groupId,
         id: chatGroups.id,
@@ -92,6 +99,7 @@ export class HomeRepository {
     agentItems: Array<{
       agentSessionGroupId: string | null;
       avatar: string | null;
+      backgroundColor: string | null;
       description: string | null;
       id: string;
       pinned: boolean | null;
@@ -102,6 +110,8 @@ export class HomeRepository {
       updatedAt: Date;
     }>,
     chatGroupItems: Array<{
+      avatar: string | null;
+      backgroundColor: string | null;
       description: string | null;
       groupId: string | null;
       id: string;
@@ -122,6 +132,7 @@ export class HomeRepository {
     const allItems: Array<SidebarAgentItem & { groupId: string | null }> = [
       ...agentItems.map((a) => ({
         avatar: a.avatar,
+        backgroundColor: a.backgroundColor,
         description: a.description,
         groupId: a.agentSessionGroupId ?? a.sessionGroupId,
         id: a.id,
@@ -132,8 +143,11 @@ export class HomeRepository {
         updatedAt: a.updatedAt,
       })),
       ...chatGroupItems.map((g) => ({
-        avatar: memberAvatarsMap.get(g.id) ?? null,
+        // If group has custom avatar, use it (string); otherwise fallback to member avatars (array)
+        avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
+        backgroundColor: g.backgroundColor,
         description: g.description,
+        groupAvatar: g.avatar,
         groupId: g.groupId,
         id: g.id,
         pinned: g.pinned ?? false,
@@ -191,6 +205,7 @@ export class HomeRepository {
     const agentResults = await this.db
       .select({
         avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
         pinned: agents.pinned,
@@ -214,6 +229,8 @@ export class HomeRepository {
     // 2. Search chat groups by title or description
     const chatGroupResults = await this.db
       .select({
+        avatar: chatGroups.avatar,
+        backgroundColor: chatGroups.backgroundColor,
         description: chatGroups.description,
         id: chatGroups.id,
         pinned: chatGroups.pinned,
@@ -239,6 +256,7 @@ export class HomeRepository {
       ...agentResults.map((a) =>
         cleanObject({
           avatar: a.avatar,
+          backgroundColor: a.backgroundColor,
           description: a.description,
           id: a.id,
           pinned: a.pinned ?? a.sessionPinned ?? false,
@@ -250,7 +268,8 @@ export class HomeRepository {
       ),
       ...chatGroupResults.map((g) =>
         cleanObject({
-          avatar: memberAvatarsMap.get(g.id),
+          avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
+          backgroundColor: g.backgroundColor,
           description: g.description,
           id: g.id,
           pinned: g.pinned ?? false,

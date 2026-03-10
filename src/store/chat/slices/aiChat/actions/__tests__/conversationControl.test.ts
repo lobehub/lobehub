@@ -1,10 +1,10 @@
-import { ConversationContext } from '@lobechat/types';
+import { type ConversationContext } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
-import { TEST_IDS, createMockMessage } from './fixtures';
+import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
 
 // Keep zustand mock as it's needed globally
@@ -425,6 +425,7 @@ describe('ConversationControl actions', () => {
         .mockReturnValue({
           state: {} as any,
           context: { phase: 'init' } as any,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       const internal_execAgentRuntimeSpy = vi
         .spyOn(result.current, 'internal_execAgentRuntime')
@@ -497,6 +498,7 @@ describe('ConversationControl actions', () => {
         .mockReturnValue({
           state: {} as any,
           context: { phase: 'init' } as any,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       const internal_execAgentRuntimeSpy = vi
         .spyOn(result.current, 'internal_execAgentRuntime')
@@ -596,6 +598,7 @@ describe('ConversationControl actions', () => {
         .mockReturnValue({
           state: {} as any,
           context: { phase: 'init' } as any,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       const internal_execAgentRuntimeSpy = vi
         .spyOn(result.current, 'internal_execAgentRuntime')
@@ -669,6 +672,7 @@ describe('ConversationControl actions', () => {
         .mockReturnValue({
           state: {} as any,
           context: { phase: 'init' } as any,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       const internal_execAgentRuntimeSpy = vi
         .spyOn(result.current, 'internal_execAgentRuntime')

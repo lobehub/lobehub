@@ -3,10 +3,12 @@ import type {
   ExecutorResult,
   IGroupOrchestrationSupervisor,
   SupervisorInstruction,
+  SupervisorInstructionBatchExecAsyncTasks,
   SupervisorInstructionCallAgent,
   SupervisorInstructionCallSupervisor,
   SupervisorInstructionDelegate,
   SupervisorInstructionExecAsyncTask,
+  SupervisorInstructionExecClientAsyncTask,
   SupervisorInstructionFinish,
   SupervisorInstructionParallelCallAgents,
 } from './types';
@@ -28,6 +30,7 @@ export interface GroupOrchestrationSupervisorConfig {
  * - supervisor_decided(broadcast) → parallel_call_agents
  * - supervisor_decided(delegate) → delegate
  * - supervisor_decided(execute_task) → exec_async_task
+ * - supervisor_decided(execute_tasks) → batch_exec_async_tasks
  * - supervisor_decided(finish) → finish
  * - agent_spoke / agents_broadcasted / task_completed / tasks_completed → call_supervisor OR finish
  * - delegated → finish
@@ -41,7 +44,7 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
   /**
    * Decide the next instruction based on the executor result
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   async decide(result: ExecutorResult, _state: AgentState): Promise<SupervisorInstruction> {
     switch (result.type) {
       case 'init': {
@@ -76,6 +79,8 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
             return {
               payload: {
                 agentIds: params.agentIds as string[],
+                // Broadcast agents should not call tools by default
+                disableTools: true,
                 instruction: params.instruction as string | undefined,
                 toolMessageId: params.toolMessageId as string,
               },
@@ -94,16 +99,41 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
           }
 
           case 'execute_task': {
+            const instructionPayload = {
+              agentId: params.agentId as string,
+              instruction: params.instruction as string,
+              timeout: params.timeout as number | undefined,
+              title: params.title as string | undefined,
+              toolMessageId: params.toolMessageId as string,
+            };
+
+            // Return different instruction type based on runInClient flag
+            if (params.runInClient) {
+              return {
+                payload: instructionPayload,
+                type: 'exec_client_async_task',
+              } as SupervisorInstructionExecClientAsyncTask;
+            }
+
             return {
-              payload: {
-                agentId: params.agentId as string,
-                task: params.task as string,
-                timeout: params.timeout as number | undefined,
-                title: params.title as string | undefined,
-                toolMessageId: params.toolMessageId as string,
-              },
+              payload: instructionPayload,
               type: 'exec_async_task',
             } as SupervisorInstructionExecAsyncTask;
+          }
+
+          case 'execute_tasks': {
+            return {
+              payload: {
+                tasks: params.tasks as Array<{
+                  agentId: string;
+                  instruction: string;
+                  timeout?: number;
+                  title?: string;
+                }>,
+                toolMessageId: params.toolMessageId as string,
+              },
+              type: 'batch_exec_async_tasks',
+            } as SupervisorInstructionBatchExecAsyncTasks;
           }
 
           case 'finish': {

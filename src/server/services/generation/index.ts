@@ -28,18 +28,25 @@ export async function fetchImageFromUrl(
   mimeType: string;
 }> {
   if (url.startsWith('data:')) {
+    log('Data URI length:', url.length);
+
+    log('parseDataUri: start');
     const { base64, mimeType, type } = parseDataUri(url);
+    log('parseDataUri: done, base64 length:', base64?.length, 'mimeType:', mimeType);
 
     if (type !== 'base64' || !base64 || !mimeType) {
       throw new Error(`Invalid data URI format: ${url}`);
     }
 
     try {
+      log('Buffer.from base64: start');
       const buffer = Buffer.from(base64, 'base64');
+      log('Buffer.from base64: done, buffer size:', buffer.length);
       return { buffer, mimeType };
     } catch (error) {
       throw new Error(
         `Failed to decode base64 data: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
     }
   } else {
@@ -90,14 +97,19 @@ export class GenerationService {
     log('Starting image transformation for:', url.startsWith('data:') ? 'base64 data' : url);
 
     // Fetch image buffer and MIME type using utility function
+    log('fetchImageFromUrl: start');
     const { buffer: originalImageBuffer, mimeType: originalMimeType } = await fetchImageFromUrl(
       url,
       fetchHeaders,
     );
+    log('fetchImageFromUrl: done, buffer size:', originalImageBuffer.length);
 
     // Calculate hash for original image
+    log('sha256: start');
     const originalHash = sha256(originalImageBuffer);
+    log('sha256: done');
 
+    log('sharp metadata: start');
     const sharpInstance = sharp(originalImageBuffer);
     const { format, width, height } = await sharpInstance.metadata();
     log('Image metadata:', { format, height, width });

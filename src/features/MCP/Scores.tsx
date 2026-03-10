@@ -1,14 +1,14 @@
 'use client';
 
-import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleDashedIcon, HammerIcon, LayersIcon, MessageSquareQuoteIcon } from 'lucide-react';
-import { Link } from '@/libs/router';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { Link } from '@/libs/router';
 import { McpNavKey } from '@/types/discover';
 
 import {
@@ -80,11 +80,11 @@ interface ScoresProps {
     license?: string;
   };
   identifier: string;
-  // 列表页支持
+  // List page support
   installationMethods?: string;
   isClaimed?: boolean;
   isValidated?: boolean;
-  // 原始数据属性
+  // Raw data properties
   overview?: {
     readme?: string;
   };
@@ -108,18 +108,18 @@ const Scores = memo<ScoresProps>(
   }) => {
     const { t } = useTranslation('discover');
 
-    // 使用工具函数计算所有的 has* 值，但需要处理类型转换
+    // Use utility function to calculate all has* values, but need to handle type conversion
     const scoreFlags = calculateScoreFlags({
-      // 只传递兼容的属性，或者进行类型转换
+      // Only pass compatible properties, or perform type conversion
       deploymentOptions: deploymentOptions?.map((item) => ({
-        // 确保不为 undefined
+        // Ensure not undefined
         connection: { type: 'stdio' as const },
-        installationMethod: item.installationMethod || 'manual', // 提供默认的 connection
+        installationMethod: item.installationMethod || 'manual', // Provide default connection
       })),
       github: github?.license
         ? {
             license: github.license,
-            url: '', // 提供默认的 url
+            url: '', // Provide default url
           }
         : undefined,
       installationMethods,
@@ -135,7 +135,7 @@ const Scores = memo<ScoresProps>(
       toolsCount,
     });
 
-    // 计算评分
+    // Calculate score
     const scoreItems = createScoreItems(scoreFlags);
     const scoreResult = calculateScore(scoreItems);
     const { grade, percentage } = scoreResult;
@@ -149,10 +149,10 @@ const Scores = memo<ScoresProps>(
     const scoreTag = (
       <Tooltip title={`${t(`mcp.details.scoreLevel.${grade}.desc`)} (${Math.round(percentage)}%)`}>
         <Flexbox
+          horizontal
           align={'center'}
           className={cx(styles.tag, getGradeStyleClass(grade, styles))}
           gap={8}
-          horizontal
           style={{
             paddingLeft: 4,
           }}
@@ -182,10 +182,10 @@ const Scores = memo<ScoresProps>(
     const unvalidatedTag = (
       <Tooltip title={t('mcp.unvalidated.desc')}>
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.tag}
           gap={8}
-          horizontal
           style={{
             color: cssVar.colorTextDescription,
             paddingLeft: 4,
@@ -198,13 +198,7 @@ const Scores = memo<ScoresProps>(
     );
 
     return (
-      <Flexbox
-        align={'center'}
-        flex={'none'}
-        gap={8}
-        horizontal
-        onClick={(e) => e.stopPropagation()}
-      >
+      <Flexbox horizontal align={'center'} flex={'none'} gap={8} onClick={stopPropagation}>
         {identifier && (
           <Link
             href={qs.stringifyUrl({
@@ -226,7 +220,7 @@ const Scores = memo<ScoresProps>(
               url: urlJoin('/community/mcp', identifier),
             })}
           >
-            <Flexbox align={'center'} className={styles.extraTag} gap={16} horizontal>
+            <Flexbox horizontal align={'center'} className={styles.extraTag} gap={16}>
               {showToolts && (
                 <Tooltip
                   title={[
@@ -234,7 +228,7 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.tools.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox align={'center'} className={styles.extraTagActive} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
                     <Icon icon={HammerIcon} size={14} />
                     {toolsCount}
                   </Flexbox>
@@ -247,7 +241,7 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.prompts.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox align={'center'} className={styles.extraTagActive} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
                     <Icon icon={MessageSquareQuoteIcon} size={14} />
                     {promptsCount}
                   </Flexbox>
@@ -260,7 +254,7 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.resources.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox align={'center'} className={styles.extraTagActive} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
                     <Icon icon={LayersIcon} size={14} />
                     {resourcesCount}
                   </Flexbox>

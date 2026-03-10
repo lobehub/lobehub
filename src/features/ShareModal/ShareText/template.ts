@@ -47,8 +47,8 @@ const markdownTemplate = template(
 <% }); %>
 `,
   {
-    evaluate: /<%([\S\s]+?)%>/g,
-    interpolate: /{{([\S\s]+?)}}/g,
+    evaluate: /<%([\s\S]+?)%>/g,
+    interpolate: /\{\{([\s\S]+?)\}\}/g,
   },
 );
 

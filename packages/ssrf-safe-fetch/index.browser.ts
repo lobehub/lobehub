@@ -24,11 +24,10 @@ export interface SSRFOptions {
  */
 export const ssrfSafeFetch = async (
   url: string,
-  // eslint-disable-next-line no-undef
+
   options?: RequestInit,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   _ssrfOptions?: SSRFOptions,
-  // eslint-disable-next-line no-undef
 ): Promise<Response> => {
   return fetch(url, options);
 };

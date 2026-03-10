@@ -1,12 +1,14 @@
-import { notFound } from '@/libs/next/navigation';
+import { redirect } from 'next/navigation';
 import { type PropsWithChildren } from 'react';
 
-import { enableBetterAuth } from '@/envs/auth';
+import { authEnv } from '@/envs/auth';
 
-const Layout = ({ children }: PropsWithChildren) => {
-  if (!enableBetterAuth) return notFound();
+const ResetPasswordLayout = ({ children }: PropsWithChildren) => {
+  if (authEnv.AUTH_DISABLE_EMAIL_PASSWORD) {
+    redirect('/signin');
+  }
 
   return children;
 };
 
-export default Layout;
+export default ResetPasswordLayout;

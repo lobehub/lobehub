@@ -1,5 +1,4 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { GroundingSearch, ModelReasoning, ToolIntervention } from '@lobechat/types';
+import type { GroundingSearch, ModelReasoning, ToolIntervention } from '@lobechat/types';
 import {
   boolean,
   index,
@@ -49,7 +48,7 @@ export const messageGroups = pgTable(
     }),
 
     // Associated user message
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
     parentMessageId: text('parent_message_id').references(() => messages.id, {
       onDelete: 'cascade',
     }),
@@ -62,6 +61,7 @@ export const messageGroups = pgTable(
     type: text('type', { enum: ['parallel', 'compression'] }),
     content: text('content'), // compression summary (plain text)
     editorData: jsonb('editor_data'), // rich text editor data (future extension)
+    metadata: jsonb('metadata'), // UI state (expanded, etc.)
 
     clientId: varchar255('client_id'),
 
@@ -69,8 +69,11 @@ export const messageGroups = pgTable(
   },
   (t) => [
     uniqueIndex('message_groups_client_id_user_id_unique').on(t.clientId, t.userId),
+    index('message_groups_user_id_idx').on(t.userId),
     index('message_groups_topic_id_idx').on(t.topicId),
     index('message_groups_type_idx').on(t.type),
+    index('message_groups_parent_group_id_idx').on(t.parentGroupId),
+    index('message_groups_parent_message_id_idx').on(t.parentMessageId),
   ],
 );
 
@@ -145,6 +148,7 @@ export const messages = pgTable(
     index('messages_thread_id_idx').on(table.threadId),
     index('messages_agent_id_idx').on(table.agentId),
     index('messages_group_id_idx').on(table.groupId),
+    index('messages_message_group_id_idx').on(table.messageGroupId),
   ],
 );
 
@@ -173,6 +177,7 @@ export const messagePlugins = pgTable(
   },
   (t) => [
     uniqueIndex('message_plugins_client_id_user_id_unique').on(t.clientId, t.userId),
+    index('message_plugins_user_id_idx').on(t.userId),
     index('message_plugins_tool_call_id_idx').on(t.toolCallId),
   ],
 );
@@ -193,6 +198,7 @@ export const messageTTS = pgTable(
   },
   (t) => ({
     clientIdUnique: uniqueIndex('message_tts_client_id_user_id_unique').on(t.clientId, t.userId),
+    userIdIdx: index('message_tts_user_id_idx').on(t.userId),
   }),
 );
 
@@ -215,6 +221,7 @@ export const messageTranslates = pgTable(
       t.clientId,
       t.userId,
     ),
+    userIdIdx: index('message_translates_user_id_idx').on(t.userId),
   }),
 );
 
@@ -235,6 +242,8 @@ export const messagesFiles = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.messageId] }),
+    userIdIdx: index('messages_files_user_id_idx').on(t.userId),
+    messageIdIdx: index('messages_files_message_id_idx').on(t.messageId),
   }),
 );
 
@@ -258,6 +267,9 @@ export const messageQueries = pgTable(
       t.clientId,
       t.userId,
     ),
+    userIdIdx: index('message_queries_user_id_idx').on(t.userId),
+    messageIdIdx: index('message_queries_message_id_idx').on(t.messageId),
+    embeddingsIdIdx: index('message_queries_embeddings_id_idx').on(t.embeddingsId),
   }),
 );
 
@@ -276,6 +288,9 @@ export const messageQueryChunks = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId, t.queryId] }),
+    userIdIdx: index('message_query_chunks_user_id_idx').on(t.userId),
+    messageIdIdx: index('message_query_chunks_message_id_idx').on(t.messageId),
+    queryIdIdx: index('message_query_chunks_query_id_idx').on(t.queryId),
   }),
 );
 export type NewMessageFileChunk = typeof messageQueryChunks.$inferInsert;
@@ -293,5 +308,7 @@ export const messageChunks = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId] }),
+    userIdIdx: index('message_chunks_user_id_idx').on(t.userId),
+    messageIdIdx: index('message_chunks_message_id_idx').on(t.messageId),
   }),
 );

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { type TaskResult, asyncifyPolling } from './asyncifyPolling';
+import type { TaskResult } from './asyncifyPolling';
+import { asyncifyPolling } from './asyncifyPolling';
 
 describe('asyncifyPolling', () => {
   describe('basic functionality', () => {

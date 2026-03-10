@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const higressChatModels: AIChatModelCard[] = [
   {
@@ -24,7 +24,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
+    description:
+      'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
     displayName: 'Qwen Plus',
     enabled: true,
     id: 'qwen-plus',
@@ -456,7 +457,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: 'Latest high-performance model with high-quality output and much faster reasoning.',
+    description:
+      'Latest high-performance model with high-quality output and much faster reasoning.',
     displayName: 'Yi Lightning',
     enabled: true,
     id: 'yi-lightning',
@@ -586,7 +588,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 16_384,
-    description: 'Model for complex visual tasks with high-performance image understanding and analysis.',
+    description:
+      'Model for complex visual tasks with high-performance image understanding and analysis.',
     displayName: 'Yi Vision',
     enabled: true,
     id: 'yi-vision',
@@ -797,7 +800,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8192,
-    description: 'GLM-4V-Plus understands video and multiple images, suitable for multimodal tasks.',
+    description:
+      'GLM-4V-Plus understands video and multiple images, suitable for multimodal tasks.',
     displayName: 'GLM-4V-Plus',
     enabled: true,
     id: 'glm-4v-plus',
@@ -1865,101 +1869,12 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4 Turbo is a multimodal model with excellent language understanding and generation plus image input.',
-    displayName: 'GPT 4 Turbo',
-    enabled: true,
-    id: 'gpt-4',
-    type: 'chat',
-  },
-  {
-    abilities: {
       vision: true,
     },
     contextWindowTokens: 128_000,
     description: 'GPT-4 Vision preview, designed for image analysis and processing tasks.',
     displayName: 'GPT 4 Turbo with Vision Preview',
     id: 'gpt-4-vision-preview',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o Mini is a small, efficient model with performance comparable to GPT-4o.',
-    displayName: 'GPT 4o Mini',
-    enabled: true,
-    id: 'gpt-4o-mini',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o is the latest multimodal model with advanced text and image processing.',
-    displayName: 'GPT 4o',
-    enabled: true,
-    id: 'gpt-4o',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: false,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'Smaller and faster than o1-preview, 80% lower cost, strong at code generation and short-context tasks.',
-    displayName: 'OpenAI o1-mini',
-    enabled: true,
-    id: 'o1-mini',
-    maxOutput: 65_536,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: false,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Focused on advanced reasoning and complex problem solving, including math and science. Ideal for applications needing deep context understanding and autonomous workflows.',
-    displayName: 'OpenAI o1-preview',
-    enabled: true,
-    id: 'o1-preview',
-    maxOutput: 32_768,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'A cost-effective AI solution for a wide range of text and image tasks.',
-    displayName: 'OpenAI GPT-4o mini',
-    enabled: true,
-    id: 'gpt-4o-mini',
-    maxOutput: 4096,
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'The most advanced multimodal model in the GPT-4 family, handling text and image inputs.',
-    displayName: 'OpenAI GPT-4o',
-    enabled: true,
-    id: 'gpt-4o',
-    maxOutput: 4096,
     type: 'chat',
   },
   {
@@ -2014,7 +1929,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Mistral Small is suitable for any language-based task requiring high efficiency and low latency.',
+    description:
+      'Mistral Small is suitable for any language-based task requiring high efficiency and low latency.',
     displayName: 'Mistral Small',
     id: 'mistral-small',
     maxOutput: 4096,
@@ -2034,7 +1950,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Strong image reasoning on high-resolution images, suited for visual understanding apps.',
+    description:
+      'Strong image reasoning on high-resolution images, suited for visual understanding apps.',
     displayName: 'Llama 3.2 11B Vision',
     id: 'llama-3.2-11b-vision-instruct',
     maxOutput: 4096,
@@ -2088,7 +2005,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'A powerful 70B-parameter model that excels at reasoning, coding, and broad language tasks.',
+    description:
+      'A powerful 70B-parameter model that excels at reasoning, coding, and broad language tasks.',
     displayName: 'Meta Llama 3 70B',
     id: 'meta-llama-3-70b-instruct',
     maxOutput: 4096,
@@ -2123,7 +2041,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'The same Phi-3-mini model with a larger context window for RAG or few-shot prompts.',
+    description:
+      'The same Phi-3-mini model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-mini 128K',
     id: 'Phi-3-mini-128k-instruct',
     maxOutput: 4096,
@@ -2140,7 +2059,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'The same Phi-3-small model with a larger context window for RAG or few-shot prompts.',
+    description:
+      'The same Phi-3-small model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-small 128K',
     id: 'Phi-3-small-128k-instruct',
     maxOutput: 4096,
@@ -2157,7 +2077,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'The same Phi-3-medium model with a larger context window for RAG or few-shot prompts.',
+    description:
+      'The same Phi-3-medium model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-medium 128K',
     id: 'Phi-3-medium-128k-instruct',
     maxOutput: 4096,
@@ -2532,7 +2453,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 002 is an efficient multimodal model for broad application scaling.',
+    description:
+      'Gemini 1.5 Flash 002 is an efficient multimodal model for broad application scaling.',
     displayName: 'Gemini 1.5 Flash 002',
     enabled: true,
     id: 'gemini-1.5-flash-002',
@@ -2553,7 +2475,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 001 is an efficient multimodal model for broad application scaling.',
+    description:
+      'Gemini 1.5 Flash 001 is an efficient multimodal model for broad application scaling.',
     displayName: 'Gemini 1.5 Flash 001',
     id: 'gemini-1.5-flash-001',
     maxOutput: 8192,
@@ -2572,7 +2495,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 0827 delivers optimized multimodal processing for complex tasks.',
+    description:
+      'Gemini 1.5 Flash 0827 delivers optimized multimodal processing for complex tasks.',
     displayName: 'Gemini 1.5 Flash 0827',
     id: 'gemini-1.5-flash-exp-0827',
     maxOutput: 8192,
@@ -2592,7 +2516,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 8B is an efficient multimodal model for broad application scaling.',
+    description:
+      'Gemini 1.5 Flash 8B is an efficient multimodal model for broad application scaling.',
     displayName: 'Gemini 1.5 Flash 8B',
     enabled: true,
     id: 'gemini-1.5-flash-8b',
@@ -2698,7 +2623,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_008_192,
-    description: 'Gemini 1.5 Pro 0827 applies latest optimizations for more efficient multimodal processing.',
+    description:
+      'Gemini 1.5 Pro 0827 applies latest optimizations for more efficient multimodal processing.',
     displayName: 'Gemini 1.5 Pro 0827',
     id: 'gemini-1.5-pro-exp-0827',
     maxOutput: 8192,
@@ -2718,7 +2644,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_008_192,
-    description: 'Gemini 1.5 Pro 0801 provides strong multimodal processing with greater flexibility for app development.',
+    description:
+      'Gemini 1.5 Pro 0801 provides strong multimodal processing with greater flexibility for app development.',
     displayName: 'Gemini 1.5 Pro 0801',
     id: 'gemini-1.5-pro-exp-0801',
     maxOutput: 8192,
@@ -2734,7 +2661,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Gemini 1.0 Pro is Google’s high-performance AI model designed for broad task scaling.',
+    description:
+      'Gemini 1.0 Pro is Google’s high-performance AI model designed for broad task scaling.',
     displayName: 'Gemini 1.0 Pro',
     id: 'gemini-1.0-pro-latest',
     maxOutput: 2048,
@@ -2768,7 +2696,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Gemini 1.0 Pro 002 (Tuning) provides strong multimodal support for complex tasks.',
+    description:
+      'Gemini 1.0 Pro 002 (Tuning) provides strong multimodal support for complex tasks.',
     displayName: 'Gemini 1.0 Pro 002 (Tuning)',
     id: 'gemini-1.0-pro-002',
     maxOutput: 2048,
@@ -2804,7 +2733,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'Mistral Small is a cost-effective, fast, and reliable option for translation, summarization, and sentiment analysis.',
+    description:
+      'Mistral Small is a cost-effective, fast, and reliable option for translation, summarization, and sentiment analysis.',
     displayName: 'Mistral Small',
     enabled: true,
     id: 'mistral-small-latest',
@@ -2836,7 +2766,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Codestral is a cutting-edge code generation model optimized for fill-in-the-middle and code completion.',
+    description:
+      'Codestral is a cutting-edge code generation model optimized for fill-in-the-middle and code completion.',
     displayName: 'Codestral',
     id: 'codestral-latest',
     pricing: {
@@ -2955,7 +2886,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 245_760,
-    description: 'Suitable for a wide range of NLP tasks, including text generation and dialogue systems.',
+    description:
+      'Suitable for a wide range of NLP tasks, including text generation and dialogue systems.',
     displayName: 'abab6.5s',
     enabled: true,
     id: 'abab6.5s-chat',

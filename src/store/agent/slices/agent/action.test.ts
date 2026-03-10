@@ -1,10 +1,10 @@
+import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { agentService } from '@/services/agent';
-import { useSessionStore } from '@/store/session';
-import { LobeAgentConfig } from '@/types/agent';
+import { type LobeAgentConfig } from '@/types/agent';
+import { withSWR } from '~test-utils';
 
 import { useAgentStore } from '../../store';
 
@@ -327,9 +327,10 @@ describe('AgentSlice Actions', () => {
       expect(result.current.data).toBeUndefined();
     });
 
-    it('should not fetch when agentId starts with cg_', async () => {
+    it('should not fetch when agentId is a chat-group session id', async () => {
       const { result } = renderHook(
-        () => useAgentStore().useFetchAgentConfig(true, 'cg_group-chat'),
+        () =>
+          useAgentStore().useFetchAgentConfig(true, `${CHAT_GROUP_SESSION_ID_PREFIX}group-chat`),
         { wrapper: withSWR },
       );
 

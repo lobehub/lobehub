@@ -1,4 +1,5 @@
-import { TopicDisplayMode, UserPreference } from '@lobechat/types';
+import type { UserPreference } from '@lobechat/types';
+import { TopicDisplayMode } from '@lobechat/types';
 
 /**
  * Current onboarding flow version.
@@ -15,6 +16,6 @@ export const DEFAULT_PREFERENCE: UserPreference = {
   lab: {
     enableInputMarkdown: true,
   },
-  topicDisplayMode: TopicDisplayMode.ByTime,
+  topicDisplayMode: TopicDisplayMode.ByCreatedTime,
   useCmdEnterToSend: false,
 };

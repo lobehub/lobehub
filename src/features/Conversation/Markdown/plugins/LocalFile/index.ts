@@ -6,7 +6,7 @@ import { createRemarkSelfClosingTagPlugin } from '../remarkPlugins/createRemarkS
 import { type MarkdownElement, type MarkdownElementProps } from '../type';
 import RenderComponent from './Render';
 
-// 定义此元素的标签名
+// Define the tag name for this element
 
 const LocalFileElement: MarkdownElement = {
   Component: RenderComponent as FC<MarkdownElementProps>,

@@ -1,4 +1,5 @@
-import { ActionIcon, Input, type InputProps } from '@lobehub/ui';
+import { type InputProps } from '@lobehub/ui';
+import { ActionIcon, Input } from '@lobehub/ui';
 import { Wand2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,16 +37,17 @@ const AutoGenerateInput = memo<AutoGenerateInputProps>(
               disabled={!canAutoGenerate}
               icon={Wand2}
               loading={loading}
-              onClick={onGenerate}
               size="small"
+              title={!canAutoGenerate ? t('autoGenerateTooltipDisabled') : t('autoGenerate')}
               style={{
                 marginRight: -4,
               }}
-              title={!canAutoGenerate ? t('autoGenerateTooltipDisabled') : t('autoGenerate')}
+              onClick={onGenerate}
             />
           )
         }
         {...props}
+        value={input}
         onBlur={() => {
           updateValue();
           isFocusing.current = false;
@@ -69,7 +71,6 @@ const AutoGenerateInput = memo<AutoGenerateInputProps>(
             isFocusing.current = false;
           }
         }}
-        value={input}
       />
     );
   },

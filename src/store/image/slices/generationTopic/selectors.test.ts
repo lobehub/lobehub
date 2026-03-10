@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { ImageStore } from '@/store/image';
+import { type ImageStore } from '@/store/image';
 import { initialState } from '@/store/image/initialState';
-import { ImageGenerationTopic } from '@/types/generation';
+import { type ImageGenerationTopic } from '@/types/generation';
 import { merge } from '@/utils/merge';
 
 import { generationTopicSelectors } from './selectors';

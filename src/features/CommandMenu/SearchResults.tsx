@@ -2,25 +2,27 @@ import { Command } from 'cmdk';
 import dayjs from 'dayjs';
 import {
   Bot,
+  Brain,
   ChevronRight,
   FileText,
   Folder,
+  Library,
   MessageCircle,
   MessageSquare,
   Plug,
   Puzzle,
   Sparkles,
 } from 'lucide-react';
-import { markdownToTxt } from 'markdown-to-txt';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import type { SearchResult } from '@/database/repositories/search';
+import { type SearchResult } from '@/database/repositories/search';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CommandItem } from './components';
 import { styles } from './styles';
-import type { ValidSearchType } from './utils/queryParser';
+import { type ValidSearchType } from './utils/queryParser';
 
 interface SearchResultsProps {
   isLoading: boolean;
@@ -68,12 +70,14 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'file': {
           // Navigate to resource library with file parameter
-          if (result.knowledgeBaseId) {
-            navigate(`/resource/library/${result.knowledgeBaseId}?file=${result.id}`);
-          } else {
-            // Fallback to library root if no knowledge base
-            navigate(`/resource/library?file=${result.id}`);
-          }
+          const fileUrl = result.knowledgeBaseId
+            ? `/resource/library/${result.knowledgeBaseId}?file=${result.id}`
+            : `/resource?file=${result.id}`;
+          console.info('[SearchResults] File navigation:', {
+            fileDetails: result,
+            url: fileUrl,
+          });
+          navigate(fileUrl);
           break;
         }
         case 'folder': {
@@ -97,11 +101,19 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'plugin': {
-          navigate(`/community/plugins/${result.identifier}`);
+          navigate(`/community/mcp/${result.identifier}`);
           break;
         }
         case 'communityAgent': {
-          navigate(`/community/assistant/${result.identifier}`);
+          navigate(`/community/agent/${result.identifier}`);
+          break;
+        }
+        case 'memory': {
+          navigate(`/memory/preferences?preferenceId=${result.id}`);
+          break;
+        }
+        case 'knowledgeBase': {
+          navigate(`/resource/library/${result.id}`);
           break;
         }
       }
@@ -137,6 +149,12 @@ const SearchResults = memo<SearchResultsProps>(
         case 'communityAgent': {
           return <Bot size={16} />;
         }
+        case 'memory': {
+          return <Brain size={16} />;
+        }
+        case 'knowledgeBase': {
+          return <Library size={16} />;
+        }
       }
     };
 
@@ -169,10 +187,15 @@ const SearchResults = memo<SearchResultsProps>(
         case 'communityAgent': {
           return t('cmdk.search.assistant');
         }
+        case 'memory': {
+          return t('cmdk.search.memory');
+        }
+        case 'knowledgeBase': {
+          return t('cmdk.search.knowledgeBase');
+        }
       }
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const getItemValue = (result: SearchResult) => {
       const meta = [result.title, result.description].filter(Boolean).join(' ');
       // Prefix with "search-result" to ensure these items rank after built-in commands
@@ -180,7 +203,6 @@ const SearchResults = memo<SearchResultsProps>(
       return `search-result ${result.type} ${result.id} ${meta}`.trim();
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const getDescription = (result: SearchResult) => {
       if (!result.description) return null;
       // Sanitize markdown content for message search results
@@ -190,7 +212,6 @@ const SearchResults = memo<SearchResultsProps>(
       return result.description;
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const getSubtitle = (result: SearchResult) => {
       const description = getDescription(result);
 
@@ -219,8 +240,10 @@ const SearchResults = memo<SearchResultsProps>(
     const fileResults = results.filter((r) => r.type === 'file');
     const folderResults = results.filter((r) => r.type === 'folder');
     const pageResults = results.filter((r) => r.type === 'page');
+    const memoryResults = results.filter((r) => r.type === 'memory');
     const mcpResults = results.filter((r) => r.type === 'mcp');
     const pluginResults = results.filter((r) => r.type === 'plugin');
+    const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
 
     // Don't render anything if no results and not loading
@@ -257,13 +280,14 @@ const SearchResults = memo<SearchResultsProps>(
 
       return (
         <CommandItem
+          forceMount
           description={subtitle}
           icon={getIcon(result.type)}
           key={result.id}
-          onSelect={() => handleNavigate(result)}
           title={titleWithPrefix}
           value={getItemValue(result)}
           variant="detailed"
+          onSelect={() => handleNavigate(result)}
         />
       );
     };
@@ -284,8 +308,8 @@ const SearchResults = memo<SearchResultsProps>(
           forceMount
           key={`search-more-${type}`}
           keywords={[`zzz-action-${type}`]}
-          onSelect={() => handleSearchMore(type)}
           value={`zzz-action-${type}-search-more`}
+          onSelect={() => handleSearchMore(type)}
         >
           <div className={styles.itemContent}>
             <div className={styles.itemIcon}>{getIcon(type)}</div>
@@ -301,63 +325,77 @@ const SearchResults = memo<SearchResultsProps>(
       <>
         {/* Render search results grouped by type without headers */}
         {messageResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {messageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('message', messageResults.length)}
           </Command.Group>
         )}
 
         {agentResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {agentResults.map((result) => renderResultItem(result))}
             {renderSearchMore('agent', agentResults.length)}
           </Command.Group>
         )}
 
         {topicResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {topicResults.map((result) => renderResultItem(result))}
             {renderSearchMore('topic', topicResults.length)}
           </Command.Group>
         )}
 
         {pageResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {pageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('page', pageResults.length)}
           </Command.Group>
         )}
 
+        {memoryResults.length > 0 && (
+          <Command.Group forceMount>
+            {memoryResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('memory', memoryResults.length)}
+          </Command.Group>
+        )}
+
         {fileResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {fileResults.map((result) => renderResultItem(result))}
             {renderSearchMore('file', fileResults.length)}
           </Command.Group>
         )}
 
         {folderResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {folderResults.map((result) => renderResultItem(result))}
             {renderSearchMore('folder', folderResults.length)}
           </Command.Group>
         )}
 
+        {knowledgeBaseResults.length > 0 && (
+          <Command.Group forceMount>
+            {knowledgeBaseResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('knowledgeBase', knowledgeBaseResults.length)}
+          </Command.Group>
+        )}
+
         {mcpResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {mcpResults.map((result) => renderResultItem(result))}
             {renderSearchMore('mcp', mcpResults.length)}
           </Command.Group>
         )}
 
         {pluginResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {pluginResults.map((result) => renderResultItem(result))}
             {renderSearchMore('plugin', pluginResults.length)}
           </Command.Group>
         )}
 
         {assistantResults.length > 0 && (
-          <Command.Group>
+          <Command.Group forceMount>
             {assistantResults.map((result) => renderResultItem(result))}
             {renderSearchMore('communityAgent', assistantResults.length)}
           </Command.Group>
@@ -365,7 +403,7 @@ const SearchResults = memo<SearchResultsProps>(
 
         {/* Show loading skeleton below existing results */}
         {isLoading && (
-          <Command.Group>
+          <Command.Group forceMount>
             {[1, 2, 3].map((i) => (
               <Command.Item
                 disabled

@@ -42,6 +42,13 @@ const History = memo(() => {
     <Action
       icon={enableHistoryCount ? Timer : TimerOff}
       loading={updating}
+      showTooltip={false}
+      title={title}
+      popover={{
+        content: <Controls setUpdating={setUpdating} updating={updating} />,
+        minWidth: 240,
+        trigger: isMobile ? 'click' : 'hover',
+      }}
       onClick={
         isMobile
           ? undefined
@@ -52,13 +59,6 @@ const History = memo(() => {
               await updateAgentChatConfig({ enableHistoryCount: next });
             }
       }
-      popover={{
-        content: <Controls setUpdating={setUpdating} updating={updating} />,
-        minWidth: 240,
-        trigger: isMobile ? 'click' : 'hover',
-      }}
-      showTooltip={false}
-      title={title}
     />
   );
 });

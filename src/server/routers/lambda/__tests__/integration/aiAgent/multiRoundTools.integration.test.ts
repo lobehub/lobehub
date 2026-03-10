@@ -1,12 +1,12 @@
 // @vitest-environment node
 /**
  * Integration tests for multi-round tool execution
- * Tests for LOBE-1657 fix: tool messages should not be duplicated across rounds
+ * Tests fix: tool messages should not be duplicated across rounds
  *
  * Note: AgentStateManager and StreamEventManager will automatically use
  * InMemory implementations when Redis is not available (test environment).
  */
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, messages } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
@@ -37,7 +37,6 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockResponsesCreate: any;
 
 let serverDB: LobeChatDatabase;
@@ -243,7 +242,7 @@ afterEach(async () => {
 
 describe('Multi-Round Tool Execution', () => {
   /**
-   * This test verifies the fix for LOBE-1657:
+   * This test verifies the fix:
    * When executing multiple rounds of batch tool calls, tool messages should not be duplicated.
    *
    * Scenario: LLM returns multiple tool calls in each round
@@ -337,7 +336,7 @@ describe('Multi-Round Tool Execution', () => {
     mockExecuteTool.mockRestore();
   });
 
-  it('should maintain correct state.messages count in AgentState across tool rounds', async () => {
+  it('should maintain correct state.messages structure in AgentState across tool rounds', async () => {
     let callCount = 0;
     mockResponsesCreate.mockImplementation(() => {
       callCount++;
@@ -373,13 +372,33 @@ describe('Multi-Round Tool Execution', () => {
 
     expect(finalState.status).toBe('done');
 
-    const stateToolMessages = finalState.messages.filter(
-      (m: { role: string }) => m.role === 'tool',
-    );
-    expect(stateToolMessages).toHaveLength(4);
+    // After LOBE-5143: state.messages stores parse()-processed UIChatMessage[]
+    // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
+    // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
+    expect(finalState.messages.length).toBeGreaterThan(0);
 
-    const stateToolCallIds = stateToolMessages.map((m: { tool_call_id: string }) => m.tool_call_id);
-    expect(new Set(stateToolCallIds).size).toBe(4);
+    // After LOBE-5143: state.messages stores parse()-processed UIChatMessage[]
+    // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
+    // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
+    expect(finalState.messages.length).toBeGreaterThan(0);
+
+    // parse() combines the multi-round assistant+tool chain into one assistantGroup
+    const assistantGroupMessages = finalState.messages.filter(
+      (m: { role: string }) => m.role === 'assistantGroup',
+    );
+    expect(assistantGroupMessages).toHaveLength(1);
+
+    // The assistantGroup children are assistant messages, each with a tools array
+    // containing the tool calls for that round
+    const group = assistantGroupMessages[0] as any;
+    expect(group.children).toHaveLength(2); // 2 rounds of tool calls
+
+    // Each child should have 2 tools (search + crawl per round)
+    const totalToolCalls = group.children.reduce(
+      (sum: number, child: any) => sum + (child.tools?.length ?? 0),
+      0,
+    );
+    expect(totalToolCalls).toBe(4);
 
     mockExecuteTool.mockRestore();
   });

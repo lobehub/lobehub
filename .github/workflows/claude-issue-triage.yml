@@ -29,7 +29,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GH_TOKEN }}
-          allowed_non_write_users: "*"
+          allowed_non_write_users: '*'
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Security: Restrict gh commands to specific safe operations only
           claude_args: |

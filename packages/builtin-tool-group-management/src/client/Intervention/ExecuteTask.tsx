@@ -1,12 +1,13 @@
 'use client';
 
-import { BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Avatar, Flexbox, Tooltip } from '@lobehub/ui';
 import { Input, InputNumber } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Clock } from 'lucide-react';
-import { ChangeEvent, memo, useCallback, useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -81,21 +82,21 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
     );
 
     // Local state
-    const [task, setTask] = useState(args?.task || '');
+    const [instruction, setInstruction] = useState(args?.instruction || '');
     const [timeout, setTimeout] = useState(args?.timeout ?? DEFAULT_TIMEOUT);
     const [hasChanges, setHasChanges] = useState(false);
 
     // Sync local state when args change externally
     useEffect(() => {
       if (!hasChanges) {
-        setTask(args?.task || '');
+        setInstruction(args?.instruction || '');
         setTimeout(args?.timeout ?? DEFAULT_TIMEOUT);
       }
-    }, [args?.task, args?.timeout, hasChanges]);
+    }, [args?.instruction, args?.timeout, hasChanges]);
 
-    // Handle task change
-    const handleTaskChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
-      setTask(e.target.value);
+    // Handle instruction change
+    const handleInstructionChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
+      setInstruction(e.target.value);
       setHasChanges(true);
     }, []);
 
@@ -113,18 +114,18 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
 
       const cleanup = registerBeforeApprove('executeTask', async () => {
         if (hasChanges && onArgsChange) {
-          await onArgsChange({ ...args, task, timeout });
+          await onArgsChange({ ...args, instruction, timeout });
         }
       });
 
       return cleanup;
-    }, [registerBeforeApprove, hasChanges, task, timeout, args, onArgsChange]);
+    }, [registerBeforeApprove, hasChanges, instruction, timeout, args, onArgsChange]);
 
     return (
       <Flexbox className={styles.container} gap={12}>
         {/* Header: Agent info + Timeout */}
-        <Flexbox align={'center'} gap={12} horizontal justify={'space-between'}>
-          <Flexbox align={'center'} flex={1} gap={12} horizontal style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
             <Avatar
               avatar={agent?.avatar || '🤖'}
               background={agent?.backgroundColor || undefined}
@@ -137,7 +138,7 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
               </span>
             </Flexbox>
           </Flexbox>
-          <Flexbox align="center" gap={8} horizontal style={{ flexShrink: 0 }}>
+          <Flexbox horizontal align="center" gap={8} style={{ flexShrink: 0 }}>
             <Tooltip title={t('agentGroupManagement.executeTask.intervention.timeout')}>
               <Clock size={14} />
             </Tooltip>
@@ -145,21 +146,21 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
               className={styles.timeoutInput}
               max={120}
               min={1}
-              onChange={handleTimeoutChange}
               size={'small'}
               suffix={t('agentGroupManagement.executeTask.intervention.timeoutUnit')}
               value={Math.round(timeout / 60_000)}
               variant={'filled'}
+              onChange={handleTimeoutChange}
             />
           </Flexbox>
         </Flexbox>
 
-        {/* Task input */}
+        {/* Instruction input */}
         <Input.TextArea
           autoSize={{ maxRows: 10, minRows: 6 }}
-          onChange={handleTaskChange}
           placeholder={t('agentGroupManagement.executeTask.intervention.taskPlaceholder')}
-          value={task}
+          value={instruction}
+          onChange={handleInstructionChange}
         />
       </Flexbox>
     );

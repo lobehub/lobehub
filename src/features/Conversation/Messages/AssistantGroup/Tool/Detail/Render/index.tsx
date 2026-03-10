@@ -1,7 +1,6 @@
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { type ChatPluginPayload } from '@lobechat/types';
 import { memo } from 'react';
-
-import { getBuiltinRender } from '@/tools/renders';
 
 import CustomRender from './CustomRender';
 import { FallbackArgumentRender } from './FallbacktArgumentRender';

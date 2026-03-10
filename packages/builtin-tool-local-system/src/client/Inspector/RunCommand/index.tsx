@@ -1,7 +1,7 @@
 'use client';
 
-import { type RunCommandParams, type RunCommandResult } from '@lobechat/electron-client-ipc';
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { RunCommandParams, RunCommandResult } from '@lobechat/electron-client-ipc';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
@@ -47,7 +47,7 @@ export const RunCommandInspector = memo<BuiltinInspectorProps<RunCommandParams, 
 
     // Get execution result from pluginState
     const result = pluginState?.result;
-    const isSuccess = result?.success && result?.exit_code === 0;
+    const isSuccess = result?.success || result?.exit_code === 0;
 
     return (
       <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>

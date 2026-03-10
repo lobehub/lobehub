@@ -1,11 +1,11 @@
+import { type ExperienceListResult } from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
-import { userMemoryService } from '@/services/userMemory';
-import { memoryCRUDService } from '@/services/userMemory/index';
-import { LayersEnum } from '@/types/userMemory';
+import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
@@ -16,32 +16,36 @@ export interface ExperienceQueryParams {
   page?: number;
   pageSize?: number;
   q?: string;
-  sort?: 'scoreConfidence';
+  sort?: 'capturedAt' | 'scoreConfidence';
 }
 
-export interface ExperienceAction {
-  deleteExperience: (id: string) => Promise<void>;
-  loadMoreExperiences: () => void;
-  resetExperiencesList: (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>) => void;
-  useFetchExperiences: (params: ExperienceQueryParams) => SWRResponse<any>;
-}
+type Setter = StoreSetter<UserMemoryStore>;
+export const createExperienceSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
+  new ExperienceActionImpl(set, get, _api);
 
-export const createExperienceSlice: StateCreator<
-  UserMemoryStore,
-  [['zustand/devtools', never]],
-  [],
-  ExperienceAction
-> = (set, get) => ({
-  deleteExperience: async (id) => {
+export class ExperienceActionImpl {
+  readonly #get: () => UserMemoryStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  deleteExperience = async (id: string): Promise<void> => {
     await memoryCRUDService.deleteExperience(id);
     // Reset list to refresh
-    get().resetExperiencesList({ q: get().experiencesQuery, sort: get().experiencesSort });
-  },
+    this.#get().resetExperiencesList({
+      q: this.#get().experiencesQuery,
+      sort: this.#get().experiencesSort,
+    });
+  };
 
-  loadMoreExperiences: () => {
-    const { experiencesPage, experiencesTotal, experiences } = get();
+  loadMoreExperiences = (): void => {
+    const { experiencesPage, experiencesTotal, experiences } = this.#get();
     if (experiences.length < (experiencesTotal || 0)) {
-      set(
+      this.#set(
         produce((draft) => {
           draft.experiencesPage = experiencesPage + 1;
         }),
@@ -49,10 +53,10 @@ export const createExperienceSlice: StateCreator<
         n('loadMoreExperiences'),
       );
     }
-  },
+  };
 
-  resetExperiencesList: (params) => {
-    set(
+  resetExperiencesList = (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>): void => {
+    this.#set(
       produce((draft) => {
         draft.experiences = [];
         draft.experiencesPage = 1;
@@ -63,9 +67,9 @@ export const createExperienceSlice: StateCreator<
       false,
       n('resetExperiencesList'),
     );
-  },
+  };
 
-  useFetchExperiences: (params) => {
+  useFetchExperiences = (params: ExperienceQueryParams): SWRResponse<ExperienceListResult> => {
     const swrKeyParts = [
       'useFetchExperiences',
       params.page,
@@ -81,44 +85,32 @@ export const createExperienceSlice: StateCreator<
     return useSWR(
       swrKey,
       async () => {
-        const result = await userMemoryService.queryMemories({
-          layer: LayersEnum.Experience,
+        // Use the new dedicated queryExperiences API
+        return userMemoryService.queryExperiences({
           page: params.page,
           pageSize: params.pageSize,
           q: params.q,
           sort: params.sort,
         });
-
-        return result;
       },
       {
-        onSuccess(data: any) {
-          set(
+        onSuccess: (data: ExperienceListResult) => {
+          this.#set(
             produce((draft) => {
               draft.experiencesSearchLoading = false;
+              draft.experiencesTotal = data.total;
 
-              // 设置基础信息
               if (!draft.experiencesInit) {
                 draft.experiencesInit = true;
-                draft.experiencesTotal = data.total;
               }
 
-              // 转换数据结构
-              const transformedItems = data.items.map((item: any) => ({
-                ...item.memory,
-                ...item.experience,
-              }));
-
-              // 累积数据逻辑
+              // Backend now returns flat structure directly, no transformation needed
               if (page === 1) {
-                // 第一页，直接设置
-                draft.experiences = uniqBy(transformedItems, 'id');
+                draft.experiences = uniqBy(data.items, 'id');
               } else {
-                // 后续页面，累积数据
-                draft.experiences = uniqBy([...draft.experiences, ...transformedItems], 'id');
+                draft.experiences = uniqBy([...draft.experiences, ...data.items], 'id');
               }
 
-              // 更新 hasMore
               draft.experiencesHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,
@@ -128,5 +120,7 @@ export const createExperienceSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type ExperienceAction = Pick<ExperienceActionImpl, keyof ExperienceActionImpl>;

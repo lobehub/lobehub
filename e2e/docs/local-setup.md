@@ -98,8 +98,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
 DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
   DATABASE_DRIVER=node \
   KEY_VAULTS_SECRET=LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s= \
-  BETTER_AUTH_SECRET=e2e-test-secret-key-for-better-auth-32chars! \
-  NEXT_PUBLIC_ENABLE_BETTER_AUTH=1 \
+  AUTH_SECRET=e2e-test-secret-key-for-better-auth-32chars! \
   SKIP_LINT=1 \
   bun run build
 ```
@@ -112,8 +111,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
 DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
   DATABASE_DRIVER=node \
   KEY_VAULTS_SECRET=LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s= \
-  BETTER_AUTH_SECRET=e2e-test-secret-key-for-better-auth-32chars! \
-  NEXT_PUBLIC_ENABLE_BETTER_AUTH=1 \
+  AUTH_SECRET=e2e-test-secret-key-for-better-auth-32chars! \
   NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION=0 \
   S3_ACCESS_KEY_ID=e2e-mock-access-key \
   S3_SECRET_ACCESS_KEY=e2e-mock-secret-key \
@@ -126,14 +124,13 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
 
 ### 服务器启动环境变量
 
-| 变量                                  | 值                                                       | 说明             |
-| ------------------------------------- | -------------------------------------------------------- | ---------------- |
-| `DATABASE_URL`                        | `postgresql://postgres:postgres@localhost:5433/postgres` | 数据库连接       |
-| `DATABASE_DRIVER`                     | `node`                                                   | 数据库驱动       |
-| `KEY_VAULTS_SECRET`                   | `LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=`           | 密钥保险库密钥   |
-| `BETTER_AUTH_SECRET`                  | `e2e-test-secret-key-for-better-auth-32chars!`           | 认证密钥         |
-| `NEXT_PUBLIC_ENABLE_BETTER_AUTH`      | `1`                                                      | 启用 Better Auth |
-| `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION` | `0`                                                      | 禁用邮箱验证     |
+| 变量                                  | 值                                                       | 说明           |
+| ------------------------------------- | -------------------------------------------------------- | -------------- |
+| `DATABASE_URL`                        | `postgresql://postgres:postgres@localhost:5433/postgres` | 数据库连接     |
+| `DATABASE_DRIVER`                     | `node`                                                   | 数据库驱动     |
+| `KEY_VAULTS_SECRET`                   | `LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=`           | 密钥保险库密钥 |
+| `AUTH_SECRET`                         | `e2e-test-secret-key-for-better-auth-32chars!`           | 认证密钥       |
+| `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION` | `0`                                                      | 禁用邮箱验证   |
 
 ### S3 Mock 变量（必需）
 

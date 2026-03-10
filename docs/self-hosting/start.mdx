@@ -1,10 +1,10 @@
 ---
-title: Build Your Own LobeChat - Choose Your Deployment Platform
+title: Build Your Own LobeHub - Choose Your Deployment Platform
 description: >-
-  Explore multiple deployment platforms like Vercel, Docker, Docker Compose, and more to deploy LobeChat. Choose the platform that best suits your needs.
-
+  Explore multiple deployment platforms like Vercel, Docker, Docker Compose, and
+  more to deploy LobeHub. Choose the platform that best suits your needs.
 tags:
-  - Lobe Chat
+  - LobeHub
   - Deployment Platform
   - Vercel
   - Docker
@@ -12,28 +12,140 @@ tags:
   - Alibaba Cloud
 ---
 
-# Build Your Own Lobe Chat
+# Build Your Own LobeHub
 
-LobeChat supports various deployment platforms, including Vercel, Docker, and Docker Compose. You can choose a deployment platform that suits you to build your own Lobe Chat.
-
-## Quick Deployment
-
-For users who are new to LobeChat, we recommend using the client-side database mode for quick deployment. The advantage of this mode is that deployment can be quickly completed with just one command/button, making it easy for you to quickly get started and experience LobeChat.
-
-You can follow the guide below for quick deployment of LobeChat:
+LobeHub can be self-hosted on your own infrastructure, giving you complete control over your data, customization, and deployment environment. Whether you're deploying for a team, organization, or personal use, LobeHub supports multiple deployment methods.
 
 <PlatformCards urlPrefix={'platform'} />
 
-<Callout>
-  In the client-side database mode, data is stored locally on the user's device, without
-  cross-device synchronization, and does not support advanced features such as file uploads and
-  knowledge base.
+## Architecture Overview
+
+LobeHub consists of several key components:
+
+### Core Services
+
+- **Next.js application** — Hybrid SSR/SPA frontend with API routes
+- **PostgreSQL database** — Stores conversations, agents, files, and user data
+- **Redis** (optional) — Session storage and caching
+- **S3-compatible storage** — File uploads and knowledge base documents
+
+### Optional Services
+
+- **RustFS / MinIO** — Self-hosted S3-compatible storage
+- **Langfuse** — LLM observability and tracing
+- **OpenTelemetry** — Distributed tracing
+- **Searxng** — Privacy-focused web search
+
+## Choosing a Deployment Method
+
+### Docker Compose (Recommended)
+
+**Best for:** Self-hosted installations, full infrastructure control, team deployments.
+
+**Pros:**
+
+- Complete stack in one command
+- Easy updates with `docker compose pull`
+- Includes PostgreSQL, Redis, RustFS, Searxng
+- Full feature support — no timeout limits, WebSocket support
+
+**Cons:**
+
+- Requires server management
+- Need to handle backups and monitoring
+
+### Vercel
+
+**Best for:** Quick deployments, serverless scaling, low maintenance.
+
+**Pros:**
+
+- One-click deployment
+- Automatic HTTPS and CDN
+- Scales automatically
+- Free tier available
+
+**Cons:**
+
+- Requires an external PostgreSQL database
+- 10-second serverless function timeout limit
+- No WebSocket support
+- Less control over infrastructure
+
+### Cloud Platforms (Zeabur, Sealos, Dokploy)
+
+Similar to Vercel with regional options. Good for specific geographic requirements with various pricing and feature differences.
+
+## Feature Comparison
+
+| Feature           | Docker       | Vercel      | Cloud Platforms |
+| ----------------- | ------------ | ----------- | --------------- |
+| Full control      | ✅            | ❌           | ⚠️              |
+| Custom domain     | ✅            | ✅           | ✅               |
+| One-click deploy  | ❌            | ✅           | ✅               |
+| Auto-scaling      | ❌            | ✅           | ✅               |
+| Free tier         | ✅            | ✅           | Varies          |
+| Function timeout  | Unlimited    | 10s         | Varies          |
+| WebSocket support | ✅            | ❌           | Varies          |
+| File storage      | Local/RustFS | External S3 | Varies          |
+| Database          | Included     | External    | Varies          |
+
+## Prerequisites
+
+Before deploying LobeHub, gather the following:
+
+### Required
+
+**AI provider API keys** — At minimum, you need an API key from one AI provider:
+
+- **OpenAI** — `OPENAI_API_KEY` from [platform.openai.com](https://platform.openai.com/account/api-keys)
+- **Anthropic** — `ANTHROPIC_API_KEY` from [console.anthropic.com](https://console.anthropic.com/)
+- **Google** — `GOOGLE_API_KEY` from [aistudio.google.com](https://aistudio.google.com/app/apikey)
+
+See [AI Provider Configuration](/docs/self-hosting/environment-variables/model-provider) for the full list of supported providers.
+
+**Database (for server deployment)** — PostgreSQL 14+ is required:
+
+- **Managed options**: Neon, Supabase, Railway, Vercel Postgres
+- **Self-hosted**: Docker (included in Docker Compose), AWS RDS, Google Cloud SQL
+
+### Optional but Recommended
+
+**Redis** — Improves performance for session storage, rate limiting, and caching. Use Upstash, Redis Cloud, or self-hosted Redis.
+
+**S3-compatible storage** — Required for file uploads and knowledge bases:
+
+- **AWS S3** — Production-ready, scalable
+- **Cloudflare R2** — No egress fees
+- **RustFS / MinIO** — Self-hosted S3 alternative (included in Docker Compose)
+
+**Authentication provider** — For SSO and team features (Google OAuth, GitHub OAuth, Microsoft Azure AD, Auth0, Keycloak). See [Authentication Setup](/docs/self-hosting/auth) for configuration.
+
+## Security Considerations
+
+<Callout type={'warning'}>
+  Never commit API keys or secrets to version control. Always use environment variables.
 </Callout>
 
-## Advanced Mode: Server-Side Database
+Essential security measures:
 
-For users who are already familiar with LobeChat or need cross-device synchronization, you can deploy a version with a server-side database to access a more complete and powerful LobeChat.
+1. **Use HTTPS** — Always deploy with SSL/TLS certificates
+2. **Secure your database** — Use strong passwords and restrict network access
+3. **Environment variables** — Store secrets securely (never in code)
+4. **Authentication** — Enable Better Auth for multi-user deployments
+5. **Regular updates** — Keep LobeHub and dependencies up to date
 
-<Cards>
-  <Card href={'/docs/self-hosting/server-database'} title={'Server-Side Database Deployment Guide'} />
-</Cards>
+Authentication options:
+
+- **Open access** — No authentication (single-user deployments only)
+- **Better Auth** — Built-in auth with email/password, OAuth, magic links
+- **Reverse proxy** — Use Authelia, Authentik, or similar
+
+## Next Steps
+
+1. **Choose your deployment method** — Docker for maximum control or Vercel for simplicity
+2. **Gather API keys** — Obtain API keys from your chosen AI providers
+3. **Set up infrastructure** — Provision database, Redis, and storage as needed
+4. **Configure environment variables** — See the [environment variable reference](/docs/self-hosting/environment-variables)
+5. **Deploy** — Follow the platform-specific guide above
+6. **Configure authentication** — Set up [Better Auth](/docs/self-hosting/auth) for multi-user access

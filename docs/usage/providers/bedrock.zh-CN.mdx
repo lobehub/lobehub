@@ -1,6 +1,6 @@
 ---
-title: 在 LobeChat 中使用 Amazon Bedrock API Key
-description: 学习如何在 LobeChat 中配置和使用 Amazon Bedrock，一个完全托管的基础模型API服务，以便开始对话。
+title: 在 LobeHub 中使用 Amazon Bedrock API Key
+description: 学习如何在 LobeHub 中配置和使用 Amazon Bedrock，一个完全托管的基础模型API服务，以便开始对话。
 tags:
   - Amazon Bedrock
   - Claude 3.5 sonnect
@@ -9,13 +9,13 @@ tags:
   - Web UI
 ---
 
-# 在 LobeChat 中使用 Amazon Bedrock
+# 在 LobeHub 中使用 Amazon Bedrock
 
-<Image alt={'在 LobeChat 中使用 Amazon Bedrock'} cover src={'https://github.com/lobehub/lobe-chat/assets/34400653/74768b36-28ca-4ec3-a42d-b32abe2c7057'} />
+<Image alt={'在 LobeHub 中使用 Amazon Bedrock'} cover src={'/blog/assets34400653/74768b36-28ca-4ec3-a42d-b32abe2c7057.webp'} />
 
 Amazon Bedrock 是一个完全托管的基础模型 API 服务，允许用户通过 API 访问来自领先 AI 公司 (如 AI21 Labs、Anthropic、Cohere、Meta、Stability AI) 和 Amazon 自家的基础模型。
 
-本文档将指导你如何在 LobeChat 中使用 Amazon Bedrock:
+本文档将指导你如何在 LobeHub 中使用 Amazon Bedrock:
 
 <Steps>
   ### 步骤一：在 AWS 中打开 Amazon Bedrock 模型的访问权限
@@ -23,15 +23,15 @@ Amazon Bedrock 是一个完全托管的基础模型 API 服务，允许用户通
   - 访问并登录 [AWS Console](https://console.aws.amazon.com/)
   - 搜索 beckrock 并进入 `Amazon Bedrock` 服务
 
-  <Image alt={'进入 Amazon Bedrock 服务'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/4e0e87d1-4970-45c5-a9ef-287098f6a198'} />
+  <Image alt={'进入 Amazon Bedrock 服务'} inStep src={'/blog/assets34400653/4e0e87d1-4970-45c5-a9ef-287098f6a198.webp'} />
 
   - 在左侧菜单中选择 `Models acess`
 
-  <Image alt={'进入 Amazon Bedrock 模型访问权限'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/fd06c0aa-4bd3-4f4e-bf2b-38374dfe775d'} />
+  <Image alt={'进入 Amazon Bedrock 模型访问权限'} inStep src={'/blog/assets34400653/fd06c0aa-4bd3-4f4e-bf2b-38374dfe775d.webp'} />
 
   - 根据你所需要的模型，打开模型访问权限
 
-  <Image alt={'打开模型访问权限'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/b695f26a-5bcd-477c-af08-bf03adb717c2'} />
+  <Image alt={'打开模型访问权限'} inStep src={'/blog/assets34400653/b695f26a-5bcd-477c-af08-bf03adb717c2.webp'} />
 
   <Callout type={'info'}>某些模型可能需要你提供额外的信息</Callout>
 
@@ -39,47 +39,47 @@ Amazon Bedrock 是一个完全托管的基础模型 API 服务，允许用户通
 
   - 继续在 AWS console 中搜索 IAM，进入 IAM 服务
 
-  <Image alt={'进入 IAM 服务'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/f9a5a394-c8f8-4567-9d51-cf84811418ca'} />
+  <Image alt={'进入 IAM 服务'} inStep src={'/blog/assets34400653/f9a5a394-c8f8-4567-9d51-cf84811418ca.webp'} />
 
   - 在 `用户` 菜单中，创建一个新的 IAM 用户
 
-  <Image alt={'创建一个新的 IAM 用户'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/750b5cd1-f16a-4330-b899-c27b28b1e837'} />
+  <Image alt={'创建一个新的 IAM 用户'} inStep src={'/blog/assets34400653/750b5cd1-f16a-4330-b899-c27b28b1e837.webp'} />
 
   - 在弹出的对话框中，输入用户名称
 
-  <Image alt={'输入用户名称'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/22ce5a72-bc46-41f3-b402-bda6dee90184'} />
+  <Image alt={'输入用户名称'} inStep src={'/blog/assets34400653/22ce5a72-bc46-41f3-b402-bda6dee90184.webp'} />
 
   - 为这个用户添加权限，或者加入一个已有的用户组，确保用户拥有 Amazon Bedrock 的访问权限
 
-  <Image alt={'为用户添加权限'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/94836b32-7fc5-45ca-8556-7a23f53b15f9'} />
+  <Image alt={'为用户添加权限'} inStep src={'/blog/assets34400653/94836b32-7fc5-45ca-8556-7a23f53b15f9.webp'} />
 
   - 为已添加的用户创建访问密钥
 
-  <Image alt={'创建访问密钥'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/ac2ed716-d270-43f6-856b-3ff81265f4e6'} />
+  <Image alt={'创建访问密钥'} inStep src={'/blog/assets34400653/ac2ed716-d270-43f6-856b-3ff81265f4e6.webp'} />
 
   - 复制并妥善保存访问密钥以及秘密访问密钥，后续将会用到
 
-  <Image alt={'进入 IAM 服务'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/3c64b747-f6f1-4ed2-84bc-bfa8e5d90966'} />
+  <Image alt={'进入 IAM 服务'} inStep src={'/blog/assets34400653/3c64b747-f6f1-4ed2-84bc-bfa8e5d90966.webp'} />
 
   <Callout type={'warning'}>
     请安全地存储密钥，因为它只会出现一次。如果您意外丢失它，您将需要创建一个新访问密钥。
   </Callout>
 
-  ### 步骤三：在 LobeChat 中配置 Amazon Bedrock
+  ### 步骤三：在 LobeHub 中配置 Amazon Bedrock
 
-  - 访问 LobeChat 的`设置`界面
+  - 访问 LobeHub 的`设置`界面
   - 在`AI 服务商`下找到`Amazon Bedrock`的设置项并打开
 
-  <Image alt={'LobeChat 中填写 Amazon Bedrock 密钥'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/7468594b-3355-4cb9-85bc-c9dace137653'} />
+  <Image alt={'LobeHub 中填写 Amazon Bedrock 密钥'} inStep src={'/blog/assets34400653/7468594b-3355-4cb9-85bc-c9dace137653.webp'} />
 
   - 打开 Amazon Bedrock 并填入获得的访问密钥与秘密访问密钥
   - 为你的助手选择一个 Amazone Bedrock 的模型即可开始对话
 
-  <Image alt={' 选择并使用 Amazon Bedrock 模型 '} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/164b34b5-671e-418d-b34a-3b70f1156d06'} />
+  <Image alt={' 选择并使用 Amazon Bedrock 模型 '} inStep src={'/blog/assets34400653/164b34b5-671e-418d-b34a-3b70f1156d06.webp'} />
 
   <Callout type={'warning'}>
     在使用过程中你可能需要向 API 服务提供商付费，请参考 Amazon Bedrock 的费用政策。
   </Callout>
 </Steps>
 
-至此你已经可以在 LobeChat 中使用 Amazone Bedrock 提供的模型进行对话了。
+至此你已经可以在 LobeHub 中使用 Amazone Bedrock 提供的模型进行对话了。

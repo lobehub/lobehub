@@ -64,15 +64,12 @@ export const parseMcpInput = (value: string): ParseResult => {
         const mcpConfig = parsedJson.mcpServers[identifier];
 
         if (mcpConfig && typeof mcpConfig === 'object' && !Array.isArray(mcpConfig)) {
-          let type: 'stdio' | 'http' | undefined;
-          let resultMcpConfig: McpConfig & { type?: 'stdio' | 'http' } = {};
+          let resultMcpConfig: McpConfig & { type?: 'stdio' | 'http' };
 
           if (mcpConfig.command && Array.isArray(mcpConfig.args)) {
-            type = 'stdio';
-            resultMcpConfig = { ...mcpConfig, type };
+            resultMcpConfig = { ...mcpConfig, type: 'stdio' };
           } else if (mcpConfig.url) {
-            type = 'http';
-            resultMcpConfig = { type, url: mcpConfig.url };
+            resultMcpConfig = { type: 'http', url: mcpConfig.url };
           } else {
             return {
               errorCode: McpParseErrorCode.InvalidMcpStructure,
@@ -90,7 +87,7 @@ export const parseMcpInput = (value: string): ParseResult => {
         // mcpConfig is invalid or not an object
         return {
           errorCode: McpParseErrorCode.InvalidMcpStructure,
-          identifier: identifier,
+          identifier,
           status: 'error',
         };
       } else {
@@ -109,17 +106,14 @@ export const parseMcpInput = (value: string): ParseResult => {
         const mcpConfig = (parsedJson as any)[identifier];
 
         if (mcpConfig && typeof mcpConfig === 'object' && !Array.isArray(mcpConfig)) {
-          let type: 'stdio' | 'http' | undefined;
-          let resultMcpConfig: McpConfig & { type?: 'stdio' | 'http' } = {};
+          let resultMcpConfig: McpConfig & { type?: 'stdio' | 'http' };
 
           // Explicitly check properties of mcpConfig
           if (mcpConfig.command && Array.isArray(mcpConfig.args)) {
-            type = 'stdio';
-            resultMcpConfig = { ...mcpConfig, type };
+            resultMcpConfig = { ...mcpConfig, type: 'stdio' };
           } else if (mcpConfig.url) {
-            type = 'http';
             // For the flat structure, ensure only 'url' is included for http type
-            resultMcpConfig = { type, url: mcpConfig.url };
+            resultMcpConfig = { type: 'http', url: mcpConfig.url };
           } else {
             // Invalid structure within the identifier's value
             return {

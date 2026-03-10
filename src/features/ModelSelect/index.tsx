@@ -1,5 +1,7 @@
-import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { TooltipGroup } from '@lobehub/ui';
+import { Select, type SelectProps } from '@lobehub/ui/base-ui';
+import { createStaticStyles, createStyles } from 'antd-style';
+import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
@@ -7,6 +9,16 @@ import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 const prefixCls = 'ant';
+
+const useStyles = createStyles(({ css }, { popupWidth }: { popupWidth?: number | string }) => ({
+  popup: css`
+    width: ${popupWidth
+      ? typeof popupWidth === 'number'
+        ? `${popupWidth}px`
+        : popupWidth
+      : 'max(360px, var(--anchor-width))'};
+  `,
+}));
 
 const styles = createStaticStyles(({ css }) => ({
   popup: css`
@@ -24,21 +36,37 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface ModelOption {
-  label: any;
+  abilities?: Record<string, boolean>;
+  id: string;
+  label: ReactNode;
   provider: string;
   value: string;
 }
 
 interface ModelSelectProps extends Pick<SelectProps, 'loading' | 'size' | 'style' | 'variant'> {
   defaultValue?: { model: string; provider?: string };
+  initialWidth?: boolean;
   onChange?: (props: { model: string; provider: string }) => void;
+  popupWidth?: number | string;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
   showAbility?: boolean;
   value?: { model: string; provider?: string };
 }
 
 const ModelSelect = memo<ModelSelectProps>(
-  ({ value, onChange, showAbility = true, requiredAbilities, loading, size, style, variant }) => {
+  ({
+    value,
+    onChange,
+    showAbility = true,
+    requiredAbilities,
+    loading,
+    size,
+    style,
+    variant,
+    initialWidth = false,
+    popupWidth,
+  }) => {
+    const { styles: dynamicStyles } = useStyles({ popupWidth });
     const enabledList = useEnabledChatModels();
 
     const options = useMemo<SelectProps['options']>(() => {
@@ -88,27 +116,30 @@ const ModelSelect = memo<ModelSelectProps>(
       <TooltipGroup>
         <Select
           className={styles.select}
-          classNames={{
-            popup: { root: styles.popup },
-          }}
           defaultValue={`${value?.provider}/${value?.model}`}
           loading={loading}
+          options={options}
+          popupClassName={popupWidth ? `${styles.popup} ${dynamicStyles.popup}` : styles.popup}
+          popupMatchSelectWidth={false}
+          size={size}
+          value={`${value?.provider}/${value?.model}`}
+          variant={variant}
+          optionRender={(option) => (
+            <ModelItemRender
+              {...(option as ModelOption)}
+              {...(option as ModelOption).abilities}
+              showInfoTag
+            />
+          )}
+          style={{
+            minWidth: 200,
+            width: initialWidth ? 'initial' : undefined,
+            ...style,
+          }}
           onChange={(value, option) => {
             const model = value.split('/').slice(1).join('/');
             onChange?.({ model, provider: (option as unknown as ModelOption).provider });
           }}
-          optionRender={(option) => (
-            <ModelItemRender {...option.data} {...option.data.abilities} showInfoTag />
-          )}
-          options={options}
-          popupMatchSelectWidth={false}
-          size={size}
-          style={{
-            minWidth: 200,
-            ...style,
-          }}
-          value={`${value?.provider}/${value?.model}`}
-          variant={variant}
         />
       </TooltipGroup>
     );

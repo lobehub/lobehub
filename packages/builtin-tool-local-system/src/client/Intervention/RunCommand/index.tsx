@@ -1,5 +1,5 @@
-import { type RunCommandParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInterventionProps } from '@lobechat/types';
+import type { RunCommandParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -37,11 +37,11 @@ const RunCommand = memo<BuiltinInterventionProps<RunCommandParams>>(({ args }) =
       </Flexbox>
       {command && (
         <Highlighter
+          wrap
           language={'sh'}
           showLanguage={false}
           style={{ padding: '4px 8px' }}
           variant={'outlined'}
-          wrap
         >
           {command}
         </Highlighter>

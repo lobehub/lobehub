@@ -3,7 +3,7 @@ import { changeLanguage } from 'i18next';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
-import { LocaleMode } from '@/types/locale';
+import { type LocaleMode } from '@/types/locale';
 
 import { switchLang } from './switchLang';
 

@@ -1,16 +1,16 @@
 import {
-  LayersEnum,
+  type IdentityListResult,
   type NewUserMemoryIdentity,
-  type TypesEnum,
   type UpdateUserMemoryIdentity,
 } from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { type AddIdentityEntryResult } from '@/database/models/userMemory';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
@@ -21,41 +21,52 @@ export interface IdentityQueryParams {
   page?: number;
   pageSize?: number;
   q?: string;
-  types?: TypesEnum[];
+  relationships?: string[];
+  sort?: 'capturedAt' | 'type';
+  types?: string[];
 }
 
-export interface IdentityAction {
-  createIdentity: (data: NewUserMemoryIdentity) => Promise<AddIdentityEntryResult>;
-  deleteIdentity: (id: string) => Promise<void>;
-  loadMoreIdentities: () => void;
-  resetIdentitiesList: (params?: Omit<IdentityQueryParams, 'page' | 'pageSize'>) => void;
-  updateIdentity: (id: string, data: UpdateUserMemoryIdentity) => Promise<boolean>;
-  useFetchIdentities: (params: IdentityQueryParams) => SWRResponse<any>;
-}
+type Setter = StoreSetter<UserMemoryStore>;
+export const createIdentitySlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
+  new IdentityActionImpl(set, get, _api);
 
-export const createIdentitySlice: StateCreator<
-  UserMemoryStore,
-  [['zustand/devtools', never]],
-  [],
-  IdentityAction
-> = (set, get) => ({
-  createIdentity: async (data) => {
+export class IdentityActionImpl {
+  readonly #get: () => UserMemoryStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createIdentity = async (data: NewUserMemoryIdentity): Promise<AddIdentityEntryResult> => {
     const result = await memoryCRUDService.createIdentity(data);
     // Reset list to refresh
-    get().resetIdentitiesList({ q: get().identitiesQuery, types: get().identitiesTypes });
+    this.#get().resetIdentitiesList({
+      q: this.#get().identitiesQuery,
+      relationships: this.#get().identitiesRelationships,
+      sort: this.#get().identitiesSort,
+      types: this.#get().identitiesTypes,
+    });
     return result;
-  },
+  };
 
-  deleteIdentity: async (id) => {
+  deleteIdentity = async (id: string): Promise<void> => {
     await memoryCRUDService.deleteIdentity(id);
     // Reset list to refresh
-    get().resetIdentitiesList({ q: get().identitiesQuery, types: get().identitiesTypes });
-  },
+    this.#get().resetIdentitiesList({
+      q: this.#get().identitiesQuery,
+      relationships: this.#get().identitiesRelationships,
+      sort: this.#get().identitiesSort,
+      types: this.#get().identitiesTypes,
+    });
+  };
 
-  loadMoreIdentities: () => {
-    const { identitiesPage, identitiesTotal, identities } = get();
+  loadMoreIdentities = (): void => {
+    const { identitiesPage, identitiesTotal, identities } = this.#get();
     if (identities.length < (identitiesTotal || 0)) {
-      set(
+      this.#set(
         produce((draft) => {
           draft.identitiesPage = identitiesPage + 1;
         }),
@@ -63,35 +74,44 @@ export const createIdentitySlice: StateCreator<
         n('loadMoreIdentities'),
       );
     }
-  },
+  };
 
-  resetIdentitiesList: (params) => {
-    set(
+  resetIdentitiesList = (params?: Omit<IdentityQueryParams, 'page' | 'pageSize'>): void => {
+    this.#set(
       produce((draft) => {
         draft.identities = [];
         draft.identitiesPage = 1;
         draft.identitiesQuery = params?.q;
+        draft.identitiesRelationships = params?.relationships;
         draft.identitiesSearchLoading = true;
+        draft.identitiesSort = params?.sort;
         draft.identitiesTypes = params?.types;
       }),
       false,
       n('resetIdentitiesList'),
     );
-  },
+  };
 
-  updateIdentity: async (id, data) => {
+  updateIdentity = async (id: string, data: UpdateUserMemoryIdentity): Promise<boolean> => {
     const result = await memoryCRUDService.updateIdentity(id, data);
     // Reset list to refresh
-    get().resetIdentitiesList({ q: get().identitiesQuery, types: get().identitiesTypes });
+    this.#get().resetIdentitiesList({
+      q: this.#get().identitiesQuery,
+      relationships: this.#get().identitiesRelationships,
+      sort: this.#get().identitiesSort,
+      types: this.#get().identitiesTypes,
+    });
     return result;
-  },
+  };
 
-  useFetchIdentities: (params) => {
+  useFetchIdentities = (params: IdentityQueryParams): SWRResponse<IdentityListResult> => {
     const swrKeyParts = [
       'useFetchIdentities',
       params.page,
       params.pageSize,
       params.q,
+      params.relationships?.join(','),
+      params.sort,
       params.types?.join(','),
     ];
     const swrKey = swrKeyParts
@@ -102,42 +122,34 @@ export const createIdentitySlice: StateCreator<
     return useSWR(
       swrKey,
       async () => {
-        return await userMemoryService.queryMemories({
-          layer: LayersEnum.Identity,
+        // Use the new dedicated queryIdentities API
+        return userMemoryService.queryIdentities({
           page: params.page,
           pageSize: params.pageSize,
           q: params.q,
+          relationships: params.relationships,
+          sort: params.sort,
           types: params.types,
         });
       },
       {
-        onSuccess(data: any) {
-          set(
+        onSuccess: (data: IdentityListResult) => {
+          this.#set(
             produce((draft) => {
               draft.identitiesSearchLoading = false;
+              draft.identitiesTotal = data.total;
 
-              // 设置基础信息
               if (!draft.identitiesInit) {
                 draft.identitiesInit = true;
-                draft.identitiesTotal = data.total;
               }
 
-              // 转换数据结构
-              const transformedItems = data.items.map((item: any) => ({
-                ...item.memory,
-                ...item.identity,
-              }));
-
-              // 累积数据逻辑
+              // Backend now returns flat structure directly, no transformation needed
               if (page === 1) {
-                // 第一页，直接设置
-                draft.identities = uniqBy(transformedItems, 'id');
+                draft.identities = uniqBy(data.items, 'id');
               } else {
-                // 后续页面，累积数据
-                draft.identities = uniqBy([...draft.identities, ...transformedItems], 'id');
+                draft.identities = uniqBy([...draft.identities, ...data.items], 'id');
               }
 
-              // 更新 hasMore
               draft.identitiesHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,
@@ -147,5 +159,7 @@ export const createIdentitySlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type IdentityAction = Pick<IdentityActionImpl, keyof IdentityActionImpl>;

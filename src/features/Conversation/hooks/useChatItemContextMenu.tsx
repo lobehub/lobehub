@@ -3,12 +3,11 @@ import {
   type ActionIconGroupItemType,
   type DropdownItem,
   type GenericItemType,
-  createRawModal,
-  showContextMenu,
 } from '@lobehub/ui';
+import { createRawModal, showContextMenu } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
-import type { MouseEvent, ReactNode } from 'react';
+import { type MouseEvent, type ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,10 +17,13 @@ import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
+import { type ShareModalProps } from '../components/ShareMessageModal';
 import ShareMessageModal from '../components/ShareMessageModal';
 import {
+  createStore,
   dataSelectors,
   messageStateSelectors,
+  Provider,
   useConversationStore,
   useConversationStoreApi,
 } from '../store';
@@ -187,13 +189,26 @@ export const useChatItemContextMenu = ({
     if (!item || item.role !== 'assistant') return;
 
     createRawModal(
-      ShareMessageModal,
+      (props: ShareModalProps) => (
+        <Provider
+          createStore={() => {
+            const state = storeApi.getState();
+            return createStore({
+              context: state.context,
+              hooks: state.hooks,
+              skipFetch: state.skipFetch,
+            });
+          }}
+        >
+          <ShareMessageModal {...props} />
+        </Provider>
+      ),
       {
         message: item,
       },
       { onCloseKey: 'onCancel', openKey: 'open' },
     );
-  }, [getMessage]);
+  }, [getMessage, storeApi]);
 
   const handleAction = useCallback(
     async (action: ContextMenuEvent) => {

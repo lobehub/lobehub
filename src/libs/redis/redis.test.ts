@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { IoRedisConfig } from './types';
+import { type RedisConfig } from './types';
 
-const buildRedisConfig = (): IoRedisConfig | null => {
+const buildRedisConfig = (): RedisConfig | null => {
   const url = process.env.REDIS_URL;
 
   if (!url) return null;
@@ -14,7 +14,6 @@ const buildRedisConfig = (): IoRedisConfig | null => {
     enabled: true,
     password: process.env.REDIS_PASSWORD,
     prefix: process.env.REDIS_PREFIX ?? 'lobe-chat-test',
-    provider: 'redis',
     tls: process.env.REDIS_TLS === 'true',
     url,
     username: process.env.REDIS_USERNAME,
@@ -24,6 +23,32 @@ const buildRedisConfig = (): IoRedisConfig | null => {
 const loadRedisProvider = async () => (await import('./redis')).IoRedisRedisProvider;
 
 const createMockedProvider = async () => {
+  const createPipelineMock = () => {
+    const pipeMocks = {
+      incr: vi.fn(),
+      expire: vi.fn(),
+      get: vi.fn(),
+      set: vi.fn(),
+      setex: vi.fn(),
+      del: vi.fn(),
+      decr: vi.fn(),
+      hget: vi.fn(),
+      hset: vi.fn(),
+      hdel: vi.fn(),
+      hgetall: vi.fn(),
+      exec: vi.fn().mockResolvedValue([]),
+    };
+    // Make each command return the pipeline itself for chaining
+    for (const key of Object.keys(pipeMocks) as (keyof typeof pipeMocks)[]) {
+      if (key !== 'exec') {
+        pipeMocks[key].mockReturnValue(pipeMocks);
+      }
+    }
+    return pipeMocks;
+  };
+
+  const pipelineMocks = createPipelineMock();
+
   const mocks = {
     connect: vi.fn().mockResolvedValue(undefined),
     ping: vi.fn().mockResolvedValue('PONG'),
@@ -43,6 +68,8 @@ const createMockedProvider = async () => {
     hset: vi.fn().mockResolvedValue(1),
     hdel: vi.fn().mockResolvedValue(1),
     hgetall: vi.fn().mockResolvedValue({ a: '1' }),
+    eval: vi.fn().mockResolvedValue(null),
+    pipeline: vi.fn().mockReturnValue(pipelineMocks),
   };
 
   vi.resetModules();
@@ -70,6 +97,8 @@ const createMockedProvider = async () => {
       hset = mocks.hset;
       hdel = mocks.hdel;
       hgetall = mocks.hgetall;
+      eval = mocks.eval;
+      pipeline = mocks.pipeline;
     }
 
     return { default: FakeRedis };
@@ -79,7 +108,6 @@ const createMockedProvider = async () => {
   const provider = new IoRedisRedisProvider({
     enabled: true,
     prefix: 'mock',
-    provider: 'redis',
     tls: false,
     url: 'redis://localhost:6379',
   });
@@ -140,6 +168,55 @@ describe('mocked', () => {
     await provider.set('key', 'value', { ex: 10, nx: true, get: true });
 
     expect(mocks.set).toHaveBeenCalledWith('key', 'value', 'EX', 10, 'NX', 'GET');
+    await provider.disconnect();
+  });
+
+  it('forwards eval to ioredis', async () => {
+    const { mocks, provider } = await createMockedProvider();
+    mocks.eval.mockResolvedValue(1);
+
+    const result = await provider.eval('return redis.call("GET", KEYS[1])', 1, 'my-key');
+
+    expect(mocks.eval).toHaveBeenCalledWith('return redis.call("GET", KEYS[1])', 1, 'my-key');
+    expect(result).toBe(1);
+    await provider.disconnect();
+  });
+
+  it('pipeline chains commands and executes in one round-trip', async () => {
+    const { mocks, provider } = await createMockedProvider();
+    const pipeMock = mocks.pipeline();
+
+    pipeMock.exec.mockResolvedValue([
+      [null, 2],
+      [null, 1],
+      [null, 3],
+      [null, 1],
+    ]);
+
+    const pipe = provider.pipeline();
+    pipe.incr('key1').expire('key1', 100).incr('key2').expire('key2', 200);
+    const results = await pipe.exec();
+
+    expect(mocks.pipeline).toHaveBeenCalled();
+    expect(pipeMock.incr).toHaveBeenCalledWith('key1');
+    expect(pipeMock.expire).toHaveBeenCalledWith('key1', 100);
+    expect(pipeMock.incr).toHaveBeenCalledWith('key2');
+    expect(pipeMock.expire).toHaveBeenCalledWith('key2', 200);
+    expect(results).toHaveLength(4);
+    await provider.disconnect();
+  });
+
+  it('pipeline set converts SetOptions to ioredis token args', async () => {
+    const { mocks, provider } = await createMockedProvider();
+    const pipeMock = mocks.pipeline();
+
+    pipeMock.exec.mockResolvedValue([[null, 'OK']]);
+
+    const pipe = provider.pipeline();
+    pipe.set('key', 'value', { ex: 60, nx: true });
+    await pipe.exec();
+
+    expect(pipeMock.set).toHaveBeenCalledWith('key', 'value', 'EX', 60, 'NX');
     await provider.disconnect();
   });
 

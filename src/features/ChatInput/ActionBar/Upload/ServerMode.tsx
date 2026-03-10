@@ -1,10 +1,11 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { Icon, type ItemType, type MenuProps, Tooltip } from '@lobehub/ui';
+import { type ItemType } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, FileUp, FolderUp, ImageUp, LibraryBig, Paperclip } from 'lucide-react';
-import { Suspense, memo, useState } from 'react';
+import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
@@ -21,6 +22,7 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
+import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
 const hotArea = css`
@@ -48,6 +50,7 @@ const FileUpload = memo(() => {
     s.updateGuideState,
   ]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   const files = useAgentStore((s) => agentByIdSelectors.getAgentFilesById(agentId)(s), isEqual);
@@ -61,21 +64,23 @@ const FileUpload = memo(() => {
     s.toggleKnowledgeBase,
   ]);
 
-  const uploadItems: MenuProps['items'] = [
+  const uploadItems: ActionDropdownMenuItems = [
     {
+      closeOnClick: false,
       disabled: !canUploadImage,
       icon: ImageUp,
       key: 'upload-image',
       label: canUploadImage ? (
         <Upload
+          multiple
           accept={'image/*'}
+          showUploadList={false}
           beforeUpload={async (file) => {
+            setDropdownOpen(false);
             await upload([file]);
 
             return false;
           }}
-          multiple
-          showUploadList={false}
         >
           <div className={cx(hotArea)}>{t('upload.action.imageUpload')}</div>
         </Upload>
@@ -86,10 +91,13 @@ const FileUpload = memo(() => {
       ),
     },
     {
+      closeOnClick: false,
       icon: FileUp,
       key: 'upload-file',
       label: (
         <Upload
+          multiple
+          showUploadList={false}
           beforeUpload={async (file) => {
             if (!canUploadImage && (file.type.startsWith('image') || file.type.startsWith('video')))
               return false;
@@ -105,22 +113,25 @@ const FileUpload = memo(() => {
               return false;
             }
 
+            setDropdownOpen(false);
             await upload([file]);
 
             return false;
           }}
-          multiple
-          showUploadList={false}
         >
           <div className={cx(hotArea)}>{t('upload.action.fileUpload')}</div>
         </Upload>
       ),
     },
     {
+      closeOnClick: false,
       icon: FolderUp,
       key: 'upload-folder',
       label: (
         <Upload
+          directory
+          multiple={true}
+          showUploadList={false}
           beforeUpload={async (file) => {
             if (!canUploadImage && (file.type.startsWith('image') || file.type.startsWith('video')))
               return false;
@@ -136,13 +147,11 @@ const FileUpload = memo(() => {
               return false;
             }
 
+            setDropdownOpen(false);
             await upload([file]);
 
             return false;
           }}
-          directory
-          multiple={true}
-          showUploadList={false}
         >
           <div className={cx(hotArea)}>{t('upload.action.folderUpload')}</div>
         </Upload>
@@ -214,24 +223,26 @@ const FileUpload = memo(() => {
     },
   );
 
-  const items: MenuProps['items'] = [
+  const items: ActionDropdownMenuItems = [
     ...uploadItems,
     ...(knowledgeItems.length > 0 ? knowledgeItems : []),
   ];
 
   const content = (
     <Action
+      icon={Paperclip}
+      loading={updating}
+      open={dropdownOpen}
+      showTooltip={false}
+      title={t('upload.action.tooltip')}
+      trigger={'both'}
       dropdown={{
         maxHeight: 500,
         maxWidth: 480,
         menu: { items },
         minWidth: 240,
       }}
-      icon={Paperclip}
-      loading={updating}
-      showTooltip={false}
-      title={t('upload.action.tooltip')}
-      trigger={'both'}
+      onOpenChange={setDropdownOpen}
     />
   );
 
@@ -239,12 +250,12 @@ const FileUpload = memo(() => {
     <Suspense fallback={<Action disabled icon={Paperclip} title={t('upload.action.tooltip')} />}>
       {showTip ? (
         <TipGuide
-          onOpenChange={() => {
-            updateGuideState({ uploadFileInKnowledgeBase: false });
-          }}
           open={showTip}
           placement={'top'}
           title={t('knowledgeBase.uploadGuide')}
+          onOpenChange={() => {
+            updateGuideState({ uploadFileInKnowledgeBase: false });
+          }}
         >
           {content}
         </TipGuide>

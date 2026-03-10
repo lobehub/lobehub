@@ -1,19 +1,27 @@
-# LobeChat 功能开发完全指南
+---
+title: LobeHub 功能开发完全指南
+description: 了解如何在 LobeHub 中开发完整的功能需求，提升开发效率。
+tags:
+  - LobeHub
+  - 功能开发
+  - 开发指南
+  - 开场设置
+---
 
-本文档旨在指导开发者了解如何在 LobeChat 中开发一块完整的功能需求。
+# LobeHub 功能开发完全指南
 
-我们将以 [RFC 021 - 自定义助手开场引导](https://github.com/lobehub/lobe-chat/discussions/891) 为例，阐述完整的实现流程。
+本文档旨在指导开发者了解如何在 LobeHub 中开发一块完整的功能需求。
 
-## 一、更新 schema
+我们将以 [RFC 021 - 自定义助手开场引导](https://github.com/lobehub/lobehub/discussions/891) 为例，阐述完整的实现流程。
 
-lobe-chat 使用 postgres 数据库，浏览器端本地数据库使用 [pglite](https://pglite.dev/)（wasm 版本 postgres）。项目还使用了 [drizzle](https://orm.drizzle.team/) ORM 用来操作数据库。
+## 一、更新 Schema
 
-相比旧方案浏览器端使用 indexDB 来说，浏览器端和 server 端都使用 postgres 好处在于 model 层代码可以完全复用。
+LobeHub 使用 PostgreSQL 数据库，项目使用 [Drizzle ORM](https://orm.drizzle.team/) 来操作数据库。
 
-schemas 都统一放在 `src/database/schemas`，我们需要调整 `agents` 表增加两个配置项对应的字段：
+Schemas 统一放在 `packages/database/src/schemas/` 下，我们需要调整 `agents` 表增加两个配置项对应的字段：
 
 ```diff
-// src/database/schemas/agent.ts
+// packages/database/src/schemas/agent.ts
 export const agents = pgTable(
   'agents',
   {
@@ -42,22 +50,15 @@ export const agents = pgTable(
 
 需要注意的是，有些时候我们可能还需要更新索引，但对于这个需求我们没有相关的性能瓶颈问题，所以不需要更新索引。
 
-调整完 schema 后我们需要运行 `npm run db:generate，` 使用 drizzle-kit 自带的数据库迁移能力生成对应的用于迁移到最新 schema 的 sql 代码。执行后会产生四个文件：
+### 数据库迁移
 
-- src/database/migrations/meta/\_journal.json：保存每次迁移的相关信息
-- src/database/migrations/0021\_add\_agent\_opening\_settings.sql：此次迁移的 sql 命令
-- src/database/client/migrations.json：pglite 使用的此次迁移的 sql 命令
-- src/database/migrations/meta/0021\_snapshot.json：当前最新的完整数据库快照
-
-注意脚本默认生成的迁移 sql 文件名不会像 `0021_add_agent_opening_settings.sql` 这样语义清晰，你需要自己手动对它重命名并且更新 `src/database/migrations/meta/_journal.json`。
-
-以前客户端存储使用 indexDB 数据迁移相对麻烦，现在本地端使用 pglite 之后数据库迁移就是一条命令的事，非常简单快捷，你也可以检查生成的迁移 sql 是否有什么优化空间，手动调整。
+调整完 schema 后需要生成并优化迁移文件，详细步骤请参阅 [数据库迁移指南](https://github.com/lobehub/lobe-chat/blob/main/.agents/skills/drizzle/references/db-migrations.md)。
 
 ## 二、更新数据模型
 
-在 `src/types` 下定义了我们项目中使用到的各种数据模型，我们并没有直接使用 drizzle schema 导出的类型，例如 `export type NewAgent = typeof agents.$inferInsert;`，而是根据前端需求和 db schema 定义中对应字段数据类型定义了对应的数据模型。
+数据模型定义在 `packages/types/src/` 下，我们并没有直接使用 Drizzle schema 导出的类型（例如 `typeof agents.$inferInsert`），而是根据前端需求定义了独立的数据模型。
 
-数据模型定义都放在 `src/types` 文件夹下，更新 `src/types/agent/index.ts` 中 `LobeAgentConfig` 类型：
+更新 `packages/types/src/agent/index.ts` 中 `LobeAgentConfig` 类型：
 
 ```diff
 export interface LobeAgentConfig {
@@ -82,51 +83,42 @@ export interface LobeAgentConfig {
    * 语言模型参数
    */
   params: LLMParams;
-  /**
-   * 启用的插件
-   */
-  plugins?: string[];
-
-  /**
-   *  模型供应商
-   */
-  provider?: string;
-
-  /**
-   * 系统角色
-   */
-  systemRole: string;
-
-  /**
-   * 语音服务
-   */
-  tts: LobeAgentTTSConfig;
+  // ...
 }
 ```
 
-## 三、Service 实现 / Model 实现
+## 三、Service / Model 各层实现
 
-- `model` 层封装对 DB 的可复用操作
-- `service` 层实现应用业务逻辑
+项目按职责分为前端和后端多层，完整的分层如下：
 
-在 `src` 目录下都有对应的顶层文件夹。
+```plaintext
++-------------------+--------------------------------------+------------------------------------------------------+
+| Layer             | Location                             | Responsibility                                       |
++-------------------+--------------------------------------+------------------------------------------------------+
+| Client Service    | src/services/                        | 封装前端可复用的业务逻辑，一般涉及多个后端请求(tRPC)  |
+| WebAPI            | src/app/(backend)/webapi/            | REST API 端点                                         |
+| tRPC Router       | src/server/routers/                  | tRPC 入口，校验输入，路由到 service                   |
+| Server Service    | src/server/services/                 | 服务端业务逻辑，可访问数据库                          |
+| Server Module     | src/server/modules/                  | 服务端模块，不直接访问数据库                          |
+| Repository        | packages/database/src/repositories/  | 封装复杂查询、跨表操作                                |
+| DB Model          | packages/database/src/models/        | 封装单表的 CRUD 操作                                  |
++-------------------+--------------------------------------+------------------------------------------------------+
+```
 
-我们需要查看是否需要更新其实现，agent 配置在前端被抽象成 session 的配置，在 `src/services/session/server.ts` 中可以看到有个 service 函数 `updateSessionConfig`：
+**Client Service** 是前端代码，封装可复用的业务逻辑，通过 tRPC 客户端调用后端。例如 `src/services/session/index.ts`：
 
 ```typescript
-export class ServerService implements ISessionService {
-  // ...
-  updateSessionConfig: ISessionService['updateSessionConfig'] = (id, config, signal) => {
+export class SessionService {
+  updateSessionConfig = (id: string, config: PartialDeep<LobeAgentConfig>, signal?: AbortSignal) => {
     return lambdaClient.session.updateSessionConfig.mutate({ id, value: config }, { signal });
   };
 }
 ```
 
-跳转 `lambdaClient.session.updateSessionConfig` 实现，发现它只是简单的 **merge** 了新的 config 和旧的 config。
+**tRPC Router** 是后端入口（`src/server/routers/lambda/`），校验输入后调用 Server Service 处理业务逻辑：
 
 ```typescript
 export const sessionRouter = router({
-  // ..
   updateSessionConfig: sessionProcedure
     .input(
       z.object({
@@ -143,13 +135,13 @@ export const sessionRouter = router({
 });
 ```
 
-可以预想的到，我们前端会增加两个输入，用户修改的时候去调用这个 `updateSessionConfig`，而目前的时候都没细粒度到 config 中的具体字段，因此，service 层和 model 层不需要修改。
+对于本次需求，`updateSessionConfig` 只是简单 merge config，并没有细粒度到具体字段，因此各层都不需要修改。
 
 ## 四、前端实现
 
-### 数据流 store 实现
+### 数据流 Store 实现
 
-lobe-chat 使用 [zustand](https://zustand.docs.pmnd.rs/getting-started/introduction) 作为全局状态管理框架，对于状态管理的详细实践介绍，可以查阅 [📘 状态管理最佳实践](/zh/docs/development/state-management/state-management-intro)。
+LobeHub 使用 [zustand](https://zustand.docs.pmnd.rs/getting-started/introduction) 作为全局状态管理框架，对于状态管理的详细实践介绍，可以查阅 [📘 状态管理最佳实践](/zh/docs/development/state-management/state-management-intro)。
 
 和 agent 相关的 store 有两个：
 
@@ -185,14 +177,6 @@ export const DEFAULT_AGENT_CONFIG: LobeAgentConfig = {
 因为我们增加了两个新字段，为了方便在 `src/features/AgentSetting/AgentOpening` 文件夹中组件访问和性能优化，我们在 `src/features/AgentSetting/store/selectors.ts` 增加相关的 selectors：
 
 ```diff
-import { DEFAULT_AGENT_CHAT_CONFIG } from '@/const/settings';
-import { LobeAgentChatConfig } from '@/types/agent';
-
-import { Store } from './action';
-
-const chatConfig = (s: Store): LobeAgentChatConfig =>
-  s.config.chatConfig || DEFAULT_AGENT_CHAT_CONFIG;
-
 +export const DEFAULT_OPENING_QUESTIONS: string[] = [];
 export const selectors = {
   chatConfig,
@@ -201,7 +185,7 @@ export const selectors = {
 };
 ```
 
-这里我们就不增加额外的 action 用于更新 agent config 了，因为我观察到已有的其它代码也是直接使用现有代码中统一的 `setChatConfig`：
+这里我们就不增加额外的 action 用于更新 agent config 了，因为已有的代码也是直接使用统一的 `setAgentConfig`：
 
 ```typescript
 export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, get) => ({
@@ -213,14 +197,11 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
 
 #### 更新 store/agent
 
-在组件 `src/app/[variants]/(main)/chat/(workspace)/@conversation/features/ChatList/WelcomeChatItem/WelcomeMessage.tsx` 我们使用了这个 store 用于获取当前 agent 配置，用来渲染用户自定义的开场消息和引导性问题。
-
-这里因为只需要读取两个配置项，我们就简单的加两个 selectors 就好了：
+在展示组件中我们使用 `src/store/agent` 获取当前 agent 配置，简单加两个 selectors：
 
 更新 `src/store/agent/slices/chat/selectors/agent.ts`：
 
 ```diff
-// ...
 +const openingQuestions = (s: AgentStoreState) =>
 +  currentAgentConfig(s).openingQuestions || DEFAULT_OPENING_QUESTIONS;
 +const openingMessage = (s: AgentStoreState) => currentAgentConfig(s).openingMessage || '';
@@ -233,62 +214,47 @@ export const agentSelectors = {
 };
 ```
 
+### i18n 处理
+
+LobeHub 是国际化项目，使用 [react-i18next](https://github.com/i18next/react-i18next) 作为 i18n 框架。新增的 UI 文案需要：
+
+1. 在 `src/locales/default/` 对应的 namespace 文件中添加 key（默认语言为英文）：
+
+```typescript
+// src/locales/default/setting.ts
+export default {
+  // ...
+  'settingOpening.title': 'Opening Settings',
+  'settingOpening.openingMessage.title': 'Opening Message',
+  'settingOpening.openingMessage.placeholder': 'Enter a custom opening message...',
+  'settingOpening.openingQuestions.title': 'Opening Questions',
+  'settingOpening.openingQuestions.placeholder': 'Enter a guiding question',
+  'settingOpening.openingQuestions.empty': 'No opening questions yet',
+  'settingOpening.openingQuestions.repeat': 'Question already exists',
+};
+```
+
+2. 如果新增了 namespace，需要在 `src/locales/default/index.ts` 中导出
+3. 开发预览时手动翻译 `locales/zh-CN/` 和 `locales/en-US/` 对应的 JSON 文件
+4. CI 会自动运行 `pnpm i18n` 生成其他语言的翻译
+
+key 的命名规范为扁平的 dot notation：`{feature}.{context}.{action|status}`。
+
 ### UI 实现和 action 绑定
 
-我们这次要新增一个类别的设置， 在 `src/features/AgentSetting` 中定义了 agent 的各种设置的 UI 组件，这次我们要增加一个设置类型：开场设置。增加一个文件夹 `AgentOpening` 存放开场设置相关的组件。项目使用了：
+我们这次要新增一个类别的设置。在 `src/features/AgentSetting` 中定义了 agent 的各种设置 UI 组件，增加一个文件夹 `AgentOpening` 存放开场设置相关的组件。
 
-- [ant-design](https://ant.design/) 和 [lobe-ui：](https://github.com/lobehub/lobe-ui)组件库
-- [antd-style](https://ant-design.github.io/antd-style) ： css-in-js 方案
-- [@lobehub/ui](https://ui.lobehub.com/)：UI 组件库（包含 Flexbox 和 Center 用于响应式布局）
-- [@ant-design/icons](https://ant.design/components/icon-cn) 和 [lucide](https://lucide.dev/icons/): 图标库
-- [react-i18next](https://github.com/i18next/react-i18next) 和 [lobe-i18n](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n) ：i18n 框架和多语言自动翻译工具
-
-lobe-chat 是个国际化项目，新加的文案需要更新默认的 `locale` 文件： `src/locales/default/setting.ts` 。
-
-我们以子组件 `OpeningQuestion.tsx` 为例，组件实现：
+以子组件 `OpeningQuestions.tsx` 为例，展示关键逻辑（省略样式代码）：
 
 ```typescript
 // src/features/AgentSetting/AgentOpening/OpeningQuestions.tsx
 'use client';
 
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Flexbox, SortableList } from '@lobehub/ui';
-import { Button, Empty, Input } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  empty: css`
-    margin-block: 24px;
-    margin-inline: 0;
-  `,
-  questionItemContainer: css`
-    margin-block-end: 8px;
-    padding-block: 2px;
-    padding-inline: 10px 0;
-    background: ${cssVar.colorBgContainer};
-  `,
-  questionItemContent: css`
-    flex: 1;
-  `,
-  questionsList: css`
-    width: 100%;
-    margin-block-start: 16px;
-  `,
-  repeatError: css`
-    margin: 0;
-    color: ${cssVar.colorErrorText};
-  `,
-}));
-
-interface QuestionItem {
-  content: string;
-  id: number;
-}
 
 const OpeningQuestions = memo(() => {
   const { t } = useTranslation('setting');
@@ -307,7 +273,6 @@ const OpeningQuestions = memo(() => {
 
   const addQuestion = useCallback(() => {
     if (!questionInput.trim()) return;
-
     setQuestions([...openingQuestions, questionInput.trim()]);
     setQuestionInput('');
   }, [openingQuestions, questionInput, setQuestions]);
@@ -322,78 +287,16 @@ const OpeningQuestions = memo(() => {
     [openingQuestions, setQuestions],
   );
 
-  // 处理拖拽排序后的逻辑
-  const handleSortEnd = useCallback(
-    (items: QuestionItem[]) => {
-      setQuestions(items.map((item) => item.content));
-    },
-    [setQuestions],
-  );
-
-  const items: QuestionItem[] = useMemo(() => {
-    return openingQuestions.map((item, index) => ({
-      content: item,
-      id: index,
-    }));
-  }, [openingQuestions]);
-
-  const isRepeat = openingQuestions.includes(questionInput.trim());
-
-  return (
-    <Flexbox gap={8}>
-      <Flexbox gap={4}>
-        <Input
-          addonAfter={
-            <Button
-              // don't allow repeat
-              disabled={openingQuestions.includes(questionInput.trim())}
-              icon={<PlusOutlined />}
-              onClick={addQuestion}
-              size="small"
-              type="text"
-            />
-          }
-          onChange={(e) => setQuestionInput(e.target.value)}
-          onPressEnter={addQuestion}
-          placeholder={t('settingOpening.openingQuestions.placeholder')}
-          value={questionInput}
-        />
-
-        {isRepeat && (
-          <p className={styles.repeatError}>{t('settingOpening.openingQuestions.repeat')}</p>
-        )}
-      </Flexbox>
-
-      <div className={styles.questionsList}>
-        {openingQuestions.length > 0 ? (
-          <SortableList
-            items={items}
-            onChange={handleSortEnd}
-            renderItem={(item) => (
-              <SortableList.Item className={styles.questionItemContainer} id={item.id}>
-                <SortableList.DragHandle />
-                <div className={styles.questionItemContent}>{item.content}</div>
-                <Button
-                  icon={<DeleteOutlined />}
-                  onClick={() => removeQuestion(item.content)}
-                  type="text"
-                />
-              </SortableList.Item>
-            )}
-          />
-        ) : (
-          <Empty
-            className={styles.empty}
-            description={t('settingOpening.openingQuestions.empty')}
-          />
-        )}
-      </div>
-    </Flexbox>
-  );
+  // 渲染 Input + SortableList，具体 UI 参考组件库文档
+  // ...
 });
-
-export default OpeningQuestions;
 ```
+
+关键点：
+
+- 通过 `selectors` 读取 store 中的配置
+- 通过 `setAgentConfig` action 更新配置
+- 使用 `useTranslation('setting')` 获取 i18n 文案
 
 同时我们需要将用户设置的开场配置展示出来，这个是在 chat 页面，对应组件在 `src/app/[variants]/(main)/chat/(workspace)/@conversation/features/ChatList/WelcomeChatItem/WelcomeMessage.tsx`：
 
@@ -401,23 +304,11 @@ export default OpeningQuestions;
 const WelcomeMessage = () => {
   const { t } = useTranslation('chat');
 
-  // 获取当前开场配置
+  // 从 store/agent 获取当前开场配置
   const openingMessage = useAgentStore(agentSelectors.openingMessage);
   const openingQuestions = useAgentStore(agentSelectors.openingQuestions);
 
   const meta = useSessionStore(sessionMetaSelectors.currentAgentMeta, isEqual);
-  const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
-  const activeId = useChatStore((s) => s.activeId);
-
-  const agentSystemRoleMsg = t('agentDefaultMessageWithSystemRole', {
-    name: meta.title || t('defaultAgent'),
-    systemRole: meta.description,
-  });
-
-  const agentMsg = t(isAgentEditable ? 'agentDefaultMessage' : 'agentDefaultMessageWithoutEdit', {
-    name: meta.title || t('defaultAgent'),
-    url: `/chat/settings?session=${activeId}`,
-  });
 
   const message = useMemo(() => {
     // 用户设置了就用用户设置的
@@ -425,37 +316,51 @@ const WelcomeMessage = () => {
     return !!meta.description ? agentSystemRoleMsg : agentMsg;
   }, [openingMessage, agentSystemRoleMsg, agentMsg, meta.description]);
 
-  const chatItem = (
-    <ChatItem
-      avatar={meta}
-      editing={false}
-      message={message}
-      placement={'left'}
-      type={type === 'chat' ? 'block' : 'pure'}
-    />
-  );
-
   return openingQuestions.length > 0 ? (
     <Flexbox>
-      {chatItem}
+      <ChatItem avatar={meta} message={message} placement="left" />
       {/* 渲染引导性问题 */}
-      <OpeningQuestions mobile={mobile} questions={openingQuestions} />
-    </Flexbox>
+      <OpeningQuestions questions={openingQuestions} />
+   
+</Flexbox>
   ) : (
-    chatItem
+    <ChatItem avatar={meta} message={message} placement="left" />
   );
 };
-export default WelcomeMessage;
 ```
 
 ## 五、测试
 
-项目使用 vitest 进行单元测试。
+项目使用 Vitest 进行单元测试，相关指南详见 [测试技能文档](https://github.com/lobehub/lobe-chat/blob/main/.agents/skills/testing/SKILL.md)。
 
-由于我们目前两个新的配置字段都是可选的，所以理论上你不更新测试也能跑通，不过由于我们把前面提到的默认配置 `DEFAULT_AGENT_CONFIG` 增加了 `openingQuestions` 字段，这导致很多测试计算出的配置都是有这个字段的，因此我们还是需要更新一部分测试的快照。
+**运行测试：**
 
-对于当前这个场景，我建议是本地直接跑下测试，看哪些测试失败了，针对需要更新，例如测试文件 `src/store/agent/slices/chat/selectors/agent.test.ts` 需要执行一下 `bunx vitest -u src/store/agent/slices/chat/selectors/agent.test.ts` 更新快照。
+```bash
+# 运行指定测试文件（不要运行 bun run test，全量测试耗时很长）
+bunx vitest run --silent='passed-only' '[file-path]'
+
+# database 包的测试
+cd packages/database && bunx vitest run --silent='passed-only' '[file]'
+```
+
+**添加新功能的测试建议：**
+
+由于我们目前两个新的配置字段都是可选的，理论上不更新测试也能跑通。但如果修改了默认配置（如 `DEFAULT_AGENT_CONFIG` 增加了 `openingQuestions` 字段），可能导致一些测试快照不匹配，需要更新。
+
+建议先本地跑下相关测试，看哪些失败了再针对性更新。例如：
+
+```bash
+bunx vitest run --silent='passed-only' 'src/store/agent/slices/chat/selectors/agent.test.ts'
+```
+
+如果只是想确认现有测试是否通过而不想本地跑，也可以直接查看 GitHub Actions 的测试结果。
+
+**更多测试场景指南：**
+
+- DB Model 测试：`.agents/skills/testing/references/db-model-test.md`
+- Zustand Store Action 测试：`.agents/skills/testing/references/zustand-store-action-test.md`
+- Electron IPC 测试：`.agents/skills/testing/references/electron-ipc-test.md`
 
 ## 总结
 
-以上就是 LobeChat 开场设置功能的完整实现流程。开发者可以参考本文档进行相关功能的开发和测试。
+以上就是 LobeHub 开场设置功能的完整实现流程，涵盖了从数据库 schema → 数据模型 → Service/Model → Store → i18n → UI → 测试的全链路。开发者可以参考本文档进行相关功能的开发。

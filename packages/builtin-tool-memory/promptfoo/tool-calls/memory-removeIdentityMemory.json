@@ -1,0 +1,20 @@
+{
+  "description": "Remove an identity memory when it is incorrect, obsolete, or duplicated. Always provide a concise reason.",
+  "name": "removeIdentityMemory",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "reason"
+    ],
+    "type": "object"
+  }
+}

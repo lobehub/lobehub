@@ -8,6 +8,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'test query',
       results: {
+        activities: [],
         contexts: [],
         experiences: [],
         preferences: [],
@@ -21,6 +22,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'project',
       results: {
+        activities: [],
         contexts: [
           {
             accessedAt: new Date('2024-01-01'),
@@ -48,10 +50,46 @@ describe('formatMemorySearchResults', () => {
     expect(result).toMatchSnapshot();
   });
 
+  it('should format activity memories with scheduling and feedback details', () => {
+    const result = formatMemorySearchResults({
+      query: 'meeting',
+      results: {
+        activities: [
+          {
+            createdAt: new Date('2024-01-01'),
+            endsAt: new Date('2024-01-01T11:00:00Z'),
+            feedback: 'Great alignment',
+            id: 'act-1',
+            metadata: null,
+            narrative: 'Covered Q1 roadmap and risks',
+            notes: 'Share slides after the call',
+            startsAt: new Date('2024-01-01T10:00:00Z'),
+            status: 'scheduled',
+            timezone: 'UTC',
+            type: 'meeting',
+            updatedAt: new Date('2024-01-01'),
+            userMemoryId: null,
+            associatedLocations: [],
+            associatedObjects: [],
+            associatedSubjects: [],
+            tags: ['meeting', 'Q1'],
+            accessedAt: new Date('2024-01-01'),
+          },
+        ],
+        contexts: [],
+        experiences: [],
+        preferences: [],
+      },
+    });
+
+    expect(result).toMatchSnapshot();
+  });
+
   it('should format experience memories with full content', () => {
     const result = formatMemorySearchResults({
       query: 'debugging',
       results: {
+        activities: [],
         contexts: [],
         experiences: [
           {
@@ -82,6 +120,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'code style',
       results: {
+        activities: [],
         contexts: [],
         experiences: [],
         preferences: [
@@ -109,6 +148,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'work',
       results: {
+        activities: [],
         contexts: [
           {
             accessedAt: new Date('2024-01-01'),
@@ -171,6 +211,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'test',
       results: {
+        activities: [],
         contexts: [
           {
             accessedAt: new Date('2024-01-01'),

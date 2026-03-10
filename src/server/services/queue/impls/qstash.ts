@@ -44,7 +44,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
           stepIndex,
           timestamp: Date.now(),
         },
-        delay: Math.ceil(delay / 1000), // 将毫秒转换为秒
+        delay: Math.ceil(delay / 1000), // Convert milliseconds to seconds
         headers: {
           'Content-Type': 'application/json',
           'X-Agent-Operation-Id': operationId,
@@ -91,7 +91,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
       // Check this marker during actual execution
       log('Requested cancellation for message %s', messageId);
 
-      // TODO: Implement cancellation logic, can store cancellation list via Redis
+      // TODO: Implement cancellation logic, cancellation list can be stored via Redis
       // await this.redis.sadd('cancelled_tasks', messageId);
     } catch (error) {
       log('Failed to cancel task %s: %O', messageId, error);

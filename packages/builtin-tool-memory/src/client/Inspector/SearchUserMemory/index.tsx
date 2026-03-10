@@ -26,9 +26,10 @@ export const SearchUserMemoryInspector = memo<
     );
   }
 
-  // pluginState is SearchMemoryResult directly (contexts, experiences, preferences)
+  // pluginState is SearchMemoryResult directly (activities, contexts, experiences, preferences)
   const resultCount = pluginState
-    ? (pluginState.contexts?.length ?? 0) +
+    ? (pluginState.activities?.length ?? 0) +
+      (pluginState.contexts?.length ?? 0) +
       (pluginState.experiences?.length ?? 0) +
       (pluginState.preferences?.length ?? 0)
     : 0;

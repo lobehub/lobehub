@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../../core/getTestDB';
 import {
   agents,
   agentsToSessions,
@@ -10,9 +11,8 @@ import {
   topics,
   users,
 } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
-import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'topic-delete-user';
 const userId2 = 'topic-delete-user-2';
@@ -47,8 +47,8 @@ describe('TopicModel - Delete', () => {
           { id: 'topic2', sessionId: 'session2', userId: '345' },
         ]);
         await tx.insert(messages).values([
-          { id: 'message1', role: 'user', topicId: topicId, userId },
-          { id: 'message2', role: 'assistant', topicId: topicId, userId },
+          { id: 'message1', role: 'user', topicId, userId },
+          { id: 'message2', role: 'assistant', topicId, userId },
           { id: 'message3', role: 'user', topicId: 'topic2', userId: '345' },
         ]);
       });

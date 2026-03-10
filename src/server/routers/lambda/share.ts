@@ -1,4 +1,4 @@
-import type { SharedTopicData } from '@lobechat/types';
+import { type SharedTopicData } from '@lobechat/types';
 import { z } from 'zod';
 
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -40,8 +40,11 @@ export const shareRouter = router({
           ? {
               avatar: share.groupAvatar,
               backgroundColor: share.groupBackgroundColor,
+              createdAt: share.groupCreatedAt,
               members: share.groupMembers,
               title: share.groupTitle,
+              updatedAt: share.groupUpdatedAt,
+              userId: share.groupUserId,
             }
           : undefined,
         shareId: share.shareId,

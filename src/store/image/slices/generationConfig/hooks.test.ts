@@ -1,7 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
-import { ModelParamsSchema, RuntimeImageGenParams } from 'model-bank';
+import {
+  type AIImageModelCard,
+  type ModelParamsSchema,
+  type RuntimeImageGenParams,
+} from 'model-bank';
 import { fluxSchnellParamsSchema } from 'model-bank';
-import { AIImageModelCard } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useImageStore } from '@/store/image';
@@ -50,7 +53,7 @@ const testParameters: RuntimeImageGenParams = {
   height: 768,
   steps: 25,
   seed: 12345,
-  cfg: 8.0,
+  cfg: 8,
   aspectRatio: '16:9',
 };
 

@@ -18,11 +18,11 @@ const HtmlPreviewAction = memo<HtmlPreviewActionProps>(({ content, size }) => {
     <>
       <ActionIcon
         icon={Eye}
-        onClick={() => setOpen(true)}
         size={size}
         title={t('HtmlPreview.actions.preview')}
+        onClick={() => setOpen(true)}
       />
-      <HtmlPreviewDrawer content={content} onClose={() => setOpen(false)} open={open} />
+      <HtmlPreviewDrawer content={content} open={open} onClose={() => setOpen(false)} />
     </>
   );
 });

@@ -38,13 +38,13 @@ export const UpdatePlanInspector = memo<BuiltinInspectorProps<UpdatePlanParams, 
       <div className={cx(oneLineEllipsis, isArgumentsStreaming && shinyTextStyles.shinyText)}>
         <span className={styles.title}>{t('builtins.lobe-gtd.apiName.updatePlan')}</span>
         {completed && (
-          <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12}>
+          <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12}>
             <Icon icon={CheckCircle} size={12} />
             {t('builtins.lobe-gtd.apiName.updatePlan.completed')}
           </Text>
         )}
         {hasUpdates && !completed && (
-          <Text as={'span'} code color={cssVar.colorWarning} fontSize={12}>
+          <Text code as={'span'} color={cssVar.colorWarning} fontSize={12}>
             <Icon icon={DiffIcon} size={12} />
             {t('builtins.lobe-gtd.apiName.updatePlan.modified')}
           </Text>

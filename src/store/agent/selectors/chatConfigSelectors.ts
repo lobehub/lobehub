@@ -4,7 +4,7 @@ import { type AgentStoreState } from '@/store/agent/initialState';
 
 import { chatConfigByIdSelectors } from './chatConfigByIdSelectors';
 
-// ============ Current Agent Selectors (复用 chatConfigByIdSelectors) ============ //
+// ============ Current Agent Selectors (reuses chatConfigByIdSelectors) ============ //
 
 const currentChatConfig = (s: AgentStoreState): LobeAgentChatConfig =>
   chatConfigByIdSelectors.getChatConfigById(s.activeAgentId || '')(s);
@@ -27,6 +27,9 @@ const enableHistoryCount = (s: AgentStoreState) =>
 const historyCount = (s: AgentStoreState): number =>
   chatConfigByIdSelectors.getHistoryCountById(s.activeAgentId || '')(s);
 
+const isMemoryToolEnabled = (s: AgentStoreState) =>
+  chatConfigByIdSelectors.isMemoryToolEnabledById(s.activeAgentId || '')(s);
+
 const enableHistoryDivider =
   (historyLength: number, currentIndex: number) => (s: AgentStoreState) => {
     const config = currentChatConfig(s);
@@ -45,6 +48,7 @@ export const agentChatConfigSelectors = {
   enableHistoryDivider,
   historyCount,
   isAgentEnableSearch,
+  isMemoryToolEnabled,
   searchFCModel,
   useModelBuiltinSearch,
 };

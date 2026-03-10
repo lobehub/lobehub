@@ -484,6 +484,96 @@ describe('resolveModelExtendParams', () => {
         expect(result.thinkingLevel).toBeUndefined();
       });
     });
+
+    describe('thinkingLevel2 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel2',
+        ]);
+      });
+
+      it('should set thinkingLevel from thinkingLevel2 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel2: 'low',
+          } as any,
+          model: 'gemini-3-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('low');
+      });
+
+      it('should not set thinkingLevel when thinkingLevel2 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+
+      it('should not read from thinkingLevel config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel: 'high',
+          } as any,
+          model: 'gemini-3-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+    });
+
+    describe('thinkingLevel3 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel3',
+        ]);
+      });
+
+      it('should set thinkingLevel from thinkingLevel3 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel3: 'medium',
+          } as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('medium');
+      });
+
+      it('should not set thinkingLevel when thinkingLevel3 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+
+      it('should not read from thinkingLevel config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel: 'high',
+          } as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBeUndefined();
+      });
+    });
   });
 
   describe('URL context', () => {
@@ -798,6 +888,267 @@ describe('resolveModelExtendParams', () => {
 
       expect(isModelHasExtendParamsSpy).toHaveBeenCalledWith('test-model', 'test-provider');
       expect(modelExtendParamsSpy).toHaveBeenCalledWith('test-model', 'test-provider');
+    });
+  });
+
+  describe('parameter precedence and conflicts', () => {
+    beforeEach(() => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+        () => true,
+      );
+    });
+
+    describe('reasoning effort variants precedence', () => {
+      it('should give precedence to later reasoning effort variants when multiple are configured', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'reasoningEffort',
+          'gpt5ReasoningEffort',
+          'gpt5_1ReasoningEffort',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            gpt5_1ReasoningEffort: 'high',
+            gpt5ReasoningEffort: 'medium',
+            reasoningEffort: 'low',
+          } as any,
+          model: 'gpt-5.1',
+          provider: 'openai',
+        });
+
+        // gpt5_1ReasoningEffort should win as it's processed last
+        expect(result.reasoning_effort).toBe('high');
+      });
+
+      it('should handle mixed reasoning effort variants with only some configured', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'reasoningEffort',
+          'gpt5ReasoningEffort',
+          'gpt5_2ReasoningEffort',
+          'gpt5_2ProReasoningEffort',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            gpt5_2ProReasoningEffort: undefined,
+            gpt5_2ReasoningEffort: 'medium',
+            gpt5ReasoningEffort: undefined,
+            reasoningEffort: 'low',
+          } as any,
+          model: 'gpt-5.2',
+          provider: 'openai',
+        });
+
+        // gpt5_2ReasoningEffort should be set, others are undefined
+        expect(result.reasoning_effort).toBe('medium');
+      });
+
+      it('should use the last supported variant in processing order', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'reasoningEffort',
+          'gpt5_2ProReasoningEffort',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            gpt5_2ProReasoningEffort: 'high',
+            reasoningEffort: 'low',
+          } as any,
+          model: 'gpt-5.2-pro',
+          provider: 'openai',
+        });
+
+        // gpt5_2ProReasoningEffort is processed after reasoningEffort
+        expect(result.reasoning_effort).toBe('high');
+      });
+    });
+
+    describe('thinking configuration conflicts', () => {
+      it('should allow thinking type param to overwrite enableReasoning thinking config', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'enableReasoning',
+          'thinking',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            enableReasoning: true,
+            reasoningBudgetToken: 2048,
+            thinking: 'extended',
+          } as any,
+          model: 'model',
+          provider: 'provider',
+        });
+
+        // thinking param overwrites enableReasoning's thinking config
+        expect(result.thinking).toEqual({
+          type: 'extended',
+        });
+      });
+
+      it('should handle reasoningBudgetToken with thinking type param', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'reasoningBudgetToken',
+          'thinking',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            reasoningBudgetToken: 4096,
+            thinking: 'basic',
+          } as any,
+          model: 'model',
+          provider: 'provider',
+        });
+
+        // thinking param should overwrite the entire thinking config
+        expect(result.thinking).toEqual({
+          type: 'basic',
+        });
+      });
+
+      it('should combine independent thinking params without conflict', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinking',
+          'thinkingBudget',
+          'thinkingLevel',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinking: 'enabled',
+            thinkingBudget: 5000,
+            thinkingLevel: 'advanced',
+          } as any,
+          model: 'model',
+          provider: 'provider',
+        });
+
+        // These are independent params and should all be set
+        expect(result.thinking).toEqual({ type: 'enabled' });
+        expect(result.thinkingBudget).toBe(5000);
+        expect(result.thinkingLevel).toBe('advanced');
+      });
+    });
+
+    describe('adaptive thinking configuration', () => {
+      it('should set adaptive thinking when enabled', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'enableAdaptiveThinking',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            enableAdaptiveThinking: true,
+          } as any,
+          model: 'claude-opus-4-6',
+          provider: 'anthropic',
+        });
+
+        expect(result.thinking).toEqual({ type: 'adaptive' });
+      });
+
+      it('should disable adaptive thinking when off', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'enableAdaptiveThinking',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            enableAdaptiveThinking: false,
+          } as any,
+          model: 'claude-opus-4-6',
+          provider: 'anthropic',
+        });
+
+        expect(result.thinking).toEqual({ type: 'disabled' });
+      });
+
+      it('should set adaptive thinking effort when configured', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'effort',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            effort: 'max',
+          } as any,
+          model: 'claude-opus-4-6',
+          provider: 'anthropic',
+        });
+
+        expect(result.effort).toBe('max');
+      });
+    });
+
+    describe('complex multi-parameter scenarios', () => {
+      it('should handle all reasoning variants with context caching and verbosity', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'enableReasoning',
+          'reasoningEffort',
+          'gpt5ReasoningEffort',
+          'disableContextCaching',
+          'textVerbosity',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            disableContextCaching: true,
+            enableReasoning: true,
+            gpt5ReasoningEffort: 'high',
+            reasoningBudgetToken: 3000,
+            reasoningEffort: 'medium',
+            textVerbosity: 'verbose',
+          } as any,
+          model: 'gpt-5',
+          provider: 'openai',
+        });
+
+        expect(result).toEqual({
+          enabledContextCaching: false,
+          reasoning_effort: 'high',
+          thinking: {
+            budget_tokens: 3000,
+            type: 'enabled',
+          },
+          verbosity: 'verbose',
+        });
+      });
+
+      it('should handle all params when none are configured', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'enableReasoning',
+          'reasoningEffort',
+          'textVerbosity',
+          'thinking',
+          'thinkingBudget',
+          'thinkingLevel',
+          'urlContext',
+          'imageAspectRatio',
+          'imageResolution',
+          'disableContextCaching',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'model',
+          provider: 'provider',
+        });
+
+        // Only enableReasoning should set thinking to disabled, others should be undefined
+        expect(result.thinking).toEqual({
+          budget_tokens: 0,
+          type: 'disabled',
+        });
+        expect(result.reasoning_effort).toBeUndefined();
+        expect(result.verbosity).toBeUndefined();
+        expect(result.thinkingBudget).toBeUndefined();
+        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.urlContext).toBeUndefined();
+        expect(result.imageAspectRatio).toBeUndefined();
+        expect(result.imageResolution).toBeUndefined();
+        expect(result.enabledContextCaching).toBeUndefined();
+      });
     });
   });
 });

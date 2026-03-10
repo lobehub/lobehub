@@ -1,6 +1,6 @@
 ---
-title: 在 LobeChat 中使用 ComfyUI 生成图像
-description: 学习如何在 LobeChat 中配置和使用 ComfyUI 服务，支持 FLUX 系列模型的高质量图像生成和编辑功能
+title: 在 LobeHub 中使用 ComfyUI 生成图像
+description: 学习如何在 LobeHub 中配置和使用 ComfyUI 服务，支持 FLUX 系列模型的高质量图像生成和编辑功能
 tags:
   - ComfyUI
   - FLUX
@@ -9,15 +9,15 @@ tags:
   - AI 图像生成
 ---
 
-# 在 LobeChat 中使用 ComfyUI
+# 在 LobeHub 中使用 ComfyUI
 
-<Image alt={'在 LobeChat 中使用 ComfyUI'} cover src={'https://hub-apac-1.lobeobjects.space/docs/e9b811f248a1db2bd1be1af888cf9b9d.png'} />
+<Image alt={'在 LobeHub 中使用 ComfyUI'} cover src={'https://hub-apac-1.lobeobjects.space/docs/e9b811f248a1db2bd1be1af888cf9b9d.png'} />
 
-本文档将指导你如何在 LobeChat 中使用 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 进行高质量的 AI 图像生成和编辑。
+本文档将指导你如何在 LobeHub 中使用 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 进行高质量的 AI 图像生成和编辑。
 
 ## ComfyUI 简介
 
-ComfyUI 是一个功能强大的稳定扩散和流扩散 GUI，提供基于节点的工作流界面。LobeChat 集成了 ComfyUI，支持完整的 FLUX 系列模型，包括文本生成图像和图像编辑功能。
+ComfyUI 是一个功能强大的稳定扩散和流扩散 GUI，提供基于节点的工作流界面。LobeHub 集成了 ComfyUI，支持完整的 FLUX 系列模型，包括文本生成图像和图像编辑功能。
 
 ### 主要特性
 
@@ -31,14 +31,14 @@ ComfyUI 是一个功能强大的稳定扩散和流扩散 GUI，提供基于节�
 
 ## 快速开始
 
-### 步骤一：在 LobeChat 中配置 ComfyUI
+### 步骤一：在 LobeHub 中配置 ComfyUI
 
 #### 1. 打开设置界面
 
-- 访问 LobeChat 的 `设置` 界面
+- 访问 LobeHub 的 `设置` 界面
 - 在 `AI 服务商` 下找到 `ComfyUI` 的设置项
 
-<Image alt={'ComfyUI 设置界面'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/3f31bc33-509f-4ad2-ba81-280c2a6ec5fa'} />
+<Image alt={'ComfyUI 设置界面'} inStep src={'/blog/assets17870709/3f31bc33-509f-4ad2-ba81-280c2a6ec5fa.webp'} />
 
 #### 2. 配置连接参数
 
@@ -56,7 +56,7 @@ ComfyUI 是一个功能强大的稳定扩散和流扩散 GUI，提供基于节�
 - 点击模型选择按钮
 - 从 ComfyUI 分类中选择所需的 FLUX 模型
 
-<Image alt={'选择 FLUX 模型'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/ff7ebacf-27f0-42d7-810b-00314499a084'} />
+<Image alt={'选择 FLUX 模型'} inStep src={'/blog/assets17870709/ff7ebacf-27f0-42d7-810b-00314499a084.webp'} />
 
 #### 2. 文本生成图像
 
@@ -124,7 +124,7 @@ sudo apt-get install apache2-utils
 sudo htpasswd -c /etc/nginx/.htpasswd admin
 ```
 
-2. **LobeChat 配置**：
+2. **LobeHub 配置**：
 
 ```yaml
 认证类型：基本认证
@@ -156,7 +156,7 @@ token = jwt.encode(payload, secret_key, algorithm='HS256')
 print(f"Bearer Token: {token}")
 ```
 
-**LobeChat 配置**：
+**LobeHub 配置**：
 
 ```yaml
 认证类型：Bearer Token
@@ -171,7 +171,7 @@ API 密钥：example-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - 集成现有企业认证系统
 - 需要多重认证头的系统
 
-**LobeChat 配置**：
+**LobeHub 配置**：
 
 ```yaml
 认证类型：自定义
@@ -179,7 +179,7 @@ API 密钥：example-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 自定义请求头：
 {
   "X-API-Key": "your_api_key",
-  "X-Client-ID": "lobechat"
+  "X-Client-ID": "LobeHub"
 }
 ```
 
@@ -525,13 +525,13 @@ Comfy-Manager 是 ComfyUI 的扩展管理器，让你能够轻松安装和管理
   访问 `http://localhost:8000` 确认 ComfyUI 界面正常加载。
 
   <Callout type={'info'}>
-    **智能模型选择**：LobeChat 会根据服务器上可用的模型文件自动选择最佳模型。您无需下载所有模型，系统会在可用模型中按优先级（官方 > 企业 > 社区）自动选择。
+    **智能模型选择**：LobeHub 会根据服务器上可用的模型文件自动选择最佳模型。您无需下载所有模型，系统会在可用模型中按优先级（官方 > 企业 > 社区）自动选择。
   </Callout>
 </details>
 
 ## 支持的模型
 
-LobeChat ComfyUI 集成采用配置驱动的架构，支持 **223 个模型**，提供从官方模型到社区优化版本的全覆盖。
+LobeHub ComfyUI 集成采用配置驱动的架构，支持 **223 个模型**，提供从官方模型到社区优化版本的全覆盖。
 
 ### FLUX 系列推荐参数
 
@@ -637,7 +637,7 @@ LobeChat ComfyUI 集成采用配置驱动的架构，支持 **223 个模型**，
 <details>
   <summary><b>🎨 配置自定义 SD 模型</b></summary>
 
-  LobeChat 支持使用自定义的 Stable Diffusion 模型。系统使用固定的文件名来识别自定义模型。
+  LobeHub 支持使用自定义的 Stable Diffusion 模型。系统使用固定的文件名来识别自定义模型。
 
   ### 1. 模型文件准备
 
@@ -667,7 +667,7 @@ LobeChat ComfyUI 集成采用配置驱动的架构，支持 **223 个模型**，
 
   ### 3. 使用自定义模型
 
-  在 LobeChat 中，自定义模型会显示为：
+  在 LobeHub 中，自定义模型会显示为：
 
   - **stable-diffusion-custom**：标准自定义模型
   - **stable-diffusion-custom-refiner**：Refiner 自定义模型
@@ -686,7 +686,7 @@ LobeChat ComfyUI 集成采用配置驱动的架构，支持 **223 个模型**，
 
 ### 智能错误诊断系统
 
-LobeChat 集成了智能错误处理系统，能够自动诊断并提供针对性的解决方案。
+LobeHub 集成了智能错误处理系统，能够自动诊断并提供针对性的解决方案。
 
 #### 错误类型与解决方案
 
@@ -813,4 +813,4 @@ sunlight filtering through leaves, warm atmosphere, cinematic lighting, 4K high 
   | `500` | 服务器错误  | 检查 ComfyUI 日志  |
 </details>
 
-至此你已经可以在 LobeChat 中使用 ComfyUI 进行高质量的 AI 图像生成和编辑了。如果遇到问题，请参考故障排除部分或查阅 [ComfyUI 官方文档](https://github.com/comfyanonymous/ComfyUI)。
+至此你已经可以在 LobeHub 中使用 ComfyUI 进行高质量的 AI 图像生成和编辑了。如果遇到问题，请参考故障排除部分或查阅 [ComfyUI 官方文档](https://github.com/comfyanonymous/ComfyUI)。

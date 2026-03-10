@@ -97,10 +97,10 @@ log ""
 
 # List created symlinks for verification
 log "--- Verification: Listing symlinks in workspace ---"
-find . -maxdepth 1 -type l -exec ls -la {} \; 2>/dev/null >> "$LOG_FILE"
-find ./packages -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2>/dev/null >> "$LOG_FILE"
-find ./apps -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2>/dev/null >> "$LOG_FILE"
-find ./e2e -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2>/dev/null >> "$LOG_FILE"
+find . -maxdepth 1 -type l -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
+find ./packages -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
+find ./apps -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
+find ./e2e -maxdepth 2 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
 
 log ""
 log "Log file saved to: $LOG_FILE"

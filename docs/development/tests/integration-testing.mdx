@@ -1,0 +1,410 @@
+---
+title: Integration Testing Guide
+description: >-
+  Learn how to effectively conduct integration testing to verify module
+  interactions and data integrity.
+tags:
+  - Integration Testing
+  - Software Testing
+  - Test Automation
+---
+
+# Integration Testing Guide
+
+## Overview
+
+Integration testing verifies the correctness of multiple modules working together, ensuring that the complete call chain (Router → Service → Model → Database) functions as expected.
+
+## Why Do We Need Integration Tests?
+
+Even with high unit test coverage (80%+), integration issues can still occur:
+
+### Common Issue Example
+
+```typescript
+// ❌ Issue: Parameter lost in the call chain
+// Router layer
+const messageId = await messageModel.create({
+  content: 'test',
+  sessionId: 'xxx',
+  topicId: 'yyy',  // ← topicId is passed in
+});
+
+// Model layer (assume there's a bug)
+async create(data) {
+  return this.db.insert(messages).values({
+    content: data.content,
+    sessionId: data.sessionId,
+    // ❌ Forgot to pass topicId
+  });
+}
+
+// Result: Unit test passes (because Model is mocked), but topicId is lost in actual execution
+```
+
+### Issues Caught by Integration Tests
+
+1. **Missing parameter propagation**: containerId, threadId, topicId, etc., lost in the call chain
+2. **Database constraints**: foreign keys, cascading deletes, etc., cannot be verified with mocks
+3. **Transaction integrity**: atomicity of cross-table operations
+4. **Permission checks**: cross-user access control
+5. **Real-world scenarios**: simulate complete user workflows
+
+## Running Integration Tests
+
+```bash
+# Run all integration tests
+pnpm test:integration
+
+# Run a specific test file
+pnpm vitest tests/integration/routers/message.integration.test.ts
+
+# Watch mode
+pnpm vitest tests/integration --watch
+
+# Generate coverage report
+pnpm test:integration --coverage
+```
+
+## Directory Structure
+
+```
+tests/integration/
+├── README.md                              # Integration test documentation
+├── setup.ts                               # Common setup and utility functions
+└── routers/                               # Router layer integration tests
+    ├── message.integration.test.ts        # Message Router tests
+    ├── session.integration.test.ts        # Session Router tests
+    ├── topic.integration.test.ts          # Topic Router tests
+    └── chat-flow.integration.test.ts      # Full chat flow tests
+```
+
+## Writing Integration Tests
+
+### Basic Template
+
+```typescript
+// @vitest-environment node
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { getTestDB } from '@/database/models/__tests__/_util';
+import { messages, sessions, users } from '@/database/schemas';
+import { LobeHubDatabase } from '@/database/type';
+import { messageRouter } from '@/server/routers/lambda/message';
+
+import { cleanupTestUser, createTestContext, createTestUser } from '../setup';
+
+describe('Your Feature Integration Tests', () => {
+  let serverDB: LobeHubDatabase;
+  let userId: string;
+
+  beforeEach(async () => {
+    // 1. Get test database
+    serverDB = await getTestDB();
+
+    // 2. Create test user
+    userId = await createTestUser(serverDB);
+
+    // 3. Prepare other test data
+    // ...
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await cleanupTestUser(serverDB, userId);
+  });
+
+  it('should do something', async () => {
+    // 1. Create tRPC caller
+    const caller = messageRouter.createCaller(createTestContext(userId));
+
+    // 2. Perform operation
+    const result = await caller.someMethod({
+      /* params */
+    });
+
+    // 3. Assert result
+    expect(result).toBeDefined();
+
+    // 4. 🔥 Key: Verify from database
+    const [dbRecord] = await serverDB.select().from(messages).where(eq(messages.id, result));
+
+    expect(dbRecord).toMatchObject({
+      // Verify all critical fields
+    });
+  });
+});
+```
+
+### Best Practices
+
+#### 1. Test the Full Call Chain
+
+```typescript
+it('should create message with correct associations', async () => {
+  const caller = messageRouter.createCaller(createTestContext(userId));
+
+  // Perform operation
+  const messageId = await caller.createMessage({
+    content: 'Test',
+    sessionId: testSessionId,
+    topicId: testTopicId,
+  });
+
+  // ✅ Verify from database, not just return value
+  const [message] = await serverDB.select().from(messages).where(eq(messages.id, messageId));
+
+  expect(message.sessionId).toBe(testSessionId);
+  expect(message.topicId).toBe(testTopicId);
+  expect(message.userId).toBe(userId);
+});
+```
+
+#### 2. Test Cascading Operations
+
+```typescript
+it('should cascade delete messages when session is deleted', async () => {
+  const sessionCaller = sessionRouter.createCaller(createTestContext(userId));
+  const messageCaller = messageRouter.createCaller(createTestContext(userId));
+
+  // Create session and messages
+  const sessionId = await sessionCaller.createSession({
+    /* ... */
+  });
+  await messageCaller.createMessage({ sessionId /* ... */ });
+
+  // Delete session
+  await sessionCaller.removeSession({ id: sessionId });
+
+  // ✅ Verify related messages are also deleted
+  const remainingMessages = await serverDB
+    .select()
+    .from(messages)
+    .where(eq(messages.sessionId, sessionId));
+
+  expect(remainingMessages).toHaveLength(0);
+});
+```
+
+#### 3. Test Cross-Router Collaboration
+
+```typescript
+it('should handle complete chat flow', async () => {
+  const sessionCaller = sessionRouter.createCaller(createTestContext(userId));
+  const topicCaller = topicRouter.createCaller(createTestContext(userId));
+  const messageCaller = messageRouter.createCaller(createTestContext(userId));
+
+  // 1. Create session
+  const sessionId = await sessionCaller.createSession({
+    /* ... */
+  });
+
+  // 2. Create topic
+  const topicId = await topicCaller.createTopic({ sessionId /* ... */ });
+
+  // 3. Create message
+  const messageId = await messageCaller.createMessage({
+    sessionId,
+    topicId,
+    /* ... */
+  });
+
+  // ✅ Verify full associations
+  const [message] = await serverDB.select().from(messages).where(eq(messages.id, messageId));
+
+  expect(message.sessionId).toBe(sessionId);
+  expect(message.topicId).toBe(topicId);
+});
+```
+
+#### 4. Test Error Scenarios
+
+```typescript
+it('should prevent cross-user access', async () => {
+  // User A creates session
+  const sessionId = await sessionRouter.createCaller(createTestContext(userA)).createSession({
+    /* ... */
+  });
+
+  // User B tries to access
+  const callerB = messageRouter.createCaller(createTestContext(userB));
+
+  // ✅ Should throw error
+  await expect(
+    callerB.createMessage({
+      sessionId,
+      content: 'Unauthorized',
+    }),
+  ).rejects.toThrow();
+});
+```
+
+#### 5. Test Concurrency
+
+```typescript
+it('should handle concurrent operations', async () => {
+  const caller = messageRouter.createCaller(createTestContext(userId));
+
+  // Concurrently create multiple messages
+  const promises = Array.from({ length: 10 }, (_, i) =>
+    caller.createMessage({
+      content: `Message ${i}`,
+      sessionId: testSessionId,
+    }),
+  );
+
+  const messageIds = await Promise.all(promises);
+
+  // ✅ Verify all messages created successfully and are unique
+  expect(messageIds).toHaveLength(10);
+  expect(new Set(messageIds).size).toBe(10);
+});
+```
+
+### Data Isolation
+
+Each test case should be independent and not rely on others:
+
+```typescript
+beforeEach(async () => {
+  // Create new data for each test
+  userId = await createTestUser(serverDB);
+  testSessionId = await createTestSession(serverDB, userId);
+});
+
+afterEach(async () => {
+  // Clean up test data
+  await cleanupTestUser(serverDB, userId);
+});
+```
+
+### Test Naming
+
+Use clear names to describe the test's intent:
+
+```typescript
+// ✅ Good naming
+it('should create message with correct sessionId and topicId');
+it('should cascade delete messages when session is deleted');
+it('should prevent cross-user access to messages');
+
+// ❌ Poor naming
+it('test message creation');
+it('test delete');
+```
+
+## Differences from Unit Tests
+
+| Dimension        | Unit Test                   | Integration Test                  |
+| ---------------- | --------------------------- | --------------------------------- |
+| **Scope**        | Single function/class       | Multiple modules working together |
+| **Dependencies** | Mocks external dependencies | Uses real dependencies            |
+| **Database**     | Mocked                      | Real test database                |
+| **Speed**        | Fast (ms level)             | Slower (seconds)                  |
+| **Quantity**     | Many (60%)                  | Fewer (30%)                       |
+| **Purpose**      | Verify logic correctness    | Verify integration correctness    |
+
+## Testing Pyramid
+
+```
+       /\
+      /E2E\        ← 10% (Critical business flows)
+     /------\
+    /Integration\  ← 30% (API integration tests) ⭐ Focus of this guide
+   /------------\
+  / Unit Tests   \ ← 60% (Already 80%+ coverage)
+ /----------------\
+```
+
+## Coverage Goals
+
+### Priority P0 (Must Cover)
+
+- ✅ Cross-layer ID propagation (sessionId, topicId, containerId, threadId)
+- ✅ Permission checks (users can only access their own resources)
+- ✅ Cascading deletes (deleting a session also deletes related data)
+- ✅ Foreign key constraints (cannot create associations to non-existent records)
+
+### Priority P1 (Should Cover)
+
+- Concurrency (multiple requests at the same time)
+- Pagination (correct data slicing)
+- Search functionality (keyword search)
+- Batch operations (bulk create/delete)
+
+### Priority P2 (Nice to Have)
+
+- Analytics (counts, rankings)
+- Complex queries (multi-condition filters)
+- Performance testing (large data scenarios)
+
+## Debugging Tips
+
+### 1. Inspect Test Database State
+
+```typescript
+it('debug test', async () => {
+  // Perform operation
+  await caller.createMessage({
+    /* ... */
+  });
+
+  // Print database state
+  const allMessages = await serverDB.select().from(messages);
+  console.log('All messages:', allMessages);
+});
+```
+
+### 2. Use Drizzle Studio
+
+```bash
+# Launch Drizzle Studio to inspect test database
+pnpm db:studio
+```
+
+### 3. Retain Test Data
+
+```typescript
+afterEach(async () => {
+  // Temporarily comment out cleanup to retain data for debugging
+  // await cleanupTestUser(serverDB, userId);
+});
+```
+
+## FAQ
+
+### Q: Integration tests are slow. What can I do?
+
+A:
+
+1. Focus on critical paths, avoid over-testing
+2. Use `test.concurrent` to run independent tests in parallel
+3. Optimize test data setup to avoid redundant creation
+
+### Q: Tests interfere with each other. How to fix?
+
+A:
+
+1. Ensure each test uses a unique userId
+2. Thoroughly clean up data in `afterEach`
+3. Use transaction isolation (if supported by the database)
+
+### Q: How to test APIs that require authentication?
+
+A: Use `createTestContext(userId)` to create an authenticated context:
+
+```typescript
+const caller = messageRouter.createCaller(createTestContext(userId));
+```
+
+## References
+
+- [Vitest Documentation](https://vitest.dev/)
+- [Drizzle ORM Documentation](https://orm.drizzle.team/)
+- [tRPC Testing Guide](https://trpc.io/docs/server/testing)
+- [Test Pyramid by Martin Fowler](https://martinfowler.com/articles/practical-test-pyramid.html)
+
+## Contributing
+
+You're welcome to contribute more integration test cases! Please follow the style of existing test files.

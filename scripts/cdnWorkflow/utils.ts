@@ -1,6 +1,7 @@
+import { resolve } from 'node:path';
+
 import { readJSONSync } from 'fs-extra';
 import { globSync } from 'glob';
-import { resolve } from 'node:path';
 
 import { opimized, opimizedGif } from './optimized';
 

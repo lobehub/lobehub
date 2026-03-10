@@ -7,8 +7,8 @@ import { getDesktopEnv } from '@/env';
 electronLog.transports.file.level = 'info'; // Log info level and above in production
 electronLog.transports.console.level =
   getDesktopEnv().NODE_ENV === 'development'
-    ? 'debug' // Show more logs in development
-    : 'warn'; // Only show warnings and errors in production
+    ? 'debug' // Show more logs in development environment
+    : 'info'; // Show info level and above in production environment
 
 // Create namespaced debugger
 export const createLogger = (namespace: string) => {

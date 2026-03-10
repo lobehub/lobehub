@@ -4,37 +4,37 @@ import { type LobeDocument } from '@/types/document';
 
 // ============ Action Types ============
 
-interface AddDocumentAction {
+type AddDocumentAction = {
   document: LobeDocument;
   type: 'addDocument';
-}
+};
 
-interface RemoveDocumentAction {
+type RemoveDocumentAction = {
   id: string;
   type: 'removeDocument';
-}
+};
 
-interface UpdateDocumentAction {
+type UpdateDocumentAction = {
   document: LobeDocument;
   id: string;
   type: 'updateDocument';
-}
+};
 
-interface ReplaceDocumentAction {
+type ReplaceDocumentAction = {
   document: LobeDocument;
   oldId: string;
   type: 'replaceDocument';
-}
+};
 
-interface SetDocumentsAction {
+type SetDocumentsAction = {
   documents: LobeDocument[];
   type: 'setDocuments';
-}
+};
 
-interface AppendDocumentsAction {
+type AppendDocumentsAction = {
   documents: LobeDocument[];
   type: 'appendDocuments';
-}
+};
 
 export type DocumentsDispatch =
   | AddDocumentAction

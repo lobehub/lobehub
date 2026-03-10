@@ -1,10 +1,10 @@
+import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
 import { type ToolIntervention } from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
-import { getBuiltinInspector } from '@/tools/inspectors';
 
 import StatusIndicator from './StatusIndicator';
 import ToolTitle from './ToolTitle';
@@ -41,7 +41,7 @@ const Inspectors = memo<InspectorProps>(
       const args = safeParseJSON(argsStr);
       const partialJson = safeParsePartialJSON(argsStr);
       return (
-        <Flexbox align={'center'} gap={6} horizontal>
+        <Flexbox allowShrink horizontal align={'center'} gap={6}>
           <StatusIndicator intervention={intervention} result={result} />
           <CustomInspector
             apiName={apiName}
@@ -57,14 +57,19 @@ const Inspectors = memo<InspectorProps>(
       );
     }
 
+    const args = safeParseJSON(argsStr);
+    const partialJson = safeParsePartialJSON(argsStr);
+
     return (
-      <Flexbox align={'center'} gap={6} horizontal>
+      <Flexbox horizontal align={'center'} gap={6}>
         <StatusIndicator intervention={intervention} result={result} />
         <ToolTitle
           apiName={apiName}
+          args={args || undefined}
           identifier={identifier}
           isAborted={isAborted}
           isLoading={isTitleLoading}
+          partialArgs={partialJson || undefined}
         />
       </Flexbox>
     );

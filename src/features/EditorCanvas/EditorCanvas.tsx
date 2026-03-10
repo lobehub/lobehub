@@ -1,9 +1,9 @@
 'use client';
 
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
-import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Editor } from '@lobehub/editor/react';
-import { type CSSProperties, memo } from 'react';
+import { type ChatInputActionsProps, type Editor } from '@lobehub/editor/react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import DocumentIdMode from './DocumentIdMode';
 import EditorDataMode from './EditorDataMode';
@@ -15,6 +15,24 @@ import InternalEditor from './InternalEditor';
  * Allows any array of plugins that the Editor component accepts
  */
 type EditorPlugins = Parameters<typeof Editor>[0]['plugins'];
+
+interface UnsavedChangesGuardOptions {
+  /**
+   * Whether to enable unsaved-changes guard for route navigation and browser unload.
+   * Defaults to false.
+   */
+  enabled?: boolean;
+
+  /**
+   * Custom message shown in leave confirmation.
+   */
+  message?: string;
+
+  /**
+   * Custom title shown in leave confirmation.
+   */
+  title?: string;
+}
 
 export interface EditorCanvasProps {
   /**
@@ -37,6 +55,14 @@ export interface EditorCanvasProps {
     content?: string;
     editorData?: unknown;
   };
+
+  /**
+   * Entity ID (e.g., agentId, groupId) to track which entity is being edited.
+   * When entityId changes, editor content will be reloaded.
+   * When entityId stays the same, editorData changes won't trigger reload.
+   * This prevents focus loss during auto-save and optimistic updates.
+   */
+  entityId?: string;
 
   /**
    * Extra plugins to prepend to BASE_PLUGINS (e.g., ReactLiteXmlPlugin)
@@ -88,6 +114,11 @@ export interface EditorCanvasProps {
    * Extra items to add to the floating toolbar (e.g., "Ask Copilot" button)
    */
   toolbarExtraItems?: ChatInputActionsProps['items'];
+
+  /**
+   * Unsaved changes guard for documentId mode.
+   */
+  unsavedChangesGuard?: UnsavedChangesGuardOptions;
 }
 
 export interface EditorCanvasWithEditorProps extends EditorCanvasProps {
@@ -113,7 +144,7 @@ export interface EditorCanvasWithEditorProps extends EditorCanvasProps {
  * - AutoSave hint display (documentId mode)
  */
 export const EditorCanvas = memo<EditorCanvasWithEditorProps>(
-  ({ editor, documentId, editorData, ...props }) => {
+  ({ editor, documentId, editorData, entityId, ...props }) => {
     // documentId mode - fetch and render with loading/error states
     if (documentId) {
       return (
@@ -127,7 +158,7 @@ export const EditorCanvas = memo<EditorCanvasWithEditorProps>(
     if (editorData) {
       return (
         <EditorErrorBoundary>
-          <EditorDataMode editor={editor} editorData={editorData} {...props} />
+          <EditorDataMode editor={editor} editorData={editorData} entityId={entityId} {...props} />
         </EditorErrorBoundary>
       );
     }

@@ -1,8 +1,10 @@
-import { CompressionGroupMetadata, MessageGroupType } from '@lobechat/types';
+import type { CompressionGroupMetadata } from '@lobechat/types';
+import { MessageGroupType } from '@lobechat/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import { MessageGroupItem, messageGroups, messages } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { MessageGroupItem } from '../../schemas';
+import { messageGroups, messages } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
 
 export interface CreateCompressionGroupParams {
   content: string;
@@ -125,6 +127,28 @@ export class CompressionRepository {
     await this.db
       .update(messageGroups)
       .set(updateData)
+      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+  }
+
+  /**
+   * Update compression group metadata (UI state like expanded)
+   */
+  async updateMetadata(
+    groupId: string,
+    metadata: Partial<CompressionGroupMetadata>,
+  ): Promise<void> {
+    // Get existing metadata and merge
+    const existing = await this.db
+      .select({ metadata: messageGroups.metadata })
+      .from(messageGroups)
+      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+
+    const existingData = (existing[0]?.metadata as Record<string, unknown>) || {};
+    const newMetadata = { ...existingData, ...metadata };
+
+    await this.db
+      .update(messageGroups)
+      .set({ metadata: newMetadata, updatedAt: new Date() })
       .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
   }
 

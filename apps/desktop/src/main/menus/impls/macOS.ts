@@ -1,11 +1,13 @@
-import { Menu, MenuItemConstructorOptions, app, shell } from 'electron';
 import * as path from 'node:path';
+
+import type { MenuItemConstructorOptions } from 'electron';
+import { app, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 import NotificationCtr from '@/controllers/NotificationCtr';
 import SystemController from '@/controllers/SystemCtr';
 
-import type { IMenuPlatform, MenuOptions } from '../types';
+import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
 
 export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
@@ -22,7 +24,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     return this.appMenu;
   }
 
-  buildContextMenu(type: string, data?: any): Menu {
+  buildContextMenu(type: string, data?: ContextMenuData): Menu {
     let template: MenuItemConstructorOptions[];
     switch (type) {
       case 'chat': {
@@ -34,7 +36,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         break;
       }
       default: {
-        template = this.getDefaultContextMenuTemplate();
+        template = this.getDefaultContextMenuTemplate(data);
       }
     }
     return Menu.buildFromTemplate(template);
@@ -47,23 +49,23 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   }
 
   refresh(options?: MenuOptions): void {
-    // 重建Application menu
+    // Rebuild Application menu
     this.buildAndSetAppMenu(options);
-    // 如果托盘菜单存在，也重建它（如果需要动态更新）
+    // If tray menu exists, rebuild it as well (if dynamic update is needed)
     // this.trayMenu = this.buildTrayMenu();
-    // 需要考虑如何更新现有托盘图标的菜单
+    // Need to consider how to update the menu for existing tray icons
   }
 
-  // --- 私有方法：定义菜单模板和逻辑 ---
+  // --- Private methods: define menu templates and logic ---
 
   private getAppMenuTemplate(options?: MenuOptions): MenuItemConstructorOptions[] {
     const appName = app.getName();
     const showDev = isDev || options?.showDevItems;
-    // 创建命名空间翻译函数
+    // Create namespaced translation function
     const t = this.app.i18n.ns('menu');
 
-    // 添加调试日志
-    // console.log('[MacOSMenu] 菜单渲染, i18n实例:', !!this.app.i18n);
+    // Add debug logging
+    // console.log('[MacOSMenu] Menu rendering, i18n instance:', !!this.app.i18n);
 
     const template: MenuItemConstructorOptions[] = [
       {
@@ -77,12 +79,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('macOS.about', { appName }),
           },
-          {
-            click: () => {
-              this.app.updaterManager.checkForUpdates({ manual: true });
-            },
-            label: t('common.checkUpdates'),
-          },
+          this.getUpdateMenuItem(t),
           { type: 'separator' },
           {
             accelerator: 'Command+,',
@@ -100,47 +97,66 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             submenu: [],
           },
           { type: 'separator' },
-          {
-            accelerator: 'Command+H',
-            label: t('macOS.hide', { appName }),
-            role: 'hide',
-          },
-          {
-            accelerator: 'Command+Alt+H',
-            label: t('macOS.hideOthers'),
-            role: 'hideOthers',
-          },
-          {
-            label: t('macOS.unhide'),
-            role: 'unhide',
-          },
+          { label: t('macOS.hide', { appName }), role: 'hide' },
+          { label: t('macOS.hideOthers'), role: 'hideOthers' },
+          { label: t('macOS.unhide'), role: 'unhide' },
           { type: 'separator' },
-          {
-            accelerator: 'Command+Q',
-            label: t('file.quit'),
-            role: 'quit',
-          },
+          { label: t('file.quit'), role: 'quit' },
         ],
       },
       {
         label: t('file.title'),
         submenu: [
           {
-            accelerator: 'Command+W',
-            label: t('window.close'),
-            role: 'close',
+            accelerator: 'Command+N',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewTopic');
+            },
+            label: t('file.newTopic'),
           },
+          { type: 'separator' },
+          {
+            accelerator: 'Alt+Command+A',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewAgent');
+            },
+            label: t('file.newAgent'),
+          },
+          {
+            accelerator: 'Alt+Command+G',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewAgentGroup');
+            },
+            label: t('file.newAgentGroup'),
+          },
+          {
+            accelerator: 'Alt+Command+P',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewPage');
+            },
+            label: t('file.newPage'),
+          },
+          { type: 'separator' },
+          { label: t('window.close'), role: 'close' },
         ],
       },
       {
         label: t('edit.title'),
         submenu: [
-          { accelerator: 'Command+Z', label: t('edit.undo'), role: 'undo' },
-          { accelerator: 'Shift+Command+Z', label: t('edit.redo'), role: 'redo' },
+          { label: t('edit.undo'), role: 'undo' },
+          { label: t('edit.redo'), role: 'redo' },
           { type: 'separator' },
-          { accelerator: 'Command+X', label: t('edit.cut'), role: 'cut' },
-          { accelerator: 'Command+C', label: t('edit.copy'), role: 'copy' },
-          { accelerator: 'Command+V', label: t('edit.paste'), role: 'paste' },
+          { label: t('edit.cut'), role: 'cut' },
+          { label: t('edit.copy'), role: 'copy' },
+          { label: t('edit.paste'), role: 'paste' },
           { type: 'separator' },
           {
             label: t('edit.speech'),
@@ -150,7 +166,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             ],
           },
           { type: 'separator' },
-          { accelerator: 'Command+A', label: t('edit.selectAll'), role: 'selectAll' },
+          { label: t('edit.selectAll'), role: 'selectAll' },
         ],
       },
       {
@@ -160,9 +176,9 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           { label: t('view.forceReload'), role: 'forceReload' },
           { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
           { type: 'separator' },
-          { accelerator: 'Command+0', label: t('view.resetZoom'), role: 'resetZoom' },
-          { accelerator: 'Command+Plus', label: t('view.zoomIn'), role: 'zoomIn' },
-          { accelerator: 'Command+-', label: t('view.zoomOut'), role: 'zoomOut' },
+          { label: t('view.resetZoom'), role: 'resetZoom' },
+          { label: t('view.zoomIn'), role: 'zoomIn' },
+          { label: t('view.zoomOut'), role: 'zoomOut' },
           { type: 'separator' },
           { accelerator: 'F11', label: t('view.toggleFullscreen'), role: 'togglefullscreen' },
         ],
@@ -230,7 +246,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           {
             click: () => {
               const logsPath = app.getPath('logs');
-              console.log(`[Menu] Opening logs directory: ${logsPath}`);
+              console.info(`[Menu] Opening logs directory: ${logsPath}`);
               shell.openPath(logsPath).catch((err) => {
                 console.error(`[Menu] Error opening path ${logsPath}:`, err);
                 // Optionally show an error dialog to the user
@@ -241,7 +257,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           {
             click: () => {
               const userDataPath = app.getPath('userData');
-              console.log(`[Menu] Opening user data directory: ${userDataPath}`);
+              console.info(`[Menu] Opening user data directory: ${userDataPath}`);
               shell.openPath(userDataPath).catch((err) => {
                 console.error(`[Menu] Error opening path ${userDataPath}:`, err);
                 // Optionally show an error dialog to the user
@@ -323,7 +339,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           },
           {
             click: () => {
-              // @ts-expect-error cache 目录好像暂时不在类型定义里
+              // @ts-expect-error cache directory seems to be temporarily missing from type definitions
               const cachePath = app.getPath('cache');
 
               const updaterCachePath = path.join(cachePath, `${app.getName()}-updater`);
@@ -370,43 +386,260 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     return template;
   }
 
-  private getDefaultContextMenuTemplate(): MenuItemConstructorOptions[] {
-    const t = this.app.i18n.ns('menu');
+  private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
+    const { stage } = this.app.updaterManager.getUpdaterState();
 
-    return [
+    switch (stage) {
+      case 'checking': {
+        return { enabled: false, label: t('common.checkingUpdates') };
+      }
+      case 'downloading': {
+        return { enabled: false, label: t('common.downloadingUpdate') };
+      }
+      case 'downloaded': {
+        return {
+          click: () => this.app.updaterManager.installNow(),
+          label: t('common.restartToUpdate'),
+        };
+      }
+      case 'latest': {
+        return { enabled: false, label: t('common.isLatestVersion') };
+      }
+      default: {
+        return {
+          click: () => this.app.updaterManager.checkForUpdates({ manual: true }),
+          label: t('common.checkUpdates'),
+        };
+      }
+    }
+  }
+
+  private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
+    const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
+    const hasLink = Boolean(data?.linkURL);
+    const hasImage = data?.mediaType === 'image' && Boolean(data?.srcURL);
+
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Look Up (macOS only) - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.showDefinitionForSelection();
+        },
+        label: t('edit.lookUp'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Link actions
+    if (hasLink) {
+      template.push({
+        click: () => shell.openExternal(data!.linkURL!),
+        label: t('context.openLink'),
+      });
+      template.push({
+        click: () => clipboard.writeText(data!.linkURL!),
+        label: t('context.copyLink'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Image actions
+    if (hasImage) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.downloadURL(data!.srcURL!);
+        },
+        label: t('context.saveImage'),
+      });
+      template.push({
+        click: () => {
+          clipboard.writeText(data!.srcURL!);
+        },
+        label: t('context.copyImageAddress'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions
+    template.push(
       { label: t('edit.cut'), role: 'cut' },
       { label: t('edit.copy'), role: 'copy' },
       { label: t('edit.paste'), role: 'paste' },
       { label: t('edit.selectAll'), role: 'selectAll' },
-      { type: 'separator' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
-  private getChatContextMenuTemplate(data?: any): MenuItemConstructorOptions[] {
-    console.log(data);
+  private getChatContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
+    const hasLink = Boolean(data?.linkURL);
+    const hasImage = data?.mediaType === 'image' && Boolean(data?.srcURL);
 
-    return [
-      { accelerator: 'Command+C', label: t('edit.copy'), role: 'copy' },
-      { accelerator: 'Command+V', label: t('edit.paste'), role: 'paste' },
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Look Up (macOS only) - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.showDefinitionForSelection();
+        },
+        label: t('edit.lookUp'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Link actions
+    if (hasLink) {
+      template.push({
+        click: () => shell.openExternal(data!.linkURL!),
+        label: t('context.openLink'),
+      });
+      template.push({
+        click: () => clipboard.writeText(data!.linkURL!),
+        label: t('context.copyLink'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Image actions
+    if (hasImage) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.downloadURL(data!.srcURL!);
+        },
+        label: t('context.saveImage'),
+      });
+      template.push({
+        click: () => {
+          clipboard.writeText(data!.srcURL!);
+        },
+        label: t('context.copyImageAddress'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions for chat (copy/paste focused)
+    template.push(
+      { label: t('edit.copy'), role: 'copy' },
+      { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
       { label: t('edit.selectAll'), role: 'selectAll' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private getEditorContextMenuTemplate(_data?: any): MenuItemConstructorOptions[] {
+  private getEditorContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
 
-    return [
-      { accelerator: 'Command+X', label: t('edit.cut'), role: 'cut' },
-      { accelerator: 'Command+C', label: t('edit.copy'), role: 'copy' },
-      { accelerator: 'Command+V', label: t('edit.paste'), role: 'paste' },
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Look Up (macOS only) - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.showDefinitionForSelection();
+        },
+        label: t('edit.lookUp'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions for editor (full edit capabilities)
+    template.push(
+      { label: t('edit.cut'), role: 'cut' },
+      { label: t('edit.copy'), role: 'copy' },
+      { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
-      { accelerator: 'Command+A', label: t('edit.selectAll'), role: 'selectAll' },
+      { label: t('edit.selectAll'), role: 'selectAll' },
       { type: 'separator' },
       { label: t('edit.delete'), role: 'delete' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
   private getTrayMenuTemplate(): MenuItemConstructorOptions[] {

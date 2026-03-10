@@ -1,27 +1,31 @@
 'use client';
 
-import type { AssistantContentBlock } from '@lobechat/types';
+import type { AssistantContentBlock, EmojiReaction } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import dynamic from '@/libs/next/dynamic';
-import { type MouseEventHandler, Suspense, memo, useCallback, useMemo } from 'react';
+import type { MouseEventHandler } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
+import dynamic from '@/libs/next/dynamic';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import Usage from '../components/Extras/Usage';
+import MessageBranch from '../components/MessageBranch';
 import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import FileListViewer from '../User/components/FileListViewer';
-import Usage from '../components/Extras/Usage';
-import MessageBranch from '../components/MessageBranch';
 import Group from './components/Group';
 
 const EditState = dynamic(() => import('./components/EditState'), {
@@ -45,7 +49,8 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
   // Get message and actionsConfig from ConversationStore
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
-  const { agentId, usage, createdAt, children, performance, model, provider, branch } = item;
+  const { agentId, usage, createdAt, children, performance, model, provider, branch, metadata } =
+    item;
   const avatar = useAgentMeta(agentId);
 
   // Collect fileList from all children blocks
@@ -68,7 +73,37 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
   // Get editing state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
   const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const newScreen = useNewScreen({ creating, isLatestItem });
+  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const { minHeight } = useNewScreen({
+    creating: creating || generating,
+    isLatestItem,
+    messageId: id,
+  });
+
+  const addReaction = useConversationStore((s) => s.addReaction);
+  const removeReaction = useConversationStore((s) => s.removeReaction);
+  const userId = useUserStore(userProfileSelectors.userId)!;
+  const reactions: EmojiReaction[] = metadata?.reactions || [];
+
+  const handleReactionClick = useCallback(
+    (emoji: string) => {
+      const existing = reactions.find((r) => r.emoji === emoji);
+      if (existing && existing.users.includes(userId)) {
+        removeReaction(id, emoji);
+      } else {
+        addReaction(id, emoji);
+      }
+    },
+    [id, reactions, addReaction, removeReaction],
+  );
+
+  const isReactionActive = useCallback(
+    (emoji: string) => {
+      const reaction = reactions.find((r) => r.emoji === emoji);
+      return !!reaction && reaction.users.includes(userId);
+    },
+    [reactions],
+  );
 
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
   const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
@@ -98,6 +133,11 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
 
   return (
     <ChatItem
+      showTitle
+      avatar={avatar}
+      newScreenMinHeight={minHeight}
+      placement={'left'}
+      time={createdAt}
       actions={
         !disableEditing && (
           <>
@@ -112,13 +152,8 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
           </>
         )
       }
-      avatar={avatar}
-      newScreen={newScreen}
       onAvatarClick={onAvatarClick}
       onMouseEnter={onMouseEnter}
-      placement={'left'}
-      showTitle
-      time={createdAt}
     >
       {children && children.length > 0 && (
         <Group
@@ -137,6 +172,14 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
       )}
       {model && (
         <Usage model={model} performance={performance} provider={provider!} usage={usage} />
+      )}
+      {reactions.length > 0 && (
+        <ReactionDisplay
+          isActive={isReactionActive}
+          messageId={id}
+          reactions={reactions}
+          onReactionClick={handleReactionClick}
+        />
       )}
       <Suspense fallback={null}>
         {editing && contentId && <EditState content={lastAssistantMsg?.content} id={contentId} />}

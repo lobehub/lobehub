@@ -1,9 +1,11 @@
-import { consola } from 'consola';
-import { readJsonSync, writeJSONSync } from 'fs-extra';
-import { markdownToTxt } from 'markdown-to-txt';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { consola } from 'consola';
+import { readJsonSync, writeJSONSync } from 'fs-extra';
 import semver from 'semver';
+
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CHANGELOG_DIR, CHANGELOG_FILE } from './const';
 
@@ -17,7 +19,7 @@ export interface ChangelogStaticItem {
 
 class BuildStaticChangelog {
   private removeDetailsTag = (changelog: string): string => {
-    const detailsRegex: RegExp = /<details\b[^>]*>[\S\s]*?<\/details>/gi;
+    const detailsRegex: RegExp = /<details\b[^>]*>[\s\S]*?<\/details>/gi;
     return changelog.replaceAll(detailsRegex, '');
   };
 

@@ -1,8 +1,9 @@
 'use client';
 
-import { BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Radio, RadioChangeEvent } from 'antd';
+import type { RadioChangeEvent } from 'antd';
+import { Radio } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -52,14 +53,14 @@ const ClearTodosIntervention = memo<BuiltinInterventionProps<ClearTodosParams>>(
 
     return (
       <Flexbox gap={12}>
-        <Flexbox align="center" className={styles.header} gap={8} horizontal>
+        <Flexbox horizontal align="center" className={styles.header} gap={8}>
           <Trash2 size={16} />
           <span style={{ fontSize: 14, fontWeight: 500 }}>{t('lobe-gtd.clearTodos.header')}</span>
         </Flexbox>
 
         <Flexbox className={styles.container} gap={8}>
           <span className={styles.label}>{t('lobe-gtd.clearTodos.label')}</span>
-          <Radio.Group onChange={handleModeChange} value={mode}>
+          <Radio.Group value={mode} onChange={handleModeChange}>
             <Flexbox gap={8}>
               <Radio value="completed">
                 <span className={styles.normalText}>

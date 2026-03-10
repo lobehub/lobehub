@@ -70,10 +70,10 @@ export const BatchCreateAgentsInspector = memo<
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
       gap={8}
-      horizontal
     >
       <span className={styles.title}>
         {t('builtins.lobe-group-agent-builder.apiName.batchCreateAgents')}:
@@ -81,7 +81,7 @@ export const BatchCreateAgentsInspector = memo<
       {displayInfo && (
         <>
           <div className={styles.avatarGroup}>
-            {displayInfo.displayAgents.map((agent, index) => (
+            {displayInfo.displayAgents?.map((agent, index) => (
               <Avatar
                 avatar={agent.avatar}
                 key={index}

@@ -4,7 +4,8 @@ import { FolderIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FolderTree, { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
+import { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
+import FolderTree from '@/features/ResourceManager/components/FolderTree';
 import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
@@ -173,7 +174,6 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
       });
     }, []);
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleFolderClick = useCallback((folderId: string, _folderSlug?: string | null) => {
       // Always use the document ID, not the slug
       setSelectedFolderId(folderId);
@@ -256,28 +256,28 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
     return (
       <Modal
+        open={open}
+        title={t('FileManager.actions.moveToFolder')}
         footer={
-          <Flexbox gap={8} horizontal justify={'flex-end'}>
+          <Flexbox horizontal gap={8} justify={'flex-end'}>
             <Button onClick={onClose}>{t('cancel', { ns: 'common' })}</Button>
-            <Button onClick={handleMoveToRoot} type="default">
+            <Button type="default" onClick={handleMoveToRoot}>
               {t('FileManager.actions.moveToRoot')}
             </Button>
-            <Button disabled={!selectedFolderId} onClick={handleMove} type="primary">
+            <Button disabled={!selectedFolderId} type="primary" onClick={handleMove}>
               {t('FileManager.actions.moveHere')}
             </Button>
           </Flexbox>
         }
         onCancel={onClose}
-        open={open}
-        title={t('FileManager.actions.moveToFolder')}
       >
         <Flexbox horizontal justify="flex-end" style={{ marginBottom: 12 }}>
           <Button
             icon={<Icon icon={FolderIcon} />}
             loading={isCreatingFolder}
-            onClick={handleCreateNewFolder}
             size="small"
             type="default"
+            onClick={handleCreateNewFolder}
           >
             {t('header.actions.newFolder', { ns: 'file' })}
           </Button>
@@ -296,10 +296,10 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
               expandedFolders={expandedFolders}
               items={folders}
               loadedFolders={loadedFolders}
+              selectedKey={selectedFolderId}
               onFolderClick={handleFolderClick}
               onLoadFolder={handleLoadFolder}
               onToggleFolder={handleToggleFolder}
-              selectedKey={selectedFolderId}
             />
           )}
         </Flexbox>

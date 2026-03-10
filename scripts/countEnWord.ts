@@ -4,7 +4,7 @@ import path from 'node:path';
 // 配置项
 const config: Config = {
   dirPath: './locales/en-US', // 替换为你的目录路径
-  ignoredFiles: ['clerk', 'models', 'providers', 'auth'], // 需要忽略的文件名
+  ignoredFiles: ['models', 'providers', 'auth'], // 需要忽略的文件名
 };
 
 interface FileCount {

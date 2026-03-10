@@ -1,8 +1,10 @@
 import { Analytics } from '@vercel/analytics/react';
 import { memo } from 'react';
 
-import { analyticsEnv } from '@/envs/analytics';
+interface VercelAnalyticsProps {
+  debug?: boolean;
+}
 
-const VercelAnalytics = memo(() => <Analytics debug={analyticsEnv.DEBUG_VERCEL_ANALYTICS} />);
+const VercelAnalytics = memo<VercelAnalyticsProps>(({ debug }) => <Analytics debug={debug} />);
 
 export default VercelAnalytics;

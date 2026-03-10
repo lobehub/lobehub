@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinStreamingProps } from '@lobechat/types';
+import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -27,11 +27,11 @@ export const ExecuteCodeStreaming = memo<BuiltinStreamingProps<ExecuteCodeParams
   return (
     <Highlighter
       animated
+      wrap
       language={displayLanguage}
       showLanguage={false}
       style={{ padding: '4px 8px' }}
       variant={'outlined'}
-      wrap
     >
       {code}
     </Highlighter>

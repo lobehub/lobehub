@@ -1,5 +1,9 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { ChatToolPayload, SecurityBlacklistConfig, UserInterventionConfig } from '@lobechat/types';
+import type { ActivatedStepTool, OperationToolSet, ToolSource } from '@lobechat/context-engine';
+import type {
+  ChatToolPayload,
+  SecurityBlacklistConfig,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import type { Cost, CostLimit, Usage } from './usage';
 
@@ -8,82 +12,28 @@ import type { Cost, CostLimit, Usage } from './usage';
  * This is the "passport" that can be persisted and transferred.
  */
 export interface AgentState {
-  operationId: string;
-  // --- State Machine ---
-  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
-
-  // --- Core Context ---
-  messages: any[];
-  tools?: any[];
-  systemRole?: string;
-  toolManifestMap: Record<string, any>;
-
-  /**
-   * Model runtime configuration
-   * Used as fallback when call_llm instruction doesn't specify model/provider
-   */
-  modelRuntimeConfig?: {
-    model: string;
-    provider: string;
-  };
-
-  /**
-   * User's global intervention configuration
-   * Controls how tools requiring approval are handled
-   */
-  userInterventionConfig?: UserInterventionConfig;
-
-  /**
-   * Security blacklist configuration
-   * These rules will ALWAYS block execution and require human intervention,
-   * regardless of user settings (even in auto-run mode).
-   * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
-   */
-  securityBlacklist?: SecurityBlacklistConfig;
-
-  // --- Execution Tracking ---
-  /**
-   * Number of execution steps in this session.
-   * Incremented on each runtime.step() call.
-   */
-  stepCount: number;
-  /**
-   * Optional maximum number of steps allowed.
-   * If set, execution will stop with error when exceeded.
-   */
-  maxSteps?: number;
-
-  // --- Usage and Cost Tracking ---
-  /**
-   * Accumulated usage statistics for this session.
-   * Tracks tokens, API calls, tool usage, etc.
-   */
-  usage: Usage;
+  /** Cumulative record of tools activated at step level */
+  activatedStepTools?: ActivatedStepTool[];
   /**
    * Current calculated cost for this session.
    * Updated after each billable operation.
    */
   cost: Cost;
+
   /**
    * Optional cost limits configuration.
    * If set, execution will stop when limits are exceeded.
    */
   costLimit?: CostLimit;
-
-  // --- HIL ---
+  // --- Metadata ---
+  createdAt: string;
+  error?: any;
   /**
-   * When status is 'waiting_for_human', this stores pending requests
-   * for human-in-the-loop operations.
+   * When true, the agent is in force-finish mode (maxSteps exceeded).
+   * Tools are allowed to complete, but the next LLM call will have tools stripped
+   * and a summary prompt injected to produce a final text response.
    */
-  pendingToolsCalling?: ChatToolPayload[];
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
-  pendingHumanSelect?: {
-    metadata?: Record<string, unknown>;
-    multi?: boolean;
-    options: Array<{ label: string; value: string }>;
-    prompt?: string;
-  };
-
+  forceFinish?: boolean;
   // --- Interruption Handling ---
   /**
    * When status is 'interrupted', this stores the interruption context
@@ -99,14 +49,90 @@ export interface AgentState {
     /** Whether the interruption can be resumed */
     canResume: boolean;
   };
-
-  // --- Metadata ---
-  createdAt: string;
-  error?: any;
   lastModified: string;
+
+  /**
+   * Optional maximum number of steps allowed.
+   * If set, execution will stop with error when exceeded.
+   */
+  maxSteps?: number;
+
+  // --- Core Context ---
+  messages: any[];
 
   // --- Extensible metadata ---
   metadata?: Record<string, any>;
+
+  /**
+   * Model runtime configuration
+   * Used as fallback when call_llm instruction doesn't specify model/provider
+   */
+  modelRuntimeConfig?: {
+    model: string;
+    provider: string;
+    /**
+     * Compression model configuration
+     * Used for context compression tasks
+     */
+    compressionModel?: {
+      model: string;
+      provider: string;
+    };
+  };
+  operationId: string;
+
+  /** Operation-level tool set snapshot (immutable after creation) */
+  operationToolSet?: OperationToolSet;
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
+  pendingHumanSelect?: {
+    metadata?: Record<string, unknown>;
+    multi?: boolean;
+    options: Array<{ label: string; value: string }>;
+    prompt?: string;
+  };
+
+  // --- HIL ---
+  /**
+   * When status is 'waiting_for_human', this stores pending requests
+   * for human-in-the-loop operations.
+   */
+  pendingToolsCalling?: ChatToolPayload[];
+  /**
+   * Security blacklist configuration
+   * These rules will ALWAYS block execution and require human intervention,
+   * regardless of user settings (even in auto-run mode).
+   * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
+   */
+  securityBlacklist?: SecurityBlacklistConfig;
+  // --- State Machine ---
+  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+
+  // --- Execution Tracking ---
+  /**
+   * Number of execution steps in this session.
+   * Incremented on each runtime.step() call.
+   */
+  stepCount: number;
+
+  systemRole?: string;
+  toolManifestMap: Record<string, any>;
+
+  tools?: any[];
+
+  /** Tool source map for routing tool execution to correct handler */
+  toolSourceMap?: Record<string, ToolSource>;
+  // --- Usage and Cost Tracking ---
+  /**
+   * Accumulated usage statistics for this session.
+   * Tracks tokens, API calls, tool usage, etc.
+   */
+  usage: Usage;
+
+  /**
+   * User's global intervention configuration
+   * Controls how tools requiring approval are handled
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**

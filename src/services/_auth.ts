@@ -111,14 +111,14 @@ const createAuthTokenWithPayload = (payload = {}) => {
 };
 
 interface AuthParams {
-  // eslint-disable-next-line no-undef
   headers?: HeadersInit;
   payload?: Record<string, any>;
   provider?: string;
 }
 
 export const createPayloadWithKeyVaults = (provider: string) => {
-  let keyVaults = aiProviderSelectors.providerKeyVaults(provider)(useAiInfraStore.getState()) || {};
+  const keyVaults =
+    aiProviderSelectors.providerKeyVaults(provider)(useAiInfraStore.getState()) || {};
 
   const runtimeProvider = resolveRuntimeProvider(provider);
 
@@ -133,7 +133,6 @@ export const createXorKeyVaultsPayload = (provider: string) => {
   return obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 };
 
-// eslint-disable-next-line no-undef
 export const createHeaderWithAuth = async (params?: AuthParams): Promise<HeadersInit> => {
   let payload = params?.payload || {};
 
@@ -143,6 +142,5 @@ export const createHeaderWithAuth = async (params?: AuthParams): Promise<Headers
 
   const token = createAuthTokenWithPayload(payload);
 
-  // eslint-disable-next-line no-undef
   return { ...params?.headers, [LOBE_CHAT_AUTH_HEADER]: token };
 };

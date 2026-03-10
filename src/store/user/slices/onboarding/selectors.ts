@@ -1,7 +1,7 @@
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 
-import type { UserStore } from '../../store';
+import { type UserStore } from '../../store';
 
 /**
  * Returns the current step for UI display.

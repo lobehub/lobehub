@@ -1,14 +1,11 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import type { BuiltinRenderProps } from '@lobechat/types';
+import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Clock } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTaskParams, ExecuteTaskState } from '../../../types';
 
@@ -40,32 +37,16 @@ const ExecuteTaskRender = memo<BuiltinRenderProps<ExecuteTaskParams, ExecuteTask
   ({ args }) => {
     const { t } = useTranslation('tool');
 
-    // Get agent info from store
-    const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-    const agent = useAgentGroupStore((s) =>
-      args?.agentId && activeGroupId
-        ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, args.agentId)(s)
-        : undefined,
-    );
-
     const timeoutMinutes = args?.timeout ? Math.round(args.timeout / 60_000) : 30;
 
     return (
       <Flexbox className={styles.container} gap={12}>
         {/* Header: Agent info + Timeout */}
-        <Flexbox align={'center'} gap={12} horizontal justify={'space-between'}>
-          <Flexbox align={'center'} flex={1} gap={12} horizontal style={{ minWidth: 0 }}>
-            <Avatar
-              avatar={agent?.avatar || '🤖'}
-              background={agent?.backgroundColor || undefined}
-              size={24}
-              style={{ borderRadius: 8, flexShrink: 0 }}
-            />
-            <span className={styles.agentTitle}>
-              {agent?.title || t('agentGroupManagement.executeTask.intervention.unknownAgent')}
-            </span>
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
+            <span className={styles.agentTitle}>{args?.title}</span>
           </Flexbox>
-          <Flexbox align="center" className={styles.timeout} gap={4} horizontal>
+          <Flexbox horizontal align="center" className={styles.timeout} gap={4}>
             <Clock size={14} />
             <span>
               {timeoutMinutes} {t('agentGroupManagement.executeTask.intervention.timeoutUnit')}
@@ -73,10 +54,10 @@ const ExecuteTaskRender = memo<BuiltinRenderProps<ExecuteTaskParams, ExecuteTask
           </Flexbox>
         </Flexbox>
 
-        {/* Task content (read-only) */}
-        {args?.task && (
+        {/* Instruction content (read-only) */}
+        {args?.instruction && (
           <Text className={styles.taskContent} style={{ margin: 0 }}>
-            {args.task}
+            {args.instruction}
           </Text>
         )}
       </Flexbox>

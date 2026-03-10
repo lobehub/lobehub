@@ -18,24 +18,25 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
   const { t } = useTranslation('common');
   return (
     <Result
+      icon={<Icon icon={ShieldAlert} />}
+      status={'error'}
+      style={{ paddingBlock: 24, width: 450 }}
+      title={t('importModal.error.title')}
       extra={
         <Flexbox gap={12} style={{ textAlign: 'start' }}>
           <Alert
+            style={{ flex: 1 }}
+            title={error?.message}
+            type={'error'}
             extra={
               <Highlighter actionIconSize={'small'} language={'json'}>
                 {JSON.stringify(error, null, 2)}
               </Highlighter>
             }
-            style={{ flex: 1 }}
-            title={error?.message}
-            type={'error'}
           />
           <Button onClick={onClick}>{t('close')}</Button>
         </Flexbox>
       }
-      icon={<Icon icon={ShieldAlert} />}
-      status={'error'}
-      style={{ paddingBlock: 24, width: 450 }}
       subTitle={
         <Balancer>
           <Trans i18nKey="importModal.error.desc" ns={'common'}>
@@ -43,12 +44,12 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
             <a
               aria-label={'issue'}
               href={GITHUB_ISSUES}
+              rel="noreferrer"
+              target="_blank"
               onClick={(e) => {
                 e.preventDefault();
                 githubService.submitImportError(error!);
               }}
-              rel="noreferrer"
-              target="_blank"
             >
               提交问题
             </a>
@@ -56,7 +57,6 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
           </Trans>
         </Balancer>
       }
-      title={t('importModal.error.title')}
     />
   );
 });

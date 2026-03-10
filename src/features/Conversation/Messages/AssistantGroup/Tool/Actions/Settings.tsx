@@ -1,10 +1,10 @@
 import { ActionIcon, createRawModal } from '@lobehub/ui';
 import { LucideSettings } from 'lucide-react';
-import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { PluginDetailModalProps } from '@/features/PluginDetailModal';
+import { type PluginDetailModalProps } from '@/features/PluginDetailModal';
+import dynamic from '@/libs/next/dynamic';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 
@@ -25,14 +25,14 @@ const Settings = memo<{ id: string }>(({ id }) => {
   return (
     <ActionIcon
       icon={LucideSettings}
+      size={'small'}
+      title={t('setting')}
       onClick={() => {
         createRawModal(PluginDetailModal, {
           id,
           schema: item?.settings,
         });
       }}
-      size={'small'}
-      title={t('setting')}
     />
   );
 });

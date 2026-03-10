@@ -1,32 +1,9 @@
-import { isDesktop } from '@lobechat/const';
 import { type PropsWithChildren } from 'react';
 
-import { authEnv } from '@/envs/auth';
-
-import BetterAuth from './BetterAuth';
-import Clerk from './Clerk';
-import Desktop from './Desktop';
-import NextAuth from './NextAuth';
-import NoAuth from './NoAuth';
-
+// Next.js only serves auth routes (signin, signup, reset-password, etc.)
+// No store initialization needed here — session sync happens in the Vite SPA after login.
 const AuthProvider = ({ children }: PropsWithChildren) => {
-  if (isDesktop) {
-    return <Desktop>{children}</Desktop>;
-  }
-
-  if (authEnv.NEXT_PUBLIC_ENABLE_CLERK_AUTH) {
-    return <Clerk>{children}</Clerk>;
-  }
-
-  if (authEnv.NEXT_PUBLIC_ENABLE_BETTER_AUTH) {
-    return <BetterAuth>{children}</BetterAuth>;
-  }
-
-  if (authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH) {
-    return <NextAuth>{children}</NextAuth>;
-  }
-
-  return <NoAuth>{children}</NoAuth>;
+  return <>{children}</>;
 };
 
 export default AuthProvider;

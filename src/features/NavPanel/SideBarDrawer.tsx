@@ -4,13 +4,14 @@ import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { cssVar } from 'antd-style';
 import { XIcon } from 'lucide-react';
-import { type ReactNode, Suspense, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, Suspense } from 'react';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 
 import { NAV_PANEL_RIGHT_DRAWER_ID } from './';
-import SideBarHeaderLayout from './SideBarHeaderLayout';
 import SkeletonList from './components/SkeletonList';
+import SideBarHeaderLayout from './SideBarHeaderLayout';
 
 interface SideBarDrawerProps {
   action?: ReactNode;
@@ -23,19 +24,23 @@ interface SideBarDrawerProps {
 
 const SideBarDrawer = memo<SideBarDrawerProps>(
   ({ subHeader, open, onClose, children, title, action }) => {
+    const size = 280;
     return (
       <Drawer
-        closable={false}
         destroyOnHidden
+        closable={false}
         getContainer={() => document.querySelector(`#${NAV_PANEL_RIGHT_DRAWER_ID}`)!}
         mask={false}
-        onClose={onClose}
         open={open}
         placement="left"
+        size={size}
         rootStyle={{
+          bottom: 0,
+          overflow: 'hidden',
           position: 'absolute',
+          top: 0,
+          width: `${size}px`,
         }}
-        size={280}
         styles={{
           body: {
             background: cssVar.colorBgLayout,
@@ -56,9 +61,16 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
         title={
           <>
             <SideBarHeaderLayout
+              showBack={false}
+              showTogglePanelButton={false}
               left={
                 typeof title === 'string' ? (
-                  <Text ellipsis fontSize={14} style={{ paddingLeft: 4 }} weight={400}>
+                  <Text
+                    ellipsis
+                    fontSize={14}
+                    style={{ fontWeight: 600, paddingLeft: 8 }}
+                    weight={400}
+                  >
                     {title}
                   </Text>
                 ) : (
@@ -68,15 +80,14 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
               right={
                 <>
                   {action}
-                  <ActionIcon icon={XIcon} onClick={onClose} size={DESKTOP_HEADER_ICON_SIZE} />
+                  <ActionIcon icon={XIcon} size={DESKTOP_HEADER_ICON_SIZE} onClick={onClose} />
                 </>
               }
-              showBack={false}
-              showTogglePanelButton={false}
             />
             {subHeader}
           </>
         }
+        onClose={onClose}
       >
         <Suspense
           fallback={

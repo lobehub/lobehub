@@ -1,6 +1,7 @@
 'use client';
 
-import { DiffAction, IEditor, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
+import { type IEditor } from '@lobehub/editor';
+import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
 import { Block, Icon } from '@lobehub/ui';
 import { Button, Space } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -42,7 +43,6 @@ const useIsEditorInit = (editor: IEditor) => {
     if (!editor) return;
 
     const onInit = () => {
-      console.log('init: id', editor.getLexicalEditor()?._key);
       setEditInit(true);
     };
     editor.on('initialized', onInit);
@@ -103,13 +103,13 @@ interface DiffAllToolbarProps {
 const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
   const { t } = useTranslation('editor');
   const isDarkMode = useIsDark();
-  const [editor, performSave, markDirty] = useDocumentStore((s) => [
+  const [storeEditor, performSave, markDirty] = useDocumentStore((s) => [
     s.editor!,
     s.performSave,
     s.markDirty,
   ]);
 
-  const hasPendingDiffs = useEditorHasPendingDiffs(editor);
+  const hasPendingDiffs = useEditorHasPendingDiffs(storeEditor);
 
   if (!hasPendingDiffs) return null;
 
@@ -121,37 +121,37 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
   return (
     <div className={styles.container}>
       <Block
+        horizontal
+        shadow
         className={cx(styles.toolbar, isDarkMode ? styles.toolbarDark : styles.toolbarLight)}
         gap={8}
-        horizontal
         padding={4}
-        shadow
         variant="outlined"
       >
         <Space>
           <Button
+            size={'small'}
+            type="text"
             onClick={async () => {
-              editor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
+              storeEditor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Reject,
               });
               await handleSave();
             }}
-            size={'small'}
-            type="text"
           >
             <Icon icon={X} size={16} />
             {t('modifier.rejectAll')}
           </Button>
           <Button
             color={'default'}
+            size={'small'}
+            variant="filled"
             onClick={async () => {
-              editor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
+              storeEditor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Accept,
               });
               await handleSave();
             }}
-            size={'small'}
-            variant="filled"
           >
             <Icon color={'green'} icon={Check} size={16} />
             {t('modifier.acceptAll')}

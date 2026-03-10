@@ -1,8 +1,9 @@
-import { enableMapSet, produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { produce } from 'immer';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -12,66 +13,36 @@ import {
   type CallKlavisToolResult,
   type CreateKlavisServerParams,
   type KlavisServer,
-  KlavisServerStatus,
   type KlavisTool,
 } from './types';
-
-enableMapSet();
+import { KlavisServerStatus } from './types';
 
 const n = setNamespace('klavisStore');
 
 /**
  * Klavis Store Actions
  */
-export interface KlavisStoreAction {
-  /**
-   * 调用 Klavis 工具
-   */
-  callKlavisTool: (params: CallKlavisToolParams) => Promise<CallKlavisToolResult>;
 
-  /**
-   * 完成 OAuth 认证后，更新服务器状态
-   * @param identifier - 服务器标识符 (e.g., 'google-calendar')
-   */
-  completeKlavisServerAuth: (identifier: string) => Promise<void>;
+type Setter = StoreSetter<ToolStore>;
+export const createKlavisStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
+  new KlavisStoreActionImpl(set, get, _api);
 
-  /**
-   * 创建单个 Klavis MCP Server 实例
-   * @returns 创建的服务器实例，如果需要 OAuth 则返回带 oauthUrl 的对象
-   */
-  createKlavisServer: (params: CreateKlavisServerParams) => Promise<KlavisServer | undefined>;
+export class KlavisStoreActionImpl {
+  readonly #get: () => ToolStore;
+  readonly #set: Setter;
 
-  /**
-   * 刷新 Klavis Server 的工具列表
-   * @param identifier - 服务器标识符 (e.g., 'google-calendar')
-   */
-  refreshKlavisServerTools: (identifier: string) => Promise<void>;
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-  /**
-   * 删除 Klavis Server
-   * @param identifier - 服务器标识符 (e.g., 'google-calendar')
-   */
-  removeKlavisServer: (identifier: string) => Promise<void>;
-
-  /**
-   * 使用 SWR 获取用户的 Klavis 服务器列表
-   * @param enabled - 是否启用获取
-   */
-  useFetchUserKlavisServers: (enabled: boolean) => SWRResponse<KlavisServer[]>;
-}
-
-export const createKlavisStoreSlice: StateCreator<
-  ToolStore,
-  [['zustand/devtools', never]],
-  [],
-  KlavisStoreAction
-> = (set, get) => ({
-  callKlavisTool: async (params) => {
+  callKlavisTool = async (params: CallKlavisToolParams): Promise<CallKlavisToolResult> => {
     const { serverUrl, toolName, toolArgs } = params;
 
     const toolId = `${serverUrl}:${toolName}`;
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
         draft.executingToolIds.add(toolId);
       }),
@@ -80,16 +51,16 @@ export const createKlavisStoreSlice: StateCreator<
     );
 
     try {
-      // 调用 tRPC 服务端接口执行工具（使用 toolsClient 以获得更长的超时时间）
+      // Call tRPC server interface to execute tool (use toolsClient for longer timeout)
       const response = await toolsClient.klavis.callTool.mutate({
         serverUrl,
         toolArgs,
         toolName,
       });
 
-      console.log('toolsClient.klavis.callTool-response', response);
+      console.info('toolsClient.klavis.callTool-response', response);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           draft.executingToolIds.delete(toolId);
         }),
@@ -101,7 +72,7 @@ export const createKlavisStoreSlice: StateCreator<
     } catch (error) {
       console.error('[Klavis] Failed to call tool:', error);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           draft.executingToolIds.delete(toolId);
         }),
@@ -114,17 +85,19 @@ export const createKlavisStoreSlice: StateCreator<
         success: false,
       };
     }
-  },
+  };
 
-  completeKlavisServerAuth: async (identifier) => {
-    // OAuth 完成后，刷新工具列表
-    await get().refreshKlavisServerTools(identifier);
-  },
+  completeKlavisServerAuth = async (identifier: string): Promise<void> => {
+    // After OAuth completes, refresh tool list
+    await this.#get().refreshKlavisServerTools(identifier);
+  };
 
-  createKlavisServer: async (params) => {
+  createKlavisServer = async (
+    params: CreateKlavisServerParams,
+  ): Promise<KlavisServer | undefined> => {
     const { userId, serverName, identifier } = params;
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
         draft.loadingServerIds.add(identifier);
       }),
@@ -133,14 +106,14 @@ export const createKlavisStoreSlice: StateCreator<
     );
 
     try {
-      // 调用 tRPC 服务端接口创建单个服务器实例
+      // Call tRPC server interface to create single server instance
       const response = await lambdaClient.klavis.createServerInstance.mutate({
         identifier,
         serverName,
         userId,
       });
 
-      // 构建服务器对象
+      // Build server object
       const server: KlavisServer = {
         createdAt: Date.now(),
         identifier: response.identifier,
@@ -154,10 +127,10 @@ export const createKlavisStoreSlice: StateCreator<
           : KlavisServerStatus.PENDING_AUTH,
       };
 
-      // 添加到 servers 列表
-      set(
+      // Add to servers list
+      this.#set(
         produce((draft: KlavisStoreState) => {
-          // 检查是否已存在（使用 identifier），如果存在则更新
+          // Check if already exists (using identifier), update if exists
           const existingIndex = draft.servers.findIndex((s) => s.identifier === identifier);
           if (existingIndex >= 0) {
             draft.servers[existingIndex] = server;
@@ -174,7 +147,7 @@ export const createKlavisStoreSlice: StateCreator<
     } catch (error) {
       console.error('[Klavis] Failed to create server:', error);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
           draft.loadingServerIds.delete(identifier);
         }),
@@ -184,19 +157,19 @@ export const createKlavisStoreSlice: StateCreator<
 
       return undefined;
     }
-  },
+  };
 
-  refreshKlavisServerTools: async (identifier) => {
-    const { servers } = get();
+  refreshKlavisServerTools = async (identifier: string): Promise<void> => {
+    const { servers } = this.#get();
 
-    // 使用 identifier 查找服务器
+    // Find server using identifier
     const server = servers.find((s) => s.identifier === identifier);
     if (!server) {
       console.error('[Klavis] Server not found:', identifier);
       return;
     }
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
         draft.loadingServerIds.add(identifier);
       }),
@@ -205,20 +178,40 @@ export const createKlavisStoreSlice: StateCreator<
     );
 
     try {
-      // 首先检查服务器的认证状态
+      // First check server authentication status
       const instanceStatus = await lambdaClient.klavis.getServerInstance.query({
         instanceId: server.instanceId,
       });
 
-      // 如果认证失败，删除服务器并重置状态
+      // If server returned an auth error (during polling), silently return
+      // This happens when user is still in the process of authorizing
+      if (instanceStatus.error === 'AUTH_ERROR') {
+        this.#set(
+          produce((draft: KlavisStoreState) => {
+            draft.loadingServerIds.delete(identifier);
+          }),
+          false,
+          n('refreshKlavisServerTools/pendingAuth'),
+        );
+        return;
+      }
+
+      // If authentication failed, remove server and reset status
       if (!instanceStatus.isAuthenticated) {
         if (!instanceStatus.authNeeded) {
-          // 如果不需要认证，说明没问题
+          // If no authentication needed, all is well
+          this.#set(
+            produce((draft: KlavisStoreState) => {
+              draft.loadingServerIds.delete(identifier);
+            }),
+            false,
+            n('refreshKlavisServerTools/noAuthNeeded'),
+          );
           return;
         }
 
-        // 从本地状态移除（使用 identifier）
-        set(
+        // Remove from local state (using identifier)
+        this.#set(
           produce((draft: KlavisStoreState) => {
             draft.servers = draft.servers.filter((s) => s.identifier !== identifier);
             draft.loadingServerIds.delete(identifier);
@@ -227,7 +220,7 @@ export const createKlavisStoreSlice: StateCreator<
           n('refreshKlavisServerTools/authFailed'),
         );
 
-        // 从数据库删除
+        // Delete from database
         await lambdaClient.klavis.deleteServerInstance.mutate({
           identifier,
           instanceId: server.instanceId,
@@ -236,16 +229,16 @@ export const createKlavisStoreSlice: StateCreator<
         return;
       }
 
-      // 认证成功，获取工具列表（使用 toolsClient 以获得更长的超时时间）
+      // Authentication successful, get tool list (use toolsClient for longer timeout)
       const response = await toolsClient.klavis.listTools.query({
         serverUrl: server.serverUrl,
       });
 
       const tools = response.tools as KlavisTool[];
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
-          // 使用 identifier 查找服务器
+          // Find server using identifier
           const serverIndex = draft.servers.findIndex((s) => s.identifier === identifier);
           if (serverIndex >= 0) {
             draft.servers[serverIndex].tools = tools;
@@ -259,7 +252,7 @@ export const createKlavisStoreSlice: StateCreator<
         n('refreshKlavisServerTools/success'),
       );
 
-      // 更新数据库中的工具列表和认证状态
+      // Update tool list and authentication status in database
       await lambdaClient.klavis.updateKlavisPlugin.mutate({
         identifier,
         instanceId: server.instanceId,
@@ -275,9 +268,9 @@ export const createKlavisStoreSlice: StateCreator<
     } catch (error) {
       console.error('[Klavis] Failed to refresh tools:', error);
 
-      set(
+      this.#set(
         produce((draft: KlavisStoreState) => {
-          // 使用 identifier 查找服务器
+          // Find server using identifier
           const serverIndex = draft.servers.findIndex((s) => s.identifier === identifier);
           if (serverIndex >= 0) {
             draft.servers[serverIndex].status = KlavisServerStatus.ERROR;
@@ -290,23 +283,23 @@ export const createKlavisStoreSlice: StateCreator<
         n('refreshKlavisServerTools/error'),
       );
     }
-  },
+  };
 
-  removeKlavisServer: async (identifier) => {
-    const { servers } = get();
-    // 使用 identifier 查找服务器
+  removeKlavisServer = async (identifier: string): Promise<void> => {
+    const { servers } = this.#get();
+    // Find server using identifier
     const server = servers.find((s) => s.identifier === identifier);
 
-    set(
+    this.#set(
       produce((draft: KlavisStoreState) => {
-        // 使用 identifier 过滤
+        // Filter using identifier
         draft.servers = draft.servers.filter((s) => s.identifier !== identifier);
       }),
       false,
       n('removeKlavisServer'),
     );
 
-    // 从 Klavis API 和数据库删除
+    // Delete from Klavis API and database
     if (server) {
       try {
         await lambdaClient.klavis.deleteServerInstance.mutate({
@@ -317,17 +310,35 @@ export const createKlavisStoreSlice: StateCreator<
         console.error('[Klavis] Failed to delete server instance:', error);
       }
     }
-  },
+  };
 
-  useFetchUserKlavisServers: (enabled) =>
-    useSWR<KlavisServer[]>(
+  useFetchServerTools = (serverName: string | undefined): SWRResponse<KlavisTool[]> => {
+    return useSWR<KlavisTool[]>(
+      serverName ? `klavis-server-tools-${serverName}` : null,
+      async () => {
+        const response = await toolsClient.klavis.getTools.query({ serverName: serverName! });
+        return (response.tools || []).map((tool: any) => ({
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          name: tool.name,
+        }));
+      },
+      {
+        fallbackData: [],
+        revalidateOnFocus: false,
+      },
+    );
+  };
+
+  useFetchUserKlavisServers = (enabled: boolean): SWRResponse<KlavisServer[]> => {
+    return useSWR<KlavisServer[]>(
       enabled ? 'fetchUserKlavisServers' : null,
       async () => {
         const klavisPlugins = await lambdaClient.klavis.getKlavisPlugins.query();
 
         if (klavisPlugins.length === 0) return [];
 
-        // 转换为 KlavisServer 对象
+        // Convert to KlavisServer objects
         return klavisPlugins
           .filter((plugin) => plugin.customParams?.klavis)
           .map((plugin) => {
@@ -356,10 +367,10 @@ export const createKlavisStoreSlice: StateCreator<
       {
         fallbackData: [],
         onSuccess: (data) => {
-          set(
+          this.#set(
             produce((draft: KlavisStoreState) => {
               if (data.length > 0) {
-                // 使用 identifier 检查是否已存在
+                // Check if already exists using identifier
                 const existingIdentifiers = new Set(draft.servers.map((s) => s.identifier));
                 const newServers = data.filter((s) => !existingIdentifiers.has(s.identifier));
                 draft.servers = [...draft.servers, ...newServers];
@@ -372,5 +383,8 @@ export const createKlavisStoreSlice: StateCreator<
         },
         revalidateOnFocus: false,
       },
-    ),
-});
+    );
+  };
+}
+
+export type KlavisStoreAction = Pick<KlavisStoreActionImpl, keyof KlavisStoreActionImpl>;

@@ -1,21 +1,17 @@
-import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
-import {
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-  session as electronSession,
-  ipcMain,
-  screen,
-} from 'electron';
 import console from 'node:console';
 import { join } from 'node:path';
+
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
+import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type { BrowserWindowConstructorOptions } from 'electron';
+import { BrowserWindow, ipcMain, screen, session as electronSession, shell } from 'electron';
 
 import { preloadDir, resourcesDir } from '@/const/dir';
 import { isMac } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
-import { setResponseHeader } from '@/utils/http-headers';
+import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
@@ -114,15 +110,22 @@ export default class Browser {
   // ==================== Window Creation ====================
 
   private createBrowserWindow(): BrowserWindow {
-    const { title, width, height, ...rest } = this.options;
+    const {
+      title,
+      width,
+      height,
+      // Strip platform visual effect props — these are managed exclusively
+      // by WindowThemeManager.getPlatformConfig() to prevent config leaking
+      // from appBrowsers/windowTemplates into the BrowserWindow constructor.
+      vibrancy: _vibrancy,
+      visualEffectState: _visualEffectState,
+      transparent: _transparent,
+      ...rest
+    } = this.options;
 
     const resolvedState = this.stateManager.resolveState({ height, width });
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
-
-    // Calculate traffic light position to center vertically in title bar
-    // Traffic light buttons are approximately 12px tall
-    const trafficLightY = Math.round((TITLE_BAR_HEIGHT - 12) / 2);
 
     return new BrowserWindow({
       ...rest,
@@ -133,18 +136,17 @@ export default class Browser {
       height: resolvedState.height,
       show: false,
       title,
-      trafficLightPosition: isMac ? { x: 12, y: trafficLightY } : undefined,
-      vibrancy: 'sidebar',
-      visualEffectState: 'active',
       webPreferences: {
         backgroundThrottling: false,
         contextIsolation: true,
         preload: join(preloadDir, 'index.js'),
         sandbox: false,
+        webviewTag: true,
       },
       width: resolvedState.width,
       x: resolvedState.x,
       y: resolvedState.y,
+      // Platform visual config is the SOLE source of vibrancy / transparency / titleBarOverlay.
       ...this.themeManager.getPlatformConfig(),
     });
   }
@@ -152,7 +154,7 @@ export default class Browser {
   private setupWindow(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] BrowserWindow instance created.`);
 
-    // Setup theme management
+    // Setup theme management (includes liquid glass lifecycle on macOS Tahoe)
     this.themeManager.attach(browserWindow);
 
     // Setup network interceptors
@@ -170,6 +172,9 @@ export default class Browser {
 
     // Setup event listeners
     this.setupEventListeners(browserWindow);
+
+    // Setup external link handler (prevents opening new windows in renderer)
+    this.setupWindowOpenHandler(browserWindow);
   }
 
   private initiateContentLoading(): void {
@@ -191,6 +196,27 @@ export default class Browser {
     this.setupCloseListener(browserWindow);
     this.setupFocusListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
+    this.setupContextMenu(browserWindow);
+  }
+
+  /**
+   * Setup window open handler to intercept external links
+   * Prevents opening new windows in renderer and uses system browser instead
+   */
+  private setupWindowOpenHandler(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up window open handler for external links`);
+
+    browserWindow.webContents.setWindowOpenHandler(({ url }) => {
+      logger.info(`[${this.identifier}] Intercepted window open for URL: ${url}`);
+
+      // Open external URL in system browser
+      shell.openExternal(url).catch((error) => {
+        logger.error(`[${this.identifier}] Failed to open external URL: ${url}`, error);
+      });
+
+      // Deny creating new window in renderer
+      return { action: 'deny' };
+    });
   }
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
@@ -233,6 +259,29 @@ export default class Browser {
     browserWindow.on('focus', () => {
       logger.debug(`[${this.identifier}] Window 'focus' event fired.`);
       this.broadcast('windowFocused');
+    });
+  }
+
+  /**
+   * Setup context menu with platform-specific features
+   * Delegates to MenuManager for consistent platform behavior
+   */
+  private setupContextMenu(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up context menu.`);
+
+    browserWindow.webContents.on('context-menu', (_event, params) => {
+      const { x, y, selectionText, linkURL, srcURL, mediaType, isEditable } = params;
+
+      // Use the platform menu system with full context data
+      this.app.menuManager.showContextMenu('default', {
+        isEditable,
+        linkURL: linkURL || undefined,
+        mediaType: mediaType as any,
+        selectionText: selectionText || undefined,
+        srcURL: srcURL || undefined,
+        x,
+        y,
+      });
     });
   }
 
@@ -291,9 +340,19 @@ export default class Browser {
     });
   }
 
-  setWindowResizable(resizable: boolean): void {
-    logger.debug(`[${this.identifier}] Setting window resizable: ${resizable}`);
-    this._browserWindow?.setResizable(resizable);
+  setWindowMinimumSize(size: { height?: number; width?: number }): void {
+    logger.debug(`[${this.identifier}] Setting window minimum size: ${JSON.stringify(size)}`);
+
+    const currentMinimumSize = this._browserWindow?.getMinimumSize?.() ?? [0, 0];
+    const rawWidth = size.width ?? currentMinimumSize[0];
+    const rawHeight = size.height ?? currentMinimumSize[1];
+
+    // Electron doesn't "reset" minimum size with 0x0 reliably.
+    // Treat 0 / negative as fallback to app-level default preset.
+    const width = rawWidth > 0 ? rawWidth : APP_WINDOW_MIN_SIZE.width;
+    const height = rawHeight > 0 ? rawHeight : APP_WINDOW_MIN_SIZE.height;
+
+    this._browserWindow?.setMinimumSize?.(width, height);
   }
 
   // ==================== Window Position ====================
@@ -432,7 +491,7 @@ export default class Browser {
 
   /**
    * Setup CORS bypass for ALL requests
-   * In production, the renderer uses app://next protocol which triggers CORS
+   * In production, the renderer uses app://renderer protocol which triggers CORS
    */
   private setupCORSBypass(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] Setting up CORS bypass for all requests`);
@@ -448,6 +507,8 @@ export default class Browser {
         delete requestHeaders['Origin'];
         logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
+
+      appendVercelCookie(requestHeaders);
 
       callback({ requestHeaders });
     });

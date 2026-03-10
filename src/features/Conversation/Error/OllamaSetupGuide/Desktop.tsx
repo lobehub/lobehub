@@ -7,7 +7,7 @@ import { useConversationStore } from '@/features/Conversation/store';
 
 import BaseErrorForm from '../BaseErrorForm';
 
-// TODO: 优化 Ollama setup 的流程，isDesktop 模式下可以直接做到端到端检测
+// TODO: Optimize the Ollama setup flow - in isDesktop mode, end-to-end detection can be done directly
 const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
   const { t } = useTranslation('components');
 
@@ -15,17 +15,18 @@ const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
 
   return (
     <BaseErrorForm
+      avatar={<Ollama.Avatar shape={'square'} size={40} />}
+      title={t('OllamaSetupGuide.install.title')}
       action={
         <Button
+          type={'primary'}
           onClick={() => {
             if (id) delAndRegenerateMessage(id);
           }}
-          type={'primary'}
         >
           {t('OllamaSetupGuide.action.start')}
         </Button>
       }
-      avatar={<Ollama.Avatar shape={'square'} size={40} />}
       desc={
         <Trans
           components={[<span key="0" />, <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />]}
@@ -33,7 +34,6 @@ const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
           ns={'components'}
         />
       }
-      title={t('OllamaSetupGuide.install.title')}
     />
   );
 });

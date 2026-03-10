@@ -24,7 +24,6 @@ export async function consumeStreamUntilDone(response: Response): Promise<void> 
 
   const reader = response.body.getReader();
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done } = await reader.read();
       if (done) break;

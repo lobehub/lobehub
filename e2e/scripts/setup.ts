@@ -31,26 +31,22 @@ const CONFIG = {
   defaultPort: 3006,
   dockerImage: 'paradedb/paradedb:latest',
   projectRoot: resolve(__dirname, '../..'),
-  
 
-// S3 Mock (required even if not testing file uploads)
-s3Mock: {
+  // S3 Mock (required even if not testing file uploads)
+  s3Mock: {
     accessKeyId: 'e2e-mock-access-key',
     bucket: 'e2e-mock-bucket',
     endpoint: 'https://e2e-mock-s3.localhost',
     secretAccessKey: 'e2e-mock-secret-key',
-  }, 
+  },
 
-  
-  
-// 2 minutes
-// Secrets (for e2e testing only)
-secrets: {
+  // 2 minutes
+  // Secrets (for e2e testing only)
+  secrets: {
     betterAuthSecret: 'e2e-test-secret-key-for-better-auth-32chars!',
     keyVaultsSecret: 'LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=',
   },
 
-  
   serverTimeout: 120_000,
 };
 
@@ -263,11 +259,10 @@ async function buildApp(): Promise<void> {
   log('🔨', 'Building application (this may take a few minutes)...');
 
   await execAsync('bun', ['run', 'build'], {
-    BETTER_AUTH_SECRET: CONFIG.secrets.betterAuthSecret,
+    AUTH_SECRET: CONFIG.secrets.betterAuthSecret,
     DATABASE_DRIVER: CONFIG.databaseDriver,
     DATABASE_URL: CONFIG.databaseUrl,
     KEY_VAULTS_SECRET: CONFIG.secrets.keyVaultsSecret,
-    NEXT_PUBLIC_ENABLE_BETTER_AUTH: '1',
     SKIP_LINT: '1',
   });
 
@@ -289,12 +284,11 @@ async function isServerRunning(port: number): Promise<boolean> {
 
 function getServerEnv(port: number): Record<string, string> {
   return {
-    BETTER_AUTH_SECRET: CONFIG.secrets.betterAuthSecret,
+    AUTH_EMAIL_VERIFICATION: '0',
+    AUTH_SECRET: CONFIG.secrets.betterAuthSecret,
     DATABASE_DRIVER: CONFIG.databaseDriver,
     DATABASE_URL: CONFIG.databaseUrl,
     KEY_VAULTS_SECRET: CONFIG.secrets.keyVaultsSecret,
-    NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: '0',
-    NEXT_PUBLIC_ENABLE_BETTER_AUTH: '1',
     NODE_OPTIONS: '--max-old-space-size=6144',
     PORT: String(port),
     S3_ACCESS_KEY_ID: CONFIG.s3Mock.accessKeyId,

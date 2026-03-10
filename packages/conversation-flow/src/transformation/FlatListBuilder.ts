@@ -21,7 +21,7 @@ export class FlatListBuilder {
     private branchResolver: BranchResolver,
     private messageCollector: MessageCollector,
     private messageTransformer: MessageTransformer,
-  ) {}
+  ) { }
 
   /**
    * Generate flatList from messages array
@@ -31,8 +31,20 @@ export class FlatListBuilder {
     const flatList: Message[] = [];
     const processedIds = new Set<string>();
 
+    // Determine the root parentId
+    // Normal case: start from null (messages with no parentId)
+    // Orphan case: if all messages have parentId (thread mode), use first message as root
+    let rootParentId: string | null = null;
+
+    const hasRootMessages = this.childrenMap.has(null) && this.childrenMap.get(null)!.length > 0;
+    if (!hasRootMessages && messages.length > 0) {
+      // All messages have parentId - this is orphan/thread mode
+      // Use the first message's parentId as the virtual root
+      rootParentId = messages[0].parentId ?? null;
+    }
+
     // Build the active path by traversing from root
-    this.buildFlatListRecursive(null, flatList, processedIds, messages);
+    this.buildFlatListRecursive(rootParentId, flatList, processedIds, messages);
 
     return flatList;
   }
@@ -86,8 +98,16 @@ export class FlatListBuilder {
             return child?.role !== 'task';
           });
 
-          // Create tasks virtual message
-          const tasksMessage = this.createTasksMessage(parentMessage, taskChildren, processedIds);
+          // Check if tasks have different agentIds (groupTasks) or same agentId (tasks)
+          const taskAgentIds = new Set(
+            taskChildren.map((childId) => this.messageMap.get(childId)?.agentId).filter(Boolean),
+          );
+          const isGroupTasks = taskAgentIds.size > 1;
+
+          // Create appropriate virtual message based on agent diversity
+          const tasksMessage = isGroupTasks
+            ? this.createGroupTasksMessage(parentMessage, taskChildren, processedIds)
+            : this.createTasksMessage(parentMessage, taskChildren, processedIds);
           flatList.push(tasksMessage);
 
           // Continue with non-task children (e.g., final summary from assistant)
@@ -95,9 +115,62 @@ export class FlatListBuilder {
             if (!processedIds.has(nonTaskChildId)) {
               const nonTaskChild = this.messageMap.get(nonTaskChildId);
               if (nonTaskChild) {
-                flatList.push(nonTaskChild);
-                processedIds.add(nonTaskChildId);
-                this.buildFlatListRecursive(nonTaskChildId, flatList, processedIds, allMessages);
+                // Check if it's an AssistantGroup (assistant with tools)
+                if (
+                  nonTaskChild.role === 'assistant' &&
+                  nonTaskChild.tools &&
+                  nonTaskChild.tools.length > 0
+                ) {
+                  this.processAssistantGroup(nonTaskChild, flatList, processedIds, allMessages);
+                } else {
+                  flatList.push(nonTaskChild);
+                  processedIds.add(nonTaskChildId);
+                  this.buildFlatListRecursive(nonTaskChildId, flatList, processedIds, allMessages);
+                }
+              }
+            }
+          }
+
+          // Also check for children of task messages (e.g., summary as child of last task)
+          for (const taskChildId of taskChildren) {
+            const taskChildrenIds = this.childrenMap.get(taskChildId) ?? [];
+            for (const taskGrandchildId of taskChildrenIds) {
+              if (!processedIds.has(taskGrandchildId)) {
+                const taskGrandchild = this.messageMap.get(taskGrandchildId);
+                if (taskGrandchild && taskGrandchild.role !== 'task') {
+                  // Check if it's an AssistantGroup (assistant with tools)
+                  if (
+                    taskGrandchild.role === 'assistant' &&
+                    taskGrandchild.tools &&
+                    taskGrandchild.tools.length > 0
+                  ) {
+                    this.processAssistantGroup(taskGrandchild, flatList, processedIds, allMessages);
+                  } else if (
+                    // Check if it's a supervisor message without tools (content-only)
+                    taskGrandchild.role === 'assistant' &&
+                    taskGrandchild.metadata?.isSupervisor &&
+                    (!taskGrandchild.tools || taskGrandchild.tools.length === 0)
+                  ) {
+                    const supervisorMessage = this.createSupervisorContentMessage(taskGrandchild);
+                    flatList.push(supervisorMessage);
+                    processedIds.add(taskGrandchildId);
+                    this.buildFlatListRecursive(
+                      taskGrandchildId,
+                      flatList,
+                      processedIds,
+                      allMessages,
+                    );
+                  } else {
+                    flatList.push(taskGrandchild);
+                    processedIds.add(taskGrandchildId);
+                    this.buildFlatListRecursive(
+                      taskGrandchildId,
+                      flatList,
+                      processedIds,
+                      allMessages,
+                    );
+                  }
+                }
               }
             }
           }
@@ -396,6 +469,60 @@ export class FlatListBuilder {
   }
 
   /**
+   * Process an assistant message with tools into an AssistantGroup
+   * Extracted to avoid code duplication in task children handling
+   */
+  private processAssistantGroup(
+    message: Message,
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): void {
+    // Collect the entire assistant group chain
+    const assistantChain: Message[] = [];
+    const allToolMessages: Message[] = [];
+    this.messageCollector.collectAssistantChain(
+      message,
+      allMessages,
+      assistantChain,
+      allToolMessages,
+      processedIds,
+    );
+
+    // Create assistantGroup virtual message
+    const groupMessage = this.createAssistantGroupMessage(
+      assistantChain[0],
+      assistantChain,
+      allToolMessages,
+    );
+    flatList.push(groupMessage);
+
+    // Mark all as processed
+    assistantChain.forEach((m) => processedIds.add(m.id));
+    allToolMessages.forEach((m) => processedIds.add(m.id));
+
+    // Continue after the assistant chain
+    // Priority 1: If last assistant has non-tool children, continue from it
+    // Priority 2: Otherwise continue from tools (for cases where user replies to tool)
+    const lastAssistant = assistantChain.at(-1);
+    const toolIds = new Set(allToolMessages.map((t) => t.id));
+
+    const lastAssistantNonToolChildren = lastAssistant
+      ? this.childrenMap.get(lastAssistant.id)?.filter((childId) => !toolIds.has(childId))
+      : undefined;
+
+    if (lastAssistantNonToolChildren && lastAssistantNonToolChildren.length > 0 && lastAssistant) {
+      // Follow-up messages exist after the last assistant (not tools)
+      this.buildFlatListRecursive(lastAssistant.id, flatList, processedIds, allMessages);
+    } else {
+      // No non-tool children of last assistant, check tools for children
+      for (const toolMsg of allToolMessages) {
+        this.buildFlatListRecursive(toolMsg.id, flatList, processedIds, allMessages);
+      }
+    }
+  }
+
+  /**
    * Check if message has compare mode in metadata
    */
   private isCompareMode(message: Message): boolean {
@@ -678,6 +805,7 @@ export class FlatListBuilder {
           'inputCitationTokens',
           'inputImageTokens',
           'inputTextTokens',
+          'inputToolTokens',
           'inputWriteCacheTokens',
           'latency',
           'outputAudioTokens',
@@ -820,6 +948,7 @@ export class FlatListBuilder {
         'inputCitationTokens',
         'inputImageTokens',
         'inputTextTokens',
+        'inputToolTokens',
         'inputWriteCacheTokens',
         'latency',
         'outputAudioTokens',
@@ -924,6 +1053,54 @@ export class FlatListBuilder {
       },
       id: tasksId,
       role: 'tasks' as any,
+      tasks: taskMessages as any,
+      updatedAt,
+    } as Message;
+  }
+
+  /**
+   * Create a virtual groupTasks message for multiple tasks with different agentIds
+   */
+  private createGroupTasksMessage(
+    parentMessage: Message,
+    taskChildIds: string[],
+    processedIds: Set<string>,
+  ): Message {
+    const taskMessages: Message[] = [];
+
+    for (const taskId of taskChildIds) {
+      const taskMessage = this.messageMap.get(taskId);
+      if (taskMessage) {
+        taskMessages.push(taskMessage);
+        processedIds.add(taskId);
+      }
+    }
+
+    // Sort by createdAt to maintain order
+    taskMessages.sort((a, b) => a.createdAt - b.createdAt);
+
+    // Generate ID with parent message id and all task message ids
+    const taskIdsStr = taskMessages.map((t) => t.id).join('-');
+    const groupTasksId = `groupTasks-${parentMessage.id}-${taskIdsStr}`;
+
+    // Calculate timestamps from task messages
+    const createdAt =
+      taskMessages.length > 0
+        ? Math.min(...taskMessages.map((m) => m.createdAt))
+        : parentMessage.createdAt;
+    const updatedAt =
+      taskMessages.length > 0
+        ? Math.max(...taskMessages.map((m) => m.updatedAt))
+        : parentMessage.updatedAt;
+
+    return {
+      content: '',
+      createdAt,
+      extra: {
+        parentMessageId: parentMessage.id,
+      },
+      id: groupTasksId,
+      role: 'groupTasks' as any,
       tasks: taskMessages as any,
       updatedAt,
     } as Message;

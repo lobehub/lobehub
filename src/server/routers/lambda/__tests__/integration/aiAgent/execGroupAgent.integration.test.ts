@@ -6,7 +6,7 @@
  * Note: AgentStateManager and StreamEventManager will automatically use
  * InMemory implementations when Redis is not available (test environment).
  */
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, chatGroups, messages, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
@@ -42,7 +42,7 @@ let serverDB: LobeChatDatabase;
 let userId: string;
 let testAgentId: string;
 let testGroupId: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 let mockResponsesCreate: any;
 
 const createTestCallerContext = (uid: string) => ({
@@ -305,7 +305,6 @@ describe('execGroupAgent', () => {
   });
 
   describe('Stream Events', () => {
-    // TODO: LOBE-1748 - Fix missing agent_runtime_end event
     // This test documents the current bug where agent_runtime_end is not sent
     // When fixed, remove .todo and the test should pass
     it.todo('should emit agent_runtime_end event when agent completes', async () => {
@@ -334,7 +333,6 @@ describe('execGroupAgent', () => {
 
       // IMPORTANT: This test verifies that agent_runtime_end event is sent
       // If this test fails, it means the SSE stream won't close properly
-      // See LOBE-1748 for details
       expect(eventTypes).toContain('agent_runtime_end');
 
       // Also verify the event has correct data structure

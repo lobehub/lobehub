@@ -5,9 +5,8 @@
  * Usage:
  * - import { useRouter, usePathname, useSearchParams, useQuery } from '@/libs/router/navigation';
  *
- * @see RFC 147: LOBE-2850 - Phase 3
+ * @see RFC 147
  */
-
 import qs from 'query-string';
 import { useMemo } from 'react';
 import {
@@ -33,7 +32,7 @@ export const useRouter = () => {
       push: (href: string) => navigate(href),
       replace: (href: string) => navigate(href, { replace: true }),
     }),
-    [navigate]
+    [navigate],
   );
 };
 
@@ -56,7 +55,9 @@ export const useSearchParams = () => {
 /**
  * Hook to get route params.
  */
-export const useParams = <T extends Record<string, string | undefined> = Record<string, string | undefined>>() => {
+export const useParams = <
+  T extends Record<string, string | undefined> = Record<string, string | undefined>,
+>() => {
   return useReactRouterParams<T>();
 };
 

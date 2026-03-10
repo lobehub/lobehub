@@ -1,12 +1,12 @@
 import debug from 'debug';
-import type { Redis } from 'ioredis';
+import { type Redis } from 'ioredis';
 
 import {
   type BaseRedisProvider,
-  type IoRedisConfig,
+  type RedisConfig,
   type RedisKey,
   type RedisMSetArgument,
-  type RedisProviderName,
+  type RedisPipeline,
   type RedisSetResult,
   type RedisValue,
   type SetOptions,
@@ -16,10 +16,9 @@ import { buildIORedisSetArgs, normalizeMsetValues } from './utils';
 const log = debug('lobe:redis');
 
 export class IoRedisRedisProvider implements BaseRedisProvider {
-  provider: RedisProviderName = 'redis';
   private client: Redis | null = null;
 
-  constructor(private config: IoRedisConfig) {}
+  constructor(private config: RedisConfig) {}
 
   async initialize() {
     const IORedis = await import('ioredis');
@@ -113,5 +112,32 @@ export class IoRedisRedisProvider implements BaseRedisProvider {
 
   async hgetall(key: RedisKey): Promise<Record<string, string>> {
     return this.ensureClient().hgetall(key);
+  }
+
+  async eval<T = unknown>(script: string, numkeys: number, ...args: RedisValue[]): Promise<T> {
+    return this.ensureClient().eval(script, numkeys, ...args) as Promise<T>;
+  }
+
+  pipeline(): RedisPipeline {
+    const raw = this.ensureClient().pipeline();
+    const pipe: RedisPipeline = {
+      decr: (key) => (raw.decr(key), pipe),
+      del: (...keys) => (raw.del(...keys), pipe),
+      exec: () => raw.exec() as Promise<[Error | null, unknown][] | null>,
+      expire: (key, seconds) => (raw.expire(key, seconds), pipe),
+      get: (key) => (raw.get(key), pipe),
+      hdel: (key, ...fields) => (raw.hdel(key, ...fields), pipe),
+      hget: (key, field) => (raw.hget(key, field), pipe),
+      hgetall: (key) => (raw.hgetall(key), pipe),
+      hset: (key, field, value) => (raw.hset(key, field, value), pipe),
+      incr: (key) => (raw.incr(key), pipe),
+      set: (key, value, options?) => {
+        const args = buildIORedisSetArgs(options);
+        (raw.set as any)(key, value, ...args);
+        return pipe;
+      },
+      setex: (key, seconds, value) => (raw.setex(key, seconds, value), pipe),
+    };
+    return pipe;
   }
 }

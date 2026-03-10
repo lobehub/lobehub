@@ -1,4 +1,4 @@
-import { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedrock-runtime';
+import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedrock-runtime';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as uuidModule from '../../../utils/uuid';
@@ -27,9 +27,8 @@ describe('AWSBedrockLlamaStream', () => {
     });
 
     const decoder = new TextDecoder();
-    const chunks = [];
+    const chunks: string[] = [];
 
-    // @ts-ignore
     for await (const chunk of protocolStream) {
       chunks.push(decoder.decode(chunk, { stream: true }));
     }
@@ -77,9 +76,8 @@ describe('AWSBedrockLlamaStream', () => {
     });
 
     const decoder = new TextDecoder();
-    const chunks = [];
+    const chunks: string[] = [];
 
-    // @ts-ignore
     for await (const chunk of protocolStream) {
       chunks.push(decoder.decode(chunk, { stream: true }));
     }
@@ -139,9 +137,8 @@ describe('AWSBedrockLlamaStream', () => {
     });
 
     const decoder = new TextDecoder();
-    const chunks = [];
+    const chunks: string[] = [];
 
-    // @ts-ignore
     for await (const chunk of protocolStream) {
       chunks.push(decoder.decode(chunk, { stream: true }));
     }
@@ -174,9 +171,8 @@ describe('AWSBedrockLlamaStream', () => {
     const protocolStream = AWSBedrockLlamaStream(mockBedrockStream);
 
     const decoder = new TextDecoder();
-    const chunks = [];
+    const chunks: string[] = [];
 
-    // @ts-ignore
     for await (const chunk of protocolStream) {
       chunks.push(decoder.decode(chunk, { stream: true }));
     }

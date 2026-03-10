@@ -1,10 +1,10 @@
-import type { AgentGroupDetail, AgentGroupMember, AgentItem } from '@lobechat/types';
+import { type AgentGroupDetail, type AgentGroupMember, type AgentItem } from '@lobechat/types';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG, DEFAULT_CHAT_GROUP_META_CONFIG } from '@/const/settings';
 import { merge } from '@/utils/merge';
 
-import type { ChatGroupState } from '../initialState';
-import type { ChatGroupStore } from '../store';
+import { type ChatGroupState } from '../initialState';
+import { type ChatGroupStore } from '../store';
 
 const groupById =
   (id: string) =>
@@ -22,6 +22,7 @@ const groupMeta = (groupId: string) => (s: ChatGroupStore) => {
     avatar: group?.avatar || undefined,
     backgroundColor: group?.backgroundColor || undefined,
     description: group?.description || '',
+    marketIdentifier: group?.marketIdentifier || undefined,
     title: group?.title || '',
   });
 };

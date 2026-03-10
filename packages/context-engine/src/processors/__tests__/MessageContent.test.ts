@@ -1,11 +1,11 @@
-import { ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
+import type { ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineContext } from '../../types';
 import { MessageContentProcessor } from '../MessageContent';
 
 vi.mock('@lobechat/utils/imageToBase64', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@lobechat/utils/imageToBase64')>();
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     imageUrlToBase64: vi.fn().mockResolvedValue({

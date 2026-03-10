@@ -72,24 +72,4 @@ describe('AgentRuntimeError', () => {
       expect(result).toEqual(errorPayload);
     });
   });
-
-  describe('textToImage', () => {
-    it('should return the same error object', () => {
-      const error = { message: 'Text to image failed', code: 'GENERATION_ERROR' };
-      const result = AgentRuntimeError.textToImage(error);
-
-      expect(result).toBe(error);
-      expect(result).toEqual(error);
-    });
-
-    it('should handle any type of error', () => {
-      const stringError = 'String error';
-      const numberError = 404;
-      const arrayError = ['error1', 'error2'];
-
-      expect(AgentRuntimeError.textToImage(stringError)).toBe(stringError);
-      expect(AgentRuntimeError.textToImage(numberError)).toBe(numberError);
-      expect(AgentRuntimeError.textToImage(arrayError)).toBe(arrayError);
-    });
-  });
 });

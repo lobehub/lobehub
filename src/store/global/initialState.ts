@@ -1,6 +1,7 @@
-import type { NavigateFunction } from 'react-router-dom';
+import { type NavigateFunction } from 'react-router-dom';
 
-import { DatabaseLoadingState, type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
+import { type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
+import { DatabaseLoadingState } from '@/types/clientDB';
 import { type LocaleMode } from '@/types/locale';
 import { SessionDefaultGroup } from '@/types/session';
 import { AsyncLocalStorage } from '@/utils/localStorage';
@@ -16,6 +17,7 @@ export enum SidebarTabKey {
   Pages = 'pages',
   Resource = 'resource',
   Setting = 'settings',
+  Video = 'video',
 }
 
 export enum ChatSettingsTabs {
@@ -35,31 +37,33 @@ export enum GroupSettingsTabs {
 }
 
 export enum SettingsTabs {
-  APIKey = 'apikey',
   About = 'about',
+  Advanced = 'advanced',
   Agent = 'agent',
+  APIKey = 'apikey',
+  Beta = 'beta',
+  Billing = 'billing',
   ChatAppearance = 'chat-appearance',
   Common = 'common',
+  Funds = 'funds',
   Hotkey = 'hotkey',
   Image = 'image',
   LLM = 'llm',
   Memory = 'memory',
+  // business
+  Plans = 'plans',
   Profile = 'profile',
   Provider = 'provider',
   Proxy = 'proxy',
+  Referral = 'referral',
   Security = 'security',
+  Skill = 'skill',
+
   Stats = 'stats',
   Storage = 'storage',
+  SystemTools = 'system-tools',
   TTS = 'tts',
-
-  /* eslint-disable typescript-sort-keys/string-enum */
-  // business
-  Plans = 'plans',
-  Funds = 'funds',
   Usage = 'usage',
-  Billing = 'billing',
-  Referral = 'referral',
-  /* eslint-enable typescript-sort-keys/string-enum */
 }
 
 /**
@@ -97,36 +101,38 @@ export interface SystemStatus {
    * Group Agent Builder panel width
    */
   groupAgentBuilderPanelWidth?: number;
-  hideGemini2_5FlashImagePreviewChineseWarning?: boolean;
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
+  hideTopicSharePrivacyWarning?: boolean;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   /**
-   * 应用初始化时不启用 PGLite，只有当用户手动开启时才启用
+   * Do not enable PGLite on app initialization, only enable when user manually turns it on
    */
   isEnablePglite?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
   /**
-   * 记住用户最后选择的图像生成模型
+   * Remember user's last selected image generation model
    */
   lastSelectedImageModel?: string;
   /**
-   * 记住用户最后选择的图像生成提供商
+   * Remember user's last selected image generation provider
    */
   lastSelectedImageProvider?: string;
+  lastSelectedVideoModel?: string;
+  lastSelectedVideoProvider?: string;
   latestChangelogId?: string;
   leftPanelWidth: number;
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
   /**
-   * ModelSwitchPanel 的分组模式
+   * ModelSwitchPanel grouping mode
    */
   modelSwitchPanelGroupMode?: 'byModel' | 'byProvider';
   /**
-   * ModelSwitchPanel 的宽度
+   * ModelSwitchPanel width
    */
   modelSwitchPanelWidth?: number;
   noWideScreen?: boolean;
@@ -136,6 +142,7 @@ export interface SystemStatus {
    */
   pagePageSize?: number;
   portalWidth: number;
+  readNotificationSlugs?: string[];
   /**
    * Resource Manager column widths
    */
@@ -152,15 +159,19 @@ export interface SystemStatus {
   showLeftPanel?: boolean;
   showRightPanel?: boolean;
   showSystemRole?: boolean;
+  showVideoPanel?: boolean;
+  showVideoTopicPanel?: boolean;
   systemRoleExpandedMap: Record<string, boolean>;
   /**
-   * 是否使用短格式显示 token
+   * Whether to display tokens in short format
    */
   tokenDisplayFormatShort?: boolean;
   /**
    * number of topics to display per page
    */
   topicPageSize?: number;
+  videoPanelWidth: number;
+  videoTopicPanelWidth?: number;
   zenMode?: boolean;
 }
 
@@ -174,14 +185,23 @@ export interface GlobalState {
 
   initClientDBProcess?: { costTime?: number; phase: 'wasm' | 'dependencies'; progress: number };
   /**
-   * 客户端数据库初始化状态
-   * 启动时为 Idle，完成为 Ready，报错为 Error
+   * Client database initialization state
+   * Idle on startup, Ready when complete, Error on failure
    */
   initClientDBStage: DatabaseLoadingState;
   isMobile?: boolean;
+  /**
+   * Server version is too old, does not support /api/version endpoint
+   * Need to prompt user to update server
+   */
+  isServerVersionOutdated?: boolean;
   isStatusInit?: boolean;
   latestVersion?: string;
   navigate?: NavigateFunction;
+  /**
+   * Server version number, used to detect client-server version consistency
+   */
+  serverVersion?: string;
   sidebarKey: SidebarTabKey;
   status: SystemStatus;
   statusStorage: AsyncLocalStorage<SystemStatus>;
@@ -198,9 +218,9 @@ export const INITIAL_STATUS = {
   fileManagerViewMode: 'list' as const,
   filePanelWidth: 320,
   groupAgentBuilderPanelWidth: 360,
-  hideGemini2_5FlashImagePreviewChineseWarning: false,
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
+  hideTopicSharePrivacyWarning: false,
   imagePanelWidth: 320,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
@@ -212,6 +232,7 @@ export const INITIAL_STATUS = {
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
+  readNotificationSlugs: [],
   resourceManagerColumnWidths: {
     date: 160,
     name: 574,
@@ -225,9 +246,13 @@ export const INITIAL_STATUS = {
   showLeftPanel: true,
   showRightPanel: true,
   showSystemRole: false,
+  showVideoPanel: true,
+  showVideoTopicPanel: true,
   systemRoleExpandedMap: {},
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
+  videoPanelWidth: 320,
+  videoTopicPanelWidth: 80,
   zenMode: false,
 } satisfies SystemStatus;
 

@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LobeAiHubMixAI } from './index';
@@ -25,9 +24,7 @@ describe('LobeAiHubMixAI', () => {
 
   describe('chat', () => {
     it('should support chat method', async () => {
-      vi.spyOn(instance as any, 'getRuntimeByModel').mockResolvedValue({
-        chat: vi.fn().mockResolvedValue(new Response()),
-      });
+      vi.spyOn(instance as any, 'runWithFallback').mockResolvedValue(new Response());
 
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
@@ -49,24 +46,21 @@ describe('LobeAiHubMixAI', () => {
         },
       };
 
-      vi.spyOn(instance as any, 'getRuntimeByModel').mockResolvedValue({
-        models: async () => {
-          try {
-            await mockClient.models.list();
-          } catch (error) {
-            console.warn(
-              'Failed to fetch AiHubMix models. Please ensure your AiHubMix API key is valid:',
-              error,
-            );
-            return [];
-          }
-        },
-      });
+      class MockRuntime {
+        client = mockClient;
+      }
 
       // The models method should return empty array on error
-      const models = await (instance as any)
-        .getRuntimeByModel('test-model')
-        .then((r: any) => r.models());
+      vi.spyOn(instance as any, 'resolveRouters').mockResolvedValue([
+        {
+          apiType: 'openai',
+          models: [],
+          options: {},
+          runtime: MockRuntime,
+        },
+      ]);
+
+      const models = await instance.models();
       expect(models).toEqual([]);
     });
   });

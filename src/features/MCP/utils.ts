@@ -1,9 +1,9 @@
 import { type ConnectionConfig, type DeploymentOption } from '@lobehub/market-types';
 
 export const genServerConfig = (identifier?: string, connection?: ConnectionConfig) => {
-  // 检查是否为 HTTP 类型
+  // Check if it is HTTP type
   if (connection?.url) {
-    // HTTP 类型配置
+    // HTTP type configuration
     return JSON.stringify(
       {
         mcpServers: {
@@ -17,7 +17,7 @@ export const genServerConfig = (identifier?: string, connection?: ConnectionConf
     );
   }
 
-  // stdio 类型配置
+  // stdio type configuration
   return JSON.stringify(
     {
       mcpServers: {

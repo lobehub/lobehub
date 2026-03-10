@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { PromptBuilder } from '@saintno/comfyui-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -81,12 +80,12 @@ vi.mock('../utils/modelResolver', () => ({
 type WorkflowBuilderFunction = (modelFileName: string, params: any, context: any) => Promise<any>;
 
 interface WorkflowTestConfig {
-  name: string;
   builder: WorkflowBuilderFunction;
+  errorTests?: boolean;
   modelName: string;
+  name: string;
   parameterKey: keyof typeof TEST_PARAMETERS;
   specialFeatures?: string[];
-  errorTests?: boolean;
 }
 
 const WORKFLOW_CONFIGS: WorkflowTestConfig[] = [
@@ -248,7 +247,7 @@ describe('Unified Workflow Tests', () => {
       it('should support variable CFG values', async () => {
         const params = {
           prompt: 'Variable CFG test',
-          cfg: 5.0, // Different from default
+          cfg: 5, // Different from default
           width: 1024,
           height: 1024,
         };
@@ -264,7 +263,7 @@ describe('Unified Workflow Tests', () => {
       it('should use fixed CFG regardless of input', async () => {
         const params = {
           prompt: 'Fixed CFG test',
-          cfg: 7.0, // Should be ignored for Schnell
+          cfg: 7, // Should be ignored for Schnell
           width: 1024,
           height: 1024,
         };

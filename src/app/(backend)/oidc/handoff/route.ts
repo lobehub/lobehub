@@ -1,5 +1,6 @@
 import debug from 'debug';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 import { OAuthHandoffModel } from '@/database/models/oauthHandoff';
 import { serverDB } from '@/database/server';
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: result, success: true });
   } catch (error) {
-    log('Error fetching handoff record: %O', error);
+    console.error('Error fetching handoff record: %O', error);
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

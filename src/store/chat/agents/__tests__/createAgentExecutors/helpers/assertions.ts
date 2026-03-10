@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 
-import type { OperationType } from '@/store/chat/slices/operation/types';
-import type { ChatStore } from '@/store/chat/store';
+import { type OperationType } from '@/store/chat/slices/operation/types';
+import { type ChatStore } from '@/store/chat/store';
 
 /**
  * Assert that an operation was created with specific type
@@ -111,20 +111,6 @@ export const expectMessagePluginUpdated = (
     );
   } else {
     expect(mockStore.optimisticUpdateMessagePlugin).toHaveBeenCalled();
-  }
-};
-
-/**
- * Assert that internal_fetchAIChatMessage was called with correct params
- */
-export const expectFetchAIChatMessageCalled = (mockStore: ChatStore, messageId?: string) => {
-  if (messageId) {
-    expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
-      messageId,
-      expect.anything(),
-    );
-  } else {
-    expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalled();
   }
 };
 

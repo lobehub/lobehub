@@ -1,4 +1,4 @@
-import type { SidebarAgentItem, SidebarAgentListResponse } from '@/database/repositories/home';
+import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { lambdaClient } from '@/libs/trpc/client';
 
 export class HomeService {

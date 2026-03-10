@@ -52,6 +52,7 @@ bun.lockb
 
 # Build outputs
 dist/
+public/spa/
 es/
 lib/
 .next/
@@ -83,6 +84,7 @@ public/sw*
 public/swe-worker*
 
 # Generated files
+src/app/spa/[variants]/[[...path]]/spaHtmlTemplates.ts
 public/*.js
 public/sitemap.xml
 public/sitemap-index.xml
@@ -98,6 +100,9 @@ robots.txt
 # Cloud service keys
 vertex-ai-key.json
 
+# Agent tracing snapshots
+.agent-tracing/
+
 # AI coding tools
 .local/
 .claude/
@@ -108,6 +113,15 @@ CLAUDE.local.md
 # MCP tools
 .serena/**
 
+# Docker development data
+docker-compose/dev/data/
+
+# Migration scripts data
+scripts/clerk-to-betterauth/test/*.csv
+scripts/clerk-to-betterauth/test/*.json
+scripts/clerk-to-betterauth/prod/*.csv
+scripts/clerk-to-betterauth/prod/*.json
+
 # Misc
 ./packages/lobe-ui
 *.ppt*
@@ -117,3 +131,7 @@ e2e/reports
 out
 i18n-unused-keys-report.json
 .vitest-reports
+
+pnpm-lock.yaml
+.turbo
+spaHtmlTemplates.ts

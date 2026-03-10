@@ -1,16 +1,15 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
-import { message } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { mutate } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
-import { FileListItem } from '@/types/files';
-import { UploadFileItem } from '@/types/files/upload';
+import { type FileListItem } from '@/types/files';
+import { type UploadFileItem } from '@/types/files/upload';
 import { unzipFile } from '@/utils/unzipFile';
+import { withSWR } from '~test-utils';
 
 import { useFileStore as useStore } from '../../store';
 

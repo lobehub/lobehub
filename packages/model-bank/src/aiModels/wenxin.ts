@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://cloud.baidu.com/doc/qianfan/s/rmh4stp0j
 
@@ -96,6 +96,7 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-12',
     settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -193,36 +194,6 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'ERNIE Speed 128K is a no-I/O-fee model for long-text understanding and large-scale trials.',
-    displayName: 'ERNIE Speed 128K',
-    id: 'ernie-speed-128k',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description: 'ERNIE Speed 8K is a free, fast model for daily chat and light text tasks.',
-    displayName: 'ERNIE Speed 8K',
-    id: 'ernie-speed-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072,
     description:
       'ERNIE Speed Pro 128K is a high-concurrency, high-value model for large-scale online services and enterprise apps.',
     displayName: 'ERNIE Speed Pro 128K',
@@ -233,22 +204,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'ERNIE Lite 8K is a lightweight general model for cost-sensitive daily QA and content generation.',
-    displayName: 'ERNIE Lite 8K',
-    id: 'ernie-lite-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -268,21 +223,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description: 'ERNIE Tiny 8K is ultra-lightweight for simple QA, classification, and low-cost inference.',
-    displayName: 'ERNIE Tiny 8K',
-    id: 'ernie-tiny-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -337,7 +277,8 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'ERNIE Novel 8K is built for long-form novels and IP plots with multi-character narratives.',
+    description:
+      'ERNIE Novel 8K is built for long-form novels and IP plots with multi-character narratives.',
     displayName: 'ERNIE Novel 8K',
     id: 'ernie-novel-8k',
     maxOutput: 2048,
@@ -352,7 +293,8 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'ERNIE 4.5 0.3B is an open-source lightweight model for local and customized deployment.',
+    description:
+      'ERNIE 4.5 0.3B is an open-source lightweight model for local and customized deployment.',
     displayName: 'ERNIE 4.5 0.3B',
     id: 'ernie-4.5-0.3b',
     maxOutput: 8192,
@@ -389,6 +331,30 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'ERNIE-4.5-21B-A3B-Thinking is a text MoE (Mixture-of-Experts) post-trained model with a total of 21B parameters and 3B active parameters, offering significantly enhanced reasoning quality and depth.',
+    displayName: 'ERNIE 4.5 21B A3B Thinking',
+    id: 'ernie-4.5-21b-a3b-thinking',
+    maxOutput: 8192,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -410,22 +376,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 131_072,
-    description:
-      'Qianfan Lightning 128B A19B is a high-performance Chinese general model for complex QA and large-scale reasoning.',
-    displayName: 'Qianfan Lightning 128B A19B',
-    id: 'qianfan-lightning-128b-a19b',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 32_768,
     description:
       'Qianfan 8B is a mid-size general model balancing cost and quality for text generation and QA.',
@@ -443,7 +393,8 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qianfan 70B is a large Chinese model for high-quality generation and complex reasoning.',
+    description:
+      'Qianfan 70B is a large Chinese model for high-quality generation and complex reasoning.',
     displayName: 'Qianfan 70B',
     id: 'qianfan-70b',
     maxOutput: 16_384,
@@ -478,24 +429,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       'Qianfan Agent Lite 8K is a lightweight agent model for low-cost multi-turn dialogue and workflows.',
     displayName: 'Qianfan Agent Lite 8K',
     id: 'qianfan-agent-lite-8k',
-    maxOutput: 2048,
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768,
-    description:
-      'Qianfan Agent Speed 32K is a high-throughput agent model for large-scale, multi-task agent apps.',
-    displayName: 'Qianfan Agent Speed 32K',
-    id: 'qianfan-agent-speed-32k',
-    maxOutput: 4096,
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'Qianfan Agent Speed 8K is a high-concurrency agent model for short-to-mid conversations and fast response.',
-    displayName: 'Qianfan Agent Speed 8K',
-    id: 'qianfan-agent-speed-8k',
     maxOutput: 2048,
     type: 'chat',
   },
@@ -625,10 +558,104 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 65_536,
+    description: 'ERNIE X1.1 is a thinking-model preview for evaluation and testing.',
+    displayName: 'ERNIE X1.1',
+    enabled: true,
+    id: 'ernie-x1.1',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 65_536,
+    description: 'ERNIE X1.1 Preview is a thinking-model preview for evaluation and testing.',
+    displayName: 'ERNIE X1.1 Preview',
+    id: 'ernie-x1.1-preview',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'ERNIE X1 Turbo 32K is a fast thinking model with 32K context for complex reasoning and multi-turn chat.',
+    displayName: 'ERNIE X1 Turbo 32K',
+    id: 'ernie-x1-turbo-32k',
+    maxOutput: 28_160,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 32_768,
+    description:
+      'ERNIE X1 Turbo 32K Preview is a fast thinking model with 32K context for complex reasoning and multi-turn chat.',
+    displayName: 'ERNIE X1 Turbo 32K Preview',
+    id: 'ernie-x1-turbo-32k-preview',
+    maxOutput: 28_160,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Qianfan Composition is a multimodal creation model for mixed image-text understanding and generation.',
+    description:
+      'Qianfan Composition is a multimodal creation model for mixed image-text understanding and generation.',
     displayName: 'Qianfan Composition',
     id: 'qianfan-composition',
     maxOutput: 8192,
@@ -758,7 +785,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 4096,
-    description: 'Qianfan EngCard VL is a multimodal recognition model focused on English scenarios.',
+    description:
+      'Qianfan EngCard VL is a multimodal recognition model focused on English scenarios.',
     displayName: 'Qianfan EngCard VL',
     id: 'qianfan-engcard-vl',
     maxOutput: 4000,
@@ -776,7 +804,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 4096,
-    description: 'Qianfan SinglePicOCR is a single-image OCR model with high-accuracy character recognition.',
+    description:
+      'Qianfan SinglePicOCR is a single-image OCR model with high-accuracy character recognition.',
     displayName: 'Qianfan SinglePicOCR',
     id: 'qianfan-singlepicocr',
     maxOutput: 4096,
@@ -794,7 +823,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'InternVL3 38B is a large open-source multimodal model for high-accuracy image-text understanding.',
+    description:
+      'InternVL3 38B is a large open-source multimodal model for high-accuracy image-text understanding.',
     displayName: 'InternVL3 38B',
     id: 'internvl3-38b',
     maxOutput: 8192,
@@ -830,7 +860,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'InternVL3 1B is a lightweight multimodal model for resource-constrained deployment.',
+    description:
+      'InternVL3 1B is a lightweight multimodal model for resource-constrained deployment.',
     displayName: 'InternVL3 1B',
     id: 'internvl3-1b',
     maxOutput: 8192,
@@ -848,7 +879,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'InternVL2.5 38B MPO is a multimodal pretrained model for complex image-text reasoning.',
+    description:
+      'InternVL2.5 38B MPO is a multimodal pretrained model for complex image-text reasoning.',
     displayName: 'InternVL2.5 38B MPO',
     id: 'internvl2.5-38b-mpo',
     maxOutput: 4096,
@@ -1056,7 +1088,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 65_536,
-    description: 'GLM-4.5V is a multimodal vision-language model for general image understanding and QA.',
+    description:
+      'GLM-4.5V is a multimodal vision-language model for general image understanding and QA.',
     displayName: 'GLM-4.5V',
     id: 'glm-4.5v',
     maxOutput: 16_384,
@@ -1096,7 +1129,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 4096,
-    description: 'DeepSeek VL2 is a multimodal model for image-text understanding and fine-grained visual QA.',
+    description:
+      'DeepSeek VL2 is a multimodal model for image-text understanding and fine-grained visual QA.',
     displayName: 'DeepSeek VL2',
     id: 'deepseek-vl2',
     maxOutput: 2048,
@@ -1114,7 +1148,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 4096,
-    description: 'DeepSeek VL2 Small is a lightweight multimodal version for resource-constrained and high-concurrency use.',
+    description:
+      'DeepSeek VL2 Small is a lightweight multimodal version for resource-constrained and high-concurrency use.',
     displayName: 'DeepSeek VL2 Small',
     id: 'deepseek-vl2-small',
     maxOutput: 2048,
@@ -1133,57 +1168,10 @@ const wenxinChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
-    contextWindowTokens: 65_536,
-    description: 'ERNIE X1.1 Preview is a thinking-model preview for evaluation and testing.',
-    displayName: 'ERNIE X1.1 Preview',
-    enabled: true,
-    id: 'ernie-x1.1-preview',
-    maxOutput: 65_536,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'ERNIE X1 Turbo 32K is a fast thinking model with 32K context for complex reasoning and multi-turn chat.',
-    displayName: 'ERNIE X1 Turbo 32K',
-    id: 'ernie-x1-turbo-32k',
-    maxOutput: 28_160,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-    },
     contextWindowTokens: 144_000,
-    description: 'DeepSeek V3.2 Think is a full deep-thinking model with stronger long-chain reasoning.',
+    description:
+      'DeepSeek V3.2 Think is a full deep-thinking model with stronger long-chain reasoning.',
     displayName: 'DeepSeek V3.2 Think',
-    enabled: true,
     id: 'deepseek-v3.2-think',
     maxOutput: 32_768,
     pricing: {
@@ -1334,8 +1322,7 @@ const wenxinChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 32_768,
-    description:
-      'DeepSeek R1 Distill Llama 70B combines R1 reasoning with the Llama ecosystem.',
+    description: 'DeepSeek R1 Distill Llama 70B combines R1 reasoning with the Llama ecosystem.',
     displayName: 'DeepSeek R1 Distill Llama 70B',
     id: 'deepseek-r1-distill-llama-70b',
     maxOutput: 8192,
@@ -1440,7 +1427,8 @@ const wenxinChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen3 235B A22B Thinking 2507 is an ultra-large thinking model for hard reasoning.',
+    description:
+      'Qwen3 235B A22B Thinking 2507 is an ultra-large thinking model for hard reasoning.',
     displayName: 'Qwen3 235B A22B Thinking 2507',
     id: 'qwen3-235b-a22b-thinking-2507',
     maxOutput: 32_768,
@@ -1603,24 +1591,6 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen3 235B A22B is a general large model for complex tasks.',
-    displayName: 'Qwen3 235B A22B',
-    id: 'qwen3-235b-a22b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768,
     description: 'Qwen3 30B A3B is a mid-large general model balancing cost and quality.',
     displayName: 'Qwen3 30B A3B',
     id: 'qwen3-30b-a3b',
@@ -1675,7 +1645,8 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen3 8B is a lightweight model with flexible deployment for high-concurrency workloads.',
+    description:
+      'Qwen3 8B is a lightweight model with flexible deployment for high-concurrency workloads.',
     displayName: 'Qwen3 8B',
     id: 'qwen3-8b',
     maxOutput: 8192,
@@ -1729,7 +1700,8 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen3 0.6B is an entry-level model for simple reasoning and very constrained environments.',
+    description:
+      'Qwen3 0.6B is an entry-level model for simple reasoning and very constrained environments.',
     displayName: 'Qwen3 0.6B',
     id: 'qwen3-0.6b',
     maxOutput: 8192,
@@ -1747,7 +1719,8 @@ const wenxinChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen2.5 7B Instruct is a mature open-source instruct model for multi-scenario chat and generation.',
+    description:
+      'Qwen2.5 7B Instruct is a mature open-source instruct model for multi-scenario chat and generation.',
     displayName: 'Qwen2.5 7B Instruct',
     id: 'qwen2.5-7b-instruct',
     maxOutput: 8192,
@@ -1760,25 +1733,42 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    contextWindowTokens: 32_768,
-    description:
-      'GLM-4 32B 0414 is a general GLM model supporting multi-task text generation and understanding.',
-    displayName: 'GLM-4 32B 0414',
-    id: 'glm-4-32b-0414',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
 ];
 
 const wenxinImageModels: AIImageModelCard[] = [
+  {
+    description:
+      'musesteamer-air-image is an image-generation model developed by Baidu’s search team to deliver exceptional cost-performance. It can quickly generate clear, action-coherent images based on user prompts, turning user descriptions effortlessly into visuals.',
+    displayName: 'MuseSteamer Air Image',
+    enabled: true,
+    id: 'musesteamer-air-image',
+    parameters: {
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      size: {
+        default: '1024x1024',
+        enum: [
+          '1024x1024',
+          '1280x720',
+          '720x1280',
+          '1152x864',
+          '864x1152',
+          '1328x1328',
+          '1664x928',
+          '928x1664',
+          '1472x1104',
+          '1104x1472',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.05, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
   {
     description:
       'ERNIE iRAG is an image retrieval-augmented generation model for image search, image-text retrieval, and content generation.',
@@ -1786,26 +1776,11 @@ const wenxinImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'irag-1.0',
     parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
       prompt: {
         default: '',
       },
-      size: {
-        default: '1024x1024',
-        enum: [
-          '768x768',
-          '1024x1024',
-          '1536x1536',
-          '2048x2048',
-          '1024x768',
-          '2048x1536',
-          '768x1024',
-          '1536x2048',
-          '1024x576',
-          '2048x1152',
-          '576x1024',
-          '1152x2048',
-        ],
-      },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
     },
     pricing: {
       currency: 'CNY',
@@ -1821,27 +1796,12 @@ const wenxinImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'ernie-irag-edit',
     parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
       imageUrl: { default: null },
       prompt: {
         default: '',
       },
-      size: {
-        default: '1024x1024',
-        enum: [
-          '768x768',
-          '1024x1024',
-          '1536x1536',
-          '2048x2048',
-          '1024x768',
-          '2048x1536',
-          '768x1024',
-          '1536x2048',
-          '1024x576',
-          '2048x1152',
-          '576x1024',
-          '1152x2048',
-        ],
-      },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
     },
     pricing: {
       currency: 'CNY',
@@ -1851,33 +1811,61 @@ const wenxinImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    description: 'FLUX.1-schnell is a high-performance image generation model for fast multi-style outputs.',
-    displayName: 'FLUX.1-schnell',
+    description:
+      'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
+    displayName: 'Qwen Image',
     enabled: true,
-    id: 'flux.1-schnell',
+    id: 'qwen-image',
     parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
       prompt: {
         default: '',
       },
       seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: [
-          '768x768',
-          '1024x1024',
-          '1536x1536',
-          '2048x2048',
-          '1024x768',
-          '2048x1536',
-          '768x1024',
-          '1536x2048',
-          '1024x576',
-          '2048x1152',
-          '576x1024',
-          '1152x2048',
-        ],
-      },
       steps: { default: 25, max: 50, min: 1 },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
+    displayName: 'Qwen Image Edit',
+    enabled: true,
+    id: 'qwen-image-edit',
+    parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      imageUrls: { default: [] },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
+      'FLUX.1-schnell is a high-performance image generation model for fast multi-style outputs.',
+    displayName: 'FLUX.1-schnell',
+    enabled: true,
+    id: 'flux.1-schnell',
+    parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      steps: { default: 25, max: 50, min: 1 },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
     },
     pricing: {
       currency: 'CNY',

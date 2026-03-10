@@ -1,5 +1,5 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Button, Flexbox, copyToClipboard } from '@lobehub/ui';
+import { Button, copyToClipboard, Flexbox } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
@@ -38,21 +38,21 @@ const ShareText = memo<ShareTextProps>(({ item }) => {
       <Button
         block
         icon={CopyIcon}
+        size={isMobile ? undefined : 'large'}
+        type={'primary'}
         onClick={async () => {
           await copyToClipboard(content);
           message.success(t('copySuccess', { ns: 'common' }));
         }}
-        size={isMobile ? undefined : 'large'}
-        type={'primary'}
       >
         {t('copy', { ns: 'common' })}
       </Button>
       <Button
         block
+        size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.md`);
         }}
-        size={isMobile ? undefined : 'large'}
       >
         {t('shareModal.downloadFile')}
       </Button>
@@ -68,7 +68,7 @@ const ShareText = memo<ShareTextProps>(({ item }) => {
         </Flexbox>
       </Flexbox>
       {isMobile && (
-        <Flexbox className={styles.footer} gap={8} horizontal>
+        <Flexbox horizontal className={styles.footer} gap={8}>
           {button}
         </Flexbox>
       )}

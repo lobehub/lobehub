@@ -3,7 +3,7 @@ import { buildTrustedClientPayload, createTrustedClientToken } from '@lobehub/ma
 import { appEnv } from '@/envs/app';
 
 export interface TrustedClientUserInfo {
-  email: string;
+  email?: string;
   name?: string;
   userId: string;
 }
@@ -31,14 +31,11 @@ export const generateTrustedClientToken = (userInfo: TrustedClientUserInfo): str
     return undefined;
   }
 
-  if (!userInfo.email) {
-    return undefined;
-  }
-
   try {
     const payload = buildTrustedClientPayload({
       clientId: MARKET_TRUSTED_CLIENT_ID,
-      email: userInfo.email,
+      // TODO: remove '' when sdk update
+      email: userInfo.email || '',
       name: userInfo.name,
       userId: userInfo.userId,
     });

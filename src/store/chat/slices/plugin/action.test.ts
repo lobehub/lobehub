@@ -1,13 +1,10 @@
-import {
-  DEFAULT_INBOX_AVATAR,
-  PLUGIN_SCHEMA_API_MD5_PREFIX,
-  PLUGIN_SCHEMA_SEPARATOR,
-} from '@lobechat/const';
+import { PLUGIN_SCHEMA_API_MD5_PREFIX, PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import { ChatToolPayload, MessageToolCall, UIChatMessage } from '@lobechat/types';
+import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import i18n from 'i18next';
-import { Mock, afterEach, describe, expect, it, vi } from 'vitest';
+import { type Mock } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
@@ -838,7 +835,7 @@ describe('ChatPluginAction', () => {
         id: messageId,
         role: 'tool',
         content: 'Tool content',
-        plugin: { identifier: identifier, arguments: '{"oldKey":"oldValue"}' },
+        plugin: { identifier, arguments: '{"oldKey":"oldValue"}' },
         tool_call_id: toolCallId,
         parentId,
       } as UIChatMessage;
@@ -847,7 +844,7 @@ describe('ChatPluginAction', () => {
         id: parentId,
         role: 'assistant',
         content: 'Assistant content',
-        tools: [{ identifier: identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
+        tools: [{ identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
       } as UIChatMessage;
 
       act(() => {
@@ -1060,6 +1057,77 @@ describe('ChatPluginAction', () => {
 
       expect(transformed[0].apiName).toBe(longApiName);
     });
+
+    it('should repair malformed JSON arguments with escaped string issue', () => {
+      // This is the malformed data from haiku-4.5 model
+      // The entire JSON got stuffed into the "description" field with escaped quotes
+      const malformedArguments = JSON.stringify({
+        description:
+          'Synthesize all 10 batch analyses into 10 most important themes for product builders", "instruction": "You have access to 10 batch analysis files", "runInClient": true, "timeout": 120000}',
+      });
+
+      const toolCalls: MessageToolCall[] = [
+        {
+          id: 'tool1',
+          function: {
+            name: ['lobe-gtd', 'execTask', 'default'].join(PLUGIN_SCHEMA_SEPARATOR),
+            arguments: malformedArguments,
+          },
+          type: 'function',
+        },
+      ];
+
+      // Setup builtin tool manifest with schema that has required fields
+      act(() => {
+        useToolStore.setState({
+          builtinTools: [
+            {
+              type: 'builtin',
+              identifier: 'lobe-gtd',
+              manifest: {
+                identifier: 'lobe-gtd',
+                api: [
+                  {
+                    name: 'execTask',
+                    description: 'Execute async task',
+                    parameters: {
+                      type: 'object',
+                      required: ['description', 'instruction'],
+                      properties: {
+                        description: { type: 'string' },
+                        instruction: { type: 'string' },
+                        runInClient: { type: 'boolean' },
+                        timeout: { type: 'number' },
+                      },
+                    },
+                  },
+                ],
+                type: 'builtin',
+              } as any,
+            },
+          ],
+        });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+
+      const transformed = result.current.internal_transformToolCalls(toolCalls);
+
+      // Parse the transformed arguments
+      const repairedArgs = JSON.parse(transformed[0].arguments);
+
+      // Verify all fields are correctly extracted
+      expect(repairedArgs).toHaveProperty('description');
+      expect(repairedArgs).toHaveProperty('instruction');
+      expect(repairedArgs).toHaveProperty('runInClient', true);
+      expect(repairedArgs).toHaveProperty('timeout', 120000);
+
+      // Verify description is the correct short value, not the entire malformed string
+      expect(repairedArgs.description).toBe(
+        'Synthesize all 10 batch analyses into 10 most important themes for product builders',
+      );
+      expect(repairedArgs.instruction).toBe('You have access to 10 batch analysis files');
+    });
   });
 
   describe('internal_updatePluginError', () => {
@@ -1117,7 +1185,7 @@ describe('ChatPluginAction', () => {
         id: messageId,
         role: 'assistant',
         content: 'Assistant content',
-        tools: [{ identifier: identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
+        tools: [{ identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
       } as UIChatMessage;
 
       act(() => {
@@ -1604,54 +1672,6 @@ describe('ChatPluginAction', () => {
           },
           undefined,
         );
-      });
-    });
-
-    describe('invokeCloudCodeInterpreterTool', () => {
-      it('should use optimisticUpdateToolMessage for successful result', async () => {
-        const mockResult = {
-          content: 'code interpreter result',
-          state: { output: 'test output' },
-          success: true,
-        };
-
-        // Mock CloudSandboxExecutionRuntime using doMock for dynamic mocking
-        vi.doMock('@lobechat/builtin-tool-cloud-sandbox/executionRuntime', () => ({
-          CloudSandboxExecutionRuntime: class {
-            'test-api' = vi.fn().mockResolvedValue(mockResult);
-          },
-        }));
-
-        const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
-
-        act(() => {
-          useChatStore.setState({
-            activeAgentId: 'session-id',
-            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
-            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
-            replaceMessages: vi.fn(),
-            messageOperationMap: {},
-            operations: {},
-          });
-        });
-
-        const { result } = renderHook(() => useChatStore());
-
-        await act(async () => {
-          await result.current.invokeCloudCodeInterpreterTool(messageId, payload);
-        });
-
-        expect(optimisticUpdateToolMessageMock).toHaveBeenCalledWith(
-          messageId,
-          {
-            content: mockResult.content,
-            pluginError: undefined,
-            pluginState: mockResult.state,
-          },
-          undefined,
-        );
-
-        vi.doUnmock('@lobechat/builtin-tool-cloud-sandbox/executionRuntime');
       });
     });
   });

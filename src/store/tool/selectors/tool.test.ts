@@ -1,20 +1,35 @@
-import { LobeChatPluginManifest, LobeChatPluginMeta } from '@lobehub/chat-plugin-sdk';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { describe, expect, it } from 'vitest';
 
+import { type ToolStoreState } from '../initialState';
 import { initialState } from '../initialState';
-import { ToolStoreState } from '../initialState';
 import { toolSelectors } from './tool';
+
+// Mock builtin skill for testing
+const mockBuiltinSkill = {
+  avatar: '🧪',
+  content: '# Test Skill',
+  description: 'A test skill',
+  identifier: 'test-skill',
+  name: 'Test Skill',
+  source: 'builtin' as const,
+};
 
 const mockState = {
   ...initialState,
+  builtinSkills: [mockBuiltinSkill],
   installedPlugins: [
     {
       identifier: 'plugin-1',
       manifest: {
         identifier: 'plugin-1',
         api: [{ name: 'api-1' }],
+        author: 'Test Author',
+        createdAt: '2024-01-01',
+        homepage: 'https://example.com/plugin-1',
         meta: { title: 'Plugin 1', description: 'Plugin 1 description' },
       } as LobeChatPluginManifest,
+      runtimeType: 'standalone',
       type: 'plugin',
     },
     {
@@ -22,7 +37,10 @@ const mockState = {
       manifest: {
         identifier: 'plugin-2',
         api: [{ name: 'api-2' }],
+        author: 'Another Author',
+        homepage: 'https://example.com/plugin-2',
       } as LobeChatPluginManifest,
+      runtimeType: 'default',
       type: 'plugin',
     },
     {
@@ -56,6 +74,7 @@ const mockState = {
     'plugin-1': false,
     'plugin-2': true,
   },
+  uninstalledBuiltinTools: [],
 } as ToolStoreState;
 
 describe('toolSelectors', () => {
@@ -81,25 +100,44 @@ describe('toolSelectors', () => {
       const result = toolSelectors.metaList(mockState);
       expect(result).toEqual([
         {
+          author: 'LobeHub',
+          identifier: 'test-skill',
+          meta: { avatar: '🧪', description: 'A test skill', title: 'Test Skill' },
+          type: 'builtin',
+        },
+        {
           type: 'builtin',
           author: 'LobeHub',
           identifier: 'builtin-1',
           meta: { title: 'Builtin 1', description: 'Builtin 1 description' },
         },
         {
-          identifier: 'plugin-1',
-          type: 'plugin',
-          meta: { title: 'Plugin 1', description: 'Plugin 1 description' },
-          title: 'Plugin 1',
+          author: 'Test Author',
+          createdAt: '2024-01-01',
           description: 'Plugin 1 description',
+          homepage: 'https://example.com/plugin-1',
+          identifier: 'plugin-1',
+          meta: { title: 'Plugin 1', description: 'Plugin 1 description' },
+          runtimeType: 'standalone',
+          title: 'Plugin 1',
+          type: 'plugin',
         },
         {
-          type: 'plugin',
+          author: 'Another Author',
+          createdAt: undefined,
+          homepage: 'https://example.com/plugin-2',
           identifier: 'plugin-2',
           meta: undefined,
+          runtimeType: 'default',
+          type: 'plugin',
         },
         {
+          author: undefined,
+          createdAt: undefined,
+          homepage: undefined,
           identifier: 'plugin-3',
+          meta: undefined,
+          runtimeType: undefined,
           type: 'customPlugin',
         },
       ]);
@@ -122,6 +160,9 @@ describe('toolSelectors', () => {
       expect(result).toEqual({
         identifier: 'plugin-1',
         api: [{ name: 'api-1' }],
+        author: 'Test Author',
+        createdAt: '2024-01-01',
+        homepage: 'https://example.com/plugin-1',
         meta: { title: 'Plugin 1', description: 'Plugin 1 description' },
       });
     });

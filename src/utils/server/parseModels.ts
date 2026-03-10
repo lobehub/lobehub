@@ -11,7 +11,7 @@ export const parseModelString = async (
   modelString: string = '',
   withDeploymentName = false,
 ) => {
-  let models: AiFullModelCard[] = [];
+  const models: AiFullModelCard[] = [];
   let removeAll = false;
   const removedModels: string[] = [];
   const modelNames = modelString.split(/[,，]/).filter(Boolean);
@@ -20,13 +20,13 @@ export const parseModelString = async (
     const disable = item.startsWith('-');
     const nameConfig = item.startsWith('+') || item.startsWith('-') ? item.slice(1) : item;
     const [idAndDisplayName, ...capabilities] = nameConfig.split('<');
-    let [id, displayName] = idAndDisplayName.split('=');
+    const [rawId, displayName] = idAndDisplayName.split('=');
 
+    let id = rawId;
     let deploymentName: string | undefined;
 
     if (withDeploymentName) {
       [id, deploymentName] = id.split('->');
-      // if (!deploymentName) deploymentName = id;
     }
 
     if (disable) {

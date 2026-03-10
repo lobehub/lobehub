@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
+import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
 
 import { ServerService } from '../generationTopic';
 

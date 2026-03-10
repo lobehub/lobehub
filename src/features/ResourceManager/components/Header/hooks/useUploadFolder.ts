@@ -1,7 +1,8 @@
-import type { TFunction } from 'i18next';
-import { type ChangeEvent, useCallback } from 'react';
+import { type TFunction } from 'i18next';
+import { type ChangeEvent } from 'react';
+import { useCallback } from 'react';
 
-import type { FileManageAction } from '@/store/file/slices/fileManager/action';
+import { type FileManageAction } from '@/store/file/slices/fileManager/action';
 import {
   filterFilesByBuiltInBlockList,
   filterFilesByGitignore,

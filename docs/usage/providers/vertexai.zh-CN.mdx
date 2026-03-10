@@ -1,20 +1,20 @@
 ---
-title: 在 LobeChat 中使用 Vertex AI API Key
-description: 学习如何在 LobeChat 中配置和使用 Vertex AI 模型，获取 API 密钥并开始对话。
+title: 在 LobeHub 中使用 Vertex AI API Key
+description: 学习如何在 LobeHub 中配置和使用 Vertex AI 模型，获取 API 密钥并开始对话。
 tags:
-  - LobeChat
+  - LobeHub
   - Vertex AI
   - API密钥
   - Web UI
 ---
 
-# 在 LobeChat 中使用 Vertex AI
+# 在 LobeHub 中使用 Vertex AI
 
-<Image alt={'在 LobeChat 中使用 Vertex AI '} cover src={'https://github.com/user-attachments/assets/638dcd7c-2bff-4adb-bade-da2aaef872bf'} />
+<Image alt={'在 LobeHub 中使用 Vertex AI '} cover src={'/blog/assets95e6fe7c19ebfb9ead1c5a267aaf2a4e.webp'} />
 
 [Vertex AI](https://cloud.google.com/vertex-ai) 是 Google Cloud 的一款全面托管、集成的 AI 开发平台，旨在构建与应用生成式 AI。你可轻松访问 Vertex AI Studio、Agent Builder 以及超过 160 种基础模型，进行 AI 开发。
 
-本文档将指导你如何在 LobeChat 中接入 Vertex AI 的模型:
+本文档将指导你如何在 LobeHub 中接入 Vertex AI 的模型:
 
 <Steps>
   ### 步骤一：准备 Vertex AI 项目
@@ -24,36 +24,36 @@ tags:
   - 进入 [Vertex AI 控制台](https://console.cloud.google.com/vertex-ai)
   - 确认该项目已开通 Vertex AI API 服务
 
-  <Image alt={'进入 Vertex AI'} inStep src={'https://github.com/user-attachments/assets/c4fe4430-7860-4339-b014-4d8d264a12c0'} />
+  <Image alt={'进入 Vertex AI'} inStep src={'/blog/assets87010372bdf39890a7478a7a8cd4a9f0.webp'} />
 
   ### 步骤二：设置 API 访问权限
 
   - 进入 Google Cloud [IAM 管理页面](https://console.cloud.google.com/iam-admin/serviceaccounts)，并导航至`服务账号`
   - 创建一个新的服务账号，并为其分配一个角色权限，例如 `Vertex AI User`
 
-  <Image alt={'创建服务账号'} inStep src={'https://github.com/user-attachments/assets/692e7c67-f173-45da-86ef-5c69e17988e4'} />
+  <Image alt={'创建服务账号'} inStep src={'/blog/assets6b01801b405c366fa4ebe683a77f289d.webp'} />
 
   - 在服务账号管理页面找到刚刚创建的服务账号，点击`密钥`并创建一个新的 JSON 格式密钥
   - 创建成功后，密钥文件将会以 JSON 文件的格式自动保存到你的电脑上，请妥善保存
 
-  <Image alt={'创建密钥'} inStep src={'https://github.com/user-attachments/assets/1fb5df18-5261-483e-a445-96f52f80dd20'} />
+  <Image alt={'创建密钥'} inStep src={'/blog/assets69146738e31a47ac6425070208ebd906.webp'} />
 
-  ### 步骤三：在 LobeChat 中配置 Vertex AI
+  ### 步骤三：在 LobeHub 中配置 Vertex AI
 
-  - 访问 LobeChat 的 `应用设置` 的 `AI 服务供应商` 界面
+  - 访问 LobeHub 的 `应用设置` 的 `AI 服务供应商` 界面
   - 在供应商列表中找到 `Vertex AI` 的设置项
 
-  <Image alt={'填写 Vertex AI API 密钥'} inStep src={'https://github.com/user-attachments/assets/5d672e8b-566f-4f82-bdce-947168726bc0'} />
+  <Image alt={'填写 Vertex AI API 密钥'} inStep src={'/blog/assetsd89998edb6b2dc8311d8d86664d5cd4d.webp'} />
 
   - 打开 Vertex AI 服务供应商
   - 将刚刚获取的 JSON 格式的全部内容填入 API Key 字段中
   - 为你的助手选择一个 Vertex AI 模型即可开始对话
 
-  <Image alt={'选择 Vertex AI 模型'} inStep src={'https://github.com/user-attachments/assets/1a7e9600-cd0f-4c82-9d32-4e61bbb351cc'} />
+  <Image alt={'选择 Vertex AI 模型'} inStep src={'/blog/assets5997a6461e20103f5bc9d6b78b872833.webp'} />
 
   <Callout type={'warning'}>
     在使用过程中你可能需要向 API 服务提供商付费，请参考 Google Cloud 的相关费用政策。
   </Callout>
 </Steps>
 
-至此你已经可以在 LobeChat 中使用 Vertex AI 提供的模型进行对话了。
+至此你已经可以在 LobeHub 中使用 Vertex AI 提供的模型进行对话了。

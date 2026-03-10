@@ -2,7 +2,8 @@ import { consola } from 'consola';
 import { markdownTable } from 'markdown-table';
 import urlJoin from 'url-join';
 
-import { DataItem, PLUGIN_SPLIT } from './const';
+import type { DataItem } from './const';
+import { PLUGIN_SPLIT } from './const';
 import {
   fetchPluginIndex,
   genLink,

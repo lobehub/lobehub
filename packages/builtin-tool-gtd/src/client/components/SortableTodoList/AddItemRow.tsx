@@ -1,10 +1,11 @@
 'use client';
 
 import { ActionIcon, Checkbox, Flexbox, Input } from '@lobehub/ui';
-import { InputRef } from 'antd';
+import type { InputRef } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
-import { ChangeEvent, KeyboardEvent, memo, useCallback, useEffect, useRef } from 'react';
+import type { ChangeEvent, KeyboardEvent } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ADD_ITEM_ID, useTodoListStore } from './store';
@@ -85,21 +86,21 @@ const AddItemRow = memo<AddItemRowProps>(({ placeholder, showDragHandle = true, 
   }, [setFocusedId]);
 
   return (
-    <Flexbox align="center" className={cx(styles.addRow, className)} gap={4} horizontal>
+    <Flexbox horizontal align="center" className={cx(styles.addRow, className)} gap={4}>
       {showDragHandle && <div className={styles.dragHandlePlaceholder} />}
       <Checkbox checked={false} shape={'circle'} style={{ borderWidth: 1.5, cursor: 'default' }} />
       <Input
-        onChange={handleChange}
-        onFocus={handleFocus}
-        onKeyDown={handleKeyDown}
         placeholder={defaultPlaceholder}
         ref={inputRef}
         size="small"
         style={{ flex: 1 }}
         value={newItemText}
         variant="borderless"
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
       />
-      <ActionIcon icon={Plus} onClick={addItem} size="small" tabIndex={-1} />
+      <ActionIcon icon={Plus} size="small" tabIndex={-1} onClick={addItem} />
     </Flexbox>
   );
 });

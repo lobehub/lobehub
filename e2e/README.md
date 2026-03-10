@@ -1,6 +1,6 @@
-# E2E Tests for LobeChat
+# E2E Tests for LobeHub
 
-This directory contains end-to-end (E2E) tests for LobeChat using Cucumber (BDD) and Playwright.
+This directory contains end-to-end (E2E) tests for LobeHub using Cucumber (BDD) and Playwright.
 
 ## Directory Structure
 
@@ -90,7 +90,7 @@ Feature: Community Smoke Tests
 
   @COMMUNITY-SMOKE-001 @P0
   Scenario: Load community assistant list page
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     Then the page should load without errors
     And I should see the page body
     And I should see the search bar

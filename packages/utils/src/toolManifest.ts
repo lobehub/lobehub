@@ -1,5 +1,6 @@
-import { OpenAIPluginManifest } from '@lobechat/types';
-import { LobeChatPluginManifest, pluginManifestSchema } from '@lobehub/chat-plugin-sdk';
+import type { OpenAIPluginManifest } from '@lobechat/types';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { pluginManifestSchema } from '@lobehub/chat-plugin-sdk';
 
 import { API_ENDPOINTS } from '@/services/_url';
 
@@ -99,27 +100,6 @@ export const getToolManifest = async (
 
   if (!parser.success) {
     throw new TypeError('manifestInvalid', { cause: parser.error });
-  }
-
-  // 4. if exist OpenAPI api, merge the OpenAPIs to api
-  if (parser.data.openapi) {
-    const openapiJson = await fetchJSON(parser.data.openapi, useProxy);
-
-    // avoid https://github.com/lobehub/lobe-chat/issues/9059
-    if (typeof window !== 'undefined') {
-      try {
-        const { OpenAPIConvertor } = await import('@lobehub/chat-plugin-sdk/openapi');
-
-        const convertor = new OpenAPIConvertor(openapiJson);
-        const openAPIs = await convertor.convertOpenAPIToPluginSchema();
-
-        data.api = [...data.api, ...openAPIs];
-
-        data.settings = await convertor.convertAuthToSettingsSchema(data.settings);
-      } catch (error) {
-        throw new TypeError('openAPIInvalid', { cause: error });
-      }
-    }
   }
 
   return data;

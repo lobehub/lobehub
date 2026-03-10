@@ -18,9 +18,11 @@ const VALID_TYPES = [
   'file',
   'folder',
   'page',
+  'memory',
   'mcp',
   'plugin',
   'communityAgent',
+  'knowledgeBase',
 ] as const;
 
 export type ValidSearchType = (typeof VALID_TYPES)[number];

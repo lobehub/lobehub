@@ -32,7 +32,7 @@ const styles = createStaticStyles(({ css }) => {
       pointer-events: none;
 
       position: absolute;
-      inset-block: 0 0;
+      inset-block: 0;
       inset-inline: 0 1%;
 
       height: 100%;
@@ -48,6 +48,9 @@ const styles = createStaticStyles(({ css }) => {
   };
 });
 
+/**
+ * Show & manage current uploading tasks
+ */
 const UploadDock = memo(() => {
   const { t } = useTranslation('file');
   const [show, setShow] = useState(true);
@@ -90,21 +93,9 @@ const UploadDock = memo(() => {
   return (
     <Flexbox className={styles.container}>
       <Flexbox
-        align={'center'}
         horizontal
+        align={'center'}
         justify={'space-between'}
-        onClick={() => {
-          setExpand(!expand);
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = convertAlphaToSolid(
-            cssVar.colorFillTertiary,
-            cssVar.colorBgContainer,
-          );
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = cssVar.colorBgContainer;
-        }}
         style={{
           background: cssVar.colorBgContainer,
           borderBottom: expand ? `1px solid ${cssVar.colorSplit}` : undefined,
@@ -117,8 +108,20 @@ const UploadDock = memo(() => {
           paddingInline: '24px 12px',
           transition: 'all 0.3s ease-in-out',
         }}
+        onClick={() => {
+          setExpand(!expand);
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = convertAlphaToSolid(
+            cssVar.colorFillTertiary,
+            cssVar.colorBgContainer,
+          );
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = cssVar.colorBgContainer;
+        }}
       >
-        <Flexbox align={'center'} className={styles.title} gap={16} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.title} gap={16}>
           {icon}
           {t(`uploadDock.uploadStatus.${overviewUploadingStatus}`)} ·{' '}
           {t('uploadDock.totalCount', { count })}
@@ -160,11 +163,11 @@ const UploadDock = memo(() => {
               </Flexbox>
               <Center style={{ height: 40, minHeight: 40 }}>
                 <Text
+                  style={{ cursor: 'pointer' }}
+                  type={'secondary'}
                   onClick={() => {
                     setExpand(false);
                   }}
-                  style={{ cursor: 'pointer' }}
-                  type={'secondary'}
                 >
                   {t('uploadDock.body.collapse')}
                 </Text>

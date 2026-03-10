@@ -1,22 +1,26 @@
 'use client';
 
 import {
-  DropdownMenuPopup,
   type DropdownMenuPopupProps,
-  DropdownMenuPortal,
-  DropdownMenuPositioner,
   type DropdownMenuProps,
-  DropdownMenuRoot,
-  DropdownMenuTrigger,
+  type MenuItemType,
   type MenuProps,
   type PopoverTrigger,
+} from '@lobehub/ui';
+import {
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
   renderDropdownMenuItems,
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
+import { type CSSProperties, type ReactNode } from 'react';
 import {
-  type CSSProperties,
-  type ReactNode,
+  isValidElement,
   memo,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -24,6 +28,7 @@ import {
   useState,
 } from 'react';
 
+import DebugNode from '@/components/DebugNode';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -34,8 +39,15 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type ActionDropdownMenu = Omit<Pick<MenuProps, 'className' | 'onClick' | 'style'>, 'items'> & {
-  items: MenuProps['items'] | (() => MenuProps['items']);
+export type ActionDropdownMenuItem = MenuItemType;
+
+export type ActionDropdownMenuItems = MenuProps<ActionDropdownMenuItem>['items'];
+
+type ActionDropdownMenu = Omit<
+  Pick<MenuProps<ActionDropdownMenuItem>, 'className' | 'onClick' | 'style'>,
+  'items'
+> & {
+  items: ActionDropdownMenuItems | (() => ActionDropdownMenuItems);
 };
 
 export interface ActionDropdownProps extends Omit<DropdownMenuProps, 'items'> {
@@ -108,15 +120,16 @@ const ActionDropdown = memo<ActionDropdownProps>(
       return trigger === 'hover';
     }, [trigger]);
     const resolvedTriggerProps = useMemo(() => {
-      if (openOnHover === undefined) return triggerProps;
+      if (openOnHover === undefined) return { nativeButton: false, ...triggerProps };
       return {
+        nativeButton: false,
         ...triggerProps,
         openOnHover,
       };
     }, [openOnHover, triggerProps]);
 
     const decorateMenuItems = useCallback(
-      (items: MenuProps['items']): MenuProps['items'] => {
+      (items: ActionDropdownMenuItems): ActionDropdownMenuItems => {
         if (!items) return items;
 
         return items.map((item) => {
@@ -136,10 +149,24 @@ const ActionDropdown = memo<ActionDropdownProps>(
             };
           }
           const itemOnClick = 'onClick' in item ? item.onClick : undefined;
+          const closeOnClick = 'closeOnClick' in item ? item.closeOnClick : undefined;
+          const keepOpenOnClick = closeOnClick === false;
+          const itemLabel = 'label' in item ? item.label : undefined;
+          const shouldKeepOpen = isValidElement(itemLabel);
+
+          const resolvedCloseOnClick = closeOnClick ?? (shouldKeepOpen ? false : undefined);
 
           return {
             ...item,
+            ...(resolvedCloseOnClick !== undefined ? { closeOnClick: resolvedCloseOnClick } : null),
             onClick: (info) => {
+              if (keepOpenOnClick) {
+                info.domEvent.stopPropagation();
+                menu.onClick?.(info);
+                itemOnClick?.(info);
+                return;
+              }
+
               info.domEvent.preventDefault();
               menu.onClick?.(info);
               itemOnClick?.(info);
@@ -236,9 +263,9 @@ const ActionDropdown = memo<ActionDropdownProps>(
       <DropdownMenuRoot
         {...rest}
         defaultOpen={defaultOpen}
+        open={open}
         onOpenChange={handleOpenChange}
         onOpenChangeComplete={handleOpenChangeComplete}
-        open={open}
       >
         <DropdownMenuTrigger {...resolvedTriggerProps}>{children}</DropdownMenuTrigger>
         <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
@@ -247,7 +274,11 @@ const ActionDropdown = memo<ActionDropdownProps>(
             hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
             placement={isMobile ? 'top' : placement}
           >
-            <DropdownMenuPopup {...resolvedPopupProps}>{menuContent}</DropdownMenuPopup>
+            <DropdownMenuPopup {...resolvedPopupProps}>
+              <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
+                {menuContent}
+              </Suspense>
+            </DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>
       </DropdownMenuRoot>

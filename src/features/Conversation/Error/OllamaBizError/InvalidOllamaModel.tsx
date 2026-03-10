@@ -22,6 +22,7 @@ const InvalidOllamaModel = memo<InvalidOllamaModelProps>(({ id, model }) => {
   return (
     <ErrorActionContainer>
       <OllamaModelDownloader
+        model={model}
         extraAction={
           <Button
             onClick={() => {
@@ -31,7 +32,6 @@ const InvalidOllamaModel = memo<InvalidOllamaModelProps>(({ id, model }) => {
             {t('unlock.closeMessage')}
           </Button>
         }
-        model={model}
         onSuccessDownload={() => {
           delAndRegenerateMessage(id);
         }}

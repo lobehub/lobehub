@@ -120,15 +120,27 @@ exports[`promptUserMemory > identities only > should format identities grouped b
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="3">
-  <personal count="1">
-    <identity role="Father">User is a father of two children</identity>
-  </personal>
-  <professional count="1">
-    <identity role="Software Engineer">User is a senior software engineer</identity>
-  </professional>
-  <demographic count="1">
-    <identity>User is based in Shanghai</identity>
-  </demographic>
+  <identity type="personal" role="Father" id="id-1">User is a father of two children</identity>
+  <identity type="professional" role="Software Engineer" id="id-2">User is a senior software engineer</identity>
+  <identity type="demographic" id="id-3">User is based in Shanghai</identity>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should format identity with capturedAt Date object 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <identity type="demographic" id="id-2" capturedAt="2025-06-15">User lives in Tokyo</identity>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should format identity with capturedAt string 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <identity type="professional" role="Engineer" id="id-1" capturedAt="2025-02-23">User is a software engineer</identity>
 </identities>
 </user_memory>"
 `;
@@ -137,10 +149,8 @@ exports[`promptUserMemory > identities only > should format single type identiti
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="2">
-  <demographic count="2">
-    <identity>User is 35 years old</identity>
-    <identity>User speaks Mandarin and English</identity>
-  </demographic>
+  <identity type="demographic" id="id-1">User is 35 years old</identity>
+  <identity type="demographic" id="id-2">User speaks Mandarin and English</identity>
 </identities>
 </user_memory>"
 `;
@@ -149,10 +159,8 @@ exports[`promptUserMemory > identities only > should format single type identiti
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="2">
-  <personal count="2">
-    <identity>User is married</identity>
-    <identity>User has a pet dog</identity>
-  </personal>
+  <identity type="personal" id="id-1">User is married</identity>
+  <identity type="personal" id="id-2">User has a pet dog</identity>
 </identities>
 </user_memory>"
 `;
@@ -161,9 +169,7 @@ exports[`promptUserMemory > identities only > should format single type identiti
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <professional count="1">
-    <identity role="CTO">User works at a tech startup</identity>
-  </professional>
+  <identity type="professional" role="CTO" id="id-1">User works at a tech startup</identity>
 </identities>
 </user_memory>"
 `;
@@ -172,9 +178,7 @@ exports[`promptUserMemory > identities only > should handle identity with null v
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <personal count="1">
-    <identity></identity>
-  </personal>
+  <identity type="personal" id="id-1"></identity>
 </identities>
 </user_memory>"
 `;
@@ -183,9 +187,16 @@ exports[`promptUserMemory > identities only > should handle identity without rol
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <personal count="1">
-    <identity>User enjoys hiking</identity>
-  </personal>
+  <identity type="personal" id="id-1">User enjoys hiking</identity>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should skip capturedAt when null 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <identity type="personal" id="id-3">User is a runner</identity>
 </identities>
 </user_memory>"
 `;
@@ -194,9 +205,7 @@ exports[`promptUserMemory > mixed memory types > should format all memory types 
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <professional count="1">
-    <identity role="Tech Lead">User is a tech lead at a startup</identity>
-  </professional>
+  <identity type="professional" role="Tech Lead" id="id-1">User is a tech lead at a startup</identity>
 </identities>
 <contexts count="1">
   <context id="ctx-1" title="Experience Level">Senior developer with 10 years experience</context>
@@ -217,15 +226,9 @@ exports[`promptUserMemory > mixed memory types > should format all memory types 
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="3">
-  <personal count="1">
-    <identity role="Father">User is a father</identity>
-  </personal>
-  <professional count="1">
-    <identity role="Senior Engineer">User is a senior engineer</identity>
-  </professional>
-  <demographic count="1">
-    <identity>User lives in Beijing</identity>
-  </demographic>
+  <identity type="personal" role="Father" id="id-1">User is a father</identity>
+  <identity type="professional" role="Senior Engineer" id="id-2">User is a senior engineer</identity>
+  <identity type="demographic" id="id-3">User lives in Beijing</identity>
 </identities>
 <contexts count="1">
   <context id="ctx-1" title="Current Work">Working on AI products</context>
@@ -281,6 +284,42 @@ exports[`promptUserMemory > mixed memory types > should format experiences and p
 <preferences count="1">
   <preference id="pref-1">Mention time complexity for algorithms</preference>
 </preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > mixed memory types > should format persona combined with other memory types 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<persona tagline="AI-focused tech lead">
+A tech lead who focuses on AI-powered developer tools and has a strong preference for TypeScript.
+</persona>
+<identities count="1">
+  <identity type="professional" role="Senior Engineer" id="id-1">User is a senior engineer</identity>
+</identities>
+<contexts count="1">
+  <context id="ctx-1" title="Current Work">Working on AI products</context>
+</contexts>
+<preferences count="1">
+  <preference id="pref-1">Prefer concise responses with code examples</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > persona only > should format persona with narrative and tagline 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<persona tagline="Senior frontend engineer & OSS contributor">
+A senior software engineer based in Shanghai who specializes in frontend development with React and TypeScript. Passionate about open source and building developer tools.
+</persona>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > persona only > should format persona with only narrative (no tagline) 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<persona>
+A product designer who transitioned from engineering. Enjoys bridging the gap between design and development.
+</persona>
 </user_memory>"
 `;
 

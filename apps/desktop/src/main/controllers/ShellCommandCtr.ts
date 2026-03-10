@@ -15,6 +15,30 @@ import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:ShellCommandCtr');
 
+// Maximum output length to prevent context explosion
+const MAX_OUTPUT_LENGTH = 80_000;
+
+/**
+ * Strip ANSI escape codes from terminal output
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_REGEX = /\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
+const stripAnsi = (str: string): string => str.replaceAll(ANSI_REGEX, '');
+
+/**
+ * Truncate string to max length with ellipsis indicator
+ */
+const truncateOutput = (str: string, maxLength: number = MAX_OUTPUT_LENGTH): string => {
+  const cleaned = stripAnsi(str);
+  if (cleaned.length <= maxLength) return cleaned;
+  return (
+    cleaned.slice(0, maxLength) +
+    '\n... [truncated, ' +
+    (cleaned.length - maxLength) +
+    ' more characters]'
+  );
+};
+
 interface ShellProcess {
   lastReadStderr: number;
   lastReadStdout: number;
@@ -104,8 +128,8 @@ export default class ShellCommandCtr extends ControllerModule {
             childProcess.kill();
             resolve({
               error: `Command timed out after ${effectiveTimeout}ms`,
-              stderr,
-              stdout,
+              stderr: truncateOutput(stderr),
+              stdout: truncateOutput(stdout),
               success: false,
             });
           }, effectiveTimeout);
@@ -125,9 +149,9 @@ export default class ShellCommandCtr extends ControllerModule {
               logger.info(`${logPrefix} Command completed`, { code, success });
               resolve({
                 exit_code: code || 0,
-                output: stdout + stderr,
-                stderr,
-                stdout,
+                output: truncateOutput(stdout + stderr),
+                stderr: truncateOutput(stderr),
+                stdout: truncateOutput(stdout),
                 success,
               });
             }
@@ -138,8 +162,8 @@ export default class ShellCommandCtr extends ControllerModule {
             logger.error(`${logPrefix} Command failed:`, error);
             resolve({
               error: error.message,
-              stderr,
-              stdout,
+              stderr: truncateOutput(stderr),
+              stdout: truncateOutput(stdout),
               success: false,
             });
           });
@@ -205,10 +229,10 @@ export default class ShellCommandCtr extends ControllerModule {
     });
 
     return {
-      output,
+      output: truncateOutput(output),
       running,
-      stderr: newStderr,
-      stdout: newStdout,
+      stderr: truncateOutput(newStderr),
+      stdout: truncateOutput(newStdout),
       success: true,
     };
   }

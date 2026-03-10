@@ -93,7 +93,7 @@ export const getVerificationOTPEmailTemplate = (params: {
     <!-- Footer -->
     <div style="text-align: center; margin-top: 32px;">
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
-        © 2025 LobeHub. All rights reserved.
+        © 2026 LobeHub. All rights reserved.
       </p>
     </div>
   </div>

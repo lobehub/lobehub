@@ -23,16 +23,23 @@ export interface UserMemoryPreferenceItem {
 export type IdentityType = 'demographic' | 'personal' | 'professional';
 
 export interface UserMemoryIdentityItem {
+  capturedAt?: string | Date | null;
   description?: string | null;
   id?: string;
   role?: string | null;
   type?: IdentityType | string | null;
 }
 
+export interface UserMemoryPersonaItem {
+  narrative?: string | null;
+  tagline?: string | null;
+}
+
 export interface UserMemoryData {
   contexts?: UserMemoryContextItem[];
   experiences?: UserMemoryExperienceItem[];
   identities?: UserMemoryIdentityItem[];
+  persona?: UserMemoryPersonaItem;
   preferences?: UserMemoryPreferenceItem[];
 }
 
@@ -97,30 +104,34 @@ const isValidIdentityItem = (item: UserMemoryIdentityItem): boolean => {
 /**
  * Formats a single identity memory item
  */
+const formatDateOnly = (value: string | Date): string => {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10); // "2025-02-23"
+};
+
 const formatIdentityItem = (item: UserMemoryIdentityItem): string => {
+  const typeAttr = item.type ? ` type="${item.type}"` : '';
   const roleAttr = item.role ? ` role="${item.role}"` : '';
-  return `    <identity${roleAttr}>${item.description || ''}</identity>`;
+  const idAttr = item.id ? ` id="${item.id}"` : '';
+  const capturedAtAttr = item.capturedAt ? ` capturedAt="${formatDateOnly(item.capturedAt)}"` : '';
+  return `  <identity${typeAttr}${roleAttr}${idAttr}${capturedAtAttr}>${item.description || ''}</identity>`;
 };
 
 /**
- * Format identities grouped by type as XML
- * Types: personal (角色), professional (职业), demographic (属性)
+ * Check if a persona item has meaningful content
  */
-const formatIdentitiesSection = (identities: UserMemoryIdentityItem[]): string => {
-  const personal = identities.filter((i) => i.type === 'personal');
-  const professional = identities.filter((i) => i.type === 'professional');
-  const demographic = identities.filter((i) => i.type === 'demographic');
+const isValidPersonaItem = (item?: UserMemoryPersonaItem | null): item is UserMemoryPersonaItem => {
+  if (!item) return false;
+  return !!(item.narrative || item.tagline);
+};
 
-  return [
-    personal.length > 0 &&
-      `  <personal count="${personal.length}">\n${personal.map(formatIdentityItem).join('\n')}\n  </personal>`,
-    professional.length > 0 &&
-      `  <professional count="${professional.length}">\n${professional.map(formatIdentityItem).join('\n')}\n  </professional>`,
-    demographic.length > 0 &&
-      `  <demographic count="${demographic.length}">\n${demographic.map(formatIdentityItem).join('\n')}\n  </demographic>`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+/**
+ * Formats a persona memory item as XML
+ */
+const formatPersonaItem = (item: UserMemoryPersonaItem): string => {
+  const taglineAttr = item.tagline ? ` tagline="${item.tagline}"` : '';
+  return `<persona${taglineAttr}>\n${item.narrative || ''}\n</persona>`;
 };
 
 /**
@@ -134,6 +145,7 @@ const formatIdentitiesSection = (identities: UserMemoryIdentityItem[]): string =
  */
 export const promptUserMemory = ({ memories }: PromptUserMemoryOptions): string => {
   // Filter out empty/invalid items
+  const hasPersona = isValidPersonaItem(memories.persona);
   const identities = (memories.identities || []).filter(isValidIdentityItem);
   const contexts = (memories.contexts || []).filter(isValidContextItem);
   const experiences = (memories.experiences || []).filter(isValidExperienceItem);
@@ -145,20 +157,22 @@ export const promptUserMemory = ({ memories }: PromptUserMemoryOptions): string 
   const hasPreferences = preferences.length > 0;
 
   // If no memories at all, return empty
-  if (!hasIdentities && !hasContexts && !hasExperiences && !hasPreferences) {
+  if (!hasPersona && !hasIdentities && !hasContexts && !hasExperiences && !hasPreferences) {
     return '';
   }
 
-  const contentParts: string[] = [];
-
-  // Add instruction
-  contentParts.push(
+  const contentParts: string[] = [
     '<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>',
-  );
+  ];
 
-  // Add identities section (user's identity information, grouped by type)
+  // Add persona section (highest-level user context)
+  if (hasPersona) {
+    contentParts.push(formatPersonaItem(memories.persona!));
+  }
+
+  // Add identities section (user's identity information)
   if (hasIdentities) {
-    const identitiesXml = formatIdentitiesSection(identities);
+    const identitiesXml = identities.map((item) => formatIdentityItem(item)).join('\n');
     contentParts.push(`<identities count="${identities.length}">
 ${identitiesXml}
 </identities>`);

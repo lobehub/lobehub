@@ -1,4 +1,4 @@
-import { ModelProviderCard, UserModelProviderConfig } from '@lobechat/types';
+import type { ModelProviderCard, UserModelProviderConfig } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import * as ProviderCards from 'model-bank/modelProviders';
 

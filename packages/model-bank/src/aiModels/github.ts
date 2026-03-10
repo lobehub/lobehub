@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const githubChatModels: AIChatModelCard[] = [
   {
@@ -52,7 +52,8 @@ const githubChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 is our flagship model for complex tasks, ideal for cross-domain problem solving.',
+    description:
+      'GPT-4.1 is our flagship model for complex tasks, ideal for cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
     id: 'openai/gpt-4.1',
@@ -208,7 +209,8 @@ const githubChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 134_144,
-    description: 'The most advanced multimodal model in the GPT-4 family, handling text and image inputs.',
+    description:
+      'The most advanced multimodal model in the GPT-4 family, handling text and image inputs.',
     displayName: 'GPT-4o',
     id: 'openai/gpt-4o',
     maxOutput: 16_384,
@@ -317,7 +319,8 @@ const githubChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Mistral Small is suitable for any language-based task requiring high efficiency and low latency.',
+    description:
+      'Mistral Small is suitable for any language-based task requiring high efficiency and low latency.',
     displayName: 'Mistral Small',
     id: 'mistral-ai/mistral-small-2503',
     maxOutput: 4096,
@@ -344,7 +347,8 @@ const githubChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Strong image reasoning on high-resolution images, suited for visual understanding apps.',
+    description:
+      'Strong image reasoning on high-resolution images, suited for visual understanding apps.',
     displayName: 'Llama 3.2 11B Vision',
     id: 'meta/Llama-3.2-11B-Vision-Instruct',
     maxOutput: 4096,
@@ -424,7 +428,8 @@ const githubChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'A powerful 70B-parameter model that excels at reasoning, coding, and broad language tasks.',
+    description:
+      'A powerful 70B-parameter model that excels at reasoning, coding, and broad language tasks.',
     displayName: 'Meta Llama 3 70B',
     id: 'meta/Meta-Llama-3-70B-Instruct',
     maxOutput: 4096,
@@ -473,7 +478,8 @@ const githubChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'The same Phi-3-mini model with a larger context window for RAG or few-shot prompts.',
+    description:
+      'The same Phi-3-mini model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-mini 128K',
     id: 'microsoft/Phi-3-mini-128k-instruct',
     maxOutput: 4096,
@@ -490,7 +496,8 @@ const githubChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'The same Phi-3-small model with a larger context window for RAG or few-shot prompts.',
+    description:
+      'The same Phi-3-small model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-small 128K',
     id: 'microsoft/Phi-3-small-128k-instruct',
     maxOutput: 4096,
@@ -507,7 +514,8 @@ const githubChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'The same Phi-3-medium model with a larger context window for RAG or few-shot prompts.',
+    description:
+      'The same Phi-3-medium model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-medium 128K',
     id: 'microsoft/Phi-3-medium-128k-instruct',
     maxOutput: 4096,

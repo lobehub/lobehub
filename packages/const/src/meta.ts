@@ -1,5 +1,5 @@
 import { BRANDING_LOGO_URL } from '@lobechat/business-const';
-import { MetaData } from '@lobechat/types';
+import type { MetaData } from '@lobechat/types';
 
 export const DEFAULT_AVATAR = '/avatars/agent-default.png';
 export const DEFAULT_USER_AVATAR = '😀';

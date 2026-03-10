@@ -52,14 +52,14 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
   }, [content, extractTitle, sanitizeFileName]);
 
   const Title = (
-    <Flexbox align={'center'} horizontal justify={'space-between'} style={{ width: '100%' }}>
+    <Flexbox horizontal align={'center'} justify={'space-between'} style={{ width: '100%' }}>
       {t('HtmlPreview.title')}
       <Segmented
-        onChange={(v) => setMode(v as 'preview' | 'code')}
+        value={mode}
         options={[
           {
             label: (
-              <Flexbox align={'center'} gap={6} horizontal>
+              <Flexbox horizontal align={'center'} gap={6}>
                 <Eye size={16} />
                 {t('HtmlPreview.mode.preview')}
               </Flexbox>
@@ -68,7 +68,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
           },
           {
             label: (
-              <Flexbox align={'center'} gap={6} horizontal>
+              <Flexbox horizontal align={'center'} gap={6}>
                 <Code2 size={16} />
                 {t('HtmlPreview.mode.code')}
               </Flexbox>
@@ -76,13 +76,13 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
             value: 'code',
           },
         ]}
-        value={mode}
+        onChange={(v) => setMode(v as 'preview' | 'code')}
       />
       <Button
         color={'default'}
         icon={<Download size={16} />}
-        onClick={onDownload}
         variant={'filled'}
+        onClick={onDownload}
       >
         {t('HtmlPreview.actions.download')}
       </Button>
@@ -93,14 +93,14 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
     <Drawer
       destroyOnHidden
       height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
-      onClose={onClose}
       open={open}
       placement="bottom"
+      title={Title}
       styles={{
         body: { height: '100%', padding: 0 },
         header: { paddingBlock: 8, paddingInline: 12 },
       }}
-      title={Title}
+      onClose={onClose}
     >
       {mode === 'preview' ? (
         <Block className={styles.container}>

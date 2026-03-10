@@ -21,9 +21,9 @@ export const VerifyEmailContent = ({ email, callbackUrl }: VerifyEmailContentPro
       <Button
         icon={<RefreshCw size={16} />}
         loading={resending}
-        onClick={handleResendEmail}
         size="large"
         type="default"
+        onClick={handleResendEmail}
       >
         {t('betterAuth.verifyEmail.resend.button')}
       </Button>

@@ -1,4 +1,6 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MODEL } from '@lobechat/const';
 
 import type { BuiltinAgentDefinition } from '../../types';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
@@ -12,8 +14,8 @@ export const AGENT_BUILDER: BuiltinAgentDefinition = {
 
   // Persist config - stored in database
   persist: {
-    model: 'claude-sonnet-4-5-20250929',
-    provider: 'lobehub',
+    model: DEFAULT_MODEL,
+    provider: DEFAULT_PROVIDER,
   },
 
   // Runtime config - static systemRole

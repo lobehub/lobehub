@@ -1,6 +1,33 @@
 import { z } from 'zod';
 
+import type { BaseListItem, BaseListParams, BaseListResult } from './shared';
+
 export type IdentityType = 'personal' | 'professional' | 'demographic';
+
+/**
+ * Identity query types for list display
+ * These are flat structures optimized for frontend rendering
+ */
+
+export type IdentityListSort = 'capturedAt' | 'type';
+
+export interface IdentityListParams extends BaseListParams {
+  relationships?: string[];
+  sort?: IdentityListSort;
+}
+
+/**
+ * Flat structure for identity list items
+ * Contains fields needed for card display
+ */
+export interface IdentityListItem extends BaseListItem {
+  description: string | null;
+  episodicDate: Date | null;
+  relationship: string | null;
+  role: string | null;
+}
+
+export type IdentityListResult = BaseListResult<IdentityListItem>;
 
 export interface UserMemoryIdentity {
   accessedAt: Date;

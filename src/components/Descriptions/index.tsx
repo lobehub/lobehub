@@ -1,7 +1,8 @@
-import { Grid, type GridProps, Icon, type IconProps, Text } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx , responsive } from 'antd-style';
-import { type CSSProperties, type ReactNode, memo } from 'react';
+import { type GridProps, type IconProps } from '@lobehub/ui';
+import { Flexbox, Grid, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
+import { type CSSProperties, type ReactNode } from 'react';
+import { memo } from 'react';
 
 import CopyableLabel from '../CopyableLabel';
 
@@ -83,10 +84,10 @@ const Descriptions = memo<DescriptionsProps>(
         >
           {items.map((item) => (
             <Flexbox
+              horizontal
               align={'center'}
               className={cx(bordered && styles.cell, item.className, classNames?.item)}
               flex={1}
-              horizontal
               key={item.key}
               style={{
                 overflow: 'hidden',
@@ -96,11 +97,11 @@ const Descriptions = memo<DescriptionsProps>(
               }}
             >
               <Flexbox
+                horizontal
                 align={'center'}
                 className={cx(bordered && styles.label)}
                 flex={'none'}
                 gap={6}
-                horizontal
                 paddingBlock={bordered ? 12 : 4}
                 paddingInline={bordered ? 16 : 0}
                 style={{ height: '100%', position: 'relative' }}
@@ -108,8 +109,8 @@ const Descriptions = memo<DescriptionsProps>(
               >
                 {item.icon && <Icon color={cssVar.colorTextSecondary} icon={item.icon} />}
                 <Text
-                  className={cx(classNames?.label, item.classNames?.label)}
                   ellipsis
+                  className={cx(classNames?.label, item.classNames?.label)}
                   style={{
                     color: cssVar.colorTextSecondary,
                     ...customStyles?.label,
@@ -120,9 +121,9 @@ const Descriptions = memo<DescriptionsProps>(
                 </Text>
               </Flexbox>
               <Flexbox
+                horizontal
                 align={'center'}
                 flex={1}
-                horizontal
                 justify={'flex-start'}
                 paddingBlock={bordered ? 12 : 4}
                 paddingInline={16}
@@ -136,8 +137,8 @@ const Descriptions = memo<DescriptionsProps>(
                   />
                 ) : (
                   <Text
-                    className={cx(classNames?.value, item.classNames?.value)}
                     ellipsis
+                    className={cx(classNames?.value, item.classNames?.value)}
                     style={{ ...customStyles?.value, ...item.styles?.value }}
                   >
                     {item.value}

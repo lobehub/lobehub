@@ -4,20 +4,17 @@
  * Centralized error handling for ComfyUI runtime
  * Maps internal errors to framework errors
  */
-import {
-  AgentRuntimeError,
-  AgentRuntimeErrorType,
-  type ILobeAgentRuntimeErrorType,
-} from '@lobechat/model-runtime';
+import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { AgentRuntimeError, AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { TRPCError } from '@trpc/server';
 
 import { SYSTEM_COMPONENTS } from '@/server/services/comfyui/config/systemComponents';
 import {
   ConfigError,
+  isComfyUIInternalError,
   ServicesError,
   UtilsError,
   WorkflowError,
-  isComfyUIInternalError,
 } from '@/server/services/comfyui/errors';
 import { ModelResolverError } from '@/server/services/comfyui/errors/modelResolverError';
 import { getComponentInfo } from '@/server/services/comfyui/utils/componentInfo';
@@ -74,6 +71,7 @@ function extractMissingFileInfo(message: string): {
   if (!message) return null;
 
   // Check for "Expected one of:" pattern from enhanced model errors
+  // eslint-disable-next-line regexp/no-super-linear-backtracking, regexp/no-dupe-disjunctions
   const expectedPattern = /expected one of:\s*([^.]+\.(?:safetensors|ckpt|pt|pth))/i;
   const expectedMatch = message.match(expectedPattern);
 

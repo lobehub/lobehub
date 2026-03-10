@@ -2,8 +2,8 @@
 
 import { Button } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
-import Link from '@/libs/next/Link';
-import { useRouter, useSearchParams } from '@/libs/next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import AuthCard from '../../../../features/AuthCard';
@@ -18,6 +18,8 @@ const ResetPasswordPage = () => {
 
   return (
     <AuthCard
+      subtitle={t('betterAuth.resetPassword.description')}
+      title={t('betterAuth.resetPassword.title')}
       footer={
         <Link href={'/signin'}>
           <Button block icon={ChevronLeftIcon} size={'large'}>
@@ -25,13 +27,11 @@ const ResetPasswordPage = () => {
           </Button>
         </Link>
       }
-      subtitle={t('betterAuth.resetPassword.description')}
-      title={t('betterAuth.resetPassword.title')}
     >
       <ResetPasswordContent
         email={email}
-        onSuccessRedirect={(url) => router.push(url)}
         token={token}
+        onSuccessRedirect={(url) => router.push(url)}
       />
     </AuthCard>
   );

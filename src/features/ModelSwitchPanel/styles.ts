@@ -2,8 +2,13 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    pointer-events: auto;
+    user-select: none;
     overflow: hidden;
     padding: 0 !important;
+  `,
+  detailPopup: css`
+    width: 400px;
   `,
   dropdownMenu: css`
     [role='menuitem'] {
@@ -68,6 +73,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
         opacity: 1;
       }
     }
+  `,
+  menuItemActive: css`
+    background: ${cssVar.colorFillTertiary};
   `,
   toolbar: css`
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};

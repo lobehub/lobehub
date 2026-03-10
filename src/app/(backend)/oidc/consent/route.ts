@@ -1,7 +1,9 @@
-import { correctOIDCUrl, getUserAuth } from '@lobechat/utils/server';
+import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
+import { appEnv } from '@/envs/app';
 import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
@@ -57,14 +59,14 @@ export async function POST(request: NextRequest) {
       } else {
         log(`Handling 'consent' prompt`);
 
-        // 1. 获取必要的 ID
+        // 1. Get necessary IDs
         const clientId = details.params.client_id as string;
 
-        // 2. 查找或创建 Grant 对象
+        // 2. Find or create Grant object
         const grant = await oidcService.findOrCreateGrants(userId!, clientId, details.grantId);
 
-        // 3. 将用户同意的 scopes 和 claims 添加到 Grant 对象
-        //    这些信息通常在 details.prompt.details 中
+        // 3. Add user-consented scopes and claims to Grant object
+        //    This information is typically in details.prompt.details
         const missingOIDCScope = (prompt.details.missingOIDCScope as string[]) || [];
         if (missingOIDCScope) {
           grant.addOIDCScope(missingOIDCScope.join(' '));
@@ -84,16 +86,16 @@ export async function POST(request: NextRequest) {
             log('Added resource scopes for %s to grant: %s', indicator, scopes.join(' '));
           }
         }
-        // 如果使用了 RAR (Rich Authorization Requests)，也需要添加到 grant
+        // If RAR (Rich Authorization Requests) is used, it also needs to be added to grant
         // if (prompt.details.rar) {
         //   prompt.details.rar.forEach(detail => grant.addRar(detail));
         // }
 
-        // 4. 保存 Grant 对象以获取其 jti (grantId)
+        // 4. Save Grant object to get its jti (grantId)
         const newGrantId = await grant.save();
         log('Saved grant with ID: %s', newGrantId);
 
-        // 5. 准备包含 grantId 的 result
+        // 5. Prepare result containing grantId
         result = { consent: { grantId: newGrantId } };
 
         log('Consent result prepared with grantId');
@@ -113,19 +115,26 @@ export async function POST(request: NextRequest) {
     const internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
     log('OIDC Provider internal redirect URL string: %s', internalRedirectUrlString);
 
-    let finalRedirectUrl;
-    try {
-      finalRedirectUrl = correctOIDCUrl(request, new URL(internalRedirectUrlString));
-    } catch {
-      finalRedirectUrl = new URL(internalRedirectUrlString);
-      log('Warning: Could not parse redirect URL, using as-is: %s', internalRedirectUrlString);
+    // Use APP_URL directly as base
+    if (appEnv.APP_URL) {
+      const baseUrl = new URL(appEnv.APP_URL);
+      const internalUrl = new URL(internalRedirectUrlString);
+      baseUrl.pathname = internalUrl.pathname;
+      baseUrl.search = internalUrl.search;
+      baseUrl.hash = internalUrl.hash;
+      const finalRedirectUrl = baseUrl;
+      log('Using APP_URL as base for redirect: %s', finalRedirectUrl.toString());
+      return NextResponse.redirect(finalRedirectUrl, {
+        status: 303,
+      });
     }
 
-    return NextResponse.redirect(finalRedirectUrl, {
+    // Fallback: use original internal URL
+    log('Using internal redirect URL directly: %s', internalRedirectUrlString);
+    return NextResponse.redirect(new URL(internalRedirectUrlString), {
       status: 303,
     });
   } catch (error) {
-    log('Error processing consent: %s', error instanceof Error ? error.message : 'unknown error');
     console.error('Error processing consent:', error);
     return NextResponse.json(
       {

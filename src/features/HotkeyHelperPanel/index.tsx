@@ -6,7 +6,8 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
-import { HotkeyGroupEnum, type HotkeyGroupId } from '@/types/hotkey';
+import { type HotkeyGroupId } from '@/types/hotkey';
+import { HotkeyGroupEnum } from '@/types/hotkey';
 
 import HotkeyContent from './HotkeyContent';
 
@@ -24,7 +25,6 @@ const HotkeyHelperPanel = memo(() => {
     <Modal
       centered
       footer={null}
-      onCancel={handleClose}
       open={open}
       styles={{
         body: { paddingBlock: 24 },
@@ -35,7 +35,8 @@ const HotkeyHelperPanel = memo(() => {
       }}
       title={
         <Segmented
-          onChange={(key) => setActive(key as HotkeyGroupId)}
+          value={active}
+          variant="filled"
           options={[
             {
               icon: <Icon icon={Settings2} />,
@@ -48,10 +49,10 @@ const HotkeyHelperPanel = memo(() => {
               value: HotkeyGroupEnum.Conversation,
             },
           ]}
-          value={active}
-          variant="filled"
+          onChange={(key) => setActive(key as HotkeyGroupId)}
         />
       }
+      onCancel={handleClose}
     >
       <Grid gap={32}>
         <HotkeyContent groupId={active} />

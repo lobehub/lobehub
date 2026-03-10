@@ -1,55 +1,50 @@
 ---
-title: Using Groq API Key in LobeChat
+title: Using the Groq API Key in LobeHub
 description: >-
-  Learn how to obtain GroqCloud API keys and configure Groq in LobeChat for optimal performance.
-
+  Learn how to obtain a GroqCloud API Key and configure Groq in LobeHub to
+  experience its powerful performance.
 tags:
-  - LPU Inference Engine
-  - GroqCloud
   - LLAMA3
   - Qwen2
   - API keys
   - Web UI
+  - API Key
 ---
 
-# Using Groq in LobeChat
+# Using Groq in LobeHub
 
-<Image alt={'Using Groq in LobeChat'} cover src={'https://github.com/lobehub/lobe-chat/assets/17870709/1d840e27-fa74-4e71-b777-330bf41d6dff'} />
+<Image alt={'Using Groq in LobeHub'} cover src={'/blog/assets17870709/1d840e27-fa74-4e71-b777-330bf41d6dff.webp'} />
 
-Groq's [LPU Inference Engine](https://wow.groq.com/news_press/groq-lpu-inference-engine-leads-in-first-independent-llm-benchmark/) has excelled in the latest independent Large Language Model (LLM) benchmark, redefining the standard for AI solutions with its remarkable speed and efficiency. By integrating LobeChat with Groq Cloud, you can now easily leverage Groq's technology to accelerate the operation of large language models in LobeChat.
+Groq’s [LPU Inference Engine](https://wow.groq.com/news_press/groq-lpu-inference-engine-leads-in-first-independent-llm-benchmark/) has demonstrated outstanding performance in the latest independent large language model (LLM) benchmarks, redefining the standards for AI solutions with its incredible speed and efficiency. With the integration of Groq Cloud into LobeHub, you can now easily harness Groq’s technology to accelerate LLM performance within LobeHub.
 
 <Callout type={'info'}>
-  Groq's LPU Inference Engine achieved a sustained speed of 300 tokens per second in internal
-  benchmark tests, and according to benchmark tests by ArtificialAnalysis.ai, Groq outperformed
-  other providers in terms of throughput (241 tokens per second) and total time to receive 100
-  output tokens (0.8 seconds).
+  In internal benchmarks, Groq’s LPU Inference Engine consistently achieved speeds of 300 tokens per second. According to ArtificialAnalysis.ai, Groq outperforms other providers in both throughput (241 tokens per second) and total time to receive 100 output tokens (0.8 seconds).
 </Callout>
 
-This document will guide you on how to use Groq in LobeChat:
+This guide will walk you through how to use Groq in LobeHub:
 
 <Steps>
-  ### Obtaining GroqCloud API Keys
+  ### Step 1: Get Your GroqCloud API Key
 
-  First, you need to obtain an API Key from the [GroqCloud Console](https://console.groq.com/).
+  First, visit the [GroqCloud Console](https://console.groq.com/) to obtain your API Key.
 
-  <Image alt={'Get GroqCloud API Key'} height={274} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/6942287e-fbb1-4a10-a1ce-caaa6663da1e'} />
+  <Image alt={'Get GroqCloud API Key'} height={274} inStep src={'/blog/assets34400653/6942287e-fbb1-4a10-a1ce-caaa6663da1e.webp'} />
 
-  Create an API Key in the `API Keys` menu of the console.
+  In the console, navigate to the `API Keys` section and create a new API Key.
 
-  <Image alt={'Save GroqCloud API Key'} height={274} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/eb57ca57-4f45-4409-91ce-9fa9c7c626d6'} />
+  <Image alt={'Save GroqCloud API Key'} height={274} inStep src={'/blog/assets34400653/eb57ca57-4f45-4409-91ce-9fa9c7c626d6.webp'} />
 
   <Callout type={'warning'}>
-    Safely store the key from the pop-up as it will only appear once. If you accidentally lose it, you
-    will need to create a new key.
+    Make sure to save the key shown in the popup — it will only be displayed once. If you lose it, you’ll need to generate a new one.
   </Callout>
 
-  ### Configure Groq in LobeChat
+  ### Step 2: Configure Groq in LobeHub
 
-  You can find the Groq configuration option in `Settings` -> `AI Service Provider`, where you can input the API Key you just obtained.
+  Go to `Settings` -> `AI Providers` in LobeHub, and find the configuration section for Groq. Paste the API Key you just obtained.
 
-  <Image alt={'Groq service provider settings'} height={274} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/88948a3a-6681-4a8d-9734-a464e09e4957'} />
+  <Image alt={'Groq Provider Settings'} height={274} inStep src={'/blog/assets34400653/88948a3a-6681-4a8d-9734-a464e09e4957.webp'} />
 </Steps>
 
-Next, select a Groq-supported model in the assistant's model options, and you can experience the powerful performance of Groq in LobeChat.
+Next, in the assistant’s model selection menu, choose a model supported by Groq to start experiencing Groq’s powerful performance in LobeHub.
 
-<Video alt={'Select and use Groq model'} src="https://github.com/lobehub/lobe-chat/assets/28616219/b6b8226b-183f-4249-8255-663a5e9f5af4" />
+<Video alt={'Select Groq Model'} src="/blog/assets28616219/b6b8226b-183f-4249-8255-663a5e9f5af4.mp4" />

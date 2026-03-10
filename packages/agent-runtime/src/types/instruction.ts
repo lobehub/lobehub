@@ -1,4 +1,4 @@
-import {
+import type {
   ChatToolPayload,
   ModelUsage,
   RuntimeInitialContext,
@@ -6,7 +6,7 @@ import {
 } from '@lobechat/types';
 
 import type { FinishReason } from './event';
-import { AgentState, ToolRegistry } from './state';
+import type { AgentState, ToolRegistry } from './state';
 import type { Cost, CostCalculationContext, Usage } from './usage';
 
 /**
@@ -72,7 +72,7 @@ export interface Agent {
    * @param context - Cost calculation context with usage and limits
    * @returns Updated cost information
    */
-  calculateCost?(context: CostCalculationContext): Cost;
+  calculateCost?: (context: CostCalculationContext) => Cost;
 
   /**
    * Calculate usage statistics from operation results
@@ -81,11 +81,11 @@ export interface Agent {
    * @param previousUsage - Previous usage statistics
    * @returns Updated usage statistics
    */
-  calculateUsage?(
+  calculateUsage?: (
     operationType: 'llm' | 'tool' | 'human_interaction',
     operationResult: any,
     previousUsage: Usage,
-  ): Usage;
+  ) => Usage;
 
   /** Optional custom executors mapping to extend runtime behaviors */
   executors?: Partial<Record<AgentInstruction['type'], any>>;
@@ -103,10 +103,10 @@ export interface Agent {
    * @param context - Current runtime context with phase and payload
    * @param state - Complete agent state for reference
    */
-  runner(
+  runner: (
     context: AgentRuntimeContext,
     state: AgentState,
-  ): Promise<AgentInstruction | AgentInstruction[]>;
+  ) => Promise<AgentInstruction | AgentInstruction[]>;
 
   /** Optional tools registry held by the agent */
   tools?: ToolRegistry;
@@ -209,6 +209,7 @@ export interface AgentInstructionResolveAbortedTools {
 
 /**
  * Instruction to execute context compression
+ * When triggered, compresses ALL messages into a single MessageGroup summary
  */
 export interface AgentInstructionCompressContext {
   payload: {
@@ -216,12 +217,8 @@ export interface AgentInstructionCompressContext {
     currentTokenCount: number;
     /** Existing summary to incorporate (for incremental compression) */
     existingSummary?: string;
-    /** Number of recent messages to keep uncompressed */
-    keepRecentCount: number;
     /** Messages to compress */
     messages: any[];
-    /** Topic ID for the conversation */
-    topicId: string;
   };
   type: 'compress_context';
 }
@@ -236,12 +233,26 @@ export interface ExecTaskItem {
   inheritMessages?: boolean;
   /** Detailed instruction/prompt for the task execution */
   instruction: string;
+  /**
+   * Whether to execute the task on the client side (desktop only).
+   * When true and running on desktop, the task will be executed locally
+   * with access to local tools (file system, shell commands, etc.).
+   *
+   * IMPORTANT: This MUST be set to true when the task requires:
+   * - Reading/writing local files via `local-system` tool
+   * - Executing shell commands
+   * - Any other desktop-only local tool operations
+   *
+   * If not specified or false, the task runs on the server (default behavior).
+   * On non-desktop platforms (web), this flag is ignored and tasks always run on server.
+   */
+  runInClient?: boolean;
   /** Timeout in milliseconds (optional, default 30 minutes) */
   timeout?: number;
 }
 
 /**
- * Instruction to execute a single async task
+ * Instruction to execute a single async task (server-side)
  */
 export interface AgentInstructionExecTask {
   payload: {
@@ -254,7 +265,7 @@ export interface AgentInstructionExecTask {
 }
 
 /**
- * Instruction to execute multiple async tasks in parallel
+ * Instruction to execute multiple async tasks in parallel (server-side)
  */
 export interface AgentInstructionExecTasks {
   payload: {
@@ -264,6 +275,34 @@ export interface AgentInstructionExecTasks {
     tasks: ExecTaskItem[];
   };
   type: 'exec_tasks';
+}
+
+/**
+ * Instruction to execute a single async task on the client (desktop only)
+ * Used when task requires local tools like file system or shell commands
+ */
+export interface AgentInstructionExecClientTask {
+  payload: {
+    /** Parent message ID (tool message that triggered the task) */
+    parentMessageId: string;
+    /** Task to execute */
+    task: ExecTaskItem;
+  };
+  type: 'exec_client_task';
+}
+
+/**
+ * Instruction to execute multiple async tasks on the client in parallel (desktop only)
+ * Used when tasks require local tools like file system or shell commands
+ */
+export interface AgentInstructionExecClientTasks {
+  payload: {
+    /** Parent message ID (tool message that triggered the tasks) */
+    parentMessageId: string;
+    /** Array of tasks to execute */
+    tasks: ExecTaskItem[];
+  };
+  type: 'exec_client_tasks';
 }
 
 /**
@@ -318,6 +357,8 @@ export type AgentInstruction =
   | AgentInstructionCallToolsBatch
   | AgentInstructionExecTask
   | AgentInstructionExecTasks
+  | AgentInstructionExecClientTask
+  | AgentInstructionExecClientTasks
   | AgentInstructionRequestHumanPrompt
   | AgentInstructionRequestHumanSelect
   | AgentInstructionRequestHumanApprove

@@ -52,9 +52,10 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   };
 
   return (
-    <Flexbox align={'center'} horizontal>
+    <Flexbox horizontal align={'center'}>
       {enabled ? (
         <DropdownMenu
+          placement="bottomRight"
           items={[
             {
               icon: <Icon icon={InfoIcon} />,
@@ -66,7 +67,7 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
                   return;
                 }
 
-                window.open(`/knowledge?file=${id}`);
+                window.open(`/resource?file=${id}`);
               },
             },
             {
@@ -77,16 +78,15 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
               onClick: removeKnowledge,
             },
           ]}
-          placement="bottomRight"
         >
           <ActionIcon icon={MoreVerticalIcon} loading={loading} />
         </DropdownMenu>
       ) : (
         <Button
           loading={loading}
-          onClick={assignKnowledge}
           size={mobile ? 'small' : undefined}
           type={'primary'}
+          onClick={assignKnowledge}
         >
           {t('knowledgeBase.library.action.add')}
         </Button>

@@ -1,11 +1,5 @@
-import {
-  CommonPlugin,
-  type IEditor,
-  Kernel,
-  LitexmlPlugin,
-  MarkdownPlugin,
-  moment,
-} from '@lobehub/editor';
+import type { IEditor } from '@lobehub/editor';
+import { CommonPlugin, Kernel, LitexmlPlugin, MarkdownPlugin, moment } from '@lobehub/editor';
 import { resetRandomKey } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +13,7 @@ describe('EditorRuntime', () => {
 
   beforeEach(() => {
     resetRandomKey();
-    editor = new Kernel();
+    editor = new Kernel() as unknown as IEditor;
     editor.registerPlugins([CommonPlugin, MarkdownPlugin, LitexmlPlugin]);
     editor.initNodeEditor();
 
@@ -47,7 +41,7 @@ describe('EditorRuntime', () => {
 
       // Verify XML structure
       const editorXml = editor.getDocument('litexml') as unknown as string;
-      expect(editorXml).toMatch(/<root>.*<p id="[^"]+".*>.*Hello world.*<\/p>.*<\/root>/s);
+      expect(editorXml).toMatch(/<root>.*<p id="[^"]+"[^>]*>.*Hello world.*<\/p>.*<\/root>/s);
     });
 
     it('should extract title from markdown heading and set content without title', async () => {

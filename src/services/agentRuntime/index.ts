@@ -49,6 +49,7 @@ class AgentRuntimeService {
       inputTemplate: chatConfig.inputTemplate,
       messages: data.messages as any,
       ...modelRuntimeConfig,
+      plugins: agentConfig.plugins,
       systemRole: agentConfig.systemRole,
       tools: enabledToolIds,
     });

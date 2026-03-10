@@ -12,9 +12,9 @@ import { useEffect } from 'react';
  */
 export default function useResizeObserver(
   element: Element | null,
-  // eslint-disable-next-line no-undef
+   
   observerCallback: ResizeObserverCallback,
-  // eslint-disable-next-line no-undef
+   
   options?: ResizeObserverOptions,
 ): void {
   useEffect(() => {

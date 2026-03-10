@@ -1,6 +1,5 @@
-import type { PluginEnableChecker } from '@lobechat/context-engine';
-import type { LobeTool } from '@lobechat/types';
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
+import { type LobeTool } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest
@@ -22,7 +21,7 @@ export interface ServerAgentToolsContext {
  */
 export interface ServerAgentToolsEngineConfig {
   /** Additional manifests to include (e.g., Klavis tools) */
-  additionalManifests?: LobeChatPluginManifest[];
+  additionalManifests?: LobeToolManifest[];
   /** Default tool IDs that will always be added */
   defaultToolIds?: string[];
   /** Custom enable checker for plugins */
@@ -33,6 +32,8 @@ export interface ServerAgentToolsEngineConfig {
  * Parameters for createServerAgentToolsEngine
  */
 export interface ServerCreateAgentToolsEngineParams {
+  /** Additional manifests to include (e.g., LobeHub Skills) */
+  additionalManifests?: LobeToolManifest[];
   /** Agent configuration containing plugins array */
   agentConfig: {
     /** Optional agent chat config with searchMode */
@@ -42,6 +43,14 @@ export interface ServerCreateAgentToolsEngineParams {
     /** Plugin IDs enabled for this agent */
     plugins?: string[];
   };
+  /** Device gateway context for remote tool calling */
+  deviceContext?: {
+    boundDeviceId?: string;
+    deviceOnline?: boolean;
+    gatewayConfigured: boolean;
+  };
+  /** Whether the user's global memory setting is enabled */
+  globalMemoryEnabled?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
   /** Model name for function calling compatibility check */

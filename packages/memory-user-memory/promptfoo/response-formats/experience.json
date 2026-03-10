@@ -62,6 +62,12 @@
                   "type": "string",
                   "description": "Narrative describing key insights or lessons learned"
                 },
+                "knowledgeValueScore": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Numeric score (0-1) describing how reusable and shareable this experience is"
+                },
                 "labels": {
                   "type": "array",
                   "items": {
@@ -72,6 +78,12 @@
                 "possibleOutcome": {
                   "type": "string",
                   "description": "Narrative describing potential outcomes or learnings"
+                },
+                "problemSolvingScore": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Numeric score (0-1) describing how effectively the problem was solved"
                 },
                 "reasoning": {
                   "type": "string",
@@ -95,8 +107,10 @@
               "required": [
                 "action",
                 "keyLearning",
+                "knowledgeValueScore",
                 "labels",
                 "possibleOutcome",
+                "problemSolvingScore",
                 "reasoning",
                 "scoreConfidence",
                 "situation",

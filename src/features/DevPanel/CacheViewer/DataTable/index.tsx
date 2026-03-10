@@ -12,6 +12,7 @@ const DataTable = memo(() => {
   return (
     <>
       <Header
+        title="Cache Entries"
         actions={[
           {
             icon: RefreshCw,
@@ -19,7 +20,6 @@ const DataTable = memo(() => {
             title: 'Refresh',
           },
         ]}
-        title="Cache Entries"
       />
       <Table
         columns={['url', 'headers.content-type', 'body', 'kind', 'tags', 'revalidate', 'timestamp']}

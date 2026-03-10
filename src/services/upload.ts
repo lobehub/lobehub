@@ -146,7 +146,7 @@ class UploadService {
     const xhr = new XMLHttpRequest();
 
     const { preSignUrl, ...result } = await this.getSignedUploadUrl(file, { directory, pathname });
-    let startTime = Date.now();
+    const startTime = Date.now();
 
     // Setup abort listener
     if (abortController) {

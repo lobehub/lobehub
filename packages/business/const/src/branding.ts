@@ -37,3 +37,4 @@ export const BRANDING_EMAIL = {
 export const BRANDING_PROVIDER = 'lobehub';
 
 export const COPYRIGHT = `© ${new Date().getFullYear()} ${ORG_NAME}`;
+export const COPYRIGHT_FULL = `${COPYRIGHT}. All rights reserved.`;

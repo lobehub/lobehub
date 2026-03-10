@@ -1,5 +1,5 @@
 interface ModelInstanceConfig {
-  appearsIn: any[]; // 你可以替换为实际类型
+  appearsIn: any[]; // You can replace this with the actual type
   order: number;
 }
 
@@ -50,8 +50,6 @@ interface Depth {
 }
 
 export interface TogetherAIModel {
-  id: string;
-  // eslint-disable-next-line typescript-sort-keys/interface
   access: string;
   config: Config;
   context_length: number;
@@ -63,6 +61,7 @@ export interface TogetherAIModel {
   display_name: string;
   display_type: string;
   hardware_label: string;
+  id: string;
   instances: Instance[];
   isFeaturedModel: boolean;
   license: string;

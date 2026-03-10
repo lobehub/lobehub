@@ -14,7 +14,6 @@ export class WorkflowError extends ComfyUIInternalError {
     super(message, reason, details);
     this.name = 'WorkflowError';
   }
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   static readonly Reasons = {
     INVALID_CONFIG: 'INVALID_CONFIG',
     INVALID_PARAMS: 'INVALID_PARAMS',
@@ -22,5 +21,4 @@ export class WorkflowError extends ComfyUIInternalError {
     MISSING_ENCODER: 'MISSING_ENCODER',
     UNSUPPORTED_MODEL: 'UNSUPPORTED_MODEL',
   } as const;
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 }

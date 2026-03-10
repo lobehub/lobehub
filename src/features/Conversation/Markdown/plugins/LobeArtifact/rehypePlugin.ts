@@ -8,7 +8,7 @@ function rehypeAntArtifact() {
       if (node.type === 'element' && node.tagName === 'p' && node.children.length > 0) {
         const firstChild = node.children[0];
         if (firstChild.type === 'raw' && firstChild.value.startsWith(`<${ARTIFACT_TAG}`)) {
-          // 提取 lobeArtifact 的属性
+          // Extract lobeArtifact attributes
           const attributes: Record<string, string> = {};
           const attributeRegex = /(\w+)="([^"]*)"/g;
           let match;
@@ -16,7 +16,7 @@ function rehypeAntArtifact() {
             attributes[match[1]] = match[2];
           }
 
-          // 创建新的 lobeArtifact 节点
+          // Create new lobeArtifact node
           const newNode = {
             children: [
               {
@@ -42,20 +42,20 @@ function rehypeAntArtifact() {
             type: 'element',
           };
 
-          // 替换原来的 p 节点
+          // Replace the original p node
           parent.children.splice(index, 1, newNode);
           return [SKIP, index];
         }
       }
-      // 如果字符串是 <lobeArtifact identifier="ai-new-interpretation" type="image/svg+xml" title="人工智能新解释">
-      // 得到的节点就是：
+      // If the string is <lobeArtifact identifier="ai-new-interpretation" type="image/svg+xml" title="New AI Interpretation">
+      // The resulting node is:
       // {
       //   type: 'raw',
       //   value:
-      //     '<lobeArtifact identifier="ai-new-interpretation" type="image/svg+xml" title="人工智能新解释">',
+      //     '<lobeArtifact identifier="ai-new-interpretation" type="image/svg+xml" title="New AI Interpretation">',
       // }
       else if (node.type === 'raw' && node.value.startsWith(`<${ARTIFACT_TAG}`)) {
-        // 创建新的 lobeArtifact 节点
+        // Create new lobeArtifact node
         const newNode = {
           children: [],
           properties: {},
@@ -63,7 +63,7 @@ function rehypeAntArtifact() {
           type: 'element',
         };
 
-        // 替换原来的 p 节点
+        // Replace the original p node
         parent.children.splice(index, 1, newNode);
         return [SKIP, index];
       }

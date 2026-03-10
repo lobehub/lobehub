@@ -20,10 +20,6 @@ class AiChatService {
       signal: abortController?.signal,
     });
   };
-
-  // sendGroupMessageInServer = async (params: SendMessageServerParams) => {
-  //   return lambdaClient.aiChat.sendGroupMessageInServer.mutate(cleanObject(params));
-  // };
 }
 
 export const aiChatService = new AiChatService();

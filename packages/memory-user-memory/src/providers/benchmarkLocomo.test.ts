@@ -1,8 +1,7 @@
-import { MemorySourceType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import locomoIngestPayloads from './tests/benchmark-locomo-converted.json';
 import { BenchmarkLocomoContextProvider } from './benchmarkLocomo';
+import locomoIngestPayloads from './tests/benchmark-locomo-converted.json';
 
 describe('BenchmarkLocomoContextProvider', () => {
   it('should convert LoCoMo ingest payload into benchmark XML context', async () => {
@@ -42,11 +41,7 @@ describe('BenchmarkLocomoContextProvider', () => {
       userId,
     });
 
-    const result = await provider.buildContext({
-      source: MemorySourceType.BenchmarkLocomo,
-      sourceId,
-      userId,
-    });
+    const result = await provider.buildContext(userId);
 
     const { context } = result;
     expect(result.sourceId).toBe(sourceId);

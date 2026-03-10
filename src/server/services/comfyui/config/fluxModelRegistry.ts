@@ -2,9 +2,8 @@
  * FLUX Model Registry - Separated for maintainability
  * Contains all FLUX model family registrations
  */
-import type { ModelConfig } from './modelRegistry';
+import { type ModelConfig } from './modelRegistry';
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
   // === Priority 1: Official Models (4 models) ===
   'flux1-dev.safetensors': {
@@ -514,7 +513,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
 
   // === Priority 3: Community Fine-tuned Models (48 models) ===
 
-  // 3.1 Jib Mix Flux系列
+  // 3.1 Jib Mix Flux Series
   'Jib_Mix_Flux_v8_schnell.safetensors': {
     priority: 3,
     variant: 'schnell',
@@ -534,7 +533,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.2 Real Dream FLUX系列
+  // 3.2 Real Dream FLUX Series
   'real_dream_flux_v1.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -566,7 +565,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.3 Vision Realistic FLUX系列
+  // 3.3 Vision Realistic FLUX Series
   'vision_realistic_flux_dev_v2.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -598,7 +597,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.4 Flux Fusion系列
+  // 3.4 Flux Fusion Series
   'flux_fusion_v2_4steps.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -618,7 +617,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.5 PixelWave FLUX系列
+  // 3.5 PixelWave FLUX Series
   'PixelWave_FLUX.1-dev_03.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -632,7 +631,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.6 Fux Capacity系列
+  // 3.6 Fux Capacity Series
   'Fux_Capacity_NSFW_v3.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -658,7 +657,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.7 Fluxmania系列
+  // 3.7 Fluxmania Series
   'FluxMania_Kreamania_v1.safetensors': {
     priority: 3,
     variant: 'krea',
@@ -684,7 +683,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.8 Fluxed Up系列
+  // 3.8 Fluxed Up Series
   'Fluxed_Up_NSFW_v2.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -692,7 +691,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.9 企业级LiblibAI模型
+  // 3.9 Enterprise LiblibAI Models
   'flux.1-ultra-realphoto-v2.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -840,4 +839,3 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 };
-/* eslint-enable sort-keys-fix/sort-keys-fix */

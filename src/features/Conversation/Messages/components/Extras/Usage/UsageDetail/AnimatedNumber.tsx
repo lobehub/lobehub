@@ -26,7 +26,7 @@ const AnimatedNumber = memo<AnimatedNumberProps>(({ value, duration = 3000, form
       const elapsed = currentTime - startTimeRef.current;
       const progress = Math.min(elapsed / duration, 1);
 
-      // 使用 easeOutCubic 缓动函数
+      // Apply easeOutCubic easing function
       const easeProgress = 1 - (1 - progress) ** 3;
       const current = startValue + diff * easeProgress;
 

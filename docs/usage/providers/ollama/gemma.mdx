@@ -1,50 +1,49 @@
 ---
-title: Using Google Gemma Model in LobeChat
+title: Using the Google Gemma Model in LobeHub
 description: >-
-  Learn how to integrate and utilize Google Gemma in LobeChat, an open-source large language model, in LobeChat with the help of Ollama. Follow these steps to pull and select the Gemma model for natural language processing tasks.
-
+  Easily perform natural language processing tasks with the Google Gemma model
+  through LobeHub's integration with Ollama. Install Ollama, pull the Gemma
+  model, select it from the model panel, and start chatting.
 tags:
   - Google Gemma
-  - LobeChat
+  - LobeHub
   - Ollama
   - Natural Language Processing
-  - Language Model
+  - Model Selection
 ---
 
-# Using Google Gemma Model
+# Using the Google Gemma Model
 
-<Image alt={'Using Gemma in LobeChat'} cover src={'https://github.com/lobehub/lobe-chat/assets/17870709/65d2dd2a-fdcf-4f3f-a6af-4ed5164a510d'} />
+<Image alt={'Using Gemma in LobeHub'} cover rounded src={'/blog/assets17870709/65d2dd2a-fdcf-4f3f-a6af-4ed5164a510d.webp'} />
 
-[Gemma](https://blog.google/technology/developers/gemma-open-models/) is an open-source large language model (LLM) from Google, designed to provide a more general and flexible model for various natural language processing tasks. Now, with the integration of LobeChat and [Ollama](https://ollama.com/), you can easily use Google Gemma in LobeChat.
+[Gemma](https://blog.google/technology/developers/gemma-open-models/) is an open-source large language model (LLM) developed by Google. It is designed to be a general-purpose and flexible model for a wide range of natural language processing (NLP) tasks. Now, thanks to LobeHub’s integration with [Ollama](https://ollama.com/), you can easily use Google Gemma directly within LobeHub.
 
-This document will guide you on how to use Google Gemma in LobeChat:
+This guide will walk you through how to use the Google Gemma model in LobeHub:
 
 <Steps>
-  ### Install Ollama locally
+  ### Install Ollama Locally
 
-  First, you need to install Ollama. For the installation process, please refer to the [Ollama usage documentation](/docs/usage/providers/ollama).
+  First, you’ll need to install Ollama. For installation instructions, refer to the [Ollama usage guide](/en/docs/usage/providers/ollama).
 
-  ### Pull Google Gemma model to local using Ollama
+  ### Pull the Google Gemma Model Using Ollama
 
-  After installing Ollama, you can install the Google Gemma model using the following command, using the 7b model as an example:
+  Once Ollama is installed, you can pull the Google Gemma model locally. For example, to pull the 7b model, run the following command:
 
   ```bash
   ollama pull gemma
   ```
 
-  <Image alt={'Pulling Gemma model using Ollama'} height={473} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/7049a811-a08b-45d3-8491-970f579c2ebd'} width={791} />
+  <Image alt={'Pulling the Gemma model using Ollama'} height={473} inStep src={'/blog/assets28616219/7049a811-a08b-45d3-8491-970f579c2ebd.webp'} width={791} />
 
-  ### Select Gemma model
+  ### Select the Gemma Model
 
-  In the session page, open the model panel and then select the Gemma model.
+  In the chat interface, open the model selection panel and choose the Gemma model.
 
-  <Image alt={'Selecting Gemma model in the model selection panel'} height={629} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/c91d0c18-a21f-41f6-b5cc-94d29faeb797'} width={791} />
+  <Image alt={'Selecting the Gemma model in the model panel'} height={629} inStep src={'/blog/assets28616219/69414c79-642e-4323-9641-bfa43a74fcc8.webp'} width={791} />
 
   <Callout type={'info'}>
-    If you do not see the Ollama provider in the model selection panel, please refer to [Integrating
-    with Ollama](/docs/self-hosting/examples/ollama) to learn how to enable the Ollama provider in
-    LobeChat.
+    If you don’t see the Ollama provider in the model selection panel, refer to the [Ollama Integration Guide](/en/docs/self-hosting/examples/ollama) to learn how to enable the Ollama provider in LobeHub.
   </Callout>
 </Steps>
 
-Now, you can start conversing with the local Gemma model using LobeChat.
+You’re all set! You can now start chatting with the local Gemma model directly in LobeHub.

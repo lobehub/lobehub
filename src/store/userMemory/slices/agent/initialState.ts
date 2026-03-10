@@ -1,4 +1,4 @@
-import type { RetrieveMemoryResult } from '@/types/userMemory';
+import { type RetrieveMemoryResult } from '@/types/userMemory';
 
 export interface AgentMemorySliceState {
   /**

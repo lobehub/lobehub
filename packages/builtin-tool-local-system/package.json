@@ -5,8 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./executor": "./src/executor/index.ts",
-    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
+    "./executor": "./src/executor/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
@@ -16,7 +15,7 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^4",
+    "@lobehub/ui": "^5",
     "antd": "^6",
     "antd-style": "*",
     "lucide-react": "*",

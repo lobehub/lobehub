@@ -22,10 +22,10 @@ interface CacheEntry<T = unknown> {
 }
 
 export interface LocalStorageCacheOptions {
-  /** localStorage key name, defaults to 'lobechat-swr-cache' */
-  cacheKey?: string;
   /** Allowed SWR key patterns (whitelist) */
   cacheablePatterns?: string[];
+  /** localStorage key name, defaults to 'lobechat-swr-cache' */
+  cacheKey?: string;
   /** Maximum cache entries, defaults to 50 */
   maxEntries?: number;
   /** Error callback */
@@ -256,7 +256,7 @@ export function clearSWRCache(cacheKey = 'lobechat-swr-cache'): void {
 
   try {
     localStorage.removeItem(cacheKey);
-    console.log('[SWR Cache] Cache cleared');
+    console.info('[SWR Cache] Cache cleared');
   } catch (error) {
     console.error('[SWR Cache] Failed to clear cache:', error);
   }

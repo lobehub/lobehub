@@ -1,6 +1,6 @@
-import { type BuiltinToolContext } from '@lobechat/types';
+import type { BuiltinToolContext } from '@lobechat/types';
 
-import { type TodoItem } from '../types';
+import type { TodoItem } from '../types';
 
 /**
  * Helper to get todos from step context or fallback to plugin state

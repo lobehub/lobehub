@@ -1,14 +1,14 @@
 import {
   KLAVIS_SERVER_TYPES,
-  type KlavisServerType,
   LOBEHUB_SKILL_PROVIDERS,
-  type LobehubSkillProviderType,
+  RECOMMENDED_SKILLS,
+  RecommendedSkillType,
 } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Image, type ItemType } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { type ItemType } from '@lobehub/ui';
+import { Avatar, Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ToyBrick } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -19,6 +19,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
+  agentSkillsSelectors,
   builtinToolSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
@@ -27,39 +28,12 @@ import {
 
 import { useAgentId } from '../../hooks/useAgentId';
 import KlavisServerItem from './KlavisServerItem';
+import KlavisSkillIcon from './KlavisSkillIcon';
+import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import ToolItem from './ToolItem';
 
-/**
- * Klavis 服务器图标组件
- * 对于 string 类型的 icon，使用 Image 组件渲染
- * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
- */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  if (typeof icon === 'string') {
-    return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
-  }
-
-  // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
-});
-
-KlavisIcon.displayName = 'KlavisIcon';
-
-/**
- * LobeHub Skill Provider 图标组件
- */
-const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
-  ({ icon, label }) => {
-    if (typeof icon === 'string') {
-      return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
-    }
-
-    return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
-  },
-);
-
-LobehubSkillIcon.displayName = 'LobehubSkillIcon';
+const SKILL_ICON_SIZE = 20;
 
 export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) => void }) => {
   const { t } = useTranslation('setting');
@@ -70,68 +44,119 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     s.togglePlugin,
   ]);
   const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
-  const enablePluginCount = useAgentStore(
-    (s) =>
-      agentByIdSelectors
-        .getAgentPluginsById(agentId)(s)
-        .filter((i) => !builtinList.some((b) => b.identifier === i)).length,
-  );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
-  // Klavis 相关状态
+  // Klavis-related state
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
   const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
-  // LobeHub Skill 相关状态
+  // LobeHub Skill related state
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
-  const [useFetchPluginStore, useFetchUserKlavisServers, useFetchLobehubSkillConnections] =
-    useToolStore((s) => [
-      s.useFetchPluginStore,
-      s.useFetchUserKlavisServers,
-      s.useFetchLobehubSkillConnections,
-    ]);
+  // Agent Skills related state
+  const installedBuiltinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
+  const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
+  const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
+
+  const [
+    useFetchPluginStore,
+    useFetchUserKlavisServers,
+    useFetchLobehubSkillConnections,
+    useFetchUninstalledBuiltinTools,
+    useFetchAgentSkills,
+  ] = useToolStore((s) => [
+    s.useFetchPluginStore,
+    s.useFetchUserKlavisServers,
+    s.useFetchLobehubSkillConnections,
+    s.useFetchUninstalledBuiltinTools,
+    s.useFetchAgentSkills,
+  ]);
 
   useFetchPluginStore();
   useFetchInstalledPlugins();
+  useFetchUninstalledBuiltinTools(true);
+  useFetchAgentSkills(true);
   useCheckPluginsIsInstalled(plugins);
 
-  // 使用 SWR 加载用户的 Klavis 集成（从数据库）
+  // Load user's Klavis integrations via SWR (from database)
   useFetchUserKlavisServers(isKlavisEnabledInEnv);
 
-  // 使用 SWR 加载用户的 LobeHub Skill 连接
+  // Load user's LobeHub Skill connections via SWR
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
-  // 根据 identifier 获取已连接的服务器
+  // Get connected server by identifier
   const getServerByName = (identifier: string) => {
     return allKlavisServers.find((server) => server.identifier === identifier);
   };
 
-  // 获取所有 Klavis 服务器类型的 identifier 集合（用于过滤 builtinList）
-  // 这里使用 KLAVIS_SERVER_TYPES 而不是已连接的服务器，因为我们要过滤掉所有可能的 Klavis 类型
+  // Get all Klavis server type identifier sets (used for filtering builtinList)
+  // Using KLAVIS_SERVER_TYPES instead of connected servers here, because we want to filter out all possible Klavis types
   const allKlavisTypeIdentifiers = useMemo(
     () => new Set(KLAVIS_SERVER_TYPES.map((type) => type.identifier)),
     [],
   );
-  // 过滤掉 builtinList 中的 klavis 工具（它们会单独显示在 Klavis 区域）
-  const filteredBuiltinList = useMemo(
+  // Get all skill identifier sets (used for filtering builtinList)
+  const allSkillIdentifiers = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of installedBuiltinSkills) ids.add(s.identifier);
+    for (const s of marketAgentSkills) ids.add(s.identifier);
+    for (const s of userAgentSkills) ids.add(s.identifier);
+    return ids;
+  }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
+
+  // Filter out Klavis tools and skills from builtinList (they will be displayed separately)
+  const filteredBuiltinList = useMemo(() => {
+    let list = builtinList;
+    if (isKlavisEnabledInEnv) {
+      list = list.filter((item) => !allKlavisTypeIdentifiers.has(item.identifier));
+    }
+    return list.filter((item) => !allSkillIdentifiers.has(item.identifier));
+  }, [builtinList, allKlavisTypeIdentifiers, isKlavisEnabledInEnv, allSkillIdentifiers]);
+
+  // Get recommended Klavis skill IDs
+  const recommendedKlavisIds = useMemo(
     () =>
-      isKlavisEnabledInEnv
-        ? builtinList.filter((item) => !allKlavisTypeIdentifiers.has(item.identifier))
-        : builtinList,
-    [builtinList, allKlavisTypeIdentifiers, isKlavisEnabledInEnv],
+      new Set(
+        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Klavis).map((s) => s.id),
+      ),
+    [],
   );
 
-  // Klavis 服务器列表项
+  // Get recommended Lobehub skill IDs
+  const recommendedLobehubIds = useMemo(
+    () =>
+      new Set(
+        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Lobehub).map((s) => s.id),
+      ),
+    [],
+  );
+
+  // Get installed Klavis server IDs
+  const installedKlavisIds = useMemo(
+    () => new Set(allKlavisServers.map((s) => s.identifier)),
+    [allKlavisServers],
+  );
+
+  // Get installed Lobehub skill IDs
+  const installedLobehubIds = useMemo(
+    () => new Set(allLobehubSkillServers.map((s) => s.identifier)),
+    [allLobehubSkillServers],
+  );
+
+  // Klavis server list items - only show installed or recommended
   const klavisServerItems = useMemo(
     () =>
       isKlavisEnabledInEnv
-        ? KLAVIS_SERVER_TYPES.map((type) => ({
-            icon: <KlavisIcon icon={type.icon} label={type.label} />,
+        ? KLAVIS_SERVER_TYPES.filter(
+            (type) =>
+              installedKlavisIds.has(type.identifier) || recommendedKlavisIds.has(type.identifier),
+          ).map((type) => ({
+            icon: <KlavisSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />,
             key: type.identifier,
             label: (
               <KlavisServerItem
+                agentId={agentId}
                 identifier={type.identifier}
                 label={type.label}
                 server={getServerByName(type.identifier)}
@@ -140,29 +165,54 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             ),
           }))
         : [],
-    [isKlavisEnabledInEnv, allKlavisServers],
+    [isKlavisEnabledInEnv, allKlavisServers, installedKlavisIds, recommendedKlavisIds, agentId],
   );
 
-  // LobeHub Skill Provider 列表项
+  // LobeHub Skill Provider list items - only show installed or recommended
   const lobehubSkillItems = useMemo(
     () =>
       isLobehubSkillEnabled
-        ? LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
-            icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
-            key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
-            label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
+        ? LOBEHUB_SKILL_PROVIDERS.filter(
+            (provider) =>
+              installedLobehubIds.has(provider.id) || recommendedLobehubIds.has(provider.id),
+          ).map((provider) => ({
+            icon: (
+              <LobehubSkillIcon
+                icon={provider.icon}
+                label={provider.label}
+                size={SKILL_ICON_SIZE}
+              />
+            ),
+            key: provider.id, // Use provider.id as key, consistent with pluginId
+            label: (
+              <LobehubSkillServerItem
+                agentId={agentId}
+                label={provider.label}
+                provider={provider.id}
+              />
+            ),
           }))
         : [],
-    [isLobehubSkillEnabled, allLobehubSkillServers],
+    [
+      isLobehubSkillEnabled,
+      allLobehubSkillServers,
+      installedLobehubIds,
+      recommendedLobehubIds,
+      agentId,
+    ],
   );
 
-  // 合并 builtin 工具、Klavis 服务器和 LobeHub Skill Provider
+  // Builtin tool list items (excluding Klavis and LobeHub Skill)
   const builtinItems = useMemo(
-    () => [
-      // 原有的 builtin 工具
-      ...filteredBuiltinList.map((item) => ({
+    () =>
+      filteredBuiltinList.map((item) => ({
         icon: (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+          <Avatar
+            avatar={item.meta.avatar}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
         ),
         key: item.identifier,
         label: (
@@ -178,68 +228,203 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           />
         ),
       })),
-      // LobeHub Skill Providers
-      ...lobehubSkillItems,
-      // Klavis 服务器
-      ...klavisServerItems,
-    ],
-    [filteredBuiltinList, klavisServerItems, lobehubSkillItems, checked, togglePlugin, setUpdating],
+    [filteredBuiltinList, checked, togglePlugin, setUpdating],
   );
 
-  // 市场 tab 的 items
-  const marketItems: ItemType[] = [
-    {
-      children: builtinItems,
-      key: 'builtins',
-      label: t('tools.builtins.groupName'),
-      type: 'group',
-    },
-    {
-      children: list.map((item) => ({
-        icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={20} />
-        ) : (
-          <Icon icon={ToyBrick} size={20} />
+  // Builtin Agent Skills list items (grouped under LobeHub)
+  const builtinAgentSkillItems = useMemo(
+    () =>
+      installedBuiltinSkills.map((skill) => ({
+        icon: (
+          <Avatar
+            avatar={skill.avatar || '🧩'}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
         ),
-        key: item.identifier,
+        key: skill.identifier,
         label: (
           <ToolItem
-            checked={checked.includes(item.identifier)}
-            id={item.identifier}
-            label={item.title}
+            checked={checked.includes(skill.identifier)}
+            id={skill.identifier}
+            label={skill.name}
             onUpdate={async () => {
               setUpdating(true);
-              await togglePlugin(item.identifier);
+              await togglePlugin(skill.identifier);
               setUpdating(false);
             }}
           />
         ),
       })),
-      key: 'plugins',
-      label: (
-        <Flexbox align={'center'} gap={40} horizontal justify={'space-between'}>
-          {t('tools.plugins.groupName')}
-          {enablePluginCount === 0 ? null : (
-            <div style={{ fontSize: 12, marginInlineEnd: 4 }}>
-              {t('tools.plugins.enabled', { num: enablePluginCount })}
-            </div>
-          )}
-        </Flexbox>
-      ),
-      type: 'group',
-    },
+    [installedBuiltinSkills, checked, togglePlugin, setUpdating],
+  );
+
+  // Market Agent Skills list items (grouped under Community)
+  const marketAgentSkillItems = useMemo(
+    () =>
+      marketAgentSkills.map((skill) => ({
+        icon: (
+          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
+        ),
+        key: skill.identifier,
+        label: (
+          <ToolItem
+            checked={checked.includes(skill.identifier)}
+            id={skill.identifier}
+            label={skill.name}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(skill.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      })),
+    [marketAgentSkills, checked, togglePlugin, setUpdating],
+  );
+
+  // User Agent Skills list items (grouped under Custom)
+  const userAgentSkillItems = useMemo(
+    () =>
+      userAgentSkills.map((skill) => ({
+        icon: (
+          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
+        ),
+        key: skill.identifier,
+        label: (
+          <ToolItem
+            checked={checked.includes(skill.identifier)}
+            id={skill.identifier}
+            label={skill.name}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(skill.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      })),
+    [userAgentSkills, checked, togglePlugin, setUpdating],
+  );
+
+  // Skills list items (including LobeHub Skill and Klavis)
+  // Connected items listed first
+  const skillItems = useMemo(() => {
+    const allItems = [...lobehubSkillItems, ...klavisServerItems];
+
+    return allItems.sort((a, b) => {
+      const isConnectedA =
+        installedLobehubIds.has(a.key as string) || installedKlavisIds.has(a.key as string);
+      const isConnectedB =
+        installedLobehubIds.has(b.key as string) || installedKlavisIds.has(b.key as string);
+
+      if (isConnectedA && !isConnectedB) return -1;
+      if (!isConnectedA && isConnectedB) return 1;
+      return 0;
+    });
+  }, [lobehubSkillItems, klavisServerItems, installedLobehubIds, installedKlavisIds]);
+
+  // Distinguish community plugins and custom plugins
+  const communityPlugins = list.filter((item) => item.type !== 'customPlugin');
+  const customPlugins = list.filter((item) => item.type === 'customPlugin');
+
+  // Function to map plugins to list items
+  const mapPluginToItem = (item: (typeof list)[0]) => ({
+    icon: item?.avatar ? (
+      <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
+    ) : (
+      <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
+    ),
+    key: item.identifier,
+    label: (
+      <ToolItem
+        checked={checked.includes(item.identifier)}
+        id={item.identifier}
+        label={item.title}
+        onUpdate={async () => {
+          setUpdating(true);
+          await togglePlugin(item.identifier);
+          setUpdating(false);
+        }}
+      />
+    ),
+  });
+
+  // Build LobeHub group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
+  const lobehubGroupChildren: ItemType[] = [
+    // 1. Builtin Agent Skills
+    ...builtinAgentSkillItems,
+    // 2. Builtin tools
+    ...builtinItems,
+    // 3. LobeHub Skill and Klavis (as builtin skills)
+    ...skillItems,
   ];
 
-  // 已安装 tab 的 items - 只显示已安装的插件
+  // Build Community group children (Market Agent Skills + community plugins)
+  const communityGroupChildren: ItemType[] = [
+    ...marketAgentSkillItems,
+    ...communityPlugins.map(mapPluginToItem),
+  ];
+
+  // Build Custom group children (User Agent Skills + custom plugins)
+  const customGroupChildren: ItemType[] = [
+    ...userAgentSkillItems,
+    ...customPlugins.map(mapPluginToItem),
+  ];
+
+  // Items for the market tab
+  const marketItems: ItemType[] = [
+    // LobeHub group
+    ...(lobehubGroupChildren.length > 0
+      ? [
+          {
+            children: lobehubGroupChildren,
+            key: 'lobehub',
+            label: t('skillStore.tabs.lobehub'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+    // Community group
+    ...(communityGroupChildren.length > 0
+      ? [
+          {
+            children: communityGroupChildren,
+            key: 'community',
+            label: t('skillStore.tabs.community'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+    // Custom group (only shown when there are custom plugins)
+    ...(customGroupChildren.length > 0
+      ? [
+          {
+            children: customGroupChildren,
+            key: 'custom',
+            label: t('skillStore.tabs.custom'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+  ];
+
+  // Items for the installed tab - only show installed plugins
   const installedPluginItems: ItemType[] = useMemo(() => {
     const installedItems: ItemType[] = [];
 
-    // 已安装的 builtin 工具
+    // Installed builtin tools
     const enabledBuiltinItems = filteredBuiltinList
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
         icon: (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+          <Avatar
+            avatar={item.meta.avatar}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
         ),
         key: item.identifier,
         label: (
@@ -256,40 +441,77 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ),
       }));
 
-    // 已连接的 Klavis 服务器（放在 builtin 里面）
+    // Connected Klavis servers
     const connectedKlavisItems = klavisServerItems.filter((item) =>
       checked.includes(item.key as string),
     );
 
-    // 已连接的 LobeHub Skill Providers
+    // Connected LobeHub Skill Providers
     const connectedLobehubSkillItems = lobehubSkillItems.filter((item) =>
       checked.includes(item.key as string),
     );
 
-    // 合并 builtin、Klavis 和 LobeHub Skill
-    const allBuiltinItems = [
+    // Merge enabled LobeHub Skill and Klavis (as builtin skills)
+    const enabledSkillItems = [...connectedLobehubSkillItems, ...connectedKlavisItems];
+
+    // Enabled Builtin Agent Skills
+    const enabledBuiltinAgentSkillItems = installedBuiltinSkills
+      .filter((skill) => checked.includes(skill.identifier))
+      .map((skill) => ({
+        icon: (
+          <Avatar
+            avatar={skill.avatar || '🧩'}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
+        ),
+        key: skill.identifier,
+        label: (
+          <ToolItem
+            checked={true}
+            id={skill.identifier}
+            label={skill.name}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(skill.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      }));
+
+    // Build builtin tools group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
+    const allBuiltinItems: ItemType[] = [
+      // 1. Builtin Agent Skills
+      ...enabledBuiltinAgentSkillItems,
+      // 2. Builtin tools
       ...enabledBuiltinItems,
-      ...connectedKlavisItems,
-      ...connectedLobehubSkillItems,
+      // 3. divider (if there are builtin tools and skill items)
+      ...(enabledBuiltinItems.length > 0 && enabledSkillItems.length > 0
+        ? [{ key: 'installed-divider-builtin-skill', type: 'divider' as const }]
+        : []),
+      // 4. LobeHub Skill and Klavis
+      ...enabledSkillItems,
     ];
 
     if (allBuiltinItems.length > 0) {
       installedItems.push({
         children: allBuiltinItems,
-        key: 'installed-builtins',
-        label: t('tools.builtins.groupName'),
+        key: 'installed-lobehub',
+        label: t('skillStore.tabs.lobehub'),
         type: 'group',
       });
     }
 
-    // 已安装的插件
-    const installedPlugins = list
+    // Enabled community plugins
+    const enabledCommunityPlugins = communityPlugins
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
         icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={20} />
+          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
         ) : (
-          <Icon icon={ToyBrick} size={20} />
+          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
         ),
         key: item.identifier,
         label: (
@@ -306,11 +528,92 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ),
       }));
 
-    if (installedPlugins.length > 0) {
+    // Enabled custom plugins
+    const enabledCustomPlugins = customPlugins
+      .filter((item) => checked.includes(item.identifier))
+      .map((item) => ({
+        icon: item?.avatar ? (
+          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
+        ) : (
+          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
+        ),
+        key: item.identifier,
+        label: (
+          <ToolItem
+            checked={true}
+            id={item.identifier}
+            label={item.title}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(item.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      }));
+
+    // Enabled Market Agent Skills
+    const enabledMarketAgentSkillItems = marketAgentSkills
+      .filter((skill) => checked.includes(skill.identifier))
+      .map((skill) => ({
+        icon: (
+          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
+        ),
+        key: skill.identifier,
+        label: (
+          <ToolItem
+            checked={true}
+            id={skill.identifier}
+            label={skill.name}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(skill.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      }));
+
+    // Community group (Market Agent Skills + community plugins)
+    const allCommunityItems = [...enabledMarketAgentSkillItems, ...enabledCommunityPlugins];
+    if (allCommunityItems.length > 0) {
       installedItems.push({
-        children: installedPlugins,
-        key: 'installed-plugins',
-        label: t('tools.plugins.groupName'),
+        children: allCommunityItems,
+        key: 'installed-community',
+        label: t('skillStore.tabs.community'),
+        type: 'group',
+      });
+    }
+
+    // Enabled User Agent Skills
+    const enabledUserAgentSkillItems = userAgentSkills
+      .filter((skill) => checked.includes(skill.identifier))
+      .map((skill) => ({
+        icon: (
+          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
+        ),
+        key: skill.identifier,
+        label: (
+          <ToolItem
+            checked={true}
+            id={skill.identifier}
+            label={skill.name}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(skill.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      }));
+
+    // Custom group (User Agent Skills + custom plugins)
+    const allCustomItems = [...enabledUserAgentSkillItems, ...enabledCustomPlugins];
+    if (allCustomItems.length > 0) {
+      installedItems.push({
+        children: allCustomItems,
+        key: 'installed-custom',
+        label: t('skillStore.tabs.custom'),
         type: 'group',
       });
     }
@@ -318,7 +621,11 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     return installedItems;
   }, [
     filteredBuiltinList,
-    list,
+    installedBuiltinSkills,
+    marketAgentSkills,
+    userAgentSkills,
+    communityPlugins,
+    customPlugins,
     klavisServerItems,
     lobehubSkillItems,
     checked,

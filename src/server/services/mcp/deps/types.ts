@@ -45,5 +45,5 @@ export interface InstallationChecker {
   /**
    * Check if package is installed
    */
-  checkPackageInstalled(details: any): Promise<PackageInstallCheckResult>;
+  checkPackageInstalled: (details: any) => Promise<PackageInstallCheckResult>;
 }

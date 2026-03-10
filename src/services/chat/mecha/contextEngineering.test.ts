@@ -1,4 +1,4 @@
-import { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as isCanUseFCModule from '@/helpers/isCanUseFC';
@@ -36,6 +36,16 @@ afterEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
 });
+
+// Helper to compute expected date content from SystemDateProvider
+const getCurrentDateContent = () => {
+  const tz = 'UTC';
+  const today = new Date();
+  const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
+  const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
+  const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
+  return `Current date: ${year}-${month}-${day} (${tz})`;
+};
 
 describe('contextEngineering', () => {
   describe('handle with files content in server mode', () => {
@@ -82,6 +92,7 @@ describe('contextEngineering', () => {
       });
 
       expect(output).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: [
             {
@@ -149,6 +160,7 @@ describe('contextEngineering', () => {
       });
 
       expect(output).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: [
             {
@@ -203,7 +215,7 @@ describe('contextEngineering', () => {
 
     expect(result).toEqual([
       {
-        content: '## Tools\n\nYou can use these tools',
+        content: '## Tools\n\nYou can use these tools\n\n' + getCurrentDateContent(),
         role: 'system',
       },
       {
@@ -232,6 +244,7 @@ describe('contextEngineering', () => {
     });
 
     expect(result).toEqual([
+      { content: getCurrentDateContent(), role: 'system' },
       {
         content: [
           {
@@ -300,7 +313,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toEqual([
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toEqual([
         { text: 'Here is an image.', type: 'text' },
         { image_url: { detail: 'auto', url: 'http://example.com/image.png' }, type: 'image_url' },
       ]);
@@ -326,7 +340,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toEqual([
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toEqual([
         { image_url: { detail: 'auto', url: 'http://example.com/image.png' }, type: 'image_url' },
       ]);
     });
@@ -361,8 +376,9 @@ describe('contextEngineering', () => {
       provider: 'openai',
     });
 
-    expect(result[0].tool_calls).toBeUndefined();
-    expect(result[0].content).toBe('I have a tool call.');
+    expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+    expect(result[1].tool_calls).toBeUndefined();
+    expect(result[1].content).toBe('I have a tool call.');
   });
 
   describe('Process placeholder variables', () => {
@@ -390,10 +406,11 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toBe(
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toBe(
         'Hello TestUser, today is 2023-12-25 and the time is 14:30:45',
       );
-      expect(result[1].content).toBe('Hi there! Your random number is 12345');
+      expect(result[2].content).toBe('Hi there! Your random number is 12345');
     });
 
     it('should process placeholder variables in array content', async () => {
@@ -422,8 +439,9 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(Array.isArray(result[0].content)).toBe(true);
-      const content = result[0].content as any[];
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(Array.isArray(result[1].content)).toBe(true);
+      const content = result[1].content as any[];
       expect(content[0].text).toBe('Hello TestUser, today is 2023-12-25');
       expect(content[1].image_url.url).toBe('data:image/png;base64,abc123');
     });
@@ -447,8 +465,9 @@ describe('contextEngineering', () => {
         },
       ];
 
-      // Mock topic memories and global identities separately
+      // Mock topic memories and user persona separately
       vi.spyOn(memoryManager, 'resolveTopicMemories').mockReturnValue({
+        activities: [],
         contexts: [
           {
             accessedAt: new Date('2024-01-01T00:00:00.000Z'),
@@ -471,7 +490,7 @@ describe('contextEngineering', () => {
         experiences: [],
         preferences: [],
       });
-      vi.spyOn(memoryManager, 'resolveGlobalIdentities').mockReturnValue([]);
+      vi.spyOn(memoryManager, 'resolveUserPersona').mockReturnValue(undefined);
 
       const result = await contextEngineering({
         enableUserMemories: true,
@@ -480,10 +499,11 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      // Keep the original system message as-is
+      // Keep the original system message as-is (with date appended by SystemDateProvider)
       expect(result[0].role).toBe('system');
       expect(result[0].content).toBe(
-        'Memory load: available={{memory_available}}, total contexts={{memory_contexts_count}}\n{{memory_summary}}',
+        'Memory load: available={{memory_available}}, total contexts={{memory_contexts_count}}\n{{memory_summary}}\n\n' +
+          getCurrentDateContent(),
       );
 
       // Memory context is injected as a consolidated user message before the first user message
@@ -515,7 +535,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toBe('Hello TestUser, missing: {{missing_var}}');
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toBe('Hello TestUser, missing: {{missing_var}}');
     });
 
     it('should not modify messages without placeholder variables', async () => {
@@ -535,7 +556,8 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0].content).toBe('Hello there, no variables here');
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[1].content).toBe('Hello there, no variables here');
     });
 
     it('should process placeholder variables combined with other processors', async () => {
@@ -565,8 +587,9 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(Array.isArray(result[0].content)).toBe(true);
-      const content = result[0].content as any[];
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(Array.isArray(result[1].content)).toBe(true);
+      const content = result[1].content as any[];
 
       // Should contain processed placeholder variables in the text content
       expect(content[0].text).toContain('Hello TestUser, check this image from 2023-12-25');
@@ -583,7 +606,7 @@ describe('contextEngineering', () => {
   });
 
   describe('Message preprocessing processors', () => {
-    it('should truncate message history when enabled', async () => {
+    it('should keep all messages (no history truncation)', async () => {
       const messages: UIChatMessage[] = [
         {
           role: 'user',
@@ -626,13 +649,13 @@ describe('contextEngineering', () => {
         messages,
         model: 'gpt-4',
         provider: 'openai',
-        enableHistoryCount: true,
-        historyCount: 4, // Should keep last 2 messages
       });
 
-      // Should only keep the last 2 messages
-      expect(result).toHaveLength(4);
+      // Should keep all messages (plus system date)
+      expect(result).toHaveLength(6);
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
+        { content: 'Message 1', role: 'user' },
         { content: 'Response 1', role: 'assistant' },
         { content: 'Message 2', role: 'user' },
         { content: 'Response 2', role: 'assistant' },
@@ -667,6 +690,7 @@ describe('contextEngineering', () => {
 
       // Should apply template to user message only
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: 'Template: Original user input - End',
           role: 'user',
@@ -676,7 +700,7 @@ describe('contextEngineering', () => {
           content: 'Assistant response',
         },
       ]);
-      expect(result[1].content).toBe('Assistant response'); // Unchanged
+      expect(result[2].content).toBe('Assistant response'); // Unchanged
     });
 
     it('should inject system role at the beginning', async () => {
@@ -697,14 +721,14 @@ describe('contextEngineering', () => {
         systemRole: 'You are a helpful assistant.',
       });
 
-      // Should have system role at the beginning
+      // Should have system role at the beginning (with date appended)
       expect(result).toEqual([
-        { content: 'You are a helpful assistant.', role: 'system' },
+        { content: 'You are a helpful assistant.\n\n' + getCurrentDateContent(), role: 'system' },
         { content: 'User message', role: 'user' },
       ]);
     });
 
-    it('should combine all preprocessing steps correctly', async () => {
+    it('should combine system role and input template correctly', async () => {
       const messages: UIChatMessage[] = [
         {
           role: 'user',
@@ -735,15 +759,17 @@ describe('contextEngineering', () => {
         provider: 'openai',
         systemRole: 'System instructions.',
         inputTemplate: 'Processed: {{text}}',
-        enableHistoryCount: true,
-        historyCount: 2, // Should keep last 1 message
       });
 
-      // System role should be first
+      // System role should be first (with date appended), followed by all messages with input template applied to user messages
       expect(result).toEqual([
         {
-          content: 'System instructions.',
+          content: 'System instructions.\n\n' + getCurrentDateContent(),
           role: 'system',
+        },
+        {
+          content: 'Processed: Old message 1',
+          role: 'user',
         },
         {
           role: 'assistant',
@@ -773,8 +799,9 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      // Should pass message unchanged
+      // Should pass message unchanged (with system date prepended)
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: 'Simple message',
           role: 'user',
@@ -782,7 +809,7 @@ describe('contextEngineering', () => {
       ]);
     });
 
-    it('should handle history truncation with system role injection correctly', async () => {
+    it('should handle system role injection with all messages (no history truncation)', async () => {
       const messages: UIChatMessage[] = [
         {
           role: 'user',
@@ -812,18 +839,24 @@ describe('contextEngineering', () => {
         model: 'gpt-4',
         provider: 'openai',
         systemRole: 'System role here.',
-        enableHistoryCount: true,
-        historyCount: 1, // Should keep only 1 message
       });
 
-      // Should have system role + 1 truncated message
+      // Should have system role (with date) + all messages
       expect(result).toEqual([
         {
-          content: 'System role here.',
+          content: 'System role here.\n\n' + getCurrentDateContent(),
           role: 'system',
         },
         {
-          content: 'Message 3', // Only the last message should remain
+          content: 'Message 1',
+          role: 'user',
+        },
+        {
+          content: 'Message 2',
+          role: 'user',
+        },
+        {
+          content: 'Message 3',
           role: 'user',
         },
       ]);
@@ -848,8 +881,9 @@ describe('contextEngineering', () => {
         inputTemplate: '<%- invalid javascript syntax %>',
       });
 
-      // Should keep original message when template fails
+      // Should keep original message when template fails (with system date prepended)
       expect(result).toEqual([
+        { content: getCurrentDateContent(), role: 'system' },
         {
           content: 'User message',
           role: 'user',

@@ -7,7 +7,6 @@ export interface SaveState {
   saveStatus: SaveStatus;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface PublicState {}
 
 export interface State extends PublicState {
@@ -15,6 +14,15 @@ export interface State extends PublicState {
    * Active tab ID - 'group' for group settings, or agent ID for member editor
    */
   activeTabId: string;
+  /**
+   * Agent builder content update - when set, triggers editor to load new content
+   * Format: { entityId: string (groupId or agentId), content: string, timestamp: number }
+   */
+  agentBuilderContentUpdate?: {
+    content: string;
+    entityId: string;
+    timestamp: number;
+  };
   chatPanelExpanded: boolean;
   editor?: IEditor;
   editorState?: any; // EditorState from useEditorState hook

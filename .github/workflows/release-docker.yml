@@ -3,7 +3,7 @@ permissions:
   contents: read
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   release:
     types: [published]
 
@@ -16,7 +16,6 @@ env:
 
 jobs:
   build:
-
     strategy:
       matrix:
         include:
@@ -34,8 +33,6 @@ jobs:
 
       - name: Checkout base
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -47,7 +44,8 @@ jobs:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event.release.prerelease }}
 
       - name: Docker login
         uses: docker/login-action@v3
@@ -94,8 +92,6 @@ jobs:
     steps:
       - name: Checkout base
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Download digests
         uses: actions/download-artifact@v7
@@ -114,7 +110,8 @@ jobs:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event.release.prerelease }}
 
       - name: Docker login
         uses: docker/login-action@v3
@@ -125,7 +122,9 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+          # 过滤掉带 v 前缀的 tag（如 lobehub/lobehub:v2.1.29），只保留无 v 前缀的版本号和 latest
+          TAGS=$(jq -cr '.tags | map(select(test(":v\\d") | not)) | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          docker buildx imagetools create $TAGS \
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect image

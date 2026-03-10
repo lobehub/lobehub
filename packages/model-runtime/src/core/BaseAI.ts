@@ -1,43 +1,53 @@
-import { AIBaseModelCard } from 'model-bank';
-import OpenAI from 'openai';
+import type { AIBaseModelCard } from 'model-bank';
+import type OpenAI from 'openai';
 
-import {
+import type {
   ChatMethodOptions,
   ChatStreamPayload,
   CreateImagePayload,
   CreateImageResponse,
+  CreateVideoPayload,
+  CreateVideoResponse,
   Embeddings,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
   GenerateObjectPayload,
+  HandleCreateVideoWebhookPayload,
+  HandleCreateVideoWebhookResult,
   ModelRequestOptions,
   PullModelParams,
-  TextToImagePayload,
   TextToSpeechOptions,
   TextToSpeechPayload,
 } from '../types';
 
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 export interface LobeRuntimeAI {
   baseURL?: string;
-  chat?(payload: ChatStreamPayload, options?: ChatMethodOptions): Promise<Response>;
-  generateObject?(payload: GenerateObjectPayload, options?: GenerateObjectOptions): Promise<any>;
-
-  embeddings?(payload: EmbeddingsPayload, options?: EmbeddingsOptions): Promise<Embeddings[]>;
-
-  models?(): Promise<any>;
-
-  textToImage?: (payload: TextToImagePayload) => Promise<string[]>;
+  chat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<Response>;
   createImage?: (payload: CreateImagePayload) => Promise<CreateImageResponse>;
+
+  createVideo?: (payload: CreateVideoPayload) => Promise<CreateVideoResponse>;
+
+  embeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<Embeddings[]>;
+
+  generateObject?: (
+    payload: GenerateObjectPayload,
+    options?: GenerateObjectOptions,
+  ) => Promise<any>;
+
+  handleCreateVideoWebhook?: (
+    payload: HandleCreateVideoWebhookPayload,
+  ) => Promise<HandleCreateVideoWebhookResult>;
+
+  models?: () => Promise<any>;
+
+  // Model management related interface
+  pullModel?: (params: PullModelParams, options?: ModelRequestOptions) => Promise<Response>;
 
   textToSpeech?: (
     payload: TextToSpeechPayload,
     options?: TextToSpeechOptions,
   ) => Promise<ArrayBuffer>;
-
-  // Model management related interface
-  pullModel?(params: PullModelParams, options?: ModelRequestOptions): Promise<Response>;
 }
 /* eslint-enabled */
 

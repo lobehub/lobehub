@@ -1,13 +1,13 @@
 import { Block, Collapse, Empty, Highlighter, Icon, Markdown } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { CheckIcon, MessageSquare, MinusIcon } from 'lucide-react';
-import { markdownToTxt } from 'markdown-to-txt';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import Title from '@/routes/(main)/community/features/Title';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
-import Title from '../../../app/[variants]/(main)/community/features/Title';
 import CollapseDesc from '../CollapseDesc';
 import CollapseLayout from '../CollapseLayout';
 import { useDetailContext } from '../DetailProvider';
@@ -41,6 +41,7 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
       activeKey={activeKey}
       expandIconPlacement={'end'}
       gap={8}
+      variant={'outlined'}
       items={prompts.map((item) => {
         return {
           children: (
@@ -55,6 +56,9 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                   children:
                     mode === ModeType.Docs ? (
                       <InlineTable
+                        dataSource={item.arguments}
+                        pagination={false}
+                        rowKey={'name'}
                         columns={[
                           {
                             dataIndex: 'name',
@@ -74,12 +78,12 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             dataIndex: 'required',
                             render: (_, record) => (
                               <Icon
+                                icon={record.required ? CheckIcon : MinusIcon}
                                 color={
                                   record.required
                                     ? cssVar.colorSuccess
                                     : cssVar.colorTextDescription
                                 }
-                                icon={record.required ? CheckIcon : MinusIcon}
                               />
                             ),
                             title: t('mcp.details.schema.prompts.table.required'),
@@ -89,9 +93,6 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             title: t('mcp.details.schema.prompts.table.description'),
                           },
                         ]}
-                        dataSource={item.arguments}
-                        pagination={false}
-                        rowKey={'name'}
                       />
                     ) : (
                       <Highlighter
@@ -122,7 +123,6 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
         };
       })}
       onChange={setActiveKey}
-      variant={'outlined'}
     />
   );
 });

@@ -1,5 +1,7 @@
-import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
+import { TooltipGroup } from '@lobehub/ui';
+import { Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
@@ -18,12 +20,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface ModelOption {
-  label: any;
+  label: ReactNode;
   provider: string;
   value: string;
 }
 
-interface ModelSelectProps extends SelectProps {
+interface ModelSelectProps extends Omit<SelectProps, 'onChange' | 'value'> {
   onChange?: (props: WorkingModel) => void;
   showAbility?: boolean;
   value?: WorkingModel;
@@ -70,15 +72,16 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
   return (
     <TooltipGroup>
       <Select
-        onChange={(value, option) => {
-          const model = value.split('/').slice(1).join('/');
-          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
-        }}
         options={options}
         popupClassName={styles.select}
         popupMatchSelectWidth={false}
         value={`${value?.provider}/${value?.model}`}
         variant={'filled'}
+        onChange={(value, option) => {
+          if (!value) return;
+          const model = (value as string).split('/').slice(1).join('/');
+          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
+        }}
         {...rest}
       />
     </TooltipGroup>

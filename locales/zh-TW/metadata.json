@@ -1,8 +1,8 @@
 {
   "changelog.description": "持續追蹤 {{appName}} 的新功能和改進",
   "changelog.title": "更新日誌",
-  "chat.description": "{{appName}} 帶給你最好的 ChatGPT, Claude, Gemini, OLLaMA WebUI 使用體驗",
-  "chat.title": "{{appName}} · 協作代理的理想平台",
+  "chat.description": "{{appName}} 是一個結合工作與生活的空間，讓你能夠尋找、建立並與隨你一同成長的智能代理團隊合作。",
+  "chat.title": "{{appName}} · 與你一同成長的智能代理團隊",
   "discover.assistants.description": "內容創作、文案、問答、圖像生成、視頻生成、語音生成、智能代理、自動化工作流程，定制你專屬的 AI / GPTs / OLLaMA 智能助手",
   "discover.assistants.title": "智慧體社群",
   "discover.description": "內容創作、文案、問答、圖像生成、視頻生成、語音生成、智能代理、自定義 AI 應用，定制你專屬的 AI 應用工作台",

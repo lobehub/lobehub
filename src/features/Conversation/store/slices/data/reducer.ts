@@ -1,9 +1,9 @@
-import type {
-  ChatMessageExtra,
-  ChatToolPayload,
-  CreateMessageParams,
-  MessagePluginItem,
-  UIChatMessage,
+import {
+  type ChatMessageExtra,
+  type ChatToolPayload,
+  type CreateMessageParams,
+  type MessagePluginItem,
+  type UIChatMessage,
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
@@ -84,6 +84,12 @@ interface UpdateMessageMetadata {
   value: Partial<UIChatMessage['metadata']>;
 }
 
+interface UpdateMessageGroupMetadata {
+  id: string;
+  type: 'updateMessageGroupMetadata';
+  value: Record<string, unknown>;
+}
+
 export type MessageDispatch =
   | CreateMessage
   | UpdateMessage
@@ -91,6 +97,7 @@ export type MessageDispatch =
   | UpdatePluginState
   | UpdateMessageExtra
   | UpdateMessageMetadata
+  | UpdateMessageGroupMetadata
   | DeleteMessage
   | UpdateMessagePlugin
   | UpdateMessageTools

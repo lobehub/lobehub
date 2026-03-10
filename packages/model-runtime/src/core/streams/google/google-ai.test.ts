@@ -1,4 +1,4 @@
-import { GenerateContentResponse } from '@google/genai';
+import type { GenerateContentResponse } from '@google/genai';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as uuidModule from '../../../utils/uuid';
@@ -251,16 +251,16 @@ describe('GoogleGenerativeAIStream', () => {
       expect(chunks).toEqual(
         [
           'id: chat_1',
-          'event: content_part',
-          'data: {"content":"234","partType":"text"}\n',
+          'event: text',
+          'data: "234"\n',
 
           'id: chat_1',
           'event: text',
           'data: ""\n',
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"567890\\n","partType":"text"}\n`,
+          'event: text',
+          `data: "567890\\n"\n`,
           // stop
           'id: chat_1',
           'event: stop',
@@ -384,12 +384,12 @@ describe('GoogleGenerativeAIStream', () => {
           `data: {"content":"**Finalizing Interpretation**\\n\\n","inReasoning":true,"partType":"text"}\n`,
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"简单来说，","partType":"text"}\n`,
+          'event: text',
+          'data: "简单来说，"\n',
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"文本内容。","partType":"text"}\n`,
+          'event: text',
+          'data: "文本内容。"\n',
           // stop
           'id: chat_1',
           'event: stop',
@@ -471,12 +471,12 @@ describe('GoogleGenerativeAIStream', () => {
       expect(chunks).toEqual(
         [
           'id: chat_1',
-          'event: content_part',
-          'data: {"content":"234","partType":"text"}\n',
+          'event: text',
+          'data: "234"\n',
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"567890\\n","partType":"text"}\n`,
+          'event: text',
+          'data: "567890\\n"\n',
           // stop
           'id: chat_1',
           'event: stop',
@@ -840,7 +840,7 @@ describe('GoogleGenerativeAIStream', () => {
 
           'id: chat_1',
           'event: grounding',
-          `data: {\"citations\":[{\"favicon\":\"npmjs.com\",\"title\":\"npmjs.com\",\"url\":\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXG1234545\"},{\"favicon\":\"google.dev\",\"title\":\"google.dev\",\"url\":\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXE9288334\"}],\"searchQueries\":[\"sdk latest version\"]}\n`,
+          `data: {"citations":[{"favicon":"npmjs.com","title":"npmjs.com","url":"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXG1234545"},{"favicon":"google.dev","title":"google.dev","url":"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AbF9wXE9288334"}],"searchQueries":["sdk latest version"]}\n`,
           // stop
           'id: chat_1',
           'event: stop',
@@ -849,6 +849,269 @@ describe('GoogleGenerativeAIStream', () => {
           'id: chat_1',
           'event: usage',
           `data: {"inputTextTokens":9,"outputImageTokens":0,"outputTextTokens":122,"totalInputTokens":9,"totalOutputTokens":122,"totalTokens":131}\n`,
+        ].map((i) => i + '\n'),
+      );
+    });
+
+    it('should handle groundingMetadata with image search results', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const data = [
+        {
+          text: 'Here are some images',
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'Here are some images' }],
+                role: 'model',
+              },
+              finishReason: 'STOP',
+              index: 0,
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    web: {
+                      uri: 'https://example.com/article',
+                      title: 'example.com',
+                    },
+                  },
+                  {
+                    image: {
+                      imageUri: 'https://example.com/photo.jpg',
+                      sourceUri: 'https://example.com/page',
+                      title: 'Example Photo',
+                      domain: 'example.com',
+                    },
+                  },
+                  {
+                    image: {
+                      imageUri: 'https://another.com/img.png',
+                      sourceUri: 'https://another.com/gallery',
+                      title: 'Another Image',
+                      domain: 'another.com',
+                    },
+                  },
+                ],
+                webSearchQueries: ['example images'],
+                imageSearchQueries: ['example photo search'],
+              },
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 5,
+            candidatesTokenCount: 10,
+            totalTokenCount: 15,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 5 }],
+          },
+          modelVersion: 'gemini-3.1-flash-image-preview',
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => controller.enqueue(item));
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      expect(chunks).toEqual(
+        [
+          'id: chat_1',
+          'event: text',
+          'data: "Here are some images"\n',
+
+          'id: chat_1',
+          'event: grounding',
+          `data: ${JSON.stringify({
+            citations: [
+              {
+                favicon: 'example.com',
+                title: 'example.com',
+                url: 'https://example.com/article',
+              },
+            ],
+            imageResults: [
+              {
+                domain: 'example.com',
+                imageUri: 'https://example.com/photo.jpg',
+                sourceUri: 'https://example.com/page',
+                title: 'Example Photo',
+              },
+              {
+                domain: 'another.com',
+                imageUri: 'https://another.com/img.png',
+                sourceUri: 'https://another.com/gallery',
+                title: 'Another Image',
+              },
+            ],
+            imageSearchQueries: ['example photo search'],
+            searchQueries: ['example images'],
+          })}\n`,
+
+          'id: chat_1',
+          'event: stop',
+          `data: "STOP"\n`,
+
+          'id: chat_1',
+          'event: usage',
+          `data: {"inputTextTokens":5,"outputImageTokens":0,"outputTextTokens":10,"totalInputTokens":5,"totalOutputTokens":10,"totalTokens":15}\n`,
+        ].map((i) => i + '\n'),
+      );
+    });
+
+    it('should handle groundingMetadata with only image search results (no web)', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const data = [
+        {
+          text: 'Image only results',
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'Image only results' }],
+                role: 'model',
+              },
+              finishReason: 'STOP',
+              index: 0,
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    image: {
+                      imageUri: 'https://img.example.com/cat.jpg',
+                      sourceUri: 'https://example.com/cats',
+                      title: 'Cat Photo',
+                      domain: 'example.com',
+                    },
+                  },
+                ],
+                imageSearchQueries: ['cute cats'],
+              },
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 3,
+            candidatesTokenCount: 5,
+            totalTokenCount: 8,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
+          },
+          modelVersion: 'gemini-3.1-flash-image-preview',
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => controller.enqueue(item));
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      expect(chunks).toEqual(
+        [
+          'id: chat_1',
+          'event: text',
+          'data: "Image only results"\n',
+
+          'id: chat_1',
+          'event: grounding',
+          `data: ${JSON.stringify({
+            imageResults: [
+              {
+                domain: 'example.com',
+                imageUri: 'https://img.example.com/cat.jpg',
+                sourceUri: 'https://example.com/cats',
+                title: 'Cat Photo',
+              },
+            ],
+            imageSearchQueries: ['cute cats'],
+          })}\n`,
+
+          'id: chat_1',
+          'event: stop',
+          `data: "STOP"\n`,
+
+          'id: chat_1',
+          'event: usage',
+          `data: {"inputTextTokens":3,"outputImageTokens":0,"outputTextTokens":5,"totalInputTokens":3,"totalOutputTokens":5,"totalTokens":8}\n`,
+        ].map((i) => i + '\n'),
+      );
+    });
+
+    it('should filter empty strings from searchQueries in groundingMetadata', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const data = [
+        {
+          text: 'result',
+          candidates: [
+            {
+              content: { parts: [{ text: 'result' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+              groundingMetadata: {
+                groundingChunks: [
+                  {
+                    web: {
+                      uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+                      title: 'example.com',
+                    },
+                  },
+                ],
+                webSearchQueries: ['', '杭州天气', 'Hangzhou weather'],
+              },
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 5,
+            candidatesTokenCount: 3,
+            totalTokenCount: 8,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 5 }],
+          },
+          modelVersion: 'gemini-3.1-flash-image-preview',
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => controller.enqueue(item));
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      expect(chunks).toEqual(
+        [
+          'id: chat_1',
+          'event: text',
+          'data: "result"\n',
+
+          'id: chat_1',
+          'event: grounding',
+          `data: ${JSON.stringify({
+            citations: [
+              {
+                favicon: 'example.com',
+                title: 'example.com',
+                url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+              },
+            ],
+            searchQueries: ['杭州天气', 'Hangzhou weather'],
+          })}\n`,
+
+          'id: chat_1',
+          'event: stop',
+          `data: "STOP"\n`,
+
+          'id: chat_1',
+          'event: usage',
+          `data: {"inputTextTokens":5,"outputImageTokens":0,"outputTextTokens":3,"totalInputTokens":5,"totalOutputTokens":3,"totalTokens":8}\n`,
         ].map((i) => i + '\n'),
       );
     });
@@ -928,7 +1191,7 @@ describe('GoogleGenerativeAIStream', () => {
         [
           'id: chat_1',
           'event: tool_calls',
-          'data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"grep____searchGitHub____mcp_0_abcd1234","index":0,"thoughtSignature":"123","type":"function"}]\n',
+          'data: [{"function":{"arguments":"{\\"query\\":\\"\\\\\\"version\\\\\\":\\",\\"repo\\":\\"lobehub/lobe-chat\\",\\"path\\":\\"package.json\\"}","name":"grep____searchGitHub____mcp"},"id":"grep____searchGitHub____mcp_0_abcd1234","index":0,"thoughtSignature":"123","type":"function"}]\n',
 
           'id: chat_1',
           'event: stop',
@@ -1103,7 +1366,7 @@ describe('GoogleGenerativeAIStream', () => {
               content: {
                 parts: [
                   {
-                    text: '**Planning the Solution**\n\nI\'m solidifying my plan...',
+                    text: "**Planning the Solution**\n\nI'm solidifying my plan...",
                     thought: true,
                   },
                 ],
@@ -1900,6 +2163,47 @@ describe('GoogleGenerativeAIStream', () => {
           'data: {"inputTextTokens":10,"outputImageTokens":0,"outputReasoningTokens":5,"outputTextTokens":20,"totalInputTokens":10,"totalOutputTokens":25,"totalTokens":30}\n',
         ].map((i) => i + '\n'),
       );
+    });
+
+    it('should NOT use multimodal processing if only thoughtsTokenCount is present in metadata but no thought parts', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const data = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'Hello world' }],
+                role: 'model',
+              },
+              index: 0,
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 10,
+            candidatesTokenCount: 2,
+            totalTokenCount: 17,
+            thoughtsTokenCount: 5,
+          },
+          modelVersion: 'gemini-2.5-flash',
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => {
+            controller.enqueue(item);
+          });
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      // Should use 'text' event, not 'content_part'
+      expect(chunks).toContain('event: text\n');
+      expect(chunks).not.toContain('event: content_part\n');
     });
   });
 });

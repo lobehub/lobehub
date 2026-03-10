@@ -6,12 +6,8 @@ import type {
   ProviderConfig,
 } from '@lobechat/types';
 import { isEmpty } from 'es-toolkit/compat';
-import {
-  AIChatModelCard,
-  AiModelSourceEnum,
-  AiProviderModelListItem,
-  EnabledAiModel,
-} from 'model-bank';
+import type { AIChatModelCard, AiProviderModelListItem, EnabledAiModel } from 'model-bank';
+import { AiModelSourceEnum } from 'model-bank';
 import * as modelBank from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import pMap from 'p-map';
@@ -20,9 +16,11 @@ import { merge, mergeArrayById } from '@/utils/merge';
 
 import { AiModelModel } from '../../models/aiModel';
 import { AiProviderModel } from '../../models/aiProvider';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 
 type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
+
+const normalizeProvider = (provider: string) => provider.toLowerCase();
 
 /**
  * Provider-level search defaults (only used when built-in models don't provide settings.searchImpl and settings.searchProvider)
@@ -92,7 +90,7 @@ const injectSearchSettings = (providerId: string, item: any) => {
     if (item?.settings?.searchImpl || item?.settings?.searchProvider) {
       const next = { ...item } as any;
       if (next.settings) {
-        // eslint-disable-next-line unused-imports/no-unused-vars, @typescript-eslint/no-unused-vars
+        // eslint-disable-next-line unused-imports/no-unused-vars
         const { searchImpl, searchProvider, ...restSettings } = next.settings;
         next.settings = Object.keys(restSettings).length > 0 ? restSettings : undefined;
       }
@@ -272,15 +270,122 @@ export class AiInfraRepos {
     const enabledImageAiProviders = enabledAiProviders.filter((provider) => {
       return allModels.some((model) => model.providerId === provider.id && model.type === 'image');
     });
+    const enabledVideoAiProviders = enabledAiProviders.filter((provider) => {
+      return allModels.some(
+        (model) => model.providerId === provider.id && model.type === 'video',
+      );
+    });
 
     return {
       enabledAiModels,
       enabledAiProviders,
       enabledChatAiProviders,
       enabledImageAiProviders,
+      enabledVideoAiProviders,
       runtimeConfig,
     };
   };
+
+  /**
+   * Resolve the best provider for a given model.
+   *
+   * Matching pipeline:
+   * 1) Build a map of provider -> enabled model ids (disabled models are ignored).
+   * 2) Walk providers in priority order: preferred providers (if any) -> explicit fallback provider -> remaining providers that have enabled models.
+   * 3) For each provider, look for an exact modelId match or any preferred model alias.
+   * 4) If nothing matches, fall back to the configured provider (with a warning) or throw when no fallback exists.
+   *
+   * Handles:
+   * - Preferred provider ordering (case-insensitive).
+   * - Preferred model aliases.
+   * - Disabled models are skipped.
+   * - Missing matches: falls back when possible, otherwise surfaces an error.
+   *
+   * Edge cases to note:
+   * - If preferredProviders are set, non-preferred providers are skipped unless they are also the explicit fallback.
+   * - If fallbackProvider lacks enabled models, it is still returned (caller should ensure runtimeConfig has credentials).
+   */
+  static async tryMatchingProviderFrom(
+    runtimeState: AiProviderRuntimeState,
+    options: {
+      fallbackProvider?: string;
+      label?: string;
+      modelId: string;
+      preferredModels?: string[];
+      preferredProviders?: string[];
+    },
+  ): Promise<string> {
+    const { modelId, fallbackProvider, preferredModels, preferredProviders, label } = options;
+
+    // Build a map of provider -> enabled model ids for quick membership checks; skip disabled models entirely
+    const providerModels = runtimeState.enabledAiModels.reduce<Record<string, Set<string>>>(
+      (acc, model) => {
+        if (model.enabled === false) return acc;
+
+        const providerId = normalizeProvider(model.providerId);
+        acc[providerId] = acc[providerId] || new Set<string>();
+        acc[providerId].add(model.id);
+
+        return acc;
+      },
+      {},
+    );
+
+    // Normalize preferred providers so ordering is stable and comparisons are case-insensitive
+    const normalizedPreferredProviders = (preferredProviders || [])
+      .map(normalizeProvider)
+      .filter(Boolean);
+
+    // Provider search pipeline:
+    // 1) iterate preferred providers (if given)
+    // 2) fall back to the explicitly configured fallback provider
+    // 3) consider any provider that has enabled models
+    const providerOrder = Array.from(
+      new Set(
+        [
+          ...normalizedPreferredProviders,
+          fallbackProvider ? normalizeProvider(fallbackProvider) : undefined,
+          ...Object.keys(providerModels),
+        ].filter(Boolean) as string[],
+      ),
+    );
+
+    // Candidate models include the requested modelId plus any preferred model aliases
+    const modelTargets = new Set([modelId, ...(preferredModels || [])]);
+
+    for (const providerId of providerOrder) {
+      // If preferred providers are specified, skip non-preferred providers unless they are the explicit fallback
+      if (
+        normalizedPreferredProviders.length > 0 &&
+        providerId !== normalizeProvider(fallbackProvider || '') &&
+        !normalizedPreferredProviders.includes(providerId)
+      ) {
+        continue;
+      }
+
+      const models = providerModels[providerId];
+      if (!models) {
+        continue;
+      }
+
+      // Accept the first provider in order whose enabled models contain either the requested id or any preferred alias
+      const match = Array.from(modelTargets).find((target) => models.has(target));
+      if (match) {
+        return providerId;
+      }
+    }
+
+    if (fallbackProvider) {
+      console.warn(
+        `[ai-infra] no enabled provider found for ${label || 'model'} "${modelId}" (preferred ${preferredProviders}), falling back to server-configured provider "${fallbackProvider}".`,
+      );
+      return normalizeProvider(fallbackProvider);
+    }
+
+    throw new Error(
+      `Unable to resolve provider for ${label || 'model'} "${modelId}". Check preferred providers/models configuration.`,
+    );
+  }
 
   getAiProviderModelList = async (
     providerId: string,

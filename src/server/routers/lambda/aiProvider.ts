@@ -7,9 +7,8 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/aiProvider';
 import {
-  type AiProviderDetailItem,
-  type AiProviderRuntimeState,
   CreateAiProviderSchema,
   UpdateAiProviderConfigSchema,
   UpdateAiProviderSchema,
@@ -98,7 +97,12 @@ export const aiProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.aiProviderModel.updateConfig(input.id, input.value, ctx.gateKeeper.encrypt);
+      return ctx.aiProviderModel.updateConfig(
+        input.id,
+        input.value,
+        ctx.gateKeeper.encrypt,
+        KeyVaultsGateKeeper.getUserKeyVaults,
+      );
     }),
 
   updateAiProviderOrder: aiProviderProcedure

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImageOptions } from '../../core/openaiCompatibleFactory';
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImagePayload } from '../../types/image';
 import { createVolcengineImage } from './createImage';
 
 // Mock dependencies
@@ -188,6 +188,93 @@ describe('createVolcengineImage', () => {
         size: '1024x1024',
       });
     });
+
+    it('should strip height and width when size is provided', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        size: '2048x2048',
+        height: 1024,
+        width: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        size: '2048x2048',
+      });
+    });
+
+    it('should convert height and width to size parameter', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        height: 768,
+        width: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        size: '1024x768',
+      });
+    });
+
+    it('should not convert size when only height is provided', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        height: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        height: 1024,
+      });
+    });
+
+    it('should not convert size when only width is provided', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        width: 1024,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith({
+        model: 'doubao-seedream-3-0-t2i',
+        watermark: false,
+        prompt: 'test prompt',
+        width: 1024,
+      });
+    });
   });
 
   describe('image input handling', () => {
@@ -288,6 +375,23 @@ describe('createVolcengineImage', () => {
       expect(OpenAI.default).toHaveBeenCalledWith({
         apiKey: 'test-api-key',
         baseURL: 'https://custom-endpoint.com/api/v1',
+      });
+    });
+
+    it('should use BytePlus baseURL for international endpoint', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      options.baseURL = 'https://ark.ap-southeast.bytepluses.com/api/v3';
+
+      await createVolcengineImage(payload, options);
+
+      const OpenAI = await import('openai');
+      expect(OpenAI.default).toHaveBeenCalledWith({
+        apiKey: 'test-api-key',
+        baseURL: 'https://ark.ap-southeast.bytepluses.com/api/v3',
       });
     });
 

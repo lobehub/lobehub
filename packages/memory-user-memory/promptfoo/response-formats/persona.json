@@ -1,0 +1,13 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "persona": { "type": "string" },
+    "summary": { "type": "string" },
+    "diff": { "type": "string" },
+    "reasoning": { "type": "string" },
+    "memoryIds": { "type": "array", "items": { "type": "string" } },
+    "sourceIds": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["persona"],
+  "type": "object"
+}

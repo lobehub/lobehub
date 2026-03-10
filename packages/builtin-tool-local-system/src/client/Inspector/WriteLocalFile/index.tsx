@@ -1,7 +1,7 @@
 'use client';
 
-import { type WriteLocalFileParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
@@ -38,7 +38,7 @@ export const WriteLocalFileInspector = memo<BuiltinInspectorProps<WriteLocalFile
         <span>{t('builtins.lobe-local-system.apiName.writeLocalFile')}: </span>
         <FilePathDisplay filePath={filePath} />
         {lines > 0 && (
-          <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12}>
+          <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12}>
             {' '}
             <Icon icon={Plus} size={12} />
             {lines}

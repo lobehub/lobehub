@@ -52,9 +52,11 @@ export const searchRouter = router({
             'folder',
             'message',
             'page',
+            'memory',
             'mcp',
             'plugin',
             'communityAgent',
+            'knowledgeBase',
           ])
           .optional(),
       }),
@@ -68,8 +70,8 @@ export const searchRouter = router({
       // Build search promises based on type filter
       const searchPromises: Promise<any>[] = [];
 
-      // Database searches (agent, topic, file, folder, message, page)
-      if (!type || ['agent', 'topic', 'file', 'folder', 'message', 'page'].includes(type)) {
+      // Database searches (agent, topic, file, folder, message, page, memory)
+      if (!type || ['agent', 'topic', 'file', 'folder', 'message', 'page', 'memory', 'knowledgeBase'].includes(type)) {
         searchPromises.push(ctx.searchRepo.search(input));
       }
 
@@ -146,6 +148,7 @@ export const searchRouter = router({
         searchPromises.push(
           ctx.discoverService
             .getAssistantList({
+              includeAgentGroup: true,
               locale,
               pageSize: limitPerType,
               q: query,

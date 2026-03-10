@@ -1,4 +1,4 @@
-import type { Operation } from '@/store/chat/slices/operation/types';
+import { type Operation } from '@/store/chat/slices/operation/types';
 
 /**
  * Simulate operation cancellation

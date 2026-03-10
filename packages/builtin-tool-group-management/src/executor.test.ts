@@ -75,6 +75,7 @@ describe('GroupManagementExecutor', () => {
           triggerBroadcast: vi.fn(),
           triggerDelegate: vi.fn(),
           triggerExecuteTask: vi.fn(),
+          triggerExecuteTasks: vi.fn(),
           triggerSpeak,
         },
         'supervisor-agent',
@@ -122,6 +123,7 @@ describe('GroupManagementExecutor', () => {
           triggerBroadcast: vi.fn(),
           triggerDelegate: vi.fn(),
           triggerExecuteTask: vi.fn(),
+          triggerExecuteTasks: vi.fn(),
           triggerSpeak,
         },
         'supervisor-agent',
@@ -171,6 +173,7 @@ describe('GroupManagementExecutor', () => {
           triggerBroadcast,
           triggerDelegate: vi.fn(),
           triggerExecuteTask: vi.fn(),
+          triggerExecuteTasks: vi.fn(),
           triggerSpeak: vi.fn(),
         },
         'supervisor-agent',
@@ -238,6 +241,7 @@ describe('GroupManagementExecutor', () => {
           triggerBroadcast: vi.fn(),
           triggerDelegate,
           triggerExecuteTask: vi.fn(),
+          triggerExecuteTasks: vi.fn(),
           triggerSpeak: vi.fn(),
         },
         'supervisor-agent',
@@ -271,18 +275,6 @@ describe('GroupManagementExecutor', () => {
     });
   });
 
-  describe('getAgentInfo', () => {
-    it('should return error when no groupId in context', async () => {
-      const ctx = createMockContext();
-
-      const result = await groupManagementExecutor.getAgentInfo({ agentId: 'agent-1' }, ctx);
-
-      // No groupId means we can't get agent info
-      expect(result.success).toBe(false);
-      expect(result.stop).toBeUndefined();
-    });
-  });
-
   describe('executeAgentTask', () => {
     beforeEach(() => {
       vi.clearAllMocks();
@@ -292,7 +284,7 @@ describe('GroupManagementExecutor', () => {
       const ctx = createMockContext();
 
       const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something' },
+        { agentId: 'agent-1', instruction: 'Do something', title: 'Test Task' },
         ctx,
       );
 
@@ -301,7 +293,7 @@ describe('GroupManagementExecutor', () => {
       expect(result.content).toBe('Triggered async task for agent "agent-1".');
       expect(result.state).toEqual({
         agentId: 'agent-1',
-        task: 'Do something',
+        instruction: 'Do something',
         timeout: undefined,
         type: 'executeAgentTask',
       });
@@ -319,6 +311,7 @@ describe('GroupManagementExecutor', () => {
           triggerBroadcast: vi.fn(),
           triggerDelegate: vi.fn(),
           triggerExecuteTask,
+          triggerExecuteTasks: vi.fn(),
           triggerSpeak: vi.fn(),
         },
         'supervisor-agent',
@@ -326,7 +319,7 @@ describe('GroupManagementExecutor', () => {
       );
 
       await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something', timeout: 30000 },
+        { agentId: 'agent-1', instruction: 'Do something', timeout: 30000, title: 'Test Task' },
         ctx,
       );
 
@@ -340,8 +333,8 @@ describe('GroupManagementExecutor', () => {
       // Now triggerExecuteTask should have been called
       expect(triggerExecuteTask).toHaveBeenCalledWith({
         agentId: 'agent-1',
+        instruction: 'Do something',
         supervisorAgentId: 'supervisor-agent',
-        task: 'Do something',
         timeout: 30000,
         toolMessageId: 'test-message-id',
       });
@@ -351,7 +344,7 @@ describe('GroupManagementExecutor', () => {
       const ctx = createMockContext();
 
       const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something' },
+        { agentId: 'agent-1', instruction: 'Do something', title: 'Test Task' },
         ctx,
       );
 
@@ -363,14 +356,14 @@ describe('GroupManagementExecutor', () => {
       const ctx = createMockContext();
 
       const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something', timeout: 60000 },
+        { agentId: 'agent-1', instruction: 'Do something', timeout: 60000, title: 'Test Task' },
         ctx,
       );
 
       expect(result.success).toBe(true);
       expect(result.state).toEqual({
         agentId: 'agent-1',
-        task: 'Do something',
+        instruction: 'Do something',
         timeout: 60000,
         type: 'executeAgentTask',
       });

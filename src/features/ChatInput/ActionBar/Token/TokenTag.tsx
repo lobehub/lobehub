@@ -111,7 +111,7 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
 
   const content = (
     <Flexbox gap={12} style={{ minWidth: 200 }}>
-      <Flexbox align={'center'} gap={4} horizontal justify={'space-between'} width={'100%'}>
+      <Flexbox horizontal align={'center'} gap={4} justify={'space-between'} width={'100%'}>
         <div style={{ color: cssVar.colorTextDescription }}>{t('tokenDetails.title')}</div>
         <Tooltip
           styles={{ root: { maxWidth: 'unset', pointerEvents: 'none' } }}
@@ -136,6 +136,7 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
         </Tooltip>
       </Flexbox>
       <TokenProgress
+        showIcon
         data={[
           {
             color: cssVar.magenta,
@@ -162,9 +163,10 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
             value: chatsToken,
           },
         ]}
-        showIcon
       />
       <TokenProgress
+        showIcon
+        showTotal={t('tokenDetails.total')}
         data={[
           {
             color: cssVar.colorSuccess,
@@ -179,8 +181,6 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
             value: maxTokens - totalToken,
           },
         ]}
-        showIcon
-        showTotal={t('tokenDetails.total')}
       />
     </Flexbox>
   );
@@ -190,12 +190,12 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
       <TokenTag
         maxValue={maxTokens}
         mode={'used'}
+        value={totalToken}
         text={{
           overload: t('tokenTag.overload'),
           remained: t('tokenTag.remained'),
           used: t('tokenTag.used'),
         }}
-        value={totalToken}
       />
     </ActionPopover>
   );

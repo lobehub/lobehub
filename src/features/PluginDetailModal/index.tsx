@@ -1,4 +1,5 @@
-import { Modal, Segmented, type SegmentedProps } from '@lobehub/ui';
+import { type SegmentedProps } from '@lobehub/ui';
+import { Modal, Segmented } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
@@ -36,19 +37,20 @@ const PluginDetailModal = memo<PluginDetailModalProps>(
     return (
       <Modal
         allowFullscreen
+        destroyOnHidden
         footer={null}
+        open={open}
+        title={t('dev.title.skillDetails')}
+        width={800}
         onCancel={onClose}
         onOk={() => {
           onClose();
         }}
-        open={open}
-        title={t('detailModal.title')}
-        width={650}
       >
         <Meta id={id} />
         <Segmented
           block
-          onChange={(v) => setTabKey(v as Tab)}
+          value={tabKey}
           options={
             [
               {
@@ -64,7 +66,7 @@ const PluginDetailModal = memo<PluginDetailModalProps>(
           style={{
             marginBlock: 16,
           }}
-          value={tabKey}
+          onChange={(v) => setTabKey(v as Tab)}
         />
         {tabKey === 'settings' ? (
           hasSettings && <PluginSettingsConfig id={id} schema={schema} />

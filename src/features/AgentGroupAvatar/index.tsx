@@ -28,10 +28,18 @@ const AgentGroupAvatar = memo<AgentGroupAvatarProps>(
   ({ avatar, backgroundColor, memberAvatars = [], size = 28 }) => {
     // If group has custom avatar, show it; otherwise show member avatars composition
     if (avatar) {
-      return <Avatar avatar={avatar} background={backgroundColor} shape="square" size={size} />;
+      return (
+        <Avatar
+          emojiScaleWithBackground
+          avatar={avatar}
+          background={backgroundColor}
+          shape="square"
+          size={size}
+        />
+      );
     }
 
-    return <GroupAvatar avatars={memberAvatars} size={size} />;
+    return <GroupAvatar avatars={memberAvatars} background={backgroundColor} size={size} />;
   },
 );
 

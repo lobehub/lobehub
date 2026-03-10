@@ -1,4 +1,4 @@
-import { markdownToTxt } from 'markdown-to-txt';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 const MIN_WIDTH = 12;
 const MAX_WIDTH = 24;

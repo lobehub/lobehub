@@ -1,12 +1,12 @@
 'use client';
 
 import { CheckCircleFilled, CloseCircleFilled, DownloadOutlined } from '@ant-design/icons';
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useCallback } from 'react';
 
-import { type ExportFileState } from '../../../types';
+import type { ExportFileState } from '../../../types';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -53,7 +53,7 @@ const ExportFile = memo<BuiltinRenderProps<ExportFileParams, ExportFileState>>(
 
     return (
       <Flexbox className={styles.container} gap={8}>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {pluginState === undefined ? null : isSuccess ? (
             <CheckCircleFilled
               className={styles.statusIcon}
@@ -62,7 +62,7 @@ const ExportFile = memo<BuiltinRenderProps<ExportFileParams, ExportFileState>>(
           ) : (
             <CloseCircleFilled className={styles.statusIcon} style={{ color: cssVar.colorError }} />
           )}
-          <Text as={'span'} code fontSize={12}>
+          <Text code as={'span'} fontSize={12}>
             {isSuccess
               ? `Exported: ${pluginState?.filename || args.path}`
               : `Failed to export ${args.path}`}
@@ -70,9 +70,9 @@ const ExportFile = memo<BuiltinRenderProps<ExportFileParams, ExportFileState>>(
           {isSuccess && pluginState?.downloadUrl && (
             <ActionIcon
               icon={DownloadOutlined}
-              onClick={handleDownload}
               size={'small'}
               title="Download"
+              onClick={handleDownload}
             />
           )}
         </Flexbox>

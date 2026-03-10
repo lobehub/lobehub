@@ -110,7 +110,7 @@ export class ToolCallProcessor extends BaseProcessor {
 
     if (!supportTools || (!hasTools && hasEmptyToolCalls)) {
       // If tools not supported or only has empty tool calls, return regular message (remove tool-related properties)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       const { tools, tool_calls, ...messageWithoutTools } = message;
       return messageWithoutTools;
     }

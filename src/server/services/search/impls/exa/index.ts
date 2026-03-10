@@ -1,4 +1,8 @@
-import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
+import {
+  type SearchParams,
+  type UniformSearchResponse,
+  type UniformSearchResult,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -32,7 +36,7 @@ export class ExaImpl implements SearchServiceImpl {
       type: 'auto',
     };
 
-    let body: ExaSearchParameters = {
+    const body: ExaSearchParameters = {
       ...defaultQueryParams,
       ...(params?.searchTimeRange && params.searchTimeRange !== 'anytime'
         ? (() => {
@@ -47,15 +51,15 @@ export class ExaImpl implements SearchServiceImpl {
             };
           })()
         : {}),
-      category: // Exa only supports news type
-      params?.searchCategories?.filter((cat) => ['news'].includes(cat))?.[0],
+      // Exa only supports news type
+      category: params?.searchCategories?.find((cat) => ['news'].includes(cat)),
     };
 
     log('Constructed request body: %o', body);
 
     let response: Response;
     const startAt = Date.now();
-    let costTime = 0;
+    let costTime: number;
     try {
       log('Sending request to endpoint: %s', endpoint);
       response = await fetch(endpoint, {
@@ -111,7 +115,7 @@ export class ExaImpl implements SearchServiceImpl {
 
       return {
         costTime,
-        query: query,
+        query,
         resultNumbers: mappedResults.length,
         results: mappedResults,
       };

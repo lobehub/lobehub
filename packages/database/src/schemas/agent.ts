@@ -1,5 +1,8 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
-import type { LobeAgentChatConfig, LobeAgentTTSConfig } from '@lobechat/types';
+import type {
+  LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
+  LobeAgentTTSConfig,
+} from '@lobechat/types';
 import { AgentChatConfigSchema } from '@lobechat/types';
 import {
   boolean,
@@ -12,6 +15,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
@@ -47,6 +51,7 @@ export const agents = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
+    agencyConfig: jsonb('agency_config').$type<LobeAgentAgencyConfig>(),
     chatConfig: jsonb('chat_config').$type<LobeAgentChatConfig>(),
 
     fewShots: jsonb('few_shots'),
@@ -79,6 +84,7 @@ export const agents = pgTable(
 );
 
 export const insertAgentSchema = createInsertSchema(agents, {
+  agencyConfig: z.custom<LobeAgentAgencyConfig>().nullable().optional(),
   // Override chatConfig type to use the proper schema
   chatConfig: AgentChatConfigSchema.nullable().optional(),
 });
@@ -105,6 +111,8 @@ export const agentsKnowledgeBases = pgTable(
   (t) => [
     primaryKey({ columns: [t.agentId, t.knowledgeBaseId] }),
     index('agents_knowledge_bases_agent_id_idx').on(t.agentId),
+    index('agents_knowledge_bases_knowledge_base_id_idx').on(t.knowledgeBaseId),
+    index('agents_knowledge_bases_user_id_idx').on(t.userId),
   ],
 );
 
@@ -127,5 +135,7 @@ export const agentsFiles = pgTable(
   (t) => [
     primaryKey({ columns: [t.fileId, t.agentId, t.userId] }),
     index('agents_files_agent_id_idx').on(t.agentId),
+    index('agents_files_file_id_idx').on(t.fileId),
+    index('agents_files_user_id_idx').on(t.userId),
   ],
 );

@@ -1,7 +1,7 @@
 import { USD_TO_CNY } from '@lobechat/const';
 import dayjs from 'dayjs';
 import { isNumber } from 'es-toolkit/compat';
-import { ModelPriceCurrency } from 'model-bank';
+import type { ModelPriceCurrency } from 'model-bank';
 import numeral from 'numeral';
 
 export const formatSize = (bytes: number, fractionDigits: number = 1): string => {
@@ -104,6 +104,13 @@ export const formatTokenNumber = (num: number): string => {
   }
   if (num === 131_072) return '128K';
   return kiloToken < 1000 ? `${kiloToken}K` : `${Math.floor(kiloToken / 1000)}M`;
+};
+
+export const formatCost = (value: number): string => {
+  return value.toLocaleString('en-US', {
+    maximumSignificantDigits: 4,
+    minimumSignificantDigits: 2,
+  });
 };
 
 export const formatPrice = (price: number, fractionDigits: number = 2) => {

@@ -3,9 +3,10 @@ import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import MarkdownRender from '../../../app/[variants]/(main)/community/(detail)/features/MakedownRender';
-import McpList from '../../../app/[variants]/(main)/community/(list)/mcp/features/List';
-import Title from '../../../app/[variants]/(main)/community/features/Title';
+import MarkdownRender from '@/routes/(main)/community/(detail)/features/MakedownRender';
+import McpList from '@/routes/(main)/community/(list)/mcp/features/List';
+import Title from '@/routes/(main)/community/features/Title';
+
 import { useDetailContext } from '../DetailProvider';
 import TagList from './TagList';
 
@@ -20,6 +21,7 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
       <Collapse
         defaultActiveKey={['summary']}
         expandIconPlacement={'end'}
+        variant={'outlined'}
         items={[
           {
             children: !!summary ? <Markdown>{summary}</Markdown> : summary,
@@ -27,7 +29,6 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
             label: t('mcp.details.summary.title'),
           },
         ]}
-        variant={'outlined'}
       />
       <Flexbox gap={16}>
         {overview?.readme && <MarkdownRender>{overview.readme.trimEnd()}</MarkdownRender>}

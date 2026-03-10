@@ -8,34 +8,29 @@ ARG USE_CN_MIRROR
 
 ENV DEBIAN_FRONTEND="noninteractive"
 
-RUN <<'EOF'
-set -e
-if [ "${USE_CN_MIRROR:-false}" = "true" ]; then
-    sed -i "s/deb.debian.org/mirrors.ustc.edu.cn/g" "/etc/apt/sources.list.d/debian.sources"
-fi
-apt update
-apt install ca-certificates proxychains-ng -qy
-mkdir -p /distroless/bin /distroless/etc /distroless/etc/ssl/certs /distroless/lib
-cp /usr/lib/$(arch)-linux-gnu/libproxychains.so.4 /distroless/lib/libproxychains.so.4
-cp /usr/lib/$(arch)-linux-gnu/libdl.so.2 /distroless/lib/libdl.so.2
-cp /usr/bin/proxychains4 /distroless/bin/proxychains
-cp /etc/proxychains4.conf /distroless/etc/proxychains4.conf
-cp /usr/lib/$(arch)-linux-gnu/libstdc++.so.6 /distroless/lib/libstdc++.so.6
-cp /usr/lib/$(arch)-linux-gnu/libgcc_s.so.1 /distroless/lib/libgcc_s.so.1
-cp /usr/local/bin/node /distroless/bin/node
-cp /etc/ssl/certs/ca-certificates.crt /distroless/etc/ssl/certs/ca-certificates.crt
-rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
-EOF
+RUN set -e && \
+    if [ "${USE_CN_MIRROR:-false}" = "true" ]; then \
+        sed -i "s/deb.debian.org/mirrors.ustc.edu.cn/g" "/etc/apt/sources.list.d/debian.sources"; \
+    fi && \
+    apt update && \
+    apt install ca-certificates proxychains-ng -qy && \
+    mkdir -p /distroless/bin /distroless/etc /distroless/etc/ssl/certs /distroless/lib && \
+    cp /usr/lib/$(arch)-linux-gnu/libproxychains.so.4 /distroless/lib/libproxychains.so.4 && \
+    cp /usr/lib/$(arch)-linux-gnu/libdl.so.2 /distroless/lib/libdl.so.2 && \
+    cp /usr/bin/proxychains4 /distroless/bin/proxychains && \
+    cp /etc/proxychains4.conf /distroless/etc/proxychains4.conf && \
+    cp /usr/lib/$(arch)-linux-gnu/libstdc++.so.6 /distroless/lib/libstdc++.so.6 && \
+    cp /usr/lib/$(arch)-linux-gnu/libgcc_s.so.1 /distroless/lib/libgcc_s.so.1 && \
+    cp /usr/lib/$(arch)-linux-gnu/librt.so.1 /distroless/lib/librt.so.1 && \
+    cp /usr/local/bin/node /distroless/bin/node && \
+    cp /etc/ssl/certs/ca-certificates.crt /distroless/etc/ssl/certs/ca-certificates.crt && \
+    rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
 
 ## Builder image, install all the dependencies and build the app
 FROM base AS builder
 
 ARG USE_CN_MIRROR
 ARG NEXT_PUBLIC_BASE_PATH
-ARG NEXT_PUBLIC_ENABLE_BETTER_AUTH
-ARG NEXT_PUBLIC_ENABLE_NEXT_AUTH
-ARG NEXT_PUBLIC_ENABLE_CLERK_AUTH
-ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG NEXT_PUBLIC_ANALYTICS_POSTHOG
 ARG NEXT_PUBLIC_POSTHOG_HOST
@@ -48,15 +43,11 @@ ARG FEATURE_FLAGS
 ENV NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}" \
     FEATURE_FLAGS="${FEATURE_FLAGS}"
 
-ENV NEXT_PUBLIC_ENABLE_BETTER_AUTH="${NEXT_PUBLIC_ENABLE_BETTER_AUTH:-0}" \
-    NEXT_PUBLIC_ENABLE_NEXT_AUTH="${NEXT_PUBLIC_ENABLE_NEXT_AUTH:-1}" \
-    NEXT_PUBLIC_ENABLE_CLERK_AUTH="${NEXT_PUBLIC_ENABLE_CLERK_AUTH:-0}" \
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" \
-    CLERK_WEBHOOK_SECRET="whsec_xxx" \
-    APP_URL="http://app.com" \
+ENV APP_URL="http://app.com" \
     DATABASE_DRIVER="node" \
     DATABASE_URL="postgres://postgres:password@localhost:5432/postgres" \
-    KEY_VAULTS_SECRET="use-for-build"
+    KEY_VAULTS_SECRET="use-for-build" \
+    AUTH_SECRET="use-for-build"
 
 # Sentry
 ENV NEXT_PUBLIC_SENTRY_DSN="${NEXT_PUBLIC_SENTRY_DSN}" \
@@ -85,41 +76,30 @@ COPY patches ./patches
 # bring in desktop workspace manifest so pnpm can resolve it
 COPY apps/desktop/src/main/package.json ./apps/desktop/src/main/package.json
 
-RUN <<'EOF'
-set -e
-if [ "${USE_CN_MIRROR:-false}" = "true" ]; then
-    export SENTRYCLI_CDNURL="https://npmmirror.com/mirrors/sentry-cli"
-    npm config set registry "https://registry.npmmirror.com/"
-    echo 'canvas_binary_host_mirror=https://npmmirror.com/mirrors/canvas' >> .npmrc
-fi
-export COREPACK_NPM_REGISTRY=$(npm config get registry | sed 's/\/$//')
-npm i -g corepack@latest
-corepack enable
-corepack use $(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json)
-pnpm i
-mkdir -p /deps
-cd /deps
-pnpm init
-pnpm add pg drizzle-orm
-EOF
+RUN set -e && \
+    if [ "${USE_CN_MIRROR:-false}" = "true" ]; then \
+        export SENTRYCLI_CDNURL="https://npmmirror.com/mirrors/sentry-cli"; \
+        npm config set registry "https://registry.npmmirror.com/"; \
+        echo 'canvas_binary_host_mirror=https://npmmirror.com/mirrors/canvas' >> .npmrc; \
+    fi && \
+    export COREPACK_NPM_REGISTRY=$(npm config get registry | sed 's/\/$//') && \
+    npm i -g corepack@latest && \
+    corepack enable && \
+    corepack use $(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json) && \
+    pnpm i && \
+    mkdir -p /deps && \
+    cd /deps && \
+    pnpm init && \
+    pnpm add pg drizzle-orm
 
 COPY . .
 
+# Prebuild: env checks (checkDeprecatedAuth, checkRequiredEnvVars, printEnvInfo) then remove desktop-only code
+RUN pnpm exec tsx scripts/dockerPrebuild.mts
+RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
+
 # run build standalone for docker version
 RUN npm run build:docker
-
-# Prepare desktop export assets for Electron packaging (if generated)
-RUN <<'EOF'
-set -e
-if [ -d "/app/out" ]; then
-    mkdir -p /app/apps/desktop/dist/next
-    cp -a /app/out/. /app/apps/desktop/dist/next/
-    echo "✅ Copied Next export output into /app/apps/desktop/dist/next"
-else
-    echo "ℹ️ No Next export output found at /app/out, creating empty directory"
-    mkdir -p /app/apps/desktop/dist/next
-fi
-EOF
 
 ## Application image, copy all the files for production
 FROM busybox:latest AS app
@@ -129,9 +109,9 @@ COPY --from=base /distroless/ /
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder /app/.next/standalone /app/
-# Copy Next export output for desktop renderer
-COPY --from=builder /app/apps/desktop/dist/next /app/apps/desktop/dist/next
-
+COPY --from=builder /app/.next/static /app/.next/static
+# Copy SPA assets (Vite build output)
+COPY --from=builder /app/public/spa /app/public/spa
 # Copy database migrations
 COPY --from=builder /app/packages/database/migrations /app/migrations
 COPY --from=builder /app/scripts/migrateServerDB/docker.cjs /app/docker.cjs
@@ -142,15 +122,14 @@ COPY --from=builder /deps/node_modules/.pnpm /app/node_modules/.pnpm
 COPY --from=builder /deps/node_modules/pg /app/node_modules/pg
 COPY --from=builder /deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm
 
-# Copy server launcher
+# Copy server launcher and shared scripts
 COPY --from=builder /app/scripts/serverLauncher/startServer.js /app/startServer.js
+COPY --from=builder /app/scripts/_shared /app/scripts/_shared
 
-RUN <<'EOF'
-set -e
-addgroup -S -g 1001 nodejs
-adduser -D -G nodejs -H -S -h /app -u 1001 nextjs
-chown -R nextjs:nodejs /app /etc/proxychains4.conf
-EOF
+RUN set -e && \
+    addgroup -S -g 1001 nodejs && \
+    adduser -D -G nodejs -H -S -h /app -u 1001 nextjs && \
+    chown -R nextjs:nodejs /app /etc/proxychains4.conf
 
 ## Production image, copy all the files and run next
 FROM scratch
@@ -173,14 +152,12 @@ ENV HOSTNAME="0.0.0.0" \
     PORT="3210"
 
 # General Variables
-ENV ACCESS_CODE="" \
-    APP_URL="" \
+ENV APP_URL="" \
     API_KEY_SELECT_MODE="" \
     DEFAULT_AGENT_CONFIG="" \
     SYSTEM_AGENT="" \
     FEATURE_FLAGS="" \
-    PROXY_URL="" \
-    ENABLE_AUTH_PROTECTION=""
+    PROXY_URL=""
 
 # Database
 ENV KEY_VAULTS_SECRET="" \
@@ -190,11 +167,38 @@ ENV KEY_VAULTS_SECRET="" \
 # Better Auth
 ENV AUTH_SECRET="" \
     AUTH_SSO_PROVIDERS="" \
-    NEXT_PUBLIC_AUTH_URL=""
+    AUTH_ALLOWED_EMAILS="" \
+    AUTH_TRUSTED_ORIGINS="" \
+    AUTH_DISABLE_EMAIL_PASSWORD="" \
+    AUTH_EMAIL_VERIFICATION="" \
+    AUTH_ENABLE_MAGIC_LINK="" \
+    # Google
+    AUTH_GOOGLE_ID="" \
+    AUTH_GOOGLE_SECRET="" \
+    # GitHub
+    AUTH_GITHUB_ID="" \
+    AUTH_GITHUB_SECRET="" \
+    # Microsoft
+    AUTH_MICROSOFT_ID="" \
+    AUTH_MICROSOFT_SECRET="" \
+    AUTH_MICROSOFT_AUTHORITY_URL="" \
+    AUTH_MICROSOFT_TENANT_ID=""
 
-# Clerk
-ENV CLERK_SECRET_KEY="" \
-    CLERK_WEBHOOK_SECRET=""
+# Redis
+ENV REDIS_URL="" \
+    REDIS_PREFIX="" \
+    REDIS_TLS=""
+
+# Email
+ENV EMAIL_SERVICE_PROVIDER="" \
+    SMTP_HOST="" \
+    SMTP_PORT="" \
+    SMTP_SECURE="" \
+    SMTP_USER="" \
+    SMTP_PASS="" \
+    SMTP_FROM="" \
+    RESEND_API_KEY="" \
+    RESEND_FROM=""
 
 # S3
 ENV NEXT_PUBLIC_S3_DOMAIN="" \

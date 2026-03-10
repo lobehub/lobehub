@@ -1,0 +1,47 @@
+[
+  {
+    "id": "msg-user-001",
+    "role": "user",
+    "content": "Compare REST vs GraphQL for my use case",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000,
+    "meta": {}
+  },
+  {
+    "id": "parallel-group-1",
+    "role": "compareGroup",
+    "content": null,
+    "parentId": null,
+    "createdAt": 1704067205000,
+    "updatedAt": 1704067205000,
+    "meta": {},
+    "children": [
+      {
+        "id": "parallel-resp-gpt4",
+        "role": "assistant",
+        "content": "From GPT-4's perspective: REST is simpler and well-suited for CRUD operations...",
+        "createdAt": "2024-01-01T10:00:05.000Z",
+        "model": "gpt-4",
+        "provider": "openai"
+      },
+      {
+        "id": "parallel-resp-claude",
+        "role": "assistant",
+        "content": "From Claude's perspective: GraphQL offers more flexibility with its query language...",
+        "createdAt": "2024-01-01T10:00:06.000Z",
+        "model": "claude-3-5-sonnet",
+        "provider": "anthropic"
+      }
+    ]
+  },
+  {
+    "id": "msg-user-002",
+    "role": "user",
+    "content": "Thanks for the comparison!",
+    "parentId": null,
+    "createdAt": 1704067210000,
+    "updatedAt": 1704067210000,
+    "meta": {}
+  }
+]

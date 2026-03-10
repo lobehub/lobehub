@@ -1,18 +1,19 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { isDesktop } from '@lobechat/const';
+import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
-import { type PropsWithChildren, memo } from 'react';
+import { type PropsWithChildren } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import useBusinessMenuItems from '@/business/client/features/User/useBusinessMenuItems';
-import type { MenuProps } from '@/components/Menu';
+import getBusinessMenuItems from '@/business/client/features/User/getBusinessMenuItems';
+import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
 import DataImporter from '@/features/DataImporter';
-import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -33,7 +34,7 @@ const NewVersionBadge = memo(
         </Flexbox>
       );
     return (
-      <Flexbox align={'center'} flex={1} gap={8} horizontal onClick={onClick} width={'100%'}>
+      <Flexbox horizontal align={'center'} flex={1} gap={8} width={'100%'} onClick={onClick}>
         {children}
         <Tag color={'info'} size={'small'} style={{ borderRadius: 16, paddingInline: 8 }}>
           {t('upgradeVersion.hasNew')}
@@ -44,7 +45,6 @@ const NewVersionBadge = memo(
 );
 
 export const useMenu = () => {
-  const { canInstall, install } = usePWAInstall();
   const hasNewVersion = useNewVersion();
   const { t } = useTranslation(['common', 'setting', 'auth']);
   const { showCloudPromotion, hideDocs } = useServerConfigStore(featureFlagsSelectors);
@@ -52,7 +52,14 @@ export const useMenu = () => {
     authSelectors.isLogin(s),
     authSelectors.isLoginWithAuth(s),
   ]);
-  const businessMenuItems = useBusinessMenuItems(isLogin);
+  const businessMenuItems = getBusinessMenuItems(isLogin);
+  const { isIOS, isAndroid } = usePlatform();
+
+  const downloadUrl = useMemo(() => {
+    if (isIOS) return DOWNLOAD_URL.ios;
+    if (isAndroid) return DOWNLOAD_URL.android;
+    return DOWNLOAD_URL.default;
+  }, [isIOS, isAndroid]);
 
   const settings: MenuProps['items'] = [
     {
@@ -71,12 +78,15 @@ export const useMenu = () => {
     },
   ];
 
-  const pwa: MenuProps['items'] = [
+  const getDesktopApp: MenuProps['items'] = [
     {
       icon: <Icon icon={Download} />,
-      key: 'pwa',
-      label: t('installPWA'),
-      onClick: () => install(),
+      key: 'get-desktop-app',
+      label: (
+        <a href={downloadUrl} rel="noopener noreferrer" target="_blank">
+          {t('getDesktopApp')}
+        </a>
+      ),
     },
     {
       type: 'divider',
@@ -119,7 +129,7 @@ export const useMenu = () => {
 
     ...(isLogin ? settings : []),
     ...businessMenuItems,
-    ...(canInstall ? pwa : []),
+    ...(!isDesktop ? getDesktopApp : []),
     ...data,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as MenuProps['items'];

@@ -1,8 +1,4 @@
-import {
-  type BuiltinRenderProps,
-  type CrawlMultiPagesQuery,
-  type CrawlPluginState,
-} from '@lobechat/types';
+import type { BuiltinRenderProps, CrawlMultiPagesQuery, CrawlPluginState } from '@lobechat/types';
 import { memo } from 'react';
 
 import PageContent from './PageContent';

@@ -28,7 +28,7 @@ const RejectedResponse = memo<RejectedResponseProps>(({ reason }) => {
 
   return (
     <Flexbox className={styles.container} gap={8}>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={16} />
         <div className={styles.title}>
           {reason

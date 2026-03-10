@@ -1,12 +1,15 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import { z } from 'zod';
 
-import { ConversationContext } from '../../conversation';
-import { UploadFileItem } from '../../files';
-import { MessageSemanticSearchChunk } from '../../rag';
-import { ChatMessageError, ChatMessageErrorSchema } from '../common/base';
-import { ChatPluginPayload, ToolInterventionSchema } from '../common/tools';
-import { UIChatMessage } from './chat';
+import type { ConversationContext } from '../../conversation';
+import type { UploadFileItem } from '../../files';
+import type { MessageSemanticSearchChunk } from '../../rag';
+import type { ChatMessageError } from '../common/base';
+import { ChatMessageErrorSchema } from '../common/base';
+// Import for local use
+import type { PageSelection } from '../common/pageSelection';
+import type { ChatPluginPayload } from '../common/tools';
+import { ToolInterventionSchema } from '../common/tools';
+import type { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
 
 export type CreateMessageRoleType = 'user' | 'assistant' | 'tool' | 'task' | 'supervisor';
@@ -19,9 +22,9 @@ export interface CreateMessageParams extends Partial<
   error?: ChatMessageError | null;
   fileChunks?: MessageSemanticSearchChunk[];
   files?: string[];
+  groupId?: string;
   model?: string;
   provider?: string;
-  groupId?: string;
   role: CreateMessageRoleType;
   /**
    * @deprecated Use agentId instead
@@ -38,37 +41,37 @@ export interface CreateMessageParams extends Partial<
  * This type is completely independent from UIChatMessage to ensure clean API contract
  */
 export interface CreateNewMessageParams {
-  // ========== Required fields ==========
-  role: CreateMessageRoleType;
-  content: string;
   agentId: string;
-
-  // ========== Tool related ==========
-  tool_call_id?: string;
-  plugin?: ChatPluginPayload;
-
-  // ========== Grouping ==========
-  parentId?: string;
-  groupId?: string;
-
-  // ========== Context ==========
-  topicId?: string;
-  threadId?: string;
-  targetId?: string | null;
-
-  // ========== Model info ==========
-  model?: string;
-  provider?: string;
-
-  // ========== Content ==========
-  files?: string[];
-
+  content: string;
   // ========== Error handling ==========
   error?: ChatMessageError | null;
 
+  fileChunks?: MessageSemanticSearchChunk[];
+  // ========== Content ==========
+  files?: string[];
+
+  groupId?: string;
+  // ========== Model info ==========
+  model?: string;
+
+  // ========== Grouping ==========
+  parentId?: string;
+  plugin?: ChatPluginPayload;
+  provider?: string;
+
+  // ========== Required fields ==========
+  role: CreateMessageRoleType;
+  targetId?: string | null;
+
+  threadId?: string;
+
+  // ========== Tool related ==========
+  tool_call_id?: string;
+
+  // ========== Context ==========
+  topicId?: string;
   // ========== Metadata ==========
   traceId?: string;
-  fileChunks?: MessageSemanticSearchChunk[];
 }
 
 export interface ChatContextContent {
@@ -79,6 +82,10 @@ export interface ChatContextContent {
   format?: 'xml' | 'text' | 'markdown';
   id: string;
   /**
+   * Page ID the selection belongs to (for page editor selections)
+   */
+  pageId?: string;
+  /**
    * Optional short preview for displaying in UI.
    */
   preview?: string;
@@ -86,7 +93,16 @@ export interface ChatContextContent {
   type: 'text';
 }
 
+// Re-export PageSelection from common for backwards compatibility
+export type { PageSelection } from '../common/pageSelection';
+export { PageSelectionSchema } from '../common/pageSelection';
+
 export interface SendMessageParams {
+  /**
+   * Additional contextual snippets (e.g., text selections) attached to the request.
+   * @deprecated Use pageSelections instead for page editor selections
+   */
+  contexts?: ChatContextContent[];
   /**
    * create a thread
    * @deprecated Use ConversationContext.newThread instead
@@ -100,12 +116,6 @@ export interface SendMessageParams {
   isWelcomeQuestion?: boolean;
   message: string;
   /**
-   * Additional metadata for the message (e.g., mentioned users)
-   */
-  metadata?: Record<string, any>;
-  onlyAddUserMessage?: boolean;
-
-  /**
    * Display messages for the current conversation context.
    * If provided, sendMessage will use these messages instead of querying from store.
    * This decouples sendMessage from store selectors.
@@ -113,19 +123,26 @@ export interface SendMessageParams {
   messages?: UIChatMessage[];
 
   /**
+   * Additional metadata for the message (e.g., mentioned users)
+   */
+  metadata?: Record<string, any>;
+
+  onlyAddUserMessage?: boolean;
+  /**
+   * Page selections attached to the message (for Ask AI functionality)
+   * These will be persisted to the database and injected via context-engine
+   */
+  pageSelections?: PageSelection[];
+  /**
    * Parent message ID for the new message.
    * If not provided, will be calculated from messages list.
    */
   parentId?: string;
-  /**
-   * Additional contextual snippets (e.g., text selections) attached to the request.
-   */
-  contexts?: ChatContextContent[];
 }
 
 export interface SendGroupMessageParams {
-  files?: UploadFileItem[];
   context: ConversationContext;
+  files?: UploadFileItem[];
   message: string;
   /**
    * Additional metadata for the message (e.g., mentioned users)

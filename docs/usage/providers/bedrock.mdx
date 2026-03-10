@@ -1,89 +1,89 @@
 ---
-title: Using Amazon Bedrock API Key in LobeChat
+title: Using Amazon Bedrock API Key in LobeHub
 description: >-
-  Learn how to integrate Amazon Bedrock models into LobeChat for AI-powered conversations. Follow these steps to grant access, obtain API keys, and configure Amazon Bedrock.
-
+  Learn how to configure and use Amazon Bedrock, a fully managed foundation
+  model API service, in LobeHub to start chatting.
 tags:
   - Amazon Bedrock
-  - Claude 3.5 sonnect
+  - Claude 3.5 Sonnet
   - API keys
   - Claude 3 Opus
   - Web UI
 ---
 
-# Using Amazon Bedrock in LobeChat
+# Using Amazon Bedrock in LobeHub
 
-<Image alt={'Using Amazon Bedrock in LobeChat'} cover src={'https://github.com/lobehub/lobe-chat/assets/34400653/74768b36-28ca-4ec3-a42d-b32abe2c7057'} />
+<Image alt={'Using Amazon Bedrock in LobeHub'} cover src={'/blog/assets34400653/74768b36-28ca-4ec3-a42d-b32abe2c7057.webp'} />
 
-Amazon Bedrock is a fully managed foundational model API service that allows users to access models from leading AI companies (such as AI21 Labs, Anthropic, Cohere, Meta, Stability AI) and Amazon's own foundational models.
+Amazon Bedrock is a fully managed foundation model API service that allows users to access models from leading AI companies (such as AI21 Labs, Anthropic, Cohere, Meta, Stability AI) and Amazon itself via API.
 
-This document will guide you on how to use Amazon Bedrock in LobeChat:
+This guide will walk you through how to use Amazon Bedrock in LobeHub:
 
 <Steps>
-  ### Step 1: Grant Access to Amazon Bedrock Models in AWS
+  ### Step 1: Enable Access to Amazon Bedrock Models in AWS
 
-  - Access and log in to the [AWS Console](https://console.aws.amazon.com/)
-  - Search for `bedrock` and enter the `Amazon Bedrock` service
+  - Visit and log in to the [AWS Console](https://console.aws.amazon.com/)
+  - Search for "Bedrock" and navigate to the `Amazon Bedrock` service
 
-  <Image alt={'Enter Amazon Bedrock service'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/4e0e87d1-4970-45c5-a9ef-287098f6a198'} />
+  <Image alt={'Accessing the Amazon Bedrock service'} inStep src={'/blog/assets34400653/4e0e87d1-4970-45c5-a9ef-287098f6a198.webp'} />
 
-  - Select `Models access` from the left menu
+  - In the left-hand menu, select `Model access`
 
-  <Image alt={'Access Amazon Bedrock model permissions'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/fd06c0aa-4bd3-4f4e-bf2b-38374dfe775d'} />
+  <Image alt={'Navigating to Amazon Bedrock model access'} inStep src={'/blog/assets34400653/fd06c0aa-4bd3-4f4e-bf2b-38374dfe775d.webp'} />
 
-  - Open model access permissions based on your needs
+  - Enable access to the models you want to use
 
-  <Image alt={'Open model access permissions'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/b695f26a-5bcd-477c-af08-bf03adb717c2'} />
+  <Image alt={'Enabling model access'} inStep src={'/blog/assets34400653/b695f26a-5bcd-477c-af08-bf03adb717c2.webp'} />
 
-  <Callout type={'info'}>Some models may require additional information from you</Callout>
+  <Callout type={'info'}>
+    Some models may require you to provide additional information.
+  </Callout>
 
   ### Step 2: Obtain API Access Keys
 
-  - Continue searching for IAM in the AWS console and enter the IAM service
+  - In the AWS Console, search for IAM and go to the IAM service
 
-  <Image alt={'Enter IAM service'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/f9a5a394-c8f8-4567-9d51-cf84811418ca'} />
+  <Image alt={'Accessing the IAM service'} inStep src={'/blog/assets34400653/f9a5a394-c8f8-4567-9d51-cf84811418ca.webp'} />
 
-  - In the `Users` menu, create a new IAM user
+  - Under the `Users` section, create a new IAM user
 
-  <Image alt={'Create a new IAM user'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/750b5cd1-f16a-4330-b899-c27b28b1e837'} />
+  <Image alt={'Creating a new IAM user'} inStep src={'/blog/assets34400653/750b5cd1-f16a-4330-b899-c27b28b1e837.webp'} />
 
-  - Enter the user name in the pop-up dialog box
+  - In the pop-up dialog, enter a username
 
-  <Image alt={'Enter user name'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/22ce5a72-bc46-41f3-b402-bda6dee90184'} />
+  <Image alt={'Entering a username'} inStep src={'/blog/assets34400653/22ce5a72-bc46-41f3-b402-bda6dee90184.webp'} />
 
-  - Add permissions for this user or join an existing user group to ensure access to Amazon Bedrock
+  - Assign permissions to the user or add them to an existing group that has access to Amazon Bedrock
 
-  <Image alt={'Add permissions for the user'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/94836b32-7fc5-45ca-8556-7a23f53b15f9'} />
+  <Image alt={'Assigning permissions to the user'} inStep src={'/blog/assets34400653/94836b32-7fc5-45ca-8556-7a23f53b15f9.webp'} />
 
-  - Create an access key for the added user
+  - Create access keys for the newly added user
 
-  <Image alt={'Create an access key'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/ac2ed716-d270-43f6-856b-3ff81265f4e6'} />
+  <Image alt={'Creating access keys'} inStep src={'/blog/assets34400653/ac2ed716-d270-43f6-856b-3ff81265f4e6.webp'} />
 
-  - Copy and securely store the access key and secret access key, as they will be needed later
+  - Copy and securely store the Access Key ID and Secret Access Key — you’ll need them later
 
-  <Image alt={'Enter IAM service'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/3c64b747-f6f1-4ed2-84bc-bfa8e5d90966'} />
+  <Image alt={'Accessing IAM service'} inStep src={'/blog/assets34400653/3c64b747-f6f1-4ed2-84bc-bfa8e5d90966.webp'} />
 
   <Callout type={'warning'}>
-    Please securely store the keys as they will only be shown once. If you lose them accidentally, you
-    will need to create a new access key.
+    Store your keys securely, as they will only be shown once. If you lose them, you’ll need to generate new access keys.
   </Callout>
 
-  ### Step 3: Configure Amazon Bedrock in LobeChat
+  ### Step 3: Configure Amazon Bedrock in LobeHub
 
-  - Access the `Settings` interface in LobeChat
-  - Find the setting for `Amazon Bedrock` under `AI Service Provider` and open it
+  - Open the `Settings` panel in LobeHub
+  - Under `AI Providers`, find and enable the `Amazon Bedrock` option
 
-  <Image alt={'Enter Amazon Bedrock keys in LobeChat'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/7468594b-3355-4cb9-85bc-c9dace137653'} />
+  <Image alt={'Entering Amazon Bedrock keys in LobeHub'} inStep src={'/blog/assets34400653/7468594b-3355-4cb9-85bc-c9dace137653.webp'} />
 
-  - Open Amazon Bedrock and enter the obtained access key and secret access key
-  - Choose an Amazon Bedrock model for your assistant to start the conversation
+  - Enter your Access Key ID and Secret Access Key
+  - Choose an Amazon Bedrock model for your assistant to start chatting
 
-  <Image alt={'Select and use Amazon Bedrock model'} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/164b34b5-671e-418d-b34a-3b70f1156d06'} />
+  <Image alt={'Selecting and using an Amazon Bedrock model'} inStep src={'/blog/assets34400653/164b34b5-671e-418d-b34a-3b70f1156d06.webp'} />
 
   <Callout type={'warning'}>
-    You may incur charges while using the API service, please refer to Amazon Bedrock's pricing
-    policy.
+    You may incur charges while using the API. Please refer to Amazon Bedrock’s pricing policy for details.
   </Callout>
 </Steps>
 
-You can now engage in conversations using the models provided by Amazon Bedrock in LobeChat.
+You’re all set! You can now start chatting in LobeHub using models provided by Amazon Bedrock.

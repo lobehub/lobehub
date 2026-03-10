@@ -1,4 +1,5 @@
-import { type FC, memo } from 'react';
+import { type FC } from 'react';
+import { memo } from 'react';
 
 import { useFileStore } from '@/store/file';
 import { type ChunkMetadata, type Coordinates, type FileChunk } from '@/types/chunk';

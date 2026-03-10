@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 import { account } from '@/database/schemas/betterAuth';
 import { users } from '@/database/schemas/user';
@@ -59,5 +60,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', exists: false }, { status: 500 });
   }
 }
-
-export const runtime = 'nodejs';

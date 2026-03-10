@@ -1,9 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { cssVar } from 'antd-style';
-import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
 
+import dynamic from '@/libs/next/dynamic';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 
 import Content from './Content';
@@ -23,17 +23,17 @@ const ChunkDrawer = memo(() => {
 
   return (
     <Drawer
-      onClose={() => {
-        closeChunkDrawer();
-      }}
       open={open}
       size="large"
+      title={file?.name}
       styles={{
         body: { padding: 0 },
       }}
-      title={file?.name}
+      onClose={() => {
+        closeChunkDrawer();
+      }}
     >
-      <Flexbox height={'100%'} horizontal style={{ overflow: 'hidden' }}>
+      <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }}>
         {file && (
           <Flexbox flex={2} style={{ overflow: 'scroll' }}>
             <FileViewer {...file} />

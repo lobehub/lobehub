@@ -1,6 +1,13 @@
-import { ChatToolPayload, MessageToolCall } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type DynamicInterventionResolver,
+  type GlobalInterventionAuditConfig,
+  type MessageToolCall,
+} from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
+  /** Force create a new assistant message (e.g., after compression) */
+  createAssistantMessage?: boolean;
   isFirstMessage?: boolean;
   messages: any[];
   model: string;
@@ -67,16 +74,34 @@ export interface GeneralAgentConfig {
   };
   /**
    * Context compression configuration
-   * Note: Compression checking is always enabled to prevent context overflow.
-   * This config only controls the compression parameters.
+   * When enabled and triggered, ALL messages are compressed into a single MessageGroup summary.
    */
   compressionConfig?: {
-    /** Number of recent messages to keep uncompressed (default: 10) */
-    keepRecentCount?: number;
+    /** Whether context compression is enabled (default: true) */
+    enabled?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
   };
+  /**
+   * Dynamic intervention audits registry (per-tool)
+   * Used to evaluate runtime intervention policies for tools with dynamic config
+   */
+  dynamicInterventionAudits?: Record<string, DynamicInterventionResolver>;
+  /**
+   * Global intervention resolvers that run for EVERY tool call
+   * Evaluated in array order, before per-tool dynamic resolvers.
+   * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
+   */
+  globalInterventionAudits?: GlobalInterventionAuditConfig[];
   modelRuntimeConfig?: {
+    /**
+     * Compression model configuration
+     * Used for context compression tasks
+     */
+    compressionModel?: {
+      model: string;
+      provider: string;
+    };
     model: string;
     provider: string;
   };
@@ -90,12 +115,10 @@ export interface GeneralAgentConfig {
 export interface GeneralAgentCompressionResultPayload {
   /** Compressed messages (summary + pinned + recent) */
   compressedMessages: any[];
-  /** Token count after compression */
-  compressedTokenCount: number;
   /** Compression group ID in database */
   groupId: string;
-  /** Token count before compression */
-  originalTokenCount: number;
+  /** Parent message ID for subsequent LLM call (last assistant message before compression) */
+  parentMessageId?: string;
   /** Whether compression was skipped (no messages to compress) */
   skipped?: boolean;
 }

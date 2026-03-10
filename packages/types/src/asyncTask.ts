@@ -2,6 +2,8 @@ export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
+  UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
+  VideoGeneration = 'video_generation',
 }
 
 export enum AsyncTaskStatus {
@@ -19,14 +21,10 @@ export enum AsyncTaskErrorType {
    * Free plan users are not allowed to use this feature
    */
   FreePlanLimit = 'FreePlanLimit',
-  /**
-   * Subscription plan limit reached (paid users run out of credits)
-   */
-  SubscriptionPlanLimit = 'SubscriptionPlanLimit',
+
+  InvalidProviderAPIKey = 'InvalidProviderAPIKey',
   /* ↑ cloud slot ↑ */
 
-  // eslint-disable-next-line typescript-sort-keys/string-enum
-  InvalidProviderAPIKey = 'InvalidProviderAPIKey',
   /**
    * Model not found on server
    */
@@ -36,6 +34,10 @@ export enum AsyncTaskErrorType {
    */
   NoChunkError = 'NoChunkError',
   ServerError = 'ServerError',
+  /**
+   * Subscription plan limit reached (paid users run out of credits)
+   */
+  SubscriptionPlanLimit = 'SubscriptionPlanLimit',
   /**
    * this happens when the task is not trigger successfully
    */
@@ -66,4 +68,23 @@ export interface FileParsingTask {
   embeddingError?: IAsyncTaskError | null;
   embeddingStatus?: AsyncTaskStatus | null;
   finishEmbedding?: boolean;
+}
+
+export interface UserMemoryExtractionProgress {
+  completedTopics: number;
+  totalTopics: number | null;
+}
+
+export interface UserMemoryExtractionMetadata {
+  progress: UserMemoryExtractionProgress;
+  range?: {
+    from?: string;
+    to?: string;
+  };
+  source: 'chat_topic';
+}
+
+export interface VideoGenerationTaskMetadata {
+  precharge?: Record<string, unknown>;
+  webhookToken?: string;
 }

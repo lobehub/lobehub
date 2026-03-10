@@ -1,6 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { topics } from '@lobechat/database/schemas';
-import { OpenAIChatMessage } from '@lobechat/model-runtime';
+import type { OpenAIChatMessage } from '@lobechat/model-runtime';
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { u } from 'unist-builder';
@@ -8,7 +8,7 @@ import { toXml } from 'xast-util-to-xml';
 import type { Child } from 'xastscript';
 import { x } from 'xastscript';
 
-import {
+import type {
   BuiltContext,
   MemoryContextProvider,
   MemoryExtractionJob,
@@ -47,7 +47,7 @@ export class LobeChatTopicContextProvider implements MemoryContextProvider<
     this.options = options;
   }
 
-  async buildContext(job: MemoryExtractionJob): Promise<BuiltContext> {
+  async buildContext(userId: string): Promise<BuiltContext> {
     const messageChildren: Child[] = [];
 
     this.options.conversations.forEach((message, index) => {
@@ -118,7 +118,7 @@ export class LobeChatTopicContextProvider implements MemoryContextProvider<
       context: topicContext,
       metadata: {},
       sourceId: this.options.topicId,
-      userId: job.userId,
+      userId,
     } satisfies BuiltContext;
   }
 }

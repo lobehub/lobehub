@@ -7,9 +7,9 @@ import { type AssistantContentBlock } from '@/types/index';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { messageStateSelectors, useConversationStore } from '../../../store';
+import MessageContent from '../../AssistantGroup/components/MessageContent';
 import { Tools } from '../../AssistantGroup/Tools';
 import Reasoning from '../../components/Reasoning';
-import MessageContent from './MessageContent';
 
 interface ContentBlockProps extends AssistantContentBlock {
   disableEditing?: boolean;

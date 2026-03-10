@@ -1,6 +1,6 @@
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
-import type { ChatInputProps } from '@lobehub/editor/react';
-import type { MenuProps } from '@lobehub/ui';
+import { type ChatInputProps } from '@lobehub/editor/react';
+import { type MenuProps } from '@lobehub/ui';
 
 import { type ActionKeys } from '@/features/ChatInput';
 
@@ -15,6 +15,7 @@ export interface SendButtonProps {
   generating: boolean;
   onStop: (params: { editor: IEditor }) => void;
   shape?: 'round' | 'default';
+  size?: number;
 }
 
 export const initialSendButtonState: SendButtonProps = {

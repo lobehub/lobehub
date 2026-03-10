@@ -122,6 +122,9 @@ const ImportPreviewModal = ({
 
   return (
     <Modal
+      open={open}
+      title={t('importPreview.title')}
+      width={700}
       footer={[
         <Button
           key="cancel"
@@ -132,20 +135,17 @@ const ImportPreviewModal = ({
         >
           {t('cancel')}
         </Button>,
-        <Button key="confirm" onClick={handleConfirm} type="primary">
+        <Button key="confirm" type="primary" onClick={handleConfirm}>
           {t('importPreview.confirmImport')}
         </Button>,
       ]}
       onCancel={() => onOpenChange(false)}
-      open={open}
-      title={t('importPreview.title')}
-      width={700}
     >
       <div className={styles.modalContent}>
         <Flexbox gap={16}>
           <Flexbox gap={4}>
-            <Flexbox align="center" horizontal justify="space-between" width="100%">
-              <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" justify="space-between" width="100%">
+              <Flexbox horizontal align="center" gap={8}>
                 <Info className={styles.infoIcon} size={16} />
                 <Text strong>{t('importPreview.totalRecords', { count: totalRecords })}</Text>
               </Flexbox>
@@ -155,7 +155,7 @@ const ImportPreviewModal = ({
                 </Text>
               </Flexbox>
             </Flexbox>
-            <Flexbox className={styles.hash} gap={4} horizontal>
+            <Flexbox horizontal className={styles.hash} gap={4}>
               {t('importPreview.hashLabel')}: <span>{importData.schemaHash}</span>
             </Flexbox>
           </Flexbox>
@@ -170,26 +170,6 @@ const ImportPreviewModal = ({
               size="small"
             />
           </div>
-
-          {/*<Flexbox>*/}
-          {/*  重复数据处理方式：*/}
-          {/*  <div className={styles.duplicateOptions}>*/}
-          {/*    <Radio.Group*/}
-          {/*      onChange={(e) => setDuplicateAction(e.target.value)}*/}
-          {/*      value={duplicateAction}*/}
-          {/*    >*/}
-          {/*      <Space>*/}
-          {/*        <Radio value="skip">跳过</Radio>*/}
-          {/*        <Radio value="overwrite">覆盖</Radio>*/}
-          {/*      </Space>*/}
-          {/*    </Radio.Group>*/}
-          {/*  </div>*/}
-          {/*  <div className={styles.duplicateDescription}>*/}
-          {/*    {duplicateAction === 'skip'*/}
-          {/*      ? '选择跳过将仅导入不重复的数据，保留现有数据不变。'*/}
-          {/*      : '选择覆盖将使用导入数据替换系统中具有相同 ID 的现有记录。'}*/}
-          {/*  </div>*/}
-          {/*</Flexbox>*/}
         </Flexbox>
       </div>
     </Modal>

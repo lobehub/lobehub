@@ -1,7 +1,7 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { exportFile } from '@lobechat/utils/client';
-import { Button, Form, type FormItemProps, copyToClipboard } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
 import { App, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
@@ -84,21 +84,21 @@ const ShareText = memo(() => {
       <Button
         block
         icon={CopyIcon}
+        size={isMobile ? undefined : 'large'}
+        type={'primary'}
         onClick={async () => {
           await copyToClipboard(content);
           message.success(t('copySuccess', { ns: 'common' }));
         }}
-        size={isMobile ? undefined : 'large'}
-        type={'primary'}
       >
         {t('copy', { ns: 'common' })}
       </Button>
       <Button
         block
+        size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.md`);
         }}
-        size={isMobile ? undefined : 'large'}
       >
         {t('shareModal.downloadFile')}
       </Button>
@@ -121,7 +121,7 @@ const ShareText = memo(() => {
         </Flexbox>
       </Flexbox>
       {isMobile && (
-        <Flexbox className={styles.footer} gap={8} horizontal>
+        <Flexbox horizontal className={styles.footer} gap={8}>
           {button}
         </Flexbox>
       )}

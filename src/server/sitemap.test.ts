@@ -59,7 +59,7 @@ describe('Sitemap', () => {
       );
       expect(pageSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/community/assistant'),
+          url: getCanonicalUrl('/community/agent'),
           changeFrequency: 'daily',
           priority: 0.7,
         }),
@@ -85,13 +85,13 @@ describe('Sitemap', () => {
       expect(assistantsSitemap.length).toBe(LOCALE_COUNT);
       expect(assistantsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/community/assistant/test-assistant'),
+          url: getCanonicalUrl('/community/agent/test-assistant'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
       expect(assistantsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/community/assistant/test-assistant?hl=zh-CN'),
+          url: getCanonicalUrl('/community/agent/test-assistant?hl=zh-CN'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
@@ -113,7 +113,7 @@ describe('Sitemap', () => {
       expect(firstPageSitemap.length).toBe(100 * LOCALE_COUNT); // 100 items * LOCALE_COUNT locales
       expect(firstPageSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/community/assistant/test-assistant-0'),
+          url: getCanonicalUrl('/community/agent/test-assistant-0'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
@@ -123,7 +123,7 @@ describe('Sitemap', () => {
       expect(secondPageSitemap.length).toBe(50 * LOCALE_COUNT); // 50 items * LOCALE_COUNT locales
       expect(secondPageSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/community/assistant/test-assistant-100'),
+          url: getCanonicalUrl('/community/agent/test-assistant-100'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );

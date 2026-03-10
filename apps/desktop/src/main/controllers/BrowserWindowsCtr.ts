@@ -1,7 +1,7 @@
 import type {
   InterceptRouteParams,
   OpenSettingsWindowOptions,
-  WindowResizableParams,
+  WindowMinimumSizeParams,
   WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
 import { findMatchingRoute } from '~common/routes';
@@ -81,9 +81,21 @@ export default class BrowserWindowsCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  setWindowResizable(params: WindowResizableParams) {
+  setWindowMinimumSize(params: WindowMinimumSizeParams) {
     this.withSenderIdentifier((identifier) => {
-      this.app.browserManager.setWindowResizable(identifier, params.resizable);
+      const currentSize = this.app.browserManager.getWindowSize(identifier);
+      const nextWindowSize = {
+        ...currentSize,
+      };
+      if (params.height) {
+        nextWindowSize.height = Math.max(currentSize.height, params.height);
+      }
+      if (params.width) {
+        nextWindowSize.width = Math.max(currentSize.width, params.width);
+      }
+
+      this.app.browserManager.setWindowSize(identifier, nextWindowSize);
+      this.app.browserManager.setWindowMinimumSize(identifier, params);
     });
   }
 

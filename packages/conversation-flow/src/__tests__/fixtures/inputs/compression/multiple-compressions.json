@@ -1,0 +1,67 @@
+[
+  {
+    "id": "comp-group-1",
+    "role": "compressedGroup",
+    "content": "Summary: Early conversation about project setup and initial requirements.",
+    "parentId": null,
+    "createdAt": 1704060000000,
+    "updatedAt": 1704060000000,
+    "meta": {},
+    "pinnedMessages": [
+      {
+        "id": "pinned-1-1",
+        "role": "assistant",
+        "content": "Key decision: Use TypeScript with strict mode",
+        "createdAt": "2024-01-01T08:00:00.000Z",
+        "model": "gpt-4",
+        "provider": "openai"
+      }
+    ]
+  },
+  {
+    "id": "msg-middle-001",
+    "role": "user",
+    "content": "Let's discuss the database schema",
+    "parentId": null,
+    "createdAt": 1704063600000,
+    "updatedAt": 1704063600000,
+    "meta": {}
+  },
+  {
+    "id": "msg-middle-002",
+    "role": "assistant",
+    "content": "Here's my suggested schema design...",
+    "parentId": "msg-middle-001",
+    "createdAt": 1704063605000,
+    "updatedAt": 1704063605000,
+    "meta": {}
+  },
+  {
+    "id": "comp-group-2",
+    "role": "compressedGroup",
+    "content": "Summary: Database schema discussions concluded with PostgreSQL + Drizzle ORM decision.",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000,
+    "meta": {},
+    "pinnedMessages": []
+  },
+  {
+    "id": "msg-recent-001",
+    "role": "user",
+    "content": "Now let's implement the API endpoints",
+    "parentId": null,
+    "createdAt": 1704070800000,
+    "updatedAt": 1704070800000,
+    "meta": {}
+  },
+  {
+    "id": "msg-recent-002",
+    "role": "assistant",
+    "content": "I'll create RESTful endpoints for CRUD operations...",
+    "parentId": "msg-recent-001",
+    "createdAt": 1704070805000,
+    "updatedAt": 1704070805000,
+    "meta": {}
+  }
+]

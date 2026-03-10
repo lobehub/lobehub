@@ -5,6 +5,23 @@ import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
 export const GroupAgentBuilderManifest: BuiltinToolManifest = {
   api: [
+    // ==================== Agent Info ====================
+    {
+      description:
+        'Get detailed information about a specific agent, including their capabilities, available tools, and configuration. Use this to check if an agent has tools before deciding between speak vs executeAgentTask.',
+      name: GroupAgentBuilderApiName.getAgentInfo,
+      parameters: {
+        properties: {
+          agentId: {
+            description: 'The ID of the agent to get information about.',
+            type: 'string',
+          },
+        },
+        required: ['agentId'],
+        type: 'object',
+      },
+    },
+
     // ==================== Group Member Management ====================
     {
       description:
@@ -75,7 +92,6 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
             description: 'Array of agent definitions to create',
             items: {
               properties: {
-                /* eslint-disable sort-keys-fix/sort-keys-fix */
                 avatar: {
                   description: "An emoji or image URL for the agent's avatar (optional).",
                   type: 'string',
@@ -99,7 +115,6 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
                   items: { type: 'string' },
                   type: 'array',
                 },
-                /* eslint-enable sort-keys-fix/sort-keys-fix */
               },
               required: ['avatar', 'title', 'description', 'systemRole'],
               type: 'object',

@@ -1,4 +1,4 @@
-import { UserImageConfig } from '@lobechat/types';
+import type { UserImageConfig } from '@lobechat/types';
 
 export const MIN_DEFAULT_IMAGE_NUM = 1;
 export const MAX_DEFAULT_IMAGE_NUM = 20;

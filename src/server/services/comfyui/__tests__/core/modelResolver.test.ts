@@ -6,7 +6,7 @@ import {
   TEST_MODEL_SETS,
   TEST_SD35_MODELS,
 } from '@/server/services/comfyui/__tests__/fixtures/testModels';
-import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
+import { type ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
 import { ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
 import { ModelResolverError } from '@/server/services/comfyui/errors/modelResolverError';
 

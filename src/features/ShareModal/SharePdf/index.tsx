@@ -1,6 +1,6 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Button, Form, type FormItemProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Button, Flexbox, Form } from '@lobehub/ui';
 import { App, Switch } from 'antd';
 import { cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -125,9 +125,9 @@ const SharePdf = memo((props: { message?: UIChatMessage }) => {
       disabled={loading}
       icon={loading ? undefined : FileText}
       loading={loading}
-      onClick={handleGeneratePdf}
       size={isMobile ? undefined : 'large'}
       type="primary"
+      onClick={handleGeneratePdf}
     >
       {loading
         ? t('shareModal.generatingPdf')
@@ -141,9 +141,9 @@ const SharePdf = memo((props: { message?: UIChatMessage }) => {
     <Button
       block
       icon={DownloadIcon}
-      onClick={handleDownload}
       size={isMobile ? undefined : 'large'}
       type="default"
+      onClick={handleDownload}
     >
       {t('shareModal.downloadPdf')}
     </Button>
@@ -177,7 +177,7 @@ const SharePdf = memo((props: { message?: UIChatMessage }) => {
 
   return (
     <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
-      <PdfPreview loading={loading} onGeneratePdf={handleGeneratePdf} pdfData={pdfData} />
+      <PdfPreview loading={loading} pdfData={pdfData} onGeneratePdf={handleGeneratePdf} />
       <Flexbox className={styles.sidebar} gap={12}>
         <Form
           initialValues={DEFAULT_FIELD_VALUE}

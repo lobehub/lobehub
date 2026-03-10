@@ -1,0 +1,33 @@
+description: LobeHub Prompts (memory-user-memory) Testing Suite
+
+# Test configurations - run all prompt tests
+testPaths:
+  - promptfoo/evals/preferences/tool-call/basic/eval.yaml
+
+# Default provider setup (must specify either providers or targets)
+providers:
+  - id: google:gemini-2.5-pro
+
+# Output configuration
+outputPath: promptfoo-results.json
+
+# Default test settings
+defaultTest:
+  assert:
+    - type: llm-rubric
+      provider: openai:gpt-5-mini
+      value: "The response should be relevant and well-formatted"
+    - type: llm-rubric
+      provider: google:gemini-2.5-flash
+      value: "The response should be relevant and well-formatted"
+    - type: cost
+      threshold: 0.01 # Maximum cost per test in USD
+
+# Evaluation settings
+evaluateOptions:
+  maxConcurrency: 5
+  delay: 100
+
+# TypeScript support
+transforms:
+  - "typescript"

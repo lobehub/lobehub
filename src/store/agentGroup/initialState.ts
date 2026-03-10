@@ -1,7 +1,7 @@
-import type { AgentGroupDetail } from '@lobechat/types';
-import type { ParsedQuery } from 'query-string';
+import { type AgentGroupDetail } from '@lobechat/types';
+import { type ParsedQuery } from 'query-string';
 
-import type { ChatGroupItem } from '@/database/schemas/chatGroup';
+import { type ChatGroupItem } from '@/database/schemas/chatGroup';
 
 export interface QueryRouter {
   push: (url: string, options?: { query?: ParsedQuery; replace?: boolean }) => void;

@@ -40,7 +40,7 @@ export class Manifest {
       background_color: color,
       cache_busting_mode: 'all',
       categories: ['productivity', 'design', 'development', 'education'],
-      description: description,
+      description,
       display: 'standalone',
       display_override: ['tabbed'],
       edge_side_panel: {
@@ -48,10 +48,10 @@ export class Manifest {
       },
       handle_links: 'auto',
       icons: icons.map((item) => this._getIcon(item)),
-      id: id,
+      id,
       immutable: 'true',
       max_age: MAX_AGE,
-      name: name,
+      name,
       orientation: 'portrait',
       related_applications: [
         {
@@ -63,10 +63,10 @@ export class Manifest {
       screenshots: screenshots.map((item) => this._getScreenshot(item)),
       short_name: name,
       splash_pages: null,
-      start_url: '/agent',
+      start_url: '/',
       tab_strip: {
         new_tab_button: {
-          url: '/agent',
+          url: '/',
         },
       },
       theme_color: color,

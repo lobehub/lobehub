@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
+// Mock trusted client to avoid server-side env access
+vi.mock('@/libs/trusted-client', () => ({
+  generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
+  getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
+  isTrustedClientEnabled: vi.fn().mockReturnValue(false),
+}));
+
 // Mock ThreadModel
 const mockThreadModel = {
   create: vi.fn(),
@@ -41,6 +48,19 @@ vi.mock('@/database/models/topic', () => ({
   })),
 }));
 
+// Mock AgentService
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn().mockImplementation(() => ({
+    getAgentConfig: vi.fn().mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+    }),
+  })),
+}));
+
 // Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
@@ -50,6 +70,20 @@ vi.mock('@/server/services/agentRuntime', () => ({
       operationId: 'op-123',
       success: true,
     }),
+  })),
+}));
+
+// Mock MarketService
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(() => ({
+    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+// Mock KlavisService
+vi.mock('@/server/services/klavis', () => ({
+  KlavisService: vi.fn().mockImplementation(() => ({
+    getKlavisManifests: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -178,6 +212,9 @@ describe('AiAgentService.execSubAgentTask', () => {
           onAfterStep: expect.any(Function),
           onComplete: expect.any(Function),
         }),
+        userInterventionConfig: {
+          approvalMode: 'headless',
+        },
       });
     });
 

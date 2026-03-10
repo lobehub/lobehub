@@ -51,8 +51,8 @@ const Header = memo(() => {
         <>
           {/* Three-dot menu */}
           <DropdownMenu
+            iconSpaceMode="group"
             items={menuItems}
-            nativeButton={false}
             placement="bottomRight"
             popupProps={{
               style: {

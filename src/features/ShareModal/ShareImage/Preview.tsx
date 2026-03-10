@@ -1,9 +1,7 @@
 import { ModelTag } from '@lobehub/icons';
-import { Avatar, Flexbox, Markdown } from '@lobehub/ui';
-import { ChatHeaderTitle } from '@lobehub/ui/chat';
+import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
 import PluginTag from '@/features/PluginTag';
@@ -14,26 +12,22 @@ import pkg from '../../../../package.json';
 import { containerStyles } from '../style';
 import ChatList from './ChatList';
 import { styles } from './style';
-import { WidthMode } from './type';
 import { type FieldType } from './type';
+import { WidthMode } from './type';
 
 const Preview = memo<FieldType & { title?: string }>(
   ({ title, withSystemRole, withBackground, withFooter, widthMode }) => {
-    const [model, plugins, systemRole, isInbox, description, avatar, backgroundColor] =
-      useAgentStore((s) => [
-        agentSelectors.currentAgentModel(s),
-        agentSelectors.displayableAgentPlugins(s),
-        agentSelectors.currentAgentSystemRole(s),
-        builtinAgentSelectors.isInboxAgent(s),
-        agentSelectors.currentAgentDescription(s),
-        agentSelectors.currentAgentAvatar(s),
-        agentSelectors.currentAgentBackgroundColor(s),
-      ]);
-
-    const { t } = useTranslation('chat');
+    const [model, plugins, systemRole, isInbox, avatar, backgroundColor] = useAgentStore((s) => [
+      agentSelectors.currentAgentModel(s),
+      agentSelectors.displayableAgentPlugins(s),
+      agentSelectors.currentAgentSystemRole(s),
+      builtinAgentSelectors.isInboxAgent(s),
+      agentSelectors.currentAgentDescription(s),
+      agentSelectors.currentAgentAvatar(s),
+      agentSelectors.currentAgentBackgroundColor(s),
+    ]);
 
     const displayTitle = isInbox ? 'Lobe AI' : title;
-    const displayDesc = isInbox ? t('inbox.desc') : description;
 
     return (
       <div
@@ -50,24 +44,21 @@ const Preview = memo<FieldType & { title?: string }>(
             gap={16}
           >
             <div className={styles.header}>
-              <Flexbox align={'flex-start'} gap={12} horizontal>
+              <Flexbox horizontal align={'center'} gap={12}>
                 <Avatar
                   avatar={avatar}
                   background={backgroundColor}
                   shape={'square'}
-                  size={40}
+                  size={28}
                   title={title}
                 />
-                <ChatHeaderTitle
-                  desc={displayDesc}
-                  tag={
-                    <Flexbox gap={4} horizontal>
-                      <ModelTag model={model} />
-                      {plugins?.length > 0 && <PluginTag plugins={plugins} />}
-                    </Flexbox>
-                  }
-                  title={displayTitle}
-                />
+                <Text strong fontSize={16}>
+                  {displayTitle}
+                </Text>
+                <Flexbox horizontal gap={4}>
+                  <ModelTag model={model} />
+                  {plugins?.length > 0 && <PluginTag plugins={plugins} />}
+                </Flexbox>
               </Flexbox>
               {withSystemRole && systemRole && (
                 <div className={styles.role}>

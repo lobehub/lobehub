@@ -1,5 +1,5 @@
-import { promptAgentKnowledge } from '@lobechat/prompts';
 import type { FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
+import { promptAgentKnowledge } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
@@ -29,7 +29,6 @@ export class KnowledgeInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected buildContent(_context: PipelineContext): string | null {
     const fileContents = this.config.fileContents || [];
     const knowledgeBases = this.config.knowledgeBases || [];

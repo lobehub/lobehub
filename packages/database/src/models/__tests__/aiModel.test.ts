@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { eq } from 'drizzle-orm';
-import { AiProviderModelListItem } from 'model-bank';
+import type { AiProviderModelListItem } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { AiModelSelectItem, NewAiModelItem, aiModels, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
-import { AiModelModel } from '../aiModel';
 import { getTestDB } from '../../core/getTestDB';
+import type { NewAiModelItem } from '../../schemas';
+import { aiModels, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { AiModelModel } from '../aiModel';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -300,6 +301,32 @@ describe('AiModelModel', () => {
       expect(models).toHaveLength(1);
       expect(models[0].enabled).toBe(false);
     });
+
+    it('should preserve type property when disabling all models', async () => {
+      // Create models with type information
+      await aiProviderModel.create({
+        id: 'gpt-4',
+        providerId: 'openai',
+        enabled: true,
+        type: 'chat',
+      });
+      await aiProviderModel.create({
+        id: 'dall-e-3',
+        providerId: 'openai',
+        enabled: true,
+        type: 'image',
+      });
+
+      // Batch disable all models
+      await aiProviderModel.batchToggleAiModels('openai', ['gpt-4', 'dall-e-3'], false);
+
+      // Verify type is preserved
+      const models = await aiProviderModel.getModelListByProviderId('openai');
+      expect(models).toHaveLength(2);
+      expect(models.find((m) => m.id === 'gpt-4')?.type).toBe('chat');
+      expect(models.find((m) => m.id === 'dall-e-3')?.type).toBe('image');
+      expect(models.every((m) => !m.enabled)).toBe(true);
+    });
   });
 
   describe('clearRemoteModels', () => {
@@ -314,6 +341,42 @@ describe('AiModelModel', () => {
       const remainingModels = await aiProviderModel.query();
       expect(remainingModels).toHaveLength(1);
       expect(remainingModels[0].id).toBe('custom1');
+    });
+  });
+
+  describe('clearModelsByProvider', () => {
+    it('should delete ALL models for a given provider regardless of source', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'remote1', providerId: 'openai', source: 'remote', userId },
+        { id: 'custom1', providerId: 'openai', source: 'custom', userId },
+        { id: 'model1', providerId: 'anthropic', source: 'remote', userId },
+        { id: 'model2', providerId: 'anthropic', source: 'custom', userId },
+      ]);
+
+      await aiProviderModel.clearModelsByProvider('openai');
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(2);
+      expect(remainingModels.every((m) => m.providerId === 'anthropic')).toBe(true);
+    });
+
+    it('should only delete models for the current user', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'user1-model', providerId: 'openai', source: 'custom', userId },
+        { id: 'user2-model', providerId: 'openai', source: 'custom', userId: 'user2' },
+      ]);
+
+      await aiProviderModel.clearModelsByProvider('openai');
+
+      const userModels = await serverDB.query.aiModels.findMany({
+        where: eq(aiModels.userId, userId),
+      });
+      const otherUserModels = await serverDB.query.aiModels.findMany({
+        where: eq(aiModels.userId, 'user2'),
+      });
+
+      expect(userModels).toHaveLength(0);
+      expect(otherUserModels).toHaveLength(1);
     });
   });
 

@@ -1,17 +1,24 @@
 import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import type { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { type HomeStoreState, initialState } from './initialState';
-import { type AgentListAction, createAgentListSlice } from './slices/agentList/action';
-import { type GroupAction, createGroupSlice } from './slices/group/action';
-import { type HomeInputAction, createHomeInputSlice } from './slices/homeInput/action';
-import { type RecentAction, createRecentSlice } from './slices/recent/action';
-import { type SidebarUIAction, createSidebarUISlice } from './slices/sidebarUI/action';
+import { flattenActions } from '../utils/flattenActions';
+import { type HomeStoreState } from './initialState';
+import { initialState } from './initialState';
+import { type AgentListAction } from './slices/agentList/action';
+import { createAgentListSlice } from './slices/agentList/action';
+import { type GroupAction } from './slices/group/action';
+import { createGroupSlice } from './slices/group/action';
+import { type HomeInputAction } from './slices/homeInput/action';
+import { createHomeInputSlice } from './slices/homeInput/action';
+import { type RecentAction } from './slices/recent/action';
+import { createRecentSlice } from './slices/recent/action';
+import { type SidebarUIAction } from './slices/sidebarUI/action';
+import { createSidebarUISlice } from './slices/sidebarUI/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -24,13 +31,23 @@ export interface HomeStore
     SidebarUIAction,
     HomeStoreState {}
 
-const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type HomeStoreAction = AgentListAction &
+  GroupAction &
+  RecentAction &
+  HomeInputAction &
+  SidebarUIAction;
+
+const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<HomeStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createAgentListSlice(...parameters),
-  ...createGroupSlice(...parameters),
-  ...createRecentSlice(...parameters),
-  ...createHomeInputSlice(...parameters),
-  ...createSidebarUISlice(...parameters),
+  ...flattenActions<HomeStoreAction>([
+    createAgentListSlice(...parameters),
+    createGroupSlice(...parameters),
+    createRecentSlice(...parameters),
+    createHomeInputSlice(...parameters),
+    createSidebarUISlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

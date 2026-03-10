@@ -28,9 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     gap: 8px;
     align-items: center;
-
     padding-block: 8px;
-    padding-inline: 16px;
   `,
   footer: css`
     padding-block-start: 8px;
@@ -203,7 +201,7 @@ const ProcessingState = memo<ProcessingStateProps>(
           {/* Current Activity */}
           {currentActivity && (
             <div className={styles.activityRow}>
-              <Flexbox align={'center'} gap={4} horizontal>
+              <Flexbox horizontal align={'center'} gap={4}>
                 <NeuralNetworkLoading size={14} />
                 <Text as={'span'} fontSize={12} type={'secondary'}>
                   {renderActivityText()}
@@ -211,8 +209,8 @@ const ProcessingState = memo<ProcessingStateProps>(
               </Flexbox>
               {currentActivity.contentPreview && (
                 <Text
-                  as={'span'}
                   ellipsis
+                  as={'span'}
                   fontSize={12}
                   style={{ whiteSpace: 'nowrap' }}
                   type={'secondary'}
@@ -231,14 +229,14 @@ const ProcessingState = memo<ProcessingStateProps>(
 
           {/* Footer with metrics */}
           <Flexbox
+            horizontal
             align="center"
             className={styles.footer}
             gap={12}
-            horizontal
             justify={'space-between'}
             wrap="wrap"
           >
-            <Flexbox align="center" gap={12} horizontal>
+            <Flexbox horizontal align="center" gap={12}>
               {/* Elapsed Time */}
               {startedAt && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
@@ -249,7 +247,7 @@ const ProcessingState = memo<ProcessingStateProps>(
                 </Text>
               )}
             </Flexbox>
-            <Flexbox align="center" gap={12} horizontal>
+            <Flexbox horizontal align="center" gap={12}>
               {/* Steps */}
               {totalSteps !== undefined && totalSteps > 0 && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
@@ -286,11 +284,11 @@ const ProcessingState = memo<ProcessingStateProps>(
       <Flexbox gap={8}>
         {/* Current Activity */}
         {currentActivity && (
-          <Flexbox align="center" gap={8} horizontal>
+          <Flexbox horizontal align="center" gap={8}>
             <NeuralNetworkLoading size={14} />
             <Text
-              as={'span'}
               ellipsis
+              as={'span'}
               fontSize={12}
               style={{ whiteSpace: 'nowrap' }}
               type={'secondary'}
@@ -309,15 +307,15 @@ const ProcessingState = memo<ProcessingStateProps>(
         {/* Footer with metrics */}
         {hasMetrics && (
           <Flexbox
+            horizontal
             align="center"
             className={styles.footer}
             gap={12}
-            horizontal
             justify="space-between"
             wrap="wrap"
           >
             {/* Left side: Elapsed Time */}
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               {startedAt && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
                   <Timer size={12} />
@@ -329,7 +327,7 @@ const ProcessingState = memo<ProcessingStateProps>(
             </Flexbox>
 
             {/* Right side: Steps, Tool Calls */}
-            <Flexbox align="center" gap={12} horizontal>
+            <Flexbox horizontal align="center" gap={12}>
               {totalSteps !== undefined && totalSteps > 0 && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
                   <Footprints size={12} />

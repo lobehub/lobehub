@@ -37,9 +37,7 @@ export interface GTDPlanInjectorConfig {
  * Format GTD Plan content for injection
  */
 function formatGTDPlan(plan: GTDPlan): string {
-  const lines: string[] = ['<gtd_plan>'];
-
-  lines.push(`<goal>${plan.goal}</goal>`);
+  const lines: string[] = ['<gtd_plan>', `<goal>${plan.goal}</goal>`];
 
   if (plan.description) {
     lines.push(`<description>${plan.description}</description>`);
@@ -70,7 +68,6 @@ export class GTDPlanInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected buildContent(_context: PipelineContext): string | null {
     const { enabled, plan } = this.config;
 

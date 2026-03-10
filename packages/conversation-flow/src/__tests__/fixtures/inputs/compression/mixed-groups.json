@@ -1,0 +1,80 @@
+[
+  {
+    "id": "comp-group-1",
+    "role": "compressedGroup",
+    "content": "Summary: Initial project discussion about building a chat application.",
+    "parentId": null,
+    "createdAt": 1704060000000,
+    "updatedAt": 1704060000000,
+    "meta": {},
+    "pinnedMessages": [
+      {
+        "id": "pinned-architecture",
+        "role": "assistant",
+        "content": "Key architecture decision: React + tRPC + PostgreSQL",
+        "createdAt": "2024-01-01T08:00:00.000Z",
+        "model": "gpt-4",
+        "provider": "openai"
+      }
+    ]
+  },
+  {
+    "id": "msg-compare-trigger",
+    "role": "user",
+    "content": "Which state management should I use: Redux, Zustand, or Jotai?",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000,
+    "meta": {}
+  },
+  {
+    "id": "parallel-group-state",
+    "role": "compareGroup",
+    "content": null,
+    "parentId": null,
+    "createdAt": 1704067205000,
+    "updatedAt": 1704067205000,
+    "meta": {},
+    "children": [
+      {
+        "id": "resp-redux",
+        "role": "assistant",
+        "content": "Redux: Best for large-scale apps with complex state logic...",
+        "createdAt": "2024-01-01T10:00:05.000Z",
+        "model": "gpt-4",
+        "provider": "openai"
+      },
+      {
+        "id": "resp-zustand",
+        "role": "assistant",
+        "content": "Zustand: Lightweight and simple, great for most React apps...",
+        "createdAt": "2024-01-01T10:00:06.000Z",
+        "model": "claude-3-5-sonnet",
+        "provider": "anthropic"
+      }
+    ]
+  },
+  {
+    "id": "msg-decision",
+    "role": "user",
+    "content": "I'll go with Zustand then. Let's start implementation.",
+    "parentId": null,
+    "createdAt": 1704067210000,
+    "updatedAt": 1704067210000,
+    "meta": {}
+  },
+  {
+    "id": "msg-implementation",
+    "role": "assistant",
+    "content": "Great choice! Here's how to set up Zustand with TypeScript...",
+    "parentId": "msg-decision",
+    "createdAt": 1704067215000,
+    "updatedAt": 1704067215000,
+    "meta": {},
+    "metadata": {
+      "totalInputTokens": 300,
+      "totalOutputTokens": 450,
+      "totalTokens": 750
+    }
+  }
+]

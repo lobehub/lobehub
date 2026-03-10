@@ -1,11 +1,13 @@
 'use client';
 
-import { type ErrorShape, type ImportFileUploadState, ImportStage } from '@lobechat/types';
+import { type ErrorShape, type ImportFileUploadState } from '@lobechat/types';
+import { ImportStage } from '@lobechat/types';
 import { Center } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { ImportIcon } from 'lucide-react';
-import React, { type ReactNode, memo, useMemo, useState } from 'react';
+import { type ReactNode } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DataStyleModal from '@/components/DataStyleModal';
@@ -14,12 +16,12 @@ import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
 import { type ImportPgDataStructure } from '@/types/export';
 
+import { parseConfigFile } from './config';
 import ImportError from './Error';
 import { FileUploading } from './FileUploading';
 import ImportPreviewModal from './ImportDetail';
 import DataLoading from './Loading';
 import SuccessResult from './SuccessResult';
-import { parseConfigFile } from './config';
 
 export interface ImportResult {
   added: number;
@@ -163,6 +165,9 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
       </DataStyleModal>
       <Upload
         accept={'application/json'}
+        className={cx(styles.wrapper)}
+        maxCount={1}
+        showUploadList={false}
         beforeUpload={async (file) => {
           const config = await parseConfigFile(file);
           if (!config) return false;
@@ -172,9 +177,6 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
 
           return false;
         }}
-        className={cx(styles.wrapper)}
-        maxCount={1}
-        showUploadList={false}
       >
         {/* a very hackable solution: add a pseudo before to have a large hot zone */}
         <div className={cx(styles.children)}>{children}</div>
@@ -182,6 +184,8 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
       {importPgData && (
         <ImportPreviewModal
           importData={importPgData}
+          open={showImportModal}
+          onOpenChange={setShowImportModal}
           onConfirm={async (overwriteExisting) => {
             setImportState(ImportStage.Preparing);
 
@@ -208,8 +212,6 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
             await refreshMessages();
             await refreshTopics();
           }}
-          onOpenChange={setShowImportModal}
-          open={showImportModal}
         />
       )}
     </>

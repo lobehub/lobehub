@@ -5,7 +5,7 @@ const { base } = interactionPolicy; // Import Check and base
 const log = debug('lobe-oidc:interaction-policy');
 
 /**
- * 创建自定义交互策略
+ * Create custom interaction policy
  */
 export const createInteractionPolicy = () => {
   log('Creating custom interaction policy');

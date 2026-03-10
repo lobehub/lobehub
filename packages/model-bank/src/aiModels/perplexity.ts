@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const perplexityChatModels: AIChatModelCard[] = [
   {
@@ -33,7 +33,8 @@ const perplexityChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 127_072,
-    description: 'An advanced search product with search grounding for complex queries and follow-ups.',
+    description:
+      'An advanced search product with search grounding for complex queries and follow-ups.',
     displayName: 'Sonar Reasoning Pro',
     enabled: true,
     id: 'sonar-reasoning-pro',
@@ -57,7 +58,8 @@ const perplexityChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 127_072,
-    description: 'An advanced search product with search grounding for complex queries and follow-ups.',
+    description:
+      'An advanced search product with search grounding for complex queries and follow-ups.',
     displayName: 'Sonar Reasoning',
     enabled: true,
     id: 'sonar-reasoning',
@@ -80,7 +82,8 @@ const perplexityChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 200_000,
-    description: 'An advanced search product with search grounding for complex queries and follow-ups.',
+    description:
+      'An advanced search product with search grounding for complex queries and follow-ups.',
     displayName: 'Sonar Pro',
     enabled: true,
     id: 'sonar-pro',

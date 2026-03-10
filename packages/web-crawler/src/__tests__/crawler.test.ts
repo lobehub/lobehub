@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Crawler } from '../crawler';
 
@@ -19,6 +19,16 @@ vi.mock('../utils/appUrlRules', () => ({
 }));
 
 describe('Crawler', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Reset applyUrlRules to default (no impls override)
+    const { applyUrlRules } = await import('../utils/appUrlRules');
+    vi.mocked(applyUrlRules).mockReturnValue({
+      transformedUrl: 'https://example.com',
+      filterOptions: {},
+    });
+  });
+
   const crawler = new Crawler();
 
   it('should crawl successfully with default impls', async () => {
@@ -194,11 +204,12 @@ describe('Crawler', () => {
     });
 
     expect(result).toEqual({
-      crawler: undefined,
+      crawler: 'browserless',
       data: {
-        content: 'Fail to crawl the page. Error type: UnknownError, error message: undefined',
-        errorMessage: undefined,
-        errorType: 'UnknownError',
+        content:
+          'Fail to crawl the page. Error type: EmptyCrawlResultError, error message: browserless returned empty or short content',
+        errorMessage: 'browserless returned empty or short content',
+        errorType: 'EmptyCrawlResultError',
       },
       originalUrl: 'https://example.com',
       transformedUrl: undefined,

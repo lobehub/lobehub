@@ -1,7 +1,7 @@
 import { PluginStoreTabs } from '@/store/tool/slices/oldStore/initialState';
 import { type InstallPluginMeta } from '@/types/tool/plugin';
 
-import type { ToolStoreState } from '../../initialState';
+import { type ToolStoreState } from '../../initialState';
 
 const onlinePluginStore = (s: ToolStoreState) => {
   const installedPluginIds = new Set(s.installedPlugins.map((i) => i.identifier));

@@ -7,12 +7,6 @@ describe('getServerConfig', () => {
     vi.resetModules();
   });
 
-  // it('correctly handles values for OPENAI_FUNCTION_REGIONS', () => {
-  //   process.env.OPENAI_FUNCTION_REGIONS = 'iad1,sfo1';
-  //   const config = getAppConfig();
-  //   expect(config.OPENAI_FUNCTION_REGIONS).toStrictEqual(['iad1', 'sfo1']);
-  // });
-
   describe('index url', () => {
     it('should return default URLs when no environment variables are set', async () => {
       const { getAppConfig } = await import('../app');
@@ -85,6 +79,81 @@ describe('getServerConfig', () => {
       const { getAppConfig } = await import('../app');
       const config = getAppConfig();
       expect(config.INTERNAL_APP_URL).toBe('http://127.0.0.1:3210');
+    });
+  });
+});
+
+describe('APP_URL fallback', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    // Clean up all related env vars
+    delete process.env.APP_URL;
+    delete process.env.VERCEL;
+    delete process.env.VERCEL_ENV;
+    delete process.env.VERCEL_URL;
+    delete process.env.VERCEL_BRANCH_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  });
+
+  it('should use APP_URL when explicitly set', async () => {
+    process.env.APP_URL = 'https://custom-app.com';
+    process.env.VERCEL = '1';
+
+    const { getAppConfig } = await import('../app');
+    const config = getAppConfig();
+    expect(config.APP_URL).toBe('https://custom-app.com');
+  });
+
+  describe('Vercel environment', () => {
+    it('should use VERCEL_PROJECT_PRODUCTION_URL in production', async () => {
+      process.env.VERCEL = '1';
+      process.env.VERCEL_ENV = 'production';
+      process.env.VERCEL_PROJECT_PRODUCTION_URL = 'lobechat.vercel.app';
+      process.env.VERCEL_BRANCH_URL = 'lobechat-git-main-org.vercel.app';
+      process.env.VERCEL_URL = 'lobechat-abc123.vercel.app';
+
+      const { getAppConfig } = await import('../app');
+      const config = getAppConfig();
+      expect(config.APP_URL).toBe('https://lobechat.vercel.app');
+    });
+
+    it('should use VERCEL_URL in preview environment', async () => {
+      process.env.VERCEL = '1';
+      process.env.VERCEL_ENV = 'preview';
+      process.env.VERCEL_BRANCH_URL = 'lobechat-git-feature-org.vercel.app';
+      process.env.VERCEL_URL = 'lobechat-abc123.vercel.app';
+
+      const { getAppConfig } = await import('../app');
+      const config = getAppConfig();
+      expect(config.APP_URL).toBe('https://lobechat-abc123.vercel.app');
+    });
+
+    it('should fallback to VERCEL_BRANCH_URL when VERCEL_URL is not set', async () => {
+      process.env.VERCEL = '1';
+      process.env.VERCEL_ENV = 'preview';
+      process.env.VERCEL_BRANCH_URL = 'lobechat-git-feature-org.vercel.app';
+
+      const { getAppConfig } = await import('../app');
+      const config = getAppConfig();
+      expect(config.APP_URL).toBe('https://lobechat-git-feature-org.vercel.app');
+    });
+  });
+
+  describe('local environment', () => {
+    it('should use localhost:3010 in development', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+
+      const { getAppConfig } = await import('../app');
+      const config = getAppConfig();
+      expect(config.APP_URL).toBe('http://localhost:3010');
+    });
+
+    it('should use localhost:3210 in non-development', async () => {
+      vi.stubEnv('NODE_ENV', 'test');
+
+      const { getAppConfig } = await import('../app');
+      const config = getAppConfig();
+      expect(config.APP_URL).toBe('http://localhost:3210');
     });
   });
 });

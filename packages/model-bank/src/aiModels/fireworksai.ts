@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const fireworksaiChatModels: AIChatModelCard[] = [
   {
@@ -159,7 +159,8 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'A 24B-parameter model with state-of-the-art capability comparable to larger models.',
+    description:
+      'A 24B-parameter model with state-of-the-art capability comparable to larger models.',
     displayName: 'Mistral Small 3 Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/mistral-small-24b-instruct-2501',

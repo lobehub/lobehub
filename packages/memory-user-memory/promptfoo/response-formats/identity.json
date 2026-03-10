@@ -3,192 +3,10 @@
     "type": "object",
     "properties": {
       "add": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "details": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "Optional detailed information"
-            },
-            "memoryCategory": {
-              "type": "string",
-              "description": "Memory category"
-            },
-            "memoryLayer": {
-              "type": "string",
-              "const": "identity",
-              "description": "Memory layer"
-            },
-            "memoryType": {
-              "type": "string",
-              "enum": [
-                "activity",
-                "context",
-                "event",
-                "fact",
-                "location",
-                "other",
-                "people",
-                "preference",
-                "technology",
-                "topic"
-              ],
-              "description": "Memory type"
-            },
-            "summary": {
-              "type": "string",
-              "description": "Concise overview of this specific memory"
-            },
-            "tags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Model generated tags that summarize the identity facets"
-            },
-            "title": {
-              "type": "string",
-              "description": "Brief descriptive title"
-            },
-            "withIdentity": {
-              "type": "object",
-              "properties": {
-                "description": {
-                  "type": "string"
-                },
-                "episodicDate": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "extractedLabels": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "relationship": {
-                  "type": "string",
-                  "enum": [
-                    "self",
-                    "father",
-                    "mother",
-                    "son",
-                    "daughter",
-                    "brother",
-                    "sister",
-                    "sibling",
-                    "husband",
-                    "wife",
-                    "spouse",
-                    "partner",
-                    "couple",
-                    "friend",
-                    "colleague",
-                    "coworker",
-                    "classmate",
-                    "mentor",
-                    "mentee",
-                    "manager",
-                    "teammate",
-                    "grandfather",
-                    "grandmother",
-                    "grandson",
-                    "granddaughter",
-                    "uncle",
-                    "aunt",
-                    "nephew",
-                    "niece",
-                    "other"
-                  ]
-                },
-                "role": {
-                  "type": "string"
-                },
-                "scoreConfidence": {
-                  "type": "number"
-                },
-                "sourceEvidence": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "professional",
-                    "personal",
-                    "demographic"
-                  ]
-                }
-              },
-              "required": [
-                "description",
-                "episodicDate",
-                "extractedLabels",
-                "relationship",
-                "role",
-                "scoreConfidence",
-                "sourceEvidence",
-                "type"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "details",
-            "memoryCategory",
-            "memoryLayer",
-            "memoryType",
-            "summary",
-            "tags",
-            "title",
-            "withIdentity"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "remove": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "reason": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "reason"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "update": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "mergeStrategy": {
-              "type": "string",
-              "enum": [
-                "merge",
-                "replace"
-              ]
-            },
-            "set": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
               "type": "object",
               "properties": {
                 "details": {
@@ -196,14 +14,16 @@
                     "string",
                     "null"
                   ],
-                  "description": "Optional detailed information, use null for omitting the field"
+                  "description": "Optional detailed information"
                 },
                 "memoryCategory": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Memory category, use null for omitting the field"
+                  "type": "string",
+                  "description": "Memory category"
+                },
+                "memoryLayer": {
+                  "type": "string",
+                  "const": "identity",
+                  "description": "Memory layer"
                 },
                 "memoryType": {
                   "type": "string",
@@ -219,44 +39,28 @@
                     "technology",
                     "topic"
                   ],
-                  "description": "Memory type, use null for omitting the field"
+                  "description": "Memory type"
                 },
                 "summary": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Concise overview of this specific memory, use null for omitting the field"
+                  "type": "string",
+                  "description": "Concise overview of this specific memory"
                 },
                 "tags": {
-                  "anyOf": [
-                    {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "description": "Model generated tags that summarize the identity facets, use null for omitting the field"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Model generated tags that summarize the identity facets"
                 },
                 "title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Brief descriptive title, use null for omitting the field"
+                  "type": "string",
+                  "description": "Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., \"Trusted open-source maintainer\", \"Specializes in low-latency infra\", \"Former Aliyun engineer\", \"Cares for rescue cats\""
                 },
                 "withIdentity": {
                   "type": "object",
                   "properties": {
                     "description": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": "string"
                     },
                     "episodicDate": {
                       "type": [
@@ -265,36 +69,52 @@
                       ]
                     },
                     "extractedLabels": {
-                      "anyOf": [
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "relationship": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "description": "Possible values: self | father | mother | son | daughter | brother | sister | sibling | husband | wife | spouse | partner | couple | friend | colleague | coworker | classmate | mentor | mentee | manager | teammate | grandfather | grandmother | grandson | granddaughter | uncle | aunt | nephew | niece | other"
+                      "type": "string",
+                      "enum": [
+                        "self",
+                        "father",
+                        "mother",
+                        "son",
+                        "daughter",
+                        "brother",
+                        "sister",
+                        "sibling",
+                        "husband",
+                        "wife",
+                        "spouse",
+                        "partner",
+                        "couple",
+                        "friend",
+                        "colleague",
+                        "coworker",
+                        "classmate",
+                        "mentor",
+                        "mentee",
+                        "manager",
+                        "teammate",
+                        "grandfather",
+                        "grandmother",
+                        "grandson",
+                        "granddaughter",
+                        "uncle",
+                        "aunt",
+                        "nephew",
+                        "niece",
+                        "other"
+                      ]
                     },
                     "role": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": "string",
+                      "description": "Role explicitly mentioned for this identity entry (e.g., \"platform engineer\", \"caregiver\"); keep neutral and only use when evidence exists"
                     },
                     "scoreConfidence": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
+                      "type": "number"
                     },
                     "sourceEvidence": {
                       "type": [
@@ -303,11 +123,12 @@
                       ]
                     },
                     "type": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "description": "Possible values: professional | personal | demographic"
+                      "type": "string",
+                      "enum": [
+                        "professional",
+                        "personal",
+                        "demographic"
+                      ]
                     }
                   },
                   "required": [
@@ -326,6 +147,7 @@
               "required": [
                 "details",
                 "memoryCategory",
+                "memoryLayer",
                 "memoryType",
                 "summary",
                 "tags",
@@ -335,13 +157,217 @@
               "additionalProperties": false
             }
           },
-          "required": [
-            "id",
-            "mergeStrategy",
-            "set"
-          ],
-          "additionalProperties": false
-        }
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Identity entries to add; use an empty array when nothing to add"
+      },
+      "remove": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Identity entries to remove; use an empty array when nothing to remove"
+      },
+      "update": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "mergeStrategy": {
+                  "type": "string",
+                  "enum": [
+                    "merge",
+                    "replace"
+                  ]
+                },
+                "set": {
+                  "type": "object",
+                  "properties": {
+                    "details": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional detailed information, use null for omitting the field"
+                    },
+                    "memoryCategory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Memory category, use null for omitting the field"
+                    },
+                    "memoryType": {
+                      "type": "string",
+                      "enum": [
+                        "activity",
+                        "context",
+                        "event",
+                        "fact",
+                        "location",
+                        "other",
+                        "people",
+                        "preference",
+                        "technology",
+                        "topic"
+                      ],
+                      "description": "Memory type, use null for omitting the field"
+                    },
+                    "summary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Concise overview of this specific memory, use null for omitting the field"
+                    },
+                    "tags": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Model generated tags that summarize the identity facets, use null for omitting the field"
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., \"Trusted open-source maintainer\", \"Specializes in low-latency infra\", \"Former Aliyun engineer\", \"Cares for rescue cats\"; use null for omitting the field"
+                    },
+                    "withIdentity": {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "episodicDate": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "extractedLabels": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "relationship": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Possible values: self | father | mother | son | daughter | brother | sister | sibling | husband | wife | spouse | partner | couple | friend | colleague | coworker | classmate | mentor | mentee | manager | teammate | grandfather | grandmother | grandson | granddaughter | uncle | aunt | nephew | niece | other"
+                        },
+                        "role": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Role explicitly mentioned for this identity entry (e.g., \"platform engineer\", \"caregiver\"); keep existing when not updated; use null for omitting the field"
+                        },
+                        "scoreConfidence": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "sourceEvidence": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "type": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Possible values: professional | personal | demographic"
+                        }
+                      },
+                      "required": [
+                        "description",
+                        "episodicDate",
+                        "extractedLabels",
+                        "relationship",
+                        "role",
+                        "scoreConfidence",
+                        "sourceEvidence",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "details",
+                    "memoryCategory",
+                    "memoryType",
+                    "summary",
+                    "tags",
+                    "title",
+                    "withIdentity"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id",
+                "mergeStrategy",
+                "set"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Identity entries to update; use an empty array when nothing to update"
       }
     },
     "required": [

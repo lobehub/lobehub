@@ -1,3 +1,5 @@
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
+
 import type { BrowserWindowOpts } from './core/browser/Browser';
 
 export const BrowsersIdentifiers = {
@@ -11,11 +13,11 @@ export const appBrowsers = {
     height: 800,
     identifier: 'app',
     keepAlive: true,
-    minWidth: 400,
+    minHeight: APP_WINDOW_MIN_SIZE.height,
+    minWidth: APP_WINDOW_MIN_SIZE.width,
     path: '/',
     showOnInit: true,
     titleBarStyle: 'hidden',
-    vibrancy: 'under-window',
     width: 1200,
   },
   devtools: {
@@ -28,7 +30,6 @@ export const appBrowsers = {
     parentIdentifier: 'app',
     path: '/desktop/devtools',
     titleBarStyle: 'hiddenInset',
-    vibrancy: 'under-window',
     width: 1000,
   },
 } satisfies Record<string, BrowserWindowOpts>;
@@ -36,7 +37,6 @@ export const appBrowsers = {
 // Window templates for multi-instance windows
 export interface WindowTemplate {
   allowMultipleInstances: boolean;
-  // Include common BrowserWindow options
   autoHideMenuBar?: boolean;
   baseIdentifier: string;
   basePath: string;
@@ -48,22 +48,8 @@ export interface WindowTemplate {
   showOnInit?: boolean;
   title?: string;
   titleBarStyle?: 'hidden' | 'default' | 'hiddenInset' | 'customButtonsOnHover';
-  vibrancy?:
-    | 'appearance-based'
-    | 'content'
-    | 'fullscreen-ui'
-    | 'header'
-    | 'hud'
-    | 'menu'
-    | 'popover'
-    | 'selection'
-    | 'sheet'
-    | 'sidebar'
-    | 'titlebar'
-    | 'tooltip'
-    | 'under-page'
-    | 'under-window'
-    | 'window';
+  // Note: vibrancy / visualEffectState / transparent are intentionally omitted.
+  // Platform visual effects are managed exclusively by WindowThemeManager.
   width?: number;
 }
 
@@ -78,7 +64,6 @@ export const windowTemplates = {
     minWidth: 400,
     parentIdentifier: 'app',
     titleBarStyle: 'hidden',
-    vibrancy: 'under-window',
     width: 900,
   },
 } satisfies Record<string, WindowTemplate>;

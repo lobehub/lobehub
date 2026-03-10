@@ -7,9 +7,11 @@ const log = debug('context-engine:processor:TasksFlattenProcessor');
 
 /**
  * Tasks Flatten Processor
- * Responsible for flattening role=tasks messages into individual task messages
+ * Responsible for flattening role=tasks and role=groupTasks messages into individual task messages
  *
- * Tasks messages are created when multiple task messages with the same parentId are aggregated.
+ * - tasks: Multiple task messages with same agentId aggregated
+ * - groupTasks: Multiple task messages with different agentIds aggregated
+ *
  * This processor converts them back to individual task messages that can be processed by TaskMessageProcessor.
  */
 export class TasksFlattenProcessor extends BaseProcessor {
@@ -30,8 +32,8 @@ export class TasksFlattenProcessor extends BaseProcessor {
 
     // Process each message
     for (const message of clonedContext.messages) {
-      // Check if this is a tasks message with tasks field
-      if (message.role === 'tasks' && message.tasks) {
+      // Check if this is a tasks or groupTasks message with tasks field
+      if (['tasks', 'groupTasks'].includes(message.role) && message.tasks) {
         // If tasks array is empty, skip this message entirely (no content to flatten)
         if (message.tasks.length === 0) {
           continue;
@@ -40,7 +42,7 @@ export class TasksFlattenProcessor extends BaseProcessor {
         processedCount++;
         tasksMessagesFlattened++;
 
-        log(`Flattening tasks message ${message.id} with ${message.tasks.length} tasks`);
+        log(`Flattening ${message.role} message ${message.id} with ${message.tasks.length} tasks`);
 
         // Flatten each task
         for (const task of message.tasks) {

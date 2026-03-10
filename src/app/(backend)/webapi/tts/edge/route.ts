@@ -1,4 +1,5 @@
-import { type EdgeSpeechPayload, EdgeSpeechTTS } from '@lobehub/tts';
+import { type EdgeSpeechPayload } from '@lobehub/tts';
+import { EdgeSpeechTTS } from '@lobehub/tts';
 
 import { createSpeechResponse } from '@/server/utils/createSpeechResponse';
 

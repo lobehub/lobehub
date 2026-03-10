@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 /**
  * @see https://fal.ai/models/fal-ai/flux/schnell
@@ -6,7 +6,6 @@ import { type ModelProviderCard } from '@/types/llm';
 const Fal: ModelProviderCard = {
   chatModels: [],
   description: 'A generative media platform built for developers.',
-  enabled: true,
   id: 'fal',
   name: 'Fal',
   settings: {

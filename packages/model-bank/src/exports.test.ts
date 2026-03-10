@@ -1,5 +1,6 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 // 本测试确保 packages/model-bank/package.json 的 exports 覆盖 src/aiModels 下的所有文件
@@ -8,7 +9,7 @@ describe('model-bank package.json exports should cover all aiModels files', () =
   const aiModelsDir = path.resolve(packageRoot, 'src/aiModels');
   const packageJsonPath = path.resolve(packageRoot, 'package.json');
 
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
     exports?: Record<string, string>;
   };
 
@@ -28,7 +29,6 @@ describe('model-bank package.json exports should cover all aiModels files', () =
     });
 
     if (missing.length > 0) {
-      // eslint-disable-next-line no-console
       console.error('Missing exports for aiModels files:', missing);
     }
 

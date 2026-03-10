@@ -1,6 +1,8 @@
+import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
 import { BrowserWindow, type Session } from 'electron';
 
 import { isDev } from '@/const/env';
+import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
 interface BackendProxyProtocolManagerOptions {
@@ -35,7 +37,7 @@ export class BackendProxyProtocolManager {
    * Debounce timer for authorization required notifications.
    * Prevents multiple rapid 401 responses from triggering duplicate notifications.
    */
-  // eslint-disable-next-line no-undef
+
   private authRequiredDebounceTimer: NodeJS.Timeout | null = null;
   private static readonly AUTH_REQUIRED_DEBOUNCE_MS = 1000;
 
@@ -115,8 +117,8 @@ export class BackendProxyProtocolManager {
         if (token) {
           headers.set('Oidc-Auth', token);
         }
+        appendVercelCookie(headers);
 
-        // eslint-disable-next-line no-undef
         const requestInit: RequestInit & { duplex?: 'half' } = {
           headers,
           method: request.method,
@@ -138,13 +140,7 @@ export class BackendProxyProtocolManager {
         } catch (error) {
           this.logger.error(`${logPrefix} upstream fetch failed: ${rewrittenUrl}`, error);
 
-          return new Response('Upstream fetch failed, target url: ' + rewrittenUrl, {
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-            },
-            status: 502,
-            statusText: 'Bad Gateway',
-          });
+          throw error;
         }
 
         const responseHeaders = new Headers(upstreamResponse.headers);
@@ -163,13 +159,14 @@ export class BackendProxyProtocolManager {
         responseHeaders.set('Access-Control-Allow-Headers', '*');
         responseHeaders.set('X-Src-Url', rewrittenUrl);
 
-        // Handle 401 Unauthorized: notify authorization required regardless of token presence
-        // This covers cases where:
-        // 1. No token exists
-        // 2. Token has expired
-        // 3. Token has been revoked server-side
+        // Handle 401 Unauthorized: only notify authorization required for real auth failures
+        // The server sets X-Auth-Required header for real authentication failures (e.g., token expired)
+        // Other 401 errors (e.g., invalid API keys) should not trigger re-authentication
         if (upstreamResponse.status === 401) {
-          this.notifyAuthorizationRequired();
+          const authRequired = upstreamResponse.headers.get(AUTH_REQUIRED_HEADER) === 'true';
+          if (authRequired) {
+            this.notifyAuthorizationRequired();
+          }
         }
 
         return new Response(upstreamResponse.body, {
@@ -179,7 +176,7 @@ export class BackendProxyProtocolManager {
         });
       } catch (error) {
         this.logger.error(`${logPrefix} protocol.handle error:`, error);
-        return null;
+        throw error;
       }
     });
 

@@ -16,11 +16,10 @@ import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { GenerationService } from '@/server/services/generation';
+import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-image:async');
 
-// Constants for better maintainability
-const FILENAME_MAX_LENGTH = 50;
 const IMAGE_URL_PREVIEW_LENGTH = 100;
 
 const imageProcedure = asyncAuthedProcedure.use(async (opts) => {
@@ -266,20 +265,6 @@ export const imageRouter = router({
 
           const { modelUsage } = response;
 
-          if (ENABLE_BUSINESS_FEATURES) {
-            await chargeAfterGenerate({
-              metadata: {
-                asyncTaskId: taskId,
-                generationBatchId: generationBatchId,
-                modelId: model,
-                topicId: generationTopicId,
-              },
-              modelUsage,
-              provider,
-              userId: ctx.userId,
-            });
-          }
-
           // Check if operation has been cancelled
           checkAbortSignal(signal);
 
@@ -343,17 +328,34 @@ export const imageRouter = router({
                 path: uploadedImageUrl,
                 width: image.width,
               },
-              name: `${params.prompt.slice(0, FILENAME_MAX_LENGTH)}.${image.extension}`,
-              // Use first 50 characters of prompt as filename
+              name: `${sanitizeFileName(params.prompt, generationId)}.${image.extension}`,
               size: image.size,
               url: uploadedImageUrl,
             },
           );
 
-          log('Updating task status to Success: %s', taskId);
+          const duration = Date.now() - generationBatch.createdAt.getTime();
+
+          log('Updating task status to Success: %s, duration: %dms', taskId, duration);
           await ctx.asyncTaskModel.update(taskId, {
+            duration,
             status: AsyncTaskStatus.Success,
           });
+
+          if (ENABLE_BUSINESS_FEATURES) {
+            await chargeAfterGenerate({
+              metrics: { latency: duration },
+              metadata: {
+                asyncTaskId: taskId,
+                generationBatchId,
+                modelId: model,
+                topicId: generationTopicId,
+              },
+              modelUsage,
+              provider,
+              userId: ctx.userId,
+            });
+          }
 
           log('Async image generation completed successfully: %s', taskId);
           return { success: true };
@@ -378,7 +380,6 @@ export const imageRouter = router({
         // Clean up timeout timer
         if (timeoutId) {
           clearTimeout(timeoutId);
-          timeoutId = null;
         }
 
         log('Async image generation failed: %O', {

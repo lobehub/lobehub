@@ -56,6 +56,7 @@ vi.mock('@/utils/logger', () => ({
 // Mock electron
 vi.mock('electron', () => ({
   app: {
+    getAppPath: vi.fn(() => '/mock/app/path'),
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
   },

@@ -1,30 +1,30 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import {
+import { parse } from '@lobechat/conversation-flow';
+import type {
   ChatFileItem,
   ChatImageItem,
-  ChatTTS,
   ChatToolPayload,
   ChatTranslate,
+  ChatTTS,
   ChatVideoItem,
   CreateMessageParams,
   DBMessageItem,
   IThreadType,
-  MessageGroupType,
   MessagePluginItem,
   ModelRankItem,
   NewMessageQueryParams,
   QueryMessageParams,
   TaskDetail,
   ThreadStatus,
-  ThreadType,
   UIChatMessage,
   UpdateMessageParams,
   UpdateMessageRAGParams,
 } from '@lobechat/types';
+import { MessageGroupType, ThreadType } from '@lobechat/types';
 import type { HeatmapsProps } from '@lobehub/charts';
 import dayjs from 'dayjs';
+import type { SQL } from 'drizzle-orm';
 import {
-  SQL,
   and,
   asc,
   count,
@@ -43,6 +43,7 @@ import {
 } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
+import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 import { today } from '@/utils/time';
 
 import {
@@ -56,13 +57,14 @@ import {
   messagePlugins,
   messageQueries,
   messageQueryChunks,
-  messageTTS,
-  messageTranslates,
   messages,
   messagesFiles,
+  messageTranslates,
+  messageTTS,
   threads,
+  topics,
 } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 
@@ -99,6 +101,17 @@ export class MessageModel {
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.db = db;
+  }
+
+  /**
+   * Touch topics' updatedAt timestamp within a transaction
+   */
+  private async touchTopicUpdatedAt(trx: Transaction, topicIds: string[]) {
+    if (topicIds.length === 0) return;
+    await trx
+      .update(topics)
+      .set({ updatedAt: new Date() })
+      .where(and(inArray(topics.id, topicIds), eq(topics.userId, this.userId)));
   }
 
   // **************** Query *************** //
@@ -201,7 +214,6 @@ export class MessageModel {
     // 1. get basic messages with joins, excluding messages that belong to MessageGroups
     const result = await this.db
       .select({
-        /* eslint-disable sort-keys-fix/sort-keys-fix*/
         id: messages.id,
         role: messages.role,
         content: messages.content,
@@ -248,7 +260,6 @@ export class MessageModel {
         ttsContentMd5: messageTTS.contentMd5,
         ttsFile: messageTTS.fileId,
         ttsVoice: messageTTS.voice,
-        /* eslint-enable */
       })
       .from(messages)
       .where(
@@ -276,19 +287,23 @@ export class MessageModel {
     if (topicId && result.length > 0) {
       if (current === 0) {
         // First page: fetch all groups to include compressed history
-        messageGroupNodes = await this.queryMessageGroupNodes(topicId);
+        messageGroupNodes = await this.queryMessageGroupNodes(topicId, undefined, postProcessUrl);
       } else {
         // Subsequent pages: filter by time range to avoid duplicates
         const firstMessageTime = result[0].createdAt;
         const lastMessageTime = result.at(-1)!.createdAt;
-        messageGroupNodes = await this.queryMessageGroupNodes(topicId, {
-          endTime: lastMessageTime,
-          startTime: firstMessageTime,
-        });
+        messageGroupNodes = await this.queryMessageGroupNodes(
+          topicId,
+          {
+            endTime: lastMessageTime,
+            startTime: firstMessageTime,
+          },
+          postProcessUrl,
+        );
       }
     } else if (topicId && current === 0) {
       // First page with no messages: still fetch all groups
-      messageGroupNodes = await this.queryMessageGroupNodes(topicId);
+      messageGroupNodes = await this.queryMessageGroupNodes(topicId, undefined, postProcessUrl);
     }
 
     // If no messages and no group nodes, return empty
@@ -431,6 +446,7 @@ export class MessageModel {
           return [
             t.sourceMessageId!,
             {
+              clientMode: metadata?.clientMode as boolean | undefined,
               duration: metadata?.duration as number | undefined,
               status: t.status as ThreadStatus,
               threadId: t.threadId,
@@ -459,8 +475,8 @@ export class MessageModel {
             })),
 
           extra: {
-            model: model,
-            provider: provider,
+            model,
+            provider,
             translate,
             tts: ttsId
               ? {
@@ -472,7 +488,7 @@ export class MessageModel {
           },
           fileList: fileList
             .filter((relation) => relation.messageId === item.id)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
             .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
               content: documentsMap[id],
               fileType: fileType!,
@@ -483,7 +499,7 @@ export class MessageModel {
             })),
           imageList: imageList
             .filter((relation) => relation.messageId === item.id)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
             .map<ChatImageItem>(({ id, url, name }) => ({ alt: name!, id, url })),
 
           model,
@@ -496,7 +512,7 @@ export class MessageModel {
           taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
           videoList: videoList
             .filter((relation) => relation.messageId === item.id)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
         } as unknown as UIChatMessage;
       },
@@ -514,8 +530,267 @@ export class MessageModel {
   };
 
   /**
+   * Query messages by their IDs with full relations
+   *
+   * This is useful for getting full message data when you already have the IDs.
+   * It reuses the same transformation logic as queryWithWhere.
+   *
+   * @param messageIds - Array of message IDs to query
+   * @param options - Query options (postProcessUrl for file URL transformation)
+   * @returns Messages with all related data (files, plugins, translations, etc.)
+   */
+  queryByIds = async (
+    messageIds: string[],
+    options: {
+      postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+    } = {},
+  ): Promise<UIChatMessage[]> => {
+    if (messageIds.length === 0) return [];
+
+    const { postProcessUrl } = options;
+
+    // 1. Query messages with joins
+    const result = await this.db
+      .select({
+        id: messages.id,
+        role: messages.role,
+        content: messages.content,
+        reasoning: messages.reasoning,
+        search: messages.search,
+        metadata: messages.metadata,
+        error: messages.error,
+
+        model: messages.model,
+        provider: messages.provider,
+
+        createdAt: messages.createdAt,
+        updatedAt: messages.updatedAt,
+
+        topicId: messages.topicId,
+        parentId: messages.parentId,
+        threadId: messages.threadId,
+
+        // Group chat fields
+        groupId: messages.groupId,
+        agentId: messages.agentId,
+        targetId: messages.targetId,
+
+        tools: messages.tools,
+        tool_call_id: messagePlugins.toolCallId,
+
+        plugin: {
+          apiName: messagePlugins.apiName,
+          arguments: messagePlugins.arguments,
+          identifier: messagePlugins.identifier,
+          type: messagePlugins.type,
+        },
+        pluginError: messagePlugins.error,
+        pluginIntervention: messagePlugins.intervention,
+        pluginState: messagePlugins.state,
+
+        translate: {
+          content: messageTranslates.content,
+          from: messageTranslates.from,
+          to: messageTranslates.to,
+        },
+
+        ttsId: messageTTS.id,
+        ttsContentMd5: messageTTS.contentMd5,
+        ttsFile: messageTTS.fileId,
+        ttsVoice: messageTTS.voice,
+      })
+      .from(messages)
+      .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)))
+      .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
+      .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
+      .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+      .orderBy(asc(messages.createdAt));
+
+    if (result.length === 0) return [];
+
+    // 2. Run parallel queries for better performance
+    const taskMessageIds = result.filter((m) => m.role === 'task').map((m) => m.id as string);
+
+    const [rawRelatedFileList, chunksList, messageQueriesList, threadData] = await Promise.all([
+      // 2a. Get related files
+      this.db
+        .select({
+          fileType: files.fileType,
+          id: messagesFiles.fileId,
+          messageId: messagesFiles.messageId,
+          name: files.name,
+          size: files.size,
+          url: files.url,
+        })
+        .from(messagesFiles)
+        .leftJoin(files, eq(files.id, messagesFiles.fileId))
+        .where(inArray(messagesFiles.messageId, messageIds)),
+
+      // 2b. Get related file chunks
+      this.db
+        .select({
+          fileId: files.id,
+          fileType: files.fileType,
+          fileUrl: files.url,
+          filename: files.name,
+          id: chunks.id,
+          messageId: messageQueryChunks.messageId,
+          similarity: messageQueryChunks.similarity,
+          text: chunks.text,
+        })
+        .from(messageQueryChunks)
+        .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
+        .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
+        .innerJoin(files, eq(fileChunks.fileId, files.id))
+        .where(inArray(messageQueryChunks.messageId, messageIds)),
+
+      // 2c. Get related message queries (RAG)
+      this.db
+        .select({
+          id: messageQueries.id,
+          messageId: messageQueries.messageId,
+          rewriteQuery: messageQueries.rewriteQuery,
+          userQuery: messageQueries.userQuery,
+        })
+        .from(messageQueries)
+        .where(inArray(messageQueries.messageId, messageIds)),
+
+      // 2d. Get thread info for task messages
+      taskMessageIds.length > 0
+        ? this.db
+            .select({
+              metadata: threads.metadata,
+              sourceMessageId: threads.sourceMessageId,
+              status: threads.status,
+              threadId: threads.id,
+              title: threads.title,
+            })
+            .from(threads)
+            .where(
+              and(
+                eq(threads.userId, this.userId),
+                inArray(threads.sourceMessageId, taskMessageIds),
+              ),
+            )
+        : Promise.resolve([]),
+    ]);
+
+    // 3. Process file results
+    const relatedFileList = await Promise.all(
+      rawRelatedFileList.map(async (file) => ({
+        ...file,
+        url: postProcessUrl ? await postProcessUrl(file.url, file as any) : (file.url as string),
+      })),
+    );
+
+    // Get associated document content
+    const fileIds = relatedFileList.map((file) => file.id).filter(Boolean);
+
+    let documentsMap: Record<string, string> = {};
+
+    if (fileIds.length > 0) {
+      const documentsList = await this.db
+        .select({
+          content: documents.content,
+          fileId: documents.fileId,
+        })
+        .from(documents)
+        .where(inArray(documents.fileId, fileIds));
+
+      documentsMap = documentsList.reduce(
+        (acc, doc) => {
+          if (doc.fileId) acc[doc.fileId] = doc.content as string;
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
+    }
+
+    const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
+    const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
+    const fileList = relatedFileList.filter(
+      (i) => !(i.fileType || '').startsWith('image') && !(i.fileType || '').startsWith('video'),
+    );
+
+    // 4. Build thread map
+    const threadMap = new Map(
+      threadData.map((t) => {
+        const metadata = t.metadata as Record<string, unknown> | null;
+        return [
+          t.sourceMessageId!,
+          {
+            clientMode: metadata?.clientMode as boolean | undefined,
+            duration: metadata?.duration as number | undefined,
+            status: t.status as ThreadStatus,
+            threadId: t.threadId,
+            title: t.title ?? undefined,
+            totalCost: metadata?.totalCost as number | undefined,
+            totalMessages: metadata?.totalMessages as number | undefined,
+            totalTokens: metadata?.totalTokens as number | undefined,
+            totalToolCalls: metadata?.totalToolCalls as number | undefined,
+          },
+        ];
+      }),
+    );
+
+    // 6. Transform messages to UIChatMessage format
+    return result.map(
+      ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+        const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
+        return {
+          ...item,
+          chunksList: chunksList
+            .filter((relation) => relation.messageId === item.id)
+            .map((c) => ({
+              ...c,
+              similarity: c.similarity === null ? undefined : Number(c.similarity),
+            })),
+
+          extra: {
+            model,
+            provider,
+            translate,
+            tts: ttsId
+              ? {
+                  contentMd5: ttsContentMd5,
+                  file: ttsFile,
+                  voice: ttsVoice,
+                }
+              : undefined,
+          },
+          fileList: fileList
+            .filter((relation) => relation.messageId === item.id)
+            .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
+              content: documentsMap[id],
+              fileType: fileType!,
+              id,
+              name: name!,
+              size: size!,
+              url,
+            })),
+          imageList: imageList
+            .filter((relation) => relation.messageId === item.id)
+            .map<ChatImageItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+
+          model,
+
+          provider,
+          ragQuery: messageQuery?.rewriteQuery,
+          ragQueryId: messageQuery?.id,
+          ragRawQuery: messageQuery?.userQuery,
+          // Add taskDetail for task messages
+          taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
+          videoList: videoList
+            .filter((relation) => relation.messageId === item.id)
+            .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+        } as unknown as UIChatMessage;
+      },
+    );
+  };
+
+  /**
    * Query MessageGroup nodes for a topic
-   * - compressedGroup: includes pinnedMessages array
+   * - compressedGroup: includes pinnedMessages and compressedMessages arrays
    * - compareGroup: includes children array
    *
    * @param topicId - The topic ID to query groups for
@@ -524,6 +799,7 @@ export class MessageModel {
   private queryMessageGroupNodes = async (
     topicId: string,
     timeRange?: { endTime: Date; startTime: Date },
+    postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>,
   ): Promise<UIChatMessage[]> => {
     // 1. Query MessageGroups for this topic, optionally filtered by time range
     const whereConditions = [
@@ -549,50 +825,77 @@ export class MessageModel {
 
     const groupIds = groups.map((g) => g.id);
 
-    // 2. Query all messages that belong to these groups (for pinnedMessages and children)
-    const groupMessages = await this.db
+    // 2. Get all message IDs that belong to these groups (using messageGroupId relation)
+    const groupMessageRecords = await this.db
       .select({
-        content: messages.content,
-        createdAt: messages.createdAt,
         favorite: messages.favorite,
         id: messages.id,
         messageGroupId: messages.messageGroupId,
-        model: messages.model,
-        provider: messages.provider,
-        role: messages.role,
       })
       .from(messages)
       .where(and(eq(messages.userId, this.userId), inArray(messages.messageGroupId, groupIds)))
       .orderBy(asc(messages.createdAt));
 
-    // 3. Build MessageGroup nodes
+    // 3. Query full message data using queryByIds (reuses all transformation logic)
+    const allMessageIds = groupMessageRecords.map((m) => m.id as string);
+    const fullMessages = await this.queryByIds(allMessageIds, { postProcessUrl });
+
+    // Create a map for quick lookup
+    const messageMap = new Map(fullMessages.map((m) => [m.id, m]));
+    const favoriteMap = new Map(groupMessageRecords.map((m) => [m.id, m.favorite]));
+
+    // 4. Build MessageGroup nodes
     return groups.map((group) => {
-      const groupMsgs = groupMessages.filter((m) => m.messageGroupId === group.id);
+      // Get messages for this group
+      const groupMsgIds = groupMessageRecords
+        .filter((m) => m.messageGroupId === group.id)
+        .map((m) => m.id as string);
+
+      const groupMsgs = groupMsgIds
+        .map((id) => messageMap.get(id))
+        .filter(Boolean) as UIChatMessage[];
 
       if (group.type === MessageGroupType.Compression) {
         // compressedGroup: extract pinnedMessages (favorite=true)
-        const pinnedMessages = groupMsgs
-          .filter((m) => m.favorite === true)
-          .map((m) => ({
-            content: m.content,
-            createdAt: m.createdAt,
-            id: m.id,
-            model: m.model,
-            provider: m.provider,
-            role: m.role,
-          }));
+        const pinnedMessages = groupMsgIds
+          .filter((id) => favoriteMap.get(id) === true)
+          .map((id) => {
+            const m = messageMap.get(id);
+            return m
+              ? {
+                  content: m.content,
+                  createdAt: m.createdAt,
+                  id: m.id,
+                  model: m.model,
+                  provider: m.provider,
+                  role: m.role,
+                }
+              : null;
+          })
+          .filter(Boolean);
+
+        // compressedMessages: parse messages through conversation-flow for proper grouping
+        // This transforms raw messages into displayMessages format (e.g., assistantGroup)
+        const { flatList } = parse(groupMsgs);
+        const compressedMessages = flatList;
+
+        // Get the last message ID for parent-child linking in conversation-flow
+        const lastMessageId = groupMsgIds.at(-1);
 
         return {
+          compressedMessages,
           content: group.content,
           createdAt: group.createdAt,
           id: group.id,
+          lastMessageId,
+          metadata: group.metadata,
           pinnedMessages,
           role: 'compressedGroup',
           topicId: group.topicId,
           updatedAt: group.updatedAt,
         } as unknown as UIChatMessage;
       } else {
-        // compareGroup (parallel): include children
+        // compareGroup (parallel): include children with basic info
         const children = groupMsgs.map((m) => ({
           content: m.content,
           createdAt: m.createdAt,
@@ -678,10 +981,11 @@ export class MessageModel {
    * @param params - Parameters for getting parent messages
    * @param params.sourceMessageId - The ID of the source message that started the thread
    * @param params.topicId - The topic ID the thread belongs to
-   * @param params.threadType - The type of thread (Continuation or Standalone)
+   * @param params.threadType - The type of thread (Continuation, Standalone, or Isolation)
    * @returns Parent messages based on thread type:
    *   - Continuation: All messages from the topic up to and including the source message
    *   - Standalone: Only the source message itself
+   *   - Isolation: No parent messages (completely isolated thread)
    */
   getThreadParentMessages = async (params: {
     sourceMessageId: string;
@@ -689,6 +993,11 @@ export class MessageModel {
     topicId: string;
   }): Promise<DBMessageItem[]> => {
     const { sourceMessageId, topicId, threadType } = params;
+
+    // For Isolation type, return empty array (no parent messages)
+    if (threadType === ThreadType.Isolation) {
+      return [];
+    }
 
     // For Standalone type, only return the source message
     if (threadType === ThreadType.Standalone) {
@@ -961,11 +1270,11 @@ export class MessageModel {
       if (message.role === 'tool') {
         await trx.insert(messagePlugins).values({
           apiName: plugin?.apiName,
-          arguments: plugin?.arguments,
+          arguments: sanitizeNullBytes(plugin?.arguments),
           id,
           identifier: plugin?.identifier,
           intervention: pluginIntervention,
-          state: pluginState,
+          state: sanitizeNullBytes(pluginState),
           toolCallId: message.tool_call_id,
           type: plugin?.type,
           userId: this.userId,
@@ -990,6 +1299,11 @@ export class MessageModel {
         );
       }
 
+      // Touch topic's updatedAt when creating a message in a topic
+      if (message.topicId) {
+        await this.touchTopicUpdatedAt(trx, [message.topicId]);
+      }
+
       return item;
     });
   };
@@ -1000,7 +1314,15 @@ export class MessageModel {
       return { ...m, role: m.role as any, userId: this.userId };
     });
 
-    return this.db.insert(messages).values(messagesToInsert);
+    const topicIds = [...new Set(newMessages.map((m) => m.topicId).filter(Boolean))] as string[];
+
+    return this.db.transaction(async (trx) => {
+      const result = await trx.insert(messages).values(messagesToInsert);
+
+      await this.touchTopicUpdatedAt(trx, topicIds);
+
+      return result;
+    });
   };
 
   createMessageQuery = async (params: NewMessageQueryParams) => {
@@ -1038,10 +1360,16 @@ export class MessageModel {
           mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
         }
 
-        await trx
+        const [updated] = await trx
           .update(messages)
           .set({ ...message, ...(mergedMetadata && { metadata: mergedMetadata }) })
-          .where(and(eq(messages.id, id), eq(messages.userId, this.userId)));
+          .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+          .returning({ topicId: messages.topicId });
+
+        // Touch topic's updatedAt when updating a message
+        if (updated?.topicId) {
+          await this.touchTopicUpdatedAt(trx, [updated.topicId]);
+        }
       });
 
       return { success: true };

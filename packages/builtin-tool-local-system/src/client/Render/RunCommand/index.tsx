@@ -7,7 +7,12 @@ import { memo } from 'react';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
-    padding-inline: 8px 0;
+    padding-inline: 8px;
+
+    & .ant-highlighter-highlighter-hover-actions {
+      inset-block-start: 4px;
+      inset-inline-end: 4px;
+    }
   `,
   head: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -41,18 +46,18 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
 
     return (
       <Flexbox className={styles.container} gap={8}>
-        <Block gap={8} padding={8} variant={'outlined'}>
+        <Block gap={8} padding={'0 8px 0'} variant={'outlined'}>
           <Highlighter
+            wrap
             language={'sh'}
             showLanguage={false}
-            style={{ paddingInline: 8 }}
+            style={{ padding: 8 }}
             variant={'borderless'}
-            wrap
           >
             {args.command}
           </Highlighter>
           {result?.output && (
-            <Highlighter language={'text'} showLanguage={false} variant={'filled'} wrap>
+            <Highlighter wrap language={'text'} showLanguage={false} variant={'filled'}>
               {result.output}
             </Highlighter>
           )}

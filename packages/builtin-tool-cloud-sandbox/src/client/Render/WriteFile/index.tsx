@@ -1,10 +1,10 @@
 'use client';
 
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type WriteLocalFileState } from '../../../types';
+import type { WriteLocalFileState } from '../../../types';
 
 interface WriteLocalFileParams {
   content: string;
@@ -59,11 +59,11 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams, WriteLocalFileSt
     return (
       <Block padding={8} variant={'outlined'}>
         <Highlighter
-          language={language}
           showLanguage
+          wrap
+          language={language}
           style={{ maxHeight: 400, overflow: 'auto' }}
           variant={'borderless'}
-          wrap
         >
           {args.content}
         </Highlighter>

@@ -2,12 +2,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { NewAgent, agents } from '../../schemas/agent';
-import { NewChatGroup, chatGroups } from '../../schemas/chatGroup';
+import { agents } from '../../schemas/agent';
+import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { agentsToSessions } from '../../schemas/relations';
-import { NewSession, NewSessionGroup, sessionGroups, sessions } from '../../schemas/session';
+import { sessionGroups, sessions } from '../../schemas/session';
 import { users } from '../../schemas/user';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { HomeRepository } from './index';
 
 const userId = 'home-test-user';
@@ -157,6 +157,126 @@ describe('HomeRepository', () => {
         title: 'My Group Chat',
         type: 'group',
       });
+    });
+
+    it('should return custom avatar when chat group has one set', async () => {
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({
+          avatar: '🚀',
+          backgroundColor: '#ff5500',
+          pinned: false,
+          title: 'Custom Avatar Group',
+          userId,
+        })
+        .returning();
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0]).toMatchObject({
+        avatar: '🚀',
+        backgroundColor: '#ff5500',
+        title: 'Custom Avatar Group',
+        type: 'group',
+      });
+    });
+
+    it('should return member avatars when chat group has no custom avatar', async () => {
+      // Create chat group without custom avatar
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({
+          pinned: false,
+          title: 'No Custom Avatar Group',
+          userId,
+        })
+        .returning();
+
+      // Create member agents
+      const [agent1] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🤖',
+          backgroundColor: '#0000ff',
+          title: 'Agent 1',
+          userId,
+          virtual: true,
+        })
+        .returning();
+
+      const [agent2] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🧑‍💻',
+          backgroundColor: '#00ff00',
+          title: 'Agent 2',
+          userId,
+          virtual: true,
+        })
+        .returning();
+
+      // Link agents to group
+      await serverDB.insert(chatGroupsAgents).values([
+        { agentId: agent1.id, chatGroupId: group.id, order: 0, userId },
+        { agentId: agent2.id, chatGroupId: group.id, order: 1, userId },
+      ]);
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      const groupItem = result.ungrouped[0];
+      expect(groupItem.type).toBe('group');
+      // Avatar should be an array of member avatars
+      expect(Array.isArray(groupItem.avatar)).toBe(true);
+      const avatarArray = groupItem.avatar as Array<{ avatar: string; background?: string }>;
+      expect(avatarArray).toHaveLength(2);
+      expect(avatarArray[0]).toMatchObject({ avatar: '🤖', background: '#0000ff' });
+      expect(avatarArray[1]).toMatchObject({ avatar: '🧑‍💻', background: '#00ff00' });
+      // backgroundColor should not be set when using member avatars
+      expect(groupItem.backgroundColor).toBeUndefined();
+    });
+
+    it('should prioritize custom avatar over member avatars', async () => {
+      // Create chat group WITH custom avatar
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({
+          avatar: '🎯',
+          backgroundColor: '#ff0000',
+          pinned: false,
+          title: 'Group With Both',
+          userId,
+        })
+        .returning();
+
+      // Create member agent
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🤖',
+          backgroundColor: '#0000ff',
+          title: 'Member Agent',
+          userId,
+          virtual: true,
+        })
+        .returning();
+
+      // Link agent to group
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: agent.id,
+        chatGroupId: group.id,
+        order: 0,
+        userId,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      const groupItem = result.ungrouped[0];
+      // Should use custom avatar (string), not member avatars (array)
+      expect(groupItem.avatar).toBe('🎯');
+      expect(groupItem.backgroundColor).toBe('#ff0000');
     });
   });
 
@@ -882,6 +1002,102 @@ describe('HomeRepository', () => {
       expect(result).toHaveLength(2);
       expect(result[0].title).toBe('New Search Agent');
       expect(result[1].title).toBe('Old Search Agent');
+    });
+
+    it('should return custom avatar for chat groups with custom avatar in search', async () => {
+      await serverDB.insert(chatGroups).values({
+        avatar: '🎨',
+        backgroundColor: '#abcdef',
+        title: 'Searchable Custom Avatar Group',
+        userId,
+      });
+
+      const result = await homeRepo.searchAgents('Searchable Custom');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        avatar: '🎨',
+        backgroundColor: '#abcdef',
+        title: 'Searchable Custom Avatar Group',
+        type: 'group',
+      });
+    });
+
+    it('should return member avatars for chat groups without custom avatar in search', async () => {
+      // Create chat group without custom avatar
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({
+          title: 'Searchable Member Avatar Group',
+          userId,
+        })
+        .returning();
+
+      // Create member agent
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🤖',
+          backgroundColor: '#112233',
+          title: 'Search Member',
+          userId,
+          virtual: true,
+        })
+        .returning();
+
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: agent.id,
+        chatGroupId: group.id,
+        order: 0,
+        userId,
+      });
+
+      const result = await homeRepo.searchAgents('Searchable Member Avatar');
+
+      expect(result).toHaveLength(1);
+      const groupItem = result[0];
+      expect(groupItem.type).toBe('group');
+      expect(Array.isArray(groupItem.avatar)).toBe(true);
+      const avatarArray = groupItem.avatar as Array<{ avatar: string; background?: string }>;
+      expect(avatarArray).toHaveLength(1);
+      expect(avatarArray[0]).toMatchObject({ avatar: '🤖', background: '#112233' });
+      expect(groupItem.backgroundColor).toBeUndefined();
+    });
+
+    it('should prioritize custom avatar over member avatars in search', async () => {
+      // Create chat group WITH custom avatar and members
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({
+          avatar: '🏆',
+          backgroundColor: '#gold00',
+          title: 'Searchable Priority Group',
+          userId,
+        })
+        .returning();
+
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🤖',
+          title: 'Priority Member',
+          userId,
+          virtual: true,
+        })
+        .returning();
+
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: agent.id,
+        chatGroupId: group.id,
+        order: 0,
+        userId,
+      });
+
+      const result = await homeRepo.searchAgents('Searchable Priority');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].avatar).toBe('🏆');
+      expect(result[0].backgroundColor).toBe('#gold00');
     });
   });
 });

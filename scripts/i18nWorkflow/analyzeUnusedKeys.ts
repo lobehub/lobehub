@@ -1,9 +1,9 @@
-/* eslint-disable unicorn/prefer-top-level-await */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import { consola } from 'consola';
 import { colors } from 'consola/utils';
 import { glob } from 'glob';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 
 import { IGNORED_FILES, PROTECTED_KEY_PATTERNS } from './protectedPatterns';
 
@@ -83,7 +83,7 @@ function loadAllI18nKeys(): I18nKey[] {
 
     try {
       // Use require to load the TypeScript file (after it's compiled)
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       const loadedModule = require(filePath);
       const translations = loadedModule.default || loadedModule;
 
@@ -130,43 +130,43 @@ async function findAllTranslationCalls(): Promise<Set<string>> {
     pattern: RegExp; // Whether pattern can capture namespace
   }> = [
     // Static patterns
-    { pattern: /\bt[A-Z]?\w*\(\s*["'`]([^"'`]+)["'`]/g },
+    { pattern: /\bt\w*\(\s*["'`]([^"'`]+)["'`]/g },
     {
       captureNs: true,
-      pattern: /\bt[A-Z]?\w*\(\s*["'`]([^"'`]+)["'`]\s*,\s*{[^}]*ns:\s*["'`]([^"'`]+)["'`]/g,
+      pattern: /\bt\w*\(\s*["'`]([^"'`]+)["'`]\s*,\s*\{[^}]*ns:\s*["'`]([^"'`]+)["'`]/g,
     },
     { pattern: /i18n\.t\(\s*["'`]([^"'`]+)["'`]/g },
-    { pattern: /\bt[A-Z]?\w*\([^)]*\?\s*["'`]([^"'`]+)["'`]/g },
-    { pattern: /\bt[A-Z]?\w*\([^)]*:\s*["'`]([^"'`]+)["'`]/g },
+    { pattern: /\bt\w*\([^)]*\?\s*["'`]([^"'`]+)["'`]/g },
+    { pattern: /\bt\w*\([^)]*:\s*["'`]([^"'`]+)["'`]/g },
     { pattern: /<Trans[^>]+i18nKey=["']([^"']+)["']/g },
-    { pattern: /<Trans[^>]+i18nKey={["']([^"']+)["']}/g },
-    { captureNs: true, pattern: /<Trans[^>]+i18nKey=["']([^"']+)["'][\S\s]*?ns=["']([^"']+)["']/g },
+    { pattern: /<Trans[^>]+i18nKey=\{["']([^"']+)["']\}/g },
+    { captureNs: true, pattern: /<Trans[^>]+i18nKey=["']([^"']+)["'][\s\S]*?ns=["']([^"']+)["']/g },
     {
       captureNs: true,
-      pattern: /<Trans[^>]+i18nKey={["']([^"']+)["']}[\S\s]*?ns={["']([^"']+)["']}/g,
+      pattern: /<Trans[^>]+i18nKey=\{["']([^"']+)["']\}[\s\S]*?ns=\{["']([^"']+)["']\}/g,
     },
 
     // Dynamic patterns (template strings, concatenations, etc.)
     // Pattern 1: t(`prefix.${var}.suffix`) - variable in the middle
-    { captureNs: false, isDynamic: true, pattern: /\bt[A-Z]?\w*\(\s*`([^$`]+)\${[^}]+}([^`]*)`/g },
+    { captureNs: false, isDynamic: true, pattern: /\bt\w*\(\s*`([^$`]+)\$\{[^}]+\}([^`]*)`/g },
     // Pattern 2: t(`${var}.suffix`) - variable at the start
-    { captureNs: false, isDynamic: true, pattern: /\bt[A-Z]?\w*\(\s*`\${[^}]+}([^`]+)`/g },
+    { captureNs: false, isDynamic: true, pattern: /\bt\w*\(\s*`\$\{[^}]+\}([^`]+)`/g },
     // Pattern 3: t(`prefix.${var}.suffix`, { ns: 'namespace' }) - with explicit ns
     {
       captureNs: true,
       isDynamic: true,
-      pattern: /\bt[A-Z]?\w*\(\s*`([^$`]*)\${[^}]+}([^`]*)`\s*,\s*{[^}]*ns:\s*["'`]([^"'`]+)["'`]/g,
+      pattern: /\bt\w*\(\s*`([^$`]*)\$\{[^}]+\}([^`]*)`\s*,\s*\{[^}]*ns:\s*["'`]([^"'`]+)["'`]/g,
     },
     // Pattern 4: t(`${var}.suffix`, { ns: 'namespace' }) - variable at start with ns
     {
       captureNs: true,
       isDynamic: true,
-      pattern: /\bt[A-Z]?\w*\(\s*`\${[^}]+}([^`]+)`\s*,\s*{[^}]*ns:\s*["'`]([^"'`]+)["'`]/g,
+      pattern: /\bt\w*\(\s*`\$\{[^}]+\}([^`]+)`\s*,\s*\{[^}]*ns:\s*["'`]([^"'`]+)["'`]/g,
     },
     // Pattern 5: String concatenation
-    { isDynamic: true, pattern: /\bt[A-Z]?\w*\(\s*["'`]([^"'`]+)["'`]\s*\+/g },
+    { isDynamic: true, pattern: /\bt\w*\(\s*["'`]([^"'`]+)["'`]\s*\+/g },
     // Pattern 6: <Trans> with dynamic keys
-    { isDynamic: true, pattern: /<Trans[^>]+i18nKey={`([^$`]+)\${[^}]+}([^`]*)`}/g },
+    { isDynamic: true, pattern: /<Trans[^>]+i18nKey=\{`([^$`]+)\$\{[^}]+\}([^`]*)`\}/g },
   ];
 
   let totalMatches = 0;
@@ -176,11 +176,11 @@ async function findAllTranslationCalls(): Promise<Set<string>> {
 
     // Extract namespace from useTranslation hook
     const useTranslationMatch = content.match(/useTranslation\(\s*["'`]([^"'`]+)["'`]\s*\)/g);
-    const useTranslationMultiMatch = content.match(/useTranslation\(\s*\[([^\]]+)]\s*\)/g);
+    const useTranslationMultiMatch = content.match(/useTranslation\(\s*\[([^\]]+)\]\s*\)/g);
 
     // Extract aliases: const { t: tAuth } = useTranslation('auth')
     const aliasPattern =
-      /const\s*{\s*t\s*:\s*(\w+)\s*}\s*=\s*useTranslation\(\s*["'`]([^"'`]+)["'`]\s*\)/g;
+      /const\s*\{\s*t\s*:\s*(\w+)\s*\}\s*=\s*useTranslation\(\s*["'`]([^"'`]+)["'`]\s*\)/g;
     const aliasMatches = content.matchAll(aliasPattern);
 
     const namespacesInFile = new Set<string>();
@@ -197,7 +197,7 @@ async function findAllTranslationCalls(): Promise<Set<string>> {
     // Extract namespaces from useTranslation(['ns1', 'ns2'])
     if (useTranslationMultiMatch) {
       for (const match of useTranslationMultiMatch) {
-        const nsArray = match.match(/\[([^\]]+)]/)?.[1];
+        const nsArray = match.match(/\[([^\]]+)\]/)?.[1];
         if (nsArray) {
           const namespaces = nsArray.match(/["'`]([^"'`]+)["'`]/g);
           if (namespaces) {
@@ -240,7 +240,7 @@ async function findAllTranslationCalls(): Promise<Set<string>> {
         if (!key) continue;
 
         // Extract function name (t, tAuth, tCommon, etc.)
-        const funcNameMatch = fullMatch.match(/\b(t[A-Z]?\w*)\(/);
+        const funcNameMatch = fullMatch.match(/\b(t\w*)\(/);
         const funcName = funcNameMatch?.[1] || 't';
 
         // Check if it's an alias with known namespace

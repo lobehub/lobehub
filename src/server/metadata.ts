@@ -5,7 +5,8 @@ import qs from 'query-string';
 import { DEFAULT_LANG } from '@/const/locale';
 import { OG_URL } from '@/const/url';
 import { isCustomORG } from '@/const/version';
-import { type Locales, locales } from '@/locales/resources';
+import { type Locales } from '@/locales/resources';
+import { locales } from '@/locales/resources';
 import { getCanonicalUrl } from '@/server/utils/url';
 import { formatDescLength, formatTitleLength } from '@/utils/genOG';
 
@@ -31,9 +32,8 @@ export class Meta {
     type?: 'website' | 'article';
     url: string;
   }): Metadata {
-    // eslint-disable-next-line no-param-reassign
     const formatedTitle = formatTitleLength(title, 21);
-    // eslint-disable-next-line no-param-reassign
+
     const formatedDescription = formatDescLength(description, tags);
     const siteTitle = title.includes(BRANDING_NAME) ? title : title + ` · ${BRANDING_NAME}`;
     return {
@@ -62,7 +62,7 @@ export class Meta {
   }
 
   private genAlternateLocales = (locale: Locales, path: string = '/') => {
-    let links: any = {};
+    const links: any = {};
     const defaultLink = getCanonicalUrl(path);
     for (const alterLocales of locales) {
       links[alterLocales] = qs.stringifyUrl({

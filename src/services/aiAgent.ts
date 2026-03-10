@@ -40,6 +40,54 @@ export interface InterruptTaskParams {
   threadId?: string;
 }
 
+/**
+ * Parameters for createClientTaskThread
+ * Creates a Thread for client-side task execution (desktop only, single agent mode)
+ */
+export interface CreateClientTaskThreadParams {
+  agentId: string;
+  groupId?: string;
+  /** Initial user message content (task instruction) */
+  instruction: string;
+  parentMessageId: string;
+  title?: string;
+  topicId: string;
+}
+
+/**
+ * Parameters for createClientGroupAgentTaskThread
+ * Creates a Thread for client-side task execution in Group mode
+ */
+export interface CreateClientGroupAgentTaskThreadParams {
+  /** The Group ID (required for Group mode) */
+  groupId: string;
+  /** Initial user message content (task instruction) */
+  instruction: string;
+  parentMessageId: string;
+  /** The Sub-Agent ID that will execute the task (worker agent in group) */
+  subAgentId: string;
+  title?: string;
+  topicId: string;
+}
+
+/**
+ * Parameters for updateClientTaskThreadStatus
+ * Updates Thread status after client-side execution completes
+ */
+export interface UpdateClientTaskThreadStatusParams {
+  completionReason: 'done' | 'error' | 'interrupted';
+  error?: string;
+  metadata?: {
+    totalCost?: number;
+    totalMessages?: number;
+    totalSteps?: number;
+    totalTokens?: number;
+    totalToolCalls?: number;
+  };
+  resultContent?: string;
+  threadId: string;
+}
+
 class AiAgentService {
   /**
    * Execute a single Agent task
@@ -71,6 +119,36 @@ class AiAgentService {
    */
   async interruptTask(params: InterruptTaskParams) {
     return await lambdaClient.aiAgent.interruptTask.mutate(params);
+  }
+
+  /**
+   * Create Thread for client-side task execution (desktop only, single agent mode)
+   *
+   * This method is called when runInClient=true on desktop client.
+   * It creates the Thread but does NOT execute the task - execution happens locally.
+   */
+  async createClientTaskThread(params: CreateClientTaskThreadParams) {
+    return await lambdaClient.aiAgent.createClientTaskThread.mutate(params);
+  }
+
+  /**
+   * Create Thread for client-side task execution in Group mode
+   *
+   * This method is specifically for Group Chat scenarios where:
+   * - Messages may have different agentIds (supervisor, workers)
+   * - Thread messages query should not filter by agentId
+   */
+  async createClientGroupAgentTaskThread(params: CreateClientGroupAgentTaskThreadParams) {
+    return await lambdaClient.aiAgent.createClientGroupAgentTaskThread.mutate(params);
+  }
+
+  /**
+   * Update Thread status after client-side task execution completes
+   *
+   * This method is called by desktop client after task execution finishes.
+   */
+  async updateClientTaskThreadStatus(params: UpdateClientTaskThreadStatusParams) {
+    return await lambdaClient.aiAgent.updateClientTaskThreadStatus.mutate(params);
   }
 }
 

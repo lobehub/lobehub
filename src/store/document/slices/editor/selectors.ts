@@ -1,6 +1,5 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix */
-import type { DocumentStore } from '../../store';
-import type { EditorContentState } from './initialState';
+import { type DocumentStore } from '../../store';
+import { type EditorContentState } from './initialState';
 
 // ===== Active Document Selectors =====
 

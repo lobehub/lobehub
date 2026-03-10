@@ -24,7 +24,7 @@ export const useInitRecentTopic = () => {
     ...rest,
     data,
     isLoading: rest.isLoading && isLogin,
-    // isRevalidating: 有缓存数据，后台正在更新
+    // isRevalidating: has cached data, updating in background
     isRevalidating: isValidating && !!data,
   };
 };

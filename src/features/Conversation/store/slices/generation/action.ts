@@ -1,10 +1,10 @@
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { useChatStore } from '@/store/chat';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
-import type { Store as ConversationStore } from '../../action';
+import { type Store as ConversationStore } from '../../action';
 
 /**
  * Generation Actions
@@ -23,16 +23,16 @@ export interface GenerationAction {
   clearOperations: () => void;
 
   /**
-   * Clear TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  clearTTS: (messageId: string) => Promise<void>;
-
-  /**
    * Clear translate for a message
    * @deprecated Temporary bridge to ChatStore
    */
   clearTranslate: (messageId: string) => Promise<void>;
+
+  /**
+   * Clear TTS for a message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  clearTTS: (messageId: string) => Promise<void>;
 
   /**
    * Continue generation from a message
@@ -61,12 +61,6 @@ export interface GenerationAction {
   openThreadCreator: (messageId: string) => void;
 
   /**
-   * Re-invoke a tool message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  reInvokeToolMessage: (messageId: string) => Promise<void>;
-
-  /**
    * Regenerate an assistant message
    */
   regenerateAssistantMessage: (messageId: string) => Promise<void>;
@@ -75,6 +69,12 @@ export interface GenerationAction {
    * Regenerate a user message
    */
   regenerateUserMessage: (messageId: string) => Promise<void>;
+
+  /**
+   * Re-invoke a tool message
+   * @deprecated Temporary bridge to ChatStore
+   */
+  reInvokeToolMessage: (messageId: string) => Promise<void>;
 
   /**
    * Resend a thread message
@@ -206,8 +206,16 @@ export const generationSlice: StateCreator<
   },
 
   delAndRegenerateMessage: async (messageId: string) => {
-    const { context } = get();
+    const { context, displayMessages } = get();
     const chatStore = useChatStore.getState();
+
+    // Find the assistant message and get parent user message ID before deletion
+    // This is needed because after deletion, we can't find the parent anymore
+    const currentMessage = displayMessages.find((c) => c.id === messageId);
+    if (!currentMessage) return;
+
+    const userId = currentMessage.parentId;
+    if (!userId) return;
 
     // Create operation to track context (use 'regenerate' type since this is a regenerate action)
     const { operationId } = chatStore.startOperation({
@@ -215,9 +223,12 @@ export const generationSlice: StateCreator<
       type: 'regenerate',
     });
 
-    // Regenerate first, then delete
-    await get().regenerateAssistantMessage(messageId);
+    // IMPORTANT: Delete first, then regenerate
+    // If we regenerate first, it switches to a new branch, causing the original
+    // message to no longer appear in displayMessages. Then deleteMessage cannot
+    // find the message and fails silently.
     await chatStore.deleteMessage(messageId, { operationId });
+    await get().regenerateUserMessage(userId);
     chatStore.completeOperation(operationId);
   },
 

@@ -1,13 +1,13 @@
-import { consola } from 'consola';
-import { colors } from 'consola/utils';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import prettier from "@prettier/sync";
+
+import prettier from '@prettier/sync';
+import { consola } from 'consola';
+import { colors } from 'consola/utils';
+
 import i18nConfig from './i18nConfig';
 
-let prettierOptions = prettier.resolveConfig(
-  resolve(__dirname, '../../.prettierrc.js')
-);
+const prettierOptions = prettier.resolveConfig(resolve(__dirname, '../../.prettierrc.js'));
 
 export const readJSON = (filePath: string) => {
   const data = readFileSync(filePath, 'utf8');

@@ -3,6 +3,7 @@ import { FilesTabs, SortType } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getTestDB } from '../../core/getTestDB';
 import {
   chunks,
   embeddings,
@@ -13,9 +14,8 @@ import {
   knowledgeBases,
   users,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { FileModel } from '../file';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -1180,7 +1180,7 @@ describe('FileModel', () => {
       ]);
 
       // 插入embeddings (1024维向量)
-      const testEmbedding = new Array(1024).fill(0.1);
+      const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId: chunkId1, embeddings: testEmbedding, model: 'test-model', userId }]);
@@ -1240,7 +1240,7 @@ describe('FileModel', () => {
       await serverDB.insert(fileChunks).values([{ fileId, chunkId, userId }]);
 
       // 插入embeddings
-      const testEmbedding = new Array(1024).fill(0.1);
+      const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);
@@ -1296,7 +1296,7 @@ describe('FileModel', () => {
       await serverDB.insert(fileChunks).values([{ fileId, chunkId, userId }]);
 
       // 插入embeddings (1024维向量)
-      const testEmbedding = new Array(1024).fill(0.1);
+      const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);
@@ -1333,6 +1333,74 @@ describe('FileModel', () => {
         where: eq(fileChunks.fileId, fileId),
       });
       expect(remainingFileChunks).toHaveLength(0);
+    });
+  });
+
+  describe('static getFileById', () => {
+    it('should return a file by id', async () => {
+      const [file] = await serverDB
+        .insert(files)
+        .values({
+          id: 'static-file-id',
+          userId,
+          name: 'static-file.txt',
+          url: 'https://example.com/file.txt',
+          fileType: 'text/plain',
+          size: 100,
+        })
+        .returning();
+
+      const result = await FileModel.getFileById(serverDB, file.id);
+      expect(result).toBeDefined();
+      expect(result?.id).toBe(file.id);
+      expect(result?.name).toBe('static-file.txt');
+    });
+
+    it('should return undefined for non-existent file', async () => {
+      const result = await FileModel.getFileById(serverDB, 'non-existent');
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('findByIds', () => {
+    it('should find multiple files by ids', async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'find-id-1',
+          userId,
+          name: 'file1.txt',
+          url: 'url1',
+          fileType: 'text/plain',
+          size: 100,
+        },
+        {
+          id: 'find-id-2',
+          userId,
+          name: 'file2.txt',
+          url: 'url2',
+          fileType: 'text/plain',
+          size: 200,
+        },
+      ]);
+
+      const result = await fileModel.findByIds(['find-id-1', 'find-id-2']);
+      expect(result).toHaveLength(2);
+    });
+
+    it('should only return files belonging to current user', async () => {
+      const otherUserId = 'other-file-user';
+      await serverDB.insert(users).values({ id: otherUserId });
+      await serverDB.insert(files).values({
+        id: 'other-file-id',
+        userId: otherUserId,
+        name: 'other.txt',
+        url: 'url',
+        fileType: 'text/plain',
+        size: 100,
+      });
+
+      const result = await fileModel.findByIds(['other-file-id']);
+      expect(result).toHaveLength(0);
     });
   });
 });

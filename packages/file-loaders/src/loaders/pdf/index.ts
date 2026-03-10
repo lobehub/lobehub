@@ -1,5 +1,6 @@
-import debug from 'debug';
 import { readFile } from 'node:fs/promises';
+
+import debug from 'debug';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { getDocument, version } from 'pdfjs-dist/legacy/build/pdf.mjs';
 // @ts-ignore
@@ -111,7 +112,7 @@ export class PdfLoader implements FileLoaderInterface {
         lineCount: 0,
         metadata: {
           error: `Failed to load or parse PDF file: ${error.message}`,
-          filePath: filePath,
+          filePath,
         },
         pageContent: '',
       };
@@ -158,7 +159,7 @@ export class PdfLoader implements FileLoaderInterface {
     });
 
     return {
-      pdfInfo: pdfInfo,
+      pdfInfo,
       // PDF info (Author, Title, etc.)
       pdfMetadata: metadata,
       // PDF metadata

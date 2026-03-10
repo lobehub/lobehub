@@ -48,33 +48,11 @@ vi.mock('./useNewVersion', () => ({
   useNewVersion: vi.fn(() => false),
 }));
 
-// Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableAuth, enableClerk } = vi.hoisted(() => ({
-  enableAuth: { value: true },
-  enableClerk: { value: true },
-}));
-
-vi.mock('@/envs/auth', () => ({
-  get enableAuth() {
-    return enableAuth.value;
-  },
-  get enableClerk() {
-    return enableClerk.value;
-  },
-}));
-
-afterEach(() => {
-  enableAuth.value = true;
-  enableClerk.value = true;
-});
-
 describe('useMenu', () => {
   it('should provide correct menu items when user is logged in with auth', () => {
     act(() => {
-      useUserStore.setState({ isSignedIn: true, enableAuth: () => true });
+      useUserStore.setState({ isSignedIn: true });
     });
-    enableAuth.value = true;
-    enableClerk.value = false;
 
     const { result } = renderHook(() => useMenu(), { wrapper });
 
@@ -88,29 +66,10 @@ describe('useMenu', () => {
     });
   });
 
-  it('should provide correct menu items when user is logged in without auth', () => {
-    act(() => {
-      useUserStore.setState({ isSignedIn: false, enableAuth: () => false });
-    });
-    enableAuth.value = false;
-
-    const { result } = renderHook(() => useMenu(), { wrapper });
-
-    act(() => {
-      const { mainItems, logoutItems } = result.current;
-      // When not logged in (isLogin = false), these items should not be shown
-      // isLogin checks isSignedIn, so with isSignedIn: false, isLogin should be false
-      expect(mainItems?.some((item) => item?.key === 'setting')).toBe(false);
-      expect(mainItems?.some((item) => item?.key === 'import')).toBe(false);
-      expect(logoutItems.some((item) => item?.key === 'logout')).toBe(false);
-    });
-  });
-
   it('should provide correct menu items when user is not logged in', () => {
     act(() => {
-      useUserStore.setState({ isSignedIn: false, enableAuth: () => true });
+      useUserStore.setState({ isSignedIn: false });
     });
-    enableAuth.value = true;
 
     const { result } = renderHook(() => useMenu(), { wrapper });
 

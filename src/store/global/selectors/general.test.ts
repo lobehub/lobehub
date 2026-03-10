@@ -1,4 +1,5 @@
-import { GlobalState, initialState } from '@/store/global/initialState';
+import { type GlobalState } from '@/store/global/initialState';
+import { initialState } from '@/store/global/initialState';
 import { merge } from '@/utils/merge';
 
 import { globalGeneralSelectors } from './general';

@@ -1,82 +1,61 @@
-import type { RetrieveMemoryParams, RetrieveMemoryResult } from '@lobechat/types';
+import { type RetrieveMemoryParams, type RetrieveMemoryResult } from '@lobechat/types';
 
-import {
-  type DisplayContextMemory,
-  type DisplayExperienceMemory,
-  type DisplayPreferenceMemory,
-} from '@/database/repositories/userMemory';
+import { type ActivitySliceState } from './slices/activity';
+import { activityInitialState } from './slices/activity';
+import { type AgentMemorySliceState } from './slices/agent';
+import { agentMemoryInitialState } from './slices/agent';
+import { type ContextSliceState } from './slices/context';
+import { contextInitialState } from './slices/context';
+import { type ExperienceSliceState } from './slices/experience';
+import { experienceInitialState } from './slices/experience';
+import { type IdentitySliceState } from './slices/identity';
+import { identityInitialState } from './slices/identity';
+import { type PreferenceSliceState } from './slices/preference';
+import { preferenceInitialState } from './slices/preference';
 
-import { type AgentMemorySliceState, agentMemoryInitialState } from './slices/agent';
-import { type IdentitySliceState, identityInitialState } from './slices/identity';
+export interface PersonaData {
+  content: string;
+  summary: string;
+}
 
-export interface UserMemoryStoreState extends AgentMemorySliceState, IdentitySliceState {
+export interface UserMemoryStoreState
+  extends
+    ActivitySliceState,
+    AgentMemorySliceState,
+    ContextSliceState,
+    ExperienceSliceState,
+    IdentitySliceState,
+    PreferenceSliceState {
   activeParams?: RetrieveMemoryParams;
   activeParamsKey?: string;
-  contexts: DisplayContextMemory[];
-  contextsHasMore: boolean;
-  contextsInit: boolean;
-  contextsPage: number;
-  contextsQuery?: string;
-  contextsSearchLoading?: boolean;
-  contextsSort?: 'scoreImpact' | 'scoreUrgency';
-  contextsTotal: number;
   editingMemoryContent?: string;
   editingMemoryId?: string;
-  editingMemoryLayer?: 'context' | 'experience' | 'identity' | 'preference';
-  experiences: DisplayExperienceMemory[];
-  experiencesHasMore: boolean;
-  experiencesInit: boolean;
-  experiencesPage: number;
-  experiencesQuery?: string;
-  experiencesSearchLoading?: boolean;
-  experiencesSort?: 'scoreConfidence';
-  experiencesTotal: number;
+  editingMemoryLayer?: 'activity' | 'context' | 'experience' | 'identity' | 'preference';
   memoryFetchedAtMap: Record<string, number>;
   memoryMap: Record<string, RetrieveMemoryResult>;
-  preferences: DisplayPreferenceMemory[];
-  preferencesHasMore: boolean;
-  preferencesInit: boolean;
-  preferencesPage: number;
-  preferencesQuery?: string;
-  preferencesSearchLoading?: boolean;
-  preferencesSort?: 'scorePriority';
-  preferencesTotal: number;
+  persona?: PersonaData;
+  personaInit: boolean;
   roles: { count: number; tag: string }[];
   tags: { count: number; tag: string }[];
   tagsInit: boolean;
 }
 
 export const initialState: UserMemoryStoreState = {
+  ...activityInitialState,
   ...agentMemoryInitialState,
+  ...contextInitialState,
+  ...experienceInitialState,
   ...identityInitialState,
+  ...preferenceInitialState,
   activeParams: undefined,
   activeParamsKey: undefined,
-  contexts: [],
-  contextsHasMore: true,
-  contextsInit: false,
-  contextsPage: 1,
-  contextsQuery: undefined,
-  contextsSort: undefined,
-  contextsTotal: 0,
   editingMemoryContent: undefined,
   editingMemoryId: undefined,
   editingMemoryLayer: undefined,
-  experiences: [],
-  experiencesHasMore: true,
-  experiencesInit: false,
-  experiencesPage: 1,
-  experiencesQuery: undefined,
-  experiencesSort: undefined,
-  experiencesTotal: 0,
   memoryFetchedAtMap: {},
   memoryMap: {},
-  preferences: [],
-  preferencesHasMore: true,
-  preferencesInit: false,
-  preferencesPage: 1,
-  preferencesQuery: undefined,
-  preferencesSort: undefined,
-  preferencesTotal: 0,
+  persona: undefined,
+  personaInit: false,
   roles: [],
   tags: [],
   tagsInit: false,

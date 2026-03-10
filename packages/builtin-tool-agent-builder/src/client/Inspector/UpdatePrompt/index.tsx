@@ -60,8 +60,8 @@ export const UpdatePromptInspector = memo<
       {/* Show length diff when completed */}
       {!isLoading && !isArgumentsStreaming && lengthDiff !== null && (
         <Text
-          as={'span'}
           code
+          as={'span'}
           color={lengthDiff >= 0 ? cssVar.colorSuccess : cssVar.colorError}
           fontSize={12}
           style={{ marginInlineStart: 4 }}
@@ -74,8 +74,8 @@ export const UpdatePromptInspector = memo<
       {/* Show streaming length */}
       {(isArgumentsStreaming || isLoading) && streamingLength > 0 && (
         <Text
-          as={'span'}
           code
+          as={'span'}
           color={cssVar.colorTextDescription}
           fontSize={12}
           style={{ marginInlineStart: 4 }}

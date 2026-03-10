@@ -1,5 +1,5 @@
-import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
-import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +14,11 @@ const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillServerItemProps {
   /**
+   * Optional agent ID to use instead of currentAgentConfig
+   * Used in group profile to specify which member's plugins to toggle
+   */
+  agentId?: string;
+  /**
    * Display label for the provider
    */
   label: string;
@@ -23,7 +28,7 @@ interface LobehubSkillServerItemProps {
   provider: string;
 }
 
-const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, label }) => {
+const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, label, agentId }) => {
   const { t } = useTranslation('setting');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
@@ -36,8 +41,11 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
 
   const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(provider));
   const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
-  const revokeConnect = useToolStore((s) => s.revokeLobehubSkill);
   const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
+
+  // Get effective agent ID (agentId prop or current active agent)
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const effectiveAgentId = agentId || activeAgentId || '';
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
@@ -101,7 +109,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
             checkStatus(provider);
           }
         } catch {
-          console.log('[LobehubSkill] COOP blocked window.closed access, falling back to polling');
+          console.info('[LobehubSkill] COOP blocked window.closed access, falling back to polling');
           if (windowCheckIntervalRef.current) {
             clearInterval(windowCheckIntervalRef.current);
             windowCheckIntervalRef.current = null;
@@ -130,10 +138,23 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   );
 
   const pluginId = server ? server.identifier : '';
-  const [checked, togglePlugin] = useAgentStore((s) => [
-    agentSelectors.currentAgentPlugins(s).includes(pluginId),
-    s.togglePlugin,
-  ]);
+  const plugins = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
+  const checked = plugins.includes(pluginId);
+  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+
+  // Toggle plugin for the effective agent
+  const togglePlugin = useCallback(
+    async (pluginIdToToggle: string) => {
+      if (!effectiveAgentId) return;
+      const currentPlugins = plugins;
+      const hasPlugin = currentPlugins.includes(pluginIdToToggle);
+      const newPlugins = hasPlugin
+        ? currentPlugins.filter((id) => id !== pluginIdToToggle)
+        : [...currentPlugins, pluginIdToToggle];
+      await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+    },
+    [effectiveAgentId, plugins, updateAgentConfigById],
+  );
 
   // Listen for OAuth success message from popup window
   useEffect(() => {
@@ -142,7 +163,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
       if (event.origin !== window.location.origin) return;
 
       if (event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' && event.data?.provider === provider) {
-        console.log('[LobehubSkill] OAuth success message received for provider:', provider);
+        console.info('[LobehubSkill] OAuth success message received for provider:', provider);
 
         // Cleanup polling/window monitoring
         cleanup();
@@ -157,11 +178,12 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
           .lobehubSkillServers?.find((s) => s.identifier === provider);
         if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
           const newPluginId = latestServer.identifier;
-          const isAlreadyEnabled = agentSelectors
-            .currentAgentPlugins(useAgentStore.getState())
-            .includes(newPluginId);
+          const currentAgentPlugins =
+            agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())
+              ?.plugins || [];
+          const isAlreadyEnabled = currentAgentPlugins.includes(newPluginId);
           if (!isAlreadyEnabled) {
-            console.log('[LobehubSkill] Auto-enabling plugin:', newPluginId);
+            console.info('[LobehubSkill] Auto-enabling plugin:', newPluginId);
             togglePlugin(newPluginId);
           }
         }
@@ -170,10 +192,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [provider, cleanup, checkStatus, togglePlugin]);
+  }, [provider, cleanup, checkStatus, togglePlugin, effectiveAgentId]);
 
   const handleConnect = async () => {
-    // 只有已连接状态才阻止重新连接
+    // Only block reconnection when already connected
     if (server?.isConnected) return;
 
     setIsConnecting(true);
@@ -196,21 +218,11 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     setIsToggling(false);
   };
 
-  const handleDisconnect = async () => {
-    if (!server) return;
-    setIsToggling(true);
-    if (checked) {
-      await togglePlugin(pluginId);
-    }
-    await revokeConnect(server.identifier);
-    setIsToggling(false);
-  };
-
   const renderRightControl = () => {
     if (isConnecting) {
       return (
-        <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-          <Icon icon={Loader2} spin />
+        <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+          <Icon spin icon={Loader2} />
         </Flexbox>
       );
     }
@@ -218,14 +230,14 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     if (!server) {
       return (
         <Flexbox
+          horizontal
           align="center"
           gap={4}
-          horizontal
+          style={{ cursor: 'pointer', opacity: 0.65 }}
           onClick={(e) => {
             e.stopPropagation();
             handleConnect();
           }}
-          style={{ cursor: 'pointer', opacity: 0.65 }}
         >
           {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
           <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -236,42 +248,32 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     switch (server.status) {
       case LobehubSkillStatus.CONNECTED: {
         if (isToggling) {
-          return <Icon icon={Loader2} spin />;
+          return <Icon spin icon={Loader2} />;
         }
         return (
-          <Flexbox align="center" gap={8} horizontal>
-            <Icon
-              icon={Unplug}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDisconnect();
-              }}
-              size="small"
-              style={{ cursor: 'pointer', opacity: 0.5 }}
-            />
-            <Checkbox
-              checked={checked}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggle();
-              }}
-            />
-          </Flexbox>
+          <Checkbox
+            checked={checked}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggle();
+            }}
+          />
         );
       }
       case LobehubSkillStatus.CONNECTING: {
         if (isWaitingAuth) {
           return (
-            <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-              <Icon icon={Loader2} spin />
+            <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
+              <Icon spin icon={Loader2} />
             </Flexbox>
           );
         }
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={async (e) => {
               e.stopPropagation();
               try {
@@ -282,7 +284,6 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
                 console.error('[LobehubSkill] Failed to get authorize URL:', error);
               }
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.lobehubSkill.authorize', { defaultValue: 'Authorize' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -292,14 +293,14 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
       case LobehubSkillStatus.NOT_CONNECTED: {
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={(e) => {
               e.stopPropagation();
               handleConnect();
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -321,9 +322,9 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       gap={24}
-      horizontal
       justify={'space-between'}
       onClick={(e) => {
         e.stopPropagation();
@@ -332,7 +333,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
         }
       }}
     >
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         {label}
       </Flexbox>
       {renderRightControl()}

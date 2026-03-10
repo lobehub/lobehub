@@ -1,4 +1,4 @@
-import { Flexbox, Hotkey, Text, combineKeys } from '@lobehub/ui';
+import { combineKeys,Flexbox, Hotkey, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,24 +25,24 @@ const ShortcutHint = memo(() => {
       fontSize={12}
       style={{ color: cssVar.colorTextQuaternary, userSelect: 'none', zIndex: 1 }}
     >
-      <Flexbox align={'center'} gap={4} horizontal justify={'flex-end'} paddingBlock={4}>
+      <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'} paddingBlock={4}>
         <Hotkey
           keys={sendShortcut}
           style={{ color: 'inherit' }}
+          variant={'borderless'}
           styles={{
             kbdStyle: { color: 'inherit' },
           }}
-          variant={'borderless'}
         />
         <span>{t('input.send')}</span>
         <span>/</span>
         <Hotkey
           keys={wrapperShortcut}
           style={{ color: 'inherit' }}
+          variant={'borderless'}
           styles={{
             kbdStyle: { color: 'inherit' },
           }}
-          variant={'borderless'}
         />
         <span>{t('input.warp')}</span>
       </Flexbox>

@@ -1,6 +1,7 @@
 import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler, memo, useCallback, useMemo } from 'react';
+import { type MouseEventHandler } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -17,8 +18,8 @@ import {
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import Actions from './Actions';
-import { UserMessageExtra } from './Extra';
 import UserMessageContent from './components/MessageContent';
+import { UserMessageExtra } from './Extra';
 
 interface UserMessageProps {
   disableEditing?: boolean;
@@ -45,13 +46,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const dmIndicator = useMemo(() => {
     if (!targetId) return undefined;
 
-    let targetName = targetId;
-    if (targetId === 'user') {
-      targetName = userName;
-    } else {
-      const targetAgent = agents?.find((agent) => agent.id === targetId);
-      targetName = targetAgent?.title || targetId;
-    }
+    const targetName =
+      targetId === 'user'
+        ? userName
+        : agents?.find((agent) => agent.id === targetId)?.title || targetId;
 
     return <Tag>{t('dm.visibleTo', { target: targetName })}</Tag>;
   }, [targetId, userName, agents, t]);
@@ -78,6 +76,16 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
 
   return (
     <ChatItem
+      avatar={{ avatar, title }}
+      editing={editing}
+      id={id}
+      message={content}
+      messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
+      placement={'right'}
+      showAvatar={false}
+      showTitle={false}
+      time={createdAt}
+      titleAddon={dmIndicator}
       actions={
         <Actions
           actionsConfig={actionsConfig}
@@ -87,18 +95,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           index={index}
         />
       }
-      avatar={{ avatar, title }}
-      editing={editing}
-      id={id}
-      message={content}
-      messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
-      placement={'right'}
-      showAvatar={false}
-      showTitle={false}
-      time={createdAt}
-      titleAddon={dmIndicator}
     >
       <UserMessageContent {...item} />
     </ChatItem>

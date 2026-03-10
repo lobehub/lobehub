@@ -7,7 +7,6 @@ import { FLUX_MODEL_CONFIG, SD_MODEL_CONFIG } from '@/server/services/comfyui/co
 /**
  * Workflow function to default filename type mapping
  */
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const WORKFLOW_DEFAULT_TYPE: Record<string, string> = {
   buildFluxDevWorkflow: 'DEV',
   buildFluxSchnellWorkflow: 'SCHNELL',
@@ -36,7 +35,6 @@ export const VARIANT_TYPE_OVERRIDE: Record<string, string> = {
   'SD1': 'SD15',
   'SDXL': 'SDXL',
 } as const;
-/* eslint-enable sort-keys-fix/sort-keys-fix */
 
 /**
  * Get the filename prefix for ComfyUI workflow output files

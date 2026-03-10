@@ -28,6 +28,4 @@ const ServerLayout =
     return isMobile ? <Mobile {...(res as T)} /> : <Desktop {...(res as T)} />;
   };
 
-ServerLayout.displayName = 'ServerLayout';
-
 export default ServerLayout;

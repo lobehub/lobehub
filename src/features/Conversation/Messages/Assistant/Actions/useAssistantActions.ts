@@ -1,4 +1,4 @@
-import type { ActionIconGroupItemType } from '@lobehub/ui';
+import { type ActionIconGroupItemType } from '@lobehub/ui';
 import { copyToClipboard } from '@lobehub/ui';
 import { App } from 'antd';
 import { css, cx } from 'antd-style';
@@ -153,9 +153,9 @@ export const useAssistantActions = ({
       },
       translate: {
         children: localeOptions.map((i) => ({
-          handleClick: () => translateMessage(id, i.value),
           key: i.value,
           label: t(`lang.${i.value}`),
+          onClick: () => translateMessage(id, i.value),
         })),
         icon: LanguagesIcon,
         key: 'translate',

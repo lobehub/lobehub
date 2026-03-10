@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ThreadStatus, ThreadType } from '@/types/index';
 
-import { messages, sessions, threads, topics, users } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
 import { getTestDB } from '../../../core/getTestDB';
+import { messages, sessions, threads, topics, users } from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
+import { MessageModel } from '../../message';
 
 const userId = 'message-task-user-test';
 const sessionId = 'message-task-session';
@@ -72,7 +72,7 @@ describe('MessageModel - queryWithWhere with task messages', () => {
       expect(taskMessage.taskDetail).toEqual({
         duration: 5000,
         status: ThreadStatus.Completed,
-        threadId: threadId,
+        threadId,
         title: 'Agent Task Execution',
         totalCost: 0.05,
         totalMessages: 10,
@@ -348,7 +348,7 @@ describe('MessageModel - queryWithWhere with task messages', () => {
       expect(taskMessage.taskDetail).toEqual({
         duration: undefined,
         status: ThreadStatus.Active,
-        threadId: threadId,
+        threadId,
         title: 'Partial Metadata Thread',
         totalCost: undefined,
         totalMessages: undefined,
@@ -387,7 +387,7 @@ describe('MessageModel - queryWithWhere with task messages', () => {
       expect(taskMessage.taskDetail).toEqual({
         duration: undefined,
         status: ThreadStatus.Pending,
-        threadId: threadId,
+        threadId,
         title: undefined,
         totalCost: undefined,
         totalMessages: undefined,

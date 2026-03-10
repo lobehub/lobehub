@@ -2,7 +2,7 @@ import { memo } from 'react';
 
 import { ModelItemRender } from '@/components/ModelSelect';
 
-import type { ModelWithProviders } from '../../types';
+import { type ModelWithProviders } from '../../types';
 
 interface SingleProviderModelItemProps {
   data: ModelWithProviders;
@@ -14,7 +14,6 @@ export const SingleProviderModelItem = memo<SingleProviderModelItemProps>(({ dat
     <ModelItemRender
       {...data.model}
       {...data.model.abilities}
-      infoTagTooltip={false}
       newBadgeLabel={newLabel}
       showInfoTag={true}
     />

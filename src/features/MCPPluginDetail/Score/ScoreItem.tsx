@@ -1,9 +1,10 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { BanIcon, CircleCheckBigIcon, CircleDashedIcon } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
-import Title from '../../../app/[variants]/(main)/community/features/Title';
+import Title from '@/routes/(main)/community/features/Title';
 
 export interface ScoreItemProps {
   check: boolean;
@@ -15,13 +16,13 @@ export interface ScoreItemProps {
 
 const ScoreItem = memo<ScoreItemProps>(({ required, check, desc, title }) => {
   return (
-    <Flexbox align={'center'} gap={16} horizontal paddingInline={16}>
+    <Flexbox horizontal align={'center'} gap={16} paddingInline={16}>
       <Icon
+        icon={check ? CircleCheckBigIcon : required ? BanIcon : CircleDashedIcon}
+        size={24}
         color={
           check ? cssVar.colorSuccess : required ? cssVar.colorError : cssVar.colorTextQuaternary
         }
-        icon={check ? CircleCheckBigIcon : required ? BanIcon : CircleDashedIcon}
-        size={24}
       />
       <Flexbox gap={4}>
         <Title level={3}>{title}</Title>

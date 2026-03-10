@@ -1,4 +1,3 @@
-// import { FileStore } from '../../store';
 import { type FilesStoreState } from '@/store/file/initialState';
 import { type FileUploadStatus } from '@/types/files/upload';
 

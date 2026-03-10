@@ -1,100 +1,100 @@
 /**
- * LobeHub Skill Server 连接状态
+ * LobeHub Skill Server connection status
  */
 export enum LobehubSkillStatus {
-  /** 已连接，可以使用 */
+  /** Connected and ready to use */
   CONNECTED = 'connected',
-  /** 连接中 */
+  /** Connecting */
   CONNECTING = 'connecting',
-  /** 连接失败或 Token 过期 */
+  /** Connection failed or token expired */
   ERROR = 'error',
-  /** 未连接 */
+  /** Not connected */
   NOT_CONNECTED = 'not_connected',
 }
 
 /**
- * LobeHub Skill Tool 定义 (来自 Market API)
+ * LobeHub Skill Tool definition (from Market API)
  */
 export interface LobehubSkillTool {
-  /** 工具描述 */
+  /** Tool description */
   description?: string;
-  /** 工具输入的 JSON Schema */
+  /** JSON Schema for tool input */
   inputSchema: {
     additionalProperties?: boolean;
     properties?: Record<string, any>;
     required?: string[];
     type: string;
   };
-  /** 工具名称 */
+  /** Tool name */
   name: string;
 }
 
 /**
- * LobeHub Skill Provider 定义 (来自 Market API)
+ * LobeHub Skill Provider definition (from Market API)
  */
 export interface LobehubSkillProvider {
-  /** Provider 图标 URL */
+  /** Provider icon URL */
   icon?: string;
-  /** Provider ID (如 'linear', 'github') */
+  /** Provider ID (e.g., 'linear', 'github') */
   id: string;
-  /** 显示名称 */
+  /** Display name */
   name: string;
-  /** 是否支持刷新 Token */
+  /** Whether token refresh is supported */
   refreshSupported?: boolean;
-  /** Provider 类型 */
+  /** Provider type */
   type?: 'mcp' | 'rest';
 }
 
 /**
- * LobeHub Skill Server 实例 (用户已连接的 provider)
+ * LobeHub Skill Server instance (user-connected provider)
  */
 export interface LobehubSkillServer {
-  /** 缓存时间戳 */
+  /** Cache timestamp */
   cachedAt?: number;
-  /** 错误信息 */
+  /** Error message */
   errorMessage?: string;
-  /** Provider 图标 URL */
+  /** Provider icon URL */
   icon?: string;
-  /** Provider ID (如 'linear') */
+  /** Provider ID (e.g., 'linear') */
   identifier: string;
-  /** 是否已认证 */
+  /** Whether authenticated */
   isConnected: boolean;
-  /** Provider 显示名称 */
+  /** Provider display name */
   name: string;
-  /** Provider 用户名 (如 GitHub username) */
+  /** Provider username (e.g., GitHub username) */
   providerUsername?: string;
-  /** 授权的 scopes */
+  /** Authorized scopes */
   scopes?: string[];
-  /** 连接状态 */
+  /** Connection status */
   status: LobehubSkillStatus;
-  /** Token 过期时间 */
+  /** Token expiration time */
   tokenExpiresAt?: string;
-  /** 工具列表 (已连接后可用) */
+  /** Tool list (available after connection) */
   tools?: LobehubSkillTool[];
 }
 
 /**
- * 调用 LobeHub Skill 工具的参数
+ * Parameters for calling LobeHub Skill tool
  */
 export interface CallLobehubSkillToolParams {
-  /** 工具参数 */
+  /** Tool arguments */
   args?: Record<string, unknown>;
-  /** Provider ID (如 'linear') */
+  /** Provider ID (e.g., 'linear') */
   provider: string;
-  /** 工具名称 */
+  /** Tool name */
   toolName: string;
 }
 
 /**
- * 调用 LobeHub Skill 工具的结果
+ * Result of calling LobeHub Skill tool
  */
 export interface CallLobehubSkillToolResult {
-  /** 返回数据 */
+  /** Return data */
   data?: any;
-  /** 错误信息 */
+  /** Error message */
   error?: string;
-  /** 错误代码 */
+  /** Error code */
   errorCode?: string;
-  /** 是否成功 */
+  /** Whether successful */
   success: boolean;
 }

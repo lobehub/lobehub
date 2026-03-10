@@ -1,17 +1,26 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI, { toFile } from 'openai';
+import type OpenAI from 'openai';
+import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../const/models';
-import { ChatStreamPayload, OpenAIChatMessage } from '../../types';
+import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
+
+type ConvertMessageContentOptions = {
+  forceImageBase64?: boolean;
+};
 
 export const convertMessageContent = async (
   content: OpenAI.ChatCompletionContentPart,
+  options?: ConvertMessageContentOptions,
 ): Promise<OpenAI.ChatCompletionContentPart> => {
   if (content.type === 'image_url') {
     const { type } = parseDataUri(content.image_url.url);
 
-    if (type === 'url' && process.env.LLM_VISION_IMAGE_USE_BASE64 === '1') {
+    const shouldUseBase64 =
+      options?.forceImageBase64 || process.env.LLM_VISION_IMAGE_USE_BASE64 === '1';
+
+    if (type === 'url' && shouldUseBase64) {
       const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
 
       return {
@@ -24,7 +33,10 @@ export const convertMessageContent = async (
   return content;
 };
 
-export const convertOpenAIMessages = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
+export const convertOpenAIMessages = async (
+  messages: OpenAI.ChatCompletionMessageParam[],
+  options?: ConvertMessageContentOptions,
+) => {
   return (await Promise.all(
     messages.map(async (message) => {
       const msg = message as any;
@@ -37,7 +49,7 @@ export const convertOpenAIMessages = async (messages: OpenAI.ChatCompletionMessa
             ? message.content
             : await Promise.all(
                 (message.content || []).map((c) =>
-                  convertMessageContent(c as OpenAI.ChatCompletionContentPart),
+                  convertMessageContent(c as OpenAI.ChatCompletionContentPart, options),
                 ),
               ),
         role: msg.role,
@@ -59,13 +71,17 @@ export const convertOpenAIMessages = async (messages: OpenAI.ChatCompletionMessa
   )) as OpenAI.ChatCompletionMessageParam[];
 };
 
-export const convertOpenAIResponseInputs = async (messages: OpenAIChatMessage[]) => {
-  let input: OpenAI.Responses.ResponseInputItem[] = [];
-  await Promise.all(
+export const convertOpenAIResponseInputs = async (
+  messages: OpenAIChatMessage[],
+  options?: ConvertMessageContentOptions,
+) => {
+  const inputGroups = await Promise.all(
     messages.map(async (message) => {
+      const items: OpenAI.Responses.ResponseInputItem[] = [];
+
       // if message has reasoning, add it as a separate reasoning item
       if (message.reasoning?.content) {
-        input.push({
+        items.push({
           summary: [{ text: message.reasoning.content, type: 'summary_text' }],
           type: 'reasoning',
         } as OpenAI.Responses.ResponseReasoningItem);
@@ -74,7 +90,7 @@ export const convertOpenAIResponseInputs = async (messages: OpenAIChatMessage[])
       // if message is assistant messages with tool calls , transform it to function type item
       if (message.role === 'assistant' && message.tool_calls && message.tool_calls?.length > 0) {
         message.tool_calls?.forEach((tool) => {
-          input.push({
+          items.push({
             arguments: tool.function.name,
             call_id: tool.id,
             name: tool.function.name,
@@ -82,59 +98,73 @@ export const convertOpenAIResponseInputs = async (messages: OpenAIChatMessage[])
           });
         });
 
-        return;
+        return items;
       }
 
       if (message.role === 'tool') {
-        input.push({
+        items.push({
           call_id: message.tool_call_id,
           output: message.content,
           type: 'function_call_output',
         } as OpenAI.Responses.ResponseFunctionToolCallOutputItem);
 
-        return;
+        return items;
       }
 
       if (message.role === 'system') {
-        input.push({ ...message, role: 'developer' } as OpenAI.Responses.ResponseInputItem);
-        return;
+        items.push({ ...message, role: 'developer' } as OpenAI.Responses.ResponseInputItem);
+        return items;
       }
 
       // default item
       // also need handle image
+
+      const processedContent =
+        typeof message.content === 'string'
+          ? message.content
+          : await Promise.all(
+              (message.content || []).map(async (c) => {
+                if (c.type === 'text') {
+                  // if assistant message, set type to output_text
+                  // https://platform.openai.com/docs/guides/text
+                  if (message.role === 'assistant') {
+                    return { ...c, type: 'output_text' };
+                  }
+                  return { ...c, type: 'input_text' };
+                }
+                const image = await convertMessageContent(c as OpenAI.ChatCompletionContentPart);
+                if (!(image as OpenAI.ChatCompletionContentPartImage).image_url?.url) {
+                  return undefined;
+                }
+                return {
+                  image_url: (image as OpenAI.ChatCompletionContentPartImage).image_url?.url,
+                  type: 'input_image',
+                };
+              }),
+            );
+
       const item = {
         ...message,
         content:
-          typeof message.content === 'string'
-            ? message.content
-            : await Promise.all(
-                (message.content || []).map(async (c) => {
-                  if (c.type === 'text') {
-                    return { ...c, type: 'input_text' };
-                  }
-
-                  const image = await convertMessageContent(c as OpenAI.ChatCompletionContentPart);
-                  return {
-                    image_url: (image as OpenAI.ChatCompletionContentPartImage).image_url?.url,
-                    type: 'input_image',
-                  };
-                }),
-              ),
+          typeof processedContent === 'string'
+            ? processedContent
+            : processedContent.filter((m) => m !== undefined),
       } as OpenAI.Responses.ResponseInputItem;
 
       // remove reasoning field from the message item
       delete (item as any).reasoning;
 
-      input.push(item);
+      items.push(item);
+      return items;
     }),
   );
 
-  return input;
+  return inputGroups.flat();
 };
 
 export const pruneReasoningPayload = (payload: ChatStreamPayload) => {
   const shouldStream = !disableStreamModels.has(payload.model);
-  const { stream_options, ...cleanedPayload } = payload as any;
+  const { stream_options, logprobs, top_logprobs, ...cleanedPayload } = payload as any;
 
   // When reasoning_effort is 'none', allow user-defined temperature/top_p
   const effort = payload.reasoning?.effort || payload.reasoning_effort;
@@ -159,10 +189,12 @@ export const pruneReasoningPayload = (payload: ChatStreamPayload) => {
 
     /**
      *  In openai docs: https://platform.openai.com/docs/guides/latest-model#gpt-5-2-parameter-compatibility
-     *  Fields like `top_p`, `temperature` and `logprobs` only supported to
+     *  Fields like `top_p`, `temperature`, `logprobs`, and `top_logprobs` are only supported by
      *  GPT-5 series (e.g. 5-mini 5-nano ) when reasoning effort is none
      */
+    logprobs: isEffortNone ? logprobs : undefined,
     temperature: isEffortNone ? payload.temperature : undefined,
+    top_logprobs: isEffortNone ? top_logprobs : undefined,
     top_p: isEffortNone ? payload.top_p : undefined,
   };
 };

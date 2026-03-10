@@ -1,3 +1,4 @@
+import type * as LobechatConstModule from '@lobechat/const';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +13,7 @@ vi.mock('zustand/traditional');
 let mockIsDesktop = false;
 
 vi.mock('@lobechat/const', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@lobechat/const')>();
+  const actual = await importOriginal<typeof LobechatConstModule>();
   return {
     ...actual,
     get isDesktop() {
@@ -62,14 +63,14 @@ describe('useUserAvatar', () => {
     expect(result.current).toBe(mockAvatar);
   });
 
-  it('should return original avatar when no remote server URL in desktop environment', () => {
+  it('should return original avatar when no remote server URL in desktop environment (selfHost mode)', () => {
     mockIsDesktop = true;
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
       useUserStore.setState({ user: { avatar: mockAvatar } as any });
       useElectronStore.setState({
-        dataSyncConfig: { remoteServerUrl: undefined, storageMode: 'local' },
+        dataSyncConfig: { remoteServerUrl: undefined, storageMode: 'selfHost' },
       });
     });
 

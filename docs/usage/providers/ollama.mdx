@@ -1,98 +1,98 @@
 ---
-title: Using Ollama in LobeChat
+title: Using Ollama in LobeHub
 description: >-
-  Learn how to use Ollama in LobeChat, run LLM locally, and experience cutting-edge AI usage.
-
+  Learn how to use Ollama in LobeHub to run large language models locally and
+  experience cutting-edge AI capabilities.
 tags:
   - Ollama
-  - Local LLM
-  - Ollama WebUI
   - Web UI
   - API Key
+  - Local LLM
+  - Ollama WebUI
 ---
 
-# Using Ollama in LobeChat
+# Using Ollama in LobeHub
 
-<Image alt={'Using Ollama in LobeChat'} borderless cover src={'https://github.com/lobehub/lobe-chat/assets/17870709/f579b39b-e771-402c-a1d1-620e57a10c75'} />
+<Image alt={'Using Ollama in LobeHub'} borderless cover src={'/blog/assets17870709/f579b39b-e771-402c-a1d1-620e57a10c75.webp'} />
 
-Ollama is a powerful framework for running large language models (LLMs) locally, supporting various language models including Llama 2, Mistral, and more. Now, LobeChat supports integration with Ollama, meaning you can easily enhance your application by using the language models provided by Ollama in LobeChat.
+Ollama is a powerful framework for running large language models (LLMs) locally. It supports a variety of models, including Llama 2, Mistral, and more. LobeHub now integrates seamlessly with Ollama, allowing you to leverage these models directly within your chat interface.
 
-This document will guide you on how to use Ollama in LobeChat:
+This guide will walk you through how to use Ollama in LobeHub:
 
-<Video alt="demonstration of using Ollama in LobeChat" height={580} src="https://github.com/lobehub/lobe-chat/assets/28616219/c32b56db-c6a1-4876-9bc3-acbd37ec0c0c" />
+<Video alt={'Full demo of using Ollama in LobeHub'} height={580} src="/blog/assets28616219/c32b56db-c6a1-4876-9bc3-acbd37ec0c0c.mp4" />
 
 ## Using Ollama on macOS
 
 <Steps>
-  ### Local Installation of Ollama
+  ### Install Ollama Locally
 
-  [Download Ollama for macOS](https://ollama.com/download?utm_source=lobehub\&utm_medium=docs\&utm_campaign=download-macos) and unzip/install it.
+  [Download Ollama for macOS](https://ollama.com/download?utm_source=lobehub\&utm_medium=docs\&utm_campaign=download-macos), then unzip and install it.
 
   ### Configure Ollama for Cross-Origin Access
 
-  Due to Ollama's default configuration, which restricts access to local only, additional environment variable setting `OLLAMA_ORIGINS` is required for cross-origin access and port listening. Use `launchctl` to set the environment variable:
+  By default, Ollama only allows local access. To enable cross-origin access and port listening, set the `OLLAMA_ORIGINS` environment variable using `launchctl`:
 
   ```bash
   launchctl setenv OLLAMA_ORIGINS "*"
   ```
 
-  After setting up, restart the Ollama application.
+  After setting the variable, restart the Ollama application.
 
-  ### Conversing with Local Large Models in LobeChat
+  ### Chat with Local LLMs in LobeHub
 
-  Now, you can start conversing with the local LLM in LobeChat.
+  You can now start chatting with local LLMs in LobeHub.
 
-  <Image alt="Chat with llama3 in LobeChat" height="573" src="https://github.com/lobehub/lobe-chat/assets/28616219/7f9a9a9f-fd91-4f59-aac9-3f26c6d49a1e" />
+  <Image alt="Chatting with llama3 in LobeHub" height="573" src="/blog/assets28616219/7f9a9a9f-fd91-4f59-aac9-3f26c6d49a1e.webp" />
 </Steps>
 
 ## Using Ollama on Windows
 
 <Steps>
-  ### Local Installation of Ollama
+  ### Install Ollama Locally
 
   [Download Ollama for Windows](https://ollama.com/download?utm_source=lobehub\&utm_medium=docs\&utm_campaign=download-windows) and install it.
 
   ### Configure Ollama for Cross-Origin Access
 
-  Since Ollama's default configuration allows local access only, additional environment variable setting `OLLAMA_ORIGINS` is needed for cross-origin access and port listening.
+  By default, Ollama only allows local access. To enable cross-origin access and port listening, set the `OLLAMA_ORIGINS` environment variable.
 
-  On Windows, Ollama inherits your user and system environment variables.
+  On Windows, Ollama inherits your user and system environment variables:
 
-  1. First, exit the Ollama program by clicking on it in the Windows taskbar.
-  2. Edit system environment variables from the Control Panel.
-  3. Edit or create the Ollama environment variable `OLLAMA_ORIGINS` for your user account, setting the value to `*`.
-  4. Click `OK/Apply` to save and restart the system.
-  5. Run `Ollama` again.
+  1. Exit Ollama from the system tray.
+  2. Open the Control Panel and edit system environment variables.
+  3. Add or edit the `OLLAMA_ORIGINS` variable for your user account and set its value to `*`.
+  4. Click `OK/Apply` and restart your system.
+  5. Relaunch Ollama.
 
-  ### Conversing with Local Large Models in LobeChat
+  ### Chat with Local LLMs in LobeHub
 
-  Now, you can start conversing with the local LLM in LobeChat.
+  You can now start chatting with local LLMs in LobeHub.
 </Steps>
 
 ## Using Ollama on Linux
 
 <Steps>
-  ### Local Installation of Ollama
+  ### Install Ollama Locally
 
-  Install using the following command:
+  Run the following command to install:
 
   ```bash
   curl -fsSL https://ollama.com/install.sh | sh
   ```
 
-  Alternatively, you can refer to the [Linux manual installation guide](https://github.com/ollama/ollama/blob/main/docs/linux.md).
+  Alternatively, refer to the [manual installation guide for Linux](https://github.com/ollama/ollama/blob/main/docs/linux.md).
 
   ### Configure Ollama for Cross-Origin Access
 
-  Due to Ollama's default configuration, which allows local access only, additional environment variable setting `OLLAMA_ORIGINS` is required for cross-origin access and port listening. If Ollama runs as a systemd service, use `systemctl` to set the environment variable:
+  By default, Ollama only allows local access. To enable cross-origin access and port listening, set the `OLLAMA_ORIGINS` environment variable. If Ollama is running as a systemd service, use `systemctl` to configure it:
 
-  1. Edit the systemd service by calling `sudo systemctl edit ollama.service`:
+  1. Edit the systemd service with:
 
   ```bash
   sudo systemctl edit ollama.service
   ```
 
-  2. Add `Environment` under `[Service]` for each environment variable:
+  2. Add the following under the `[Service]` section:
 
   ```bash
   [Service]
@@ -101,24 +101,24 @@ This document will guide you on how to use Ollama in LobeChat:
   ```
 
   3. Save and exit.
-  4. Reload `systemd` and restart Ollama:
+  4. Reload systemd and restart Ollama:
 
   ```bash
   sudo systemctl daemon-reload
   sudo systemctl restart ollama
   ```
 
-  ### Conversing with Local Large Models in LobeChat
+  ### Chat with Local LLMs in LobeHub
 
-  Now, you can start conversing with the local LLM in LobeChat.
+  You can now start chatting with local LLMs in LobeHub.
 </Steps>
 
-## Deploying Ollama using Docker
+## Using Ollama with Docker
 
 <Steps>
-  ### Pulling Ollama Image
+  ### Pull the Ollama Docker Image
 
-  If you prefer using Docker, Ollama provides an official Docker image that you can pull using the following command:
+  If you prefer using Docker, Ollama provides an official image. Pull it with:
 
   ```bash
   docker pull ollama/ollama
@@ -126,48 +126,48 @@ This document will guide you on how to use Ollama in LobeChat:
 
   ### Configure Ollama for Cross-Origin Access
 
-  Since Ollama's default configuration allows local access only, additional environment variable setting `OLLAMA_ORIGINS` is needed for cross-origin access and port listening.
-
-  If Ollama runs as a Docker container, you can add the environment variable to the `docker run` command.
+  By default, Ollama only allows local access. To enable cross-origin access and port listening, set the `OLLAMA_ORIGINS` environment variable in your `docker run` command:
 
   ```bash
   docker run -d --gpus=all -v ollama:/root/.ollama -e OLLAMA_ORIGINS="*" -p 11434:11434 --name ollama ollama/ollama
   ```
 
-  ### Conversing with Local Large Models in LobeChat
+  ### Chat with Local LLMs in LobeHub
 
-  Now, you can start conversing with the local LLM in LobeChat.
+  You can now start chatting with local LLMs in LobeHub.
 </Steps>
 
 ## Installing Ollama Models
 
-Ollama supports various models, which you can view in the [Ollama Library](https://ollama.com/library) and choose the appropriate model based on your needs.
+Ollama supports a wide range of models. You can browse the available models in the [Ollama Library](https://ollama.com/library) and choose the ones that best suit your needs.
 
-### Installation in LobeChat
+### Install via LobeHub
 
-In LobeChat, we have enabled some common large language models by default, such as llama3, Gemma, Mistral, etc. When you select a model for conversation, we will prompt you to download that model.
+LobeHub comes pre-configured with popular LLMs like llama3, Gemma, and Mistral. When you select a model for the first time, LobeHub will prompt you to download it.
 
-<Image alt="LobeChat guide your to install Ollama model" height="460" src="https://github.com/lobehub/lobe-chat/assets/28616219/4e81decc-776c-43b8-9a54-dfb43e9f601a" />
+<Image alt="LobeHub prompts to install Ollama model" height="460" src="/blog/assets28616219/4e81decc-776c-43b8-9a54-dfb43e9f601a.webp" />
 
-Once downloaded, you can start conversing.
+Once the download is complete, you can start chatting.
 
-### Pulling Models to Local with Ollama
+### Pull Models via Ollama CLI
 
-Alternatively, you can install models by executing the following command in the terminal, using llama3 as an example:
+Alternatively, you can install models directly via the terminal. For example, to install llama3:
 
 ```bash
 ollama pull llama3
 ```
 
-<Video height="524" src="https://github.com/lobehub/lobe-chat/assets/28616219/95828c11-0ae5-4dfa-84ed-854124e927a6" />
+<Video height={524} src="/blog/assets28616219/95828c11-0ae5-4dfa-84ed-854124e927a6.mp4" />
 
 ## Custom Configuration
 
-You can find Ollama's configuration options in `Settings` -> `AI Service Provider`, where you can configure Ollama's proxy, model names, etc.
+You can configure Ollama settings in LobeHub under `Settings` -> `AI Providers`. Here, you can set the proxy, model name, and more.
 
-<Image alt={'Ollama Provider Settings'} height={274} src={'https://github.com/lobehub/lobe-chat/assets/28616219/54b3696b-5b13-4761-8c1b-1e664867b2dd'} />
+<Image alt={'Ollama provider settings'} height={274} src={'/blog/assets28616219/54b3696b-5b13-4761-8c1b-1e664867b2dd.webp'} />
 
 <Callout type={'info'}>
-  Visit [Integrating with Ollama](/docs/self-hosting/examples/ollama) to learn how to deploy
-  LobeChat to meet integration needs with Ollama.
+  To learn how to deploy LobeHub with Ollama integration, visit [Integrating with Ollama](/en/docs/self-hosting/examples/ollama).
 </Callout>
+
+```
+```

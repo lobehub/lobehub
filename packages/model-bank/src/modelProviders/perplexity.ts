@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref :https://docs.perplexity.ai/docs/model-cards
 const Perplexity: ModelProviderCard = {

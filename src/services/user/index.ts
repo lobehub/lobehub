@@ -1,4 +1,4 @@
-import type { PartialDeep } from 'type-fest';
+import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import {
@@ -25,10 +25,6 @@ export class UserService {
 
   getUserSSOProviders = async (): Promise<SSOProvider[]> => {
     return lambdaClient.user.getUserSSOProviders.query();
-  };
-
-  unlinkSSOProvider = async (provider: string, providerAccountId: string) => {
-    return lambdaClient.user.unlinkSSOProvider.mutate({ provider, providerAccountId });
   };
 
   makeUserOnboarded = async () => {

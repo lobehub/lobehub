@@ -1,4 +1,4 @@
-import { type UniformSearchResult } from '@lobechat/types';
+import type { UniformSearchResult } from '@lobechat/types';
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useState } from 'react';
@@ -70,13 +70,18 @@ const VideoItem = memo<SearchResultProps>(
     return (
       <Flexbox gap={12}>
         <Flexbox className={styles.container} onClick={() => setExpand(!expand)}>
-          <Flexbox flex={1} gap={8} horizontal padding={12}>
+          <Flexbox horizontal flex={1} gap={8} padding={12}>
             {videoUrl && (
               <Flexbox>
                 <iframe
                   // alt={title}
                   className={styles.iframe}
                   height={100}
+                  src={videoUrl}
+                  width={200}
+                  style={{
+                    pointerEvents: 'none',
+                  }}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -84,26 +89,21 @@ const VideoItem = memo<SearchResultProps>(
                   onPlay={(e) => {
                     e.preventDefault();
                   }}
-                  src={videoUrl}
-                  style={{
-                    pointerEvents: 'none',
-                  }}
-                  width={200}
                 />
               </Flexbox>
             )}
             <Flexbox flex={1} gap={8}>
-              <Flexbox align={'center'} distribution={'space-between'} gap={12} horizontal>
-                <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} distribution={'space-between'} gap={12}>
+                <Flexbox horizontal align={'center'} gap={8}>
                   <Avatar.Group
+                    shape={'circle'}
+                    size={20}
                     items={engines.map((engine) => ({
                       avatar: ENGINE_ICON_MAP[engine],
                       background: cssVar.colorBgLayout,
                       key: engine,
                       title: engine,
                     }))}
-                    shape={'circle'}
-                    size={20}
                   />
                   <Flexbox className={styles.title}>{title}</Flexbox>
                 </Flexbox>

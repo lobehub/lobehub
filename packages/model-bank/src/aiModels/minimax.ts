@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
 
 const minimaxChatModels: AIChatModelCard[] = [
   {
@@ -8,9 +8,54 @@ const minimaxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 204_800,
     description:
+      'Top-tier performance and ultimate cost-effectiveness, easily handling complex tasks (approx. 60 tps).',
+    displayName: 'MiniMax M2.5',
+    enabled: true,
+    id: 'MiniMax-M2.5',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-02-12',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description: 'M2.5 Lightning: Same performance, faster and more agile (approx. 100 tps).',
+    displayName: 'MiniMax M2.5 Lightning',
+    id: 'MiniMax-M2.5-Lightning',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 16.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-02-12',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
       'Powerful multilingual programming capabilities, comprehensively upgraded programming experience',
     displayName: 'MiniMax M2.1',
-    enabled: true,
     id: 'MiniMax-M2.1',
     maxOutput: 131_072,
     pricing: {
@@ -149,6 +194,7 @@ const minimaxImageModels: AIImageModelCard[] = [
         default: '1:1',
         enum: ['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'],
       },
+      imageUrls: { default: [] },
       prompt: {
         default: '',
       },
@@ -166,8 +212,9 @@ const minimaxImageModels: AIImageModelCard[] = [
     parameters: {
       aspectRatio: {
         default: '1:1',
-        enum: ['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'],
+        enum: ['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16'],
       },
+      imageUrls: { default: [] },
       prompt: {
         default: '',
       },

@@ -1,8 +1,9 @@
-import { createEnv } from '@t3-oss/env-nextjs';
+import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 
 export const getPythonConfig = () => {
   return createEnv({
+    clientPrefix: 'NEXT_PUBLIC_',
     client: {
       NEXT_PUBLIC_PYODIDE_INDEX_URL: z.string().url().optional(),
       NEXT_PUBLIC_PYODIDE_PIP_INDEX_URL: z.string().url().optional(),

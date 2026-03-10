@@ -15,6 +15,7 @@ export interface ModelParamsContext {
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
+  effort?: string;
   enabledContextCaching?: boolean;
   imageAspectRatio?: string;
   imageResolution?: string;
@@ -77,6 +78,21 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     };
   }
 
+  // Adaptive thinking (Claude Opus/Sonnet 4.6)
+  if (modelExtendParams.includes('enableAdaptiveThinking')) {
+    if (chatConfig.enableAdaptiveThinking) {
+      extendParams.thinking = {
+        type: 'adaptive',
+      };
+    } else if (!modelExtendParams.includes('enableReasoning')) {
+      // Only disable when the model has no enableReasoning fallback
+      extendParams.thinking = {
+        type: 'disabled',
+      };
+    }
+    // When adaptive is off and model also has enableReasoning, let enableReasoning result stand
+  }
+
   // Context caching
   if (modelExtendParams.includes('disableContextCaching') && chatConfig.disableContextCaching) {
     extendParams.enabledContextCaching = false;
@@ -106,6 +122,18 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.gpt5_2ProReasoningEffort;
   }
 
+  if (modelExtendParams.includes('grok4_20ReasoningEffort') && chatConfig.grok4_20ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('effort') && chatConfig.effort) {
+    extendParams.effort = chatConfig.effort;
+  }
+
   // Text verbosity
   if (modelExtendParams.includes('textVerbosity') && chatConfig.textVerbosity) {
     extendParams.verbosity = chatConfig.textVerbosity;
@@ -124,6 +152,22 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingLevel = chatConfig.thinkingLevel;
   }
 
+  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel4') && chatConfig.thinkingLevel4) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel4;
+  }
+
+  if (modelExtendParams.includes('thinkingLevel5') && chatConfig.thinkingLevel5) {
+    extendParams.thinkingLevel = chatConfig.thinkingLevel5;
+  }
+
   // URL context
   if (modelExtendParams.includes('urlContext') && chatConfig.urlContext) {
     extendParams.urlContext = chatConfig.urlContext;
@@ -134,8 +178,16 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.imageAspectRatio = chatConfig.imageAspectRatio;
   }
 
+  if (modelExtendParams.includes('imageAspectRatio2') && chatConfig.imageAspectRatio2) {
+    extendParams.imageAspectRatio = chatConfig.imageAspectRatio2;
+  }
+
   if (modelExtendParams.includes('imageResolution') && chatConfig.imageResolution) {
     extendParams.imageResolution = chatConfig.imageResolution;
+  }
+
+  if (modelExtendParams.includes('imageResolution2') && chatConfig.imageResolution2) {
+    extendParams.imageResolution = chatConfig.imageResolution2;
   }
 
   return extendParams;

@@ -1,9 +1,10 @@
 import { ARTIFACT_TAG_CLOSED_REGEX, ARTIFACT_TAG_REGEX } from '@/const/plugin';
-import type { ChatStoreState } from '@/store/chat';
+import { type ChatStoreState } from '@/store/chat';
 import { type PortalArtifact } from '@/types/artifact';
 
 import { dbMessageSelectors } from '../message/selectors';
-import { type PortalFile, type PortalViewData, PortalViewType } from './initialState';
+import { type PortalFile, type PortalViewData } from './initialState';
+import { PortalViewType } from './initialState';
 
 // ============== Core Stack Selectors ==============
 
@@ -122,7 +123,6 @@ const toolUIIdentifier = (s: ChatStoreState) => currentToolUI(s)?.identifier;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 export const chatPortalSelectors = {
   // Core stack selectors
   currentView,

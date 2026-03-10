@@ -3,7 +3,8 @@ import type { ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { identityPrompt } from '../prompts';
-import { IdentityExtractor, IdentityExtractorTemplateProps } from './identity';
+import type { IdentityExtractorTemplateProps } from './identity';
+import { IdentityExtractor } from './identity';
 
 const runtimeMock = { generateObject: vi.fn() } as unknown as ModelRuntime;
 const extractorConfig = {
@@ -46,7 +47,6 @@ describe('IdentityExtractor', () => {
         {
           details: null,
           memoryCategory: 'personal',
-          memoryLayer: 'identity',
           memoryType: 'fact',
           summary: 'New identity summary',
           tags: ['tag'],

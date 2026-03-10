@@ -1,7 +1,7 @@
 import type { ExportedTopic, ImportedMessage } from '@lobechat/types';
 
 import { messagePlugins, messages, topics } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
 
 export interface ImportTopicParams {

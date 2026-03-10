@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * Lobe Group Management Executor
  *
@@ -6,55 +5,27 @@
  * Note: Member management (searchAgent, inviteAgent, createAgent, removeAgent)
  * is handled by group-agent-builder. This executor focuses on orchestration.
  */
-import {
+import type {
   BroadcastParams,
   CreateWorkflowParams,
   DelegateParams,
   ExecuteTaskParams,
-  GetAgentInfoParams,
-  GroupManagementApiName,
-  GroupManagementIdentifier,
+  ExecuteTasksParams,
   InterruptParams,
   SpeakParams,
   SummarizeParams,
   VoteParams,
 } from '@lobechat/builtin-tool-group-management';
-import { formatAgentProfile } from '@lobechat/prompts';
-import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
-
-import { agentGroupSelectors, useAgentGroupStore } from '@/store/agentGroup';
+import {
+  GroupManagementApiName,
+  GroupManagementIdentifier,
+} from '@lobechat/builtin-tool-group-management';
+import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName> {
   readonly identifier = GroupManagementIdentifier;
   protected readonly apiEnum = GroupManagementApiName;
-
-  // ==================== Agent Info ====================
-
-  getAgentInfo = async (
-    params: GetAgentInfoParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { groupId } = ctx;
-
-    if (!groupId) {
-      return {
-        content: JSON.stringify({ error: 'No group context available', success: false }),
-        success: false,
-      };
-    }
-
-    const agent = agentGroupSelectors.getAgentByIdFromGroup(
-      groupId,
-      params.agentId,
-    )(useAgentGroupStore.getState());
-
-    if (!agent) {
-      return { content: `Agent "${params.agentId}" not found in this group`, success: false };
-    }
-
-    // Return formatted agent profile for the supervisor
-    return { content: formatAgentProfile(agent), state: agent, success: true };
-  };
 
   // ==================== Communication Coordination ====================
 
@@ -155,16 +126,19 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
     params: ExecuteTaskParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const { agentId, instruction, timeout, skipCallSupervisor, runInClient } = params;
+
     // Register afterCompletion callback to trigger async task execution after AgentRuntime completes
     // This follows the same pattern as speak/broadcast - trigger mode, not blocking
     if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
       ctx.registerAfterCompletion(() =>
         ctx.groupOrchestration!.triggerExecuteTask({
-          agentId: params.agentId,
-          skipCallSupervisor: params.skipCallSupervisor,
+          agentId,
+          instruction,
+          runInClient,
+          skipCallSupervisor,
           supervisorAgentId: ctx.agentId!,
-          task: params.task,
-          timeout: params.timeout,
+          timeout,
           toolMessageId: ctx.messageId,
         }),
       );
@@ -172,13 +146,46 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
     // Returns stop: true to indicate the supervisor should stop and let the task execute
     return {
-      content: `Triggered async task for agent "${params.agentId}".`,
+      content: `Triggered async task for agent "${agentId}"${runInClient ? ' (client-side)' : ''}.`,
       state: {
-        agentId: params.agentId,
-        skipCallSupervisor: params.skipCallSupervisor,
-        task: params.task,
-        timeout: params.timeout,
+        agentId,
+        instruction,
+        runInClient,
+        skipCallSupervisor,
+        timeout,
         type: 'executeAgentTask',
+      },
+      stop: true,
+      success: true,
+    };
+  };
+
+  executeAgentTasks = async (
+    params: ExecuteTasksParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    // Register afterCompletion callback to trigger parallel task execution after AgentRuntime completes
+    // This follows the same pattern as executeAgentTask - trigger mode, not blocking
+    if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
+      ctx.registerAfterCompletion(() =>
+        ctx.groupOrchestration!.triggerExecuteTasks({
+          skipCallSupervisor: params.skipCallSupervisor,
+          supervisorAgentId: ctx.agentId!,
+          tasks: params.tasks,
+          toolMessageId: ctx.messageId,
+        }),
+      );
+    }
+
+    const agentIds = params.tasks.map((t) => t.agentId).join(', ');
+
+    // Returns stop: true to indicate the supervisor should stop and let the tasks execute
+    return {
+      content: `Triggered ${params.tasks.length} parallel tasks for agents: ${agentIds}.`,
+      state: {
+        skipCallSupervisor: params.skipCallSupervisor,
+        tasks: params.tasks,
+        type: 'executeAgentTasks',
       },
       stop: true,
       success: true,
@@ -225,12 +232,12 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
     _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     // TODO: Implement conversation summarization
+    const focusInfo = params.focus ? ` with focus on "${params.focus}"` : '';
+    const preserveInfo = params.preserveRecent
+      ? ` (preserving ${params.preserveRecent} recent messages)`
+      : '';
     return {
-      content: JSON.stringify({
-        focus: params.focus,
-        message: 'Summarization not yet implemented',
-        preserveRecent: params.preserveRecent,
-      }),
+      content: `Summarization not yet implemented${focusInfo}${preserveInfo}`,
       success: true,
     };
   };
@@ -243,23 +250,16 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
   ): Promise<BuiltinToolResult> => {
     // TODO: Implement workflow creation
     return {
-      content: JSON.stringify({
-        message: 'Workflow creation not yet implemented',
-        name: params.name,
-        steps: params.steps,
-      }),
+      content: `Workflow creation not yet implemented for "${params.name}" with ${params.steps.length} steps`,
       success: true,
     };
   };
 
   vote = async (params: VoteParams, _ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
     // TODO: Implement voting mechanism
+    const optionLabels = params.options.map((o) => o.label).join(', ');
     return {
-      content: JSON.stringify({
-        message: 'Voting not yet implemented',
-        options: params.options,
-        question: params.question,
-      }),
+      content: `Voting not yet implemented for question: "${params.question}" with options: ${optionLabels}`,
       success: true,
     };
   };

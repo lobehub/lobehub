@@ -1,0 +1,73 @@
+---
+title: Configuring Authelia Authentication Service for LobeHub
+description: >-
+  Learn how to configure Authelia authentication service in LobeHub, including
+  creating a provider, configuring environment variables, and deploying LobeHub.
+  Detailed steps and necessary environment variable settings.
+tags:
+  - Authelia Configuration
+  - Single Sign-On (SSO)
+  - LobeHub Authentication
+  - Environment Variables
+  - Deployment Instructions
+---
+
+## Configuring Authelia Authentication Service
+
+## Authelia Configuration Flow
+
+<Steps>
+  ### Create an Authelia Identity Provider
+
+  We assume you are already familiar with using Authelia. Let's say your LobeHub instance is deployed at [https://lobe.example.com/](https://lobe.example.com/). Note that currently only localhost supports HTTP access; other domains need to enable TLS, otherwise Authelia will actively interrupt authentication by default.
+
+  Now, let's open and edit the configuration file of your Authelia instance:
+
+  Add a new lobe-chat item under `identity_providers` -> `oidc`:
+
+  ```yaml
+  identity_providers:
+    oidc:
+      ...
+      ## The other portions of the mandatory OpenID Connect 1.0 configuration go here.
+      ## See: https://www.authelia.com/c/oidc
+      - id: lobe-chat
+        description: LobeHub
+        secret: '$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKn50cFzzvE9RXV88h1wJn5KGiHrD0YKtZaR/nCb2CJPOsKaPK0hjf.9yHxzQGZziziccp6Yng'  # The digest of 'insecure_secret'.
+        public: false
+        authorization_policy: two_factor
+        redirect_uris:
+          - https://chat.example.com/api/auth/callback/authelia
+        scopes:
+          - openid
+          - profile
+          - email
+        userinfo_signing_algorithm: none
+  ```
+
+  Make sure to replace secret and `redirect_urls` with your own values. Note! The secret configured in Authelia is ciphertext, i.e., a salted hash value. Its corresponding plaintext needs to be filled in LobeHub later.
+
+  Save the configuration file and restart the Authelia service. Now we have completed the Authelia configuration.
+
+  ### Configure Environment Variables
+
+  When deploying LobeHub, you need to configure the following environment variables:
+
+  | Environment Variable      | Type     | Description                                                                                                                                                                                                                                               |
+  | ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | Required | The secret used to encrypt Auth.js session tokens. You can generate a secret using the following command: `openssl rand -base64 32`                                                                                                                       |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the SSO provider for LoboChat. Use `authentik` for Authentik.                                                                                                                                                                                      |
+  | `AUTH_AUTHELIA_ID`        | Required | The id just configured in Authelia, example value is lobe-chat                                                                                                                                                                                            |
+  | `AUTH_AUTHELIA_SECRET`    | Required | The plaintext corresponding to the secret just configured in Authelia, example value is `insecure_secret`                                                                                                                                                 |
+  | `AUTH_AUTHELIA_ISSUER`    | Required | Your Authelia URL, for example [https://sso.example.com](https://sso.example.com)                                                                                                                                                                         |
+  | `AUTH_URL`                | Required | This URL is used to specify the callback address for Auth.js when performing OAuth verification. It only needs to be set when the default generated redirect address is incorrect. [https://chat.example.com/api/auth](https://chat.example.com/api/auth) |
+
+  <Callout type={'tip'}>
+    Go to  [📘 Environment Variables](/docs/self-hosting/environment-variable#Authelia) for details about the variables.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After a successful deployment, users will be able to use LobeHub by authenticating with the users
+  configured in Authelia.
+</Callout>

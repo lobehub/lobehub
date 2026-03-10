@@ -2,7 +2,7 @@ import { type ThreadItem, type UIChatMessage } from '@lobechat/types';
 
 import { useAgentStore } from '@/store/agent';
 import { agentChatConfigSelectors } from '@/store/agent/selectors';
-import type { ChatStoreState } from '@/store/chat';
+import { type ChatStoreState } from '@/store/chat';
 import { chatHelpers } from '@/store/chat/helpers';
 
 import { displayMessageSelectors } from '../../message/selectors';

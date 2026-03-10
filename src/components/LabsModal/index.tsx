@@ -42,7 +42,7 @@ const LabsModal = memo<LabsModalProps>(({ open, onClose }) => {
   ];
 
   return (
-    <Modal footer={null} onCancel={onClose} open={open} title={t('title')} width={700}>
+    <Modal footer={null} open={open} title={t('title')} width={700} onCancel={onClose}>
       <Flexbox gap={16} padding={16} style={{ alignItems: 'center', width: '100%' }}>
         {labItems.map((item) => (
           <LabCard
@@ -51,8 +51,8 @@ const LabsModal = memo<LabsModalProps>(({ open, onClose }) => {
             desc={item.desc}
             key={item.key}
             loading={!isPreferenceInit}
-            onChange={(checked: boolean) => updateLab({ [item.key]: checked })}
             title={item.title}
+            onChange={(checked: boolean) => updateLab({ [item.key]: checked })}
           />
         ))}
       </Flexbox>

@@ -1,0 +1,84 @@
+---
+title: Configure ZITADEL Authentication Service for LobeHub
+description: >-
+  Learn how to configure ZITADEL Authentication Service for LobeHub deployment,
+  including creating ZITADEL applications, setting up environment variables, and
+  enabling single sign-on (SSO).
+tags:
+  - ZITADEL Authentication
+  - LobeHub Deployment
+  - Single Sign-On (SSO)
+  - Environment Variables
+  - ZITADEL Applications
+---
+
+# Configure ZITADEL Authentication Service
+
+<Steps>
+  ### Create ZITADEL Application
+
+  Log in to the console of your ZITADEL instance using an account with at least a [`Project Owner` role](https://zitadel.com/docs/guides/manage/console/managers#roles), navigate to (or [create](https://zitadel.com/docs/guides/manage/console/projects#create-a-project)) the project you'd like to host your application in, and click the **New** button to create an application.
+
+  <Image alt="Create ZITADEL Application S1" inStep src="/blog/assets8692892/b05473ad-04a6-4ebc-9810-116c778d4448.webp" />
+
+  Fill in the name, choose **Web** as the application type, and click **Continue**.
+
+  <Image alt="Create ZITADEL Application S2" inStep src="/blog/assets8692892/5a0e6c58-9e6f-4ffb-8af2-32e48cfb45b0.webp" />
+
+  Choose **Code** as the authentication method.
+
+  <Image alt="Create ZITADEL Application S3" inStep src="/blog/assets8692892/14ecaa12-74a1-4e2f-b171-9d9ac09d3d63.webp" />
+
+  In the **Redirect URIs** field, fill in:
+
+  ```
+  http(s)://your-domain/api/auth/callback/zitadel
+  ```
+
+  <Image alt="Create ZITADEL Application S4" inStep src="/blog/assets8692892/4ff3c3a0-9ca0-45ff-8f3a-219f4445098b.webp" />
+
+  <Callout type={'important'}>
+    - You can fill in or modify redirect URIs after creating the application, but make sure the filled
+      URL is consistent with the deployed URL.
+
+    - Replace `http(s)://your-domain` with the actual URL that LobeHub is deployed to.
+  </Callout>
+
+  Confirm the configuration and click **Create**.
+
+  <Image alt="Create ZITADEL Application S5" inStep src="/blog/assets8692892/bee24764-aa42-47d9-ad43-bcb8e7b35bc3.webp" />
+
+  Save the **ClientId** and **ClientSecret** for later use.
+
+  <Image alt="Create ZITADEL Application S6" inStep src="/blog/assets8692892/407b4eed-7f21-4aa6-b68f-9bae2faf09d0.webp" />
+
+  In the application settings page, navigate to the **Token Settings** tab, enable **User Info inside ID Token** option, and click **Save**.
+
+  <Image alt="Create ZITADEL Application S7" inStep src="/blog/assets8692892/d84235b1-45f6-447d-bdd9-58ab9527dc9b.webp" />
+
+  Navigate to the **URLs** tab, and save the **issuer** URL.
+
+  <Image alt="Create ZITADEL Application S8" inStep src="/blog/assets8692892/d12a2661-7b98-484f-8f3d-07e84d42ae08.webp" />
+
+  ### Configure Environment Variables
+
+  When deploying LobeHub, you need to configure the following environment variables:
+
+  | Environment Variable      | Type     | Description                                                                                                                                                                                         |
+  | ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | Required | Key used to encrypt Auth.js session tokens. You can generate a key using the following command: `openssl rand -base64 32`                                                                           |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LoboChat. Use `zitadel` for ZITADEL.                                                                                                                         |
+  | `AUTH_ZITADEL_ID`         | Required | Client ID (`ClientId` as shown in ZITADEL) of the ZITADEL application                                                                                                                               |
+  | `AUTH_ZITADEL_SECRET`     | Required | Client Secret (`ClientSecret` as shown in ZITADEL) of the ZITADEL application                                                                                                                       |
+  | `AUTH_ZITADEL_ISSUER`     | Required | Issuer URL of the ZITADEL application                                                                                                                                                               |
+  | `AUTH_URL`                | Required | The URL is used to specify the callback address for the execution of OAuth authentication in Auth.js. It needs to be set only when the default address is incorrect. `https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    You can refer to the related variable details at [📘Environment Variables](/docs/self-hosting/environment-variables/auth#zitadel).
+  </Callout>
+</Steps>
+
+<Callout>
+  After successful deployment, users will be able to authenticate and use LobeHub using existing
+  users configured in ZITADEL.
+</Callout>

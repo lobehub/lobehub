@@ -125,6 +125,21 @@ export class ContextTreeBuilder {
       for (const nonTaskChild of nonTaskChildren) {
         this.transformToLinear(nonTaskChild, contextTree);
       }
+
+      // Also check for children of task messages (e.g., summary as child of last task)
+      const taskChildren = idNode.children.filter((child) => {
+        const childMsg = this.messageMap.get(child.id);
+        return childMsg?.role === 'task';
+      });
+
+      for (const taskChild of taskChildren) {
+        for (const taskGrandchild of taskChild.children) {
+          const taskGrandchildMsg = this.messageMap.get(taskGrandchild.id);
+          if (taskGrandchildMsg && taskGrandchildMsg.role !== 'task') {
+            this.transformToLinear(taskGrandchild, contextTree);
+          }
+        }
+      }
       return;
     }
 

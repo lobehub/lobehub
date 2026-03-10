@@ -1,20 +1,20 @@
 ---
-title: 在 LobeChat 中使用 LM Studio
-description: 学习如何配置和使用 LM Studio，并在 LobeChat 中 通过 LM Studio 运行 AI 模型进行对话。
+title: 在 LobeHub 中使用 LM Studio
+description: 学习如何配置和使用 LM Studio，并在 LobeHub 中 通过 LM Studio 运行 AI 模型进行对话。
 tags:
-  - LobeChat
+  - LobeHub
   - LM Studio
   - 开源模型
   - Web UI
 ---
 
-# 在 LobeChat 中使用 LM Studio
+# 在 LobeHub 中使用 LM Studio
 
-<Image alt={'在 LobeChat 中使用 LM Studio'} cover src={'https://github.com/user-attachments/assets/cc1f6146-8063-4a4d-947a-7fd6b9133c0c'} />
+<Image alt={'在 LobeHub 中使用 LM Studio'} cover src={'/blog/assets28749075f0c4d62c1642694a4ed9ec08.webp'} />
 
 [LM Studio](https://lmstudio.ai/) 是一个用于测试和运行大型语言模型（LLM）的平台，提供了直观易用的界面，适合开发人员和 AI 爱好者使用。它支持在本地电脑上部署和运行各种开源 LLM 模型，例如 Deepseek 或 Qwen，实现离线 AI 聊天机器人的功能，从而保护用户隐私并提供更大的灵活性。
 
-本文档将指导你如何在 LobeChat 中使用 LM Studio:
+本文档将指导你如何在 LobeHub 中使用 LM Studio:
 
 <Steps>
   ### 步骤一：获取并安装 LM Studio
@@ -23,7 +23,7 @@ tags:
   - 选择你的平台并下载安装包，LM Studio 目前支持 MacOS、Windows 和 Linux 平台
   - 按照提示完成安装，运行 LM Studio
 
-  <Image alt={'安装并运行 LM Studio'} inStep src={'https://github.com/user-attachments/assets/e887fa04-c553-45f1-917f-5c123ac9c68b'} />
+  <Image alt={'安装并运行 LM Studio'} inStep src={'/blog/assets73ba166f1e6d54e8c860b91f61c23355.webp'} />
 
   ### 步骤二：搜索并下载模型
 
@@ -31,14 +31,14 @@ tags:
   - 找到合适的模型（如 Deepseek R1），点击下载
   - 下载可能需要一些时间，耐心等待完成
 
-  <Image alt={'搜索并下载模型'} inStep src={'https://github.com/user-attachments/assets/f878355f-710b-452e-8606-0c75c47f29d2'} />
+  <Image alt={'搜索并下载模型'} inStep src={'/blog/assets3e2af0090f02059c687b6add6b73a90b.webp'} />
 
   ### 步骤三：部署并运行模型
 
   - 在顶部的模型选择栏中选择下载好的模型，并加载模型
   - 在弹出的面板中配置模型运行参数，详细的参数设置请参考 [LM Studio 官方文档](https://lmstudio.ai/docs)
 
-  <Image alt={'配置模型运行参数'} inStep src={'https://github.com/user-attachments/assets/dba58ea6-7df8-4971-b6d4-b24d5f486ba7'} />
+  <Image alt={'配置模型运行参数'} inStep src={'/blog/assetsbbe90aa719d182d3d2f327e4182732c5.webp'} />
 
   - 点击 `加载模型` 按钮，等待模型完成加载并运行
   - 模型加载完成后，你可以在聊天界面中使用该模型进行对话
@@ -47,18 +47,18 @@ tags:
 
   - 如果你希望通过其它程序使用该模型，需要启动一个本地 API 服务，通过 `Developer` 面板或软件菜单启动服务，LM Studio 服务默认启动在本机的 `1234` 端口
 
-  <Image alt={'启动本地服务'} inStep src={'https://github.com/user-attachments/assets/08ced88b-4968-46e8-b1da-0c04ddf5b743'} />
+  <Image alt={'启动本地服务'} inStep src={'/blog/assets5fd5fb937b9b05d50ce8659cea3210a4.webp'} />
 
   - 本地服务启动后，你还需要在服务设置中开启 `CORS（跨域资源共享）`选项，这样才能在其它程序中使用该模型
 
-  <Image alt={'开启 CORS'} inStep src={'https://github.com/user-attachments/assets/8ce79bd6-f1a3-48bb-b3d0-5271c84801c2'} />
+  <Image alt={'开启 CORS'} inStep src={'/blog/assets5f8cc99da9c3c1eaca284411833c99e3.webp'} />
 
-  ### 步骤五：在 LobeChat 中使用 LM Studio
+  ### 步骤五：在 LobeHub 中使用 LM Studio
 
-  - 访问 LobeChat 的 `应用设置` 的 `AI 服务供应商` 界面
+  - 访问 LobeHub 的 `应用设置` 的 `AI 服务供应商` 界面
   - 在供应商列表中找到 `LM Studio` 的设置项
 
-  <Image alt={'填写 LM Studio 的地址'} inStep src={'https://github.com/user-attachments/assets/143ff392-97b5-427a-97a7-f2f577915728'} />
+  <Image alt={'填写 LM Studio 的地址'} inStep src={'/blog/assetsc52da5833158f3b3143e40bf2a534ac7.webp'} />
 
   - 打开 LM Studio 服务商并填入 API 服务地址
 
@@ -67,7 +67,7 @@ tags:
   - 在下方的模型列表中添加你运行的模型
   - 为你的助手选择一个火山引擎模型即可开始对话
 
-    <Image alt={'选择 LM Studio 模型'} inStep src={'https://github.com/user-attachments/assets/bd399cef-283c-4706-bdc8-de9de662de41'} />
+    <Image alt={'选择 LM Studio 模型'} inStep src={'/blog/assets4224bf4978bea84e82b3b3aec77656f0.webp'} />
 </Steps>
 
-至此你已经可以在 LobeChat 中使用 LM Studio 运行的模型进行对话了。
+至此你已经可以在 LobeHub 中使用 LM Studio 运行的模型进行对话了。

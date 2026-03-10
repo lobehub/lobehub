@@ -5,7 +5,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentChatConfigSelectors } from '@/store/agent/selectors';
 
 import { chatHelpers } from '../../../helpers';
-import type { ChatStoreState } from '../../../initialState';
+import { type ChatStoreState } from '../../../initialState';
 import { messageMapKey } from '../../../utils/messageMapKey';
 
 /**
@@ -30,6 +30,7 @@ export const currentDisplayChatKey = (s: ChatStoreState) =>
   messageMapKey({
     agentId: s.activeAgentId,
     groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
     topicId: s.activeTopicId,
   });
 
@@ -67,7 +68,7 @@ const lastDisplayMessageId = (s: ChatStoreState) => {
 // ============= Thread Handling ========== //
 
 const getChatsWithThread = (s: ChatStoreState, messages: UIChatMessage[]) => {
-  // 如果没有 activeThreadId，则返回所有的主消息
+  // If there is no activeThreadId, return all top-level messages
   if (!s.activeThreadId) return messages.filter((m) => !m.threadId);
 
   const thread = s.threadMaps[s.activeTopicId!]?.find((t) => t.id === s.activeThreadId);
@@ -246,7 +247,7 @@ const findLastBlockId = (block: AssistantContentBlock | undefined): string | und
 
 /**
  * Recursively finds the last message ID in a message tree
- * Priority: children > tools > self
+ * Priority: children > tools > compressedGroup.lastMessageId > self
  */
 const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | undefined => {
   if (!node) return undefined;
@@ -263,7 +264,12 @@ const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | u
     return lastTool?.result_msg_id;
   }
 
-  // Priority 3: Return self ID
+  // Priority 3: For compressedGroup, return lastMessageId instead of group ID
+  if (node.role === 'compressedGroup' && 'lastMessageId' in node) {
+    return (node as any).lastMessageId;
+  }
+
+  // Priority 4: Return self ID
   return node.id;
 };
 

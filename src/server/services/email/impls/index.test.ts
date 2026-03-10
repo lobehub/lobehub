@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { EmailImplType, createEmailServiceImpl } from './index';
+import { createEmailServiceImpl,EmailImplType } from './index';
 
 vi.mock('./nodemailer', () => ({
   NodemailerImpl: vi.fn().mockImplementation(() => ({

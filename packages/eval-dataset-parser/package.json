@@ -1,0 +1,33 @@
+{
+  "name": "@lobechat/eval-dataset-parser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Parse CSV, XLSX, JSON, and JSONL files into structured dataset records",
+  "keywords": ["dataset", "parser", "csv", "xlsx", "jsonl", "lobehub"],
+  "homepage": "https://github.com/lobehub/lobehub/tree/master/packages/eval-dataset-parser",
+  "bugs": {
+    "url": "https://github.com/lobehub/lobehub/issues/new"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lobehub/lobehub.git"
+  },
+  "author": "LobeHub <i@lobehub.com>",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "papaparse": "^5.5.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.3.15",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5"
+  }
+}

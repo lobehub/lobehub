@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../errorType';
+import {
+  isFetchNetworkError,
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+  toFetchError,
+} from '../errorType';
 
 describe('errorType', () => {
   describe('PageNotFoundError', () => {
@@ -167,6 +173,43 @@ describe('errorType', () => {
       const names = [pageError.name, networkError.name, timeoutError.name];
       const uniqueNames = [...new Set(names)];
       expect(uniqueNames).toHaveLength(names.length);
+    });
+  });
+
+  describe('isFetchNetworkError', () => {
+    it('should return true for TypeError with "fetch failed" message', () => {
+      expect(isFetchNetworkError(new TypeError('fetch failed'))).toBe(true);
+    });
+
+    it('should return false for plain Error with "fetch failed" message', () => {
+      expect(isFetchNetworkError(new Error('fetch failed'))).toBe(false);
+    });
+
+    it('should return false for TypeError with different message', () => {
+      expect(isFetchNetworkError(new TypeError('something else'))).toBe(false);
+    });
+
+    it('should return false for non-error values', () => {
+      expect(isFetchNetworkError('fetch failed')).toBe(false);
+      expect(isFetchNetworkError(null)).toBe(false);
+      expect(isFetchNetworkError(undefined)).toBe(false);
+    });
+  });
+
+  describe('toFetchError', () => {
+    it('should return NetworkConnectionError for fetch network errors', () => {
+      const result = toFetchError(new TypeError('fetch failed'));
+      expect(result).toBeInstanceOf(NetworkConnectionError);
+    });
+
+    it('should return TimeoutError as-is', () => {
+      const timeout = new TimeoutError('Request timeout after 10000ms');
+      expect(toFetchError(timeout)).toBe(timeout);
+    });
+
+    it('should return unknown errors unchanged', () => {
+      const unknown = new Error('something unexpected');
+      expect(toFetchError(unknown)).toBe(unknown);
     });
   });
 

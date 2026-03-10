@@ -4,7 +4,8 @@ import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { type MouseEvent, type ReactNode, Suspense, memo, useCallback } from 'react';
+import { type MouseEvent, type ReactNode } from 'react';
+import { memo, Suspense, useCallback } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 
@@ -14,6 +15,8 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../s
 import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
 import AssistantGroupMessage from './AssistantGroup';
+import CompressedGroupMessage from './CompressedGroup';
+import GroupTasksMessage from './GroupTasks';
 import SupervisorMessage from './Supervisor';
 import TaskMessage from './Task';
 import TasksMessage from './Tasks';
@@ -41,8 +44,8 @@ export interface MessageItemProps {
   enableHistoryDivider?: boolean;
   endRender?: ReactNode;
   id: string;
-  inPortalThread?: boolean;
   index: number;
+  inPortalThread?: boolean;
   isLatestItem?: boolean;
 }
 
@@ -84,12 +87,17 @@ const MessageItem = memo<MessageItemProps>(
         if (isDesktop) {
           const { electronSystemService } = await import('@/services/electron/system');
 
+          // Get selected text for context menu features like Look Up and Search
+          const selection = window.getSelection();
+          const selectionText = selection?.toString() || '';
+
           electronSystemService.showContextMenu('chat', {
             content: message.content,
             hasError: !!message.error,
             messageId: id,
             // For assistantGroup, we treat it as assistant for context menu purposes
             role: message.role === 'assistantGroup' ? 'assistant' : message.role,
+            selectionText,
           });
 
           return;
@@ -153,8 +161,16 @@ const MessageItem = memo<MessageItemProps>(
           return <TasksMessage id={id} index={index} />;
         }
 
+        case 'groupTasks': {
+          return <GroupTasksMessage id={id} index={index} />;
+        }
+
         case 'agentCouncil': {
           return <AgentCouncilMessage id={id} index={index} />;
+        }
+
+        case 'compressedGroup': {
+          return <CompressedGroupMessage id={id} index={index} />;
         }
 
         case 'tool': {

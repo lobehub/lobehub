@@ -1,59 +1,61 @@
 ---
-title: Using Vertex AI API Key in LobeChat
-description: Learn how to configure and use Vertex AI models in LobeChat, get an API key, and start a conversation.
+title: Using Vertex AI API Key in LobeHub
+description: >-
+  Learn how to configure and use Vertex AI models in LobeHub, obtain your API
+  key, and start chatting.
 tags:
-  - LobeChat
+  - LobeHub
   - Vertex AI
   - API Key
   - Web UI
 ---
 
-# Using Vertex AI in LobeChat
+# Using Vertex AI in LobeHub
 
-<Image alt={'Using Vertex AI in LobeChat'} cover src={'https://github.com/user-attachments/assets/638dcd7c-2bff-4adb-bade-da2aaef872bf'} />
+<Image alt={'Using Vertex AI in LobeHub'} cover src={'/blog/assets95e6fe7c19ebfb9ead1c5a267aaf2a4e.webp'} />
 
-[Vertex AI](https://cloud.google.com/vertex-ai) is a fully managed, integrated AI development platform from Google Cloud, designed for building and deploying generative AI. It provides easy access to Vertex AI Studio, Agent Builder, and over 160 foundational models for AI development.
+[Vertex AI](https://cloud.google.com/vertex-ai) is a fully managed, integrated AI development platform from Google Cloud, designed for building and deploying generative AI applications. It provides easy access to Vertex AI Studio, Agent Builder, and over 160 foundation models for your AI development needs.
 
-This document will guide you on how to connect Vertex AI models in LobeChat:
+This guide will walk you through how to integrate Vertex AI models into LobeHub:
 
 <Steps>
-  ### Step 1: Prepare a Vertex AI Project
+  ### Step 1: Set Up Your Vertex AI Project
 
-  - First, visit [Google Cloud](https://console.cloud.google.com/) and complete the registration and login process.
+  - First, visit the [Google Cloud Console](https://console.cloud.google.com/) and sign in or create an account.
   - Create a new Google Cloud project or select an existing one.
-  - Go to the [Vertex AI Console](https://console.cloud.google.com/vertex-ai).
-  - Ensure that the Vertex AI API service is enabled for the project.
+  - Navigate to the [Vertex AI Console](https://console.cloud.google.com/vertex-ai).
+  - Ensure that the Vertex AI API is enabled for your project.
 
-  <Image alt={'Accessing Vertex AI'} inStep src={'https://github.com/user-attachments/assets/c4fe4430-7860-4339-b014-4d8d264a12c0'} />
+  <Image alt={'Accessing Vertex AI'} inStep src={'/blog/assets87010372bdf39890a7478a7a8cd4a9f0.webp'} />
 
-  ### Step 2: Set Up API Access Permissions
+  ### Step 2: Configure API Access
 
-  - Go to the Google Cloud [IAM Management page](https://console.cloud.google.com/iam-admin/serviceaccounts) and navigate to `Service Accounts`.
-  - Create a new service account and assign a role permission to it, such as `Vertex AI User`.
+  - Go to the [IAM & Admin Service Accounts page](https://console.cloud.google.com/iam-admin/serviceaccounts) in Google Cloud and navigate to the "Service Accounts" section.
+  - Create a new service account and assign it a role such as Vertex AI User.
 
-  <Image alt={'Creating a Service Account'} inStep src={'https://github.com/user-attachments/assets/692e7c67-f173-45da-86ef-5c69e17988e4'} />
+  <Image alt={'Creating a Service Account'} inStep src={'/blog/assets6b01801b405c366fa4ebe683a77f289d.webp'} />
 
-  - On the service account management page, find the service account you just created, click `Keys`, and create a new JSON format key.
-  - After successful creation, the key file will be automatically saved to your computer in JSON format. Please keep it safe.
+  - In the service account management page, find the newly created account, click on "Keys", and generate a new key in JSON format.
+  - Once created, the key file will be automatically downloaded to your computer. Be sure to store it securely.
 
-  <Image alt={'Creating a Key'} inStep src={'https://github.com/user-attachments/assets/1fb5df18-5261-483e-a445-96f52f80dd20'} />
+  <Image alt={'Creating a Key'} inStep src={'/blog/assets69146738e31a47ac6425070208ebd906.webp'} />
 
-  ### Step 3: Configure Vertex AI in LobeChat
+  ### Step 3: Configure Vertex AI in LobeHub
 
-  - Visit the `App Settings` and then the `AI Service Provider` interface in LobeChat.
-  - Find the settings item for `Vertex AI` in the list of providers.
+  - Open LobeHub and go to the App Settings > AI Service Providers section.
+  - Find the Vertex AI option in the list of providers.
 
-  <Image alt={'Entering Vertex AI API Key'} inStep src={'https://github.com/user-attachments/assets/5d672e8b-566f-4f82-bdce-947168726bc0'} />
+  <Image alt={'Entering Vertex AI API Key'} inStep src={'/blog/assetsd89998edb6b2dc8311d8d86664d5cd4d.webp'} />
 
-  - Open the Vertex AI service provider settings.
-  - Fill the entire content of the JSON format key you just obtained into the API Key field.
-  - Select a Vertex AI model for your assistant to start the conversation.
+  - Open the Vertex AI provider settings.
+  - Paste the entire contents of the JSON key file into the API Key field.
+  - Choose a Vertex AI model for your assistant to start chatting.
 
-  <Image alt={'Selecting a Vertex AI Model'} inStep src={'https://github.com/user-attachments/assets/1a7e9600-cd0f-4c82-9d32-4e61bbb351cc'} />
+  <Image alt={'Selecting a Vertex AI Model'} inStep src={'/blog/assets5997a6461e20103f5bc9d6b78b872833.webp'} />
 
   <Callout type={'warning'}>
-    You may need to pay the API service provider during usage. Please refer to Google Cloud's relevant fee policies.
+    You may incur charges when using the API services. Please refer to Google Cloud’s pricing documentation for more details.
   </Callout>
 </Steps>
 
-Now you can use the models provided by Vertex AI for conversations in LobeChat.
+You're all set! You can now start using Vertex AI models in LobeHub for your conversations.

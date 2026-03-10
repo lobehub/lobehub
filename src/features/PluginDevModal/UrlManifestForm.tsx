@@ -1,7 +1,8 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { ActionIcon, Flexbox, FormItem, Input , Checkbox } from '@lobehub/ui';
-import { Form, type FormInstance } from 'antd';
+import { ActionIcon, Checkbox, Flexbox, FormItem, Input } from '@lobehub/ui';
+import { type FormInstance } from 'antd';
+import { Form } from 'antd';
 import { FileCode, RotateCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,12 +23,12 @@ const ProxyChecker = memo<ProxyCheckerProps>(({ value, onChange }) => {
 
   return (
     <Flexbox
-      gap={8}
       horizontal
+      gap={8}
+      style={{ cursor: 'pointer' }}
       onClick={() => {
         onChange?.(!value);
       }}
-      style={{ cursor: 'pointer' }}
     >
       <Checkbox checked={value} /> {t('dev.customParams.useProxy.label')}
     </Flexbox>
@@ -47,6 +48,11 @@ const UrlManifestForm = memo<{ form: FormInstance; isEditMode: boolean }>(
     return (
       <Form form={form} layout={'vertical'}>
         <FormItem
+          hasFeedback
+          required
+          label={t('dev.meta.manifest.label')}
+          name={urlKey}
+          style={{ marginBottom: 0 }}
           desc={
             <Flexbox horizontal justify={'space-between'} style={{ marginTop: 8 }}>
               {t('dev.meta.manifest.desc', { appName: BRANDING_NAME })}
@@ -61,10 +67,6 @@ const UrlManifestForm = memo<{ form: FormInstance; isEditMode: boolean }>(
               )}
             </Flexbox>
           }
-          hasFeedback
-          label={t('dev.meta.manifest.label')}
-          name={urlKey}
-          required
           rules={[
             { required: true },
             {
@@ -102,30 +104,29 @@ const UrlManifestForm = memo<{ form: FormInstance; isEditMode: boolean }>(
                   },
                 },
           ]}
-          style={{ marginBottom: 0 }}
         >
           <Input
             placeholder={'http://localhost:3400/manifest-dev.json'}
             suffix={
               <ActionIcon
                 icon={RotateCwIcon}
+                size={'small'}
+                title={t('dev.meta.manifest.refresh')}
                 onClick={(e) => {
                   e.stopPropagation();
                   form.validateFields([urlKey, 'identifier']);
                 }}
-                size={'small'}
-                title={t('dev.meta.manifest.refresh')}
               />
             }
           />
         </FormItem>
 
-        <FormItem name={proxyKey} noStyle>
+        <FormItem noStyle name={proxyKey}>
           <ProxyChecker />
         </FormItem>
 
-        <FormItem name={'identifier'} noStyle />
-        <FormItem name={'manifest'} noStyle />
+        <FormItem noStyle name={'identifier'} />
+        <FormItem noStyle name={'manifest'} />
       </Form>
     );
   },

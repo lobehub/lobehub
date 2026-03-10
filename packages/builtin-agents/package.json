@@ -6,6 +6,8 @@
   "dependencies": {
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
+    "@lobechat/business-const": "workspace:*",
+    "@lobechat/const": "workspace:*",
     "@lobechat/builtin-tool-group-management": "workspace:*",
     "@lobechat/builtin-tool-gtd": "workspace:*",
     "@lobechat/builtin-tool-notebook": "workspace:*"

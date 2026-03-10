@@ -3,12 +3,12 @@
 import { OFFICIAL_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
-import { getDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
 import { isDesktop } from '@/const/version';
+import { getDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
-import type { UserInitializationState } from '@/types/user';
+import { type UserInitializationState } from '@/types/user';
 
 const redirectIfNotOn = (currentPath: string, path: string) => {
   if (!currentPath.startsWith(path)) {
@@ -20,53 +20,46 @@ export const useDesktopUserStateRedirect = () => {
   const dataSyncConfig = useElectronStore((s) => s.dataSyncConfig);
   const logout = useUserStore((s) => s.logout);
 
-  const handleDesktopWaitlist = useCallback(async () => {
-    const waitlistBaseUrl = dataSyncConfig.remoteServerUrl || OFFICIAL_URL;
-    let waitlistUrl = waitlistBaseUrl;
-    try {
-      waitlistUrl = new URL('/waitlist', waitlistBaseUrl).toString();
-    } catch {
-      // Ignore: keep fallback URL for external open attempt.
-    }
-
-    try {
-      const { electronSystemService } = await import('@/services/electron/system');
-      await electronSystemService.openExternalLink(waitlistUrl);
-    } catch {
-      // Ignore: fallback to logout flow even if IPC is unavailable.
-    }
-
-    try {
-      const { remoteServerService } = await import('@/services/electron/remoteServer');
-      await remoteServerService.clearRemoteServerConfig();
-    } catch {
-      // Ignore: fallback to logout flow even if IPC is unavailable.
-    }
-
-    await logout();
-  }, [dataSyncConfig.remoteServerUrl, logout]);
-
-  return useCallback(
-    (state: UserInitializationState) => {
-      if (state.isInWaitList === true) {
-        void handleDesktopWaitlist();
-        return;
+  const openExternalAndLogout = useCallback(
+    async (path: string) => {
+      const baseUrl = dataSyncConfig.remoteServerUrl || OFFICIAL_URL;
+      let targetUrl = baseUrl;
+      try {
+        targetUrl = new URL(path, baseUrl).toString();
+      } catch {
+        // Ignore: keep fallback URL for external open attempt.
       }
 
-      if (!getDesktopOnboardingCompleted()) return;
-      // Desktop onboarding is handled by desktop-only flow.
+      try {
+        const { electronSystemService } = await import('@/services/electron/system');
+        await electronSystemService.openExternalLink(targetUrl);
+      } catch {
+        // Ignore: fallback to logout flow even if IPC is unavailable.
+      }
+
+      try {
+        const { remoteServerService } = await import('@/services/electron/remoteServer');
+        await remoteServerService.clearRemoteServerConfig();
+      } catch {
+        // Ignore: fallback to logout flow even if IPC is unavailable.
+      }
+
+      await logout();
     },
-    [handleDesktopWaitlist],
+    [dataSyncConfig.remoteServerUrl, logout],
   );
+
+  return useCallback(() => {
+    if (!getDesktopOnboardingCompleted()) {
+      redirectIfNotOn(window.location.pathname, '/desktop-onboarding');
+      return;
+    }
+  }, [openExternalAndLogout]);
 };
 
 export const useWebUserStateRedirect = () =>
   useCallback((state: UserInitializationState) => {
-    const pathname = window.location.pathname;
-    if (state.isInWaitList === true) {
-      redirectIfNotOn(pathname, '/waitlist');
-      return;
-    }
+    const { pathname } = window.location;
 
     if (!onboardingSelectors.needsOnboarding(state)) return;
 

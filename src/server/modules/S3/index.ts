@@ -7,11 +7,11 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import mime from 'mime';
 import { z } from 'zod';
 
 import { fileEnv } from '@/envs/file';
 import { YEAR } from '@/utils/units';
-import { inferContentTypeFromImageUrl } from '@/utils/url';
 
 export const fileSchema = z.object({
   Key: z.string(),
@@ -52,10 +52,10 @@ export class S3 {
 
     this.client = new S3Client({
       credentials: {
-        accessKeyId: accessKeyId,
-        secretAccessKey: secretAccessKey,
+        accessKeyId,
+        secretAccessKey,
       },
-      endpoint: endpoint,
+      endpoint,
       forcePathStyle: options?.forcePathStyle,
       region: options?.region || DEFAULT_S3_REGION,
       // refs: https://github.com/lobehub/lobe-chat/pull/5479
@@ -153,12 +153,20 @@ export class S3 {
     });
   }
 
-  // Add a new method for uploading binary content
-  public async uploadBuffer(path: string, buffer: Buffer, contentType?: string) {
+  /**
+   * Upload buffer with specified content type
+   */
+  public async uploadBuffer(
+    path: string,
+    buffer: Buffer,
+    contentType?: string,
+    cacheControl?: string,
+  ) {
     const command = new PutObjectCommand({
       ACL: this.setAcl ? 'public-read' : undefined,
       Body: buffer,
       Bucket: this.bucket,
+      CacheControl: cacheControl,
       ContentType: contentType,
       Key: path,
     });
@@ -177,13 +185,17 @@ export class S3 {
     return this.client.send(command);
   }
 
+  /**
+   * Upload media file (images only) with long-term cache
+   */
   public async uploadMedia(key: string, buffer: Buffer) {
+    const contentType = mime.getType(key) || 'application/octet-stream';
     const command = new PutObjectCommand({
       ACL: this.setAcl ? 'public-read' : undefined,
       Body: buffer,
       Bucket: this.bucket,
       CacheControl: `public, max-age=${YEAR}`,
-      ContentType: inferContentTypeFromImageUrl(key)!,
+      ContentType: contentType,
       Key: key,
     });
 

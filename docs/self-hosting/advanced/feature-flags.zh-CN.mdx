@@ -1,8 +1,8 @@
 ---
-title: LobeChat 特性标志环境变量配置指南
-description: 了解如何使用环境变量自定义 LobeChat 的特性标志，包括控制否启用某个功能、或者根据需要对特定用户群体或环境启用或禁用功能。
+title: LobeHub 特性标志环境变量配置指南
+description: 了解如何使用环境变量自定义 LobeHub 的特性标志，包括控制否启用某个功能、或者根据需要对特定用户群体或环境启用或禁用功能。
 tags:
-  - LobeChat
+  - LobeHub
   - 环境变量
   - 配置指南
   - 特征标志
@@ -10,12 +10,12 @@ tags:
 
 # 特性标志
 
-除了基础的环境变量配置外，LobeChat 还提供了一些特性标志（Feature Flags），用于控制是否全局启用某个功能，或者根据需要对特定用户群体或环境启用或禁用功能。
+除了基础的环境变量配置外，LobeHub 还提供了一些特性标志（Feature Flags），用于控制是否全局启用某个功能，或者根据需要对特定用户群体或环境启用或禁用功能。
 
 ## 特性标志环境变量 `FEATURE_FLAGS`
 
 - 类型：可选
-- 描述：用于控制 LobeChat 的特性功能，支持多个功能标志，使用 `+` 增加一个功能，使用 `-` 来关闭一个功能，多个功能标志之间使用英文逗号 `,` 隔开，最外层建议添加引号 `"` 以避免解析错误。
+- 描述：用于控制 LobeHub 的特性功能，支持多个功能标志，使用 `+` 增加一个功能，使用 `-` 来关闭一个功能，多个功能标志之间使用英文逗号 `,` 隔开，最外层建议添加引号 `"` 以避免解析错误。
 - 默认值：`-`
 - 示例：`"-welcome_suggest"`
 
@@ -53,4 +53,27 @@ tags:
 | `commercial_hide_github`  | 隐藏设置页面底部的 GitHub 相关链接（需要商业授权）。       | 关闭  |
 | `commercial_hide_docs`    | 隐藏文档和帮助菜单，包括更新日志、文档和反馈（需要商业授权）。      | 关闭  |
 
-你可以随时检查 [featureFlags](https://github.com/lobehub/lobe-chat/blob/main/src/config/featureFlags/schema.ts) 以获取最新的特性标志列表。
+你可以随时检查 [featureFlags](https://github.com/lobehub/lobehub/blob/main/src/config/featureFlags/schema.ts) 以获取最新的特性标志列表。
+
+## 独立功能启用 / 禁用变量
+
+除了上述 `FEATURE_FLAGS` 体系外，LobeHub 还提供了一批独立的环境变量，用于控制依赖外部基础设施的特定功能。这些是独立变量（不属于 `FEATURE_FLAGS`）：
+
+| 环境变量                     | 默认值 | 说明                                           | 依赖                 |
+| ------------------------ | --- | -------------------------------------------- | ------------------ |
+| `ENABLED_ARTIFACTS`      | `1` | 启用 Artifacts 面板（Claude 风格的代码 / SVG/React 预览） | —                  |
+| `ENABLED_MCP`            | `1` | 启用模型上下文协议（MCP）插件系统                           | —                  |
+| `ENABLED_UPLOAD`         | `1` | 启用文件上传功能                                     | S3 兼容存储            |
+| `ENABLED_KNOWLEDGE_BASE` | `1` | 启用知识库和 RAG 功能                                | S3 存储 + PostgreSQL |
+| `ENABLED_WEB_SEARCH`     | `1` | 启用网络搜索集成（在线搜索）                               | Searxng 或搜索插件      |
+
+设置为 `0` 可禁用对应功能。例如，若未配置 S3 存储，可禁用文件上传：
+
+```bash
+ENABLED_UPLOAD=0
+ENABLED_KNOWLEDGE_BASE=0
+```
+
+<Callout type={'info'}>
+  如果未配置 S3 兼容存储，应将 `ENABLED_UPLOAD` 和 `ENABLED_KNOWLEDGE_BASE` 设为禁用状态，否则文件相关操作将会失败。
+</Callout>

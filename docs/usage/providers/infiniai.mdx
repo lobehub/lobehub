@@ -1,29 +1,36 @@
 ---
-title: Using Infini-AI in LobeChat
-description: Learn how to configure and utilize Infini-AI's model services in LobeChat.
+title: Using Infini-AI in LobeHub
+description: >-
+  Learn how to configure and use Infini-AI's API Key in LobeHub to enable
+  AI-powered conversations.
 tags:
-  - LobeChat
+  - LobeHub
   - Infini-AI
   - API Key
-  - LLM Deployment
+  - Large Model Deployment
 ---
 
-# Using Infini-AI in LobeChat
+# Using Infini-AI in LobeHub
 
-[Infini-AI](https://cloud.infini-ai.com/) is a large model service platform optimized for multiple chip architectures, providing efficient and unified AGI infrastructure solutions.
+[Infini-AI](https://cloud.infini-ai.com/) is a large model service platform optimized for diverse chip architectures, offering a high-performance and unified AGI infrastructure solution.
 
-This guide will help you quickly integrate Infini-AI's AI capabilities into LobeChat.
+This guide will walk you through the steps to quickly integrate Infini-AI's capabilities into LobeHub.
+
+<Callout type="info">
+  Infini-AI enforces a whitelist mechanism for image URLs. Currently, image links from services like Alibaba Cloud OSS and AWS S3 are supported.\
+  If you encounter a 400 error when using image-based conversations, try [uploading images using base64 encoding](/docs/self-hosting/environment-variables/s3#llm-vision-image-use-base-64).
+</Callout>
 
 <Steps>
-  ### Step 1: Obtain Infini-AI API Key
+  ### Step 1: Obtain an Infini-AI API Key
 
   - Log in to the [Large Model Service Platform](https://cloud.infini-ai.com/genstudio/model)
-  - Select "API KEY Management" in the left navigation bar
-  - In the newly opened page, click the "Create API KEY" button, enter a name, and click "Create"
+  - In the left-hand navigation menu, select "API KEY Management"
+  - On the newly opened page, click the "Create API KEY" button, enter a name, and click "Create"
 
-  ### Step 2: Configure LobeChat Model Service
+  ### Step 2: Configure the Model Service in LobeHub
 
-  - Open LobeChat and go to the "Settings" interface
-  - Select "Infini-AI" in the "Language Model" module
-  - Paste the API key you obtained
+  - Open LobeHub and go to the "Settings" page
+  - In the "Language Model" section, select "Infini-AI"
+  - Paste the API Key you obtained earlier
 </Steps>

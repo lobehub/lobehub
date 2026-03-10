@@ -1068,11 +1068,11 @@ describe('LobeAi360AI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: '360gpt-pro',
-        temperature: 2.0,
+        temperature: 2,
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.temperature).toBe(2.0);
+      expect(calledPayload.temperature).toBe(2);
     });
 
     it('should handle top_p of 0', async () => {

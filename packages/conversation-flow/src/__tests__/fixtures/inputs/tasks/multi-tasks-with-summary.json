@@ -1,0 +1,234 @@
+[
+  {
+    "id": "msg-user-1",
+    "role": "user",
+    "content": "Process these files in 10 parallel tasks and give me a summary.",
+    "parentId": null,
+    "createdAt": 1735526559382,
+    "updatedAt": 1735526559382
+  },
+  {
+    "id": "msg-assistant-1",
+    "role": "assistant",
+    "content": "I'll process these files in 10 parallel tasks.",
+    "parentId": "msg-user-1",
+    "createdAt": 1735526560163,
+    "updatedAt": 1735526585550,
+    "model": "gpt-4",
+    "provider": "openai",
+    "tools": [
+      {
+        "id": "call_exec_tasks_1",
+        "type": "builtin",
+        "apiName": "execTasks",
+        "arguments": "{\"tasks\": [{\"description\": \"Task 1\"}, {\"description\": \"Task 2\"}, {\"description\": \"Task 3\"}, {\"description\": \"Task 4\"}, {\"description\": \"Task 5\"}, {\"description\": \"Task 6\"}, {\"description\": \"Task 7\"}, {\"description\": \"Task 8\"}, {\"description\": \"Task 9\"}, {\"description\": \"Task 10\"}]}",
+        "identifier": "lobe-gtd"
+      }
+    ]
+  },
+  {
+    "id": "msg-tool-1",
+    "role": "tool",
+    "content": "Triggered 10 async tasks",
+    "parentId": "msg-assistant-1",
+    "tool_call_id": "call_exec_tasks_1",
+    "createdAt": 1735526588116,
+    "updatedAt": 1735526591337,
+    "pluginState": {
+      "type": "execTasks",
+      "tasks": [
+        { "description": "Task 1" },
+        { "description": "Task 2" },
+        { "description": "Task 3" },
+        { "description": "Task 4" },
+        { "description": "Task 5" },
+        { "description": "Task 6" },
+        { "description": "Task 7" },
+        { "description": "Task 8" },
+        { "description": "Task 9" },
+        { "description": "Task 10" }
+      ],
+      "parentMessageId": "msg-tool-1"
+    }
+  },
+  {
+    "id": "msg-task-1",
+    "role": "task",
+    "content": "Task 1 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526594643,
+    "updatedAt": 1735526756262,
+    "taskDetail": {
+      "duration": 120000,
+      "status": "completed",
+      "threadId": "thd_task_1",
+      "title": "Task 1",
+      "totalCost": 0.015,
+      "totalMessages": 15,
+      "totalTokens": 100000
+    }
+  },
+  {
+    "id": "msg-task-2",
+    "role": "task",
+    "content": "Task 2 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526595000,
+    "updatedAt": 1735526757000,
+    "taskDetail": {
+      "duration": 121000,
+      "status": "completed",
+      "threadId": "thd_task_2",
+      "title": "Task 2",
+      "totalCost": 0.016,
+      "totalMessages": 16,
+      "totalTokens": 101000
+    }
+  },
+  {
+    "id": "msg-task-3",
+    "role": "task",
+    "content": "Task 3 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526596000,
+    "updatedAt": 1735526758000,
+    "taskDetail": {
+      "duration": 122000,
+      "status": "completed",
+      "threadId": "thd_task_3",
+      "title": "Task 3",
+      "totalCost": 0.017,
+      "totalMessages": 17,
+      "totalTokens": 102000
+    }
+  },
+  {
+    "id": "msg-task-4",
+    "role": "task",
+    "content": "Task 4 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526597000,
+    "updatedAt": 1735526759000,
+    "taskDetail": {
+      "duration": 123000,
+      "status": "completed",
+      "threadId": "thd_task_4",
+      "title": "Task 4",
+      "totalCost": 0.018,
+      "totalMessages": 18,
+      "totalTokens": 103000
+    }
+  },
+  {
+    "id": "msg-task-5",
+    "role": "task",
+    "content": "Task 5 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526598000,
+    "updatedAt": 1735526760000,
+    "taskDetail": {
+      "duration": 124000,
+      "status": "completed",
+      "threadId": "thd_task_5",
+      "title": "Task 5",
+      "totalCost": 0.019,
+      "totalMessages": 19,
+      "totalTokens": 104000
+    }
+  },
+  {
+    "id": "msg-task-6",
+    "role": "task",
+    "content": "Task 6 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526599000,
+    "updatedAt": 1735526761000,
+    "taskDetail": {
+      "duration": 125000,
+      "status": "completed",
+      "threadId": "thd_task_6",
+      "title": "Task 6",
+      "totalCost": 0.02,
+      "totalMessages": 20,
+      "totalTokens": 105000
+    }
+  },
+  {
+    "id": "msg-task-7",
+    "role": "task",
+    "content": "Task 7 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526600000,
+    "updatedAt": 1735526762000,
+    "taskDetail": {
+      "duration": 126000,
+      "status": "completed",
+      "threadId": "thd_task_7",
+      "title": "Task 7",
+      "totalCost": 0.021,
+      "totalMessages": 21,
+      "totalTokens": 106000
+    }
+  },
+  {
+    "id": "msg-task-8",
+    "role": "task",
+    "content": "Task 8 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526601000,
+    "updatedAt": 1735526763000,
+    "taskDetail": {
+      "duration": 127000,
+      "status": "completed",
+      "threadId": "thd_task_8",
+      "title": "Task 8",
+      "totalCost": 0.022,
+      "totalMessages": 22,
+      "totalTokens": 107000
+    }
+  },
+  {
+    "id": "msg-task-9",
+    "role": "task",
+    "content": "Task 9 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526602000,
+    "updatedAt": 1735526764000,
+    "taskDetail": {
+      "duration": 128000,
+      "status": "completed",
+      "threadId": "thd_task_9",
+      "title": "Task 9",
+      "totalCost": 0.023,
+      "totalMessages": 23,
+      "totalTokens": 108000
+    }
+  },
+  {
+    "id": "msg-task-10",
+    "role": "task",
+    "content": "Task 10 completed with results...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526603000,
+    "updatedAt": 1735526765000,
+    "taskDetail": {
+      "duration": 129000,
+      "status": "completed",
+      "threadId": "thd_task_10",
+      "title": "Task 10",
+      "totalCost": 0.024,
+      "totalMessages": 24,
+      "totalTokens": 109000
+    }
+  },
+  {
+    "id": "msg-assistant-summary",
+    "role": "assistant",
+    "content": "All 10 tasks completed successfully! Here's the comprehensive summary...",
+    "parentId": "msg-task-10",
+    "createdAt": 1735526810000,
+    "updatedAt": 1735526820000,
+    "model": "gpt-4",
+    "provider": "openai"
+  }
+]

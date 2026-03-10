@@ -1,7 +1,102 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 // https://cloud.tencent.com/document/product/1729/104753
 const hunyuanChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'Release Features: The model base has been upgraded from TurboS to **Hunyuan 2.0**, resulting in comprehensive capability improvements. It significantly enhances the model’s ability to follow complex instructions, understand multi-turn and long-form text, handle code, operate as an agent, and perform reasoning tasks.',
+    displayName: 'Tencent HY 2.0 Think',
+    enabled: true,
+    id: 'hunyuan-2.0-thinking-20251109',
+    maxOutput: 64_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 3.975,
+              '[0.032, infinity]': 5.3,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 15.9,
+              '[0.032, infinity]': 21.2,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2025-11-09',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      search: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'Release Features: The model base has been upgraded from TurboS to **Hunyuan 2.0**, resulting in comprehensive capability improvements. It significantly enhances instruction-following, multi-turn and long-form text understanding, literary creation, knowledge accuracy, coding, and reasoning abilities.',
+    displayName: 'Tencent HY 2.0 Instruct',
+    enabled: true,
+    id: 'hunyuan-2.0-instruct-20251111',
+    maxOutput: 16_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 3.18,
+              '[0.032, infinity]': 4.505,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 7.95,
+              '[0.032, infinity]': 11.13,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2025-11-11',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       reasoning: true,
@@ -14,6 +109,13 @@ const hunyuanChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'hunyuan-a13b',
     maxOutput: 32_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
     releasedAt: '2025-06-25',
     settings: {
       extendParams: ['enableReasoning'],
@@ -30,7 +132,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
     description:
       'Significantly improves the slow-thinking model on hard math, complex reasoning, difficult coding, instruction following, and creative writing quality.',
     displayName: 'Hunyuan T1',
-    enabled: true,
     id: 'hunyuan-t1-latest',
     maxOutput: 64_000,
     pricing: {
@@ -214,7 +315,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
     description:
       'Hunyuan-large has ~389B total parameters and ~52B activated, the largest and strongest open MoE model in a Transformer architecture.',
     displayName: 'Hunyuan Large',
-    enabled: true,
     id: 'hunyuan-large',
     maxOutput: 4000,
     pricing: {
@@ -334,7 +434,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
     description:
       'The latest Hunyuan TurboS flagship model with stronger reasoning and a better overall experience.',
     displayName: 'Hunyuan TurboS',
-    enabled: true,
     id: 'hunyuan-turbos-latest',
     maxOutput: 16_000,
     pricing: {
@@ -352,108 +451,12 @@ const hunyuanChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 44_000,
-    description:
-      'Upgraded pretraining data quality and post-training strategy, improving agents, English/low-resource languages, instruction following, code, and STEM capabilities.',
-    displayName: 'Hunyuan TurboS 20250926',
-    id: 'hunyuan-turbos-20250926',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-26',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 44_000,
-    description:
-      'Upgraded pretraining base with improved writing and reading comprehension, significant gains in code and STEM, and better complex instruction following.',
-    displayName: 'Hunyuan TurboS 20250604',
-    id: 'hunyuan-turbos-20250604',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-06-04',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'Upgraded pretraining base to improve instruction understanding and following; alignment boosts math, code, logic, and science; improves writing quality, comprehension, translation accuracy, and knowledge QA; strengthens agent abilities, especially multi-turn understanding.',
-    displayName: 'Hunyuan TurboS 20250416',
-    id: 'hunyuan-turbos-20250416',
-    maxOutput: 8000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-04-16',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'Unifies math solution style and strengthens multi-turn math QA. Writing style is refined to reduce AI-like tone and add polish.',
-    displayName: 'Hunyuan TurboS 20250313',
-    id: 'hunyuan-turbos-20250313',
-    maxOutput: 8000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-03-13',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       vision: true,
     },
     contextWindowTokens: 24_000,
     description:
-      '基于文本 TurboS 基座生产的图生文快思考模型，相比上一版本在图像基础识别、图像分析推理等维度都有明显的效果提升。',
-    displayName: '混元图生文',
+      'A fast-thinking image-to-text model built on the TurboS text base, showing notable improvements over the previous version in fundamental image recognition and image analysis reasoning.',
+    displayName: 'Hunyuan Vision 1.5 Instruct',
     id: 'hunyuan-vision-1.5-instruct',
     maxOutput: 16_000,
     pricing: {
@@ -464,64 +467,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-12-17',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 36_000,
-    description:
-      'Latest 7B multimodal model with a 32K context window, supporting Chinese/English multimodal chat, object recognition, document table understanding, and multimodal math, outperforming 7B peers on multiple benchmarks.',
-    displayName: 'Hunyuan Lite Vision',
-    id: 'hunyuan-lite-vision',
-    maxOutput: 4000,
-    releasedAt: '2024-12-12',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 8000,
-    description: 'Latest multimodal model with multilingual responses and balanced Chinese/English ability.',
-    displayName: 'Hunyuan Standard Vision',
-    id: 'hunyuan-standard-vision',
-    maxOutput: 2000,
-    releasedAt: '2024-12-31',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 8000,
-    description:
-      'Next-generation vision-language flagship using a new MoE architecture, with broad improvements in recognition, content creation, knowledge QA, and analytical reasoning.',
-    displayName: 'Hunyuan Turbo Vision',
-    id: 'hunyuan-turbo-vision',
-    maxOutput: 2000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 80, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 80, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-11-26',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 16_000,
-    description:
-      'A vision-language model trained from Hunyuan Large for image-text understanding. Supports multi-image + text input at any resolution and improves multilingual visual understanding.',
-    displayName: 'Hunyuan Large Vision',
-    id: 'hunyuan-large-vision',
-    maxOutput: 8000,
-    releasedAt: '2025-05-26',
     type: 'chat',
   },
   {
@@ -545,179 +490,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
     releasedAt: '2025-09-16',
     type: 'chat',
   },
-  {
-    abilities: {
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 40_000,
-    description:
-      'Latest t1-vision multimodal deep reasoning model with native long chain-of-thought, significantly improved over the previous default version.',
-    displayName: 'Hunyuan T1 Vision 20250619',
-    id: 'hunyuan-t1-vision-20250619',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-06-19',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'Latest TurboS vision-language flagship with major gains on image-text tasks such as entity recognition, knowledge QA, copywriting, and photo-based problem solving.',
-    displayName: 'Hunyuan TurboS Vision 20250619',
-    id: 'hunyuan-turbos-vision-20250619',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-06-19',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'A next-gen vision-language flagship based on the latest TurboS, focused on image-text understanding tasks like entity recognition, knowledge QA, copywriting, and photo-based problem solving.',
-    displayName: 'Hunyuan TurboS Vision',
-    id: 'hunyuan-turbos-vision',
-    maxOutput: 24_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-05-23',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_000,
-    description: 'Latest multimodal model supporting image + text input to generate text.',
-    displayName: 'Hunyuan Vision',
-    id: 'hunyuan-vision',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-01-03',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8000,
-    description:
-      'Latest code generation model trained with 200B high-quality code and six months of SFT; context expanded to 8K. It ranks top in automated benchmarks for five languages and in human evaluations across ten criteria.',
-    displayName: 'Hunyuan Code',
-    id: 'hunyuan-code',
-    maxOutput: 4000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-11-12',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'Latest MoE FunctionCall model trained with high-quality function-call data, featuring a 32K context window and leading benchmark results across dimensions.',
-    displayName: 'Hunyuan FunctionCall',
-    id: 'hunyuan-functioncall',
-    maxOutput: 4000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-04-22',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_000,
-    description:
-      'Latest roleplay model, officially fine-tuned on roleplay datasets, delivering stronger baseline performance for roleplay scenarios.',
-    displayName: 'Hunyuan Role',
-    id: 'hunyuan-role',
-    maxOutput: 4000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-07-04',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_000,
-    description:
-      'Latest roleplay model, officially fine-tuned on roleplay datasets, delivering stronger baseline performance for roleplay scenarios.',
-    displayName: 'Hunyuan TurboS Role Plus',
-    id: 'hunyuan-turbos-role-plus',
-    maxOutput: 4000,
-    type: 'chat',
-  },
-  // {
-  //   contextWindowTokens: 8000,
-  //   description:
-  //     'The Hunyuan translation model supports conversational translation; it supports mutual translation among 15 languages, including Chinese, English, Japanese, French, Portuguese, Spanish, Turkish, Russian, Arabic, Korean, Italian, German, Vietnamese, Malay, and Indonesian.',
-  //   displayName: 'Hunyuan Translation Lite',
-  //   id: 'hunyuan-translation-lite',
-  //   maxOutput: 4000,
-  //   pricing: {
-  //     currency: 'CNY',
-  //     input: 1,
-  //     output: 3,
-  //   },
-  //   releasedAt: '2024-11-25',
-  //   type: 'chat',
-  // },
-  // {
-  //   contextWindowTokens: 8000,
-  //   description:
-  //     'Supports mutual translation among 15 languages including Chinese, English, Japanese, French, Portuguese, Spanish, Turkish, Russian, Arabic, Korean, Italian, German, Vietnamese, Malay, and Indonesian. Based on automated COMET evaluation across multi-scenario translation benchmarks, it outperforms similarly sized models on translation between Chinese and other common languages.',
-  //   displayName: 'Hunyuan Translation',
-  //   id: 'hunyuan-translation',
-  //   maxOutput: 4000,
-  //   pricing: {
-  //     currency: 'CNY',
-  //     input: 15,
-  //     output: 45,
-  //   },
-  //   releasedAt: '2024-10-25',
-  //   type: 'chat',
-  // },
 ];
 
 export const allModels = [...hunyuanChatModels];

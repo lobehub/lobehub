@@ -1,11 +1,11 @@
 import { ModelProvider } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload } from '../../types';
 
 export const LobeTaichuAI = createOpenAICompatibleRuntime({
-  baseURL: 'https://ai-maas.wair.ac.cn/maas/v1',
+  baseURL: 'https://cloud.zidongtaichu.com/maas/v1',
   chatCompletion: {
     handlePayload: (payload: ChatStreamPayload) => {
       const { temperature, top_p, ...rest } = payload;

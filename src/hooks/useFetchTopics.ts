@@ -29,7 +29,7 @@ export const useFetchTopics = (options?: { excludeTriggers?: string[] }) => {
   });
 
   return {
-    // isRevalidating: 有缓存数据，后台正在更新
+    // isRevalidating: has cached data, updating in background
     isRevalidating: isValidating && !!data,
   };
 };

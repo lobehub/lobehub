@@ -1,4 +1,7 @@
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '../types/error';
+import type { ILobeAgentRuntimeErrorType } from '../types/error';
+import { AgentRuntimeErrorType } from '../types/error';
+import { isExceededContextWindowError } from './isExceededContextWindowError';
+import { isQuotaLimitError } from './isQuotaLimitError';
 
 export interface ParsedError {
   error: any;
@@ -43,7 +46,7 @@ export function extractStatusCodeFromError(message: string): {
   // We need to find a bracket that contains a status code (3-digit number followed by space and text)
 
   let searchStart = 0;
-  // eslint-disable-next-line no-constant-condition
+
   while (true) {
     const openBracketIndex = message.indexOf('[', searchStart);
     if (openBracketIndex === -1) {
@@ -72,13 +75,13 @@ export function extractStatusCodeFromError(message: string): {
         // Create JSON containing status code and message
         const resultJson = {
           message: messageContent,
-          statusCode: statusCode,
+          statusCode,
           statusCodeText: `[${statusCode} ${statusText}]`,
         };
 
         return {
           errorDetails: resultJson,
-          prefix: prefix,
+          prefix,
         };
       }
     }
@@ -107,6 +110,14 @@ export function parseGoogleErrorMessage(message: string): ParsedError {
   const lowerMessage = message.toLowerCase();
   if (lowerMessage.includes('no image generated') || lowerMessage.includes('no image data')) {
     return { error: { message }, errorType: AgentRuntimeErrorType.ProviderNoImageGenerated };
+  }
+
+  if (isExceededContextWindowError(message)) {
+    return { error: { message }, errorType: AgentRuntimeErrorType.ExceededContextWindow };
+  }
+
+  if (isQuotaLimitError(message)) {
+    return { error: { message }, errorType: AgentRuntimeErrorType.QuotaLimitReached };
   }
 
   // Unified error type determination function

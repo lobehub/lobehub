@@ -1,11 +1,11 @@
 import type { TracePayload } from '@lobechat/types';
-import { ClientOptions } from 'openai';
+import type { ClientOptions } from 'openai';
 
-import { LobeBedrockAIParams } from '../providers/bedrock';
-import { LobeCloudflareParams } from '../providers/cloudflare';
+import type { LobeBedrockAIParams } from '../providers/bedrock';
+import type { LobeCloudflareParams } from '../providers/cloudflare';
 import { LobeOpenAI } from '../providers/openai';
 import { providerRuntimeMap } from '../runtimeMap';
-import {
+import type {
   ChatMethodOptions,
   ChatStreamPayload,
   EmbeddingsOptions,
@@ -13,13 +13,13 @@ import {
   GenerateObjectPayload,
   ModelRequestOptions,
   PullModelParams,
-  TextToImagePayload,
   TextToSpeechPayload,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
-import { AuthenticatedImageRuntime, CreateImagePayload } from '../types/image';
+import type { AuthenticatedImageRuntime, CreateImagePayload } from '../types/image';
+import type { CreateVideoPayload, HandleCreateVideoWebhookPayload } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
-import { LobeRuntimeAI } from './BaseAI';
+import type { LobeRuntimeAI } from './BaseAI';
 
 export interface AgentChatOptions {
   enableTrace?: boolean;
@@ -79,12 +79,16 @@ export class ModelRuntime {
     return this._runtime.generateObject!(payload);
   }
 
-  async textToImage(payload: TextToImagePayload) {
-    return this._runtime.textToImage?.(payload);
-  }
-
   async createImage(payload: CreateImagePayload) {
     return this._runtime.createImage?.(payload);
+  }
+
+  async createVideo(payload: CreateVideoPayload) {
+    return this._runtime.createVideo?.(payload);
+  }
+
+  async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
+    return this._runtime.handleCreateVideoWebhook?.(payload);
   }
 
   async models() {

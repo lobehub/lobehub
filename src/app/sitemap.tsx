@@ -2,8 +2,8 @@ import { type MetadataRoute } from 'next';
 
 import { LAST_MODIFIED, Sitemap, SitemapType } from '@/server/sitemap';
 
-// Sitemap缓存配置 - 24小时重新验证
-export const revalidate = 86_400; // 24小时 - 内容页面缓存
+// Sitemap cache configuration - revalidate every 24 hours
+export const revalidate = 86_400; // 24 hours - content page cache
 export const dynamic = 'force-static';
 
 export const generateSitemapLink = (url: string) =>
@@ -13,17 +13,17 @@ export const generateSitemapLink = (url: string) =>
 
 export async function generateSitemaps() {
   const sitemapModule = new Sitemap();
-  // 生成动态的sitemap列表，包括分页的sitemap
+  // Generate dynamic sitemap list, including paginated sitemaps
   const staticSitemaps = sitemapModule.sitemapIndexs;
 
-  // 获取需要分页的类型的页数
+  // Get page counts for types that need pagination
   const [pluginPages, assistantPages, modelPages] = await Promise.all([
     sitemapModule.getPluginPageCount(),
     sitemapModule.getAssistantPageCount(),
     sitemapModule.getModelPageCount(),
   ]);
 
-  // 生成分页sitemap ID列表
+  // Generate paginated sitemap ID list
   const paginatedSitemaps = [
     ...Array.from({ length: pluginPages }, (_, i) => ({ id: `plugins-${i + 1}` as SitemapType })),
     ...Array.from({ length: assistantPages }, (_, i) => ({
@@ -35,7 +35,7 @@ export async function generateSitemaps() {
   return [...staticSitemaps, ...paginatedSitemaps];
 }
 
-// 解析分页ID
+// Parse paginated ID
 export function parsePaginatedId(id: string): { page?: number; type: SitemapType } {
   if (id.includes('-')) {
     const [type, pageStr] = id.split('-');
@@ -74,7 +74,7 @@ export default async function sitemap({
       return sitemapModule.getProviders();
     }
     default: {
-      // 处理分页的sitemap（plugins-1, assistants-2, mcp-3等）
+      // Handle paginated sitemaps (plugins-1, assistants-2, mcp-3, etc.)
       if (id.startsWith('plugins-')) {
         const pageNum = parseInt(id.split('-')[1], 10);
         return sitemapModule.getPlugins(pageNum);
@@ -88,7 +88,7 @@ export default async function sitemap({
         return sitemapModule.getModels(pageNum);
       }
 
-      // 默认返回空数组
+      // Default to empty array
       return [];
     }
   }

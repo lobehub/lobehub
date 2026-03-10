@@ -2,7 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
-import type { ActionKeys } from '@/features/ChatInput';
+import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput, ChatList } from '@/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -26,7 +26,7 @@ const AgentBuilderConversation = memo<AgentBuilderConversationProps>(({ agentId 
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   return (
-    <DragUploadZone onUploadFiles={handleUploadFiles} style={{ flex: 1, height: '100%' }}>
+    <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
       <Flexbox flex={1} height={'100%'}>
         <TopicSelector agentId={agentId} />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>

@@ -1,0 +1,62 @@
+---
+title: 在 LobeHub 中配置 Authentik 身份验证服务
+description: 学习如何在 LobeHub 中配置 Authentik 身份验证服务，包括创建提供程序、配置环境变量和部署 LobeHub。详细步骤和必要环境变量设置。
+tags:
+  - Authentik
+  - 身份验证
+  - 单点登录
+  - 环境变量
+  - LobeHub
+---
+
+# 配置 Authentik 身份验证服务
+
+## Authentik 配置流程
+
+<Steps>
+  ### 创建 Authentik 提供应用
+
+  在你的 Authentik 实例中使用管理员账号进入 管理员界面 -> 应用程序 -> 提供程序 创建一个新的提供程序。
+
+  选择 OAuth2/OpenID Provider 作为提供程序类型。填写提供程序的名称，选择身份流程和授权流程。
+
+  在 `重定向 URL/Origin（正则）` 处填写：
+
+  ```bash
+  https://your-domain/api/auth/callback/authentik
+  ```
+
+  <Callout type={'info'}>
+    - 可以之后再填写或修改 `重定向 URL/Origin（正则）`，但是务必保证填写的 URL 与部署的 URL 一致。 -
+      your-domain 请替换为自己的域名
+  </Callout>
+
+  <Image alt="创建 Authentik 提供程序" inStep src="/blog/assets67304509/4244634e-5f68-48d5-aac0-e5f4b06d1c4b.webp" />
+
+  点击「完成」
+
+  创建成功后，点击左侧的「应用程序」-> 创建，填写名称和 Slug ，提供程序选择上一步创建的提供程序，点击「创建」。
+
+  提供程序创建成功后，点击相应的提供程序，进入详情页，点击「编辑」，将 `客户端 ID` 和 `客户端 Secret` 保存下来。复制 `OpenID 配置颁发者` 的 URL，保存下来。
+
+  ### 配置环境变量
+
+  在部署 LobeHub 时，你需要配置以下环境变量：
+
+  | 环境变量                      | 类型 | 描述                                                                                          |
+  | ------------------------- | -- | ------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | 必选 | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令生成秘钥： `openssl rand -base64 32`                               |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必选 | 选择 LoboChat 的单点登录提供商。使用 Authentik 请填写 `authentik`。                                          |
+  | `AUTH_AUTHENTIK_ID`       | 必选 | Authentik 提供程序详情页的 客户端 ID                                                                   |
+  | `AUTH_AUTHENTIK_SECRET`   | 必选 | Authentik 提供程序详情页的 客户端 Secret                                                               |
+  | `AUTH_AUTHENTIK_ISSUER`   | 必选 | Authentik 提供程序详情页的 OpenID 配置颁发者                                                             |
+  | `AUTH_URL`                | 必选 | 该 URL 用于指定 Auth.js 在执行 OAuth 验证时的回调地址，当默认生成的重定向地址发生不正确时才需要设置。`https://example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variable#Authentik) 可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以使用 Authentik 中配置的用户通过身份认证并使用 LobeHub。
+</Callout>

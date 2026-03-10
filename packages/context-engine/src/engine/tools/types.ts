@@ -1,4 +1,4 @@
-import type { HumanInterventionConfig } from '@/types/index';
+import type { ExtendedHumanInterventionConfig } from '@/types/index';
 
 export interface LobeChatPluginApi {
   description: string;
@@ -14,7 +14,7 @@ export interface LobeChatPluginApi {
    * - 'always' - always require intervention
    * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
    */
-  humanIntervention?: HumanInterventionConfig;
+  humanIntervention?: ExtendedHumanInterventionConfig;
   name: string;
   parameters: Record<string, any>;
   url?: string;
@@ -72,6 +72,12 @@ export interface GenerateToolsParams {
   model: string;
   /** Provider name */
   provider: string;
+  /**
+   * Whether to skip merging default tools.
+   * When true, only the explicitly provided toolIds will be used.
+   * Useful for broadcast scenarios where tools should be completely disabled.
+   */
+  skipDefaultTools?: boolean;
   /** List of tool IDs to enable */
   toolIds?: string[];
 }
@@ -144,4 +150,56 @@ export interface UniformTool {
    * The type of the tool. Currently, only `function` is supported.
    */
   type: 'function';
+}
+
+// ---- Tool Lifecycle Types ----
+
+export type ToolSource = 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill';
+
+/**
+ * How a tool was activated at step level
+ */
+export type ActivationSource = 'active_tools' | 'mention' | 'device' | 'discovery';
+
+/**
+ * Operation-level tool set: determined at createOperation time, immutable during execution.
+ */
+export interface OperationToolSet {
+  enabledToolIds: string[];
+  manifestMap: Record<string, LobeToolManifest>;
+  sourceMap: Record<string, ToolSource>;
+  tools: UniformTool[];
+}
+
+/**
+ * Record of a tool activated at step level.
+ */
+export interface ActivatedStepTool {
+  activatedAtStep: number;
+  id: string;
+  manifest?: LobeToolManifest;
+  source: ActivationSource;
+}
+
+/**
+ * Declarative delta describing tool changes for a single step.
+ * Built by `buildStepToolDelta`, consumed by `ToolResolver.resolve`.
+ */
+export interface StepToolDelta {
+  activatedTools: Array<{
+    id: string;
+    manifest?: LobeToolManifest;
+    source: ActivationSource;
+  }>;
+  deactivatedToolIds?: string[];
+}
+
+/**
+ * Final resolved tool set ready for LLM call.
+ */
+export interface ResolvedToolSet {
+  enabledToolIds: string[];
+  manifestMap: Record<string, LobeToolManifest>;
+  sourceMap: Record<string, ToolSource>;
+  tools: UniformTool[];
 }

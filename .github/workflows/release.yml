@@ -7,9 +7,8 @@ permissions:
 
 on:
   push:
-    branches:
-      - main
-      - next
+    tags:
+      - 'v*.*.*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +17,7 @@ concurrency:
 jobs:
   release:
     name: Release
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
 
     services:
@@ -27,6 +27,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+
 
         ports:
           - 5432:5432
@@ -64,12 +65,6 @@ jobs:
 
       - name: Test App
         run: bun run test-app
-
-      - name: Release
-        run: bun run release
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Workflow
         run: bun run workflow:readme

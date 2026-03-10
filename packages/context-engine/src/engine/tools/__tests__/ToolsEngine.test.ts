@@ -710,7 +710,7 @@ describe('ToolsEngine', () => {
           type: 'function',
           function: {
             // The long action name should be hashed
-            name: expect.stringMatching(/^long-long-plugin-with-id____MD5HASH_[a-f0-9]+$/),
+            name: expect.stringMatching(/^long-long-plugin-with-id____MD5HASH_[\da-f]+$/),
             description: 'Long API',
             parameters: {},
           },
@@ -1133,6 +1133,148 @@ describe('ToolsEngine', () => {
 
       // Should only generate 2 unique tools despite multiple duplicates
       expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('skipDefaultTools', () => {
+    it('should not include default tools when skipDefaultTools is true in generateTools', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['lobe-web-browsing'],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateTools({
+        toolIds: ['dalle'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Should only include dalle, not the default lobe-web-browsing
+      expect(result).toHaveLength(1);
+      expect(result![0].function.name).toBe('dalle____generateImage____builtin');
+    });
+
+    it('should not include default tools when skipDefaultTools is true in generateToolsDetailed', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['lobe-web-browsing'],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: ['dalle'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Should only include dalle, not the default lobe-web-browsing
+      expect(result.tools).toHaveLength(1);
+      expect(result.enabledToolIds).toEqual(['dalle']);
+      expect(result.enabledManifests).toHaveLength(1);
+      expect(result.enabledManifests[0].identifier).toBe('dalle');
+    });
+
+    it('should return undefined when skipDefaultTools is true and toolIds is empty', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['lobe-web-browsing', 'dalle'],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateTools({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Should return undefined when no tools are available
+      expect(result).toBeUndefined();
+    });
+
+    it('should return empty results when skipDefaultTools is true and toolIds is empty in generateToolsDetailed', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['lobe-web-browsing', 'dalle'],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Should return empty results
+      expect(result.tools).toBeUndefined();
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.enabledManifests).toHaveLength(0);
+    });
+
+    it('should include default tools when skipDefaultTools is false', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['lobe-web-browsing'],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateTools({
+        toolIds: ['dalle'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: false,
+      });
+
+      // Should include both dalle and the default lobe-web-browsing
+      expect(result).toHaveLength(2);
+    });
+
+    it('should include default tools when skipDefaultTools is undefined (default behavior)', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['lobe-web-browsing'],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateTools({
+        toolIds: ['dalle'],
+        model: 'gpt-4',
+        provider: 'openai',
+        // skipDefaultTools not specified
+      });
+
+      // Should include both dalle and the default lobe-web-browsing
+      expect(result).toHaveLength(2);
+    });
+
+    it('should work correctly with empty defaultToolIds', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: [],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateTools({
+        toolIds: ['dalle'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Should only include dalle
+      expect(result).toHaveLength(1);
+      expect(result![0].function.name).toBe('dalle____generateImage____builtin');
     });
   });
 });

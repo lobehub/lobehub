@@ -1,0 +1,188 @@
+---
+title: Agent
+description: >-
+  Build a personalized AI Agent — configure its role, model, Skills, knowledge
+  base, and Memory in one place.
+tags:
+  - LobeHub
+  - Agent
+  - Agent Configuration
+  - System Prompt
+  - Knowledge Base
+  - Memory
+  - Skills
+---
+
+# Agent
+
+Every Agent in LobeHub is a persistent teammate — not a one-off conversation. Build a translation Agent that remembers your terminology, a coding Agent tuned to your stack, or a writing Agent that matches your voice. Configure the role, model, Skills, and knowledge base once; let it get smarter from there.
+
+This guide walks you through creating and configuring your first Agent.
+
+## What Makes an Agent
+
+Every Agent is built from six components:
+
+| Component          | Purpose                                                            |
+| ------------------ | ------------------------------------------------------------------ |
+| **System Role**    | The Agent's personality, expertise, and behavioral guidelines      |
+| **AI Model**       | The LLM powering the Agent — GPT-4o, Claude, Gemini, and more      |
+| **Skills**         | Capabilities like web search, code execution, and image generation |
+| **Integrations**   | MCP connections and integrations with external services            |
+| **Knowledge Base** | Documents and data the Agent can search and reference              |
+| **Memory**         | Personal context the Agent learns and retains across sessions      |
+
+Start simple — a System Role and a model is all you need. Layer in Skills, Integrations, and a Knowledge Base as your work demands.
+
+## Types of Agents
+
+- **Built-in Agents** — Agent Builder (helps you create Agents), Pages Agent (writing), Memory Agent (manages your personal Memory)
+- **Custom Agents** — Agents you create and configure for your specific workflows
+- **Community Agents** — Ready-to-use Agents shared by the LobeHub community — one click to add
+
+## Create a New Agent
+
+Three paths to your first Agent: smart creation with Agent Builder, building one from scratch, or adding one from the Community. All three let you fine-tune every detail afterward.
+
+### Smart Creation with Agent Builder
+
+<Steps>
+  ### Open Agent Builder
+
+  Click **Create Agent** in the left sidebar, or use the **Create Agent** option below the chat input.
+
+  ### Describe Your Goal
+
+  On the Agent Profile page, chat with Agent Builder on the right panel. Describe what you need in plain language — Agent Builder generates the role settings, system prompt, and Skill configuration automatically.
+
+  ### Review and Adjust
+
+  Review the generated configuration and adjust anything that doesn't fit.
+</Steps>
+
+![Agent Builder Smart Creation](/blog/assets2964497066067ca0588a7767eb4c1709.webp)
+
+### Build a Custom Agent
+
+For full control: set the avatar, name, system prompt, model, and Integrations yourself on the Agent Profile page. Start with the system prompt — everything else follows.
+
+### Add from the Community
+
+The Community has thousands of ready-to-use Agents — design experts, coding helpers, copywriters, academic tutors, and more.
+
+- Go to **Community → Agents** in the left sidebar, or scroll down the main screen to **Community Agents**.
+- Open an Agent's detail page, then click **Add Agent & Chat** to start immediately.
+
+![Add Agent from Community](/blog/assetsbcd98b0913d2dfc30d5a2b5523115d33.webp)
+
+### Connect Skills and Integrations
+
+After creating an Agent, expand its capabilities by adding Skills and linking external services.
+
+Go to **Agent Profile → + Add Skill** in the left sidebar.
+
+![Add Skill from Agent Profile](/blog/assetsdc6362a2c6db476fc1b7b9d6bf443af2.webp)
+
+### Edit Agent Information
+
+Your Agent should evolve as your work does. Open a conversation, click **Agent Profile** in the left sidebar, and update anything — name, role, model, or Skills — at any time.
+
+### Link a Knowledge Base
+
+Attach a knowledge base so your Agent answers from your own data — docs, specs, or research — not just from general training.
+
+In the chat interface, use the Knowledge Base button to select and attach a knowledge base.
+
+![Link Knowledge Base in Chat](/blog/assetsc89931ace11a936d87d0b87a6bca1069.webp)
+
+<Callout type="info">
+  For more on knowledge bases, see [Resource Library](/docs/usage/getting-started/resource).
+</Callout>
+
+## Writing Effective System Prompts
+
+The system prompt is the most important part of your Agent. It defines the Agent's expertise, behavior, and communication style. A well-written system prompt produces consistent, high-quality results.
+
+**Example structure:**
+
+```
+You are an expert [ROLE] specializing in [DOMAIN].
+
+Your expertise includes:
+- [Specific area 1]
+- [Specific area 2]
+- [Specific area 3]
+
+When responding:
+- [Communication guideline 1]
+- [Communication guideline 2]
+- [Format preference]
+```
+
+**Tips for writing good prompts:**
+
+- **Be specific about expertise** — "You are a senior TypeScript engineer specializing in React and performance optimization" is far more useful than "You are a coding assistant."
+- **Define the communication style** — Specify tone (professional, casual), response length (concise/detailed), and format (markdown, bullet points, prose).
+- **Include domain-specific guidelines** — For a legal writing Agent: "Cite relevant statutes when applicable. Flag when advice requires licensed legal counsel."
+- **Start simple, iterate** — Begin with a basic prompt and refine based on the Agent's actual responses.
+
+## Choosing the Right Model
+
+Different models have different strengths:
+
+| Model                     | Best For                                      |
+| ------------------------- | --------------------------------------------- |
+| GPT-4o, Claude Sonnet     | Balanced performance, coding, analysis        |
+| Claude Opus, GPT-o1       | Complex reasoning, nuanced tasks              |
+| Gemini                    | Multi-modal tasks, long context               |
+| GPT-4o-mini, Claude Haiku | Fast responses, simple tasks, cost efficiency |
+| Ollama (local)            | Privacy-sensitive tasks, offline use          |
+
+Match the model to the task complexity and your budget. For Agents that handle routine tasks, a smaller model is often sufficient and faster.
+
+## Best Practices
+
+- **Test your prompts** — After creating an Agent, run a few sample conversations to verify it behaves as expected. Refine the system prompt based on what doesn't work.
+- **One responsibility per Agent** — Specialized Agents outperform generalists. Create separate Agents for coding, writing, and research rather than one Agent for everything.
+- **Update Agents as needs evolve** — Agents aren't set-and-forget. Revisit the system prompt when your workflows or requirements change.
+- **Use Agent Builder for complex setups** — For Agents requiring multiple Skills and a sophisticated system prompt, let Agent Builder do the initial setup, then refine manually.
+
+## Manage Agents
+
+When you have many Agents and Group Chats, organizing them into Groups keeps the sidebar clean and makes switching easier.
+
+### Create a Group
+
+On the LobeHub homepage, open the Agent list menu and select **Add New Group**.
+
+![Add New Group in Agent List](/blog/assets98cddf4b80b8bac0c250a5236062d198.webp)
+
+### Move to a Group
+
+Select an existing Agent or Group Chat, then click **Move to Group**. You can also create new Agents or Group Chats directly inside a Group.
+
+### Manage Groups
+
+Go to the Agent list or Group menu and select **Manage Groups** to rename or reorder them.
+
+### Pin Frequently Used Agents
+
+Pin an Agent to the top of the list for quicker access. Select the Agent and choose **Pin** from the menu. Pinned Agents stay at the top.
+
+## Create a Copy
+
+Duplicate an Agent to explore different configurations without modifying the original. Select the Agent and choose **Create Copy** from the menu.
+
+## Delete an Agent
+
+Select the Agent, choose **Delete** from the menu, and confirm. The Agent will be removed.
+
+<Cards>
+  <Card href={'/docs/usage/agent/agent-team'} title={'Agent Groups'} />
+
+  <Card href={'/docs/usage/agent/scheduled-task'} title={'Scheduled Tasks'} />
+
+  <Card href={'/docs/usage/getting-started/memory'} title={'Memory'} />
+
+  <Card href={'/docs/usage/community/publish-agent'} title={'Publish an Agent'} />
+</Cards>

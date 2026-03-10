@@ -78,28 +78,31 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     };
 
     return (
-      <Flexbox gap={8} horizontal>
+      <Flexbox horizontal gap={8}>
         <Popover
+          open={rejectPopoverOpen}
+          placement="bottomRight"
+          trigger="click"
           content={
             <Flexbox gap={12} style={{ width: 400 }}>
-              <Flexbox align={'center'} horizontal justify={'space-between'}>
+              <Flexbox horizontal align={'center'} justify={'space-between'}>
                 <div>{t('tool.intervention.rejectTitle')}</div>
 
                 <Space>
                   <Button
                     color={'default'}
                     loading={rejectLoading}
-                    onClick={() => handleReject(rejectReason)}
                     size="small"
                     variant={'filled'}
+                    onClick={() => handleReject(rejectReason)}
                   >
                     {t('tool.intervention.rejectOnly')}
                   </Button>
                   <Button
                     loading={rejectLoading}
-                    onClick={() => handleRejectAndContinue(rejectReason)}
                     size="small"
                     type="primary"
+                    onClick={() => handleRejectAndContinue(rejectReason)}
                   >
                     {t('tool.intervention.rejectAndContinue')}
                   </Button>
@@ -107,11 +110,11 @@ const ApprovalActions = memo<ApprovalActionsProps>(
               </Flexbox>
               <Input.TextArea
                 autoFocus
-                onChange={(e) => setRejectReason(e.target.value)}
                 placeholder={t('tool.intervention.rejectReasonPlaceholder')}
                 rows={3}
                 value={rejectReason}
                 variant={'filled'}
+                onChange={(e) => setRejectReason(e.target.value)}
               />
             </Flexbox>
           }
@@ -120,9 +123,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
             setRejectPopoverOpen(open);
           }}
-          open={rejectPopoverOpen}
-          placement="bottomRight"
-          trigger="click"
         >
           <Button color={'default'} disabled={isMessageCreating} size="small" variant={'filled'}>
             {t('tool.intervention.reject')}
@@ -134,9 +134,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             <Button
               disabled={isMessageCreating}
               loading={approveLoading}
-              onClick={() => handleApprove(true)}
               size="small"
               type="primary"
+              onClick={() => handleApprove(true)}
             >
               {t('tool.intervention.approveAndRemember')}
             </Button>
@@ -162,9 +162,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           <Button
             disabled={isMessageCreating}
             loading={approveLoading}
-            onClick={() => handleApprove()}
             size="small"
             type="primary"
+            onClick={() => handleApprove()}
           >
             {t('tool.intervention.approve')}
           </Button>

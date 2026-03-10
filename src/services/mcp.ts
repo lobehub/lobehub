@@ -35,7 +35,7 @@ class MCPService {
     payload: ChatToolPayload,
     { signal, topicId }: { signal?: AbortSignal; topicId?: string },
   ) {
-    await discoverService.injectMPToken();
+    await discoverService.safeInjectMPToken();
 
     const { pluginSelectors } = await import('@/store/tool/selectors');
     const { getToolStoreState } = await import('@/store/tool/store');
@@ -149,7 +149,6 @@ class MCPService {
       success = true;
       return result;
     } catch (error) {
-      success = false;
       const err = error as Error;
       errorCode = 'CALL_FAILED';
       errorMessage = err.message;

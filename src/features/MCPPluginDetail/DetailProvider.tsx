@@ -1,6 +1,7 @@
 'use client';
 
-import { type ReactNode, createContext, memo, use } from 'react';
+import { type ReactNode } from 'react';
+import { createContext, memo, use } from 'react';
 
 import { type DiscoverMcpDetail } from '@/types/discover';
 

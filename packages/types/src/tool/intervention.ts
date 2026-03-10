@@ -138,13 +138,15 @@ export interface UserInterventionConfig {
    * - auto-run: Automatically approve all tools without user consent
    * - allow-list: Only approve tools in the allow list
    * - manual: Use tool's own humanIntervention config (default)
+   * - headless: Fully automated mode for async tasks - all tools execute automatically,
+   *             security blacklist tools are skipped (not blocked)
    */
-  approvalMode: 'auto-run' | 'allow-list' | 'manual';
+  approvalMode: 'auto-run' | 'allow-list' | 'manual' | 'headless';
 }
 
 export const UserInterventionConfigSchema = z.object({
   allowList: z.array(z.string()).optional(),
-  approvalMode: z.enum(['auto-run', 'allow-list', 'manual']),
+  approvalMode: z.enum(['auto-run', 'allow-list', 'manual', 'headless']),
 });
 
 /**

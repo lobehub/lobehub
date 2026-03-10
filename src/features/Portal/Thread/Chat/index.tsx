@@ -1,23 +1,23 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Suspense, memo, useCallback, useMemo } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 
+import { type ConversationContext, type ConversationHooks } from '@/features/Conversation';
 import {
   ChatInput,
   ChatList,
-  type ConversationContext,
-  type ConversationHooks,
   ConversationProvider,
-  MessageItem,
   conversationSelectors,
+  MessageItem,
   useConversationStore,
 } from '@/features/Conversation';
 import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
-import { type MessageMapKeyInput, messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ThreadDivider from './ThreadDivider';
 import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
@@ -61,10 +61,10 @@ const ThreadChatContent = memo(() => {
 
       return (
         <MessageItem
+          inPortalThread
           disableEditing={isParentMessage}
           endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
           id={id}
-          inPortalThread
           index={index}
         />
       );
@@ -83,12 +83,12 @@ const ThreadChatContent = memo(() => {
       >
         <Flexbox
           flex={1}
+          width={'100%'}
           style={{
             overflowX: 'hidden',
             overflowY: 'auto',
             position: 'relative',
           }}
-          width={'100%'}
         >
           <ChatList itemContent={itemContent} />
         </Flexbox>
@@ -204,11 +204,11 @@ const ThreadChat = memo(() => {
       hasInitMessages={!!messages}
       hooks={hooks}
       messages={messages}
+      operationState={operationState}
+      skipFetch={isCreatingNewThread}
       onMessagesChange={(msgs, ctx) => {
         replaceMessages(msgs, { context: ctx });
       }}
-      operationState={operationState}
-      skipFetch={isCreatingNewThread}
     >
       <ThreadChatContent />
     </ConversationProvider>

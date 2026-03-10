@@ -1,11 +1,12 @@
 // @vitest-environment node
-import { ClientSecretPayload } from '@lobechat/types';
+import type { ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatStreamCallbacks, ChatStreamPayload, LobeOpenAI, ModelRuntime } from '../index';
+import type { ChatStreamCallbacks, ChatStreamPayload } from '../index';
+import { LobeOpenAI, ModelRuntime } from '../index';
 import { providerRuntimeMap } from '../runtimeMap';
-import { CreateImagePayload } from '../types/image';
+import type { CreateImagePayload } from '../types/image';
 
 /**
  * Mock createTraceOptions for testing purposes.
@@ -223,43 +224,6 @@ describe('ModelRuntime', () => {
 
       expect(LobeOpenAI.prototype.generateObject).toHaveBeenCalledWith(payload);
       expect(result).toBe(mockResponse);
-    });
-  });
-
-  describe('ModelRuntime textToImage method', () => {
-    it('should run correctly', async () => {
-      const payload = {
-        model: 'stable-diffusion',
-        prompt: 'A beautiful landscape',
-      };
-
-      const mockResponse = ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'];
-
-      vi.spyOn(LobeOpenAI.prototype, 'textToImage').mockResolvedValue(mockResponse);
-
-      const result = await mockModelRuntime.textToImage(payload);
-
-      expect(LobeOpenAI.prototype.textToImage).toHaveBeenCalledWith(payload);
-      expect(result).toBe(mockResponse);
-    });
-
-    it('should handle undefined textToImage method gracefully', async () => {
-      const payload = {
-        model: 'stable-diffusion',
-        prompt: 'A beautiful landscape',
-      };
-
-      // Mock runtime without textToImage method
-      const runtimeWithoutTextToImage = {
-        textToImage: undefined,
-      };
-
-      // @ts-ignore - testing edge case
-      mockModelRuntime['_runtime'] = runtimeWithoutTextToImage;
-
-      const result = await mockModelRuntime.textToImage(payload);
-
-      expect(result).toBeUndefined();
     });
   });
 

@@ -1,6 +1,7 @@
-import type { ChatStoreState } from '@/store/chat';
+import { type ChatStoreState } from '@/store/chat';
 
-import { type PortalViewData, PortalViewType } from '../initialState';
+import { type PortalViewData } from '../initialState';
+import { PortalViewType } from '../initialState';
 
 // Helper to get current view
 const getCurrentView = (s: ChatStoreState): PortalViewData | null => {

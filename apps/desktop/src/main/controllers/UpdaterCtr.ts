@@ -1,3 +1,5 @@
+import type { UpdateChannel, UpdaterState } from '@lobechat/electron-client-ipc';
+
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -12,7 +14,7 @@ export default class UpdaterCtr extends ControllerModule {
   @IpcMethod()
   async checkForUpdates() {
     logger.info('Check for updates requested');
-    await this.app.updaterManager.checkForUpdates();
+    await this.app.updaterManager.checkForUpdates({ manual: true });
   }
 
   /**
@@ -40,5 +42,27 @@ export default class UpdaterCtr extends ControllerModule {
   installLater() {
     logger.info('Install later requested');
     this.app.updaterManager.installLater();
+  }
+
+  @IpcMethod()
+  async getUpdateChannel(): Promise<UpdateChannel> {
+    return this.app.storeManager.get('updateChannel') ?? 'stable';
+  }
+
+  @IpcMethod()
+  async setUpdateChannel(channel: UpdateChannel): Promise<void> {
+    const validChannels = new Set(['stable', 'nightly', 'canary']);
+    if (!validChannels.has(channel)) {
+      logger.warn(`Invalid update channel: ${channel}, ignoring`);
+      return;
+    }
+    logger.info(`Set update channel requested: ${channel}`);
+    this.app.storeManager.set('updateChannel', channel);
+    this.app.updaterManager.switchChannel(channel);
+  }
+
+  @IpcMethod()
+  async getUpdaterState(): Promise<UpdaterState> {
+    return this.app.updaterManager.getUpdaterState();
   }
 }

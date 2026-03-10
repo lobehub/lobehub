@@ -1,5 +1,6 @@
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 describe('Desktop TRPC Route', () => {
@@ -7,7 +8,7 @@ describe('Desktop TRPC Route', () => {
     const routeDirs = ['async', 'lambda', 'mobile', 'tools'];
 
     for (const dir of routeDirs) {
-      const routePath = join(__dirname, dir);
+      const routePath = path.join(__dirname, dir);
       expect(existsSync(routePath)).toBe(true);
     }
   });

@@ -26,7 +26,7 @@ export interface SearchResultItem {
  * ```
  */
 export const searchResultsPrompt = (results: SearchResultItem[]): string => {
-  if (results.length === 0) return '<searchResults />';
+  if (results.length === 0) return '<searchResults>No results found.</searchResults>';
 
   const items = results
     .map((item) => {

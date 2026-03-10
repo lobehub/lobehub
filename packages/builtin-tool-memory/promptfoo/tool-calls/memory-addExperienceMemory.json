@@ -1,0 +1,125 @@
+{
+  "description": "Record an experience memory capturing situation, actions, reasoning, outcomes, and confidence. Use for lessons, playbooks, or transferable know-how.",
+  "name": "addExperienceMemory",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "details": {
+        "description": "Optional detailed information",
+        "type": "string"
+      },
+      "memoryCategory": {
+        "description": "Memory category",
+        "type": "string"
+      },
+      "memoryType": {
+        "description": "Memory type",
+        "enum": [
+          "activity",
+          "context",
+          "event",
+          "fact",
+          "location",
+          "other",
+          "people",
+          "preference",
+          "technology",
+          "topic"
+        ],
+        "type": "string"
+      },
+      "summary": {
+        "description": "Concise overview of this specific memory",
+        "type": "string"
+      },
+      "tags": {
+        "description": "Model generated tags that summarize the experience facets",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": {
+        "description": "Brief descriptive title",
+        "type": "string"
+      },
+      "withExperience": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "Narrative describing actions taken or behaviors exhibited",
+            "type": "string"
+          },
+          "keyLearning": {
+            "description": "Narrative describing key insights or lessons learned",
+            "type": "string"
+          },
+          "knowledgeValueScore": {
+            "description": "Numeric score (0-1) describing how reusable and shareable this experience is",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "labels": {
+            "description": "Model generated tags that summarize the experience facets",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "possibleOutcome": {
+            "description": "Narrative describing potential outcomes or learnings",
+            "type": "string"
+          },
+          "problemSolvingScore": {
+            "description": "Numeric score (0-1) describing how effectively the problem was solved",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "reasoning": {
+            "description": "Narrative describing the thought process or motivations",
+            "type": "string"
+          },
+          "scoreConfidence": {
+            "description": "Numeric score (0-1 (0% to 100%)) describing confidence in the experience details",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "situation": {
+            "description": "Narrative describing the situation or event",
+            "type": "string"
+          },
+          "type": {
+            "description": "Type of experience being recorded",
+            "type": "string"
+          }
+        },
+        "required": [
+          "situation",
+          "reasoning",
+          "action",
+          "possibleOutcome",
+          "keyLearning",
+          "type",
+          "labels",
+          "problemSolvingScore",
+          "scoreConfidence",
+          "knowledgeValueScore"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "details",
+      "memoryCategory",
+      "memoryType",
+      "summary",
+      "tags",
+      "title",
+      "withExperience"
+    ],
+    "type": "object"
+  }
+}

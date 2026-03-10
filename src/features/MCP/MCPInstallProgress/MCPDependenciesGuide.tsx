@@ -82,12 +82,12 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
     };
 
     const handleRetryCheck = async () => {
-      // 重新检查依赖，重新开始安装流程
+      // Re-check dependencies, restart the installation process
       await installMCPPlugin(identifier);
     };
 
     const handleSkipCheck = async () => {
-      // 跳过依赖检查，继续安装流程
+      // Skip dependency check, continue installation process
       await installMCPPlugin(identifier, { skipDepsCheck: true });
     };
 
@@ -105,7 +105,7 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
           transition={{ delay: 0.15, duration: 0.2 }}
         >
           <Flexbox gap={8}>
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               <AlertTriangle color={cssVar.colorWarning} size={16} />
               <Text as={'h5'} style={{ margin: 0 }}>
                 {t('mcpInstall.dependenciesRequired')}
@@ -126,8 +126,8 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
             {systemDependencies.map((dep) => (
               <Card className={styles.dependencyCard} key={dep.name} size="small">
                 <Flexbox gap={12}>
-                  <Flexbox align="center" horizontal justify="space-between">
-                    <Flexbox align="center" gap={8} horizontal>
+                  <Flexbox horizontal align="center" justify="space-between">
+                    <Flexbox horizontal align="center" gap={8}>
                       <Text strong>{dep.name}</Text>
                       {dep.requiredVersion && (
                         <Text style={{ fontSize: 12 }} type="secondary">
@@ -194,14 +194,14 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
           transition={{ delay: 0.3, duration: 0.2 }}
         >
           <Flexbox horizontal justify={'space-between'}>
-            <Button onClick={handleCancel} size="small">
+            <Button size="small" onClick={handleCancel}>
               {t('common:cancel')}
             </Button>
             <Space>
-              <Button onClick={handleSkipCheck} size="small">
+              <Button size="small" onClick={handleSkipCheck}>
                 {t('mcpInstall.skipDependencies')}
               </Button>
-              <Button onClick={handleRetryCheck} size="small" type="primary">
+              <Button size="small" type="primary" onClick={handleRetryCheck}>
                 {t('mcpInstall.recheckDependencies')}
               </Button>
             </Space>

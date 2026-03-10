@@ -1,7 +1,7 @@
-import type {
-  SidebarAgentItem,
-  SidebarAgentListResponse,
-  SidebarGroup,
+import {
+  type SidebarAgentItem,
+  type SidebarAgentListResponse,
+  type SidebarGroup,
 } from '@/database/repositories/home';
 
 export interface AgentListState {

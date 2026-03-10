@@ -1,9 +1,9 @@
-import { DeploymentOption, SystemDependency } from '@lobehub/market-sdk';
+import { type DeploymentOption, type SystemDependency } from '@lobehub/market-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mock setup
 import { mcpSystemDepsCheckService } from './MCPSystemDepsCheckService';
-import { InstallationChecker } from './types';
+import { type InstallationChecker } from './types';
 
 // Hoist the mock to ensure it's available in the factory
 const { mockExecPromise } = vi.hoisted(() => {

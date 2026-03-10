@@ -1,9 +1,9 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
 
-import { LobeChatDatabase } from '../type';
+import type { SessionGroupItem } from '../schemas';
+import { sessionGroups } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 import { idGenerator } from '../utils/idGenerator';
-
-import { SessionGroupItem, sessionGroups } from '../schemas';
 
 export class SessionGroupModel {
   private userId: string;

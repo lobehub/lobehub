@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref: https://modelscope.cn/docs/model-service/API-Inference/intro
 const ModelScope: ModelProviderCard = {

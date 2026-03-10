@@ -1,6 +1,5 @@
 import {
   ContextStatusEnum,
-  LayersEnum,
   UserMemoryContextObjectType,
   UserMemoryContextSubjectType,
 } from '@lobechat/types';
@@ -79,7 +78,6 @@ export const WithContextSchema = z.object({
 export const ContextMemoryItemSchema = z.object({
   details: z.string().describe('Optional detailed information'),
   memoryCategory: z.string().describe('Memory category'),
-  memoryLayer: z.literal(LayersEnum.Context).describe('Memory layer'),
   memoryType: MemoryTypeSchema.describe('Memory type'),
   summary: z.string().describe('Concise overview of this specific memory'),
   tags: z.array(z.string()).describe('User defined tags that summarize the context facets'),

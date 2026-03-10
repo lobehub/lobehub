@@ -1,8 +1,8 @@
-import { Content, GenerateContentConfig, GoogleGenAI, Part } from '@google/genai';
+import type { Content, GenerateContentConfig, GoogleGenAI, Part } from '@google/genai';
 import { imageUrlToBase64 } from '@lobechat/utils';
 
 import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
-import { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
@@ -143,7 +143,7 @@ async function generateImageByChatModel(
 
   const config: GenerateContentConfig = {
     responseModalities: ['Image'],
-    ...(params.aspectRatio
+    ...(params.aspectRatio && params.aspectRatio !== 'auto'
       ? {
           imageConfig: {
             aspectRatio: params.aspectRatio,

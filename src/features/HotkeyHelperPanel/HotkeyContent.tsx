@@ -37,7 +37,7 @@ const HotkeyContent = memo<HotkeyContentProps>(({ groupId }) => {
   return (
     <>
       {HOTKEYS_REGISTRATION.filter((item) => item.group === groupId).map((item) => (
-        <Flexbox align={'flex-start'} gap={16} horizontal key={item.id} width={'100%'}>
+        <Flexbox horizontal align={'flex-start'} gap={16} key={item.id} width={'100%'}>
           <Flexbox flex={1} gap={4} justify={'space-between'}>
             <span>{t(`${item.id}.title`)}</span>
             {hotkeyMeta[`${item.id}.desc`] ? (

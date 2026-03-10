@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { testService } from '~test-utils';
 
 import { UserService, userService } from './index';
@@ -8,7 +9,6 @@ const mockLambdaClient = vi.hoisted(() => ({
     getUserRegistrationDuration: { query: vi.fn() },
     getUserState: { query: vi.fn() },
     getUserSSOProviders: { query: vi.fn() },
-    unlinkSSOProvider: { mutate: vi.fn() },
     makeUserOnboarded: { mutate: vi.fn() },
     updateAvatar: { mutate: vi.fn() },
     updateFullName: { mutate: vi.fn() },
@@ -61,19 +61,6 @@ describe('UserService', () => {
 
       expect(mockLambdaClient.user.getUserSSOProviders.query).toHaveBeenCalled();
       expect(result).toEqual(mockProviders);
-    });
-  });
-
-  describe('unlinkSSOProvider', () => {
-    it('should call lambdaClient.user.unlinkSSOProvider.mutate with correct params', async () => {
-      mockLambdaClient.user.unlinkSSOProvider.mutate.mockResolvedValueOnce({ success: true });
-
-      await userService.unlinkSSOProvider('github', 'account-123');
-
-      expect(mockLambdaClient.user.unlinkSSOProvider.mutate).toHaveBeenCalledWith({
-        provider: 'github',
-        providerAccountId: 'account-123',
-      });
     });
   });
 

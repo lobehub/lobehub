@@ -20,13 +20,13 @@ const getEnableHistoryCountById = (agentId: string) => (s: AgentStoreState) => {
   const config = agentSelectors.getAgentConfigById(agentId)(s);
   const chatConfig = getChatConfigById(agentId)(s);
 
-  // 如果开启了上下文缓存，且当前模型类型匹配，则不开启历史记录
+  // If context caching is enabled and the current model type matches, do not enable history count
   const enableContextCaching = !chatConfig.disableContextCaching;
 
   if (enableContextCaching && config?.model && isContextCachingModel(config.model)) return false;
 
-  // 当开启搜索时，针对 claude 3.7 sonnet 模型不开启历史记录
-  const searchMode = chatConfig.searchMode || 'off';
+  // When search is enabled, do not enable history count for the claude 3.7 sonnet model
+  const searchMode = chatConfig.searchMode || 'auto';
   const enableSearch = searchMode !== 'off';
 
   if (enableSearch && config?.model && isThinkingWithToolClaudeModel(config.model)) return false;
@@ -43,7 +43,7 @@ const getHistoryCountById =
   };
 
 const getSearchModeById = (agentId: string) => (s: AgentStoreState) =>
-  getChatConfigById(agentId)(s).searchMode || 'off';
+  getChatConfigById(agentId)(s).searchMode || 'auto';
 
 const isEnableSearchById = (agentId: string) => (s: AgentStoreState) =>
   getSearchModeById(agentId)(s) !== 'off';
@@ -54,12 +54,24 @@ const getUseModelBuiltinSearchById = (agentId: string) => (s: AgentStoreState) =
 const getSearchFCModelById = (agentId: string) => (s: AgentStoreState) =>
   getChatConfigById(agentId)(s).searchFCModel || DEFAULT_AGENT_SEARCH_FC_MODEL;
 
+const getMemoryToolConfigById = (agentId: string) => (s: AgentStoreState) =>
+  getChatConfigById(agentId)(s).memory;
+
+const isMemoryToolEnabledById = (agentId: string) => (s: AgentStoreState) =>
+  getChatConfigById(agentId)(s).memory?.enabled ?? false;
+
+const getMemoryToolEffortById = (agentId: string) => (s: AgentStoreState) =>
+  getChatConfigById(agentId)(s).memory?.effort ?? 'medium';
+
 export const chatConfigByIdSelectors = {
   getChatConfigById,
   getEnableHistoryCountById,
   getHistoryCountById,
+  getMemoryToolConfigById,
+  getMemoryToolEffortById,
   getSearchFCModelById,
   getSearchModeById,
   getUseModelBuiltinSearchById,
   isEnableSearchById,
+  isMemoryToolEnabledById,
 };

@@ -1,0 +1,148 @@
+{
+  "description": "Add an identity memory describing enduring facts about a person, their role, relationship, and supporting evidence. Use to track self/others identities.",
+  "name": "addIdentityMemory",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "details": {
+        "description": "Optional detailed information",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "memoryCategory": {
+        "description": "Memory category",
+        "type": "string"
+      },
+      "memoryType": {
+        "description": "Memory type",
+        "enum": [
+          "activity",
+          "context",
+          "event",
+          "fact",
+          "location",
+          "other",
+          "people",
+          "preference",
+          "technology",
+          "topic"
+        ],
+        "type": "string"
+      },
+      "summary": {
+        "description": "Concise overview of this specific memory",
+        "type": "string"
+      },
+      "tags": {
+        "description": "Model generated tags that summarize the identity facets",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": {
+        "description": "Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., \"Trusted open-source maintainer\", \"Specializes in low-latency infra\", \"Former Aliyun engineer\", \"Cares for rescue cats\"",
+        "type": "string"
+      },
+      "withIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "episodicDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "extractedLabels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "relationship": {
+            "enum": [
+              "aunt",
+              "brother",
+              "classmate",
+              "colleague",
+              "couple",
+              "coworker",
+              "daughter",
+              "father",
+              "friend",
+              "granddaughter",
+              "grandfather",
+              "grandmother",
+              "grandson",
+              "husband",
+              "manager",
+              "mentee",
+              "mentor",
+              "mother",
+              "nephew",
+              "niece",
+              "other",
+              "partner",
+              "self",
+              "sibling",
+              "sister",
+              "son",
+              "spouse",
+              "teammate",
+              "uncle",
+              "wife"
+            ],
+            "type": "string"
+          },
+          "role": {
+            "description": "Role explicitly mentioned for this identity entry (e.g., \"platform engineer\", \"caregiver\"); keep neutral and only use when evidence exists",
+            "type": "string"
+          },
+          "scoreConfidence": {
+            "type": "number"
+          },
+          "sourceEvidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "enum": [
+              "demographic",
+              "personal",
+              "professional"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "episodicDate",
+          "extractedLabels",
+          "relationship",
+          "role",
+          "scoreConfidence",
+          "sourceEvidence",
+          "type"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "details",
+      "memoryCategory",
+      "memoryType",
+      "summary",
+      "tags",
+      "title",
+      "withIdentity"
+    ],
+    "type": "object"
+  }
+}

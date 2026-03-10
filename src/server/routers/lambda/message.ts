@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicShareModel } from '@/database/models/topicShare';
+import { CompressionRepository } from '@/database/repositories/compression';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
@@ -22,6 +23,7 @@ const messageProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 
   return opts.next({
     ctx: {
+      compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId),
       fileService: new FileService(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       messageService: new MessageService(ctx.serverDB, ctx.userId),
@@ -46,7 +48,32 @@ export const messageRouter = router({
       return ctx.messageService.addFilesToMessage(id, fileIds, resolved);
     }),
 
-  count: messageProcedure
+  /**
+   * Cancel compression by deleting the compression group and restoring original messages
+   */
+cancelCompression: messageProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullable().optional(),
+        messageGroupId: z.string(),
+        threadId: z.string().nullable().optional(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, agentId, groupId, threadId, topicId } = input;
+
+      return ctx.messageService.cancelCompression(messageGroupId, {
+        agentId,
+        groupId,
+        threadId,
+        topicId,
+      });
+    }),
+
+  
+count: messageProcedure
     .input(
       z
         .object({
@@ -60,7 +87,9 @@ export const messageRouter = router({
       return ctx.messageModel.count(input);
     }),
 
-  countWords: messageProcedure
+  
+  
+countWords: messageProcedure
     .input(
       z
         .object({
@@ -74,7 +103,36 @@ export const messageRouter = router({
       return ctx.messageModel.countWords(input);
     }),
 
-  createMessage: messageProcedure
+  
+/**
+   * Create a compression group for old messages
+   * Creates a placeholder group, marks messages as compressed
+   * Returns messages to summarize for frontend AI generation
+   */
+createCompressionGroup: messageProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullable().optional(),
+        messageIds: z.array(z.string()),
+        threadId: z.string().nullable().optional(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { topicId, messageIds, agentId, groupId, threadId } = input;
+
+      return ctx.messageService.createCompressionGroup(topicId, messageIds, {
+        agentId,
+        groupId,
+        threadId,
+        topicId,
+      });
+    }),
+
+  
+  
+createMessage: messageProcedure
     .input(CreateNewMessageParamsSchema)
     .mutation(async ({ input, ctx }) => {
       // If there's no agentId but has sessionId, resolve agentId from sessionId
@@ -85,6 +143,27 @@ export const messageRouter = router({
 
       // Create message with the resolved agentId
       return ctx.messageService.createMessage({ ...input, agentId } as any);
+    }),
+
+  
+  /**
+   * Finalize compression by updating the group with generated summary
+   */
+finalizeCompression: messageProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        content: z.string(),
+        groupId: z.string().nullable().optional(),
+        messageGroupId: z.string(),
+        threadId: z.string().nullable().optional(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, content, ...params } = input;
+
+      return ctx.messageService.finalizeCompression(messageGroupId, content, params);
     }),
 
   getHeatmaps: messageProcedure.query(async ({ ctx }) => {
@@ -234,6 +313,28 @@ export const messageRouter = router({
       const resolved = await resolveContext({ agentId, ...options }, ctx.serverDB, ctx.userId);
 
       return ctx.messageService.updateMessage(id, value as any, resolved);
+    }),
+
+  /**
+   * Update message group metadata (e.g., expanded state)
+   */
+  updateMessageGroupMetadata: messageProcedure
+    .input(
+      z.object({
+        context: z.object({
+          agentId: z.string(),
+          groupId: z.string().nullable().optional(),
+          threadId: z.string().nullable().optional(),
+          topicId: z.string(),
+        }),
+        expanded: z.boolean().optional(),
+        messageGroupId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, expanded, context } = input;
+
+      return ctx.messageService.updateMessageGroupMetadata(messageGroupId, { expanded }, context);
     }),
 
   updateMessagePlugin: messageProcedure

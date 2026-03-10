@@ -1,9 +1,10 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
+import { type IEditor } from '@lobehub/editor';
 import {
-  type IEditor,
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactImagePlugin,
   ReactLinkPlugin,
@@ -14,16 +15,22 @@ import {
   ReactToolbarPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import isEqual from 'fast-deep-equal';
+import { memo, type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { EditorCanvasProps } from './EditorCanvas';
+import { type EditorCanvasProps } from './EditorCanvas';
 import InlineToolbar from './InlineToolbar';
+import { useImageUpload } from './useImageUpload';
+
+const IMAGE_FILTERS = [
+  { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'], name: 'Images' },
+];
 
 /**
- * Base plugins for the editor (without toolbar)
+ * Base plugins for the editor (without image and toolbar, which need dynamic config)
  */
-const BASE_PLUGINS = [
+const STATIC_PLUGINS = [
   ReactLiteXmlPlugin,
   ReactListPlugin,
   ReactCodePlugin,
@@ -32,12 +39,14 @@ const BASE_PLUGINS = [
   ReactLinkPlugin,
   ReactTablePlugin,
   ReactMathPlugin,
-  Editor.withProps(ReactImagePlugin, {
-    defaultBlockImage: true,
-  }),
 ];
 
 export interface InternalEditorProps extends EditorCanvasProps {
+  /**
+   * Optional lock ref to suppress content-change callback during programmatic document hydration.
+   */
+  contentChangeLockRef?: RefObject<boolean>;
+
   /**
    * Editor instance (required)
    */
@@ -49,6 +58,7 @@ export interface InternalEditorProps extends EditorCanvasProps {
  */
 const InternalEditor = memo<InternalEditorProps>(
   ({
+    contentChangeLockRef,
     editor,
     extraPlugins,
     floatingToolbar = true,
@@ -62,6 +72,19 @@ const InternalEditor = memo<InternalEditorProps>(
   }) => {
     const { t } = useTranslation('file');
     const editorState = useEditorState(editor);
+    const handleImageUpload = useImageUpload();
+
+    const handlePickFile = useCallback(async (): Promise<File | null> => {
+      if (!isDesktop) return null;
+      const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+      const ipc = ensureElectronIpc();
+      const result = await (ipc as any).localSystem.handlePickFile({
+        filters: IMAGE_FILTERS,
+      });
+      if (result.canceled || !result.file) return null;
+      const { data, mimeType, name } = result.file;
+      return new File([data], name, { type: mimeType });
+    }, []);
 
     const finalPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
 
@@ -70,8 +93,16 @@ const InternalEditor = memo<InternalEditorProps>(
       // If custom plugins provided, use them directly
       if (customPlugins) return customPlugins;
 
+      const imagePlugin = Editor.withProps(ReactImagePlugin, {
+        defaultBlockImage: true,
+        handleUpload: handleImageUpload,
+        onPickFile: isDesktop ? handlePickFile : undefined,
+      });
+
       // Build base plugins with optional extra plugins prepended
-      const basePlugins = extraPlugins ? [...extraPlugins, ...BASE_PLUGINS] : BASE_PLUGINS;
+      const basePlugins = extraPlugins
+        ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin]
+        : [...STATIC_PLUGINS, imagePlugin];
 
       // Add toolbar if enabled
       if (floatingToolbar) {
@@ -80,10 +111,10 @@ const InternalEditor = memo<InternalEditorProps>(
           Editor.withProps(ReactToolbarPlugin, {
             children: (
               <InlineToolbar
+                floating
                 editor={editor}
                 editorState={editorState}
                 extraItems={toolbarExtraItems}
-                floating
               />
             ),
           }),
@@ -91,7 +122,16 @@ const InternalEditor = memo<InternalEditorProps>(
       }
 
       return basePlugins;
-    }, [customPlugins, editor, editorState, extraPlugins, floatingToolbar, toolbarExtraItems]);
+    }, [
+      customPlugins,
+      editor,
+      editorState,
+      extraPlugins,
+      floatingToolbar,
+      handleImageUpload,
+      handlePickFile,
+      toolbarExtraItems,
+    ]);
 
     useEffect(() => {
       // for easier debug, mount editor instance to window
@@ -103,7 +143,7 @@ const InternalEditor = memo<InternalEditorProps>(
     }, [editor]);
 
     // Use refs for stable references across re-renders
-    const previousContentRef = useRef<string | undefined>(undefined);
+    const previousDocumentSnapshotRef = useRef<unknown>(undefined);
     const onContentChangeRef = useRef(onContentChange);
     onContentChangeRef.current = onContentChange;
 
@@ -115,18 +155,22 @@ const InternalEditor = memo<InternalEditorProps>(
       const lexicalEditor = editor.getLexicalEditor?.();
       if (!lexicalEditor) return;
 
-      // Initialize previousContent with current content before registering listener
-      previousContentRef.current = JSON.stringify(editor.getDocument('text'));
+      // Initialize snapshot before registering listener
+      previousDocumentSnapshotRef.current = editor.getDocument('json');
 
       const unregister = lexicalEditor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
-        // Only process when there are actual content changes
+        // Skip selection-only / caret-movement updates — no content was mutated.
         if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
 
-        const currentContent = JSON.stringify(editor.getDocument('text'));
+        const currentDocumentSnapshot = editor.getDocument('json');
 
-        if (currentContent !== previousContentRef.current) {
-          // Content actually changed
-          previousContentRef.current = currentContent;
+        if (!isEqual(currentDocumentSnapshot, previousDocumentSnapshotRef.current)) {
+          previousDocumentSnapshotRef.current = currentDocumentSnapshot;
+
+          // During document hydration (e.g. route switch), we only advance snapshot
+          // and skip external change callback to avoid false dirty checks.
+          if (contentChangeLockRef?.current) return;
+
           onContentChangeRef.current?.();
         }
       });
@@ -134,7 +178,7 @@ const InternalEditor = memo<InternalEditorProps>(
       return () => {
         unregister();
       };
-    }, [editor]); // Only depend on editor, use ref for onContentChange
+    }, [contentChangeLockRef, editor]); // Only depend on stable refs and editor
 
     return (
       <div
@@ -147,15 +191,15 @@ const InternalEditor = memo<InternalEditorProps>(
           content={''}
           editor={editor}
           lineEmptyPlaceholder={finalPlaceholder}
-          onInit={onInit}
           placeholder={finalPlaceholder}
           plugins={plugins}
           slashOption={slashItems ? { items: slashItems } : undefined}
+          type={'text'}
           style={{
             paddingBottom: 64,
             ...style,
           }}
-          type={'text'}
+          onInit={onInit}
         />
       </div>
     );

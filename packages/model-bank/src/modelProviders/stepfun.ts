@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref: https://platform.stepfun.com/docs/llm/text
 // According to the documentation, for Stepfun models, the 'k' in context length refers to 1000

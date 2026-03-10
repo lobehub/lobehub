@@ -1,8 +1,8 @@
 ---
 title: Configuring S3 Storage Service
 description: >-
-  Learn how to configure S3 storage service to support multimodal AI sessions and image uploads.
-
+  Learn how to configure S3 storage service to support multimodal AI sessions
+  and image uploads.
 tags:
   - S3 Storage
   - Multimodal AI
@@ -12,7 +12,7 @@ tags:
 
 # Configuring S3 Storage Service
 
-LobeChat supports multimodal AI sessions, including the ability to upload unstructured data such as images and files to large language models. To optimize storage and performance, we use S3-compatible file storage services to store image files and support file upload/knowledge base functionality.
+LobeHub supports multimodal AI sessions, including the ability to upload unstructured data such as images and files to large language models. To optimize storage and performance, we use S3-compatible file storage services to store image files and support file upload/knowledge base functionality.
 
 ## Core Environment Variables
 
@@ -58,13 +58,6 @@ LobeChat supports multimodal AI sessions, including the ability to upload unstru
 - Default: `1`
 - Example: `0`
 
-### `S3_PUBLIC_DOMAIN`
-
-- Type: Required
-- Description: Public access domain for the bucket, used to access files in the bucket
-- Default: -
-- Example: `https://files.example.com`
-
 ### `S3_ENABLE_PATH_STYLE`
 
 - Type: Optional
@@ -88,8 +81,17 @@ LobeChat supports multimodal AI sessions, including the ability to upload unstru
 - Default: undefined
 - Example: `1`
 
-When set to `1`, LobeChat will convert images to base64 encoding before uploading them to the LLM model. When encountering the following error, please consider configuring this environment variable to `1`:
+When set to `1`, LobeHub will convert images to base64 encoding before uploading them to the LLM model. When encountering the following error, please consider configuring this environment variable to `1`:
 
 ```log
 Route: [xai] ProviderBizError: Fetching images over plain http:// is not supported.
 ```
+
+### `LLM_VISION_VIDEO_USE_BASE64`
+
+- Type: Optional
+- Description: Set to `1` to use base64 encoding for video upload.
+- Default: undefined
+- Example: `1`
+
+When set to `1`, LobeChat will convert videos to base64 encoding before uploading them to the LLM model.

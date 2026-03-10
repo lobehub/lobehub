@@ -1,8 +1,9 @@
-import { Menu, MenuItemConstructorOptions, app, dialog, shell } from 'electron';
+/* eslint-disable unicorn/no-array-push-push */
+import { Menu, MenuItemConstructorOptions, app, clipboard, dialog, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 
-import type { IMenuPlatform, MenuOptions } from '../types';
+import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
 
 export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
@@ -16,7 +17,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
     return this.appMenu;
   }
 
-  buildContextMenu(type: string, data?: any): Menu {
+  buildContextMenu(type: string, data?: ContextMenuData): Menu {
     let template: MenuItemConstructorOptions[];
     switch (type) {
       case 'chat': {
@@ -28,7 +29,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         break;
       }
       default: {
-        template = this.getDefaultContextMenuTemplate();
+        template = this.getDefaultContextMenuTemplate(data);
       }
     }
     return Menu.buildFromTemplate(template);
@@ -44,7 +45,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
     this.buildAndSetAppMenu(options);
   }
 
-  // --- 私有方法：定义菜单模板和逻辑 ---
+  // --- Private methods: define menu templates and logic ---
 
   private getAppMenuTemplate(options?: MenuOptions): MenuItemConstructorOptions[] {
     const showDev = isDev || options?.showDevItems;
@@ -54,6 +55,44 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         label: t('file.title'),
         submenu: [
+          {
+            accelerator: 'Ctrl+N',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewTopic');
+            },
+            label: t('file.newTopic'),
+          },
+          { type: 'separator' },
+          {
+            accelerator: 'Alt+Ctrl+A',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewAgent');
+            },
+            label: t('file.newAgent'),
+          },
+          {
+            accelerator: 'Alt+Ctrl+G',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewAgentGroup');
+            },
+            label: t('file.newAgentGroup'),
+          },
+          {
+            accelerator: 'Alt+Ctrl+P',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewPage');
+            },
+            label: t('file.newPage'),
+          },
+          { type: 'separator' },
           {
             click: () => this.app.browserManager.retrieveByIdentifier('settings').show(),
             label: t('file.preferences'),
@@ -65,16 +104,8 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('common.checkUpdates'),
           },
           { type: 'separator' },
-          {
-            accelerator: 'Ctrl+W',
-            label: t('window.close'),
-            role: 'close',
-          },
-          {
-            accelerator: 'Ctrl+M',
-            label: t('window.minimize'),
-            role: 'minimize',
-          },
+          { label: t('window.close'), role: 'close' },
+          { label: t('window.minimize'), role: 'minimize' },
           { type: 'separator' },
           { label: t('file.quit'), role: 'quit' },
         ],
@@ -82,24 +113,24 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         label: t('edit.title'),
         submenu: [
-          { accelerator: 'Ctrl+Z', label: t('edit.undo'), role: 'undo' },
-          { accelerator: 'Ctrl+Shift+Z', label: t('edit.redo'), role: 'redo' },
+          { label: t('edit.undo'), role: 'undo' },
+          { label: t('edit.redo'), role: 'redo' },
           { type: 'separator' },
-          { accelerator: 'Ctrl+X', label: t('edit.cut'), role: 'cut' },
-          { accelerator: 'Ctrl+C', label: t('edit.copy'), role: 'copy' },
-          { accelerator: 'Ctrl+V', label: t('edit.paste'), role: 'paste' },
+          { label: t('edit.cut'), role: 'cut' },
+          { label: t('edit.copy'), role: 'copy' },
+          { label: t('edit.paste'), role: 'paste' },
           { type: 'separator' },
-          { accelerator: 'Ctrl+A', label: t('edit.selectAll'), role: 'selectAll' },
+          { label: t('edit.selectAll'), role: 'selectAll' },
         ],
       },
       {
         label: t('view.title'),
         submenu: [
-          { accelerator: 'Ctrl+0', label: t('view.resetZoom'), role: 'resetZoom' },
-          { accelerator: 'Ctrl+Plus', label: t('view.zoomIn'), role: 'zoomIn' },
-          { accelerator: 'Ctrl+-', label: t('view.zoomOut'), role: 'zoomOut' },
+          { label: t('view.resetZoom'), role: 'resetZoom' },
+          { label: t('view.zoomIn'), role: 'zoomIn' },
+          { label: t('view.zoomOut'), role: 'zoomOut' },
           { type: 'separator' },
-          { accelerator: 'F11', label: t('view.toggleFullscreen'), role: 'togglefullscreen' },
+          { label: t('view.toggleFullscreen'), role: 'togglefullscreen' },
         ],
       },
       {
@@ -181,9 +212,9 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
       template.push({
         label: t('dev.title'),
         submenu: [
-          { accelerator: 'Ctrl+R', label: t('dev.reload'), role: 'reload' },
-          { accelerator: 'Ctrl+Shift+R', label: t('dev.forceReload'), role: 'forceReload' },
-          { accelerator: 'Ctrl+Shift+I', label: t('dev.devTools'), role: 'toggleDevTools' },
+          { label: t('dev.reload'), role: 'reload' },
+          { label: t('dev.forceReload'), role: 'forceReload' },
+          { label: t('dev.devTools'), role: 'toggleDevTools' },
           { type: 'separator' },
           {
             click: () => {
@@ -198,43 +229,197 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
     return template;
   }
 
-  private getDefaultContextMenuTemplate(): MenuItemConstructorOptions[] {
+  private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
+    const hasLink = Boolean(data?.linkURL);
+    const hasImage = data?.mediaType === 'image' && Boolean(data?.srcURL);
 
-    return [
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Link actions
+    if (hasLink) {
+      template.push({
+        click: () => shell.openExternal(data!.linkURL!),
+        label: t('context.openLink'),
+      });
+      template.push({
+        click: () => clipboard.writeText(data!.linkURL!),
+        label: t('context.copyLink'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Image actions
+    if (hasImage) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.downloadURL(data!.srcURL!);
+        },
+        label: t('context.saveImage'),
+      });
+      template.push({
+        click: () => {
+          clipboard.writeText(data!.srcURL!);
+        },
+        label: t('context.copyImageAddress'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions
+    template.push(
       { label: t('edit.cut'), role: 'cut' },
       { label: t('edit.copy'), role: 'copy' },
       { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
       { label: t('edit.selectAll'), role: 'selectAll' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
-  private getChatContextMenuTemplate(data?: any): MenuItemConstructorOptions[] {
-    console.log(data);
+  private getChatContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
+    const hasLink = Boolean(data?.linkURL);
+    const hasImage = data?.mediaType === 'image' && Boolean(data?.srcURL);
 
-    return [
-      { accelerator: 'Ctrl+C', label: t('edit.copy'), role: 'copy' },
-      { accelerator: 'Ctrl+V', label: t('edit.paste'), role: 'paste' },
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Link actions
+    if (hasLink) {
+      template.push({
+        click: () => shell.openExternal(data!.linkURL!),
+        label: t('context.openLink'),
+      });
+      template.push({
+        click: () => clipboard.writeText(data!.linkURL!),
+        label: t('context.copyLink'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Image actions
+    if (hasImage) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.downloadURL(data!.srcURL!);
+        },
+        label: t('context.saveImage'),
+      });
+      template.push({
+        click: () => {
+          clipboard.writeText(data!.srcURL!);
+        },
+        label: t('context.copyImageAddress'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions for chat
+    template.push(
+      { label: t('edit.copy'), role: 'copy' },
+      { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
       { label: t('edit.selectAll'), role: 'selectAll' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private getEditorContextMenuTemplate(_data?: any): MenuItemConstructorOptions[] {
+  private getEditorContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
 
-    return [
-      { accelerator: 'Ctrl+X', label: t('edit.cut'), role: 'cut' },
-      { accelerator: 'Ctrl+C', label: t('edit.copy'), role: 'copy' },
-      { accelerator: 'Ctrl+V', label: t('edit.paste'), role: 'paste' },
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions for editor
+    template.push(
+      { label: t('edit.cut'), role: 'cut' },
+      { label: t('edit.copy'), role: 'copy' },
+      { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
-      { accelerator: 'Ctrl+A', label: t('edit.selectAll'), role: 'selectAll' },
+      { label: t('edit.selectAll'), role: 'selectAll' },
       { type: 'separator' },
       { label: t('edit.delete'), role: 'delete' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
   private getTrayMenuTemplate(): MenuItemConstructorOptions[] {

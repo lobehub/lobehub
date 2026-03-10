@@ -1,0 +1,126 @@
+---
+title: Configuring Keycloak Authentication Service in LobeHub
+description: >-
+  Learn how to configure the Keycloak authentication service in LobeHub,
+  including deployment, creation, permission settings, and environment
+  variables.
+tags:
+  - Keycloak Authentication
+  - Environment Variable Configuration
+  - Single Sign-On
+  - LobeHub
+---
+
+# Configuring Keycloak Authentication Service in LobeHub
+
+[Keycloak](https://www.keycloak.org/) is an open-source identity and access management solution that provides single sign-on, identity brokering, and social login features, suitable for modern applications and services.
+
+<Callout type={'tip'}>
+  If you want to privately deploy Keycloak, we recommend using it together with LobeHub via Docker
+  Compose deployment for easier service management.
+</Callout>
+
+## Keycloak Configuration Process
+
+If you deploy using a local network IP, this guide assumes:
+
+- Your LobeHub database version IP/port is `http://LobeHub_IP:3210`.
+- Your privately deployed Keycloak domain is `http://KEYCLOAK_IP:8080`.
+
+If you deploy using a public network, this guide assumes:
+
+- Your LobeHub database version domain is `https://lobe.example.com`.
+- Your privately deployed Keycloak domain is `https://lobe-auth-api.example.com`.
+
+<Steps>
+  ### Create Keycloak Realm and Client
+
+  Access your privately deployed Keycloak admin console (default is `http://localhost:8080/admin`) and log in with the administrator account.
+
+  1. Create a new Realm
+
+     - Click the dropdown menu in the upper left corner and select "Create Realm"
+     - Enter a name, such as "LobeHub", then click "Create"
+
+  2. Create a Client
+
+     - Select "Clients" from the left menu, then click "Create client"
+     - Fill in the following information:
+       - Client ID: `LobeHub`
+       - Client type: `OpenID Connect`
+       - Click "Next"
+     - On the "Capability config" page:
+       - Enable "Client authentication"
+       - Enable "Standard flow"
+       - Click "Next"
+     - On the "Login settings" page:
+       - Valid redirect URIs:
+         - Local development environment: `http://localhost:3210/api/auth/callback/keycloak`
+         - Local network IP deployment: `http://LobeHub_IP:3210/api/auth/callback/keycloak`
+         - Public environment: `https://lobe.example.com/api/auth/callback/keycloak`
+       - Web origins: Add your LobeHub domain or IP
+       - Click "Save"
+
+  3. Get Client Secret
+     - On the client details page, switch to the "Credentials" tab
+     - Copy the "Client secret" value, which will be needed later
+
+  ### Configure Users and Roles (Optional)
+
+  1. Create Users
+
+     - Select "Users" from the left menu, then click "Add user"
+     - Fill in the user information and click "Create"
+     - On the user details page, switch to the "Credentials" tab
+     - Set a password, and disable the "Temporary" option if needed
+     - Click "Set Password" to save
+
+  2. Create Roles and Permissions
+     - Select "Realm roles" from the left menu
+     - Click "Create role"
+     - Create necessary roles, such as "admin", "user", etc.
+     - Assign roles to users: On the user details page, switch to the "Role mapping" tab and assign appropriate roles
+
+  ### Disable Registration (Optional)
+
+  To ensure the security of your application, it's recommended to control Keycloak's registration functionality.
+
+  1. Select "Realm settings" from the left menu
+  2. Switch to the "Login" tab
+  3. In the "User registration" section, disable the "User registration" option
+  4. Click "Save" to save the settings
+
+  <Callout type={'warning'}>
+    If registration is not disabled, anyone might be able to register and log in to your application.
+    Please configure according to your security requirements.
+  </Callout>
+
+  ### Configure Environment Variables
+
+  Set the obtained client ID and client secret as `AUTH_KEYCLOAK_ID` and `AUTH_KEYCLOAK_SECRET` in the LobeHub environment variables.
+
+  Configure the LobeHub environment variable `AUTH_KEYCLOAK_ISSUER` as:
+
+  - `http://localhost:8080/realms/LobeHub` for local development environment
+  - `http://KEYCLOAK_IP:8080/realms/LobeHub` for privately deployed Keycloak on a local network
+  - `https://lobe-auth-api.example.com/realms/LobeHub` for Keycloak deployed in a public environment
+
+  When deploying LobeHub, you need to configure the following environment variables:
+
+  | Environment Variable      | Type     | Description                                                                                                                                                                              |
+  | ------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `AUTH_SECRET`             | Required | Key used to encrypt Auth.js session tokens. You can generate a key using: `openssl rand -base64 32`                                                                                      |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeHub. For Keycloak, fill in `keycloak`.                                                                                                        |
+  | `AUTH_KEYCLOAK_ID`        | Required | Keycloak client ID                                                                                                                                                                       |
+  | `AUTH_KEYCLOAK_SECRET`    | Required | Keycloak client secret                                                                                                                                                                   |
+  | `AUTH_KEYCLOAK_ISSUER`    | Required | OpenID Connect issuer URL for the Keycloak provider, in the format `{keycloak_url}/realms/{realm_name}`                                                                                  |
+  | `AUTH_URL`                | Required | This URL specifies the callback address for Auth.js during OAuth verification. Only needed when the default generated redirect address is incorrect. `https://lobe.example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    Visit [📘 Environment Variables](/zh/docs/self-hosting/environment-variables/auth#keycloak) for details on related variables.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After successful deployment, users will be able to authenticate through Keycloak and use LobeHub.
+</Callout>

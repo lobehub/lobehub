@@ -153,6 +153,43 @@ describe('parse', () => {
 
       expect(serializeParseResult(result)).toEqual(outputs.agentGroup.speakDifferentAgent);
     });
+
+    it('should handle supervisor content-only message (no tools)', () => {
+      const result = parse(inputs.agentGroup.supervisorContentOnly);
+
+      // The critical assertions:
+      // 1. The final supervisor message (content-only, no tools) should be transformed to role='supervisor'
+      // 2. Its content should be moved to children array
+      const supervisorSummary = result.flatList.find((m) => m.id === 'msg-supervisor-summary');
+      expect(supervisorSummary).toBeDefined();
+      expect(supervisorSummary?.role).toBe('supervisor');
+      expect((supervisorSummary as any)?.children).toHaveLength(1);
+      expect((supervisorSummary as any)?.children[0].content).toBe('调研完成！这是综合汇总报告...');
+      // The top-level content should be empty
+      expect(supervisorSummary?.content).toBe('');
+    });
+
+    it('should handle supervisor summary after multiple tasks (content folded into children)', () => {
+      const result = parse(inputs.agentGroup.supervisorAfterMultiTasks);
+
+      // The critical assertions:
+      // 1. flatList should have: user, supervisor(+tool), groupTasks(2 tasks), supervisor-summary
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('supervisor');
+      expect(result.flatList[2].role).toBe('groupTasks');
+      expect(result.flatList[3].role).toBe('supervisor');
+
+      // 2. groupTasks should have 2 tasks
+      expect((result.flatList[2] as any).tasks).toHaveLength(2);
+
+      // 3. The supervisor summary (no tools) should have content folded into children
+      const supervisorSummary = result.flatList[3];
+      expect(supervisorSummary.id).toBe('msg-supervisor-summary');
+      expect(supervisorSummary.content).toBe(''); // content should be empty
+      expect((supervisorSummary as any).children).toHaveLength(1);
+      expect((supervisorSummary as any).children[0].content).toBe('调研完成！这是综合汇总报告...');
+    });
   });
 
   describe('Tasks Aggregation', () => {
@@ -193,6 +230,59 @@ describe('parse', () => {
       expect((result.flatList[2] as any).tasks).toHaveLength(3);
 
       expect(serializeParseResult(result)).toEqual(outputs.tasks.withSummary);
+    });
+
+    it('should handle 10 parallel tasks with summary as task child', () => {
+      const result = parse(inputs.tasks.multiTasksWithSummary);
+
+      // The critical assertions:
+      // 1. flatList should have 4 items: user, assistantGroup(+tool), tasks(10 tasks), assistant-summary
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+      expect(result.flatList[2].role).toBe('tasks');
+      expect(result.flatList[3].role).toBe('assistant');
+
+      // 2. tasks virtual message should have 10 task messages
+      expect((result.flatList[2] as any).tasks).toHaveLength(10);
+
+      // 3. Verify all tasks are completed
+      const tasks = (result.flatList[2] as any).tasks;
+      for (const task of tasks) {
+        expect(task.taskDetail.status).toBe('completed');
+      }
+
+      // 4. The summary message should be present and accessible
+      expect(result.flatList[3].id).toBe('msg-assistant-summary');
+      expect(result.flatList[3].content).toContain('All 10 tasks completed');
+    });
+
+    it('should handle single task (execTask) with tool chain after completion', () => {
+      const result = parse(inputs.tasks.singleTaskWithToolChain);
+
+      expect(serializeParseResult(result)).toEqual(outputs.tasks.singleTaskWithToolChain);
+    });
+
+    it('should merge assistant with tools after task into AssistantGroup', () => {
+      const result = parse(inputs.tasks.withAssistantGroup);
+
+      // The critical assertions:
+      // 1. flatList should have 4 items: user, assistantGroup(+tool), tasks(3 tasks), assistantGroup(with tool chain)
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+      expect(result.flatList[2].role).toBe('tasks');
+      expect(result.flatList[3].role).toBe('assistantGroup');
+
+      // 2. The last assistantGroup should contain the full chain:
+      //    - msg-assistant-after-task (with tool)
+      //    - msg-assistant-final (without tool)
+      const lastGroup = result.flatList[3] as any;
+      expect(lastGroup.children).toHaveLength(2);
+      expect(lastGroup.children[0].id).toBe('msg-assistant-after-task');
+      expect(lastGroup.children[0].tools).toBeDefined();
+      expect(lastGroup.children[0].tools[0].result_msg_id).toBe('msg-tool-list-files');
+      expect(lastGroup.children[1].id).toBe('msg-assistant-final');
     });
   });
 

@@ -1,8 +1,8 @@
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
-  type ChatTTS,
   type ChatTranslate,
+  type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
   type MessageMetadata,
@@ -13,7 +13,7 @@ import {
   type UpdateMessageRAGParams,
   type UpdateMessageResult,
 } from '@lobechat/types';
-import type { HeatmapsProps } from '@lobehub/charts';
+import { type HeatmapsProps } from '@lobehub/charts';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -214,6 +214,81 @@ export class MessageService {
     ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
     return lambdaClient.message.addFilesToMessage.mutate({ ...ctx, fileIds, id });
+  };
+
+  // =============== Compression ===============
+
+  /**
+   * Create a compression group for old messages
+   * Returns placeholder group and messages to summarize
+   */
+  createCompressionGroup = async (params: {
+    agentId: string;
+    groupId?: string | null;
+    messageIds: string[];
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{
+    messageGroupId: string;
+    messages: UIChatMessage[];
+    messagesToSummarize: UIChatMessage[];
+  }> => {
+    const result = await lambdaClient.message.createCompressionGroup.mutate(params);
+    return {
+      messageGroupId: result.messageGroupId,
+      messages: (result.messages || []) as unknown as UIChatMessage[],
+      messagesToSummarize: (result.messagesToSummarize || []) as unknown as UIChatMessage[],
+    };
+  };
+
+  /**
+   * Finalize compression by updating group with generated summary
+   */
+  finalizeCompression = async (params: {
+    agentId: string;
+    content: string;
+    groupId?: string | null;
+    messageGroupId: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{ messages?: UIChatMessage[] }> => {
+    const result = await lambdaClient.message.finalizeCompression.mutate(params);
+    return {
+      messages: (result.messages || []) as unknown as UIChatMessage[],
+    };
+  };
+
+  /**
+   * Update message group metadata (e.g., expanded state)
+   */
+  updateMessageGroupMetadata = async (params: {
+    context: {
+      agentId: string;
+      groupId?: string | null;
+      threadId?: string | null;
+      topicId: string;
+    };
+    expanded?: boolean;
+    messageGroupId: string;
+  }): Promise<{ messages: UIChatMessage[] }> => {
+    const result = await lambdaClient.message.updateMessageGroupMetadata.mutate(params);
+    return {
+      messages: (result.messages || []) as unknown as UIChatMessage[],
+    };
+  };
+
+  /**
+   * Cancel compression by deleting the compression group and restoring original messages
+   */
+  cancelCompression = async (params: {
+    agentId: string;
+    groupId?: string | null;
+    messageGroupId: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{ messages: UIChatMessage[] }> => {
+    const result = await lambdaClient.message.cancelCompression.mutate(params);
+    return { messages: (result.messages || []) as unknown as UIChatMessage[] };
   };
 }
 

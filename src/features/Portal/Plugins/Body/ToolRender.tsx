@@ -1,10 +1,10 @@
+import { BuiltinToolsPortals } from '@lobechat/builtin-tools/portals';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import PluginRender from '@/features/PluginsUI/Render';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
-import { BuiltinToolsPortals } from '@/tools/portals';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 const ToolRender = memo(() => {
