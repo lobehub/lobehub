@@ -8,7 +8,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
-      video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
