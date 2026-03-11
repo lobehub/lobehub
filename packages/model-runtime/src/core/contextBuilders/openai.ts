@@ -162,7 +162,7 @@ export const convertOpenAIResponseInputs = async (
                   return { ...c, type: 'input_text' };
                 }
                 if (c.type === 'video_url') {
-                  const video = await convertMessageContent(c);
+                  const video = await convertMessageContent(c, options);
                   if (!('video_url' in video) || !video.video_url?.url) {
                     return undefined;
                   }
@@ -171,7 +171,10 @@ export const convertOpenAIResponseInputs = async (
                     type: 'input_video',
                   };
                 }
-                const image = await convertMessageContent(c as OpenAI.ChatCompletionContentPart);
+                const image = await convertMessageContent(
+                  c as OpenAI.ChatCompletionContentPart,
+                  options,
+                );
                 if (!(image as OpenAI.ChatCompletionContentPartImage).image_url?.url) {
                   return undefined;
                 }

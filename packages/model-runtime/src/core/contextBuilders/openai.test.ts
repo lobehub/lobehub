@@ -666,6 +666,90 @@ describe('convertOpenAIResponseInputs', () => {
       },
     ]);
   });
+
+  it('should pass forceVideoBase64 to convertMessageContent in video_url branch', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'https://example.com/video.mp4',
+            },
+          },
+        ],
+      },
+    ];
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertOpenAIResponseInputs(messages, { forceVideoBase64: true });
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is a video' },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,forcedBase64',
+          },
+        ],
+      },
+    ]);
+
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+  });
+
+  it('should pass forceImageBase64 to convertMessageContent in image_url branch', async () => {
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is an image' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: 'https://example.com/image.jpg',
+            },
+          },
+        ],
+      },
+    ];
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'image/jpeg',
+    });
+
+    const result = await convertOpenAIResponseInputs(messages, { forceImageBase64: true });
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is an image' },
+          {
+            type: 'input_image',
+            image_url: 'data:image/jpeg;base64,forcedBase64',
+          },
+        ],
+      },
+    ]);
+
+    expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
+  });
 });
 
 describe('convertImageUrlToFile', () => {
