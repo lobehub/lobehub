@@ -2507,4 +2507,346 @@ describe('GeneralChatAgent', () => {
       ]);
     });
   });
+
+  describe('audit type annotation and session bypass', () => {
+    it('should annotate auditType from global resolver on tools needing intervention', async () => {
+      const customResolver: GlobalInterventionAuditConfig = {
+        type: 'customBlocker',
+        policy: 'always',
+        resolver: (toolArgs) => toolArgs.dangerous === true,
+      };
+
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        globalInterventionAudits: [customResolver],
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'my-tool',
+        apiName: 'doSomething',
+        arguments: '{"dangerous":true}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          'my-tool': { identifier: 'my-tool', humanIntervention: 'never' },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'request_human_approve',
+          pendingToolsCalling: [
+            expect.objectContaining({
+              id: 'call-1',
+              intervention: { auditType: 'customBlocker' },
+            }),
+          ],
+          reason: 'human_intervention_required',
+        },
+      ]);
+    });
+
+    it('should annotate auditType from dynamic resolver on tools needing intervention', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        dynamicInterventionAudits: {
+          pathScopeAudit: (toolArgs, metadata) => {
+            const workingDirectory = metadata?.workingDirectory as string | undefined;
+            if (!workingDirectory) return false;
+            const path = toolArgs.path as string;
+            return !path.startsWith(workingDirectory);
+          },
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'local-system',
+        apiName: 'readLocalFile',
+        arguments: '{"path":"/etc/passwd"}',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        metadata: { workingDirectory: '/workspace' },
+        toolManifestMap: {
+          'local-system': {
+            identifier: 'local-system',
+            api: [
+              {
+                name: 'readLocalFile',
+                humanIntervention: {
+                  dynamic: {
+                    default: 'never',
+                    policy: 'required',
+                    type: 'pathScopeAudit',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'request_human_approve',
+          pendingToolsCalling: [
+            expect.objectContaining({
+              id: 'call-1',
+              intervention: { auditType: 'pathScopeAudit' },
+            }),
+          ],
+          reason: 'human_intervention_required',
+        },
+      ]);
+    });
+
+    it('should session-bypass dynamic audit type when in sessionBypassedAudits', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        dynamicInterventionAudits: {
+          pathScopeAudit: () => true,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'local-system',
+        apiName: 'readLocalFile',
+        arguments: '{"path":"/etc/passwd"}',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        sessionBypassedAudits: ['pathScopeAudit'],
+        toolManifestMap: {
+          'local-system': {
+            identifier: 'local-system',
+            api: [
+              {
+                name: 'readLocalFile',
+                humanIntervention: {
+                  dynamic: {
+                    default: 'never',
+                    policy: 'required',
+                    type: 'pathScopeAudit',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: expect.objectContaining({
+              id: 'call-1',
+              intervention: { auditType: 'pathScopeAudit', status: 'session_bypassed' },
+            }),
+          },
+        },
+      ]);
+    });
+
+    it('should NOT session-bypass dynamic audit type when NOT in sessionBypassedAudits', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        dynamicInterventionAudits: {
+          pathScopeAudit: () => true,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'local-system',
+        apiName: 'readLocalFile',
+        arguments: '{"path":"/etc/passwd"}',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        sessionBypassedAudits: ['someOtherAudit'],
+        toolManifestMap: {
+          'local-system': {
+            identifier: 'local-system',
+            api: [
+              {
+                name: 'readLocalFile',
+                humanIntervention: {
+                  dynamic: {
+                    default: 'never',
+                    policy: 'required',
+                    type: 'pathScopeAudit',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'request_human_approve',
+          pendingToolsCalling: [
+            expect.objectContaining({
+              id: 'call-1',
+              intervention: { auditType: 'pathScopeAudit' },
+            }),
+          ],
+          reason: 'human_intervention_required',
+        },
+      ]);
+    });
+
+    it('should session-bypass overridable global block when auditType is in sessionBypassedAudits', async () => {
+      const softBlocker: GlobalInterventionAuditConfig = {
+        type: 'softBlocker',
+        policy: 'required',
+        resolver: () => true,
+      };
+
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        globalInterventionAudits: [softBlocker],
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'my-tool',
+        apiName: 'doSomething',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        sessionBypassedAudits: ['softBlocker'],
+        toolManifestMap: {
+          'my-tool': { identifier: 'my-tool', humanIntervention: 'never' },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: expect.objectContaining({
+              id: 'call-1',
+              intervention: { auditType: 'softBlocker', status: 'session_bypassed' },
+            }),
+          },
+        },
+      ]);
+    });
+
+    it('should NOT session-bypass global audit with policy always (e.g., securityBlacklist)', async () => {
+      const alwaysBlocker: GlobalInterventionAuditConfig = {
+        type: 'securityBlacklist',
+        policy: 'always',
+        resolver: (toolArgs) => toolArgs.dangerous === true,
+      };
+
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        globalInterventionAudits: [alwaysBlocker],
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'my-tool',
+        apiName: 'doSomething',
+        arguments: '{"dangerous":true}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        sessionBypassedAudits: ['securityBlacklist'],
+        toolManifestMap: {
+          'my-tool': { identifier: 'my-tool', humanIntervention: 'never' },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'request_human_approve',
+          pendingToolsCalling: [
+            expect.objectContaining({
+              id: 'call-1',
+              intervention: { auditType: 'securityBlacklist' },
+            }),
+          ],
+          reason: 'human_intervention_required',
+        },
+      ]);
+    });
+  });
 });

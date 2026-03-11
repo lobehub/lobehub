@@ -190,6 +190,103 @@ export class ConversationControlActionImpl {
     }
   };
 
+  approveAllToolCallings = async (
+    toolMessageIds: string[],
+    _assistantGroupId: string,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    const { agentId, topicId, threadId, scope } = effectiveContext;
+
+    // Use the last tool message as parent for the resumed execution
+    const parentMessageId = toolMessageIds.at(-1);
+    if (!parentMessageId) return;
+
+    const { operationId } = startOperation({
+      type: 'approveToolCalling',
+      context: {
+        agentId,
+        topicId: topicId ?? undefined,
+        threadId: threadId ?? undefined,
+        scope,
+        messageId: parentMessageId,
+      },
+    });
+
+    const optimisticContext = { operationId };
+
+    // Update all intervention statuses to approved
+    const approvedToolCalls: unknown[] = [];
+    for (const toolMsgId of toolMessageIds) {
+      const toolMessage = dbMessageSelectors.getDbMessageById(toolMsgId)(this.#get());
+      if (!toolMessage) continue;
+
+      await this.#get().optimisticUpdatePlugin(
+        toolMsgId,
+        { intervention: { status: 'approved' } },
+        optimisticContext,
+      );
+
+      approvedToolCalls.push(toolMessage.plugin);
+    }
+
+    // Bail out if no valid tool messages were found
+    if (approvedToolCalls.length === 0) {
+      completeOperation(operationId);
+      return;
+    }
+
+    // Get current messages for state construction
+    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
+    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+
+    const { state, context: initialContext } = this.#get().internal_createAgentState({
+      messages: currentMessages,
+      parentMessageId,
+      agentId,
+      topicId,
+      threadId: threadId ?? undefined,
+      operationId,
+    });
+
+    const agentRuntimeContext: AgentRuntimeContext = {
+      ...initialContext,
+      phase: 'human_approved_tools',
+      payload: {
+        approvedToolCalls,
+        parentMessageId,
+        skipCreateToolMessage: true,
+      },
+    };
+
+    try {
+      await internal_execAgentRuntime({
+        context: effectiveContext,
+        messages: currentMessages,
+        parentMessageId,
+        parentMessageType: 'tool',
+        initialState: state,
+        initialContext: agentRuntimeContext,
+        parentOperationId: operationId,
+      });
+      completeOperation(operationId);
+    } catch (error) {
+      const err = error as Error;
+      console.error('[approveAllToolCallings] Error executing agent runtime:', err);
+      this.#get().failOperation(operationId, {
+        type: 'approveToolCalling',
+        message: err.message || 'Unknown error',
+      });
+    }
+  };
+
   rejectToolCalling = async (
     messageId: string,
     reason?: string,

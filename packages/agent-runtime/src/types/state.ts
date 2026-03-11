@@ -104,6 +104,7 @@ export interface AgentState {
    * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
    */
   securityBlacklist?: SecurityBlacklistConfig;
+  sessionBypassedAudits?: string[];
   // --- State Machine ---
   status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
 

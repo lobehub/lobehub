@@ -1,7 +1,7 @@
 import { type ToolIntervention } from '@lobechat/types';
 import { Block, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Ban, Check, HandIcon, PauseIcon, X } from 'lucide-react';
+import { Ban, Check, HandIcon, PauseIcon, ShieldCheck, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +22,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(({ intervention, result }) =>
   const isPending = intervention?.status === 'pending';
   const isReject = intervention?.status === 'rejected';
   const isAbort = intervention?.status === 'aborted';
+  const isSessionBypassed = intervention?.status === 'session_bypassed';
 
   let icon;
 
@@ -39,6 +40,12 @@ const StatusIndicator = memo<StatusIndicatorProps>(({ intervention, result }) =>
     );
   } else if (hasError) {
     icon = <Icon color={cssVar.colorError} icon={X} />;
+  } else if (isSessionBypassed) {
+    icon = (
+      <Tooltip title={t('tool.intervention.sessionBypassed')}>
+        <Icon color={cssVar.colorSuccess} icon={ShieldCheck} />
+      </Tooltip>
+    );
   } else if (isPending) {
     icon = <Icon color={cssVar.colorInfo} icon={HandIcon} />;
   } else if (hasResult) {

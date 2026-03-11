@@ -121,6 +121,32 @@ export class AgentRuntime {
           },
           type: 'call_tool',
         };
+      } else if (runtimeContext.phase === 'human_approved_tools') {
+        // Batch approve: execute all approved tools
+        const approvedPayload = runtimeContext.payload as {
+          approvedToolCalls: ChatToolPayload[];
+          parentMessageId: string;
+        };
+
+        if (approvedPayload.approvedToolCalls.length === 1) {
+          rawInstructions = {
+            payload: {
+              parentMessageId: approvedPayload.parentMessageId,
+              skipCreateToolMessage: true,
+              toolCalling: approvedPayload.approvedToolCalls[0],
+            },
+            type: 'call_tool',
+          };
+        } else {
+          rawInstructions = {
+            payload: {
+              parentMessageId: approvedPayload.parentMessageId,
+              skipCreateToolMessage: true,
+              toolsCalling: approvedPayload.approvedToolCalls,
+            },
+            type: 'call_tools_batch',
+          };
+        }
       } else {
         // Standard flow: Plan -> Execute
         rawInstructions = await this.agent.runner(runtimeContext, newState);
@@ -685,7 +711,11 @@ export class AgentRuntime {
     const results = await pMap(instruction.payload.toolsCalling, (toolCalling: ChatToolPayload) =>
       this.executors.call_tool(
         {
-          payload: { parentMessageId: payload.parentMessageId, toolCalling },
+          payload: {
+            parentMessageId: payload.parentMessageId,
+            skipCreateToolMessage: payload.skipCreateToolMessage,
+            toolCalling,
+          },
           type: 'call_tool',
         } as AgentInstructionCallTool,
         structuredClone(baseState), // Each tool starts from the same base state

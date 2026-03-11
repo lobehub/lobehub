@@ -128,18 +128,12 @@ export class GeneralChatAgent implements Agent {
     const toolsNeedingIntervention: ChatToolPayload[] = [];
     const toolsToExecute: ChatToolPayload[] = [];
 
-    // Get security blacklist for resolver metadata
     const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
-
-    // Build resolver metadata: merge state.metadata with security blacklist
     const resolverMetadata = { ...state.metadata, securityBlacklist };
-
-    // Get user config (default to 'manual' mode)
     const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
-
-    // Global audits: default to security blacklist audit if not provided
     const globalResolvers = this.config.globalInterventionAudits ?? createDefaultGlobalAudits();
+    const sessionBypassed = state.sessionBypassedAudits ?? [];
 
     for (const toolCalling of toolsCalling) {
       const { identifier, apiName } = toolCalling;
@@ -161,6 +155,10 @@ export class GeneralChatAgent implements Agent {
         if (globalResolver.resolver(toolArgs, resolverMetadata)) {
           globalBlocked = true;
           globalPolicy = globalResolver.policy ?? 'always';
+          toolCalling.intervention = {
+            ...toolCalling.intervention,
+            auditType: globalResolver.type,
+          };
           break;
         }
       }
@@ -194,14 +192,29 @@ export class GeneralChatAgent implements Agent {
         if (dynamicPolicy === 'never') {
           toolsToExecute.push(toolCalling);
         } else {
-          toolsNeedingIntervention.push(toolCalling);
+          const dynamicConfig = config as { dynamic: { type: string } };
+          const auditType = dynamicConfig.dynamic.type;
+          toolCalling.intervention = { ...toolCalling.intervention, auditType };
+
+          if (sessionBypassed.includes(auditType)) {
+            toolCalling.intervention = { ...toolCalling.intervention, status: 'session_bypassed' };
+            toolsToExecute.push(toolCalling);
+          } else {
+            toolsNeedingIntervention.push(toolCalling);
+          }
         }
         continue;
       }
 
       // Phase 3.5: Handle overridable global block (policy !== 'always')
       if (globalBlocked && globalPolicy !== 'always') {
-        toolsNeedingIntervention.push(toolCalling);
+        const auditType = toolCalling.intervention?.auditType;
+        if (auditType && sessionBypassed.includes(auditType)) {
+          toolCalling.intervention = { ...toolCalling.intervention, status: 'session_bypassed' };
+          toolsToExecute.push(toolCalling);
+        } else {
+          toolsNeedingIntervention.push(toolCalling);
+        }
         continue;
       }
 

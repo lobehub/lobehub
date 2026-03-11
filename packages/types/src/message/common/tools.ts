@@ -6,13 +6,17 @@ import type { LobeToolRenderType } from '../../tool';
 
 // ToolIntervention must be defined first to avoid circular dependency
 export interface ToolIntervention {
+  auditType?: string;
   rejectedReason?: string;
-  status?: 'pending' | 'approved' | 'rejected' | 'aborted' | 'none';
+  status?: 'pending' | 'approved' | 'rejected' | 'aborted' | 'none' | 'session_bypassed';
 }
 
 export const ToolInterventionSchema = z.object({
+  auditType: z.string().optional(),
   rejectedReason: z.string().optional(),
-  status: z.enum(['pending', 'approved', 'rejected', 'aborted', 'none']).optional(),
+  status: z
+    .enum(['pending', 'approved', 'rejected', 'aborted', 'none', 'session_bypassed'])
+    .optional(),
 });
 
 export interface ChatPluginPayload {

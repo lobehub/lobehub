@@ -194,6 +194,10 @@ export class StreamingExecutorActionImpl {
     const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
     const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
 
+    // Read session-bypassed audits for this conversation
+    const conversationKey = `${agentId}-${topicId ?? 'default'}`;
+    const sessionBypassedAudits = this.#get().sessionBypassedAudits[conversationKey] ?? [];
+
     // Create initial state or use provided state
     const state =
       initialState ||
@@ -214,6 +218,7 @@ export class StreamingExecutorActionImpl {
           sourceMap: {},
           tools: toolsDetailed.tools ?? [],
         },
+        sessionBypassedAudits: sessionBypassedAudits.length > 0 ? sessionBypassedAudits : undefined,
         toolManifestMap,
         userInterventionConfig,
       });

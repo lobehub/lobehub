@@ -443,6 +443,12 @@ export default {
   'tool.intervention.rejectedWithReason': 'This Skill call was rejected: {{reason}}',
   'tool.intervention.toolAbort': 'You canceled this Skill call',
   'tool.intervention.toolRejected': 'This Skill call was rejected',
+  'tool.intervention.approveAll': 'Approve All',
+  'tool.intervention.rejectAll': 'Reject All',
+  'tool.intervention.allowSession': 'Allow for This Session',
+  'tool.intervention.sessionBypassed': 'Auto-approved (session authorized)',
+  'tool.intervention.batchTitle_one': '{{count}} operation requires approval',
+  'tool.intervention.batchTitle_other': '{{count}} operations require approval',
   'toolAuth.authorize': 'Authorize',
   'toolAuth.authorizing': 'Authorizing...',
   'toolAuth.hint':

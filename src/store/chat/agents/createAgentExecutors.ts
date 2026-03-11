@@ -694,6 +694,10 @@ export const createAgentExecutors = (context: {
             groupId: assistantMessage?.groupId,
             parentId: payload.parentMessageId,
             plugin: chatToolPayload,
+            pluginIntervention:
+              chatToolPayload.intervention?.status === 'session_bypassed'
+                ? { status: 'session_bypassed', auditType: chatToolPayload.intervention.auditType }
+                : undefined,
             role: 'tool',
             agentId: effectiveAgentId!,
             threadId: opContext.threadId,
@@ -1025,7 +1029,10 @@ export const createAgentExecutors = (context: {
             plugin: {
               ...toolPayload,
             },
-            pluginIntervention: { status: 'pending' },
+            pluginIntervention: {
+              auditType: toolPayload.intervention?.auditType,
+              status: 'pending',
+            },
             role: 'tool',
             agentId: effectiveAgentId!,
             threadId: opContext.threadId,

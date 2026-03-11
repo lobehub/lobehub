@@ -39,6 +39,7 @@ export interface AgentRuntimeContext {
     | 'tasks_batch_result'
     | 'human_response'
     | 'human_approved_tool'
+    | 'human_approved_tools'
     | 'human_abort'
     | 'compression_result'
     | 'error';

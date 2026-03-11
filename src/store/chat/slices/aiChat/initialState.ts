@@ -5,6 +5,11 @@ export interface ChatAIChatState {
   inputMessage: string;
   mainInputEditor: ChatInputEditor | null;
   searchWorkflowLoadingIds: string[];
+  /**
+   * Session-bypassed audit types per conversation key.
+   * Key format: `${agentId}-${topicId ?? 'default'}`
+   */
+  sessionBypassedAudits: Record<string, string[]>;
   threadInputEditor: ChatInputEditor | null;
   /**
    * the tool calling stream ids
@@ -17,6 +22,7 @@ export const initialAiChatState: ChatAIChatState = {
   inputMessage: '',
   mainInputEditor: null,
   searchWorkflowLoadingIds: [],
+  sessionBypassedAudits: {},
   threadInputEditor: null,
   toolCallingStreamIds: {},
 };
