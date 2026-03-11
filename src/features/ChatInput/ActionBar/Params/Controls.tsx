@@ -142,7 +142,7 @@ const PARAM_CONFIG = {
   }
 >;
 
-const Controls = memo<ControlsProps>(({ setUpdating }) => {
+const Controls = memo<ControlsProps>(({ setUpdating, updating }) => {
   const { t } = useTranslation('setting');
   const mobile = useServerConfigStore((s) => s.isMobile);
   const agentId = useAgentId();
@@ -158,8 +158,9 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
   const historyCountFromStore = useAgentStore((s) =>
     chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
   );
-  const enableHistoryCountFromStore = useAgentStore((s) =>
-    chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
+  // Use raw chatConfig value, not the selector with business logic that may force false
+  const enableHistoryCountFromStore = useAgentStore(
+    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).enableHistoryCount,
   );
 
   const lastValuesRef = useRef<Record<ParamKey, number | undefined>>({
@@ -184,6 +185,9 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
 
   // Sync history count values to form
   useEffect(() => {
+    // Skip syncing when updating to avoid overwriting user's in-progress edits
+    if (updating) return;
+
     form.setFieldsValue({
       chatConfig: {
         ...form.getFieldValue('chatConfig'),
@@ -191,7 +195,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
         historyCount: historyCountFromStore,
       },
     });
-  }, [enableHistoryCountFromStore, historyCountFromStore, form]);
+  }, [form, enableHistoryCountFromStore, historyCountFromStore, updating]);
 
   const temperatureValue = AntdForm.useWatch(PARAM_NAME_MAP.temperature, form);
   const topPValue = AntdForm.useWatch(PARAM_NAME_MAP.top_p, form);
@@ -360,7 +364,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     {
       children: <Switch />,
       label: (
-        <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
           {t('settingChat.enableHistoryCount.title')}
           <InfoTooltip title={t('settingChat.historyCount.desc')} />
         </Flexbox>
@@ -377,16 +381,16 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
                 max={20}
                 min={0}
                 step={1}
+                unlimitedInput={true}
                 styles={{
                   input: {
                     maxWidth: 64,
                   },
                 }}
-                unlimitedInput={true}
               />
             ),
             label: (
-              <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
                 {t('settingChat.historyCount.title')}
                 <InfoTooltip title={t('settingChat.historyCount.desc')} />
               </Flexbox>
