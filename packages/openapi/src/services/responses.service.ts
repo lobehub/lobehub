@@ -606,7 +606,7 @@ export class ResponsesService extends BaseService {
       top_logprobs: p.top_logprobs ?? 0,
       top_p: opts.params.top_p ?? 1,
       truncation:
-        typeof opts.params.truncation === 'object'
+        opts.params.truncation && typeof opts.params.truncation === 'object'
           ? opts.params.truncation.type
           : (opts.params.truncation ?? 'disabled'),
       usage: {

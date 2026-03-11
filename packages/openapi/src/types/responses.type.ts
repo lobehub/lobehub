@@ -10,6 +10,7 @@ export type InputTextContent = z.infer<typeof InputTextContentSchema>;
 
 export const OutputTextContentSchema = z.object({
   annotations: z.array(z.any()).optional(),
+  logprobs: z.array(z.any()).optional(),
   text: z.string(),
   type: z.literal('output_text'),
 });
@@ -120,6 +121,9 @@ export type Tool = z.infer<typeof ToolSchema>;
 
 export interface ResponseUsage {
   input_tokens: number;
+  input_tokens_details?: {
+    cached_tokens?: number;
+  };
   output_tokens: number;
   output_tokens_details?: {
     reasoning_tokens?: number;
@@ -290,6 +294,7 @@ export interface OutputItemDoneEvent extends BaseStreamEvent {
 
 export interface ContentPartAddedEvent extends BaseStreamEvent {
   content_index: number;
+  item_id: string;
   output_index: number;
   part: ContentPart;
   type: 'response.content_part.added';
@@ -297,6 +302,7 @@ export interface ContentPartAddedEvent extends BaseStreamEvent {
 
 export interface ContentPartDoneEvent extends BaseStreamEvent {
   content_index: number;
+  item_id: string;
   output_index: number;
   part: ContentPart;
   type: 'response.content_part.done';
@@ -305,12 +311,16 @@ export interface ContentPartDoneEvent extends BaseStreamEvent {
 export interface OutputTextDeltaEvent extends BaseStreamEvent {
   content_index: number;
   delta: string;
+  item_id: string;
+  logprobs: any[];
   output_index: number;
   type: 'response.output_text.delta';
 }
 
 export interface OutputTextDoneEvent extends BaseStreamEvent {
   content_index: number;
+  item_id: string;
+  logprobs: any[];
   output_index: number;
   text: string;
   type: 'response.output_text.done';
