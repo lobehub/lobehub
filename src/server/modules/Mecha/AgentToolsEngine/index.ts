@@ -9,6 +9,7 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
+import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
@@ -100,11 +101,19 @@ export const createServerAgentToolsEngine = (
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
 
+  // Determine runtime mode based on platform
+  const isDesktopClient = !!deviceContext?.gatewayConfigured;
+  const platform = isDesktopClient ? 'desktop' : 'web';
+  const runtimeMode =
+    agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[platform] ??
+    (isDesktopClient ? 'local' : 'none');
+
   log(
-    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s, additionalManifests=%d, deviceGateway=%s',
+    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s, runtimeMode=%s, additionalManifests=%d, deviceGateway=%s',
     model,
     provider,
     searchMode,
+    runtimeMode,
     additionalManifests?.length ?? 0,
     !!deviceContext?.gatewayConfigured,
   );
@@ -116,9 +125,12 @@ export const createServerAgentToolsEngine = (
     defaultToolIds,
     enableChecker: createEnableChecker({
       rules: {
+        [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
         [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
         [LocalSystemManifest.identifier]:
-          !!deviceContext?.gatewayConfigured && !!deviceContext?.deviceOnline,
+          runtimeMode === 'local' &&
+          !!deviceContext?.gatewayConfigured &&
+          !!deviceContext?.deviceOnline,
         [MemoryManifest.identifier]: globalMemoryEnabled,
         [RemoteDeviceManifest.identifier]: !!deviceContext?.gatewayConfigured,
         [WebBrowsingManifest.identifier]: isSearchEnabled,

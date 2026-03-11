@@ -30,6 +30,7 @@ export const defaultToolIds = [
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   LocalSystemManifest.identifier,
+  CloudSandboxManifest.identifier,
 ];
 
 export const builtinTools: LobeBuiltinTool[] = [
