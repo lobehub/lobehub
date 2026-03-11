@@ -3,6 +3,7 @@
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, Icon, Skeleton } from '@lobehub/ui';
 import { Switch } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,6 +13,14 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
+
+const styles = createStaticStyles(({ css }) => ({
+  labItem: css`
+    .ant-form-item-row {
+      align-items: center !important;
+    }
+  `,
+}));
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
@@ -51,7 +60,7 @@ const Page = memo(() => {
           <img
             alt={tLabs('features.inputMarkdown.title')}
             src="https://github.com/user-attachments/assets/0527a966-3d95-46b4-b880-c0f3fca18f02"
-            style={{ borderRadius: 6, height: 'auto', marginRight: 8, objectFit: 'cover', width: 64 }}
+            style={{ borderRadius: 8, height: 'auto', marginRight: 12, objectFit: 'cover', width: 120 }}
           />
         ),
         children: (
@@ -61,6 +70,7 @@ const Page = memo(() => {
             onChange={(checked) => updateLab({ enableInputMarkdown: checked })}
           />
         ),
+        className: styles.labItem,
         desc: tLabs('features.inputMarkdown.desc'),
         label: tLabs('features.inputMarkdown.title'),
         minWidth: undefined,
