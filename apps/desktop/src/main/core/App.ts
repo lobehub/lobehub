@@ -18,6 +18,9 @@ import {
   browserAutomationDetectors,
   contentSearchDetectors,
   fileSearchDetectors,
+  type IToolDetector,
+  runtimeEnvironmentDetectors,
+  type ToolCategory,
 } from '@/modules/toolDetectors';
 import type { IServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
@@ -187,24 +190,20 @@ export class App {
   private registerBuiltinToolDetectors() {
     logger.debug('Registering built-in tool detectors');
 
-    // Register content search tools (rg, ag, grep)
-    for (const detector of contentSearchDetectors) {
-      this.toolDetectorManager.register(detector, 'content-search');
-    }
+    const detectorCategories: Partial<Record<ToolCategory, IToolDetector[]>> = {
+      'runtime-environment': runtimeEnvironmentDetectors,
+      'ast-search': astSearchDetectors,
+      'browser-automation': browserAutomationDetectors,
+      'content-search': contentSearchDetectors,
+      'file-search': fileSearchDetectors,
+    };
 
-    // Register AST-based code search tools (ast-grep)
-    for (const detector of astSearchDetectors) {
-      this.toolDetectorManager.register(detector, 'ast-search');
-    }
-
-    // Register file search tools (mdfind, fd, find)
-    for (const detector of fileSearchDetectors) {
-      this.toolDetectorManager.register(detector, 'file-search');
-    }
-
-    // Register browser automation tools (agent-browser)
-    for (const detector of browserAutomationDetectors) {
-      this.toolDetectorManager.register(detector, 'browser-automation');
+    for (const [category, detectors] of Object.entries(detectorCategories)) {
+      if (detectors) {
+        for (const detector of detectors) {
+          this.toolDetectorManager.register(detector, category as ToolCategory);
+        }
+      }
     }
 
     logger.info(

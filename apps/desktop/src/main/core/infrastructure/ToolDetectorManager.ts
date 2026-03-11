@@ -40,6 +40,7 @@ export type ToolCategory =
   | 'ast-search'
   | 'file-search'
   | 'browser-automation'
+  | 'runtime-environment'
   | 'system'
   | 'custom';
 

@@ -8,6 +8,7 @@
 export { browserAutomationDetectors } from './agentBrowserDetectors';
 export { astSearchDetectors, contentSearchDetectors } from './contentSearchDetectors';
 export { fileSearchDetectors } from './fileSearchDetectors';
+export { runtimeEnvironmentDetectors } from './runtimeEnvironmentDetectors';
 
 // Re-export types for convenience
 export type {
