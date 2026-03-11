@@ -8,11 +8,6 @@ export interface XAIModelCard {
   id: string;
 }
 
-export const GrokReasoningModels = new Set(['grok-3-mini', 'grok-4', 'grok-code']);
-
-export const isGrokReasoningModel = (model: string) =>
-  Array.from(GrokReasoningModels).some((id) => model.includes(id));
-
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
   chatCompletion: {
@@ -20,6 +15,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   },
   createImage: createXAIImage,
   debug: {
+    chatCompletion: () => process.env.DEBUG_XAI_CHAT_COMPLETION === '1',
     responses: () => process.env.DEBUG_XAI_RESPONSES === '1',
   },
   models: async ({ client }) => {
@@ -31,7 +27,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.XAI,
   responses: {
     handlePayload: (payload) => {
-      const { enabledSearch, frequency_penalty, model, presence_penalty, tools, ...rest } = payload;
+      const { enabledSearch, tools, ...rest } = payload;
 
       const xaiTools = enabledSearch
         ? [...(tools || []), { type: 'web_search' }, { type: 'x_search' }]
@@ -39,10 +35,6 @@ export const LobeXAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
-        frequency_penalty: isGrokReasoningModel(model) ? undefined : frequency_penalty,
-        model,
-        presence_penalty: isGrokReasoningModel(model) ? undefined : presence_penalty,
-        stream: payload.stream ?? true,
         tools: xaiTools,
         include: ['reasoning.encrypted_content'],
       } as any;

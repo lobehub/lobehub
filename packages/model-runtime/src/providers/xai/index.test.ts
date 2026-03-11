@@ -5,14 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import type { XAIModelCard } from './index';
-import { isGrokReasoningModel, LobeXAI } from './index';
+import { LobeXAI } from './index';
 
 testProvider({
   Runtime: LobeXAI,
   provider: ModelProvider.XAI,
   defaultBaseURL: 'https://api.x.ai/v1',
   chatDebugEnv: 'DEBUG_XAI_CHAT_COMPLETION',
+  responseDebugEnv: 'DEBUG_XAI_RESPONSES',
   chatModel: 'grok',
+  test: { useResponsesAPI: true },
 });
 
 describe('LobeXAI - custom features', () => {
@@ -20,73 +22,7 @@ describe('LobeXAI - custom features', () => {
 
   beforeEach(() => {
     instance = new LobeXAI({ apiKey: 'test_api_key' });
-    vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
-      new ReadableStream() as any,
-    );
     vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(new ReadableStream() as any);
-  });
-
-  describe('isGrokReasoningModel', () => {
-    it('should identify Grok reasoning models correctly', () => {
-      expect(isGrokReasoningModel('grok-3-mini')).toBe(true);
-      expect(isGrokReasoningModel('grok-4')).toBe(true);
-      expect(isGrokReasoningModel('grok-code')).toBe(true);
-      expect(isGrokReasoningModel('grok-2')).toBe(false);
-      expect(isGrokReasoningModel('other-model')).toBe(false);
-    });
-  });
-
-  describe('chat with handlePayload', () => {
-    it('should handle Grok reasoning models by removing frequency_penalty and presence_penalty', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-4',
-        frequency_penalty: 0.5,
-        presence_penalty: 0.3,
-        temperature: 0.7,
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
-      expect(calledPayload.frequency_penalty).toBeUndefined();
-      expect(calledPayload.presence_penalty).toBeUndefined();
-      expect(calledPayload.model).toBe('grok-4');
-    });
-
-    it('should keep frequency_penalty and presence_penalty for non-reasoning models', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-2',
-        frequency_penalty: 0.5,
-        presence_penalty: 0.3,
-        temperature: 0.7,
-      });
-
-      const calledPayload = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
-      expect(calledPayload.frequency_penalty).toBe(0.5);
-      expect(calledPayload.presence_penalty).toBe(0.3);
-    });
-
-    it('should use responses API when enabledSearch is true', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-2',
-        enabledSearch: true,
-      });
-
-      expect(instance['client'].responses.create).toHaveBeenCalled();
-      expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
-    });
-
-    it('should not use responses API when enabledSearch is false', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-2',
-        enabledSearch: false,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalled();
-      expect(instance['client'].responses.create).not.toHaveBeenCalled();
-    });
   });
 
   describe('responses.handlePayload', () => {
