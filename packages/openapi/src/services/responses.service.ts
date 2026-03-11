@@ -107,6 +107,71 @@ export class ResponsesService extends BaseService {
   }
 
   /**
+   * Extract full output items from AgentState messages, including tool calls.
+   * Converts assistant tool_calls → function_call items,
+   * tool result messages → function_call_output items,
+   * and final assistant message → message item.
+   */
+  private extractOutputItems(
+    state: AgentState,
+    responseId: string,
+  ): { output: OutputItem[]; outputText: string } {
+    if (!state.messages?.length) return { output: [], outputText: '' };
+
+    const output: OutputItem[] = [];
+    let outputText = '';
+    let itemCounter = 0;
+
+    // Skip system messages; process assistant and tool messages in order
+    for (const msg of state.messages) {
+      if (msg.role === 'assistant') {
+        const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
+
+        // Handle tool_calls from assistant
+        if (hasToolCalls) {
+          for (const toolCall of msg.tool_calls) {
+            output.push({
+              arguments: toolCall.function?.arguments ?? '{}',
+              call_id: toolCall.id ?? `call_${itemCounter}`,
+              id: `fc_${responseId.slice(5)}_${itemCounter++}`,
+              name: toolCall.function?.name ?? '',
+              status: 'completed' as const,
+              type: 'function_call' as const,
+            });
+          }
+        }
+
+        // Only emit message item for assistant messages WITHOUT tool_calls (i.e., final text response)
+        if (!hasToolCalls) {
+          const content = typeof msg.content === 'string' ? msg.content : '';
+          if (content) {
+            outputText = content;
+            output.push({
+              content: [
+                { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
+              ],
+              id: `msg_${responseId.slice(5)}_${itemCounter++}`,
+              role: 'assistant' as const,
+              status: 'completed' as const,
+              type: 'message' as const,
+            });
+          }
+        }
+      } else if (msg.role === 'tool') {
+        output.push({
+          call_id: msg.tool_call_id ?? '',
+          id: `fco_${responseId.slice(5)}_${itemCounter++}`,
+          output: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          status: 'completed' as const,
+          type: 'function_call_output' as const,
+        });
+      }
+    }
+
+    return { output, outputText };
+  }
+
+  /**
    * Extract usage from AgentState
    */
   private extractUsage(state: AgentState): ResponseUsage {
@@ -159,30 +224,15 @@ export class ResponsesService extends BaseService {
       const finalState = await agentRuntimeService.executeSync(execResult.operationId);
 
       // 3. Extract results from final state
-      const content = this.extractAssistantContent(finalState);
+      const { output, outputText } = this.extractOutputItems(finalState, responseId);
       const usage = this.extractUsage(finalState);
-
-      const outputItemId = `msg_${responseId.slice(5)}`;
-      const output: OutputItem[] = content
-        ? [
-            {
-              content: [
-                { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
-              ],
-              id: outputItemId,
-              role: 'assistant' as const,
-              status: 'completed' as const,
-              type: 'message' as const,
-            },
-          ]
-        : [];
 
       return this.buildResponseObject({
         completedAt: Math.floor(Date.now() / 1000),
         createdAt,
         id: responseId,
         output,
-        outputText: content,
+        outputText,
         params,
         status: finalState.status === 'error' ? 'failed' : 'completed',
         usage,
@@ -366,7 +416,7 @@ export class ResponsesService extends BaseService {
         ? this.extractUsage(finalState)
         : { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
-      // 8. Emit closing events
+      // 8. Emit closing events for text content
       yield {
         content_index: contentIndex,
         item_id: outputItemId,
@@ -408,12 +458,17 @@ export class ResponsesService extends BaseService {
         type: 'response.output_item.done' as const,
       };
 
+      // 9. Build final output including tool calls from AgentState
+      const fullOutput = finalState
+        ? this.extractOutputItems(finalState, responseId)
+        : { output: [completedItem], outputText: accumulatedText };
+
       yield {
         response: {
           ...response,
           completed_at: Math.floor(Date.now() / 1000),
-          output: [completedItem],
-          output_text: accumulatedText,
+          output: fullOutput.output,
+          output_text: fullOutput.outputText || accumulatedText,
           status: (finalState?.status === 'error' ? 'failed' : 'completed') as any,
           usage: {
             input_tokens: usage.input_tokens,

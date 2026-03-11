@@ -72,6 +72,7 @@ export const FunctionCallOutputItemSchema = z.object({
   call_id: z.string(),
   id: z.string().optional(),
   output: z.string(),
+  status: z.enum(['completed', 'in_progress', 'incomplete']).optional(),
   type: z.literal('function_call_output'),
 });
 export type FunctionCallOutputItem = z.infer<typeof FunctionCallOutputItemSchema>;
