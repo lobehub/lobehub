@@ -47,6 +47,13 @@ const Page = memo(() => {
   const labsGroup: FormGroupItemType = {
     children: [
       {
+        avatar: (
+          <img
+            alt={tLabs('features.inputMarkdown.title')}
+            src="https://github.com/user-attachments/assets/0527a966-3d95-46b4-b880-c0f3fca18f02"
+            style={{ borderRadius: 6, height: 'auto', marginRight: 8, objectFit: 'cover', width: 64 }}
+          />
+        ),
         children: (
           <Switch
             checked={enableInputMarkdown}
