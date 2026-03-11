@@ -157,6 +157,111 @@ export function registerTopicCommand(program: Command) {
       console.log(`${pc.green('✓')} Deleted ${ids.length} topic(s)`);
     });
 
+  // ── clone ───────────────────────────────────────────
+
+  topic
+    .command('clone <id>')
+    .description('Clone a topic')
+    .option('-t, --title <title>', 'New title for the cloned topic')
+    .action(async (id: string, options: { title?: string }) => {
+      const client = await getTrpcClient();
+
+      const input: Record<string, any> = { id };
+      if (options.title) input.newTitle = options.title;
+
+      const newId = await client.topic.cloneTopic.mutate(input as any);
+      console.log(`${pc.green('✓')} Cloned topic → ${pc.bold(String(newId || ''))}`);
+    });
+
+  // ── share ──────────────────────────────────────────
+
+  topic
+    .command('share <id>')
+    .description('Enable sharing for a topic')
+    .option('--visibility <v>', 'Visibility: private or link', 'link')
+    .action(async (id: string, options: { visibility?: string }) => {
+      const client = await getTrpcClient();
+
+      const input: Record<string, any> = { topicId: id };
+      if (options.visibility) input.visibility = options.visibility;
+
+      const result = await client.topic.enableSharing.mutate(input as any);
+      const r = result as any;
+
+      console.log(`${pc.green('✓')} Sharing enabled for topic ${pc.bold(id)}`);
+      if (r.shareId) {
+        console.log(`  Share ID: ${pc.bold(r.shareId)}`);
+      }
+    });
+
+  // ── unshare ────────────────────────────────────────
+
+  topic
+    .command('unshare <id>')
+    .description('Disable sharing for a topic')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      await client.topic.disableSharing.mutate({ topicId: id });
+      console.log(`${pc.green('✓')} Sharing disabled for topic ${pc.bold(id)}`);
+    });
+
+  // ── share-info ─────────────────────────────────────
+
+  topic
+    .command('share-info <id>')
+    .description('View sharing info for a topic')
+    .option('--json', 'Output JSON')
+    .action(async (id: string, options: { json?: boolean }) => {
+      const client = await getTrpcClient();
+      const info = await client.topic.getShareInfo.query({ topicId: id });
+
+      if (options.json) {
+        console.log(JSON.stringify(info, null, 2));
+        return;
+      }
+
+      if (!info) {
+        console.log('Sharing not enabled for this topic.');
+        return;
+      }
+
+      const i = info as any;
+      console.log(`${pc.bold('Topic ID:')}    ${id}`);
+      if (i.shareId) console.log(`${pc.bold('Share ID:')}    ${i.shareId}`);
+      if (i.visibility) console.log(`${pc.bold('Visibility:')}  ${i.visibility}`);
+      if (i.createdAt) console.log(`${pc.bold('Created:')}     ${i.createdAt}`);
+    });
+
+  // ── import ─────────────────────────────────────────
+
+  topic
+    .command('import')
+    .description('Import a topic')
+    .requiredOption('--agent-id <id>', 'Agent ID')
+    .requiredOption('--data <json>', 'Topic data as JSON string')
+    .option('--group-id <id>', 'Group ID')
+    .option('--json', 'Output JSON')
+    .action(
+      async (options: { agentId: string; data: string; groupId?: string; json?: boolean }) => {
+        const client = await getTrpcClient();
+
+        const input: Record<string, any> = {
+          agentId: options.agentId,
+          data: options.data,
+        };
+        if (options.groupId) input.groupId = options.groupId;
+
+        const result = await client.topic.importTopic.mutate(input as any);
+
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        console.log(`${pc.green('✓')} Topic imported successfully`);
+      },
+    );
+
   // ── recent ────────────────────────────────────────────
 
   topic
