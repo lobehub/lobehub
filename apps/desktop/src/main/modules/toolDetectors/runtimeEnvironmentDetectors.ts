@@ -38,15 +38,12 @@ export const pythonDetector: IToolDetector = {
         const { stdout: pathOut } = await execPromise(`${whichCmd} ${cmd}`, { timeout: 3000 });
         const toolPath = pathOut.trim().split('\n')[0];
 
-        let version: string | undefined;
-        try {
-          const { stdout: versionOut } = await execPromise(`${cmd} --version`, {
-            timeout: 3000,
-          });
-          version = versionOut.trim().split('\n')[0];
-        } catch {
-          // Some Python builds don't support --version in same way
-        }
+        // Must successfully invoke --version to confirm usable runtime (e.g. avoid
+        // Windows Microsoft Store alias which is found by where but fails to run)
+        const { stdout: versionOut } = await execPromise(`${cmd} --version`, {
+          timeout: 3000,
+        });
+        const version = versionOut.trim().split('\n')[0];
 
         return {
           available: true,
