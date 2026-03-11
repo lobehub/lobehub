@@ -13,6 +13,7 @@ import {
   FlaskConical,
   Github,
   Rocket,
+  Settings2,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -120,6 +121,14 @@ const Footer = memo(() => {
 
   const helpMenuItems: MenuProps['items'] = useMemo(
     () => [
+      {
+        icon: <Icon icon={Settings2} />,
+        key: 'setting',
+        label: <Link to="/settings">{t('userPanel.setting')}</Link>,
+      },
+      {
+        type: 'divider' as const,
+      },
       {
         icon: <Icon icon={Book} />,
         key: 'docs',
