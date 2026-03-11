@@ -80,26 +80,33 @@ export function registerKbCommand(program: Command) {
         return;
       }
 
-      // Recursively fetch all items in the knowledge base
+      // Recursively fetch all items in the knowledge base (with pagination)
       const allItems: any[] = [];
       async function fetchItems(parentId: string | null, depth = 0) {
-        const query: any = { knowledgeBaseId: id, limit: 100, parentId };
+        const PAGE_SIZE = 100;
+        let offset = 0;
+        let hasMore = true;
 
-        const items = await client.file.getKnowledgeItems.query(query);
-        const list = Array.isArray(items) ? items : ((items as any).items ?? []);
+        while (hasMore) {
+          const query: any = { knowledgeBaseId: id, limit: PAGE_SIZE, offset, parentId };
+          const result = await client.file.getKnowledgeItems.query(query);
+          const list = Array.isArray(result) ? result : ((result as any).items ?? []);
+          hasMore = Array.isArray(result) ? false : ((result as any).hasMore ?? false);
+          offset += list.length;
 
-        // Collect folders for parallel recursive fetch
-        const folders: any[] = [];
-        for (const item of list) {
-          allItems.push({ ...item, _depth: depth });
-          if (item.fileType === 'custom/folder') {
-            folders.push(item);
+          // Collect folders for parallel recursive fetch
+          const folders: any[] = [];
+          for (const item of list) {
+            allItems.push({ ...item, _depth: depth });
+            if (item.fileType === 'custom/folder') {
+              folders.push(item);
+            }
           }
-        }
 
-        // Fetch all sub-folders in parallel
-        if (folders.length > 0) {
-          await Promise.all(folders.map((f) => fetchItems(f.id, depth + 1)));
+          // Fetch all sub-folders in parallel
+          if (folders.length > 0) {
+            await Promise.all(folders.map((f) => fetchItems(f.id, depth + 1)));
+          }
         }
       }
       await fetchItems(null);

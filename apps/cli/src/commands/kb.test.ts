@@ -50,7 +50,7 @@ describe('kb command', () => {
     }
     // Default: file queries return empty
     mockTrpcClient.file.getFiles.query.mockResolvedValue([]);
-    mockTrpcClient.file.getKnowledgeItems.query.mockResolvedValue({ items: [] });
+    mockTrpcClient.file.getKnowledgeItems.query.mockResolvedValue({ hasMore: false, items: [] });
   });
 
   afterEach(() => {
