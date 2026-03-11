@@ -1,5 +1,10 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 
+import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
+import type {
+  StreamChunkData,
+  StreamEvent,
+} from '@/server/modules/AgentRuntime/StreamEventManager';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -201,9 +206,8 @@ export class ResponsesService extends BaseService {
   }
 
   /**
-   * Create a streaming response
-   * Calls execAgent, waits for completion via executeSync,
-   * then emits OpenResponses SSE events from the result
+   * Create a streaming response with real token-level streaming
+   * Subscribes to Agent Runtime stream events and converts to OpenResponses SSE events
    */
   async *createStreamingResponse(
     params: CreateResponseRequest,
@@ -211,6 +215,9 @@ export class ResponsesService extends BaseService {
     const responseId = this.generateResponseId();
     const createdAt = Math.floor(Date.now() / 1000);
     let sequenceNumber = 0;
+    const outputItemId = `msg_${responseId.slice(5)}`;
+    const outputIndex = 0;
+    const contentIndex = 0;
 
     const response = this.buildResponseObject({
       createdAt,
@@ -221,50 +228,81 @@ export class ResponsesService extends BaseService {
       status: 'in_progress',
     });
 
-    // Emit response.created
-    yield {
-      response,
-      sequence_number: sequenceNumber++,
-      type: 'response.created' as const,
-    };
-
-    // Emit response.in_progress
-    yield {
-      response,
-      sequence_number: sequenceNumber++,
-      type: 'response.in_progress' as const,
-    };
+    // Emit response.created + response.in_progress
+    yield { response, sequence_number: sequenceNumber++, type: 'response.created' as const };
+    yield { response, sequence_number: sequenceNumber++, type: 'response.in_progress' as const };
 
     try {
       const slug = params.model;
       const prompt = this.extractPrompt(params.input);
       const instructions = this.buildInstructions(params);
 
+      // 1. Create agent operation
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
         autoStart: false,
         instructions,
         prompt,
         slug,
-        stream: false,
+        stream: true,
       });
 
       if (!execResult.success) {
         throw new Error(execResult.error || 'Failed to create agent operation');
       }
 
+      const operationId = execResult.operationId;
+
+      // 2. Create AgentRuntimeService with custom stream manager for event subscription
+      const streamEventManager = new InMemoryStreamEventManager();
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
         queueService: null,
+        streamEventManager,
       });
-      const finalState = await agentRuntimeService.executeSync(execResult.operationId);
 
-      const content = this.extractAssistantContent(finalState);
-      const usage = this.extractUsage(finalState);
-      const outputItemId = `msg_${responseId.slice(5)}`;
-      const outputIndex = 0;
-      const contentIndex = 0;
+      // 3. Setup async event queue to bridge push events → pull-based generator
+      const eventQueue: StreamEvent[] = [];
+      let resolveWaiting: (() => void) | null = null;
+      let executionDone = false;
 
-      // Emit output_item.added
+      const unsubscribe = streamEventManager.subscribe(operationId, (events) => {
+        eventQueue.push(...events);
+        if (resolveWaiting) {
+          resolveWaiting();
+          resolveWaiting = null;
+        }
+      });
+
+      // Helper to wait for next event batch
+      const waitForEvents = (): Promise<void> =>
+        new Promise((resolve) => {
+          if (eventQueue.length > 0 || executionDone) {
+            resolve();
+          } else {
+            resolveWaiting = resolve;
+          }
+        });
+
+      // 4. Start execution in background
+      let finalState: AgentState | undefined;
+      const executionPromise = agentRuntimeService
+        .executeSync(operationId)
+        .then((state) => {
+          finalState = state;
+        })
+        .catch((err) => {
+          finalState = { status: 'error' } as AgentState;
+          this.log('error', 'Streaming execution failed', { error: err, responseId });
+        })
+        .finally(() => {
+          executionDone = true;
+          if (resolveWaiting) {
+            resolveWaiting();
+            resolveWaiting = null;
+          }
+        });
+
+      // 5. Emit output_item.added + content_part.added immediately
       const outputItem: OutputItem = {
         content: [{ annotations: [], logprobs: [], text: '', type: 'output_text' as const }],
         id: outputItemId,
@@ -279,48 +317,84 @@ export class ResponsesService extends BaseService {
         sequence_number: sequenceNumber++,
         type: 'response.output_item.added' as const,
       };
-
-      // Emit content_part.added
       yield {
         content_index: contentIndex,
+        item_id: outputItemId,
         output_index: outputIndex,
         part: { annotations: [], logprobs: [], text: '', type: 'output_text' as const },
         sequence_number: sequenceNumber++,
         type: 'response.content_part.added' as const,
       };
 
-      // Emit full text as a single delta
-      if (content) {
-        yield {
-          content_index: contentIndex,
-          delta: content,
-          output_index: outputIndex,
-          sequence_number: sequenceNumber++,
-          type: 'response.output_text.delta' as const,
-        };
+      // 6. Process stream events and emit text deltas
+      let accumulatedText = '';
+
+      while (!executionDone || eventQueue.length > 0) {
+        await waitForEvents();
+
+        while (eventQueue.length > 0) {
+          const event = eventQueue.shift()!;
+
+          if (event.type === 'stream_chunk') {
+            const chunk = event.data as StreamChunkData;
+            if (chunk.chunkType === 'text' && chunk.content) {
+              accumulatedText += chunk.content;
+              yield {
+                content_index: contentIndex,
+                delta: chunk.content,
+                item_id: outputItemId,
+                logprobs: [],
+                output_index: outputIndex,
+                sequence_number: sequenceNumber++,
+                type: 'response.output_text.delta' as const,
+              };
+            }
+          }
+        }
       }
 
-      // Emit output_text.done
+      // 7. Wait for execution to fully complete
+      await executionPromise;
+      unsubscribe();
+
+      // If no text came through streaming, extract from final state
+      if (!accumulatedText && finalState) {
+        accumulatedText = this.extractAssistantContent(finalState);
+      }
+
+      const usage = finalState
+        ? this.extractUsage(finalState)
+        : { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+
+      // 8. Emit closing events
       yield {
         content_index: contentIndex,
+        item_id: outputItemId,
+        logprobs: [],
         output_index: outputIndex,
         sequence_number: sequenceNumber++,
-        text: content,
+        text: accumulatedText,
         type: 'response.output_text.done' as const,
       };
 
-      // Emit content_part.done
       yield {
         content_index: contentIndex,
+        item_id: outputItemId,
         output_index: outputIndex,
-        part: { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
+        part: {
+          annotations: [],
+          logprobs: [],
+          text: accumulatedText,
+          type: 'output_text' as const,
+        },
         sequence_number: sequenceNumber++,
         type: 'response.content_part.done' as const,
       };
 
-      // Emit output_item.done
       const completedItem: OutputItem = {
-        content: [{ annotations: [], logprobs: [], text: content, type: 'output_text' as const }],
+        content: [
+          { annotations: [], logprobs: [], text: accumulatedText, type: 'output_text' as const },
+        ],
         id: outputItemId,
         role: 'assistant' as const,
         status: 'completed' as const,
@@ -334,14 +408,13 @@ export class ResponsesService extends BaseService {
         type: 'response.output_item.done' as const,
       };
 
-      // Emit response.completed
       yield {
         response: {
           ...response,
           completed_at: Math.floor(Date.now() / 1000),
           output: [completedItem],
-          output_text: content,
-          status: 'completed' as const,
+          output_text: accumulatedText,
+          status: (finalState?.status === 'error' ? 'failed' : 'completed') as any,
           usage: {
             input_tokens: usage.input_tokens,
             input_tokens_details: { cached_tokens: 0 },
