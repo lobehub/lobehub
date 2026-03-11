@@ -7,7 +7,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
-      video: true,
+      // video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -32,7 +32,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
-      video: true,
+      // video: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -103,7 +103,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
-      video: true,
+      // video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -123,7 +123,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      video: true,
+      // video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,
@@ -143,7 +143,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      video: true,
+      // video: true,
       vision: true,
     },
     contextWindowTokens: 32_768,

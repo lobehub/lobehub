@@ -405,6 +405,7 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 65_536,
@@ -706,6 +707,7 @@ const zhipuChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 65_536,
@@ -726,6 +728,7 @@ const zhipuChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 65_536,
