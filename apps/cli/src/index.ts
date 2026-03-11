@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { Command } from 'commander';
 
 import { registerAgentCommand } from './commands/agent';
+import { registerBotCommand } from './commands/bot';
 import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
 import { registerDeviceCommand } from './commands/device';
@@ -43,6 +44,7 @@ registerSearchCommand(program);
 registerKbCommand(program);
 registerMemoryCommand(program);
 registerAgentCommand(program);
+registerBotCommand(program);
 registerGenerateCommand(program);
 registerFileCommand(program);
 registerSkillCommand(program);

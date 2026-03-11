@@ -55,6 +55,19 @@ export const agentBotProviderRouter = router({
       return ctx.agentBotProviderModel.findByAgentId(input.agentId);
     }),
 
+  list: agentBotProviderProcedure
+    .input(
+      z
+        .object({
+          agentId: z.string().optional(),
+          platform: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.agentBotProviderModel.query(input);
+    }),
+
   connectBot: agentBotProviderProcedure
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
