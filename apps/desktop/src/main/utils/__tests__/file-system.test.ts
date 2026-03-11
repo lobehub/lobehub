@@ -1,4 +1,5 @@
 import { mkdirSync, statSync } from 'node:fs';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { makeSureDirExist } from '../file-system';

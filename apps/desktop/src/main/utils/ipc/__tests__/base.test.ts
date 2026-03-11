@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IpcContext } from '../base';
-import { IpcMethod, IpcService, getIpcContext } from '../base';
+import { getIpcContext,IpcMethod, IpcService } from '../base';
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),

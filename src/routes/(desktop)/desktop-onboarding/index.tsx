@@ -145,7 +145,7 @@ const DesktopOnboardingPage = memo(() => {
       const next = flow[idx + 1];
 
       if (!next) {
-        // Complete onboarding.
+        // Complete onboarding - mark as completed and clear persisted screen state
         setDesktopOnboardingCompleted();
         clearDesktopOnboardingScreen();
 
