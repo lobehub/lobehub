@@ -188,7 +188,6 @@ export class ResponsesService extends BaseService {
    * Calls execAgent with autoStart: false, then executeSync to wait for completion
    */
   async createResponse(params: CreateResponseRequest): Promise<ResponseObject> {
-    const responseId = this.generateResponseId();
     const createdAt = Math.floor(Date.now() / 1000);
 
     try {
@@ -196,16 +195,22 @@ export class ResponsesService extends BaseService {
       const prompt = this.extractPrompt(params.input);
       const instructions = this.buildInstructions(params);
 
+      // Resolve topicId from previous_response_id for multi-turn
+      const previousTopicId = params.previous_response_id
+        ? this.extractTopicIdFromResponseId(params.previous_response_id)
+        : null;
+
       this.log('info', 'Creating response via execAgent', {
         hasInstructions: !!instructions,
+        previousTopicId,
         prompt: prompt.slice(0, 50),
-        responseId,
         slug,
       });
 
       // 1. Create agent operation without auto-start
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
         instructions,
         prompt,
@@ -216,6 +221,9 @@ export class ResponsesService extends BaseService {
       if (!execResult.success) {
         throw new Error(execResult.error || 'Failed to create agent operation');
       }
+
+      // Generate response ID encoding topicId for multi-turn support
+      const responseId = this.generateResponseId(execResult.topicId);
 
       // 2. Execute synchronously to completion
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
@@ -238,7 +246,8 @@ export class ResponsesService extends BaseService {
         usage,
       });
     } catch (error) {
-      this.log('error', 'Response creation failed', { error, responseId });
+      const errorResponseId = this.generateResponseId();
+      this.log('error', 'Response creation failed', { error, responseId: errorResponseId });
 
       return this.buildResponseObject({
         createdAt,
@@ -246,7 +255,7 @@ export class ResponsesService extends BaseService {
           code: 'server_error',
           message: error instanceof Error ? error.message : 'Unknown error',
         },
-        id: responseId,
+        id: errorResponseId,
         output: [],
         outputText: '',
         params,
@@ -262,34 +271,25 @@ export class ResponsesService extends BaseService {
   async *createStreamingResponse(
     params: CreateResponseRequest,
   ): AsyncGenerator<ResponseStreamEvent> {
-    const responseId = this.generateResponseId();
     const createdAt = Math.floor(Date.now() / 1000);
     let sequenceNumber = 0;
-    const outputItemId = `msg_${responseId.slice(5)}`;
     const outputIndex = 0;
     const contentIndex = 0;
-
-    const response = this.buildResponseObject({
-      createdAt,
-      id: responseId,
-      output: [],
-      outputText: '',
-      params,
-      status: 'in_progress',
-    });
-
-    // Emit response.created + response.in_progress
-    yield { response, sequence_number: sequenceNumber++, type: 'response.created' as const };
-    yield { response, sequence_number: sequenceNumber++, type: 'response.in_progress' as const };
 
     try {
       const slug = params.model;
       const prompt = this.extractPrompt(params.input);
       const instructions = this.buildInstructions(params);
 
-      // 1. Create agent operation
+      // Resolve topicId from previous_response_id for multi-turn
+      const previousTopicId = params.previous_response_id
+        ? this.extractTopicIdFromResponseId(params.previous_response_id)
+        : null;
+
+      // 1. Create agent operation (before generating responseId so we have topicId)
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
         instructions,
         prompt,
@@ -302,6 +302,27 @@ export class ResponsesService extends BaseService {
       }
 
       const operationId = execResult.operationId;
+
+      // Generate response ID encoding topicId for multi-turn support
+      const responseId = this.generateResponseId(execResult.topicId);
+      const outputItemId = `msg_${responseId.slice(5)}`;
+
+      const response = this.buildResponseObject({
+        createdAt,
+        id: responseId,
+        output: [],
+        outputText: '',
+        params,
+        status: 'in_progress',
+      });
+
+      // Emit response.created + response.in_progress
+      yield { response, sequence_number: sequenceNumber++, type: 'response.created' as const };
+      yield {
+        response,
+        sequence_number: sequenceNumber++,
+        type: 'response.in_progress' as const,
+      };
 
       // 2. Create AgentRuntimeService with custom stream manager for event subscription
       const streamEventManager = new InMemoryStreamEventManager();
@@ -482,30 +503,63 @@ export class ResponsesService extends BaseService {
         type: 'response.completed' as const,
       };
     } catch (error) {
-      this.log('error', 'Streaming response failed', { error, responseId });
+      const errorResponseId = this.generateResponseId();
+      this.log('error', 'Streaming response failed', { error, responseId: errorResponseId });
+
+      const errorResponse = this.buildResponseObject({
+        createdAt,
+        error: {
+          code: 'server_error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+        id: errorResponseId,
+        output: [],
+        outputText: '',
+        params,
+        status: 'failed',
+      });
 
       yield {
-        response: {
-          ...response,
-          error: {
-            code: 'server_error' as const,
-            message: error instanceof Error ? error.message : 'Unknown error',
-          },
-          status: 'failed' as const,
-        },
+        response: errorResponse,
         sequence_number: sequenceNumber,
         type: 'response.failed' as const,
       };
     }
   }
 
-  private generateResponseId(): string {
+  /**
+   * Generate a response ID that encodes the topicId for multi-turn support.
+   * Format: resp_{topicId}_{8-char-random-suffix}
+   * When no topicId is available, generates a plain random ID.
+   */
+  private generateResponseId(topicId?: string): string {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let id = 'resp_';
-    for (let i = 0; i < 24; i++) {
+    let suffix = '';
+    for (let i = 0; i < 8; i++) {
+      suffix += chars[Math.floor(Math.random() * chars.length)];
+    }
+    if (topicId) {
+      return `resp_${topicId}_${suffix}`;
+    }
+    // Fallback: plain 24-char random ID
+    let id = '';
+    for (let i = 0; i < 16; i++) {
       id += chars[Math.floor(Math.random() * chars.length)];
     }
-    return id;
+    return `resp_${id}_${suffix}`;
+  }
+
+  /**
+   * Extract topicId from a response ID (previous_response_id).
+   * Reverses the encoding from generateResponseId.
+   */
+  private extractTopicIdFromResponseId(responseId: string): string | null {
+    if (!responseId.startsWith('resp_')) return null;
+    const withoutPrefix = responseId.slice(5); // remove "resp_"
+    const lastUnderscore = withoutPrefix.lastIndexOf('_');
+    if (lastUnderscore === -1) return null;
+    const topicId = withoutPrefix.slice(0, lastUnderscore);
+    return topicId || null;
   }
 
   private buildResponseObject(opts: {
