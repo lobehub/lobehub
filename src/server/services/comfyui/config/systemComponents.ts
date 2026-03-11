@@ -44,7 +44,6 @@ export const CONTROLNET_TYPES = {
   SEMANTIC: 'semantic',
 } as const;
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const SYSTEM_COMPONENTS: Record<string, ComponentConfig> = {
   // ===================================================================
   // === ESSENTIAL COMPONENTS (Priority 1) ===
@@ -336,7 +335,6 @@ export const SYSTEM_COMPONENTS: Record<string, ComponentConfig> = {
     type: 'controlnet',
   },
 } as const;
-/* eslint-enable sort-keys-fix/sort-keys-fix */
 
 /**
  * Get all components with names matching filters

@@ -85,7 +85,7 @@ export interface ListItemProps {
   };
 
   /**
-   * @description 是否显示聊天项的名称
+   * @description Whether to show the chat item title
    * @default false
    */
   showTitle?: boolean;

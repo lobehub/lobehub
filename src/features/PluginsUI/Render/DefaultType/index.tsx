@@ -1,7 +1,7 @@
 import { Skeleton } from '@lobehub/ui';
-import dynamic from '@/libs/next/dynamic';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 
+import dynamic from '@/libs/next/dynamic';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 

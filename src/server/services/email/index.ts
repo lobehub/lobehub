@@ -1,6 +1,7 @@
 import { emailEnv } from '@/envs/email';
 
-import { EmailImplType, type EmailPayload, type EmailResponse, createEmailServiceImpl , type EmailServiceImpl } from './impls';
+import { type EmailPayload, type EmailResponse, type EmailServiceImpl } from './impls';
+import { createEmailServiceImpl, EmailImplType } from './impls';
 
 /**
  * Email service class

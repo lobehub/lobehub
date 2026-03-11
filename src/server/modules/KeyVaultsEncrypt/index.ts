@@ -21,7 +21,16 @@ export class KeyVaultsGateKeeper {
 If you don't have it, please run \`openssl rand -base64 32\` to create one.
 `);
 
-    const rawKey = Buffer.from(KEY_VAULTS_SECRET, 'base64'); // Ensure key is 32 bytes (256 bits)
+    const rawKey = Buffer.from(KEY_VAULTS_SECRET, 'base64');
+
+    // Validate key length - AES-GCM supports 128, 192, and 256 bit keys (16, 24, or 32 bytes)
+    // See: https://developer.mozilla.org/en-US/docs/Web/API/AesKeyGenParams#length
+    if (![16, 24, 32].includes(rawKey.length)) {
+      throw new Error(
+        `\`KEY_VAULTS_SECRET\` must be 16, 24, or 32 bytes (128, 192, or 256 bits) when base64 decoded, got ${rawKey.length} bytes. ` +
+          'Please run `openssl rand -base64 32` to create a valid key.',
+      );
+    }
     const aesKey = await crypto.subtle.importKey(
       'raw',
       rawKey,
@@ -41,7 +50,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
 
     const encryptedData = await crypto.subtle.encrypt(
       {
-        iv: iv,
+        iv,
         name: 'AES-GCM',
       },
       this.aesKey,
@@ -72,7 +81,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     try {
       const decryptedBuffer = await crypto.subtle.decrypt(
         {
-          iv: iv,
+          iv,
           name: 'AES-GCM',
         },
         this.aesKey,

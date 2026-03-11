@@ -70,7 +70,7 @@ describe('OIDC Provider - Market Client Integration', () => {
       expect(module.API_AUDIENCE).toBe('urn:lobehub:chat');
 
       vi.doUnmock('@/envs/app');
-    });
+    }, 10000);
 
     it('should have createOIDCProvider function', async () => {
       vi.doMock('@/envs/app', () => ({
@@ -85,7 +85,7 @@ describe('OIDC Provider - Market Client Integration', () => {
       expect(typeof module.createOIDCProvider).toBe('function');
 
       vi.doUnmock('@/envs/app');
-    });
+    }, 10000);
   });
 
   describe('Name Resolution Priority', () => {

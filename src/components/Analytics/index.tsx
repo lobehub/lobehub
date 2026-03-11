@@ -1,7 +1,6 @@
-import dynamic from '@/libs/next/dynamic';
-
 import { isDesktop } from '@/const/version';
 import { analyticsEnv } from '@/envs/analytics';
+import dynamic from '@/libs/next/dynamic';
 
 import Desktop from './Desktop';
 import Google from './Google';
@@ -15,8 +14,12 @@ const ReactScan = dynamic(() => import('./ReactScan'));
 const Analytics = () => {
   return (
     <>
-      {analyticsEnv.ENABLE_VERCEL_ANALYTICS && <Vercel />}
-      {analyticsEnv.ENABLE_GOOGLE_ANALYTICS && <Google />}
+      {analyticsEnv.ENABLE_VERCEL_ANALYTICS && (
+        <Vercel debug={analyticsEnv.DEBUG_VERCEL_ANALYTICS} />
+      )}
+      {analyticsEnv.ENABLE_GOOGLE_ANALYTICS && (
+        <Google gaId={analyticsEnv.GOOGLE_ANALYTICS_MEASUREMENT_ID} />
+      )}
       {analyticsEnv.ENABLED_PLAUSIBLE_ANALYTICS && (
         <Plausible
           domain={analyticsEnv.PLAUSIBLE_DOMAIN}

@@ -67,7 +67,7 @@ const QuickImportSection = ({
       // Update form fields even if duplicate, so user sees the pasted values
       form.setFieldsValue({
         customParams: { mcp: mcpConfig },
-        identifier: identifier,
+        identifier,
       });
       // Trigger validation to show Form.Item error
       form.validateFields(['identifier']);
@@ -79,7 +79,7 @@ const QuickImportSection = ({
     // All checks passed, fill the form
     form.setFieldsValue({
       customParams: { mcp: mcpConfig },
-      identifier: identifier,
+      identifier,
     });
 
     // Clear potential old validation error on identifier field
@@ -96,12 +96,12 @@ const QuickImportSection = ({
       <div>
         <Button
           block // Make button full width
+          style={{ marginBottom: 16 }} // Add some spacing
+          type="dashed"
           onClick={() => {
             setImportError(null); // Clear previous errors when opening
             setIsImportModalVisible(true);
           }}
-          style={{ marginBottom: 16 }} // Add some spacing
-          type="dashed"
         >
           {t('dev.mcp.quickImport')}
         </Button>
@@ -116,10 +116,7 @@ const QuickImportSection = ({
       )}
       <TextArea
         autoSize={{ maxRows: 15, minRows: 10 }}
-        onChange={(e) => {
-          setJsonInput(e.target.value);
-          if (importError) setImportError(null);
-        }}
+        value={jsonInput}
         placeholder={`{
   "mcpServers": {
     "github": {
@@ -134,19 +131,22 @@ const QuickImportSection = ({
     }
   }
 }`}
-        value={jsonInput}
+        onChange={(e) => {
+          setJsonInput(e.target.value);
+          if (importError) setImportError(null);
+        }}
       />
       <Flexbox horizontal justify={'space-between'}>
         <Button
           className={electronStylish.nodrag}
+          size={'small'}
           onClick={() => {
             setIsImportModalVisible(false);
           }}
-          size={'small'}
         >
           {t('common:cancel')}
         </Button>
-        <Button onClick={handleImportConfirm} size={'small'} type={'primary'}>
+        <Button size={'small'} type={'primary'} onClick={handleImportConfirm}>
           {t('common:import')}
         </Button>
       </Flexbox>

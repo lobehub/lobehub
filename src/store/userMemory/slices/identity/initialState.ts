@@ -1,6 +1,6 @@
-import type { IdentityListItem, IdentityListSort } from '@lobechat/types';
+import { type IdentityListItem, type IdentityListSort } from '@lobechat/types';
 
-import type { IdentityForInjection } from '../../types';
+import { type IdentityForInjection } from '../../types';
 
 export interface IdentitySliceState {
   /** Global identities fetched at app initialization for injection into chat context */

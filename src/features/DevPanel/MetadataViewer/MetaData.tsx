@@ -10,6 +10,8 @@ const MetaData = memo(() => {
   return (
     <Form
       itemMinWidth={'max(75%,240px)'}
+      itemsType={'flat'}
+      variant={'borderless'}
       items={[
         {
           children: <Input value={title} variant={'filled'} />,
@@ -20,8 +22,6 @@ const MetaData = memo(() => {
           label: `Description (${description.length})`,
         },
       ]}
-      itemsType={'flat'}
-      variant={'borderless'}
     />
   );
 });

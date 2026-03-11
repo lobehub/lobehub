@@ -1,4 +1,5 @@
-import { Flexbox, Icon, type ItemType, Text } from '@lobehub/ui';
+import type { ItemType } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { ReactNode } from 'react';
@@ -6,7 +7,7 @@ import { Fragment, isValidElement, memo } from 'react';
 
 export const toolsListStyles = createStaticStyles(({ css }) => ({
   groupLabel: css`
-    padding-block: 4px;
+    padding-block: 12px 4px;
     padding-inline: 12px;
   `,
   item: css`
@@ -38,10 +39,6 @@ export const toolsListStyles = createStaticStyles(({ css }) => ({
 
     width: 24px;
     height: 24px;
-
-    .ant-avatar {
-      margin-inline-end: 0;
-    }
   `,
 }));
 
@@ -76,9 +73,9 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
     <div
       className={toolsListStyles.item}
       key={item.key || `item-${index}`}
-      onClick={item.onClick}
       role="button"
       tabIndex={0}
+      onClick={item.onClick}
     >
       {iconNode && <div className={toolsListStyles.itemIcon}>{iconNode}</div>}
       <div className={toolsListStyles.itemContent}>{item.label}</div>

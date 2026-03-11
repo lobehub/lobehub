@@ -1,4 +1,4 @@
-import { McpInstallSchema } from '../types';
+import type { McpInstallSchema } from '../types';
 
 /**
  * Protocol installation related Broadcast events (main process -> renderer process)

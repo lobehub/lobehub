@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContextEngine } from '../pipeline';
-import type { ContextProcessor, PipelineContext } from '../types';
+import type { ContextProcessor } from '../types';
 import { PipelineError } from '../types';
 
 describe('ContextEngine', () => {

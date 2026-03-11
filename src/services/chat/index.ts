@@ -1,25 +1,19 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import type { OfficialToolItem } from '@lobechat/context-engine';
+import { type OfficialToolItem } from '@lobechat/context-engine';
+import { type FetchSSEOptions } from '@lobechat/fetch-sse';
+import { fetchSSE, getMessageError, standardizeAnimationStyle } from '@lobechat/fetch-sse';
+import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import { AgentRuntimeError } from '@lobechat/model-runtime';
 import {
-  type FetchSSEOptions,
-  fetchSSE,
-  getMessageError,
-  standardizeAnimationStyle,
-} from '@lobechat/fetch-sse';
-import { AgentRuntimeError, type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import {
-  ChatErrorType,
   type RuntimeInitialContext,
   type RuntimeStepContext,
   type TracePayload,
-  TraceTagMap,
   type UIChatMessage,
 } from '@lobechat/types';
-import {
-  type PluginRequestPayload,
-  createHeadersWithPluginSettings,
-} from '@lobehub/chat-plugin-sdk';
+import { ChatErrorType, TraceTagMap } from '@lobechat/types';
+import { type PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
+import { createHeadersWithPluginSettings } from '@lobehub/chat-plugin-sdk';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
@@ -47,15 +41,15 @@ import {
   userGeneralSettingsSelectors,
   userProfileSelectors,
 } from '@/store/user/selectors';
-import type { ChatStreamPayload, OpenAIChatMessage } from '@/types/openai/chat';
+import { type ChatStreamPayload, type OpenAIChatMessage } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { createTraceHeader, getTraceId } from '@/utils/trace';
 
 import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
 import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } from './helper';
+import { type ResolvedAgentConfig } from './mecha';
 import {
-  type ResolvedAgentConfig,
   contextEngineering,
   getTargetAgentId,
   initializeWithClientStore,
@@ -139,6 +133,7 @@ class ChatService {
       chatConfig,
       enabledManifests = [],
       enabledToolIds = [],
+      plugins,
       tools,
     } = resolvedAgentConfig;
 
@@ -148,6 +143,9 @@ class ChatService {
     // =================== 1.1 process user memories =================== //
 
     const enableUserMemories = settingsSelectors.memoryEnabled(getUserStoreState());
+    const userMemorySettings = settingsSelectors.currentMemorySettings(getUserStoreState());
+    const effectiveMemoryEffort =
+      chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
 
     // =================== 1.2 build agent builder context =================== //
 
@@ -161,11 +159,12 @@ class ChatService {
       const activeAgentId = getChatStoreState().activeAgentId || '';
       const baseContext =
         agentByIdSelectors.getAgentBuilderContextById(activeAgentId)(getAgentStoreState());
+      const activeAgentConfig =
+        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
 
       // Build official tools list (builtin tools + Klavis tools)
       const toolState = getToolStoreState();
-      const enabledPlugins =
-        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState()).plugins || [];
+      const enabledPlugins = activeAgentConfig?.plugins || [];
 
       const officialTools: OfficialToolItem[] = [];
 
@@ -254,12 +253,16 @@ class ChatService {
       manifests: enabledManifests,
       messages,
       model: payload.model,
+      plugins,
       provider: payload.provider!,
       sessionId: options?.trace?.sessionId,
       stepContext: options?.stepContext,
       systemRole: agentConfig.systemRole,
       tools: enabledToolIds,
       topicId,
+      memoryContext: {
+        effort: effectiveMemoryEffort,
+      },
     });
 
     // ============  3. process extend params   ============ //
@@ -364,7 +367,7 @@ class ChatService {
     /**
      * Use browser agent runtime
      */
-    let enableFetchOnClient = isEnableFetchOnClient(provider);
+    const enableFetchOnClient = isEnableFetchOnClient(provider);
 
     let fetcher: typeof fetch | undefined = undefined;
 
@@ -421,7 +424,7 @@ class ChatService {
 
     return fetchSSE(API_ENDPOINTS.chat(provider), {
       body: JSON.stringify(payload),
-      fetcher: fetcher,
+      fetcher,
       headers,
       method: 'POST',
       onAbort: options?.onAbort,

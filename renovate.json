@@ -58,7 +58,7 @@
   "rangeStrategy": "bump",
   "rebaseWhen": "conflicted",
   "schedule": "on sunday before 6:00am",
-  "separateMinorPatch": false,
   "separateMajorMinor": true,
+  "separateMinorPatch": false,
   "timezone": "UTC"
 }

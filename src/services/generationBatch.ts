@@ -10,8 +10,11 @@ class GenerationBatchService {
   /**
    * Get generation batches for a specific topic
    */
-  async getGenerationBatches(topicId: string): Promise<GenerationBatchWithAsyncTaskId[]> {
-    return lambdaClient.generationBatch.getGenerationBatches.query({ topicId });
+  async getGenerationBatches(
+    topicId: string,
+    type?: 'image' | 'video',
+  ): Promise<GenerationBatchWithAsyncTaskId[]> {
+    return lambdaClient.generationBatch.getGenerationBatches.query({ topicId, type });
   }
 
   /**

@@ -12,6 +12,8 @@ export const config = {
     '/community',
     '/community(.*)',
     '/labs',
+    '/eval',
+    '/eval(.*)',
     '/agent',
     '/agent(.*)',
     '/group',
@@ -27,8 +29,7 @@ export const config = {
     '/me',
     '/me(.*)',
     '/share(.*)',
-    '/desktop-onboarding',
-    '/desktop-onboarding(.*)',
+
     '/onboarding',
 
     '/signup(.*)',

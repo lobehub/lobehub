@@ -1,9 +1,9 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG } from '@lobechat/const';
-import type { AgentBuilderContext } from '@lobechat/context-engine';
+import { type AgentBuilderContext } from '@lobechat/context-engine';
 import { type AgentMode, type LobeAgentTTSConfig, type LocalSystemConfig } from '@lobechat/types';
 
-import type { AgentStoreState } from '../initialState';
+import { type AgentStoreState } from '../initialState';
 import { agentSelectors } from './selectors';
 
 /**
@@ -102,14 +102,14 @@ const getAgentBuilderContextById =
 
     return {
       config: {
-        chatConfig: config.chatConfig,
-        model: config.model,
-        openingMessage: config.openingMessage,
-        openingQuestions: config.openingQuestions,
-        params: config.params,
-        plugins: config.plugins,
-        provider: config.provider,
-        systemRole: config.systemRole,
+        chatConfig: config?.chatConfig,
+        model: config?.model,
+        openingMessage: config?.openingMessage,
+        openingQuestions: config?.openingQuestions,
+        params: config?.params,
+        plugins: config?.plugins,
+        provider: config?.provider,
+        systemRole: config?.systemRole,
       },
       meta,
     };

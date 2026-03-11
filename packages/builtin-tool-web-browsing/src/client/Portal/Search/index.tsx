@@ -1,4 +1,4 @@
-import { type SearchQuery, type UniformSearchResponse } from '@lobechat/types';
+import type { SearchQuery, UniformSearchResponse } from '@lobechat/types';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { uniq } from 'es-toolkit/compat';
 import { memo } from 'react';

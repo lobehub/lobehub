@@ -20,8 +20,8 @@ export type {
   CompressedGroupNode,
   ContextNode,
   MessageNode,
-  TasksNode,
   PinnedMessage,
+  TasksNode,
 } from './contextTree';
 
 // Flat Message List Types

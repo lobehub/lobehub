@@ -22,8 +22,8 @@ const UploadStatus = memo<UploadStateProps>(({ status, size, uploadState }) => {
     default:
     case 'pending': {
       return (
-        <Flexbox align={'center'} gap={4} horizontal>
-          <Icon icon={Loader2Icon} size={12} spin />
+        <Flexbox horizontal align={'center'} gap={4}>
+          <Icon spin icon={Loader2Icon} size={12} />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {t('upload.preview.status.pending')}
           </Text>
@@ -33,7 +33,7 @@ const UploadStatus = memo<UploadStateProps>(({ status, size, uploadState }) => {
 
     case 'uploading': {
       return (
-        <Flexbox align={'center'} gap={4} horizontal>
+        <Flexbox horizontal align={'center'} gap={4}>
           <Progress percent={uploadState?.progress} size={14} type="circle" />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size * ((uploadState?.progress || 0) / 100), 0)}
@@ -44,7 +44,7 @@ const UploadStatus = memo<UploadStateProps>(({ status, size, uploadState }) => {
 
     case 'processing': {
       return (
-        <Flexbox align={'center'} gap={4} horizontal>
+        <Flexbox horizontal align={'center'} gap={4}>
           <Progress percent={uploadState?.progress} size={14} type="circle" />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size)}
@@ -55,7 +55,7 @@ const UploadStatus = memo<UploadStateProps>(({ status, size, uploadState }) => {
 
     case 'success': {
       return (
-        <Flexbox align={'center'} gap={4} horizontal>
+        <Flexbox horizontal align={'center'} gap={4}>
           <CheckCircleFilled style={{ color: cssVar.colorSuccess, fontSize: 12 }} />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size)}

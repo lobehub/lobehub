@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 
-import type { TrustedClientUserInfo } from './index';
+import { type TrustedClientUserInfo } from './index';
 
 /**
  * Get user info from the current session for trusted client authentication

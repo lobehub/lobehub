@@ -1,6 +1,7 @@
 import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 import { appEnv } from '@/envs/app';
 import { OIDCService } from '@/server/services/oidc';
@@ -134,7 +135,6 @@ export async function POST(request: NextRequest) {
       status: 303,
     });
   } catch (error) {
-    log('Error processing consent: %s', error instanceof Error ? error.message : 'unknown error');
     console.error('Error processing consent:', error);
     return NextResponse.json(
       {

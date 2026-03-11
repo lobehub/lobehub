@@ -1,9 +1,16 @@
 import { type ChatMessageError, type ChatPluginPayload } from '@lobechat/types';
 import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginSettings from './PluginSettings';
+
+const styles = createStaticStyles(({ css }) => ({
+  errorResponseExtra: css`
+    padding-inline-start: 12px;
+  `,
+}));
 
 interface ErrorResponseProps extends ChatMessageError {
   id: string;
@@ -18,16 +25,16 @@ const ErrorResponse = memo<ErrorResponseProps>(({ id, type, body, message, plugi
 
   return (
     <Alert
+      showIcon
+      title={t(`response.${type}` as any)}
+      type={'secondary'}
       extra={
-        <Flexbox>
+        <Flexbox className={styles.errorResponseExtra}>
           <Highlighter actionIconSize={'small'} language={'json'} variant={'borderless'}>
             {JSON.stringify(body || { message, type }, null, 2)}
           </Highlighter>
         </Flexbox>
       }
-      showIcon
-      title={t(`response.${type}` as any)}
-      type={'secondary'}
     />
   );
 });

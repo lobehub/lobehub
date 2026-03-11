@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { DEFAULT_PREFERENCE } from '@lobechat/const';
 import type { CustomPluginParams, UserOnboarding } from '@lobechat/types';
 import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';

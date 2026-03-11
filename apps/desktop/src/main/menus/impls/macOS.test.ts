@@ -1,4 +1,4 @@
-import { Menu, app, shell } from 'electron';
+import { app, Menu, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -39,7 +39,7 @@ const createMockApp = () => {
     let translation = menuTranslations[key as keyof typeof menuTranslations] || key;
     if (params && typeof translation === 'string') {
       Object.keys(params).forEach((paramKey) => {
-        translation = translation.replace(
+        translation = translation.replaceAll(
           new RegExp(`{{${paramKey}}}`, 'g'),
           params[paramKey] as string,
         );
@@ -65,6 +65,8 @@ const createMockApp = () => {
     },
     updaterManager: {
       checkForUpdates: vi.fn(),
+      getUpdaterState: vi.fn(() => ({ stage: 'idle' })),
+      installNow: vi.fn(),
       simulateUpdateAvailable: vi.fn(),
       simulateDownloadProgress: vi.fn(),
       simulateUpdateDownloaded: vi.fn(),
@@ -274,24 +276,24 @@ describe('MacOSMenu', () => {
       expect(preferencesItem.accelerator).toBe('Command+,');
     });
 
-    it('should set correct accelerator for quit', () => {
+    it('should use role for quit (accelerator handled by Electron)', () => {
       macOSMenu.buildAndSetAppMenu();
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const appMenu = template[0];
       const quitItem = appMenu.submenu.find((item: any) => item.label === 'Quit');
 
-      expect(quitItem.accelerator).toBe('Command+Q');
+      expect(quitItem.role).toBe('quit');
     });
 
-    it('should set correct accelerator for copy in edit menu', () => {
+    it('should use role for copy in edit menu (accelerator handled by Electron)', () => {
       macOSMenu.buildAndSetAppMenu();
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const editMenu = template.find((item: any) => item.label === 'Edit');
       const copyItem = editMenu.submenu.find((item: any) => item.label === 'Copy');
 
-      expect(copyItem.accelerator).toBe('Command+C');
+      expect(copyItem.role).toBe('copy');
     });
 
     it('should set correct accelerators for history navigation', () => {

@@ -1,5 +1,9 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { ChatToolPayload, SecurityBlacklistConfig, UserInterventionConfig } from '@lobechat/types';
+import type { ActivatedStepTool, OperationToolSet, ToolSource } from '@lobechat/context-engine';
+import type {
+  ChatToolPayload,
+  SecurityBlacklistConfig,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import type { Cost, CostLimit, Usage } from './usage';
 
@@ -8,17 +12,56 @@ import type { Cost, CostLimit, Usage } from './usage';
  * This is the "passport" that can be persisted and transferred.
  */
 export interface AgentState {
-  operationId: string;
-  // --- State Machine ---
-  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+  /** Cumulative record of tools activated at step level */
+  activatedStepTools?: ActivatedStepTool[];
+  /**
+   * Current calculated cost for this session.
+   * Updated after each billable operation.
+   */
+  cost: Cost;
+
+  /**
+   * Optional cost limits configuration.
+   * If set, execution will stop when limits are exceeded.
+   */
+  costLimit?: CostLimit;
+  // --- Metadata ---
+  createdAt: string;
+  error?: any;
+  /**
+   * When true, the agent is in force-finish mode (maxSteps exceeded).
+   * Tools are allowed to complete, but the next LLM call will have tools stripped
+   * and a summary prompt injected to produce a final text response.
+   */
+  forceFinish?: boolean;
+  // --- Interruption Handling ---
+  /**
+   * When status is 'interrupted', this stores the interruption context
+   * for potential resumption or cleanup.
+   */
+  interruption?: {
+    /** Reason for interruption */
+    reason: string;
+    /** Timestamp when interruption occurred */
+    interruptedAt: string;
+    /** The instruction that was being executed when interrupted */
+    interruptedInstruction?: any;
+    /** Whether the interruption can be resumed */
+    canResume: boolean;
+  };
+  lastModified: string;
+
+  /**
+   * Optional maximum number of steps allowed.
+   * If set, execution will stop with error when exceeded.
+   */
+  maxSteps?: number;
 
   // --- Core Context ---
   messages: any[];
-  tools?: any[];
-  systemRole?: string;
-  toolManifestMap: Record<string, any>;
-  /** Tool source map for routing tool execution to correct handler */
-  toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
+
+  // --- Extensible metadata ---
+  metadata?: Record<string, any>;
 
   /**
    * Model runtime configuration
@@ -36,56 +79,10 @@ export interface AgentState {
       provider: string;
     };
   };
+  operationId: string;
 
-  /**
-   * User's global intervention configuration
-   * Controls how tools requiring approval are handled
-   */
-  userInterventionConfig?: UserInterventionConfig;
-
-  /**
-   * Security blacklist configuration
-   * These rules will ALWAYS block execution and require human intervention,
-   * regardless of user settings (even in auto-run mode).
-   * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
-   */
-  securityBlacklist?: SecurityBlacklistConfig;
-
-  // --- Execution Tracking ---
-  /**
-   * Number of execution steps in this session.
-   * Incremented on each runtime.step() call.
-   */
-  stepCount: number;
-  /**
-   * Optional maximum number of steps allowed.
-   * If set, execution will stop with error when exceeded.
-   */
-  maxSteps?: number;
-
-  // --- Usage and Cost Tracking ---
-  /**
-   * Accumulated usage statistics for this session.
-   * Tracks tokens, API calls, tool usage, etc.
-   */
-  usage: Usage;
-  /**
-   * Current calculated cost for this session.
-   * Updated after each billable operation.
-   */
-  cost: Cost;
-  /**
-   * Optional cost limits configuration.
-   * If set, execution will stop when limits are exceeded.
-   */
-  costLimit?: CostLimit;
-
-  // --- HIL ---
-  /**
-   * When status is 'waiting_for_human', this stores pending requests
-   * for human-in-the-loop operations.
-   */
-  pendingToolsCalling?: ChatToolPayload[];
+  /** Operation-level tool set snapshot (immutable after creation) */
+  operationToolSet?: OperationToolSet;
   pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
@@ -94,29 +91,48 @@ export interface AgentState {
     prompt?: string;
   };
 
-  // --- Interruption Handling ---
+  // --- HIL ---
   /**
-   * When status is 'interrupted', this stores the interruption context
-   * for potential resumption or cleanup.
+   * When status is 'waiting_for_human', this stores pending requests
+   * for human-in-the-loop operations.
    */
-  interruption?: {
-    /** Reason for interruption */
-    reason: string;
-    /** Timestamp when interruption occurred */
-    interruptedAt: string;
-    /** The instruction that was being executed when interrupted */
-    interruptedInstruction?: any;
-    /** Whether the interruption can be resumed */
-    canResume: boolean;
-  };
+  pendingToolsCalling?: ChatToolPayload[];
+  /**
+   * Security blacklist configuration
+   * These rules will ALWAYS block execution and require human intervention,
+   * regardless of user settings (even in auto-run mode).
+   * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
+   */
+  securityBlacklist?: SecurityBlacklistConfig;
+  // --- State Machine ---
+  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
 
-  // --- Metadata ---
-  createdAt: string;
-  error?: any;
-  lastModified: string;
+  // --- Execution Tracking ---
+  /**
+   * Number of execution steps in this session.
+   * Incremented on each runtime.step() call.
+   */
+  stepCount: number;
 
-  // --- Extensible metadata ---
-  metadata?: Record<string, any>;
+  systemRole?: string;
+  toolManifestMap: Record<string, any>;
+
+  tools?: any[];
+
+  /** Tool source map for routing tool execution to correct handler */
+  toolSourceMap?: Record<string, ToolSource>;
+  // --- Usage and Cost Tracking ---
+  /**
+   * Accumulated usage statistics for this session.
+   * Tracks tokens, API calls, tool usage, etc.
+   */
+  usage: Usage;
+
+  /**
+   * User's global intervention configuration
+   * Controls how tools requiring approval are handled
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**

@@ -3,10 +3,10 @@
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
 
 import { useChatInputStore } from '@/features/ChatInput/store';
+import dynamic from '@/libs/next/dynamic';
 
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
@@ -44,6 +44,9 @@ const DesktopChatInput = memo(() => {
         paddingInline={12}
       >
         <ChatInput
+          fullscreen={expand}
+          header={<ChatInputActionBar left={<ActionBar />} />}
+          slashMenuRef={slashMenuRef}
           footer={
             <ChatInputActionBar
               left={<div />}
@@ -53,9 +56,6 @@ const DesktopChatInput = memo(() => {
               }}
             />
           }
-          fullscreen={expand}
-          header={<ChatInputActionBar left={<ActionBar />} />}
-          slashMenuRef={slashMenuRef}
         >
           {expand && fileNode}
           <InputEditor defaultRows={1} />

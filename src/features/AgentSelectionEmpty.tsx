@@ -1,4 +1,5 @@
-import { Center, Empty, type EmptyProps } from '@lobehub/ui';
+import { type EmptyProps } from '@lobehub/ui';
+import { Center, Empty } from '@lobehub/ui';
 import { Users } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,10 +26,10 @@ const AgentSelectionEmpty = memo<AgentSelectionEmptyProps>(
       <Center height="100%" style={{ minHeight: '30vh' }} width="100%">
         <Empty
           description={description}
+          icon={Users}
           descriptionProps={{
             fontSize: 14,
           }}
-          icon={Users}
           style={{
             maxWidth: 400,
           }}

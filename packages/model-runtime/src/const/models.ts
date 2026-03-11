@@ -40,10 +40,20 @@ export const responsesAPIModels = new Set([
   'gpt-5-pro-2025-10-06',
   'gpt-5.1-codex',
   'gpt-5.1-codex-mini',
+  'gpt-5.1-codex-max',
   'gpt-5.2',
+  'gpt-5.2-codex',
   'gpt-5.2-pro-2025-12-11',
   'gpt-5.2-pro',
+  'gpt-5.3-codex',
+  'gpt-5.4',
+  'gpt-5.4-pro',
 ]);
+
+/**
+ * Grok models use Responses API only
+ */
+export const responsesAPIGrokModels = new Set(['grok-4.20-multi-agent-experimental-beta-0304']);
 
 /**
  * Regex patterns for models that support context caching (3.5+)

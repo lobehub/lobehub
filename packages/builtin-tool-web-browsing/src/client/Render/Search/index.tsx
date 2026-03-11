@@ -1,8 +1,4 @@
-import {
-  type BuiltinRenderProps,
-  type SearchQuery,
-  type UniformSearchResponse,
-} from '@lobechat/types';
+import type { BuiltinRenderProps, SearchQuery, UniformSearchResponse } from '@lobechat/types';
 import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
@@ -21,6 +17,8 @@ const Search = memo<BuiltinRenderProps<SearchQuery, UniformSearchResponse>>(
 
       return (
         <Alert
+          title={pluginError?.message}
+          type={'error'}
           extra={
             <Flexbox>
               <Highlighter actionIconSize={'small'} language={'json'} variant={'borderless'}>
@@ -28,8 +26,6 @@ const Search = memo<BuiltinRenderProps<SearchQuery, UniformSearchResponse>>(
               </Highlighter>
             </Flexbox>
           }
-          title={pluginError?.message}
-          type={'error'}
         />
       );
     }

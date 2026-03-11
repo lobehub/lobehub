@@ -1,6 +1,7 @@
 import { Center, Checkbox, Flexbox, Icon } from '@lobehub/ui';
 import { Loader2 } from 'lucide-react';
-import { type ReactNode, memo, useState } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useState } from 'react';
 
 export interface CheckboxItemProps {
   checked?: boolean;
@@ -22,14 +23,10 @@ const CheckboxItem = memo<CheckboxItemProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={24}
-        horizontal
         justify={'space-between'}
-        onClick={async (e) => {
-          e.stopPropagation();
-          updateState();
-        }}
         style={
           hasPadding
             ? {
@@ -37,11 +34,15 @@ const CheckboxItem = memo<CheckboxItemProps>(
               }
             : void 0
         }
+        onClick={async (e) => {
+          e.stopPropagation();
+          updateState();
+        }}
       >
         {label || id}
         {loading ? (
           <Center width={18}>
-            <Icon icon={Loader2} spin />
+            <Icon spin icon={Loader2} />
           </Center>
         ) : (
           <Checkbox

@@ -1,19 +1,16 @@
-import { type EditLocalFileParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { createPatch } from 'diff';
+import type { EditLocalFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInterventionProps } from '@lobechat/types';
+import { CodeDiff, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
-import { useTheme } from 'next-themes';
 import path from 'path-browserify-esm';
-import React, { memo, useMemo } from 'react';
-import { Diff, Hunk, parseDiff } from 'react-diff-view';
-import 'react-diff-view/style/index.css';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { LocalFile, LocalFolder } from '@/features/LocalFile';
 import { localFileService } from '@/services/electron/localFileService';
-import '@/styles/react-diff-view.dark.css';
+
+import OutOfScopeWarning from '../OutOfScopeWarning';
 
 const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ args }) => {
   const { t } = useTranslation('tool');
@@ -29,35 +26,21 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
     },
   );
 
-  const { resolvedTheme } = useTheme();
-  const isDarkMode = resolvedTheme === 'dark';
-  // Generate diff from full file content
-  const files = useMemo(() => {
-    if (!fileData?.content) return [];
+  // Generate new content by applying the replacement
+  const { oldContent, newContent } = useMemo(() => {
+    if (!fileData?.content) return { newContent: '', oldContent: '' };
 
-    try {
-      const oldContent = fileData.content;
+    const oldContent = fileData.content;
+    const newContent = args.replace_all
+      ? oldContent.replaceAll(args.old_string, args.new_string)
+      : oldContent.replace(args.old_string, args.new_string);
 
-      // Generate new content by applying the replacement
-      const newContent = args.replace_all
-        ? oldContent.replaceAll(args.old_string, args.new_string)
-        : oldContent.replace(args.old_string, args.new_string);
-
-      // Use createPatch to generate unified diff with full file content
-      const patch = createPatch(args.file_path, oldContent, newContent, '', '');
-
-      // Add git diff header for parseDiff compatibility
-      const diffText = `diff --git a${args.file_path} b${args.file_path}\n${patch}`;
-
-      return parseDiff(diffText);
-    } catch (error) {
-      console.error('Failed to generate diff:', error);
-      return [];
-    }
-  }, [fileData?.content, args.file_path, args.old_string, args.new_string, args.replace_all]);
+    return { newContent, oldContent };
+  }, [fileData?.content, args.old_string, args.new_string, args.replace_all]);
 
   return (
     <Flexbox gap={12}>
+      <OutOfScopeWarning paths={[args.file_path]} />
       <Flexbox horizontal>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />
@@ -73,18 +56,16 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
               ? t('localFiles.editFile.replaceAll')
               : t('localFiles.editFile.replaceFirst')}
           </Text>
-          {files.map((file, index) => (
-            <div key={`${file.oldPath}-${index}`} style={{ fontSize: '12px' }}>
-              <Diff
-                data-theme={isDarkMode ? 'dark' : 'light'}
-                diffType={file.type}
-                hunks={file.hunks}
-                viewType="split"
-              >
-                {(hunks) => hunks.map((hunk) => <Hunk hunk={hunk} key={hunk.content} />)}
-              </Diff>
-            </div>
-          ))}
+          {oldContent && (
+            <CodeDiff
+              fileName={args.file_path}
+              newContent={newContent}
+              oldContent={oldContent}
+              showHeader={false}
+              variant="borderless"
+              viewMode="split"
+            />
+          )}
         </Flexbox>
       )}
     </Flexbox>

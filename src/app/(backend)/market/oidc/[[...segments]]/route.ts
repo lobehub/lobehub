@@ -1,9 +1,10 @@
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 import { getTrustedClientTokenForSession } from '@/libs/trusted-client';
 import { MarketService } from '@/server/services/market';
 
-const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
+const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
 
 type RouteContext = {
   params: Promise<{
@@ -164,7 +165,7 @@ const handleProxy = async (req: NextRequest, context: RouteContext) => {
       try {
         const { token } = (await req.json()) as { token?: string };
 
-        // 如果没有 token，尝试使用 trustedClientToken
+        // If no token is provided, attempt to use trustedClientToken
         if (!token) {
           const trustedClientToken = await getTrustedClientTokenForSession();
 
@@ -179,7 +180,7 @@ const handleProxy = async (req: NextRequest, context: RouteContext) => {
             );
           }
 
-          // 使用 trustedClientToken 直接调用 Market userinfo 端点
+          // Use trustedClientToken to directly call the Market userinfo endpoint
           const userInfoUrl = `${MARKET_BASE_URL}/lobehub-oidc/userinfo`;
           const response = await fetch(userInfoUrl, {
             headers: {

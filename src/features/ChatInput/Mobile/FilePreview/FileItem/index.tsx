@@ -1,4 +1,5 @@
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files';
@@ -25,10 +26,10 @@ const FileItem = memo<FileItemProps>((props) => {
       <Image
         alt={file.name}
         loading={status === 'pending'}
+        src={previewUrl}
         onRemove={() => {
           removeFile(id);
         }}
-        src={previewUrl}
       />
     );
   }

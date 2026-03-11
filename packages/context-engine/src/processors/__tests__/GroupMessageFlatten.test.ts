@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { PipelineContext } from '../../types';
+import type { PipelineContext } from '../../types';
 import { GroupMessageFlattenProcessor } from '../GroupMessageFlatten';
 
 describe('GroupMessageFlattenProcessor', () => {

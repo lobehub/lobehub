@@ -1,11 +1,10 @@
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks } from '../../types';
 import { convertOpenAIUsage } from '../usageConverters';
+import type { StreamProtocolChunk, StreamProtocolToolCallChunk } from './protocol';
 import {
-  StreamProtocolChunk,
-  StreamProtocolToolCallChunk,
   convertIterableToStream,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
@@ -161,7 +160,7 @@ export const transformSparkStream = (chunk: OpenAI.ChatCompletionChunk): StreamP
 export const SparkAIStream = (
   stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
   // TODO: preserve for RFC 097
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, unused-imports/no-unused-vars
+  // eslint-disable-next-line unused-imports/no-unused-vars
   { callbacks, inputStartAt }: { callbacks?: ChatStreamCallbacks; inputStartAt?: number } = {},
 ) => {
   const readableStream =

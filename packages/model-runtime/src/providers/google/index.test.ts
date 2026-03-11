@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { GenerateContentResponse } from '@google/genai';
+import type { GenerateContentResponse } from '@google/genai';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -617,7 +617,7 @@ describe('thinkingConfig includeThoughts logic', () => {
     expect(config.thinkingConfig?.includeThoughts).toBe(true);
   });
 
-  it('should enable thinking for gemini-3-pro-image models', async () => {
+  it('should let API decide thinking for gemini-3-pro-image models without explicit params', async () => {
     const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
 
@@ -629,7 +629,8 @@ describe('thinkingConfig includeThoughts logic', () => {
 
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
     const config = callArgs[0].config;
-    expect(config.thinkingConfig?.includeThoughts).toBe(true);
+    // Gemini 3 models without explicit thinkingLevel/thinkingBudget → let API decide
+    expect(config.thinkingConfig?.includeThoughts).toBeUndefined();
   });
 
   it('should enable thinking for thinking-enabled models', async () => {
@@ -677,5 +678,98 @@ describe('thinkingConfig includeThoughts logic', () => {
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
     const config = callArgs[0].config as any;
     expect(config.thinkingConfig?.thinkingLevel).toBe('high');
+  });
+});
+
+describe('buildGoogleToolsWithSearch', () => {
+  it('should include imageSearch searchTypes for models in modelsWithImageSearch when search is enabled', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-3.1-flash-image-preview',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.1-flash-image-preview',
+      temperature: 0,
+      enabledSearch: true,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.tools).toEqual([
+      { googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } },
+    ]);
+  });
+
+  it('should use plain googleSearch for non-imageSearch models when search is enabled', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-2.0-flash',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-2.0-flash',
+      temperature: 0,
+      enabledSearch: true,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.tools).toEqual([{ googleSearch: {} }]);
+  });
+});
+
+describe('models', () => {
+  it('should pass API Key via x-goog-api-key header instead of URL parameter', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ models: [] }),
+      ok: true,
+    });
+    global.fetch = mockFetch;
+
+    const apiKey = 'test-google-key';
+    const localInstance = new LobeGoogleAI({ apiKey });
+
+    await localInstance.models();
+    const [url, options] = mockFetch.mock.calls[0];
+
+    expect(url).not.toContain('key=');
+    expect(options.headers).toMatchObject({
+      'x-goog-api-key': apiKey,
+    });
   });
 });

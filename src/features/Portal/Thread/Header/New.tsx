@@ -14,21 +14,21 @@ const NewThreadHeader = () => {
   const [newThreadMode] = useChatStore((s) => [portalThreadSelectors.newThreadMode(s)]);
 
   return (
-    <Flexbox align={'center'} gap={8} horizontal style={{ marginInlineStart: 4 }}>
+    <Flexbox horizontal align={'center'} gap={8} style={{ marginInlineStart: 4 }}>
       <Icon icon={GitBranch} size={18} />
-      <Text className={oneLineEllipsis} ellipsis style={{ fontSize: 14 }}>
+      <Text ellipsis className={oneLineEllipsis} style={{ fontSize: 14 }}>
         {t('newPortalThread.title')}
       </Text>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Switch
           checked={newThreadMode === ThreadType.Continuation}
+          size={'small'}
+          style={{ marginInlineStart: 12 }}
           onChange={(e) => {
             useChatStore.setState({
               newThreadMode: e ? ThreadType.Continuation : ThreadType.Standalone,
             });
           }}
-          size={'small'}
-          style={{ marginInlineStart: 12 }}
         />
         {t('newPortalThread.includeContext')}
       </Flexbox>

@@ -4,7 +4,8 @@ import { ArrowDownIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AT_BOTTOM_THRESHOLD, OPEN_DEV_INSPECTOR } from '../AutoScroll/DebugInspector';
+import { AT_BOTTOM_THRESHOLD } from '../AutoScroll/const';
+import { OPEN_DEV_INSPECTOR } from '../AutoScroll/DebugInspector';
 import { styles } from './style';
 
 export interface BackBottomProps {
@@ -18,7 +19,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
 
   return (
     <>
-      {/* Debug: 底部指示线 */}
+      {/* Debug: bottom indicator line */}
       {OPEN_DEV_INSPECTOR && (
         <div
           style={{
@@ -29,7 +30,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
             right: 0,
           }}
         >
-          {/* Threshold 区域顶部边界线 */}
+          {/* Threshold area top boundary line */}
           <div
             style={{
               background: atBottom ? '#22c55e' : '#ef4444',
@@ -42,7 +43,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
             }}
           />
 
-          {/* Threshold 区域 mask - 显示在指示线上方 */}
+          {/* Threshold area mask - displayed above the indicator line */}
           <div
             style={{
               background: atBottom
@@ -56,7 +57,7 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
             }}
           />
 
-          {/* AutoScroll 位置指示线（底部） */}
+          {/* AutoScroll position indicator line (bottom) */}
           <div
             style={{
               background: atBottom ? '#22c55e' : '#ef4444',
@@ -68,17 +69,17 @@ const BackBottom = memo<BackBottomProps>(({ visible, atBottom, onScrollToBottom 
       )}
 
       <ActionIcon
-        className={cx(styles.container, visible && styles.visible)}
         glass
+        className={cx(styles.container, visible && styles.visible)}
         icon={ArrowDownIcon}
-        onClick={onScrollToBottom}
+        title={t('backToBottom')}
+        variant={'outlined'}
         size={{
           blockSize: 36,
           borderRadius: 36,
           size: 18,
         }}
-        title={t('backToBottom')}
-        variant={'outlined'}
+        onClick={onScrollToBottom}
       />
     </>
   );

@@ -1,6 +1,7 @@
 'use client';
 
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
@@ -15,12 +16,12 @@ interface EditorCanvasProps {
 }
 
 const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
-  const { t } = useTranslation(['file', 'editor']);
+  const { t } = useTranslation(['file', 'ui']);
 
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
 
-  const slashItems = useSlashItems(editor);
+  const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor);
 
   return (
@@ -31,6 +32,11 @@ const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
       slashItems={slashItems}
       style={style}
       toolbarExtraItems={askCopilotItem}
+      unsavedChangesGuard={{
+        enabled: true,
+        message: t('form.unsavedWarning', { ns: 'ui' }),
+        title: t('form.unsavedChanges', { ns: 'ui' }),
+      }}
     />
   );
 });

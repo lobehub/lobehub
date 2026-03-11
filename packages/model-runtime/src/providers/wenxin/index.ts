@@ -1,10 +1,9 @@
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { createWenxinImage } from './createImage';
 
 export interface WenxinModelCard {
   id: string;
@@ -27,7 +26,9 @@ export const params = {
           },
         }),
         ...(thinking && {
-          enable_thinking: thinking.type !== 'disabled',
+          enable_thinking: thinking.type
+            ? thinking.type !== 'disabled'
+            : undefined,
           ...(thinking?.budget_tokens !== 0 && {
             thinking_budget: Math.min(Math.max(thinking?.budget_tokens, 100), 16_384),
           }),
@@ -35,6 +36,7 @@ export const params = {
       } as any;
     },
   },
+  createImage: createWenxinImage,
   debug: {
     chatCompletion: () => process.env.DEBUG_WENXIN_CHAT_COMPLETION === '1',
   },

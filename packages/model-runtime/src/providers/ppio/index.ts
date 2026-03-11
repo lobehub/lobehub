@@ -2,7 +2,7 @@ import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { PPIOModelCard } from './type';
+import type { PPIOModelCard } from './type';
 
 export const LobePPIOAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.ppinfra.com/v3/openai',
@@ -32,7 +32,7 @@ export const LobePPIOAI = createOpenAICompatibleRuntime({
           contextWindowTokens: model.context_size,
           description: model.description,
           displayName:
-            model.display_name?.replace(/[\t（）]/g, (match) =>
+            model.display_name?.replaceAll(/[\t（）]/g, (match) =>
               match === '（' ? ' (' : match === '）' ? ')' : '',
             ) ||
             model.title ||

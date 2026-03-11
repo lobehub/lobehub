@@ -10,7 +10,7 @@ export const createRemarkCustomTagPlugin = (tag: string) => () => {
         let endIndex = startIndex + 1;
         let hasCloseTag = false;
 
-        // 查找闭合标签
+        // Find the closing tag
         while (endIndex < parent.children.length) {
           const sibling = parent.children[endIndex];
           if (sibling.type === 'html' && sibling.value === `</${tag}>`) {
@@ -20,22 +20,22 @@ export const createRemarkCustomTagPlugin = (tag: string) => () => {
           endIndex++;
         }
 
-        // 计算需要删除的节点范围
+        // Calculate the range of nodes to delete
         const deleteCount = hasCloseTag
           ? endIndex - startIndex + 1
           : parent.children.length - startIndex;
 
-        // 提取内容节点
+        // Extract content nodes
         const contentNodes = parent.children.slice(
           startIndex + 1,
           hasCloseTag ? endIndex : undefined,
         );
 
-        // 转换为 Markdown 字符串
+        // Convert to Markdown string
 
         const content = treeNodeToString(contentNodes);
 
-        // 创建自定义节点
+        // Create custom node
         const customNode = {
           data: {
             hChildren: [{ type: 'text', value: content }],
@@ -45,10 +45,10 @@ export const createRemarkCustomTagPlugin = (tag: string) => () => {
           type: `${tag}Block`,
         };
 
-        // 替换原始节点
+        // Replace the original nodes
         parent.children.splice(startIndex, deleteCount, customNode);
 
-        // 跳过已处理的节点
+        // Skip already-processed nodes
         return [SKIP, startIndex + 1];
       }
     });

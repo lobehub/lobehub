@@ -1,8 +1,9 @@
 import debug from 'debug';
-import type { TFunction } from 'i18next';
-import { type ChangeEvent, useCallback, useRef, useState } from 'react';
+import { type TFunction } from 'i18next';
+import { type ChangeEvent } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
-import type { DocumentAction } from '@/store/file/slices/document/action';
+import { type DocumentAction } from '@/store/file/slices/document/action';
 import { unzipFile } from '@/utils/unzipFile';
 
 const log = debug('resource:notion-import');

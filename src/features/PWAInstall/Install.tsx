@@ -1,12 +1,12 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import dynamic from '@/libs/next/dynamic';
 import { memo, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PWA_INSTALL_ID } from '@/const/layoutTokens';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import dynamic from '@/libs/next/dynamic';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -33,7 +33,6 @@ const PWAInstall = memo(() => {
   }, []);
 
   const pwaInstall =
-    // eslint-disable-next-line unicorn/prefer-query-selector
     typeof window === 'undefined' ? undefined : document.getElementById(PWA_INSTALL_ID);
 
   // add an event listener to control the user close installer action
@@ -62,9 +61,6 @@ const PWAInstall = memo(() => {
     // trigger the pwa installer and register the service worker
     if (isShowPWAGuide) {
       install();
-      if ('serviceWorker' in navigator && window.serwist !== undefined) {
-        window.serwist.register();
-      }
     }
   }, [canInstall, hidePWAInstaller, isShowPWAGuide]);
 

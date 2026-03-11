@@ -1,7 +1,18 @@
-import { ActionIcon, Block, Flexbox, Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuSubmenuRoot,
+  DropdownMenuSubmenuTrigger,
+  Flexbox,
+  Icon,
+  menuSharedStyles,
+} from '@lobehub/ui';
+import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
@@ -9,37 +20,50 @@ import urlJoin from 'url-join';
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 
 import { styles } from '../../styles';
-import type { ListItem } from '../../types';
+import { type ListItem } from '../../types';
 import { menuKey } from '../../utils';
+import ModelDetailPanel from '../ModelDetailPanel';
 import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
 import { SingleProviderModelItem } from './SingleProviderModelItem';
 
 interface ListItemRendererProps {
   activeKey: string;
-  isScrolling: boolean;
+  isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  onRestrictedModelClick?: () => void;
+  proLabel?: string;
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ activeKey, isScrolling, item, newLabel, onModelChange, onClose }) => {
+  ({
+    activeKey,
+    isModelRestricted,
+    item,
+    newLabel,
+    onModelChange,
+    onClose,
+    onRestrictedModelClick,
+    proLabel,
+  }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
+    const [detailOpen, setDetailOpen] = useState(false);
 
     switch (item.type) {
       case 'no-provider': {
         return (
           <Block
-            className={styles.menuItem}
             clickable
-            gap={8}
             horizontal
+            className={styles.menuItem}
+            gap={8}
             key="no-provider"
-            onClick={() => navigate('/settings/provider/all')}
             style={{ color: cssVar.colorTextTertiary }}
             variant={'borderless'}
+            onClick={() => navigate('/settings/provider/all')}
           >
             {t('ModelSwitchPanel.emptyProvider')}
             <Icon icon={LucideArrowRight} />
@@ -50,8 +74,8 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'group-header': {
         return (
           <Flexbox
-            className={styles.groupHeader}
             horizontal
+            className={styles.groupHeader}
             justify="space-between"
             key={`header-${item.provider.id}`}
             paddingBlock={'12px 4px'}
@@ -66,6 +90,8 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             <ActionIcon
               className="settings-icon"
               icon={LucideBolt}
+              size={'small'}
+              title={t('ModelSwitchPanel.goToSettings')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -76,8 +102,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   navigate(url);
                 }
               }}
-              size={'small'}
-              title={t('ModelSwitchPanel.goToSettings')}
             />
           </Flexbox>
         );
@@ -86,12 +110,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'empty-model': {
         return (
           <Flexbox
+            horizontal
             className={styles.menuItem}
             gap={8}
-            horizontal
             key={`empty-${item.provider.id}`}
-            onClick={() => navigate(`/settings/provider/${item.provider.id}`)}
             style={{ color: cssVar.colorTextTertiary }}
+            onClick={() => navigate(`/settings/provider/${item.provider.id}`)}
           >
             {t('ModelSwitchPanel.emptyModel')}
             <Icon icon={LucideArrowRight} />
@@ -102,25 +126,42 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
       case 'provider-model-item': {
         const key = menuKey(item.provider.id, item.model.id);
         const isActive = key === activeKey;
+        const restricted = isModelRestricted?.(item.model.id, item.provider.id);
 
         return (
-          <Block
-            className={styles.menuItem}
-            clickable
-            key={key}
-            onClick={async () => {
-              onModelChange(item.model.id, item.provider.id);
-              onClose();
-            }}
-            variant={isActive ? 'filled' : 'borderless'}
-          >
-            <ModelItemRender
-              {...item.model}
-              {...item.model.abilities}
-              newBadgeLabel={newLabel}
-              showInfoTag
-            />
-          </Block>
+          <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+            <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
+              <DropdownMenuSubmenuTrigger
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={async () => {
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
+                  setDetailOpen(false);
+                  onModelChange(item.model.id, item.provider.id);
+                  onClose();
+                }}
+              >
+                <ModelItemRender
+                  {...item.model}
+                  {...item.model.abilities}
+                  showInfoTag
+                  newBadgeLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
+                />
+              </DropdownMenuSubmenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
+                  <DropdownMenuPopup className={styles.detailPopup}>
+                    <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
+                  </DropdownMenuPopup>
+                </DropdownMenuPositioner>
+              </DropdownMenuPortal>
+            </DropdownMenuSubmenuRoot>
+          </Flexbox>
         );
       }
 
@@ -128,20 +169,40 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const singleProvider = item.data.providers[0];
         const key = menuKey(singleProvider.id, item.data.model.id);
         const isActive = key === activeKey;
+        const restricted = isModelRestricted?.(item.data.model.id, singleProvider.id);
 
         return (
-          <Block
-            className={styles.menuItem}
-            clickable
-            key={key}
-            onClick={async () => {
-              onModelChange(item.data.model.id, singleProvider.id);
-              onClose();
-            }}
-            variant={isActive ? 'filled' : 'borderless'}
-          >
-            <SingleProviderModelItem data={item.data} newLabel={newLabel} />
-          </Block>
+          <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
+            <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
+              <DropdownMenuSubmenuTrigger
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={async () => {
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
+                  setDetailOpen(false);
+                  onModelChange(item.data.model.id, singleProvider.id);
+                  onClose();
+                }}
+              >
+                <SingleProviderModelItem
+                  data={item.data}
+                  newLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
+                />
+              </DropdownMenuSubmenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={16}>
+                  <DropdownMenuPopup className={styles.detailPopup}>
+                    <ModelDetailPanel model={item.data.model.id} provider={singleProvider.id} />
+                  </DropdownMenuPopup>
+                </DropdownMenuPositioner>
+              </DropdownMenuPortal>
+            </DropdownMenuSubmenuRoot>
+          </Flexbox>
         );
       }
 
@@ -151,10 +212,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             <MultipleProvidersModelItem
               activeKey={activeKey}
               data={item.data}
-              isScrolling={isScrolling}
+              isModelRestricted={isModelRestricted}
               newLabel={newLabel}
+              proLabel={proLabel}
               onClose={onClose}
               onModelChange={onModelChange}
+              onRestrictedModelClick={onRestrictedModelClick}
             />
           </Flexbox>
         );

@@ -8,7 +8,7 @@ import { authSelectors } from '@/store/user/selectors';
  * If a targetAgentId is provided, use it to fetch the agent config directly.
  * Otherwise, use the active session id to fetch the config.
  */
-export const useInitAgentConfig = () => {
+export const useInitAgentConfig = (agentId?: string) => {
   const [useFetchAgentConfig, activeAgentId] = useAgentStore((s) => [
     s.useFetchAgentConfig,
     s.activeAgentId,
@@ -18,7 +18,9 @@ export const useInitAgentConfig = () => {
 
   const params = useParams<{ aid?: string }>();
 
-  const data = useFetchAgentConfig(isLogin, activeAgentId ?? params.aid ?? '');
+  const id = agentId || activeAgentId || params.aid || '';
+
+  const data = useFetchAgentConfig(isLogin, id);
 
   return { ...data, isLoading: data.isLoading && isLogin };
 };

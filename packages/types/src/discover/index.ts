@@ -1,5 +1,5 @@
-import { DiscoverAssistantItem } from './assistants';
-import { DiscoverGroupAgentItem } from './groupAgents';
+import type { DiscoverAssistantItem } from './assistants';
+import type { DiscoverGroupAgentItem } from './groupAgents';
 
 export * from './assistants';
 export * from './fork';
@@ -8,6 +8,7 @@ export * from './mcp';
 export * from './models';
 export * from './plugins';
 export * from './providers';
+export * from './skills';
 
 export enum DiscoverTab {
   Assistants = 'agent',
@@ -17,6 +18,7 @@ export enum DiscoverTab {
   Models = 'model',
   Plugins = 'plugin',
   Providers = 'provider',
+  Skills = 'skill',
   User = 'user',
 }
 
@@ -32,6 +34,7 @@ export enum CacheTag {
   Models = 'models',
   Plugins = 'plugins',
   Providers = 'providers',
+  Skills = 'skills',
 }
 
 export enum CacheRevalidate {

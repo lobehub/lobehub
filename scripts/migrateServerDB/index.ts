@@ -1,8 +1,9 @@
+import { join } from 'node:path';
+
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 import { migrate as neonMigrate } from 'drizzle-orm/neon-serverless/migrator';
 import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
-import { join } from 'node:path';
 
 // @ts-ignore tsgo handle esm import cjs and compatibility issues
 import { DB_FAIL_INIT_HINT, DUPLICATE_EMAIL_HINT, PGVECTOR_HINT } from './errorHint';
@@ -19,8 +20,6 @@ dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${env}.local` })
 
 const migrationsFolder = join(__dirname, '../../packages/database/migrations');
 
-const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
-
 const runMigrations = async () => {
   const { serverDB } = await import('../../packages/database/src/server');
 
@@ -32,15 +31,14 @@ const runMigrations = async () => {
   }
 
   console.log('✅ database migration pass. use: %s ms', Date.now() - time);
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(0);
 };
 
-let connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL;
 
 // only migrate database if the connection string is available
-if (!isDesktop && connectionString) {
-  // eslint-disable-next-line unicorn/prefer-top-level-await
+if (connectionString) {
   runMigrations().catch((err) => {
     console.error('❌ Database migrate failed:', err);
 
@@ -56,7 +54,6 @@ if (!isDesktop && connectionString) {
       console.info(DB_FAIL_INIT_HINT);
     }
 
-    // eslint-disable-next-line unicorn/no-process-exit
     process.exit(1);
   });
 } else {

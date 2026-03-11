@@ -1,6 +1,13 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
-import { agents, chatGroups, messages, sessions, threads, topics } from '@lobechat/database/schemas';
+import { type LobeChatDatabase } from '@lobechat/database';
+import {
+  agents,
+  chatGroups,
+  messages,
+  sessions,
+  threads,
+  topics,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
@@ -85,7 +92,7 @@ describe('createClientTaskThread Integration', () => {
     testTopicId = topic.id;
 
     // Create parent message (simulating a task message from supervisor)
-    const [parentMsg] = await serverDB
+    const [parentMsg] = (await serverDB
       .insert(messages)
       .values({
         userId,
@@ -95,7 +102,7 @@ describe('createClientTaskThread Integration', () => {
         agentId: testAgentId,
         groupId: testGroupId,
       })
-      .returning();
+      .returning()) as any[];
     parentMessageId = parentMsg.id;
   });
 
@@ -287,7 +294,7 @@ describe('createClientTaskThread Integration', () => {
       });
 
       // Create second parent message for second thread
-      const [secondParentMsg] = await serverDB
+      const [secondParentMsg] = (await serverDB
         .insert(messages)
         .values({
           userId,
@@ -296,7 +303,7 @@ describe('createClientTaskThread Integration', () => {
           topicId: testTopicId,
           agentId: testAgentId,
         })
-        .returning();
+        .returning()) as any;
 
       // Create second thread
       const result2 = await caller.createClientTaskThread({
@@ -374,8 +381,14 @@ describe('createClientTaskThread Integration', () => {
       expect(result2.success).toBe(true);
 
       // Verify threads have different agentIds
-      const [thread1] = await serverDB.select().from(threads).where(eq(threads.id, result1.threadId));
-      const [thread2] = await serverDB.select().from(threads).where(eq(threads.id, result2.threadId));
+      const [thread1] = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.id, result1.threadId));
+      const [thread2] = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.id, result2.threadId));
 
       expect(thread1.agentId).toBe(testAgentId);
       expect(thread2.agentId).toBe(agent2.id);
@@ -418,7 +431,9 @@ describe('createClientTaskThread Integration', () => {
       expect(result.startedAt).toBe(thread.metadata?.startedAt);
 
       // Verify timestamp is within the call window
+      // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
       expect(thread.metadata?.startedAt! >= beforeCall).toBe(true);
+      // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
       expect(thread.metadata?.startedAt! <= afterCall).toBe(true);
     });
   });

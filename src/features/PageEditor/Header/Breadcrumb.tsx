@@ -64,7 +64,7 @@ const Breadcrumb = memo(() => {
   const documentTitle = title || t('pageEditor.titlePlaceholder');
 
   return (
-    <Flexbox align={'center'} className={styles.breadcrumb} flex={1} gap={0} horizontal>
+    <Flexbox horizontal align={'center'} className={styles.breadcrumb} flex={1} gap={0}>
       {/* Knowledge Base (root) */}
       {knowledgeBaseId && (
         <>
@@ -77,7 +77,7 @@ const Breadcrumb = memo(() => {
 
       {/* Folder chain */}
       {folderChain.map((folder: FolderCrumb) => (
-        <Flexbox align={'center'} gap={0} horizontal key={folder.id}>
+        <Flexbox horizontal align={'center'} gap={0} key={folder.id}>
           <span className={styles.breadcrumbItem} style={{ cursor: 'default' }}>
             {folder.name}
           </span>

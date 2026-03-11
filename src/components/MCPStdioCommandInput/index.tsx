@@ -6,9 +6,10 @@ import {
   SiPnpm,
   SiPython,
 } from '@icons-pack/react-simple-icons';
-import { AutoComplete, type AutoCompleteProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
-import { type FC, memo } from 'react';
+import { type AutoCompleteProps } from '@lobehub/ui';
+import { AutoComplete, Flexbox } from '@lobehub/ui';
+import { type FC } from 'react';
+import { memo } from 'react';
 
 // Define preset command options
 const STDIO_COMMAND_OPTIONS: {
@@ -33,12 +34,12 @@ const MCPStdioCommandInput = memo<AutoCompleteProps>((props) => (
   <AutoComplete
     options={STDIO_COMMAND_OPTIONS.map(({ value, icon: Icon, color }) => ({
       label: (
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           {Icon && <Icon color={color} size={16} />}
           {value}
         </Flexbox>
       ),
-      value: value,
+      value,
     }))}
     {...props}
   />

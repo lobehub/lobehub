@@ -5,7 +5,8 @@ import { createStoreUpdater } from 'zustand-utils';
 
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
-import { type PublicState, usePageEditorStore, useStoreApi } from './store';
+import { type PublicState } from './store';
+import { usePageEditorStore, useStoreApi } from './store';
 
 export interface StoreUpdaterProps extends Partial<PublicState> {
   pageId?: string;

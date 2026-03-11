@@ -97,7 +97,9 @@ export const batchResolveAgentIdFromSessions = async (
   const relations = await db
     .select({ agentId: agentsToSessions.agentId, sessionId: agentsToSessions.sessionId })
     .from(agentsToSessions)
-    .where(and(eq(agentsToSessions.userId, userId), inArray(agentsToSessions.sessionId, sessionIds)));
+    .where(
+      and(eq(agentsToSessions.userId, userId), inArray(agentsToSessions.sessionId, sessionIds)),
+    );
 
   return new Map(relations.map((r) => [r.sessionId, r.agentId]));
 };

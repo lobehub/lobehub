@@ -20,8 +20,6 @@ Feature: Core Routes Accessibility
       | /          |
       | /chat      |
       | /discover  |
-      | /files     |
-      | /repos     |
 
   @ROUTES-002 @P0
   Scenario Outline: Access settings routes without errors

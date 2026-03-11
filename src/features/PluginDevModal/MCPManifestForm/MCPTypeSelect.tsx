@@ -126,7 +126,7 @@ const MCPTypeSelect = ({ value, onChange }: MCPTypeSelectProps) => {
   ];
 
   return (
-    <Flexbox gap={16} horizontal width={'100%'}>
+    <Flexbox horizontal gap={16} width={'100%'}>
       {data.map(({ label, description, features, value: itemValue, icon }) => {
         const isActive = value === itemValue;
         const disabled = itemValue === 'stdio' && !isDesktop;
@@ -135,14 +135,14 @@ const MCPTypeSelect = ({ value, onChange }: MCPTypeSelectProps) => {
             className={cx(styles.container, isActive && styles.active, disabled && styles.disabled)}
             gap={12}
             key={itemValue}
-            onClick={disabled ? undefined : () => handleSelect(itemValue)}
             style={{ flex: 1 }} // Make cards take equal width
+            onClick={disabled ? undefined : () => handleSelect(itemValue)}
           >
             <Center className={styles.checkIcon} style={{ opacity: isActive ? 1 : 0 }}>
               <CheckIcon size={14} />
             </Center>
 
-            <Flexbox align={'flex-start'} gap={12} horizontal>
+            <Flexbox horizontal align={'flex-start'} gap={12}>
               <Center height={22}>
                 <Icon icon={icon} style={{ fontSize: 16 }} />
               </Center>

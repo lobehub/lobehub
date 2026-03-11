@@ -51,7 +51,7 @@ describe('safeParseJSON', () => {
   });
 
   it('should parse large JSON without throwing an error', () => {
-    const largeJSON = JSON.stringify({ data: Array(1000).fill('test') });
+    const largeJSON = JSON.stringify({ data: Array.from({ length: 1000 }).fill('test') });
     const result = safeParseJSON(largeJSON);
     expect(result).toHaveProperty('data');
     expect(Array.isArray(result!.data)).toBe(true);

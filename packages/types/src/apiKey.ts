@@ -4,7 +4,7 @@ export interface ApiKeyItem {
   createdAt: Date;
   enabled?: boolean | null;
   expiresAt?: Date | null;
-  id: number;
+  id: string;
   key: string;
   lastUsedAt?: Date | null;
   name: string;

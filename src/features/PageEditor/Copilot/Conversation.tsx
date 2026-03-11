@@ -1,65 +1,108 @@
+import { isChatGroupSessionId } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
-import type { ActionKeys } from '@/features/ChatInput';
-import { ChatInput, ChatList } from '@/features/Conversation';
+import { actionMap } from '@/features/ChatInput/ActionBar/config';
+import { ActionBarContext } from '@/features/ChatInput/ActionBar/context';
+import {
+  ChatInput,
+  ChatList,
+  conversationSelectors,
+  useConversationStore,
+} from '@/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
+import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
+import CopilotModelSelector from './CopilotModelSelector';
 import CopilotToolbar from './Toolbar';
 import Welcome from './Welcome';
 
-interface ConversationProps {
-  // Default agent id
-  agentId: string;
-}
-const actions: ActionKeys[] = ['model', 'search'];
+const Search = actionMap['search'];
 
-const Conversation = memo<ConversationProps>(({ agentId }) => {
-  const [activeAgentId, setActiveAgentId, useFetchAgentConfig] = useAgentStore((s) => [
-    s.activeAgentId,
+const EMPTY_LEFT_ACTIONS: [] = [];
+
+const COMPACT_ACTION_SIZE = { blockSize: 28, size: 16 };
+const COMPACT_CONTEXT_VALUE = { actionSize: COMPACT_ACTION_SIZE };
+const COMPACT_ACTION_BAR_STYLE = { paddingLeft: 4, paddingRight: 4 };
+const COMPACT_SEND_BUTTON_PROPS = { size: 28 };
+
+const Conversation = memo(() => {
+  const [setActiveAgentId, useFetchAgentConfig] = useAgentStore((s) => [
     s.setActiveAgentId,
     s.useFetchAgentConfig,
   ]);
-  const [isHovered, setIsHovered] = useState(false);
+  const currentAgentId = useConversationStore(conversationSelectors.agentId);
 
   useEffect(() => {
-    setActiveAgentId(agentId);
-    // Also set the chat store's activeAgentId so topic selectors can work correctly
-    useChatStore.setState({ activeAgentId: agentId });
-  }, [agentId, setActiveAgentId]);
+    if (!currentAgentId) return;
 
-  const currentAgentId = activeAgentId || agentId;
+    if (useAgentStore.getState().activeAgentId !== currentAgentId) {
+      setActiveAgentId(currentAgentId);
+    }
 
-  // Fetch agent config when activeAgentId changes to ensure it's loaded in the store
-  // This is needed when user switches to a different agent
+    const { activeAgentId, activeTopicId, switchTopic } = useChatStore.getState();
+
+    if (activeAgentId !== currentAgentId) {
+      useChatStore.setState({ activeAgentId: currentAgentId });
+    }
+
+    // Reset topic on agent/context switch to avoid reusing old topic scope.
+    if (activeAgentId !== currentAgentId || !!activeTopicId) {
+      void switchTopic(null, { scope: 'page', skipRefreshMessage: true });
+    }
+  }, [currentAgentId, setActiveAgentId]);
+
   useFetchAgentConfig(true, currentAgentId);
 
-  // Get agent's model info for vision support check
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(currentAgentId)(s));
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
   );
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
+  const handleAgentChange = useCallback(
+    (id: string) => {
+      if (!id || id === currentAgentId || isChatGroupSessionId(id)) return;
+      setActiveAgentId(id);
+    },
+    [currentAgentId, setActiveAgentId],
+  );
+
+  const leftContent = useMemo(
+    () => (
+      <ActionBarContext value={COMPACT_CONTEXT_VALUE}>
+        <Flexbox horizontal align={'center'} gap={2}>
+          <AgentSelectorAction onAgentChange={handleAgentChange} />
+          <Search />
+        </Flexbox>
+      </ActionBarContext>
+    ),
+    [handleAgentChange],
+  );
+
+  const modelSelector = useMemo(() => <CopilotModelSelector />, []);
+
   return (
     <DragUploadZone
-      onUploadFiles={handleUploadFiles}
       style={{ flex: 1, height: '100%', minWidth: 300 }}
+      onUploadFiles={handleUploadFiles}
     >
-      <Flexbox
-        flex={1}
-        height={'100%'}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <CopilotToolbar agentId={currentAgentId} isHovered={isHovered} />
+      <Flexbox flex={1} height={'100%'}>
+        <CopilotToolbar />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ChatList welcome={<Welcome />} />
         </Flexbox>
-        <ChatInput leftActions={actions} />
+        <ChatInput
+          actionBarStyle={COMPACT_ACTION_BAR_STYLE}
+          allowExpand={false}
+          leftActions={EMPTY_LEFT_ACTIONS}
+          leftContent={leftContent}
+          sendAreaPrefix={modelSelector}
+          sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
+        />
       </Flexbox>
     </DragUploadZone>
   );

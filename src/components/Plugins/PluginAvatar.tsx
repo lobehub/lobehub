@@ -1,6 +1,7 @@
 import { MCP } from '@lobehub/icons';
 import { Avatar } from '@lobehub/ui';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
 
 interface PluginAvatarProps {
   alt?: string;

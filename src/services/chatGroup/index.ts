@@ -1,4 +1,4 @@
-import { type AgentGroupDetail, type AgentItem } from '@lobechat/types';
+import { type AgentGroupDetail } from '@lobechat/types';
 
 import {
   type ChatGroupAgentItem,
@@ -69,7 +69,7 @@ class ChatGroupService {
         ...groupConfig,
         config: groupConfig.config as any,
       },
-      members: members as Partial<AgentItem>[],
+      members,
       supervisorConfig,
     });
   };
@@ -113,7 +113,7 @@ class ChatGroupService {
    */
   batchCreateAgentsInGroup = (groupId: string, agents: GroupMemberConfig[]) => {
     return lambdaClient.group.batchCreateAgentsInGroup.mutate({
-      agents: agents as Partial<AgentItem>[],
+      agents,
       groupId,
     });
   };

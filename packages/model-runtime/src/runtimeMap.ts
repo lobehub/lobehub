@@ -4,8 +4,8 @@ import { LobeAi360AI } from './providers/ai360';
 import { LobeAiHubMixAI } from './providers/aihubmix';
 import { LobeAkashChatAI } from './providers/akashchat';
 import { LobeAnthropicAI } from './providers/anthropic';
-import { LobeAzureOpenAI } from './providers/azureOpenai';
 import { LobeAzureAI } from './providers/azureai';
+import { LobeAzureOpenAI } from './providers/azureOpenai';
 import { LobeBaichuanAI } from './providers/baichuan';
 import { LobeBedrockAI } from './providers/bedrock';
 import { LobeBflAI } from './providers/bfl';
@@ -19,6 +19,7 @@ import { LobeFalAI } from './providers/fal';
 import { LobeFireworksAI } from './providers/fireworksai';
 import { LobeGiteeAI } from './providers/giteeai';
 import { LobeGithubAI } from './providers/github';
+import { LobeGithubCopilotAI } from './providers/githubCopilot';
 import { LobeGoogleAI } from './providers/google';
 import { LobeGroq } from './providers/groq';
 import { LobeHigressAI } from './providers/higress';
@@ -29,6 +30,7 @@ import { LobeInternLMAI } from './providers/internlm';
 import { LobeJinaAI } from './providers/jina';
 import { LobeLMStudioAI } from './providers/lmstudio';
 import { LobeHubAI } from './providers/lobehub';
+import { LobeLongCatAI } from './providers/longcat';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMistralAI } from './providers/mistral';
 import { LobeModelScopeAI } from './providers/modelscope';
@@ -52,6 +54,7 @@ import { LobeSenseNovaAI } from './providers/sensenova';
 import { LobeSiliconCloudAI } from './providers/siliconcloud';
 import { LobeSparkAI } from './providers/spark';
 import { LobeStepfunAI } from './providers/stepfun';
+import { LobeStraicoAI } from './providers/straico';
 import { LobeTaichuAI } from './providers/taichu';
 import { LobeTencentCloudAI } from './providers/tencentcloud';
 import { LobeTogetherAI } from './providers/togetherai';
@@ -90,6 +93,7 @@ export const providerRuntimeMap = {
   fireworksai: LobeFireworksAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
+  githubcopilot: LobeGithubCopilotAI,
   google: LobeGoogleAI,
   groq: LobeGroq,
   higress: LobeHigressAI,
@@ -100,6 +104,7 @@ export const providerRuntimeMap = {
   jina: LobeJinaAI,
   lmstudio: LobeLMStudioAI,
   lobehub: LobeHubAI,
+  longcat: LobeLongCatAI,
   minimax: LobeMinimaxAI,
   mistral: LobeMistralAI,
   modelscope: LobeModelScopeAI,
@@ -124,6 +129,7 @@ export const providerRuntimeMap = {
   siliconcloud: LobeSiliconCloudAI,
   spark: LobeSparkAI,
   stepfun: LobeStepfunAI,
+  straico: LobeStraicoAI,
   taichu: LobeTaichuAI,
   tencentcloud: LobeTencentCloudAI,
   togetherai: LobeTogetherAI,

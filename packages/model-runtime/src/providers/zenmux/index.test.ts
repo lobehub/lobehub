@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as modelParseModule from '../../utils/modelParse';
-import { LobeZenMuxAI, params } from './index';
+import { params } from './index';
 
 // Mock external dependencies
 vi.mock('../../utils/modelParse');

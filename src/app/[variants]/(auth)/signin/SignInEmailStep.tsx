@@ -1,7 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
-import { Divider, Form } from 'antd';
-import type { FormInstance, InputRef } from 'antd';
+import { type FormInstance, type InputRef } from 'antd';
+import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -20,13 +20,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 export const USERNAME_REGEX = /^\w+$/;
 
 export interface SignInEmailStepProps {
   disableEmailPassword?: boolean;
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
+  lastAuthProvider?: string | null;
   loading: boolean;
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
@@ -40,6 +41,7 @@ export const SignInEmailStep = ({
   disableEmailPassword,
   form,
   isSocialOnly,
+  lastAuthProvider,
   loading,
   oAuthSSOProviders,
   serverConfigInit,
@@ -67,7 +69,7 @@ export const SignInEmailStep = ({
     const normalized = provider
       .toLowerCase()
       .replaceAll(/(^|[_-])([a-z])/g, (_, __, c) => c.toUpperCase());
-    const normalizedKey = normalized.replaceAll(/[^\dA-Za-z]/g, '');
+    const normalizedKey = normalized.replaceAll(/[^\da-z]/gi, '');
     const key = `betterAuth.signin.continueWith${normalizedKey}`;
     return t(key, { defaultValue: `Continue with ${normalized}` });
   };
@@ -75,6 +77,8 @@ export const SignInEmailStep = ({
   const footer = (
     <Text fontSize={13} type={'secondary'}>
       <Trans
+        i18nKey={'footer.agreement'}
+        ns={'auth'}
         components={{
           privacy: (
             <a
@@ -93,8 +97,6 @@ export const SignInEmailStep = ({
             </a>
           ),
         }}
-        i18nKey={'footer.agreement'}
-        ns={'auth'}
       />
     </Text>
   );
@@ -114,32 +116,46 @@ export const SignInEmailStep = ({
       )}
       {serverConfigInit && oAuthSSOProviders.length > 0 && (
         <Flexbox gap={12}>
-          {oAuthSSOProviders.map((provider) => (
-            <Button
-              block
-              icon={
-                <Icon
-                  icon={AuthIcons(provider, 18)}
-                  style={{
-                    left: 12,
-                    position: 'absolute',
-                    top: 13,
-                  }}
-                />
-              }
-              key={provider}
-              loading={socialLoading === provider}
-              onClick={() => onSocialSignIn(provider)}
-              size="large"
-            >
-              {getProviderLabel(provider)}
-            </Button>
-          ))}
+          {oAuthSSOProviders.map((provider) => {
+            const button = (
+              <Button
+                block
+                key={provider}
+                loading={socialLoading === provider}
+                size="large"
+                icon={
+                  <Icon
+                    icon={AuthIcons(provider, 18)}
+                    style={{
+                      left: 12,
+                      position: 'absolute',
+                      top: 13,
+                    }}
+                  />
+                }
+                onClick={() => onSocialSignIn(provider)}
+              >
+                {getProviderLabel(provider)}
+              </Button>
+            );
+            return provider === lastAuthProvider ? (
+              <Badge.Ribbon
+                color="var(--ant-color-info-fill-tertiary)"
+                key={provider}
+                styles={{ content: { color: 'var(--ant-color-info)' } }}
+                text={t('betterAuth.signin.lastUsed')}
+              >
+                {button}
+              </Badge.Ribbon>
+            ) : (
+              button
+            );
+          })}
           {!disableEmailPassword && divider}
         </Flexbox>
       )}
       {serverConfigInit && disableEmailPassword && oAuthSSOProviders.length === 0 && (
-        <Alert description={t('betterAuth.signin.ssoOnlyNoProviders')} showIcon type="warning" />
+        <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
       )}
       {!disableEmailPassword && (
         <Form
@@ -149,6 +165,7 @@ export const SignInEmailStep = ({
         >
           <Form.Item
             name="email"
+            style={{ marginBottom: 0 }}
             rules={[
               { message: t('betterAuth.errors.emailRequired'), required: true },
               {
@@ -162,10 +179,11 @@ export const SignInEmailStep = ({
                 },
               },
             ]}
-            style={{ marginBottom: 0 }}
           >
             <Input
               placeholder={t('betterAuth.signin.emailPlaceholder')}
+              ref={emailInputRef}
+              size="large"
               prefix={
                 <Icon
                   icon={Mail}
@@ -174,8 +192,6 @@ export const SignInEmailStep = ({
                   }}
                 />
               }
-              ref={emailInputRef}
-              size="large"
               style={{
                 padding: 6,
               }}
@@ -183,9 +199,9 @@ export const SignInEmailStep = ({
                 <Button
                   icon={ChevronRight}
                   loading={loading}
-                  onClick={() => form.submit()}
                   title={t('betterAuth.signin.nextStep')}
                   variant={'filled'}
+                  onClick={() => form.submit()}
                 />
               }
             />
@@ -194,6 +210,9 @@ export const SignInEmailStep = ({
       )}
       {isSocialOnly && (
         <Alert
+          showIcon
+          style={{ marginTop: 12 }}
+          type="info"
           description={
             <>
               {t('betterAuth.signin.socialOnlyHint')}{' '}
@@ -202,9 +221,6 @@ export const SignInEmailStep = ({
               </a>
             </>
           }
-          showIcon
-          style={{ marginTop: 12 }}
-          type="info"
         />
       )}
     </AuthCard>

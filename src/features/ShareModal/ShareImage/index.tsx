@@ -1,5 +1,5 @@
-import { Button, Form, type FormItemProps, Segmented } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { Button, Flexbox, Form, Segmented } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -14,7 +14,8 @@ import { agentSelectors } from '@/store/agent/selectors';
 
 import { styles } from '../style';
 import Preview from './Preview';
-import { type FieldType, WidthMode } from './type';
+import { type FieldType } from './type';
+import { WidthMode } from './type';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
   imageType: ImageType.JPG,
@@ -81,13 +82,13 @@ const ShareImage = memo<{ mobile?: boolean }>(() => {
         block
         icon={CopyIcon}
         loading={copyLoading}
-        onClick={() => onCopy()}
         size={isMobile ? undefined : 'large'}
         type={'primary'}
+        onClick={() => onCopy()}
       >
         {t('copy', { ns: 'common' })}
       </Button>
-      <Button block loading={loading} onClick={onDownload} size={isMobile ? undefined : 'large'}>
+      <Button block loading={loading} size={isMobile ? undefined : 'large'} onClick={onDownload}>
         {t('shareModal.download')}
       </Button>
     </>
@@ -109,7 +110,7 @@ const ShareImage = memo<{ mobile?: boolean }>(() => {
         </Flexbox>
       </Flexbox>
       {isMobile && (
-        <Flexbox className={styles.footer} gap={8} horizontal>
+        <Flexbox horizontal className={styles.footer} gap={8}>
           {button}
         </Flexbox>
       )}

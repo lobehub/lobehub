@@ -9,7 +9,10 @@ export const searchRouter = router({
   crawlPages: searchProcedure
     .input(
       z.object({
-        impls: z.enum(['jina', 'naive', 'browserless']).array().optional(),
+        impls: z
+          .enum(['browserless', 'exa', 'firecrawl', 'jina', 'naive', 'search1api', 'tavily'])
+          .array()
+          .optional(),
         urls: z.string().array(),
       }),
     )

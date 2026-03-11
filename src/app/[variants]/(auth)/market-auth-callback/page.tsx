@@ -5,11 +5,13 @@ import { Result } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { persistMarketAuthResult } from '@/layout/AuthProvider/MarketAuth/handoff';
+
 type CallbackStatus = 'loading' | 'success' | 'error';
 
 /**
- * Market OIDC 授权回调页面
- * 处理从 OIDC 服务器返回的授权码
+ * Market OIDC authorization callback page
+ * Handles the authorization code returned from the OIDC server
  */
 const MarketAuthCallbackPage = () => {
   const { t } = useTranslation('marketAuth');
@@ -18,7 +20,7 @@ const MarketAuthCallbackPage = () => {
   const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    console.log('[MarketAuthCallback] Processing authorization callback');
+    console.info('[MarketAuthCallback] Processing authorization callback');
 
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -31,11 +33,18 @@ const MarketAuthCallbackPage = () => {
       setStatus('error');
       setMessage(t('callback.messages.authFailed', { error: errorDescription || error }));
 
-      // 向父窗口发送错误消息
+      persistMarketAuthResult({
+        error: errorDescription || error,
+        state: state || undefined,
+        type: 'MARKET_AUTH_ERROR',
+      });
+
+      // Send error message to parent window
       if (window.opener) {
         window.opener.postMessage(
           {
             error: errorDescription || error,
+            state,
             type: 'MARKET_AUTH_ERROR',
           },
           window.location.origin,
@@ -45,11 +54,17 @@ const MarketAuthCallbackPage = () => {
     }
 
     if (code && state) {
-      console.log('[MarketAuthCallback] Authorization successful, code received');
+      console.info('[MarketAuthCallback] Authorization successful, code received');
       setStatus('success');
       setMessage(t('callback.messages.successWithRedirect'));
 
-      // 向父窗口发送成功消息
+      persistMarketAuthResult({
+        code,
+        state,
+        type: 'MARKET_AUTH_SUCCESS',
+      });
+
+      // Send success message to parent window
       if (window.opener) {
         window.opener.postMessage(
           {
@@ -61,7 +76,7 @@ const MarketAuthCallbackPage = () => {
         );
       }
 
-      // 开始倒计时并在3秒后关闭窗口
+      // Start countdown and close window after 3 seconds
       let timeLeft = 3;
       setCountdown(timeLeft);
 
@@ -79,10 +94,17 @@ const MarketAuthCallbackPage = () => {
       setStatus('error');
       setMessage(t('callback.messages.missingParams'));
 
+      persistMarketAuthResult({
+        error: 'Missing authorization parameters',
+        state: state || undefined,
+        type: 'MARKET_AUTH_ERROR',
+      });
+
       if (window.opener) {
         window.opener.postMessage(
           {
             error: 'Missing authorization parameters',
+            state,
             type: 'MARKET_AUTH_ERROR',
           },
           window.location.origin,
@@ -146,7 +168,7 @@ const MarketAuthCallbackPage = () => {
   const getExtra = () => {
     if (status === 'error') {
       return (
-        <Button block onClick={() => window.close()} size={'large'} style={{ minWidth: 240 }}>
+        <Button block size={'large'} style={{ minWidth: 240 }} onClick={() => window.close()}>
           {t('callback.buttons.close')}
         </Button>
       );

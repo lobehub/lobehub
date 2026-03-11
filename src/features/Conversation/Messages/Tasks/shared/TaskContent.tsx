@@ -1,7 +1,6 @@
 'use client';
 
-import { ThreadStatus } from '@lobechat/types';
-import type { TaskDetail, UIChatMessage } from '@lobechat/types';
+import { type TaskDetail, type ThreadStatus, type UIChatMessage } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +39,7 @@ const TaskContent = memo<TaskContentProps>(
 
       // Already completed but loading messages: show simple loading
       return (
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <BubblesLoading />
           <Text type="secondary">{t('task.status.fetchingDetails')}</Text>
         </Flexbox>

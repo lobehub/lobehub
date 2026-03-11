@@ -1,4 +1,4 @@
-import { type CrawlResult } from '@lobechat/types';
+import type { CrawlResult } from '@lobechat/types';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';

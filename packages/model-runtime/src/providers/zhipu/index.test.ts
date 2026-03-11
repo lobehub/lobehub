@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import { type LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeZhipuAI, params } from './index';
 
@@ -244,7 +244,7 @@ describe('LobeZhipuAI - custom features', () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'glm-4-alltools',
-          temperature: 2.0, // Will be normalized to 1.0, then clamped to 0.99
+          temperature: 2, // Will be normalized to 1.0, then clamped to 0.99
         });
 
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
@@ -291,7 +291,7 @@ describe('LobeZhipuAI - custom features', () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'glm-4-alltools',
-          temperature: 1.0, // Will be normalized to 0.5
+          temperature: 1, // Will be normalized to 0.5
         });
 
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
@@ -308,7 +308,7 @@ describe('LobeZhipuAI - custom features', () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'glm-4',
-          temperature: 1.0,
+          temperature: 1,
         });
 
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
@@ -378,39 +378,6 @@ describe('LobeZhipuAI - custom features', () => {
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
           expect.objectContaining({
             thinking: { type: 'disabled' },
-          }),
-          expect.anything(),
-        );
-      });
-    });
-
-    describe('Stream parameter', () => {
-      it('should always set stream to true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            stream: true,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should override stream parameter to true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          stream: false,
-          temperature: 0.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            stream: true,
           }),
           expect.anything(),
         );

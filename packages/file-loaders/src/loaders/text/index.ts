@@ -1,5 +1,6 @@
-import debug from 'debug';
 import { readFile } from 'node:fs/promises';
+
+import debug from 'debug';
 
 import type { DocumentPage, FileLoaderInterface } from '../../types';
 

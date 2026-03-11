@@ -5,12 +5,12 @@ export class ClientService {
   ];
 
   getTableDetails = async (tableName: string) => {
-    console.log('getTableDetails:', tableName);
+    console.info('getTableDetails:', tableName);
     return [{ name: 'test' }];
   };
 
   getTableData = async (tableName: string) => {
-    console.log('getTableData:', tableName);
+    console.info('getTableData:', tableName);
     return [{ name: 'test' }];
   };
 }

@@ -1,11 +1,7 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
-import {
-  type TaskCurrentActivity,
-  type TaskStatusResult,
-  ThreadStatus,
-  ThreadType,
-} from '@lobechat/types';
+import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
+import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -489,8 +485,10 @@ export const aiAgentRouter = router({
         initialMessages: messages,
         modelRuntimeConfig,
         operationId,
-        toolManifestMap,
-        tools,
+        toolSet: {
+          manifestMap: toolManifestMap,
+          tools,
+        },
         userId: ctx.userId,
       });
 
@@ -859,11 +857,24 @@ export const aiAgentRouter = router({
 
             log('getSubAgentTaskStatus: marked thread %s as completed', threadId);
           } else if (realtimeStatus.hasError || redisState.status === 'error') {
-            updatedMetadata.error = redisState.error;
+            // Format error properly to avoid [object Object] in serialization
+            const errorObj = redisState.error as any;
+            const formattedError = errorObj
+              ? typeof errorObj === 'object' && 'message' in errorObj
+                ? { message: errorObj.message, ...errorObj }
+                : { message: String(errorObj) }
+              : undefined;
+
+            updatedMetadata.error = formattedError;
             updatedMetadata.completedAt = new Date().toISOString();
             if (metadata?.startedAt) {
               updatedMetadata.duration = Date.now() - new Date(metadata.startedAt).getTime();
             }
+
+            log('getSubAgentTaskStatus: error formatting for thread %s: %O', threadId, {
+              originalError: redisState.error,
+              formattedError,
+            });
 
             await ctx.threadModel.update(threadId, {
               metadata: updatedMetadata,
@@ -892,12 +903,10 @@ export const aiAgentRouter = router({
       const updatedStatus = updatedThread?.status ?? thread.status;
       const updatedTaskStatus = threadStatusToTaskStatus[updatedStatus] || 'processing';
 
-      // DEBUG: Log metadata for failed tasks
       if (updatedTaskStatus === 'failed') {
-        console.log('[DEBUG] getSubAgentTaskStatus - failed task metadata:', {
-          threadId,
+        console.error('getSubAgentTaskStatus: failed task metadata for thread %s: %O', threadId, {
           updatedMetadata,
-          'updatedMetadata?.error': updatedMetadata?.error,
+          error: updatedMetadata?.error,
           updatedStatus,
         });
       }
@@ -1025,7 +1034,7 @@ export const aiAgentRouter = router({
       log(`Processing ${action} for operation ${operationId}`);
 
       // Build intervention parameters
-      let interventionParams: any = {
+      const interventionParams: any = {
         action,
         operationId,
         stepIndex,

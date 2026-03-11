@@ -1,13 +1,15 @@
 /**
  * @vitest-environment happy-dom
  */
-import { type IEditor, moment } from '@lobehub/editor';
+import { type IEditor } from '@lobehub/editor';
+import { moment } from '@lobehub/editor';
 import { useEditor } from '@lobehub/editor/react';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { memo, useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import InternalEditor, { type InternalEditorProps } from './InternalEditor';
+import { type InternalEditorProps } from './InternalEditor';
+import InternalEditor from './InternalEditor';
 
 // Suppress console.warn for expected errors in tests
 const originalWarn = console.warn;
@@ -147,10 +149,10 @@ describe('InternalEditor', () => {
       // When editor initializes with empty/undefined content, it should not throw
       const { container } = render(
         <MinimalTestWrapper
+          onInit={onInit}
           onEditorReady={(e) => {
             editorInstance = e;
           }}
-          onInit={onInit}
         />,
       );
 
@@ -245,6 +247,48 @@ describe('InternalEditor', () => {
       );
     });
 
+    it('should call onContentChange when formatting changes but text stays the same', async () => {
+      const onContentChange = vi.fn();
+      let editorInstance: IEditor | undefined;
+
+      render(
+        <MinimalTestWrapper
+          onContentChange={onContentChange}
+          onEditorReady={(e) => {
+            editorInstance = e;
+          }}
+        />,
+      );
+
+      await act(async () => {
+        await moment();
+      });
+
+      await waitFor(() => {
+        expect(editorInstance).toBeDefined();
+      });
+
+      await act(async () => {
+        editorInstance!.setDocument('text', 'Hello');
+        await moment();
+      });
+
+      onContentChange.mockClear();
+
+      await act(async () => {
+        // Keep the same plain text but change formatting structure.
+        editorInstance!.setDocument('markdown', '**Hello**');
+        await moment();
+      });
+
+      await waitFor(
+        () => {
+          expect(onContentChange).toHaveBeenCalled();
+        },
+        { timeout: 2000 },
+      );
+    });
+
     it('should track multiple content changes', async () => {
       const onContentChange = vi.fn();
       let editorInstance: IEditor | undefined;
@@ -288,6 +332,60 @@ describe('InternalEditor', () => {
         () => {
           // Should have multiple calls for different content changes
           expect(onContentChange.mock.calls.length).toBeGreaterThanOrEqual(2);
+        },
+        { timeout: 2000 },
+      );
+    });
+
+    it('should not call onContentChange for programmatic hydration while lock is active', async () => {
+      const onContentChange = vi.fn();
+      const contentChangeLockRef = { current: false };
+      let editorInstance: IEditor | undefined;
+
+      render(
+        <MinimalTestWrapper
+          contentChangeLockRef={contentChangeLockRef}
+          onContentChange={onContentChange}
+          onEditorReady={(e) => {
+            editorInstance = e;
+          }}
+        />,
+      );
+
+      await act(async () => {
+        await moment();
+      });
+
+      await waitFor(() => {
+        expect(editorInstance).toBeDefined();
+      });
+
+      await act(async () => {
+        editorInstance!.setDocument('text', 'Doc A');
+        await moment();
+      });
+
+      onContentChange.mockClear();
+
+      contentChangeLockRef.current = true;
+
+      await act(async () => {
+        editorInstance!.setDocument('text', 'Doc B');
+        await moment();
+      });
+
+      expect(onContentChange).not.toHaveBeenCalled();
+
+      contentChangeLockRef.current = false;
+
+      await act(async () => {
+        editorInstance!.setDocument('text', 'Doc B edited');
+        await moment();
+      });
+
+      await waitFor(
+        () => {
+          expect(onContentChange).toHaveBeenCalledTimes(1);
         },
         { timeout: 2000 },
       );

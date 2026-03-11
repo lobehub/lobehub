@@ -1,4 +1,4 @@
-import { ChatTopic, UIChatMessage } from '@lobechat/types';
+import { type ChatTopic, type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';

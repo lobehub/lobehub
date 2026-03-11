@@ -25,10 +25,26 @@ export interface CitationItem {
   url: string;
 }
 
+export interface ImageCitationItem {
+  domain?: string;
+  imageUri?: string;
+  sourceUri?: string;
+  title?: string;
+}
+
 export interface GroundingSearch {
   citations?: CitationItem[];
+  imageResults?: ImageCitationItem[];
+  imageSearchQueries?: string[];
   searchQueries?: string[];
 }
+
+export const ImageCitationItemSchema = z.object({
+  domain: z.string().optional(),
+  imageUri: z.string().optional(),
+  sourceUri: z.string().optional(),
+  title: z.string().optional(),
+});
 
 export const GroundingSearchSchema = z.object({
   citations: z
@@ -41,5 +57,7 @@ export const GroundingSearchSchema = z.object({
       }),
     )
     .optional(),
+  imageResults: z.array(ImageCitationItemSchema).optional(),
+  imageSearchQueries: z.array(z.string()).optional(),
   searchQueries: z.array(z.string()).optional(),
 });

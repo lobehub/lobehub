@@ -19,7 +19,7 @@ import {
   WORKFLOW_DEFAULTS,
 } from '@/server/services/comfyui/config/constants';
 import { type ModelConfig } from '@/server/services/comfyui/config/modelRegistry';
-import type { WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
+import { type WorkflowContext } from '@/server/services/comfyui/core/workflowBuilderService';
 import { getModelConfig } from '@/server/services/comfyui/utils/staticModelLookup';
 import { getWorkflowFilenamePrefix } from '@/server/services/comfyui/utils/workflowUtils';
 
@@ -116,7 +116,6 @@ export async function buildSimpleSDWorkflow(
   // If no VAE found or it's SD3, use built-in VAE (selectedVAE remains undefined)
 
   // Base workflow for models with built-in CLIP/T5 encoders
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const workflow: any = {
     '1': {
       _meta: { title: 'Load Checkpoint' },
@@ -174,7 +173,6 @@ export async function buildSimpleSDWorkflow(
       },
     },
   };
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 
   // Add VAE Loader node if using external VAE
   if (selectedVAE) {

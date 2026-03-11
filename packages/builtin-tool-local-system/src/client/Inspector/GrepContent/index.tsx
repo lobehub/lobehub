@@ -1,7 +1,7 @@
 'use client';
 
-import { type GrepContentParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { GrepContentParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type GrepContentState } from '../../..';
+import type { GrepContentState } from '../../..';
 
 export const GrepContentInspector = memo<
   BuiltinInspectorProps<GrepContentParams, GrepContentState>
@@ -38,6 +38,7 @@ export const GrepContentInspector = memo<
   // Check result count
   const resultCount = pluginState?.result?.total_matches ?? 0;
   const hasResults = resultCount > 0;
+  const engine = pluginState?.result?.engine;
 
   return (
     <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
@@ -57,6 +58,16 @@ export const GrepContentInspector = memo<
             ({t('builtins.lobe-local-system.inspector.noResults')})
           </Text>
         ))}
+      {!isLoading && engine && (
+        <Text
+          as={'span'}
+          color={cssVar.colorTextDescription}
+          fontSize={12}
+          style={{ marginInlineStart: 4 }}
+        >
+          [{engine}]
+        </Text>
+      )}
     </div>
   );
 });

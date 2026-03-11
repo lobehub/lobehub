@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import { type CSSProperties, type ReactNode, memo, useMemo } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 
 import { MAX_SIZE_DESKTOP, MIN_IMAGE_SIZE, styles } from './style';
 
@@ -36,9 +37,9 @@ const Grid = memo<GridProps>(
 
     return (
       <Flexbox
+        horizontal
         className={cx(styles.container, className)}
         gap={gap}
-        horizontal
         style={{
           ...cssVariables,
           ...style,

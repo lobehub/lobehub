@@ -106,10 +106,11 @@ describe('EditorCanvas', () => {
           autoSave={false}
           documentId="doc-123"
           editor={mockEditor}
-          onContentChange={onContentChange}
-          onInit={onInit}
           placeholder="Custom placeholder"
           sourceType="notebook"
+          unsavedChangesGuard={{ enabled: true, message: 'unsaved', title: 'Unsaved' }}
+          onContentChange={onContentChange}
+          onInit={onInit}
         />,
       );
 
@@ -124,6 +125,7 @@ describe('EditorCanvas', () => {
         onInit,
         placeholder: 'Custom placeholder',
         sourceType: 'notebook',
+        unsavedChangesGuard: { enabled: true, message: 'unsaved', title: 'Unsaved' },
       });
     });
 
@@ -136,9 +138,9 @@ describe('EditorCanvas', () => {
         <EditorCanvas
           editor={mockEditor}
           editorData={editorData}
+          placeholder="Custom placeholder"
           onContentChange={onContentChange}
           onInit={onInit}
-          placeholder="Custom placeholder"
         />,
       );
 
@@ -162,9 +164,9 @@ describe('EditorCanvas', () => {
         <EditorCanvas
           editor={mockEditor}
           floatingToolbar={false}
+          placeholder="Custom placeholder"
           onContentChange={onContentChange}
           onInit={onInit}
-          placeholder="Custom placeholder"
         />,
       );
 

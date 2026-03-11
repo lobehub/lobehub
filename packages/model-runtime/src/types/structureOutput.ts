@@ -1,4 +1,4 @@
-import { ChatCompletionTool } from './chat';
+import type { ChatCompletionTool } from './chat';
 
 interface GenerateObjectMessage {
   content: string;

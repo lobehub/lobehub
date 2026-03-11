@@ -1,10 +1,7 @@
-import {
-  BUILTIN_AGENT_SLUGS,
-  type BuiltinAgentSlug,
-  getAgentRuntimeConfig,
-} from '@lobechat/builtin-agents';
+import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
+import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import { type LobeToolManifest } from '@lobechat/context-engine';
 import {
   type ChatCompletionTool,
   type LobeAgentChatConfig,
@@ -47,7 +44,7 @@ const applyParamsFromChatConfig = (
   chatConfig: LobeAgentChatConfig,
 ): LobeAgentConfig => {
   // If params is not defined, return agentConfig as-is
-  if (!agentConfig.params) {
+  if (!agentConfig?.params) {
     return agentConfig;
   }
 
@@ -171,7 +168,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
 
   // Base plugins from agent config
-  const basePlugins = agentConfig.plugins ?? [];
+  const basePlugins = agentConfig?.plugins ?? [];
 
   // Check if this is a builtin agent
   // Priority: supervisor check (when in group scope) > agent store slug
@@ -189,10 +186,10 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       ctx.groupId,
       group
         ? {
-            groupId: group.id,
-            supervisorAgentId: group.supervisorAgentId,
-            title: group.title,
-          }
+          groupId: group.id,
+          supervisorAgentId: group.supervisorAgentId,
+          title: group.title,
+        }
         : null,
       agentId,
     );
@@ -295,11 +292,11 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       ctx.groupId,
       group
         ? {
-            agentsCount: group.agents?.length,
-            groupId: group.id,
-            supervisorAgentId: group.supervisorAgentId,
-            title: group.title,
-          }
+          agentsCount: group.agents?.length,
+          groupId: group.id,
+          supervisorAgentId: group.supervisorAgentId,
+          title: group.title,
+        }
         : null,
     );
 

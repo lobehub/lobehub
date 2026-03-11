@@ -16,6 +16,12 @@ const TopP = memo<TopPProps>(({ value, onChange, disabled }) => {
         changeOnWheel
         controls={false}
         disabled={disabled}
+        max={1}
+        min={0}
+        size={'small'}
+        step={0.1}
+        style={{ height: 42 }}
+        value={value}
         marks={{
           0: (
             <Icon
@@ -29,18 +35,12 @@ const TopP = memo<TopPProps>(({ value, onChange, disabled }) => {
             <Icon icon={FlowerIcon} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />
           ),
         }}
-        max={1}
-        min={0}
-        onChange={onChange}
-        size={'small'}
-        step={0.1}
-        style={{ height: 42 }}
         styles={{
           input: {
             maxWidth: 43,
           },
         }}
-        value={value}
+        onChange={onChange}
       />
     </Flexbox>
   );

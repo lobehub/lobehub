@@ -1,5 +1,6 @@
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
-import { type KnowledgeItem, KnowledgeType } from '@lobechat/types';
+import { type KnowledgeItem } from '@lobechat/types';
+import { KnowledgeType } from '@lobechat/types';
 import { z } from 'zod';
 
 import { AgentModel } from '@/database/models/agent';
@@ -54,7 +55,6 @@ export const agentRouter = router({
             chatConfig: true,
             openingMessage: true,
             openingQuestions: true,
-            plugins: true,
             tags: true,
             tts: true,
           })
@@ -66,7 +66,7 @@ export const agentRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const session = await ctx.sessionModel.create({
-        config: input.config,
+        config: input.config as any,
         session: { groupId: input.groupId },
         type: 'agent',
       });
@@ -212,7 +212,7 @@ export const agentRouter = router({
           if (!user) return DEFAULT_AGENT_CONFIG;
 
           const res = await ctx.agentService.createInbox();
-          console.log('create inbox session', res);
+          console.info('create inbox session', res);
         }
       }
 

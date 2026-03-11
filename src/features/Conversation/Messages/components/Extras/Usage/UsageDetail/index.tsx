@@ -14,7 +14,8 @@ import { formatNumber, formatShortenNumber } from '@/utils/format';
 
 import AnimatedNumber from './AnimatedNumber';
 import ModelCard from './ModelCard';
-import TokenProgress, { type TokenProgressItem } from './TokenProgress';
+import { type TokenProgressItem } from './TokenProgress';
+import TokenProgress from './TokenProgress';
 import { getDetailsToken } from './tokens';
 
 interface TokenDetailProps {
@@ -27,7 +28,7 @@ interface TokenDetailProps {
 const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provider }) => {
   const { t } = useTranslation('chat');
 
-  // 使用 systemStatus 管理短格式显示状态
+  // Use systemStatus to manage short-format display state
   const isShortFormat = useGlobalStore(systemStatusSelectors.tokenDisplayFormatShort);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
@@ -107,6 +108,12 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
         ? detailTokens.inputCachedWrite.credit
         : detailTokens.inputCachedWrite.token,
     },
+    !!detailTokens.inputTool && {
+      color: cssVar.geekblue,
+      id: 'inputTool',
+      title: t('messages.tokenDetails.inputTool'),
+      value: isShowCredit ? detailTokens.inputTool.credit : detailTokens.inputTool.token,
+    },
     !!detailTokens.totalOutput && {
       color: cssVar.colorSuccess,
       id: 'output',
@@ -132,6 +139,8 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
 
   return (
     <Popover
+      placement={'top'}
+      trigger="hover"
       content={
         <Flexbox gap={8} style={{ minWidth: 200 }}>
           {modelCard && <ModelCard {...modelCard} provider={provider} />}
@@ -140,9 +149,9 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
             {inputDetails.length > 1 && (
               <Flexbox gap={4}>
                 <Flexbox
+                  horizontal
                   align={'center'}
                   gap={4}
-                  horizontal
                   justify={'space-between'}
                   width={'100%'}
                 >
@@ -150,15 +159,15 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     {t('messages.tokenDetails.inputTitle')}
                   </div>
                 </Flexbox>
-                <TokenProgress data={inputDetails} showIcon />
+                <TokenProgress showIcon data={inputDetails} />
               </Flexbox>
             )}
             {outputDetails.length > 1 && (
               <Flexbox gap={4}>
                 <Flexbox
+                  horizontal
                   align={'center'}
                   gap={4}
-                  horizontal
                   justify={'space-between'}
                   width={'100%'}
                 >
@@ -166,20 +175,20 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     {t('messages.tokenDetails.outputTitle')}
                   </div>
                 </Flexbox>
-                <TokenProgress data={outputDetails} showIcon />
+                <TokenProgress showIcon data={outputDetails} />
               </Flexbox>
             )}
             <Flexbox>
-              <TokenProgress data={totalDetail} showIcon />
+              <TokenProgress showIcon data={totalDetail} />
               <Divider style={{ marginBlock: 8 }} />
-              <Flexbox align={'center'} gap={4} horizontal justify={'space-between'}>
+              <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                 <div style={{ color: cssVar.colorTextSecondary }}>
                   {t('messages.tokenDetails.total')}
                 </div>
                 <div style={{ fontWeight: 500 }}>{detailTotal}</div>
               </Flexbox>
               {isShowCredit && (
-                <Flexbox align={'center'} gap={4} horizontal justify={'space-between'}>
+                <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                   <div style={{ color: cssVar.colorTextSecondary }}>
                     {t('messages.tokenDetails.average')}
                   </div>
@@ -187,8 +196,8 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                 </Flexbox>
               )}
               {tps && (
-                <Flexbox align={'center'} gap={4} horizontal justify={'space-between'}>
-                  <Flexbox gap={8} horizontal>
+                <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
+                  <Flexbox horizontal gap={8}>
                     <div style={{ color: cssVar.colorTextSecondary }}>
                       {t('messages.tokenDetails.speed.tps.title')}
                     </div>
@@ -198,8 +207,8 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                 </Flexbox>
               )}
               {ttft && (
-                <Flexbox align={'center'} gap={4} horizontal justify={'space-between'}>
-                  <Flexbox gap={8} horizontal>
+                <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
+                  <Flexbox horizontal gap={8}>
                     <div style={{ color: cssVar.colorTextSecondary }}>
                       {t('messages.tokenDetails.speed.ttft.title')}
                     </div>
@@ -212,23 +221,25 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
           </Flexbox>
         </Flexbox>
       }
-      placement={'top'}
-      trigger="hover"
     >
       <Center
-        gap={2}
         horizontal
+        gap={2}
+        style={{ cursor: 'pointer' }}
         onClick={(e) => {
-          // 阻止 Popover 并切换格式
+          // Prevent Popover from closing and toggle the format
           e.preventDefault();
           e.stopPropagation();
           updateSystemStatus({ tokenDisplayFormatShort: !isShortFormat });
         }}
-        style={{ cursor: 'pointer' }}
       >
         <Icon icon={isShowCredit ? BadgeCent : CoinsIcon} />
         <AnimatedNumber
           duration={1500}
+          // Force remount when switching between token/credit to prevent unwanted animation
+          // See: https://github.com/lobehub/lobe-chat/pull/10098
+          key={isShowCredit ? 'credit' : 'token'}
+          value={totalCount}
           formatter={(value) => {
             const roundedValue = Math.round(value);
             if (isShortFormat) {
@@ -236,10 +247,6 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
             }
             return new Intl.NumberFormat('en-US').format(roundedValue);
           }}
-          // Force remount when switching between token/credit to prevent unwanted animation
-          // See: https://github.com/lobehub/lobe-chat/pull/10098
-          key={isShowCredit ? 'credit' : 'token'}
-          value={totalCount}
         />
       </Center>
     </Popover>

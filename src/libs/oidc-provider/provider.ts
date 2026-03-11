@@ -1,6 +1,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
-import Provider, { type Configuration, type KoaContextWithOIDC, errors } from 'oidc-provider';
+import { type Configuration, type KoaContextWithOIDC } from 'oidc-provider';
+import Provider, { errors } from 'oidc-provider';
 import urlJoin from 'url-join';
 
 import { serverDBEnv } from '@/config/db';
@@ -18,7 +19,7 @@ const logProvider = debug('lobe-oidc:provider');
 export const API_AUDIENCE = 'urn:lobehub:chat';
 
 /**
- * 获取 Cookie 密钥，使用 KEY_VAULTS_SECRET
+ * Get cookie keys using KEY_VAULTS_SECRET
  */
 const getCookieKeys = () => {
   const key = serverDBEnv.KEY_VAULTS_SECRET;
@@ -29,38 +30,38 @@ const getCookieKeys = () => {
 };
 
 /**
- * 创建 OIDC Provider 实例
- * @param db - 数据库实例
- * @returns 配置好的 OIDC Provider 实例
+ * Create OIDC Provider instance
+ * @param db - Database instance
+ * @returns Configured OIDC Provider instance
  */
 export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider> => {
-  // 获取 JWKS
+  // Get JWKS
   const jwks = getJWKS();
 
   const cookieKeys = getCookieKeys();
 
   const configuration: Configuration = {
-    // 11. 数据库适配器
+    // 11. Database adapter
     adapter: DrizzleAdapter.createAdapterFactory(db),
 
-    // 4. Claims 定义
+    // 4. Claims definition
     claims: defaultClaims,
 
-    // 新增：客户端 CORS 控制逻辑
+    // Added: client-based CORS control logic
     clientBasedCORS(ctx, origin, client) {
-      // 检查客户端是否允许此来源
-      // 一个常见的策略是允许所有已注册的 redirect_uris 的来源
+      // Check if the client allows this origin
+      // A common strategy is to allow origins of all registered redirect_uris
       if (!client || !client.redirectUris) {
         logProvider('clientBasedCORS: No client or redirectUris found, denying origin: %s', origin);
-        return false; // 如果没有客户端或重定向URI，则拒绝
+        return false; // Deny if no client or redirect URIs
       }
 
       const allowed = client.redirectUris.some((uri) => {
         try {
-          // 比较来源 (scheme, hostname, port)
+          // Compare origins (scheme, hostname, port)
           return new URL(uri).origin === origin;
         } catch {
-          // 如果 redirect_uri 不是有效的 URL (例如自定义协议)，则跳过
+          // Skip if redirect_uri is not a valid URL (e.g. custom protocol)
           return false;
         }
       });
@@ -74,34 +75,60 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       return allowed;
     },
 
-    // 1. 客户端配置
+    // 1. Client configuration
     clients: defaultClients,
 
-    // 新增：确保 ID Token 包含所有 scope 对应的 claims，而不仅仅是 openid scope
+    // Added: ensure ID Token includes claims for all scopes, not just openid scope
     conformIdTokenClaims: false,
 
-    // 7. Cookie 配置
+    // 7. Cookie configuration
     cookies: {
       keys: cookieKeys,
       long: { path: '/', signed: true },
       short: { path: '/', signed: true },
     },
 
-    // 5. 特性配置
+    // 5. Features configuration
     features: {
       backchannelLogout: { enabled: true },
       clientCredentials: { enabled: false },
       devInteractions: { enabled: false },
-      deviceFlow: { enabled: false },
+      deviceFlow: {
+        charset: 'base-20',
+        enabled: true,
+        mask: '****-****',
+        successSource: async (ctx) => {
+          ctx.redirect('/oauth/device/success');
+        },
+        userCodeConfirmSource: async (ctx, form, client, deviceInfo, userCode) => {
+          const xsrf = (ctx.oidc.session as any)?.state?.secret;
+          const params = new URLSearchParams();
+          if (xsrf) params.set('xsrf', xsrf);
+          params.set('user_code', userCode);
+          params.set('client_name', client.clientName || client.clientId);
+          params.set('client_id', client.clientId);
+          ctx.redirect(`/oauth/device/confirm?${params.toString()}`);
+        },
+        userCodeInputSource: async (ctx, form, out, err) => {
+          const xsrf = (ctx.oidc.session as any)?.state?.secret;
+          const params = new URLSearchParams();
+          if (xsrf) params.set('xsrf', xsrf);
+          if (err) {
+            params.set('error', err.message || 'Unknown error');
+            if ((err as any).userCode) params.set('user_code', (err as any).userCode);
+          }
+          ctx.redirect(`/oauth/device?${params.toString()}`);
+        },
+      },
       introspection: { enabled: true },
       resourceIndicators: {
         defaultResource: () => API_AUDIENCE,
         enabled: true,
 
         getResourceServerInfo: (ctx, resourceIndicator) => {
-          logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- 添加这行日志
+          logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- Add this log line
           if (resourceIndicator === API_AUDIENCE) {
-            logProvider('Indicator matches API_AUDIENCE, returning JWT config.'); // <-- 添加这行日志
+            logProvider('Indicator matches API_AUDIENCE, returning JWT config.'); // <-- Add this log line
             return {
               accessTokenFormat: 'jwt',
               audience: API_AUDIENCE,
@@ -109,29 +136,29 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
             };
           }
 
-          logProvider('Indicator does not match API_AUDIENCE, throwing InvalidTarget.'); // <-- 添加这行日志
+          logProvider('Indicator does not match API_AUDIENCE, throwing InvalidTarget.'); // <-- Add this log line
           throw new errors.InvalidTarget();
         },
-        // 当客户端使用刷新令牌请求新的访问令牌但没有指定资源时，授权服务器会检查原始授权中包含的所有资源，并将这些资源用于新的访问令牌。这提供了一种便捷的方式来维持授权一致性，而不需要客户端在每次刷新时重新指定所有资源
+        // When a client uses a refresh token to request a new access token without specifying a resource, the authorization server checks all resources included in the original authorization and uses them for the new access token. This provides a convenient way to maintain authorization consistency without requiring the client to re-specify all resources on each refresh.
         useGrantedResource: () => true,
       },
       revocation: { enabled: true },
       rpInitiatedLogout: { enabled: true },
       userinfo: { enabled: true },
     },
-    // 10. 账户查找
+    // 10. Account lookup
     async findAccount(ctx: KoaContextWithOIDC, id: string) {
       logProvider('findAccount called for id: %s', id);
 
-      // 检查是否有预先存储的外部账户 ID
-      // @ts-ignore - 自定义属性
+      // Check if there is a pre-stored external account ID
+      // @ts-ignore - Custom property
       const externalAccountId = ctx.externalAccountId;
       if (externalAccountId) {
         logProvider('Found externalAccountId in context: %s', externalAccountId);
       }
 
-      // 确定要查找的账户 ID
-      // 优先级: 1. externalAccountId 2. ctx.oidc.session?.accountId 3. 传入的 id
+      // Determine the account ID to look up
+      // Priority: 1. externalAccountId 2. ctx.oidc.session?.accountId 3. passed-in id
       const accountIdToFind = externalAccountId || ctx.oidc?.session?.accountId || id;
 
       const clientId = ctx.oidc?.client?.clientId;
@@ -148,7 +175,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
             : 'parameter_id',
       );
 
-      // 如果没有可用的 ID，返回 undefined
+      // Return undefined if no account ID is available
       if (!accountIdToFind) {
         logProvider('findAccount: No account ID available, returning undefined.');
         return undefined;
@@ -199,15 +226,15 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       }
     },
 
-    // 9. 交互策略
+    // 9. Interaction policy
     interactions: {
       policy: createInteractionPolicy(),
       url(ctx, interaction) {
-        // ---> 添加日志 <---
+        // ---> Add logs <---
         logProvider('interactions.url function called');
         logProvider('Interaction details: %O', interaction);
 
-        // 读取 OIDC 请求中的 ui_locales 参数（空格分隔的语言优先级）
+        // Read the ui_locales parameter from the OIDC request (space-separated language priorities)
         // https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
         const uiLocalesRaw = (interaction.params?.ui_locales || ctx.oidc?.params?.ui_locales) as
           | string
@@ -215,7 +242,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
         let query = '';
         if (uiLocalesRaw) {
-          // 取第一个优先语言，规范化到站点支持的标签
+          // Take the first priority language and normalize it to a site-supported tag
           const first = uiLocalesRaw.split(/[\s,]+/).find(Boolean);
           const hl = normalizeLocale(first);
           query = `?hl=${encodeURIComponent(hl)}`;
@@ -226,20 +253,20 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
         const interactionUrl = `/oauth/consent/${interaction.uid}${query}`;
         logProvider('Generated interaction URL: %s', interactionUrl);
-        // ---> 添加日志结束 <---
+        // ---> End of added logs <---
         return interactionUrl;
       },
     },
 
-    // 6. 密钥配置 - 使用 RS256 JWKS
+    // 6. Key configuration - using RS256 JWKS
     jwks: jwks as { keys: any[] },
 
-    // 2. PKCE 配置
+    // 2. PKCE configuration
     pkce: {
       required: () => true,
     },
 
-    // 12. 其他配置
+    // 12. Other configuration
     renderError: async (ctx, out, error) => {
       ctx.type = 'html';
       ctx.body = `
@@ -256,18 +283,20 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       `;
     },
 
-    // 新增：启用 Refresh Token 轮换
+    // Added: enable refresh token rotation
     rotateRefreshToken: true,
 
     routes: {
       authorization: '/oidc/auth',
+      code_verification: '/oidc/device',
+      device_authorization: '/oidc/device/auth',
       end_session: '/oidc/session/end',
       token: '/oidc/token',
     },
-    // 3. Scopes 定义
+    // 3. Scopes definition
     scopes: defaultScopes,
 
-    // 8. 令牌有效期
+    // 8. Token TTL
     ttl: {
       AccessToken: 7 * 24 * 3600, // 7 days
       AuthorizationCode: 600, // 10 minutes
@@ -281,7 +310,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     },
   };
 
-  // 创建提供者实例
+  // Create provider instance
   const baseUrl = urlJoin(appEnv.APP_URL!, '/oidc');
 
   const provider = new Provider(baseUrl, configuration);

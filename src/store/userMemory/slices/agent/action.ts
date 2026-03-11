@@ -1,45 +1,40 @@
 import { omit } from 'es-toolkit';
-import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { userMemoryService } from '@/services/userMemory';
-import type { RetrieveMemoryResult } from '@/types/userMemory';
+import { type StoreSetter } from '@/store/types';
+import { type RetrieveMemoryResult } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
 
 const n = setNamespace('userMemory/agent');
 
-export interface AgentMemoryAction {
-  /**
-   * Clear memories for a specific topic (e.g., when topic is deleted)
-   */
-  clearTopicMemories: (topicId: string) => void;
+type Setter = StoreSetter<UserMemoryStore>;
+export const createAgentMemorySlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
+  new AgentMemoryActionImpl(set, get, _api);
 
-  /**
-   * Fetch and cache memories for a specific topic
-   * Uses SWR for caching and revalidation
-   */
-  useFetchMemoriesForTopic: (topicId?: string | null) => SWRResponse<RetrieveMemoryResult>;
-}
+export class AgentMemoryActionImpl {
+  readonly #get: () => UserMemoryStore;
+  readonly #set: Setter;
 
-export const createAgentMemorySlice: StateCreator<
-  UserMemoryStore,
-  [['zustand/devtools', never]],
-  [],
-  AgentMemoryAction
-> = (set, get) => ({
-  clearTopicMemories: (topicId) => {
-    set(
-      { topicMemoriesMap: omit(get().topicMemoriesMap, [topicId]) },
+  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  clearTopicMemories = (topicId: string): void => {
+    this.#set(
+      { topicMemoriesMap: omit(this.#get().topicMemoriesMap, [topicId]) },
       false,
       n('clearTopicMemories', { topicId }),
     );
-  },
+  };
 
-  useFetchMemoriesForTopic: (topicId) =>
-    useClientDataSWRWithSync<RetrieveMemoryResult>(
+  useFetchMemoriesForTopic = (topicId?: string | null): SWRResponse<RetrieveMemoryResult> => {
+    return useClientDataSWRWithSync<RetrieveMemoryResult>(
       topicId ? ['useFetchMemoriesForTopic', topicId] : null,
       async () => {
         // Retrieve memories using topic's context
@@ -50,7 +45,7 @@ export const createAgentMemorySlice: StateCreator<
         onData: (data) => {
           if (!topicId || !data) return;
 
-          set(
+          this.#set(
             (state) => ({
               topicMemoriesMap: { ...state.topicMemoriesMap, [topicId]: data },
             }),
@@ -66,5 +61,8 @@ export const createAgentMemorySlice: StateCreator<
         },
         revalidateOnFocus: false,
       },
-    ),
-});
+    );
+  };
+}
+
+export type AgentMemoryAction = Pick<AgentMemoryActionImpl, keyof AgentMemoryActionImpl>;

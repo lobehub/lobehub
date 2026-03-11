@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { indicatorStyles } from './styles';
-import type { MinimapIndicatorProps } from './types';
+import { type MinimapIndicatorProps } from './types';
 
 export const MinimapIndicator = memo<MinimapIndicatorProps>(
   ({ id, width, preview, role, virtuosoIndex, position, activePosition, onJump }) => {
@@ -38,8 +38,8 @@ export const MinimapIndicator = memo<MinimapIndicatorProps>(
         }}
       >
         <Block
-          align={'flex-end'}
           clickable
+          align={'flex-end'}
           style={{ borderRadius: 4 }}
           variant={'borderless'}
           width={'100%'}
@@ -48,8 +48,8 @@ export const MinimapIndicator = memo<MinimapIndicatorProps>(
             aria-current={isActive ? 'true' : undefined}
             aria-label={t('minimap.jumpToMessage', { index: position + 1 })}
             className={styles.indicator}
-            onClick={() => onJump(virtuosoIndex)}
             style={{ width }}
+            onClick={() => onJump(virtuosoIndex)}
           >
             <div
               className={cx(styles.indicatorContent, isActive && styles.indicatorContentActive)}

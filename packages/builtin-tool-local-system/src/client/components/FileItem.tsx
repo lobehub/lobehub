@@ -1,4 +1,4 @@
-import { type LocalFileItem } from '@lobechat/electron-client-ipc';
+import type { LocalFileItem } from '@lobechat/electron-client-ipc';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
@@ -57,17 +57,17 @@ const FileItem = memo<FileItemProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         className={styles.container}
         gap={12}
-        horizontal
+        padding={'2px 8px'}
+        style={{ cursor: 'pointer', fontSize: 12, width: '100%' }}
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => setIsHovering(false)}
         onClick={() => {
           localFileService.openLocalFileOrFolder(path, isDirectory);
         }}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-        padding={'2px 8px'}
-        style={{ cursor: 'pointer', fontSize: 12, width: '100%' }}
       >
         <FileIcon
           fileName={name}
@@ -77,9 +77,9 @@ const FileItem = memo<FileItemProps>(
           variant={'raw'}
         />
         <Flexbox
+          horizontal
           align={'baseline'}
           gap={4}
-          horizontal
           style={{ overflow: 'hidden', width: '100%' }}
         >
           <div className={styles.title}>{name}</div>
@@ -93,13 +93,13 @@ const FileItem = memo<FileItemProps>(
           <Flexbox direction={'horizontal-reverse'} gap={8} style={{ minWidth: 50 }}>
             <ActionIcon
               icon={FolderOpen}
+              size={'small'}
+              style={{ height: 16, width: 16 }}
+              title={t('localFiles.openFolder')}
               onClick={(e) => {
                 e.stopPropagation();
                 localFileService.openLocalFolder({ isDirectory, path });
               }}
-              size={'small'}
-              style={{ height: 16, width: 16 }}
-              title={t('localFiles.openFolder')}
             />
           </Flexbox>
         ) : (

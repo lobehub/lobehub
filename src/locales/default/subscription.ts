@@ -113,6 +113,10 @@ export default {
   'limitation.expired.desc':
     'Your {{plan}} computing credits expired on {{expiredAt}}. Upgrade your plan now to get computing credits.',
   'limitation.expired.title': 'Computing Credits Expired',
+  'limitation.insufficientBudget.desc':
+    'Your remaining credits are not enough for the estimated cost of this model. Please top up credits or switch to a less expensive model.',
+  'limitation.insufficientBudget.retry': 'Retry',
+  'limitation.insufficientBudget.title': 'Insufficient Credits for This Model',
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',
   'limitation.hobby.desc':
@@ -128,6 +132,14 @@ export default {
   'limitation.image.topupSuccess.desc':
     'Your top-up credits are now active. Enjoy AI image generation. Your current plan includes:',
   'limitation.image.topupSuccess.title': 'Top-up Successful',
+  'limitation.video.success.action': 'Continue Generating',
+  'limitation.video.success.desc':
+    'Your {{plan}} subscription has been upgraded successfully. Enjoy AI video generation. Your current plan includes:',
+  'limitation.video.success.title': 'Upgrade Successful',
+  'limitation.video.topupSuccess.action': 'Continue Generating',
+  'limitation.video.topupSuccess.desc':
+    'Your top-up credits are now active. Enjoy AI video generation. Your current plan includes:',
+  'limitation.video.topupSuccess.title': 'Top-up Successful',
   'limitation.limited.action': 'Upgrade Now',
   'limitation.limited.advanceFeature': 'Upgrade to enjoy premium features:',
   'limitation.limited.desc':

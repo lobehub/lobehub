@@ -1,0 +1,28 @@
+{
+  "config.aspectRatio.label": "نسبة العرض إلى الارتفاع",
+  "config.cameraFixed.label": "كاميرا ثابتة",
+  "config.duration.label": "المدة",
+  "config.endImageUrl.label": "الإطار النهائي",
+  "config.generateAudio.label": "توليد صوت",
+  "config.header.title": "فيديو",
+  "config.imageUrl.label": "الإطار الابتدائي",
+  "config.prompt.placeholder": "صف الفيديو الذي ترغب في إنشائه",
+  "config.referenceImage.label": "صورة مرجعية",
+  "config.resolution.label": "الدقة",
+  "config.seed.label": "البذرة",
+  "config.seed.random": "عشوائي",
+  "generation.actions.copyError": "نسخ رسالة الخطأ",
+  "generation.actions.errorCopied": "تم نسخ رسالة الخطأ إلى الحافظة",
+  "generation.actions.errorCopyFailed": "فشل في نسخ رسالة الخطأ",
+  "generation.actions.generate": "إنشاء",
+  "generation.freeQuota.exhausted": "🎁 تم استهلاك الحصة المجانية، سيتم استخدام الرصيد",
+  "generation.freeQuota.remaining": "🎁 {{remaining}} فيديو مجاني متبقٍ اليوم",
+  "generation.status.failed": "فشل في الإنشاء",
+  "generation.status.generating": "جارٍ الإنشاء...",
+  "generation.validation.endFrameRequiresStartFrame": "لا يمكن استخدام الإطار النهائي بدون إطار ابتدائي. يرجى تعيين إطار ابتدائي أولاً.",
+  "topic.createNew": "موضوع جديد",
+  "topic.deleteConfirm": "حذف موضوع الفيديو",
+  "topic.deleteConfirmDesc": "أنت على وشك حذف موضوع الفيديو هذا. لا يمكن التراجع عن هذا الإجراء.",
+  "topic.title": "مواضيع الفيديو",
+  "topic.untitled": "موضوع افتراضي"
+}

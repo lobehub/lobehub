@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,7 +41,9 @@ export const CrawlMultiPagesInspector = memo<BuiltinInspectorProps<CrawlMultiPag
       <div
         className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
       >
-        <span>{t('builtins.lobe-web-browsing.apiName.crawlMultiPages')}: </span>
+        <span>
+          {t('builtins.lobe-web-browsing.apiName.crawlMultiPages')}:{'\u00A0'}
+        </span>
         {displayText && <span className={highlightTextStyles.gold}>{displayText}</span>}
       </div>
     );

@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { agents, agentsToSessions, messages, sessions, topics } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 
 type MigrateBySessionParams = { agentId: string; sessionId: string };
 type MigrateInboxParams = { agentId: string; isInbox: true; sessionId?: string | null };

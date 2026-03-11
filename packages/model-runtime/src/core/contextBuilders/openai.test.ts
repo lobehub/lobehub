@@ -1,8 +1,8 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OpenAIChatMessage } from '../../types';
+import type { OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   convertImageUrlToFile,
@@ -395,6 +395,88 @@ describe('convertOpenAIResponseInputs', () => {
       { summary: [{ text: 'reasoning content', type: 'summary_text' }], type: 'reasoning' },
       { content: 'hello', role: 'assistant' },
       { content: '杭州天气如何', role: 'user' },
+    ]);
+  });
+
+  it('should preserve message order when earlier messages have async content (images)', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { content: 'system prompts', role: 'system' },
+      {
+        content: [
+          { type: 'text', text: 'describe this image' },
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,abc123' } },
+        ],
+        role: 'user',
+      },
+      {
+        content: 'The image shows a green car.',
+        role: 'assistant',
+        reasoning: { content: 'analyzing the image', duration: 3000 },
+      },
+      { content: '1 + 1 = ?', role: 'user' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      {
+        content: [
+          { type: 'input_text', text: 'describe this image' },
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,abc123' },
+        ],
+        role: 'user',
+      },
+      { summary: [{ text: 'analyzing the image', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'The image shows a green car.', role: 'assistant' },
+      { content: '1 + 1 = ?', role: 'user' },
+    ]);
+  });
+
+  it('should handle openai and claude mixed message', async () => {
+    // See: https://github.com/lobehub/lobehub/pull/12017
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'system prompts',
+        role: 'system',
+      },
+      {
+        content: '你是谁',
+        role: 'user',
+      },
+      {
+        content: [
+          {
+            signature: 'E',
+            thinking: 'thoughts',
+            type: 'thinking',
+          },
+          {
+            text: '我是 Claude',
+            type: 'text',
+          },
+        ],
+        role: 'assistant',
+        reasoning: {
+          content: 'The user is asking',
+          duration: 110,
+          // @ts-expect-error: ignore
+          signature: 'E',
+        },
+      },
+    ];
+    const result = await convertOpenAIResponseInputs(messages);
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      { content: '你是谁', role: 'user' },
+      {
+        summary: [{ text: 'The user is asking', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        content: [{ text: '我是 Claude', type: 'output_text' }],
+        role: 'assistant',
+      },
     ]);
   });
 });

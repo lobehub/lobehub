@@ -14,7 +14,8 @@ import { type McpConnectionParams } from '@/types/plugins';
 import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import ConfigDisplay from './ConfigDisplay';
-import { type McpInstallRequest, TRUSTED_MARKETPLACES, type TrustedMarketplaceId } from './types';
+import { type McpInstallRequest, type TrustedMarketplaceId } from './types';
+import { TRUSTED_MARKETPLACES } from './types';
 
 interface CustomPluginInstallModalProps {
   installRequest: McpInstallRequest | null;
@@ -28,7 +29,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     const { t } = useTranslation('plugin');
     const [loading, setLoading] = useState(false);
 
-    // 跟踪配置更新
+    // Track config updates
     const [updatedConfig, setUpdatedConfig] = useState<{
       env?: Record<string, string>;
       headers?: Record<string, string>;
@@ -38,7 +39,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     const testMcpConnection = useToolStore((s) => s.testMcpConnection);
     const togglePlugin = useAgentStore((s) => s.togglePlugin);
 
-    // 为自定义插件测试连接生成唯一标识符
+    // Generate a unique identifier for custom plugin connection testing
     const identifier = installRequest?.schema?.identifier || '';
     const testState = useToolStore(mcpStoreSelectors.getMCPConnectionTestState(identifier));
 
@@ -47,7 +48,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     const marketplace =
       isMarketplace && marketId ? TRUSTED_MARKETPLACES[marketId as TrustedMarketplaceId] : null;
 
-    // 重置加载状态和配置
+    // Reset loading state and config
     useEffect(() => {
       if (!installRequest) {
         setLoading(false);
@@ -60,20 +61,17 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
 
       setLoading(true);
       try {
-        // 第三方市场和自定义插件：构建自定义插件数据
-        let customPlugin: LobeToolCustomPlugin;
-
-        // 合并原始配置和用户更新的配置
+        // Merge original config with user-updated config
         const finalConfig = {
           ...schema.config,
           env: updatedConfig.env || schema.config.env,
           headers: updatedConfig.headers || schema.config.headers,
         };
 
-        // 自定义插件：先测试连接获取真实的 manifest
+        // Custom plugin: test connection first to get the real manifest
         const testParams: McpConnectionParams = {
           connection: finalConfig,
-          identifier: identifier,
+          identifier,
           metadata: {
             avatar: schema.icon,
             description: schema.description,
@@ -90,18 +88,19 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           throw new Error(t('protocolInstall.messages.manifestNotFound'));
         }
 
-        // 使用测试连接获取的真实 manifest
-        customPlugin = {
+        // Third-party marketplace and custom plugins: build custom plugin data
+        // Use the real manifest obtained from connection testing
+        const customPlugin: LobeToolCustomPlugin = {
           customParams: {
             avatar: schema.icon,
             description: schema.description,
             mcp: {
-              ...finalConfig, // 使用合并后的配置
+              ...finalConfig, // Use the merged config
               headers: finalConfig.type === 'http' ? finalConfig.headers : undefined,
             },
           },
           identifier: schema.identifier,
-          manifest: testResult.manifest, // 使用真实的 manifest
+          manifest: testResult.manifest, // Use the real manifest
           type: 'customPlugin',
         };
 
@@ -134,7 +133,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
 
     if (!installRequest || !schema) return null;
 
-    // 根据类型渲染不同的 Alert 组件
+    // Render different Alert components based on type
     const renderAlert = () => {
       if (!isMarketplace) {
         return (
@@ -147,7 +146,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
         );
       }
 
-      // marketplace 类型
+      // marketplace type
       return marketplace ? (
         <Alert
           showIcon
@@ -175,22 +174,22 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
 
     return (
       <Modal
+        open
         confirmLoading={loading || testState.loading}
         okText={okText}
-        onCancel={handleCancel}
-        onOk={handleConfirm}
-        open
         title={modalTitle}
         width={680}
+        onCancel={handleCancel}
+        onOk={handleConfirm}
       >
         <Flexbox gap={24}>
           {renderAlert()}
 
-          <Block gap={16} horizontal justify={'space-between'} padding={16} variant={'outlined'}>
-            <Flexbox gap={16} horizontal>
+          <Block horizontal gap={16} justify={'space-between'} padding={16} variant={'outlined'}>
+            <Flexbox horizontal gap={16}>
               <PluginAvatar avatar={schema.icon} size={40} />
               <Flexbox gap={2}>
-                <Flexbox align={'center'} gap={8} horizontal>
+                <Flexbox horizontal align={'center'} gap={8}>
                   {schema.name}
                   <PluginTag type={'customPlugin'} />
                 </Flexbox>
@@ -202,13 +201,13 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           </Block>
 
           <Flexbox>
-            <ConfigDisplay onConfigUpdate={setUpdatedConfig} schema={schema} />
-            {/* 显示测试连接错误 */}
+            <ConfigDisplay schema={schema} onConfigUpdate={setUpdatedConfig} />
+            {/* Show connection test error */}
             {testState.error && (
               <Alert
                 closable
-                description={testState.error}
                 showIcon
+                description={testState.error}
                 title={t('protocolInstall.messages.connectionTestFailed')}
                 type="error"
                 variant={'filled'}

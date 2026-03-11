@@ -1,11 +1,11 @@
 // @vitest-environment node
-import { SkillManifest } from '@lobechat/types';
+import type { SkillManifest } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { agentSkills, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { AgentSkillModel } from '../agentSkill';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -297,6 +297,44 @@ describe('AgentSkillModel', () => {
       const results = await agentSkillModel.search('coding');
       expect(results.data).toHaveLength(1);
       expect(results.total).toBe(1);
+    });
+  });
+
+  describe('findByName', () => {
+    it('should find a skill by name', async () => {
+      await serverDB.insert(agentSkills).values({
+        name: 'Unique Skill Name',
+        description: 'A unique skill',
+        identifier: 'unique-skill',
+        source: 'user',
+        manifest: createManifest(),
+        userId,
+      });
+
+      const result = await agentSkillModel.findByName('Unique Skill Name');
+      expect(result).toBeDefined();
+      expect(result?.name).toBe('Unique Skill Name');
+    });
+
+    it('should return undefined for non-existent name', async () => {
+      const result = await agentSkillModel.findByName('Non Existent');
+      expect(result).toBeUndefined();
+    });
+
+    it('should not find skills from other users', async () => {
+      const otherUserId = 'other-skill-user';
+      await serverDB.insert(users).values({ id: otherUserId });
+      await serverDB.insert(agentSkills).values({
+        name: 'Other Skill',
+        description: 'Other skill desc',
+        identifier: 'other-skill',
+        source: 'user',
+        manifest: createManifest(),
+        userId: otherUserId,
+      });
+
+      const result = await agentSkillModel.findByName('Other Skill');
+      expect(result).toBeUndefined();
     });
   });
 });

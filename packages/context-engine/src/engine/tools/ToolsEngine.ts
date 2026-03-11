@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import {
+import type {
   FunctionCallChecker,
   GenerateToolsParams,
   LobeToolManifest,

@@ -1,7 +1,7 @@
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { StreamContext } from './protocol';
+import type { StreamContext } from './protocol';
 import { QwenAIStream, transformQwenStream } from './qwen';
 
 describe('QwenAIStream', () => {

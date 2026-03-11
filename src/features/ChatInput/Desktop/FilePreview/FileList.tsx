@@ -24,13 +24,13 @@ const FileList = memo(() => {
 
   return (
     <ScrollShadow
-      className={styles.container}
       hideScrollBar
       horizontal
+      className={styles.container}
       orientation={'horizontal'}
       size={8}
     >
-      <Flexbox gap={6} horizontal paddingBlock={8} paddingInline={expand ? 0 : 12}>
+      <Flexbox horizontal gap={6} paddingBlock={8} paddingInline={expand ? 0 : 12}>
         {inputFilesList.map((item) => (
           <FileItem key={item.id} {...item} />
         ))}

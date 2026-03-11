@@ -2,9 +2,9 @@
   "name": "@lobehub/desktop-ipc-typings",
   "version": "1.0.0",
   "private": true,
-  "main": "./exports.d.ts",
-  "types": "./exports.d.ts",
   "exports": {
     ".": "./exports.d.ts"
-  }
+  },
+  "main": "./exports.d.ts",
+  "types": "./exports.d.ts"
 }

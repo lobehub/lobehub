@@ -1,8 +1,8 @@
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
-import type { ResourceItem } from '@/types/resource';
+import { type ResourceItem } from '@/types/resource';
 
-import type { TreeItem } from './types';
+import { type TreeItem } from './types';
 
 export const sortTreeItems = <T extends TreeItem>(items: T[]): T[] => {
   return [...items].sort((a, b) => {
@@ -19,6 +19,7 @@ export const resourceItemToTreeItem = (item: ResourceItem): TreeItem => {
     fileType: item.fileType,
     id: item.id,
     isFolder: item.fileType === 'custom/folder',
+    metadata: item.metadata,
     name: item.name,
     slug: item.slug,
     sourceType: item.sourceType,
@@ -128,6 +129,7 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
           fileType: item.fileType,
           id: item.id,
           isFolder: item.fileType === 'custom/folder',
+          metadata: item.metadata,
           name: item.name,
           slug: item.slug,
           sourceType: item.sourceType,

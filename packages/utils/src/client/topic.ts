@@ -1,4 +1,4 @@
-import { ChatTopic, GroupedTopic, TimeGroupId } from '@lobechat/types';
+import type { ChatTopic, GroupedTopic, TimeGroupId } from '@lobechat/types';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -42,13 +42,14 @@ const getTopicGroupId = (timestamp: number): TimeGroupId => {
 
 // Ensure group sorting
 const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
-  const orderMap = new Map<string, number>();
+  const orderMap = new Map<string, number>([
+    ['today', 0],
+    ['yesterday', 1],
+    ['week', 2],
+    ['month', 3],
+  ]);
 
   // Set the order of fixed groups
-  orderMap.set('today', 0);
-  orderMap.set('yesterday', 1);
-  orderMap.set('week', 2);
-  orderMap.set('month', 3);
 
   return groups.sort((a, b) => {
     const orderA = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
@@ -63,18 +64,25 @@ const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
   });
 };
 
-// Specific implementation of time grouping
-export const groupTopicsByTime = (topics: ChatTopic[]): GroupedTopic[] => {
+// Generic time-based grouping parameterized by field
+const groupTopicsByField = (
+  topics: ChatTopic[],
+  field: 'createdAt' | 'updatedAt',
+): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const sortedTopics = [...topics].sort((a, b) => b.createdAt - a.createdAt);
+  const sortedTopics = [...topics].sort((a, b) => b[field] - a[field]);
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
-  sortedTopics.forEach((topic) => {
-    const groupId = getTopicGroupId(topic.createdAt);
-    const existingGroup = groupsMap.get(groupId) || [];
-    groupsMap.set(groupId, [...existingGroup, topic]);
-  });
+  for (const topic of sortedTopics) {
+    const groupId = getTopicGroupId(topic[field]);
+    const existing = groupsMap.get(groupId);
+    if (existing) {
+      existing.push(topic);
+    } else {
+      groupsMap.set(groupId, [topic]);
+    }
+  }
 
   const result = Array.from(groupsMap.entries()).map(([id, children]) => ({
     children,
@@ -83,3 +91,7 @@ export const groupTopicsByTime = (topics: ChatTopic[]): GroupedTopic[] => {
 
   return sortGroups(result);
 };
+
+export const groupTopicsByTime = (topics: ChatTopic[]) => groupTopicsByField(topics, 'createdAt');
+export const groupTopicsByUpdatedTime = (topics: ChatTopic[]) =>
+  groupTopicsByField(topics, 'updatedAt');

@@ -24,14 +24,14 @@ export const FileUploading = memo<FileUploadingProps>(({ progress = 0, speed = 0
         {t('importModal.uploading.desc')}
         <Flexbox flex={1} gap={8} width={'100%'}>
           <Progress
-            percent={progress}
             showInfo
+            percent={progress}
             strokeColor={cssVar.colorSuccess}
             trailColor={cssVar.colorSuccessBg}
           />
           <Flexbox
-            distribution={'space-between'}
             horizontal
+            distribution={'space-between'}
             style={{ color: cssVar.colorTextDescription, fontSize: 12 }}
           >
             <span>

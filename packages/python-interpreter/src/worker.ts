@@ -1,11 +1,10 @@
 import * as Comlink from 'comlink';
-import { PyodideAPI, loadPyodide as loadPyodideType } from 'pyodide';
+import type { loadPyodide as loadPyodideType, PyodideAPI } from 'pyodide';
 import urlJoin from 'url-join';
 
-import { PythonOptions, PythonOutput, PythonResult } from './types';
+import type { PythonOptions, PythonOutput, PythonResult } from './types';
 
 declare global {
-  // eslint-disable-next-line no-var
   var loadPyodide: typeof loadPyodideType;
 }
 

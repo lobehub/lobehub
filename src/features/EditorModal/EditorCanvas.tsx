@@ -1,7 +1,7 @@
+import { type IEditor } from '@lobehub/editor';
 import {
-  IEditor,
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactLinkPlugin,
   ReactListPlugin,
@@ -10,7 +10,7 @@ import {
 } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
-import { FC } from 'react';
+import { type FC } from 'react';
 
 import TypoBar from './Typobar';
 
@@ -31,14 +31,8 @@ const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor }) => {
           autoFocus
           content={''}
           editor={editor}
-          onInit={(editor) => {
-            if (!editor || !defaultValue) return;
-            try {
-              editor?.setDocument('markdown', defaultValue);
-            } catch (e) {
-              console.error('setDocument error:', e);
-            }
-          }}
+          type={'text'}
+          variant={'chat'}
           plugins={[
             ReactListPlugin,
             ReactCodePlugin,
@@ -51,8 +45,14 @@ const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor }) => {
           style={{
             paddingBottom: 120,
           }}
-          type={'text'}
-          variant={'chat'}
+          onInit={(editor) => {
+            if (!editor || !defaultValue) return;
+            try {
+              editor?.setDocument('markdown', defaultValue);
+            } catch (e) {
+              console.error('setDocument error:', e);
+            }
+          }}
         />
       </Flexbox>
     </>

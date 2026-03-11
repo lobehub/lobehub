@@ -22,7 +22,7 @@ import {
   ModelRuntime,
 } from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
-import { ClientSecretPayload } from '@lobechat/types';
+import { type ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 

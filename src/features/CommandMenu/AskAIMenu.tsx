@@ -59,25 +59,25 @@ const AskAIMenu = memo(() => {
 
   return (
     <Command.Group heading={heading}>
-      <Command.Item onSelect={handleAskLobeAI} value="lobe-ai">
-        <Avatar avatar={DEFAULT_INBOX_AVATAR} emojiScaleWithBackground shape="square" size={18} />
+      <Command.Item value="lobe-ai" onSelect={handleAskLobeAI}>
+        <Avatar emojiScaleWithBackground avatar={DEFAULT_INBOX_AVATAR} shape="square" size={18} />
         <div className={styles.itemContent}>
           <div className={styles.itemLabel}>Lobe AI</div>
         </div>
       </Command.Item>
-      <Command.Item onSelect={handleAgentBuilder} value="agent-builder">
+      <Command.Item value="agent-builder" onSelect={handleAgentBuilder}>
         <Bot className={styles.icon} />
         <div className={styles.itemContent}>
           <div className={styles.itemLabel}>{t('agentBuilder.title', { ns: 'chat' })}</div>
         </div>
       </Command.Item>
-      <Command.Item onSelect={handleGroupBuilder} value="group-builder">
+      <Command.Item value="group-builder" onSelect={handleGroupBuilder}>
         <GroupBotSquareIcon className={styles.icon} />
         <div className={styles.itemContent}>
           <div className={styles.itemLabel}>{t('starter.createGroup', { ns: 'home' })}</div>
         </div>
       </Command.Item>
-      <Command.Item onSelect={handleAIPainting} value="ai-painting">
+      <Command.Item value="ai-painting" onSelect={handleAIPainting}>
         <Image className={styles.icon} />
         <div className={styles.itemContent}>
           <div className={styles.itemLabel}>{t('cmdk.aiPainting')}</div>
@@ -86,20 +86,20 @@ const AskAIMenu = memo(() => {
 
       {agents.map((agent) => (
         <CommandItem
-          icon={
-            <Avatar
-              avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
-              emojiScaleWithBackground
-              shape="square"
-              size={18}
-            />
-          }
           key={agent.id}
-          onSelect={() => handleAgentSelect(agent.id)}
           title={agent.title || t('defaultAgent')}
           trailingLabel={t('cmdk.search.agent')}
           value={`agent-${agent.id}`}
           variant="detailed"
+          icon={
+            <Avatar
+              emojiScaleWithBackground
+              avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+              shape="square"
+              size={18}
+            />
+          }
+          onSelect={() => handleAgentSelect(agent.id)}
         />
       ))}
     </Command.Group>

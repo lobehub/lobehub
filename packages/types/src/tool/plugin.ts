@@ -1,6 +1,6 @@
 import type { LobeChatPluginManifest, Meta } from '@lobehub/chat-plugin-sdk';
 
-import { LobeToolType } from './tool';
+import type { LobeToolType } from './tool';
 
 export type PluginManifestMap = Record<string, LobeChatPluginManifest>;
 
@@ -12,12 +12,22 @@ export interface CustomPluginMetadata {
 
 export interface CustomPluginParams {
   apiMode?: 'openapi' | 'simple';
+  avatar?: string;
+  description?: string;
   enableSettings?: boolean;
+  /**
+   * Klavis integration parameters
+   */
+  klavis?: {
+    instanceId: string;
+    isAuthenticated: boolean;
+    oauthUrl?: string;
+    serverName: string;
+    serverUrl: string;
+  };
+
   manifestMode?: 'local' | 'url';
   manifestUrl?: string;
-  useProxy?: boolean;
-
-  /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
   /**
    * TODO: Temporary solution, needs major refactoring in the future
    */
@@ -37,19 +47,7 @@ export interface CustomPluginParams {
     // Added headers configuration support
     headers?: Record<string, string>;
   };
-  /**
-   * Klavis integration parameters
-   */
-  klavis?: {
-    instanceId: string;
-    isAuthenticated: boolean;
-    oauthUrl?: string;
-    serverName: string;
-    serverUrl: string;
-  };
-  avatar?: string;
-  description?: string;
-  /* eslint-enable */
+  useProxy?: boolean;
 }
 
 export interface LobeToolCustomPlugin {

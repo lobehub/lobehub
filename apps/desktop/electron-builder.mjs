@@ -1,8 +1,10 @@
-import dotenv from 'dotenv';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import dotenv from 'dotenv';
 
 import {
   copyNativeModules,
@@ -24,37 +26,46 @@ const hasAppleCertificate = Boolean(process.env.CSC_LINK);
 // 自定义更新服务器 URL (用于 stable 频道)
 const updateServerUrl = process.env.UPDATE_SERVER_URL;
 
-console.log(`🚄 Build Version ${packageJSON.version}, Channel: ${channel}`);
-console.log(`🏗️ Building for architecture: ${arch}`);
+console.info(`🚄 Build Version ${packageJSON.version}, Channel: ${channel}`);
+console.info(`🏗️ Building for architecture: ${arch}`);
 
+// Channel identity derived solely from UPDATE_CHANNEL env var.
+// Supported channels: stable, nightly, canary
+const isStable = !channel || channel === 'stable';
 const isNightly = channel === 'nightly';
-const isBeta = packageJSON.name.includes('beta');
-const isStable = !isNightly && !isBeta;
+const isCanary = channel === 'canary';
 
-// 根据 channel 配置不同的 publish provider
-// - Stable + UPDATE_SERVER_URL: 使用 generic (自定义 HTTP 服务器)
-// - Beta/Nightly: 仅使用 GitHub
+// Strip trailing channel path from URL for re-appending the correct channel
+// Handles both base URL (https://cdn.example.com) and legacy URL with channel (https://cdn.example.com/stable)
+const stripChannelSuffix = (url) => url.replace(/\/(stable|nightly|canary|beta)\/?$/, '');
+
+// 根据 channel 配置 publish provider
+// - 所有渠道 + UPDATE_SERVER_URL: 使用 generic (S3)
+// - 无 UPDATE_SERVER_URL: 回退到 GitHub (本地开发)
 const getPublishConfig = () => {
-  const githubProvider = {
-    owner: 'lobehub',
-    provider: 'github',
-    repo: 'lobe-chat',
-  };
+  const channelPath = isStable ? 'stable' : isNightly ? 'nightly' : channel || 'stable';
 
-  // Stable channel: 使用自定义服务器 (generic provider)
-  if (isStable && updateServerUrl) {
-    console.log(`📦 Stable channel: Using generic provider (${updateServerUrl})`);
-    const genericProvider = {
-      provider: 'generic',
-      url: updateServerUrl,
-    };
-    // 同时发布到自定义服务器和 GitHub (GitHub 作为备用/镜像)
-    return [genericProvider, githubProvider];
+  if (updateServerUrl) {
+    const baseUrl = stripChannelSuffix(updateServerUrl);
+    const fullUrl = `${baseUrl}/${channelPath}`;
+    console.info(`📦 ${channelPath} channel: Using generic provider (${fullUrl})`);
+    return [
+      {
+        provider: 'generic',
+        url: fullUrl,
+      },
+    ];
   }
 
-  // Beta/Nightly channel: 仅使用 GitHub
-  console.log(`📦 ${channel || 'default'} channel: Using GitHub provider`);
-  return [githubProvider];
+  // 本地开发无 S3 时回退到 GitHub
+  console.info(`📦 ${channelPath} channel: No UPDATE_SERVER_URL, falling back to GitHub provider`);
+  return [
+    {
+      owner: 'lobehub',
+      provider: 'github',
+      repo: 'lobehub',
+    },
+  ];
 };
 
 // Keep only these Electron Framework localization folders (*.lproj)
@@ -65,14 +76,13 @@ const keepLanguages = new Set(['en', 'en_GB', 'en-US', 'en_US']);
 if (!hasAppleCertificate) {
   // Disable auto discovery to keep electron-builder from searching unavailable signing identities
   process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
-  console.log('⚠️ Apple certificate link not found, macOS artifacts will be unsigned.');
+  console.info('⚠️ Apple certificate link not found, macOS artifacts will be unsigned.');
 }
 
 // 根据版本类型确定协议 scheme
 const getProtocolScheme = () => {
+  if (isCanary) return 'lobehub-canary';
   if (isNightly) return 'lobehub-nightly';
-  if (isBeta) return 'lobehub-beta';
-
   return 'lobehub';
 };
 
@@ -80,9 +90,9 @@ const protocolScheme = getProtocolScheme();
 
 // Determine icon file based on version type
 const getIconFileName = () => {
-  if (isNightly) return 'Icon-nightly';
-  if (isBeta) return 'Icon-beta';
-  return 'Icon';
+  if (isStable || isCanary) return 'Icon';
+  // nightly uses pre-release icon
+  return 'Icon-nightly';
 };
 
 /**
@@ -96,6 +106,9 @@ const config = {
    */
   beforePack: async () => {
     await copyNativeModulesToSource();
+
+    console.info('📦 Downloading agent-browser binary...');
+    execSync('node scripts/download-agent-browser.mjs', { stdio: 'inherit', cwd: __dirname });
   },
   /**
    * AfterPack hook for post-processing:
@@ -168,18 +181,14 @@ const config = {
     try {
       await fs.access(assetsCarSource);
       await fs.copyFile(assetsCarSource, assetsCarDest);
-      console.log(`✅ Copied Liquid Glass icon: ${iconFileName}.Assets.car`);
+      console.info(`✅ Copied Liquid Glass icon: ${iconFileName}.Assets.car`);
     } catch {
       // Non-critical: Assets.car not found or copy failed
       // App will use fallback .icns icon on all macOS versions
-      console.log(`⏭️  Skipping Assets.car (not found or copy failed)`);
+      console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
-  appId: isNightly
-    ? 'com.lobehub.lobehub-desktop-nightly'
-    : isBeta
-      ? 'com.lobehub.lobehub-desktop-beta'
-      : 'com.lobehub.lobehub-desktop',
+  appId: 'com.lobehub.lobehub-desktop',
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
@@ -196,6 +205,16 @@ const config = {
 
   dmg: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
+    background: 'resources/dmg.png',
+    contents: [
+      { type: 'file', x: 150, y: 240 },
+      { type: 'link', path: '/Applications', x: 450, y: 240 },
+    ],
+    iconSize: 80,
+    window: {
+      height: 400,
+      width: 600,
+    },
   },
 
   electronDownload: {
@@ -205,13 +224,9 @@ const config = {
   files: [
     'dist',
     'resources',
-    // Ensure Next export assets are packaged
-    'dist/next/**/*',
+    'dist/renderer/**/*',
     '!resources/locales',
-    '!dist/next/docs',
-    '!dist/next/packages',
-    '!dist/next/.next/server/app/sitemap',
-    '!dist/next/.next/static/media',
+    '!resources/dmg.png',
     // Exclude all node_modules first
     '!node_modules',
     // Then explicitly include native modules using object form (handles pnpm symlinks)
@@ -249,15 +264,10 @@ const config = {
     hardenedRuntime: hasAppleCertificate,
     notarize: hasAppleCertificate,
     ...(hasAppleCertificate ? {} : { identity: null }),
-    target:
-      // 降低构建时间，nightly 只打 dmg
-      // 根据当前机器架构只构建对应架构的包
-      isNightly
-        ? [{ arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'dmg' }]
-        : [
-            { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'dmg' },
-            { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'zip' },
-          ],
+    target: [
+      { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'dmg' },
+      { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'zip' },
+    ],
   },
   npmRebuild: true,
   nsis: {
@@ -285,6 +295,8 @@ const config = {
   releaseInfo: {
     releaseNotes: process.env.RELEASE_NOTES || undefined,
   },
+
+  extraResources: [{ from: 'resources/bin', to: 'bin' }],
 
   win: {
     executableName: 'LobeHub',

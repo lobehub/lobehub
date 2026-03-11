@@ -20,8 +20,8 @@ const SystemInspector = () => {
   return (
     <Flexbox gap={4} height={'100%'}>
       <Tabs
-        activeKey={activeTab}
         compact
+        activeKey={activeTab}
         items={[
           {
             key: TabKey.AiProviderRuntimeConfig,

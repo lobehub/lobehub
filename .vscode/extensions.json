@@ -1,13 +1,13 @@
 {
-    "recommendations": [
-        "Anthropic.claude-code",
-        "dbaeumer.vscode-eslint",
-        "jrr997.antd-docs",
-        "seatonjiang.gitmoji-vscode",
-        "styled-components.vscode-styled-components",
-        "stylelint.vscode-stylelint",
-        "unifiedjs.vscode-mdx",
-        "unifiedjs.vscode-remark",
-        "vitest.explorer",
-    ]
+  "recommendations": [
+    "Anthropic.claude-code",
+    "dbaeumer.vscode-eslint",
+    "jrr997.antd-docs",
+    "seatonjiang.gitmoji-vscode",
+    "styled-components.vscode-styled-components",
+    "stylelint.vscode-stylelint",
+    "unifiedjs.vscode-mdx",
+    "unifiedjs.vscode-remark",
+    "vitest.explorer"
+  ]
 }

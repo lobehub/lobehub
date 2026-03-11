@@ -1,14 +1,14 @@
-import type { NewChunkItem, NewUnstructuredChunkItem } from '@/database/schemas';
+import { type NewChunkItem, type NewUnstructuredChunkItem } from '@/database/schemas';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { ChunkingLoader } from '@/libs/langchain';
 
+import { type ChunkingService } from './rules';
 import { ChunkingRuleParser } from './rules';
-import type { ChunkingService } from './rules';
 
 export interface ChunkContentParams {
   content: Uint8Array;
-  fileType: string;
   filename: string;
+  fileType: string;
   mode?: 'fast' | 'hi-res';
 }
 

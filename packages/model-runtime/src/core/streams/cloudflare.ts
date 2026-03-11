@@ -41,12 +41,13 @@ function fillUrl(accountID: string): string {
 }
 
 function desensitizeAccountId(path: string): string {
-  return path.replace(/\/[\dA-Fa-f]{32}\//, '/****/');
+  return path.replace(/\/[\da-f]{32}\//i, '/****/');
 }
 
 function desensitizeCloudflareUrl(url: string): string {
   const urlObj = new URL(url);
-  let { protocol, hostname, port, pathname, search } = urlObj;
+  const { protocol, hostname, port, search } = urlObj;
+  let { pathname } = urlObj;
   if (url.startsWith(DEFAULT_BASE_URL_PREFIX)) {
     return `${protocol}//${hostname}${port ? `:${port}` : ''}${desensitizeAccountId(pathname)}${search}`;
   } else {

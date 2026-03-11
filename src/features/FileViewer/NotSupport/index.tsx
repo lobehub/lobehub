@@ -1,6 +1,7 @@
 import { Button, Center, Flexbox, FluentEmoji } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type CSSProperties, type ComponentType, useState } from 'react';
+import { type ComponentType, type CSSProperties } from 'react';
+import { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { MORE_FILE_PREVIEW_REQUEST_URL } from '@/const/url';
@@ -36,7 +37,12 @@ const NotSupport: ComponentType<NotSupportProps> = ({ fileName, url, style }) =>
           <Flexbox style={{ textAlign: 'center' }}>
             <Trans i18nKey="preview.unsupportedFileAndContact" ns={'file'}>
               此文件格式暂不支持在线预览，如有预览诉求，欢迎
-              <a aria-label={'todo'} href={MORE_FILE_PREVIEW_REQUEST_URL} rel="noreferrer" target="_blank">
+              <a
+                aria-label={'todo'}
+                href={MORE_FILE_PREVIEW_REQUEST_URL}
+                rel="noreferrer"
+                target="_blank"
+              >
                 反馈给我们
               </a>
             </Trans>

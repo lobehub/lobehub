@@ -52,22 +52,22 @@ const Temperature = memo<TemperatureProps>(({ value, onChange, disabled }) => {
         changeOnWheel
         controls={false}
         disabled={disabled}
+        max={2}
+        size={'small'}
+        step={0.1}
+        style={{ height: 42 }}
+        value={value}
         marks={{
           0: <Icon icon={Sparkle} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />,
           1: <div />,
           2: <Icon icon={Sparkles} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />,
         }}
-        max={2}
-        onChange={onChange}
-        size={'small'}
-        step={0.1}
-        style={{ height: 42 }}
         styles={{
           input: {
             maxWidth: 43,
           },
         }}
-        value={value}
+        onChange={onChange}
       />
       {!disabled && <Warning />}
     </Flexbox>

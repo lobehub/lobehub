@@ -7,6 +7,7 @@ export * from './proxyTRPCRequest';
 export * from './route';
 export * from './shortcut';
 export * from './system';
+export * from './toolDetector';
 export * from './tray';
 export * from './update';
 export * from './upload';

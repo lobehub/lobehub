@@ -762,7 +762,7 @@ describe('OpenAIStream', () => {
                 content: '',
                 tool_calls: [
                   {
-                    function: { arguments: '{"city": "\u676d\u5dde"}' },
+                    function: { arguments: '{"city": "\u676D\u5DDE"}' },
                     type: 'function',
                     index: 0,
                   },

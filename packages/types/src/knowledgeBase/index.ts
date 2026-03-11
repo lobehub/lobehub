@@ -1,4 +1,4 @@
-import { FilesConfigItem } from '../user/settings/filesConfig';
+import type { FilesConfigItem } from '../user/settings/filesConfig';
 
 export enum KnowledgeBaseTabs {
   Files = 'files',

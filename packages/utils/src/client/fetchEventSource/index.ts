@@ -2,13 +2,13 @@
  * file copy from https://github.com/Azure/fetch-event-source/blob/45ac3cfffd30b05b79fbf95c21e67d4ef59aa56a/src/fetch.ts
  * and remove some code
  */
-import { EventSourceMessage, getBytes, getLines, getMessages } from './parse';
+import type { EventSourceMessage } from './parse';
+import { getBytes, getLines, getMessages } from './parse';
 
 export const EventStreamContentType = 'text/event-stream';
 
 const LastEventId = 'last-event-id';
 
-// eslint-disable-next-line no-undef
 export interface FetchEventSourceInit extends RequestInit {
   /** The Fetch function to use. Defaults to window.fetch */
   fetch?: typeof fetch;
@@ -51,7 +51,6 @@ export interface FetchEventSourceInit extends RequestInit {
 }
 
 export function fetchEventSource(
-  // eslint-disable-next-line no-undef
   input: RequestInfo,
   {
     signal: inputSignal,

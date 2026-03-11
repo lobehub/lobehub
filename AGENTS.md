@@ -1,6 +1,6 @@
-# LobeChat Development Guidelines
+# LobeHub Development Guidelines
 
-This document serves as a comprehensive guide for all team members when developing LobeChat.
+This document serves as a comprehensive guide for all team members when developing LobeHub.
 
 ## Project Description
 
@@ -26,6 +26,9 @@ lobe-chat/
 │   └── ...
 ├── src/
 │   ├── app/                # Next.js app router
+│   ├── spa/                # SPA entry points (entry.*.tsx) and router config
+│   ├── routes/             # SPA page components (roots)
+│   ├── features/           # Business components by domain
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
 │   ├── server/             # Server services and routers
@@ -38,7 +41,8 @@ lobe-chat/
 
 ### Git Workflow
 
-- The current release branch is `next` until v2.0.0 is officially released
+- **Branch strategy**: `canary` is the development branch (cloud production); `main` is the release branch (periodically cherry-picks from canary)
+- New branches should be created from `canary`; PRs should target `canary`
 - Use rebase for git pull
 - Git commit messages should prefix with gitmoji
 - Git branch name format: `username/feat/feature-name`
@@ -70,7 +74,7 @@ cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path
 **Important Notes**:
 
 - Wrap file paths in single quotes to avoid shell expansion
-- Never run `bun run test` - this runs all tests and takes ~10 minutes
+- Never run `bun run test` - this runs all tests and takes \~10 minutes
 
 ### Type Checking
 
@@ -86,19 +90,26 @@ cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path
 
 Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-not-installed-linear-mcp) when working with Linear issues.
 
+## SPA Routes and Features
+
+- **`src/routes/`** holds only page segments (layout + page entry files). Keep route files thin; they should import from `@/features/*` and compose.
+- **`src/features/`** holds business components by domain. Put layout pieces, hooks, and domain UI here.
+- See [CLAUDE.md – SPA Routes and Features](CLAUDE.md#spa-routes-and-features) and the **spa-routes** skill for how to add new routes and how to split files.
+
 ## Skills (Auto-loaded)
 
 All AI development skills are available in `.agents/skills/` directory:
 
-| Category | Skills |
-|----------|--------|
-| Frontend | `react`, `typescript`, `i18n`, `microcopy` |
-| State | `zustand` |
-| Backend | `drizzle` |
-| Desktop | `desktop` |
-| Testing | `testing` |
-| UI | `modal`, `hotkey`, `recent-data` |
-| Config | `add-provider-doc`, `add-setting-env` |
-| Workflow | `linear`, `debug` |
-| Performance | `vercel-react-best-practices` |
-| Overview | `project-overview` |
+| Category     | Skills                                     |
+| ------------ | ------------------------------------------ |
+| Frontend     | `react`, `typescript`, `i18n`, `microcopy` |
+| State        | `zustand`                                  |
+| Backend      | `drizzle`                                  |
+| Desktop      | `desktop`                                  |
+| Testing      | `testing`                                  |
+| UI           | `modal`, `hotkey`, `recent-data`           |
+| Config       | `add-provider-doc`, `add-setting-env`      |
+| Workflow     | `linear`, `debug`                          |
+| Architecture | `spa-routes`                               |
+| Performance  | `vercel-react-best-practices`              |
+| Overview     | `project-overview`                         |

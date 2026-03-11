@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import { LobeSparkAI, params } from './index';
 
 const provider = ModelProvider.Spark;
-const defaultBaseURL = 'https://spark-api-open.xf-yun.com/v1';
+const defaultBaseURL = 'https://spark-api-open.xf-yun.com/v2';
 
 testProvider({
   Runtime: LobeSparkAI,

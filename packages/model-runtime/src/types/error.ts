@@ -1,8 +1,8 @@
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '@lobechat/types';
+import type { ILobeAgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType } from '@lobechat/types';
 
 export const AGENT_RUNTIME_ERROR_SET = new Set<string>(Object.values(AgentRuntimeErrorType));
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const StandardErrorType = {
   // ******* Client Error ******* //
   BadRequest: 400,
@@ -18,7 +18,6 @@ export const StandardErrorType = {
   ServiceUnavailable: 503,
   GatewayTimeout: 504,
 } as const;
-/* eslint-enable */
 
 export type ErrorType = (typeof StandardErrorType)[keyof typeof StandardErrorType];
 

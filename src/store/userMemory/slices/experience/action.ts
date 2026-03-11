@@ -1,11 +1,11 @@
-import type { ExperienceListResult } from '@lobechat/types';
+import { type ExperienceListResult } from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import useSWR from 'swr';
 
-import { userMemoryService } from '@/services/userMemory';
-import { memoryCRUDService } from '@/services/userMemory/index';
+import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
@@ -19,29 +19,33 @@ export interface ExperienceQueryParams {
   sort?: 'capturedAt' | 'scoreConfidence';
 }
 
-export interface ExperienceAction {
-  deleteExperience: (id: string) => Promise<void>;
-  loadMoreExperiences: () => void;
-  resetExperiencesList: (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>) => void;
-  useFetchExperiences: (params: ExperienceQueryParams) => SWRResponse<ExperienceListResult>;
-}
+type Setter = StoreSetter<UserMemoryStore>;
+export const createExperienceSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
+  new ExperienceActionImpl(set, get, _api);
 
-export const createExperienceSlice: StateCreator<
-  UserMemoryStore,
-  [['zustand/devtools', never]],
-  [],
-  ExperienceAction
-> = (set, get) => ({
-  deleteExperience: async (id) => {
+export class ExperienceActionImpl {
+  readonly #get: () => UserMemoryStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  deleteExperience = async (id: string): Promise<void> => {
     await memoryCRUDService.deleteExperience(id);
     // Reset list to refresh
-    get().resetExperiencesList({ q: get().experiencesQuery, sort: get().experiencesSort });
-  },
+    this.#get().resetExperiencesList({
+      q: this.#get().experiencesQuery,
+      sort: this.#get().experiencesSort,
+    });
+  };
 
-  loadMoreExperiences: () => {
-    const { experiencesPage, experiencesTotal, experiences } = get();
+  loadMoreExperiences = (): void => {
+    const { experiencesPage, experiencesTotal, experiences } = this.#get();
     if (experiences.length < (experiencesTotal || 0)) {
-      set(
+      this.#set(
         produce((draft) => {
           draft.experiencesPage = experiencesPage + 1;
         }),
@@ -49,10 +53,10 @@ export const createExperienceSlice: StateCreator<
         n('loadMoreExperiences'),
       );
     }
-  },
+  };
 
-  resetExperiencesList: (params) => {
-    set(
+  resetExperiencesList = (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>): void => {
+    this.#set(
       produce((draft) => {
         draft.experiences = [];
         draft.experiencesPage = 1;
@@ -63,9 +67,9 @@ export const createExperienceSlice: StateCreator<
       false,
       n('resetExperiencesList'),
     );
-  },
+  };
 
-  useFetchExperiences: (params) => {
+  useFetchExperiences = (params: ExperienceQueryParams): SWRResponse<ExperienceListResult> => {
     const swrKeyParts = [
       'useFetchExperiences',
       params.page,
@@ -90,8 +94,8 @@ export const createExperienceSlice: StateCreator<
         });
       },
       {
-        onSuccess(data: ExperienceListResult) {
-          set(
+        onSuccess: (data: ExperienceListResult) => {
+          this.#set(
             produce((draft) => {
               draft.experiencesSearchLoading = false;
               draft.experiencesTotal = data.total;
@@ -116,5 +120,7 @@ export const createExperienceSlice: StateCreator<
         revalidateOnFocus: false,
       },
     );
-  },
-});
+  };
+}
+
+export type ExperienceAction = Pick<ExperienceActionImpl, keyof ExperienceActionImpl>;

@@ -1,4 +1,4 @@
-import { ChatResponse } from 'ollama/browser';
+import type { ChatResponse } from 'ollama/browser';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as uuidModule from '../../utils/uuid';

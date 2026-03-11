@@ -1,8 +1,9 @@
-import debug from 'debug';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
+import debug from 'debug';
 
 import { SOCK_FILE, SOCK_INFO_FILE, WINDOW_PIPE_FILE } from './const';
 
@@ -14,7 +15,7 @@ export class ElectronIpcClient {
   private socket: net.Socket | null = null;
   // eslint-disable-next-line @typescript-eslint/ban-types
   private requestQueue: Map<string, { reject: Function; resolve: Function }> = new Map();
-  // eslint-disable-next-line no-undef
+
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private connectionAttempts: number = 0;
   private maxConnectionAttempts: number = 5;
@@ -195,9 +196,6 @@ export class ElectronIpcClient {
       const request = { id, method, params };
       log('Created request with ID: %s', id);
 
-      // eslint-disable-next-line no-undef
-      let requestTimeoutId: NodeJS.Timeout;
-
       const cleanupAndResolve = (value: T) => {
         clearTimeout(requestTimeoutId);
         this.requestQueue.delete(id);
@@ -222,7 +220,7 @@ export class ElectronIpcClient {
       this.requestQueue.set(id, { reject: cleanupAndReject, resolve: cleanupAndResolve });
       log('Added request to queue, current queue size: %d', this.requestQueue.size);
 
-      requestTimeoutId = setTimeout(() => {
+      const requestTimeoutId: NodeJS.Timeout = setTimeout(() => {
         const pendingRequest = this.requestQueue.get(id);
         if (pendingRequest) {
           // Request is still in queue, indicating timeout

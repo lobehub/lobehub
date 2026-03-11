@@ -5,8 +5,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthCard from '@/features/AuthCard';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { useSession } from '@/libs/better-auth/auth-client';
 
 import OAuthApplicationLogo from './components/OAuthApplicationLogo';
 
@@ -24,9 +23,10 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
 
   const clientDisplayName = clientMetadata?.clientName || 'the application';
 
-  const isUserStateInit = useUserStore((s) => s.isUserStateInit);
-  const avatar = useUserStore(userProfileSelectors.userAvatar);
-  const nickName = useUserStore(userProfileSelectors.nickName);
+  const { data: session, isPending } = useSession();
+  const isUserStateInit = !isPending && !!session;
+  const avatar = session?.user?.image || '';
+  const nickName = session?.user?.name || '';
 
   const [isLoading, setIsLoading] = React.useState(false);
 
@@ -42,12 +42,14 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
         logoUrl={clientMetadata.logo}
       />
       <AuthCard
+        subtitle={descriptionText}
+        title={titleText}
         footer={
           <form
             action="/oidc/consent"
             method="post"
-            onSubmit={() => setIsLoading(true)}
             style={{ width: '100%' }}
+            onSubmit={() => setIsLoading(true)}
           >
             {/* Adjust action URL */}
             <input name="uid" type="hidden" value={uid} />
@@ -67,19 +69,17 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
             </Button>
           </form>
         }
-        subtitle={descriptionText}
-        title={titleText}
       >
         <Block padding={16} variant={'outlined'}>
           {isUserStateInit ? (
-            <Flexbox align={'center'} gap={16} horizontal>
+            <Flexbox horizontal align={'center'} gap={16}>
               <Avatar alt={nickName || ''} avatar={avatar} shape={'square'} size={40} />
               <Text fontSize={18} weight={500}>
                 {nickName}
               </Text>
             </Flexbox>
           ) : (
-            <Flexbox gap={16} horizontal>
+            <Flexbox horizontal gap={16}>
               <Skeleton.Avatar active shape={'square'} size={40} />
               <Skeleton.Button active />
             </Flexbox>

@@ -1,4 +1,4 @@
-import type { State } from '../../initialState';
+import { type State } from '../../initialState';
 
 const atBottom = (s: State) => s.atBottom;
 const isScrolling = (s: State) => s.isScrolling;

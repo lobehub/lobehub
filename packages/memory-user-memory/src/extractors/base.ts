@@ -1,15 +1,19 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
-import type { ChatCompletionTool, GenerateObjectPayload } from '@lobechat/model-runtime';
-import { GenerateObjectSchema, ModelRuntime } from '@lobechat/model-runtime';
+import type {
+  ChatCompletionTool,
+  GenerateObjectPayload,
+  GenerateObjectSchema,
+  ModelRuntime,
+} from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
   ATTR_GEN_AI_OPERATION_NAME,
   ATTR_GEN_AI_REQUEST_MODEL,
 } from '@lobechat/observability-otel/gen-ai';
 import { tracer } from '@lobechat/observability-otel/modules/memory-user-memory';
-import { z } from 'zod';
+import type { z } from 'zod';
 
-import {
+import type {
   ExtractorOptions,
   ExtractorTemplateProps,
   MemoryExtractionAgent,
@@ -59,7 +63,6 @@ export abstract class BaseMemoryExtractor<
   }
   protected abstract getResultSchema(): z.ZodType<TOutput> | undefined;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected getSchema(_options: TExtractorTemplateProps): GenerateObjectSchema | undefined {
     const schema = this.getResultSchema();
     if (!schema) return undefined;
@@ -77,7 +80,6 @@ export abstract class BaseMemoryExtractor<
     } satisfies TemplateProps;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected getTools(_options: TExtractorTemplateProps): ChatCompletionTool[] | undefined {
     return undefined;
   }

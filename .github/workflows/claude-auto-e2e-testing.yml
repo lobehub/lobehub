@@ -21,7 +21,7 @@ env:
   DATABASE_DRIVER: node
   KEY_VAULTS_SECRET: LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=
   AUTH_SECRET: e2e-test-secret-key-for-better-auth-32chars!
-  AUTH_EMAIL_VERIFICATION: "0"
+  AUTH_EMAIL_VERIFICATION: '0'
   S3_ACCESS_KEY_ID: e2e-mock-access-key
   S3_SECRET_ACCESS_KEY: e2e-mock-secret-key
   S3_BUCKET: e2e-mock-bucket
@@ -43,14 +43,13 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
         ports:
           - 5432:5432
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -67,7 +66,7 @@ jobs:
       - name: Build application
         run: bun run build
         env:
-          SKIP_LINT: "1"
+          SKIP_LINT: '1'
 
       - name: Configure Git
         run: |
@@ -85,7 +84,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GH_TOKEN }}
-          allowed_non_write_users: "*"
+          allowed_non_write_users: '*'
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --allowedTools "Bash,Read,Edit,Write,Glob,Grep"

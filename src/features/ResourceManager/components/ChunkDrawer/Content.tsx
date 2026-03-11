@@ -20,6 +20,7 @@ const Content = memo(() => {
     <Flexbox gap={8} height={'100%'} paddingBlock={'16px 0'}>
       <Flexbox paddingInline={12}>
         <SearchBar
+          variant={'filled'}
           onChange={(text) => {
             if (!text) useFileStore.setState({ isSimilaritySearch: false });
           }}
@@ -27,7 +28,6 @@ const Content = memo(() => {
             useFileStore.setState({ isSimilaritySearch: !!text });
             semanticSearch(text, fileId);
           }}
-          variant={'filled'}
         />
       </Flexbox>
       {showSimilaritySearch ? <SimilaritySearchList /> : <ChunkList fileId={fileId} />}

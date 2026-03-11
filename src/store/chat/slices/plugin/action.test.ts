@@ -1,13 +1,10 @@
-import {
-  DEFAULT_INBOX_AVATAR,
-  PLUGIN_SCHEMA_API_MD5_PREFIX,
-  PLUGIN_SCHEMA_SEPARATOR,
-} from '@lobechat/const';
+import { PLUGIN_SCHEMA_API_MD5_PREFIX, PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import { ChatToolPayload, MessageToolCall, UIChatMessage } from '@lobechat/types';
+import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import i18n from 'i18next';
-import { Mock, afterEach, describe, expect, it, vi } from 'vitest';
+import { type Mock } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
@@ -838,7 +835,7 @@ describe('ChatPluginAction', () => {
         id: messageId,
         role: 'tool',
         content: 'Tool content',
-        plugin: { identifier: identifier, arguments: '{"oldKey":"oldValue"}' },
+        plugin: { identifier, arguments: '{"oldKey":"oldValue"}' },
         tool_call_id: toolCallId,
         parentId,
       } as UIChatMessage;
@@ -847,7 +844,7 @@ describe('ChatPluginAction', () => {
         id: parentId,
         role: 'assistant',
         content: 'Assistant content',
-        tools: [{ identifier: identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
+        tools: [{ identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
       } as UIChatMessage;
 
       act(() => {
@@ -1188,7 +1185,7 @@ describe('ChatPluginAction', () => {
         id: messageId,
         role: 'assistant',
         content: 'Assistant content',
-        tools: [{ identifier: identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
+        tools: [{ identifier, arguments: '{"oldKey":"oldValue"}', id: toolCallId }],
       } as UIChatMessage;
 
       act(() => {

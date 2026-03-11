@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  PlaceholderVariablesProcessor,
   formatPlaceholderValues,
   parsePlaceholderVariables,
   parsePlaceholderVariablesMessages,
+  PlaceholderVariablesProcessor,
   renderPlaceholderTemplate,
 } from '../PlaceholderVariables';
 

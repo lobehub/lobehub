@@ -1,4 +1,4 @@
-import type { GenericOAuthConfig } from 'better-auth/plugins';
+import { type GenericOAuthConfig } from 'better-auth/plugins';
 
 export const DEFAULT_OIDC_SCOPES = ['openid', 'email', 'profile'];
 

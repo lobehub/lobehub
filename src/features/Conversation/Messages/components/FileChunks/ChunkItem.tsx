@@ -20,10 +20,10 @@ const ChunkItem = memo<ChunkItemProps>(({ id, fileId, similarity, text, filename
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={cx(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)}
       gap={4}
-      horizontal
       key={id}
       onClick={(e) => {
         e.stopPropagation();
@@ -31,7 +31,7 @@ const ChunkItem = memo<ChunkItemProps>(({ id, fileId, similarity, text, filename
       }}
     >
       <FileIcon fileName={filename} fileType={fileType} size={20} variant={'raw'} />
-      <Flexbox gap={12} horizontal justify={'space-between'} style={{ maxWidth: 200 }}>
+      <Flexbox horizontal gap={12} justify={'space-between'} style={{ maxWidth: 200 }}>
         <Text ellipsis>{filename}</Text>
         {similarity && (
           <Tooltip title={similarity}>

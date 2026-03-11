@@ -1,5 +1,6 @@
 import { DEFAULT_LANG } from '@/const/locale';
-import { type Locales, type NS, normalizeLocale } from '@/locales/resources';
+import { type Locales, type NS } from '@/locales/resources';
+import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 
 import { loadI18nNamespaceModuleWithFallback } from '../utils/i18n/loadI18nNamespaceModule';

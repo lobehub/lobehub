@@ -7,7 +7,6 @@ import { GTDApiName } from './types';
 export const GTDIdentifier = 'lobe-gtd';
 
 export const GTDManifest: BuiltinToolManifest = {
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   api: [
     // ==================== Planning ====================
     {
@@ -237,7 +236,7 @@ export const GTDManifest: BuiltinToolManifest = {
   identifier: GTDIdentifier,
   meta: {
     avatar: '✅',
-    description: 'Plan goals and track progress with GTD methodology',
+    description: 'Create plans, manage todo lists with status tracking, and run background tasks',
     title: 'GTD Tools',
   },
   systemRole: systemPrompt,

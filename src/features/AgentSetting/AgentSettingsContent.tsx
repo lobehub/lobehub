@@ -1,10 +1,12 @@
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 
 import AgentChat from './AgentChat';
+import AgentMeta from './AgentMeta';
 import AgentModal from './AgentModal';
 import AgentOpening from './AgentOpening';
 
@@ -20,6 +22,7 @@ const AgentSettingsContent = memo<AgentSettingsContentProps>(({ tab, loadingSkel
 
   return (
     <>
+      {tab === ChatSettingsTabs.Meta && <AgentMeta />}
       {tab === ChatSettingsTabs.Opening && <AgentOpening />}
       {tab === ChatSettingsTabs.Chat && <AgentChat />}
       {tab === ChatSettingsTabs.Modal && <AgentModal />}

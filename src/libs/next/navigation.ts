@@ -1,22 +1,17 @@
 /**
- * Navigation utilities wrapper for Next.js navigation APIs.
- * This module provides a unified interface that can be easily replaced
- * with react-router-dom in the future.
- *
- * @see Phase 3.1
+ * Navigation utilities — re-exports from next/navigation.
+ * In Vite/SPA mode, this file is replaced by navigation.vite.ts via the
+ * viteModuleRedirect plugin (see vite.config.ts).
  */
 
-// Re-export all navigation hooks and utilities from Next.js
 export {
   notFound,
-  ReadonlyURLSearchParams,
+  type ReadonlyURLSearchParams,
   redirect,
   useParams,
   usePathname,
   useRouter,
   useSearchParams,
-  useServerInsertedHTML,
 } from 'next/navigation';
 
-// Re-export types
-export type { RedirectType } from 'next/navigation';
+export type RedirectType = 'push' | 'replace';

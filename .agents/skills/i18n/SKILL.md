@@ -3,7 +3,7 @@ name: i18n
 description: Internationalization guide using react-i18next. Use when adding translations, creating i18n keys, or working with localized text in React components (.tsx files). Triggers on translation tasks, locale management, or i18n implementation.
 ---
 
-# LobeChat Internationalization Guide
+# LobeHub Internationalization Guide
 
 - Default language: Chinese (zh-CN)
 - Framework: react-i18next
@@ -31,11 +31,13 @@ export default {
 **Patterns:** `{feature}.{context}.{action|status}`
 
 **Parameters:** Use `{{variableName}}` syntax
+
 ```typescript
 'alert.cloud.desc': '我们提供 {{credit}} 额度积分',
 ```
 
 **Avoid key conflicts:**
+
 ```typescript
 // ❌ Conflict
 'clientDB.solve': '自助解决',
@@ -60,12 +62,12 @@ import { useTranslation } from 'react-i18next';
 
 const { t } = useTranslation('common');
 
-t('newFeature.title')
-t('alert.cloud.desc', { credit: '1000' })
+t('newFeature.title');
+t('alert.cloud.desc', { credit: '1000' });
 
 // Multiple namespaces
 const { t } = useTranslation(['common', 'chat']);
-t('common:save')
+t('common:save');
 ```
 
 ## Common Namespaces

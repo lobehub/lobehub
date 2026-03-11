@@ -1,4 +1,4 @@
-import type { PartialDeep } from 'type-fest';
+import { type PartialDeep } from 'type-fest';
 
 import { type AgentSettingsInstance } from '@/features/AgentSetting';
 import { type AgentItem } from '@/types/agent';

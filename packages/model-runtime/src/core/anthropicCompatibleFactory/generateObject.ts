@@ -1,8 +1,8 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import debug from 'debug';
 
+import type { GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 import { buildAnthropicMessages, buildAnthropicTools } from '../contextBuilders/anthropic';
-import { GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 
 const log = debug('lobe-model-runtime:anthropic:generate-object');
 
@@ -20,17 +20,20 @@ export const createAnthropicGenerateObject = async (
   log('schema: %O', schema);
   log('messages count: %d', messages.length);
 
-  // Convert messages to Anthropic format
+  // Convert messages to Anthropic format.
+  // Filter out empty/whitespace-only system prompts — Anthropic API rejects them.
   const system_message = messages.find((m) => m.role === 'system')?.content;
+  const systemPromptText =
+    typeof system_message === 'string' && system_message.trim() ? system_message : undefined;
   const user_messages = messages.filter((m) => m.role !== 'system');
   const anthropicMessages = await buildAnthropicMessages(user_messages);
 
   log('converted %d messages to Anthropic format', anthropicMessages.length);
 
-  const systemPrompts = system_message
+  const systemPrompts = systemPromptText
     ? [
         {
-          text: system_message,
+          text: systemPromptText,
           type: 'text' as const,
         },
       ]
@@ -66,7 +69,7 @@ export const createAnthropicGenerateObject = async (
         messages: anthropicMessages,
         model,
         system: systemPrompts,
-        tool_choice: tool_choice,
+        tool_choice,
         tools: finalTools,
       },
       { signal: options?.signal },

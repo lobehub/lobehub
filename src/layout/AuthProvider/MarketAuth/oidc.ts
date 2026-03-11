@@ -2,10 +2,17 @@ import { isDesktop } from '@/const/version';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 
 import { MarketAuthError } from './errors';
+import {
+  clearMarketAuthResult,
+  getMarketAuthResultStorageKey,
+  type MarketAuthHandoffPayload,
+  readMarketAuthResult,
+  resolveMarketAuthHandoffPayload,
+} from './handoff';
 import { type OIDCConfig, type PKCEParams, type TokenResponse } from './types';
 
 /**
- * Market OIDC 授权工具类
+ * Market OIDC authorization utility class
  */
 export class MarketOIDC {
   private config: OIDCConfig;
@@ -16,15 +23,21 @@ export class MarketOIDC {
 
   private static readonly DESKTOP_HANDOFF_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
+  private static readonly WEB_POPUP_CLOSE_GRACE_PERIOD = 1500;
+
+  private static readonly WEB_POPUP_MONITOR_INTERVAL = 500;
+
+  private static readonly WEB_POPUP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
   constructor(config: OIDCConfig) {
     this.config = config;
   }
 
   /**
-   * 生成 PKCE code verifier
+   * Generate PKCE code verifier
    */
   private generateCodeVerifier(): string {
-    console.log('[MarketOIDC] Generating PKCE code verifier');
+    console.info('[MarketOIDC] Generating PKCE code verifier');
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
     return btoa(String.fromCharCode.apply(null, Array.from(array)))
@@ -34,10 +47,10 @@ export class MarketOIDC {
   }
 
   /**
-   * 生成 PKCE code challenge
+   * Generate PKCE code challenge
    */
   private async generateCodeChallenge(codeVerifier: string): Promise<string> {
-    console.log('[MarketOIDC] Generating PKCE code challenge');
+    console.info('[MarketOIDC] Generating PKCE code challenge');
     const encoder = new TextEncoder();
     const data = encoder.encode(codeVerifier);
     const digest = await crypto.subtle.digest('SHA-256', data);
@@ -48,10 +61,10 @@ export class MarketOIDC {
   }
 
   /**
-   * 生成随机 state
+   * Generate random state
    */
   private generateState(): string {
-    console.log('[MarketOIDC] Generating random state');
+    console.info('[MarketOIDC] Generating random state');
     const array = new Uint8Array(16);
     crypto.getRandomValues(array);
     return btoa(String.fromCharCode.apply(null, Array.from(array)))
@@ -61,19 +74,19 @@ export class MarketOIDC {
   }
 
   /**
-   * 生成 PKCE 参数
+   * Generate PKCE parameters
    */
   async generatePKCEParams(): Promise<PKCEParams> {
-    console.log('[MarketOIDC] Generating PKCE parameters');
+    console.info('[MarketOIDC] Generating PKCE parameters');
     const codeVerifier = this.generateCodeVerifier();
     const codeChallenge = await this.generateCodeChallenge(codeVerifier);
     const state = this.generateState();
 
-    // 将参数存储到 sessionStorage 用于后续验证
+    // Store parameters in sessionStorage for subsequent verification
     sessionStorage.setItem('market_code_verifier', codeVerifier);
     sessionStorage.setItem('market_state', state);
 
-    console.log('[MarketOIDC] PKCE parameters generated and stored');
+    console.info('[MarketOIDC] PKCE parameters generated and stored');
     return {
       codeChallenge,
       codeVerifier,
@@ -82,13 +95,13 @@ export class MarketOIDC {
   }
 
   /**
-   * 构建授权 URL
+   * Build authorization URL
    */
   async buildAuthUrl(): Promise<string> {
-    console.log('[MarketOIDC] Building authorization URL');
+    console.info('[MarketOIDC] Building authorization URL');
     const pkceParams = await this.generatePKCEParams();
 
-    console.log('[MarketOIDC] this.config:', this.config);
+    console.info('[MarketOIDC] this.config:', this.config);
 
     const authUrl = new URL(MARKET_OIDC_ENDPOINTS.auth, this.config.baseUrl);
     authUrl.searchParams.set('client_id', this.config.clientId);
@@ -99,24 +112,24 @@ export class MarketOIDC {
     authUrl.searchParams.set('code_challenge', pkceParams.codeChallenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
 
-    console.log('[MarketOIDC] Authorization URL built:', authUrl.toString());
+    console.info('[MarketOIDC] Authorization URL built:', authUrl.toString());
     return authUrl.toString();
   }
 
   /**
-   * 用授权码换取访问令牌
+   * Exchange authorization code for access token
    */
   async exchangeCodeForToken(code: string, state: string): Promise<TokenResponse> {
-    console.log('[MarketOIDC] Exchanging authorization code for token');
+    console.info('[MarketOIDC] Exchanging authorization code for token');
 
-    // 验证 state 参数
+    // Validate state parameter
     const storedState = sessionStorage.getItem('market_state');
     if (state !== storedState) {
       console.error('[MarketOIDC] State parameter mismatch');
       throw new MarketAuthError('stateMismatch', { message: 'Invalid state parameter' });
     }
 
-    // 获取存储的 code verifier
+    // Get stored code verifier
     const codeVerifier = sessionStorage.getItem('market_code_verifier');
     if (!codeVerifier) {
       console.error('[MarketOIDC] Code verifier not found');
@@ -155,9 +168,9 @@ export class MarketOIDC {
     }
 
     const tokenData = (await response.json()) as TokenResponse;
-    console.log('[MarketOIDC] Token exchange successful');
+    console.info('[MarketOIDC] Token exchange successful');
 
-    // 清理 sessionStorage 中的临时数据
+    // Clean up temporary data in sessionStorage
     sessionStorage.removeItem('market_code_verifier');
     sessionStorage.removeItem('market_state');
 
@@ -165,7 +178,7 @@ export class MarketOIDC {
   }
 
   /**
-   * 启动授权流程并返回授权结果
+   * Start authorization flow and return authorization result
    */
   async startAuthorization(): Promise<{ code: string; state: string }> {
     const authUrl = await this.buildAuthUrl();
@@ -184,11 +197,11 @@ export class MarketOIDC {
       });
     }
 
-    // 在新窗口中打开授权页面
+    // Open authorization page in a new window
     let popup: Window | null = null;
     if (isDesktop) {
-      // Electron 桌面端：使用 IPC 调用主进程打开系统浏览器
-      console.log('[MarketOIDC] Desktop app detected, opening system browser via IPC');
+      // Electron desktop: use IPC to call the main process to open the system browser
+      console.info('[MarketOIDC] Desktop app detected, opening system browser via IPC');
       const { remoteServerService } = await import('@/services/electron/remoteServer');
 
       try {
@@ -200,7 +213,7 @@ export class MarketOIDC {
             meta: { error: result.error },
           });
         }
-        console.log('[MarketOIDC] System browser opened successfully');
+        console.info('[MarketOIDC] System browser opened successfully');
       } catch (error) {
         console.error('[MarketOIDC] Exception opening system browser:', error);
         throw new MarketAuthError('openBrowserFailed', {
@@ -211,7 +224,7 @@ export class MarketOIDC {
 
       return this.pollDesktopHandoff(state);
     } else {
-      // 浏览器环境：使用 window.open 打开弹窗
+      // Browser environment: use window.open to open a popup
       popup = window.open(
         authUrl,
         'market_auth',
@@ -226,64 +239,161 @@ export class MarketOIDC {
       }
     }
 
+    clearMarketAuthResult(state);
+
     return new Promise((resolve, reject) => {
       let checkClosed: number | undefined;
+      let fallbackPolling: number | undefined;
+      let popupClosedGraceTimeout: number | undefined;
 
-      // 先声明，后定义，避免相互“定义前使用”
-      let messageHandler: (event: MessageEvent) => void;
+      const authTimeout = setTimeout(() => {
+        cleanup();
+        reject(
+          new MarketAuthError('handoffTimeout', {
+            message:
+              'Authorization timeout. Please complete the authorization in the browser and try again.',
+          }),
+        );
+      }, MarketOIDC.WEB_POPUP_TIMEOUT) as unknown as number;
 
-      // 清理函数
-      function cleanup() {
+      const cleanup = () => {
         window.removeEventListener('message', messageHandler);
+        window.removeEventListener('storage', storageHandler);
+        clearTimeout(authTimeout);
         if (checkClosed) clearInterval(checkClosed);
-      }
+        if (fallbackPolling) clearInterval(fallbackPolling);
+        if (popupClosedGraceTimeout) clearTimeout(popupClosedGraceTimeout);
+        clearMarketAuthResult(state);
+      };
 
-      // 监听消息事件，等待授权完成
-      messageHandler = (event: MessageEvent) => {
-        console.log('[MarketOIDC] Received message from popup:', event.data);
+      const settle = (payload: MarketAuthHandoffPayload) => {
+        cleanup();
 
-        if (event.data.type === 'MARKET_AUTH_SUCCESS') {
-          cleanup();
-
-          // 不立即关闭弹窗，让用户看到成功状态
-          // 弹窗会在3秒后自动关闭
+        if (payload.type === 'MARKET_AUTH_SUCCESS') {
           resolve({
-            code: event.data.code,
-            state: event.data.state,
+            code: payload.code,
+            state: payload.state,
           });
-        } else if (event.data.type === 'MARKET_AUTH_ERROR') {
-          cleanup();
+
+          return;
+        }
+
+        try {
           popup?.close();
-          reject(
-            new MarketAuthError('authorizationFailed', {
-              message: event.data.error || 'Authorization failed',
-              meta: { error: event.data.error },
-            }),
-          );
+        } catch {
+          // Ignore close failures from cross-origin popup contexts.
+        }
+
+        reject(
+          new MarketAuthError('authorizationFailed', {
+            message: payload.error || 'Authorization failed',
+            meta: { error: payload.error },
+          }),
+        );
+      };
+
+      const handleHandoffPayload = (payload: MarketAuthHandoffPayload | null) => {
+        if (!payload) return false;
+        if (payload.state && payload.state !== state) return false;
+
+        settle(payload);
+        return true;
+      };
+
+      const flushStoredResult = () => handleHandoffPayload(readMarketAuthResult(state));
+
+      const startStoragePolling = () => {
+        if (fallbackPolling) return;
+
+        fallbackPolling = setInterval(() => {
+          flushStoredResult();
+        }, MarketOIDC.WEB_POPUP_MONITOR_INTERVAL) as unknown as number;
+      };
+
+      const rejectPopupClosed = () => {
+        cleanup();
+        reject(new MarketAuthError('popupClosed', { message: 'Authorization popup was closed' }));
+      };
+
+      const handlePopupClosed = () => {
+        if (popupClosedGraceTimeout) return;
+        if (checkClosed) {
+          clearInterval(checkClosed);
+          checkClosed = undefined;
+        }
+
+        if (flushStoredResult()) return;
+
+        startStoragePolling();
+
+        popupClosedGraceTimeout = setTimeout(() => {
+          if (flushStoredResult()) return;
+          rejectPopupClosed();
+        }, MarketOIDC.WEB_POPUP_CLOSE_GRACE_PERIOD) as unknown as number;
+      };
+
+      // Listen for message events, waiting for authorization to complete
+      const messageHandler = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+
+        console.info('[MarketOIDC] Received message from popup:', event.data);
+
+        handleHandoffPayload(resolveMarketAuthHandoffPayload(event.data));
+      };
+
+      const storageHandler = (event: StorageEvent) => {
+        if (event.storageArea !== localStorage) return;
+        if (event.key !== getMarketAuthResultStorageKey(state)) return;
+
+        if (!event.newValue) {
+          flushStoredResult();
+          return;
+        }
+
+        try {
+          handleHandoffPayload(resolveMarketAuthHandoffPayload(JSON.parse(event.newValue)));
+        } catch {
+          // Ignore malformed storage payloads and keep waiting for a valid handoff.
         }
       };
 
       window.addEventListener('message', messageHandler);
+      window.addEventListener('storage', storageHandler);
 
-      // 检查弹窗是否被关闭
+      if (flushStoredResult()) return;
+
+      // Check if the popup was closed. A readable `closed === true` means the
+      // window is genuinely gone, so only wait a short grace period for the
+      // callback page to persist its handoff result. If accessing popup state
+      // throws, assume COOP isolation and keep waiting on storage handoff.
       if (popup) {
         checkClosed = setInterval(() => {
-          if (popup.closed) {
-            cleanup();
-            reject(
-              new MarketAuthError('popupClosed', { message: 'Authorization popup was closed' }),
+          try {
+            if (popup.closed) {
+              handlePopupClosed();
+            }
+          } catch {
+            console.info(
+              '[MarketOIDC] COOP blocked popup monitoring, falling back to storage handoff',
             );
+
+            if (checkClosed) {
+              clearInterval(checkClosed);
+              checkClosed = undefined;
+            }
+
+            startStoragePolling();
           }
-        }, 1000) as unknown as number;
+        }, MarketOIDC.WEB_POPUP_MONITOR_INTERVAL) as unknown as number;
       }
     });
   }
 
   /**
-   * 轮询 handoff 接口获取桌面端授权结果
+   * Poll the handoff endpoint to get the desktop authorization result
    */
   private async pollDesktopHandoff(state: string): Promise<{ code: string; state: string }> {
-    console.log('[MarketOIDC] Starting desktop handoff polling with state:', state);
+    console.info('[MarketOIDC] Starting desktop handoff polling with state:', state);
 
     const startTime = Date.now();
 
@@ -291,7 +401,7 @@ export class MarketOIDC {
       state,
     )}&client=${encodeURIComponent(MarketOIDC.DESKTOP_HANDOFF_CLIENT)}`;
 
-    console.log('[MarketOIDC] Poll URL:', pollUrl);
+    console.info('[MarketOIDC] Poll URL:', pollUrl);
 
     while (Date.now() - startTime < MarketOIDC.DESKTOP_HANDOFF_TIMEOUT) {
       try {
@@ -302,14 +412,14 @@ export class MarketOIDC {
 
         const data = await response.json().catch(() => undefined);
 
-        console.log('[MarketOIDC] Poll response:', response.status, data);
+        console.info('[MarketOIDC] Poll response:', response.status, data);
 
         if (
           response.status === 200 &&
           data?.status === 'success' &&
           typeof data?.code === 'string'
         ) {
-          console.log('[MarketOIDC] Desktop handoff succeeded');
+          console.info('[MarketOIDC] Desktop handoff succeeded');
           return {
             code: data.code,
             state,

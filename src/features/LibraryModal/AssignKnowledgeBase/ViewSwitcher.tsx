@@ -21,20 +21,20 @@ const ViewSwitcher = memo<ViewSwitcherProps>(({ onViewChange, view }) => {
   const { t } = useTranslation('components');
 
   return (
-    <Flexbox className={styles.container} horizontal>
+    <Flexbox horizontal className={styles.container}>
       <ActionIcon
         active={view === 'list'}
         icon={ListIcon}
-        onClick={() => onViewChange('list')}
         size={16}
         title={t('FileManager.view.list')}
+        onClick={() => onViewChange('list')}
       />
       <ActionIcon
         active={view === 'masonry'}
         icon={Grid3x3Icon}
-        onClick={() => onViewChange('masonry')}
         size={16}
         title={t('FileManager.view.masonry')}
+        onClick={() => onViewChange('masonry')}
       />
     </Flexbox>
   );

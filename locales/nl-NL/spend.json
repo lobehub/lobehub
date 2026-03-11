@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "Tokenverbruik",
   "table.columns.type.enums.chat": "Tekstgeneratie",
   "table.columns.type.enums.imageGeneration": "Afbeeldinggeneratie",
+  "table.columns.type.enums.videoGeneration": "Videogeneratie",
   "table.columns.type.title": "Type",
   "table.desc": "Details van het gebruik van rekencredits voor tekstgeneratie, embedding, afbeeldinggeneratie, enz.",
   "table.more": "Bekijk details",

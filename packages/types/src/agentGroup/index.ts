@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { AgentItem } from '../agent';
-import { TaskDetail, UIChatMessage } from '../message';
-import { ChatTopic } from '../topic';
+import type { AgentItem } from '../agent';
+import type { TaskDetail, UIChatMessage } from '../message';
+import type { ChatTopic } from '../topic';
 
 export interface LobeChatGroupMetaConfig {
   avatar?: string;

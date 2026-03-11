@@ -6,7 +6,8 @@ import { GenerationModel } from '@/database/models/generation';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { type AsyncTaskError, AsyncTaskStatus } from '@/types/asyncTask';
+import { type AsyncTaskError } from '@/types/asyncTask';
+import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type Generation } from '@/types/generation';
 
 const generationProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {

@@ -9,6 +9,7 @@ describe('useOnPluginSettingsUpdate', () => {
 
   afterEach(() => {
     mockCallback.mockReset();
+    // eslint-disable-next-line unicorn/no-invalid-remove-event-listener
     window.removeEventListener('message', () => {});
   });
 

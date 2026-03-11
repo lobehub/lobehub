@@ -6,10 +6,10 @@
  */
 import debug from 'debug';
 
+import { type ModelConfig } from '@/server/services/comfyui/config/modelRegistry';
 import {
   MODEL_ID_VARIANT_MAP,
   MODEL_REGISTRY,
-  type ModelConfig,
 } from '@/server/services/comfyui/config/modelRegistry';
 
 const log = debug('lobe-image:comfyui:static-model-lookup');

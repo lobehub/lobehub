@@ -10,7 +10,8 @@
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
+import { WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // Helper Functions
@@ -92,6 +93,75 @@ async function inputPageName(
   console.log(`   ✅ 已输入新名称 "${newName}"`);
 }
 
+async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
+  const loadingSelectors = ['[aria-label="Loading"]', '.lobe-brand-loading'];
+  const timeout = WAIT_TIMEOUT;
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    // Wait until global loading indicator is gone
+    let loadingVisible = false;
+    for (const selector of loadingSelectors) {
+      const loading = world.page.locator(selector).first();
+      if ((await loading.count()) > 0 && (await loading.isVisible())) {
+        loadingVisible = true;
+        break;
+      }
+    }
+
+    if (loadingVisible) {
+      await world.page.waitForTimeout(300);
+      continue;
+    }
+
+    // Any of these means the page workspace is ready for interactions
+    const readyCandidates = [
+      world.page.locator('button:has(svg.lucide-square-pen)').first(),
+      world.page.locator('input[placeholder*="Search"], input[placeholder*="搜索"]').first(),
+      world.page.locator('a[href^="/page/"]').first(),
+    ];
+
+    for (const candidate of readyCandidates) {
+      if ((await candidate.count()) > 0 && (await candidate.isVisible())) {
+        return;
+      }
+    }
+
+    await world.page.waitForTimeout(300);
+  }
+
+  throw new Error('Page workspace did not become ready in time');
+}
+
+async function clickNewPageButton(world: CustomWorld): Promise<void> {
+  await waitForPageWorkspaceReady(world);
+
+  const candidates = [
+    world.page.locator('button:has(svg.lucide-square-pen)').first(),
+    world.page
+      .locator('svg.lucide-square-pen')
+      .first()
+      .locator('xpath=ancestor::*[self::button or @role="button"][1]'),
+    world.page.getByRole('button', { name: /create page|new page|新建文稿|新建/i }).first(),
+    world.page
+      .locator(
+        'button[title*="Create"], button[title*="Page"], button[title*="new"], button[title*="新建"]',
+      )
+      .first(),
+  ];
+
+  for (const candidate of candidates) {
+    if ((await candidate.count()) === 0) continue;
+    if (!(await candidate.isVisible())) continue;
+
+    await candidate.click();
+    await world.page.waitForTimeout(500);
+    return;
+  }
+
+  throw new Error('Could not find new page button');
+}
+
 // ============================================
 // Given Steps
 // ============================================
@@ -100,7 +170,7 @@ Given('用户在 Page 页面', async function (this: CustomWorld) {
   console.log('   📍 Step: 导航到 Page 页面...');
   await this.page.goto('/page');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
-  await this.page.waitForTimeout(1000);
+  await waitForPageWorkspaceReady(this);
 
   console.log('   ✅ 已进入 Page 页面');
 });
@@ -109,12 +179,9 @@ Given('用户在 Page 页面有一个文稿', async function (this: CustomWorld)
   console.log('   📍 Step: 导航到 Page 页面...');
   await this.page.goto('/page');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
-  await this.page.waitForTimeout(1000);
 
   console.log('   📍 Step: 通过 UI 创建新文稿...');
-  // Click the new page button to create via UI (ensures proper server-side creation)
-  const newPageButton = this.page.locator('svg.lucide-square-pen').first();
-  await newPageButton.click();
+  await clickNewPageButton(this);
   await this.page.waitForTimeout(1500);
 
   // Wait for the new page to be created and URL to change
@@ -220,12 +287,9 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
   console.log('   📍 Step: 导航到 Page 页面...');
   await this.page.goto('/page');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
-  await this.page.waitForTimeout(1000);
 
   console.log('   📍 Step: 通过 UI 创建新文稿...');
-  // Click the new page button to create via UI
-  const newPageButton = this.page.locator('svg.lucide-square-pen').first();
-  await newPageButton.click();
+  await clickNewPageButton(this);
   await this.page.waitForTimeout(1500);
 
   // Wait for the new page to be created
@@ -313,22 +377,7 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
 When('用户点击新建文稿按钮', async function (this: CustomWorld) {
   console.log('   📍 Step: 点击新建文稿按钮...');
 
-  // Look for the SquarePen icon button (new page button)
-  const newPageButton = this.page.locator('svg.lucide-square-pen').first();
-
-  if ((await newPageButton.count()) > 0) {
-    await newPageButton.click();
-  } else {
-    // Fallback: look for button with title containing "new" or "新建"
-    const buttonByTitle = this.page
-      .locator('button[title*="new"], button[title*="新建"], [role="button"][title*="new"]')
-      .first();
-    if ((await buttonByTitle.count()) > 0) {
-      await buttonByTitle.click();
-    } else {
-      throw new Error('Could not find new page button');
-    }
-  }
+  await clickNewPageButton(this);
 
   await this.page.waitForTimeout(1000);
   console.log('   ✅ 已点击新建文稿按钮');
@@ -438,7 +487,7 @@ Then('文稿列表中应该出现 {string}', async function (this: CustomWorld, 
   if ((await duplicatedItem.count()) === 0) {
     // Fallback: check if there are at least 2 pages with similar name
     const similarPages = this.page.getByText(expectedName.replace(/\s*\(Copy\)$/, '')).all();
-    // eslint-disable-next-line unicorn/no-await-expression-member
+
     const count = (await similarPages).length;
     console.log(`   📍 Debug: Found ${count} pages with similar name`);
     expect(count).toBeGreaterThanOrEqual(2);

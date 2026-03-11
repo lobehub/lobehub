@@ -9,7 +9,7 @@ import {
 import { KnowledgeType } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AgentStoreState } from '@/store/agent/initialState';
+import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin';
 

@@ -3,6 +3,10 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
 
 export interface ToolExecutionContext {
+  /** Target device ID for device proxy tool calls */
+  activeDeviceId?: string;
+  /** Memory tool permission from agent chat config */
+  memoryToolPermission?: 'read-only' | 'read-write';
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
   toolManifestMap: Record<string, LobeToolManifest>;
@@ -28,5 +32,8 @@ export interface ToolExecutionResultResponse extends ToolExecutionResult {
 }
 
 export interface IToolExecutor {
-  execute(payload: ChatToolPayload, context: ToolExecutionContext): Promise<ToolExecutionResult>;
+  execute: (
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+  ) => Promise<ToolExecutionResult>;
 }

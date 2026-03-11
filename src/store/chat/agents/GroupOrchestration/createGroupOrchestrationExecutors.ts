@@ -1,22 +1,22 @@
-import type {
-  GroupOrchestrationEvent,
-  GroupOrchestrationExecutor,
-  GroupOrchestrationExecutorOutput,
-  SupervisorInstruction,
-  SupervisorInstructionBatchExecAsyncTasks,
-  SupervisorInstructionCallAgent,
-  SupervisorInstructionCallSupervisor,
-  SupervisorInstructionDelegate,
-  SupervisorInstructionExecAsyncTask,
-  SupervisorInstructionExecClientAsyncTask,
-  SupervisorInstructionParallelCallAgents,
+import {
+  type GroupOrchestrationEvent,
+  type GroupOrchestrationExecutor,
+  type GroupOrchestrationExecutorOutput,
+  type SupervisorInstruction,
+  type SupervisorInstructionBatchExecAsyncTasks,
+  type SupervisorInstructionCallAgent,
+  type SupervisorInstructionCallSupervisor,
+  type SupervisorInstructionDelegate,
+  type SupervisorInstructionExecAsyncTask,
+  type SupervisorInstructionExecClientAsyncTask,
+  type SupervisorInstructionParallelCallAgents,
 } from '@lobechat/agent-runtime';
-import type { ConversationContext, UIChatMessage } from '@lobechat/types';
+import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
 import { aiAgentService } from '@/services/aiAgent';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
-import type { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 const log = debug('lobe-store:group-orchestration-executors');
@@ -87,8 +87,6 @@ export const createGroupOrchestrationExecutors = (
    * Helper to get current messages for the group conversation
    */
   const getMessages = () => dbMessageSelectors.getDbMessagesByKey(chatKey)(get());
-
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
 
   return {
     /**

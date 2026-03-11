@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { StreamEvent } from '@/services/agentRuntime';
+import { type StreamEvent } from '@/services/agentRuntime';
 import { useChatStore } from '@/store/chat/store';
 
 // Keep zustand mock as it's needed globally
@@ -29,7 +29,7 @@ const resetTestEnvironment = () => {
 };
 
 // Helper to create streaming context
-const createStreamingContext = (overrides = {}) => ({
+const createStreamingContext = (overrides: any = {}) => ({
   assistantId: '',
   content: '',
   reasoning: '',

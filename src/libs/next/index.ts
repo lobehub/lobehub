@@ -1,22 +1,14 @@
 /**
- * Next.js wrapper module
+ * Next.js wrapper module — SPA implementation
  *
- * This module provides unified interfaces for Next.js-specific APIs,
- * making it easier to migrate from Next.js to other frameworks (e.g., Vite + React Router).
- *
- * Usage:
- * - import { useRouter, usePathname } from '@/libs/next/navigation';
- * - import Link from '@/libs/next/Link';
- * - import dynamic from '@/libs/next/dynamic';
- * - import Image from '@/libs/next/Image';
- *
- * @see RFC 147
+ * Provides unified interfaces that map to react-router-dom / vanilla React
+ * so that consumer code does not need framework-specific imports.
  */
 
 // Navigation exports
 export * from './navigation';
 
-// Component exports (re-export as named for convenience)
+// Component exports
 export { default as dynamic } from './dynamic';
 export { default as Image } from './Image';
 export { default as Link } from './Link';

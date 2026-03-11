@@ -1,23 +1,24 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { expo } from '@better-auth/expo';
 import { passkey } from '@better-auth/passkey';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { createNanoId, idGenerator, serverDB } from '@lobechat/database';
 import * as schema from '@lobechat/database/schemas';
 import bcrypt from 'bcryptjs';
-import { emailHarmony } from 'better-auth-harmony';
-import { validateEmail } from 'better-auth-harmony/email';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { verifyPassword as defaultVerifyPassword } from 'better-auth/crypto';
-import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
+import { type BetterAuthOptions } from 'better-auth/minimal';
+import { betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
+import { emailHarmony } from 'better-auth-harmony';
+import { validateEmail } from 'better-auth-harmony/email';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
 import { businessEmailValidator } from '@/business/server/better-auth';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import {
+  getChangeEmailVerificationTemplate,
   getMagicLinkEmailTemplate,
   getResetPasswordEmailTemplate,
   getVerificationEmailTemplate,
@@ -149,11 +150,19 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           return;
         }
 
-        const template = getVerificationEmailTemplate({
-          expiresInSeconds: VERIFICATION_LINK_EXPIRES_IN,
-          url,
-          userName: user.name,
-        });
+        // Use different template for change-email vs signup verification
+        const isChangeEmail = request?.url?.includes('/change-email');
+        const template = isChangeEmail
+          ? getChangeEmailVerificationTemplate({
+              expiresInSeconds: VERIFICATION_LINK_EXPIRES_IN,
+              url,
+              userName: user.name,
+            })
+          : getVerificationEmailTemplate({
+              expiresInSeconds: VERIFICATION_LINK_EXPIRES_IN,
+              url,
+              userName: user.name,
+            });
 
         const emailService = new EmailService();
         await emailService.sendMail({
@@ -170,6 +179,8 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         enabled: true,
         maxAge: 10 * 60, // Cache duration in seconds
       },
+      // Keep a DB-backed fallback when Redis secondary storage entries are unexpectedly missing.
+      storeSessionInDatabase: true,
     },
     database: drizzleAdapter(serverDB, {
       provider: 'pg',
@@ -206,6 +217,9 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       },
     },
     user: {
+      changeEmail: {
+        enabled: true,
+      },
       additionalFields: {
         username: {
           required: false,
@@ -237,6 +251,12 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           // Other models: use shared nanoid generator (12 chars) to keep consistency.
           return createNanoId(12)();
         },
+      },
+    },
+    rateLimit: {
+      customRules: {
+        '/request-password-reset': { max: 3, window: 60 },
+        '/send-verification-email': { max: 3, window: 60 },
       },
     },
     plugins: [

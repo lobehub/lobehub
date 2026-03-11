@@ -1,10 +1,15 @@
 /**
  * @vitest-environment node
  */
+import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeService } from './AgentRuntimeService';
-import type { AgentExecutionParams, OperationCreationParams, StartExecutionParams } from './types';
+import {
+  type AgentExecutionParams,
+  type OperationCreationParams,
+  type StartExecutionParams,
+} from './types';
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -59,34 +64,33 @@ vi.mock('@/server/services/pluginGateway', () => ({
   })),
 }));
 
-// Mock dependencies
-vi.mock('@/server/modules/AgentRuntime', () => ({
-  AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
-    createAgentOperation: vi.fn(),
-    deleteAgentOperation: vi.fn(),
-    disconnect: vi.fn(),
-    getActiveOperations: vi.fn(),
-    getExecutionHistory: vi.fn(),
-    getOperationMetadata: vi.fn(),
-    loadAgentState: vi.fn(),
-    saveAgentState: vi.fn(),
-    saveStepResult: vi.fn(),
-  })),
-  createStreamEventManager: vi.fn().mockReturnValue({
-    getStreamHistory: vi.fn().mockResolvedValue([]),
-    publishStreamEvent: vi.fn().mockResolvedValue(undefined),
-    subscribe: vi.fn().mockReturnValue(() => {}),
-  }),
-  createStreamingFinishExecutor: vi.fn(),
-  createStreamingHumanApprovalExecutor: vi.fn(),
-  createStreamingLLMExecutor: vi.fn(),
-  createStreamingToolExecutor: vi.fn(),
-  DurableLobeChatAgent: vi.fn(),
-  StreamEventManager: vi.fn().mockImplementation(() => ({
-    getStreamHistory: vi.fn(),
-    publishStreamEvent: vi.fn(),
-  })),
+// Mock factory and redis dependencies to break env import chains,
+// so the barrel can be imported with real AgentRuntimeCoordinator + InMemory backends
+vi.mock('@/server/modules/AgentRuntime/factory', async () => {
+  const { InMemoryAgentStateManager } =
+    await import('@/server/modules/AgentRuntime/InMemoryAgentStateManager');
+  const { InMemoryStreamEventManager } =
+    await import('@/server/modules/AgentRuntime/InMemoryStreamEventManager');
+  return {
+    createAgentStateManager: () => new InMemoryAgentStateManager(),
+    createStreamEventManager: () => new InMemoryStreamEventManager(),
+    isRedisAvailable: () => false,
+  };
+});
+
+vi.mock('@/server/modules/AgentRuntime/redis', () => ({
+  createAgentRuntimeRedisClient: vi.fn().mockReturnValue(null),
+  getAgentRuntimeRedisClient: vi.fn().mockReturnValue(null),
 }));
+
+// Use real AgentRuntimeCoordinator with InMemory backends; only mock unrelated exports
+vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    createRuntimeExecutors: vi.fn(),
+  };
+});
 
 vi.mock('@lobechat/agent-runtime', () => ({
   AgentRuntime: vi.fn().mockImplementation((agent, options) => ({
@@ -116,7 +120,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 
 // Mock model-bank
 vi.mock('model-bank', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('model-bank')>();
+  const actual = await importOriginal<typeof ModelBankModule>();
   return {
     ...actual,
     LOBE_DEFAULT_MODEL_LIST: [
@@ -155,10 +159,23 @@ describe('AgentRuntimeService', () => {
 
     service = new AgentRuntimeService(mockDb, mockUserId);
 
-    // Get mocked instances
+    // Get real instances (backed by InMemory implementations)
     mockCoordinator = (service as any).coordinator;
     mockStreamManager = (service as any).streamManager;
     mockQueueService = (service as any).queueService;
+
+    // Auto-spy all coordinator methods so tests can use .mockResolvedValue() / .toHaveBeenCalledWith()
+    for (const key of Object.getOwnPropertyNames(Object.getPrototypeOf(mockCoordinator))) {
+      if (key !== 'constructor' && typeof mockCoordinator[key] === 'function') {
+        vi.spyOn(mockCoordinator, key);
+      }
+    }
+    // Auto-spy all streamManager methods
+    for (const key of Object.getOwnPropertyNames(Object.getPrototypeOf(mockStreamManager))) {
+      if (key !== 'constructor' && typeof mockStreamManager[key] === 'function') {
+        vi.spyOn(mockStreamManager, key);
+      }
+    }
   });
 
   afterEach(() => {
@@ -194,7 +211,7 @@ describe('AgentRuntimeService', () => {
       appContext: {},
       agentConfig: { name: 'test-agent' },
       modelRuntimeConfig: { model: 'gpt-4' },
-      toolManifestMap: {},
+      toolSet: { manifestMap: {} },
       userId: 'user-123',
       autoStart: true,
       initialMessages: [],
@@ -263,6 +280,35 @@ describe('AgentRuntimeService', () => {
       mockCoordinator.saveAgentState.mockRejectedValueOnce(new Error('Database error'));
 
       await expect(service.createOperation(mockParams)).rejects.toThrow('Database error');
+    });
+
+    it('should pass maxSteps to initial state when provided', async () => {
+      mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
+
+      await service.createOperation({ ...mockParams, maxSteps: 25 });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          maxSteps: 25,
+        }),
+      );
+    });
+
+    it('should pass evalContext to metadata when provided', async () => {
+      mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
+
+      const evalContext = { envPrompt: 'You are in a test environment' };
+      await service.createOperation({ ...mockParams, evalContext });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            evalContext,
+          }),
+        }),
+      );
     });
   });
 
@@ -499,6 +545,227 @@ describe('AgentRuntimeService', () => {
 
       expect(result.success).toBe(true);
       expect(result.nextStepScheduled).toBe(false); // Should not schedule next step when status is 'done'
+    });
+
+    it('should detect interruption that occurred during step execution', async () => {
+      const mockStepResult = {
+        newState: { ...mockState, stepCount: 2, status: 'running' },
+        nextContext: mockParams.context,
+        events: [],
+      };
+
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      // First call returns running state (for executeStep's initial load),
+      // second call returns interrupted state (checked after runtime.step completes)
+      mockCoordinator.loadAgentState
+        .mockResolvedValueOnce(mockState) // initial load
+        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' }); // post-step check
+
+      const result = await service.executeStep(mockParams);
+
+      // The step result should reflect the interrupted status
+      expect(result.state).toEqual(expect.objectContaining({ status: 'interrupted' }));
+      expect(result.nextStepScheduled).toBe(false);
+      // saveStepResult should be called with interrupted state
+      expect(mockCoordinator.saveStepResult).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          newState: expect.objectContaining({ status: 'interrupted' }),
+        }),
+      );
+    });
+  });
+
+  describe('executeStep - tool result extraction', () => {
+    const mockParams: AgentExecutionParams = {
+      operationId: 'test-operation-1',
+      stepIndex: 1,
+      context: {
+        phase: 'user_input',
+        payload: {
+          message: { content: 'test' },
+          sessionId: 'test-operation-1',
+          isFirstMessage: false,
+        },
+        session: {
+          sessionId: 'test-operation-1',
+          status: 'running',
+          stepCount: 1,
+          messageCount: 1,
+        },
+      },
+    };
+
+    const mockState = {
+      operationId: 'test-operation-1',
+      status: 'running',
+      stepCount: 1,
+      messages: [],
+      events: [],
+      lastModified: new Date().toISOString(),
+    };
+
+    const mockMetadata = {
+      userId: 'user-123',
+      agentConfig: { name: 'test-agent' },
+      modelRuntimeConfig: { model: 'gpt-4' },
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      status: 'running',
+      totalCost: 0,
+      totalSteps: 1,
+    };
+
+    beforeEach(() => {
+      mockCoordinator.loadAgentState.mockResolvedValue(mockState);
+      mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
+    });
+
+    it('should extract tool output from data field for single tool_result', async () => {
+      const mockOnAfterStep = vi.fn();
+      service.registerStepCallbacks('test-operation-1', { onAfterStep: mockOnAfterStep });
+
+      const mockStepResult = {
+        newState: { ...mockState, stepCount: 2, status: 'running' },
+        nextContext: {
+          phase: 'tool_result',
+          payload: {
+            data: 'Search found 3 results for "weather"',
+            executionTime: 120,
+            isSuccess: true,
+            toolCall: { identifier: 'lobe-web-browsing', apiName: 'search', id: 'tc-1' },
+            toolCallId: 'tc-1',
+          },
+          session: {
+            sessionId: 'test-operation-1',
+            status: 'running',
+            stepCount: 2,
+            messageCount: 2,
+          },
+        },
+        events: [],
+      };
+
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(mockParams);
+
+      expect(mockOnAfterStep).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolsResult: [
+            expect.objectContaining({
+              apiName: 'search',
+              identifier: 'lobe-web-browsing',
+              output: 'Search found 3 results for "weather"',
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should extract tool output from data field for tools_batch_result', async () => {
+      const mockOnAfterStep = vi.fn();
+      service.registerStepCallbacks('test-operation-1', { onAfterStep: mockOnAfterStep });
+
+      const mockStepResult = {
+        newState: { ...mockState, stepCount: 2, status: 'running' },
+        nextContext: {
+          phase: 'tools_batch_result',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCount: 2,
+            toolResults: [
+              {
+                data: 'Result from tool A',
+                executionTime: 100,
+                isSuccess: true,
+                toolCall: { identifier: 'builtin', apiName: 'searchA', id: 'tc-1' },
+                toolCallId: 'tc-1',
+              },
+              {
+                data: { items: [1, 2, 3] },
+                executionTime: 200,
+                isSuccess: true,
+                toolCall: { identifier: 'lobe-skills', apiName: 'runSkill', id: 'tc-2' },
+                toolCallId: 'tc-2',
+              },
+            ],
+          },
+          session: {
+            sessionId: 'test-operation-1',
+            status: 'running',
+            stepCount: 2,
+            messageCount: 3,
+          },
+        },
+        events: [],
+      };
+
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(mockParams);
+
+      expect(mockOnAfterStep).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolsResult: [
+            expect.objectContaining({
+              apiName: 'searchA',
+              identifier: 'builtin',
+              output: 'Result from tool A',
+            }),
+            expect.objectContaining({
+              apiName: 'runSkill',
+              identifier: 'lobe-skills',
+              output: JSON.stringify({ items: [1, 2, 3] }),
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('should handle tool result with undefined data', async () => {
+      const mockOnAfterStep = vi.fn();
+      service.registerStepCallbacks('test-operation-1', { onAfterStep: mockOnAfterStep });
+
+      const mockStepResult = {
+        newState: { ...mockState, stepCount: 2, status: 'running' },
+        nextContext: {
+          phase: 'tool_result',
+          payload: {
+            data: undefined,
+            toolCall: { identifier: 'builtin', apiName: 'noop', id: 'tc-1' },
+            toolCallId: 'tc-1',
+          },
+          session: {
+            sessionId: 'test-operation-1',
+            status: 'running',
+            stepCount: 2,
+            messageCount: 2,
+          },
+        },
+        events: [],
+      };
+
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(mockParams);
+
+      expect(mockOnAfterStep).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolsResult: [
+            expect.objectContaining({
+              apiName: 'noop',
+              identifier: 'builtin',
+              output: undefined,
+            }),
+          ],
+        }),
+      );
     });
   });
 
@@ -895,19 +1162,31 @@ describe('AgentRuntimeService', () => {
         expect(shouldContinue).toBe(false);
       });
 
-      it('should return false when max steps reached', () => {
+      it('should not check maxSteps — delegated to runtime.step()', () => {
+        // maxSteps is handled by runtime.step() which sets forceFinish → status:'done'
+        // shouldContinueExecution only checks status, not maxSteps
         const shouldContinue = (service as any).shouldContinueExecution(
           { status: 'running', maxSteps: 10, stepCount: 10 },
           { phase: 'user_input' },
         );
-        expect(shouldContinue).toBe(false);
+        expect(shouldContinue).toBe(true);
+      });
+
+      it('should continue when forceFinish is active even at maxSteps', () => {
+        // When runtime sets forceFinish, the service must allow one more step
+        // for the LLM to produce a final text response without tools
+        const shouldContinue = (service as any).shouldContinueExecution(
+          { status: 'running', maxSteps: 5, stepCount: 6, forceFinish: true },
+          { phase: 'llm_result' },
+        );
+        expect(shouldContinue).toBe(true);
       });
 
       it('should return false when cost limit exceeded with stop action', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           {
             status: 'running',
-            cost: { total: 1.0 },
+            cost: { total: 1 },
             costLimit: { maxTotalCost: 0.5, onExceeded: 'stop' },
           },
           { phase: 'user_input' },
@@ -919,7 +1198,7 @@ describe('AgentRuntimeService', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           {
             status: 'running',
-            cost: { total: 1.0 },
+            cost: { total: 1 },
             costLimit: { maxTotalCost: 0.5, onExceeded: 'continue' },
           },
           { phase: 'user_input' },
@@ -991,6 +1270,92 @@ describe('AgentRuntimeService', () => {
         });
         expect(priority).toBe('normal');
       });
+    });
+  });
+
+  describe('interruptOperation', () => {
+    it('should interrupt a running operation', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'op-1',
+        status: 'running',
+        stepCount: 3,
+        lastModified: new Date().toISOString(),
+      });
+
+      const result = await service.interruptOperation('op-1');
+
+      expect(result).toBe(true);
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'op-1',
+        expect.objectContaining({
+          status: 'interrupted',
+          lastModified: expect.any(String),
+        }),
+      );
+    });
+
+    it('should interrupt a waiting_for_human operation', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'op-2',
+        status: 'waiting_for_human',
+        stepCount: 1,
+      });
+
+      const result = await service.interruptOperation('op-2');
+
+      expect(result).toBe(true);
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'op-2',
+        expect.objectContaining({ status: 'interrupted' }),
+      );
+    });
+
+    it('should return false when state not found', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+
+      const result = await service.interruptOperation('non-existent');
+
+      expect(result).toBe(false);
+      expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+    });
+
+    it('should return false when operation already done', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'op-done',
+        status: 'done',
+        stepCount: 5,
+      });
+
+      const result = await service.interruptOperation('op-done');
+
+      expect(result).toBe(false);
+      expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+    });
+
+    it('should return false when operation already in error state', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'op-err',
+        status: 'error',
+        stepCount: 2,
+      });
+
+      const result = await service.interruptOperation('op-err');
+
+      expect(result).toBe(false);
+      expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+    });
+
+    it('should return false when operation already interrupted', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'op-int',
+        status: 'interrupted',
+        stepCount: 4,
+      });
+
+      const result = await service.interruptOperation('op-int');
+
+      expect(result).toBe(false);
+      expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
   });
 });

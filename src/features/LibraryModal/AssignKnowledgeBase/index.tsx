@@ -19,13 +19,13 @@ export const AttachKnowledgeModal = memo<AttachKnowledgeModalProps>(({ setOpen, 
     <Modal
       allowFullscreen
       footer={null}
-      onCancel={() => {
-        setOpen(false);
-      }}
       open={open}
       styles={{ body: { overflow: 'hidden' } }}
       title={t('knowledgeBase.library.title')}
       width={600}
+      onCancel={() => {
+        setOpen(false);
+      }}
     >
       <Flexbox
         gap={mobile ? 8 : 16}

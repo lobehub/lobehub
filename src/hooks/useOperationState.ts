@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { ConversationContext, OperationState } from '@/features/Conversation/types';
+import { type ConversationContext, type OperationState } from '@/features/Conversation/types';
 import {
   DEFAULT_MESSAGE_OPERATION_STATE,
   DEFAULT_TOOL_OPERATION_STATE,
@@ -80,7 +80,7 @@ export const useOperationState = (context: ConversationContext): OperationState 
           isRegenerating: runningOps.some((op) => op.type === 'regenerate'),
         };
       },
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       getToolOperationState: (messageId: string, index: number, _toolCallId?: string) => {
         const state = useChatStore.getState();
 

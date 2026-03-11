@@ -6,15 +6,16 @@ import {
 import { LayersEnum, MemorySourceType } from '@lobechat/types';
 import { errorMessageFrom } from '@lobechat/utils';
 import { Client } from '@upstash/qstash';
-import { WorkflowAbort, WorkflowContext, WorkflowNonRetryableError } from '@upstash/workflow';
+import { type WorkflowContext } from '@upstash/workflow';
+import { WorkflowAbort, WorkflowNonRetryableError } from '@upstash/workflow';
 import { createWorkflow } from '@upstash/workflow/nextjs';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { getServerDB } from '@/database/server';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
   MemoryExtractionExecutor,
-  type MemoryExtractionPayloadInput,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 

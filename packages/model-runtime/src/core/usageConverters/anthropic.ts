@@ -1,7 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { ModelUsage } from '@lobechat/types';
+import type Anthropic from '@anthropic-ai/sdk';
+import type { ModelUsage } from '@lobechat/types';
 
-import { ChatPayloadForTransformStream } from '../streams/protocol';
+import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { withUsageCost } from './utils/withUsageCost';
 
 const buildInitialUsage = (

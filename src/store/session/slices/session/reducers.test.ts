@@ -1,10 +1,10 @@
 import { nanoid } from 'nanoid';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { LobeAgentConfig } from '@/types/agent';
-import { LobeAgentSession, LobeSessions } from '@/types/session';
+import { type LobeSessions } from '@/types/session';
 
-import { SessionDispatch, sessionsReducer } from './reducers';
+import { type SessionDispatch } from './reducers';
+import { sessionsReducer } from './reducers';
 
 describe('sessionsReducer', () => {
   const mockSession = {

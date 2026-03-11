@@ -1,10 +1,10 @@
-import { LobeChatPluginManifest, LobeChatPluginMeta } from '@lobehub/chat-plugin-sdk';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { describe, expect, it } from 'vitest';
 
-import { DiscoverPluginItem } from '@/types/discover';
+import { type DiscoverPluginItem } from '@/types/discover';
 
+import { type ToolStoreState } from '../../initialState';
 import { initialState } from '../../initialState';
-import { ToolStoreState } from '../../initialState';
 import { pluginSelectors } from './selectors';
 
 const mockState = {

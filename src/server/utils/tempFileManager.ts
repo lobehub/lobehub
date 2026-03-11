@@ -29,7 +29,7 @@ export class TempFileManager {
       return filePath;
     } catch (error) {
       this.cleanup(); // Immediately cleanup on write failure
-      throw new Error(`Failed to write temp file: ${(error as Error).message}`);
+      throw new Error(`Failed to write temp file: ${(error as Error).message}`, { cause: error });
     }
   }
 

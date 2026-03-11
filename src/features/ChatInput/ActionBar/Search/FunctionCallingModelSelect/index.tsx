@@ -1,6 +1,8 @@
-import { LobeSelect, type LobeSelectProps, TooltipGroup } from '@lobehub/ui';
+import { TooltipGroup } from '@lobehub/ui';
+import { Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { type ReactNode, memo, useMemo } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -23,7 +25,7 @@ interface ModelOption {
   value: string;
 }
 
-interface ModelSelectProps extends Omit<LobeSelectProps, 'onChange' | 'value'> {
+interface ModelSelectProps extends Omit<SelectProps, 'onChange' | 'value'> {
   onChange?: (props: WorkingModel) => void;
   showAbility?: boolean;
   value?: WorkingModel;
@@ -32,7 +34,7 @@ interface ModelSelectProps extends Omit<LobeSelectProps, 'onChange' | 'value'> {
 const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
   const enabledList = useEnabledChatModels();
 
-  const options = useMemo<LobeSelectProps['options']>(() => {
+  const options = useMemo<SelectProps['options']>(() => {
     const getChatModels = (provider: EnabledProviderWithModels) =>
       provider.children
         .filter((model) => !!model.abilities.functionCall)
@@ -69,16 +71,17 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
 
   return (
     <TooltipGroup>
-      <LobeSelect
-        onChange={(value, option) => {
-          const model = value.split('/').slice(1).join('/');
-          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
-        }}
+      <Select
         options={options}
         popupClassName={styles.select}
         popupMatchSelectWidth={false}
         value={`${value?.provider}/${value?.model}`}
         variant={'filled'}
+        onChange={(value, option) => {
+          if (!value) return;
+          const model = (value as string).split('/').slice(1).join('/');
+          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
+        }}
         {...rest}
       />
     </TooltipGroup>

@@ -1,5 +1,6 @@
 import { revalidateTag } from 'next/cache';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export const GET = async (request: NextRequest) => {
   if (!process.env.REVALIDATE_SECRET) {

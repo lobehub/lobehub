@@ -53,6 +53,9 @@ const PluginSettingsConfig = memo<PluginSettingsConfigProps>(({ schema, id }) =>
       form={form}
       gap={16}
       initialValues={pluginSetting}
+      itemsType={'flat'}
+      layout={'vertical'}
+      variant={'borderless'}
       items={items.map((item) => ({
         children: (
           <ItemRender
@@ -74,12 +77,9 @@ const PluginSettingsConfig = memo<PluginSettingsConfigProps>(({ schema, id }) =>
         tag: item.tag,
         valuePropName: item.type === 'boolean' ? 'checked' : undefined,
       }))}
-      itemsType={'flat'}
-      layout={'vertical'}
       onFinish={async (v) => {
         await updatePluginSettings(id, v);
       }}
-      variant={'borderless'}
     />
   );
 });

@@ -14,6 +14,7 @@
   "table.columns.totalTokens": "Zużycie tokenów",
   "table.columns.type.enums.chat": "Generowanie tekstu",
   "table.columns.type.enums.imageGeneration": "Generowanie obrazów",
+  "table.columns.type.enums.videoGeneration": "Generowanie wideo",
   "table.columns.type.title": "Typ",
   "table.desc": "Szczegóły dotyczące wykorzystania kredytów obliczeniowych na generowanie tekstu, osadzanie, generowanie obrazów itp.",
   "table.more": "Zobacz szczegóły",

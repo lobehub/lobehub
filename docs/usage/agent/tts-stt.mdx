@@ -1,33 +1,80 @@
 ---
 title: Text-to-Speech & Speech-to-Text
 description: >-
-  Learn how to use the text-to-speech (TTS) and speech-to-text (STT) features in
-  LobeHub, including how to configure your preferred voice model.
+  Listen to Agent responses hands-free, speak instead of typing — TTS and STT
+  for natural voice conversations.
 tags:
   - LobeHub
-  - Text-to-Speech
   - TTS
   - STT
-  - Voice Model
+  - Voice
+  - Hands-Free
 ---
 
-# Guide to Text-to-Speech & Speech-to-Text
+# Text-to-Speech & Speech-to-Text
 
-LobeHub supports text and voice conversion features, allowing users to input content via speech and have AI responses read aloud using voice synthesis.
+LobeHub supports voice capabilities — listen to Agent responses hands-free, speak your messages instead of typing, and hold natural back-and-forth voice conversations. TTS converts text to speech; STT converts your voice to text.
+
+## Overview
+
+Voice features in LobeHub provide:
+
+- **Text-to-Speech (TTS)**: Convert AI text responses into spoken audio
+- **Speech-to-Text (STT)**: Speak your messages instead of typing
+- **Hands-Free Mode**: Continuous voice conversations combining both
+- **Multiple Providers**: Choose from various voice styles and languages
+- **Per-Agent Voices**: Configure unique voices for different agents
 
 ## Text-to-Speech (TTS)
+
+TTS converts AI text responses into spoken audio, allowing you to listen instead of read.
 
 To have AI read text aloud, simply highlight any content in the chat window and select `Text-to-Speech`. The AI will use a TTS model to convert the selected text into speech.
 
 <Image alt={'TTS'} src={'/blog/assets907ea775d228958baca38e2dbb65939a.webp'} />
 
-## Speech-to-Text (STT)
+You can also configure an Agent to automatically read all responses as soon as each message completes — useful for hands-free workflows.
 
-To input text using your voice, click the voice input option in the message box. LobeHub will convert your speech into text and insert it into the input field. Once you're done, you can send it directly to the AI.
+### Voice Providers and Options
 
-<Image alt={'STT'} src={'/blog/assets34424062ad6ab98df7f56c9e61341be5.webp'} />
+LobeHub supports two voice providers:
 
-## Configuring Voice Conversion Settings
+<Tabs>
+  <Tab title="OpenAI Voices">
+    Premium neural voices with natural prosody and intonation:
+
+    | Voice   | Character           |
+    | ------- | ------------------- |
+    | Alloy   | Neutral, balanced   |
+    | Echo    | Clear, professional |
+    | Fable   | Warm, friendly      |
+    | Onyx    | Deep, authoritative |
+    | Nova    | Energetic, engaging |
+    | Shimmer | Soft, gentle        |
+
+    **Best for**: Long-form content listening, professional use cases, content requiring natural flow.
+  </Tab>
+
+  <Tab title="Microsoft Edge Speech">
+    Azure Neural Voices — an extensive library with 100+ voices across languages, regional accents (US, UK, AU, and more), and male/female options.
+
+    **Best for**: Specific accent requirements, multi-language content, variety.
+  </Tab>
+</Tabs>
+
+### Playback Controls
+
+When audio is playing:
+
+- **Play/Pause** — Control playback
+- **Progress bar** — See and seek through audio
+- **Speed control** — Adjust playback speed (0.5× to 2×)
+- **Volume** — Adjust audio level
+- **Download** — Save audio file for offline use
+
+TTS audio is automatically cached — the first playback generates audio in real time, and subsequent playbacks are instant from cache.
+
+### Configuring Voice Settings
 
 You can customize the voice conversion experience by selecting your preferred models in the settings.
 
@@ -36,3 +83,96 @@ You can customize the voice conversion experience by selecting your preferred mo
 - Open the `Settings` panel
 - Navigate to the `Text-to-Speech` section
 - Choose your desired voice service and AI model
+
+Each Agent can have its own voice. To configure per-Agent: open Agent settings → TTS section → select voice provider → choose a voice → test with sample text → save.
+
+## Speech-to-Text (STT)
+
+STT converts your spoken words into text, enabling voice input for messages.
+
+To input text using your voice, click the voice input option in the message box. LobeHub will convert your speech into text and insert it into the input field. Once you're done, you can send it directly to the AI.
+
+<Image alt={'STT'} src={'/blog/assets34424062ad6ab98df7f56c9e61341be5.webp'} />
+
+### Supported Languages
+
+STT supports a wide range of languages including English (US, UK, AU, CA, IN), Spanish, French, German, Italian, Portuguese, Chinese (Mandarin), Japanese, Korean, and many more. Language is typically auto-detected or set based on your interface language.
+
+### Tips for Best Results
+
+<AccordionGroup>
+  <Accordion title="Speak Clearly">
+    Use a normal pace and enunciate. Avoid mumbling or speaking too quickly.
+  </Accordion>
+
+  <Accordion title="Optimize Your Environment">
+    Use good microphone positioning and minimize background noise for better accuracy.
+  </Accordion>
+
+  <Accordion title="Use Complete Sentences">
+    Speak in complete sentences and pause briefly between thoughts for more accurate transcription.
+  </Accordion>
+
+  <Accordion title="Review Before Sending">
+    After voice input, review the transcribed text, edit any mistakes, and send when ready. This hybrid approach combines the speed of voice with the precision of text editing.
+  </Accordion>
+</AccordionGroup>
+
+## Voice Conversations (Hands-Free Mode)
+
+Combine TTS and STT for natural, continuous voice conversations:
+
+1. Configure your agent to use automatic TTS playback
+2. Click the microphone and speak your message
+3. Review the transcription and send
+4. The AI response plays automatically via TTS
+5. Speak your next message when ready
+
+### Use Cases
+
+<Tabs>
+  <Tab title="Accessibility">
+    Screen reader users, users with mobility limitations, or anyone who prefers audio interaction. Voice mode makes LobeHub accessible to a broader range of users.
+  </Tab>
+
+  <Tab title="Language Learning">
+    Practice speaking in a target language and hear correct pronunciation via TTS. The AI can provide feedback on phrasing and suggest improvements.
+  </Tab>
+
+  <Tab title="Multitasking">
+    Get AI assistance while cooking, commuting, or exercising. Hands-free mode lets you interact without looking at a screen.
+  </Tab>
+
+  <Tab title="Content Consumption">
+    Listen to long articles, research papers, or learning materials at your own pace. Adjust speed to match your preference.
+  </Tab>
+</Tabs>
+
+## Performance
+
+- **Sample rates**: Voice output supports standard audio sample rates for high-quality playback
+- **Latency**: First playback requires real-time generation; cached playback is instant
+- **Formats**: Audio is generated in optimized formats for web playback
+- **Caching**: TTS output is cached locally to avoid redundant generation
+
+## Privacy Note
+
+<Callout type={'warning'}>
+  Voice input is processed by AI services for transcription. Avoid speaking sensitive information
+  unless you are using a private or local deployment.
+</Callout>
+
+Voice data handling:
+
+- STT audio is sent to the provider for transcription
+- TTS audio is cached locally for performance
+- Audio is not stored permanently by providers
+- Transcriptions become part of conversation data
+
+Best practices: review transcriptions before sending, don't speak passwords or sensitive data, and clear the local audio cache periodically if you are concerned about storage.
+
+<Cards>
+  <Card href={'/docs/usage/agent/translate'} title={'Conversation Translation'} />
+
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+</Cards>

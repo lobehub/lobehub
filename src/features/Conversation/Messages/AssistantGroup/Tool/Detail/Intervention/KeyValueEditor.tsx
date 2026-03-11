@@ -1,5 +1,6 @@
 import { ActionIcon, Button, Flexbox, Icon, Input } from '@lobehub/ui';
-import { App, Form, type FormInstance } from 'antd';
+import { type FormInstance } from 'antd';
+import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -114,7 +115,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
       initialValues={{ items: recordToFormList(initialValue) }}
       ref={formRef}
     >
-      <Flexbox className={styles.title} gap={8} horizontal>
+      <Flexbox horizontal className={styles.title} gap={8}>
         <Flexbox flex={1}>key</Flexbox>
         <Flexbox flex={4}>value</Flexbox>
       </Flexbox>
@@ -123,10 +124,10 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
           <Flexbox width={'100%'}>
             {fields.map(({ key, name, ...restField }, index) => (
               <Flexbox
+                horizontal
                 align="center"
                 className={styles.row}
                 gap={8}
-                horizontal
                 key={key}
                 width={'100%'}
               >
@@ -134,6 +135,8 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                   {...restField}
                   className={styles.formItem}
                   name={[name, 'key']}
+                  style={{ flex: 1 }}
+                  validateTrigger={['onChange', 'onBlur']}
                   rules={[
                     { message: t('updateArgs.keyRequired'), required: true },
                     {
@@ -145,8 +148,6 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                         ),
                     },
                   ]}
-                  style={{ flex: 1 }}
-                  validateTrigger={['onChange', 'onBlur']}
                 >
                   <Input
                     allowClear
@@ -170,32 +171,32 @@ const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish,
                 </Form.Item>
                 <ActionIcon
                   icon={LucideTrash}
-                  onClick={() => remove(name)}
                   size={'small'}
+                  title={t('delete', { ns: 'common' })}
                   style={{
                     marginBottom: 6,
                   }}
-                  title={t('delete', { ns: 'common' })}
+                  onClick={() => remove(name)}
                 />
               </Flexbox>
             ))}
             <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>
-              <Flexbox gap={8} horizontal justify={'space-between'}>
+              <Flexbox horizontal gap={8} justify={'space-between'}>
                 <Button
                   color={'default'}
                   icon={<Icon icon={LucidePlus} />}
-                  onClick={() => add({ id: `new-${Date.now()}`, key: '', value: '' })}
                   size={'small'}
                   variant="filled"
+                  onClick={() => add({ id: `new-${Date.now()}`, key: '', value: '' })}
                 >
                   {t('updateArgs.form.add')}
                 </Button>
 
-                <Flexbox gap={8} horizontal>
-                  <Button onClick={handleCancel} size={'small'}>
+                <Flexbox horizontal gap={8}>
+                  <Button size={'small'} onClick={handleCancel}>
                     {t('cancel', { ns: 'common' })}
                   </Button>
-                  <Button loading={updating} onClick={handleFinish} size={'small'} type={'primary'}>
+                  <Button loading={updating} size={'small'} type={'primary'} onClick={handleFinish}>
                     {t('save', { ns: 'common' })}
                   </Button>
                 </Flexbox>

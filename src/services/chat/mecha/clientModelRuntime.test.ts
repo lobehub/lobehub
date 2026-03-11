@@ -1,3 +1,4 @@
+import { type LobeOpenAICompatibleRuntime } from '@lobechat/model-runtime';
 import {
   LobeAnthropicAI,
   LobeAzureOpenAI,
@@ -9,7 +10,6 @@ import {
   LobeMoonshotAI,
   LobeOllamaAI,
   LobeOpenAI,
-  LobeOpenAICompatibleRuntime,
   LobeOpenRouterAI,
   LobePerplexityAI,
   LobeQwenAI,

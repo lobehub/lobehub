@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
 
 import { styles } from '../style';
-import type { ChatItemProps } from '../type';
+import { type ChatItemProps } from '../type';
 
 export interface LoadingProps {
   loading?: ChatItemProps['loading'];
@@ -15,7 +15,7 @@ const Loading = memo<LoadingProps>(({ loading }) => {
 
   return (
     <Flexbox align={'center'} className={styles.loading} justify={'center'}>
-      <Icon icon={Loader2} size={{ size: 12, strokeWidth: 3 }} spin />
+      <Icon spin icon={Loader2} size={{ size: 12, strokeWidth: 3 }} />
     </Flexbox>
   );
 });

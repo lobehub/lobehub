@@ -1,11 +1,10 @@
-import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ModelConfig } from '@/server/services/comfyui/config/modelRegistry';
+import { type ModelConfig } from '@/server/services/comfyui/config/modelRegistry';
 import { resolveModel } from '@/server/services/comfyui/utils/staticModelLookup';
-import {
-  type SD3Variant,
-  WorkflowDetector,
-} from '@/server/services/comfyui/utils/workflowDetector';
+import { type SD3Variant } from '@/server/services/comfyui/utils/workflowDetector';
+import { WorkflowDetector } from '@/server/services/comfyui/utils/workflowDetector';
 
 // Mock static model lookup functions
 vi.mock('../../utils/staticModelLookup', () => ({

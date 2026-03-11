@@ -29,11 +29,11 @@ export type InsertEvaluationRecord = z.infer<typeof insertEvaluationSchema>;
 export interface RAGEvalEvaluationItem {
   createdAt: Date;
   dataset: {
-    id: number;
+    id: string;
     name: string;
   };
   evalRecordsUrl?: string;
-  id: number;
+  id: string;
   name: string;
   recordsStats: {
     success: number;
@@ -44,7 +44,7 @@ export interface RAGEvalEvaluationItem {
 }
 
 export const insertEvalEvaluationSchema = z.object({
-  datasetId: z.number(),
+  datasetId: z.string(),
   description: z.string().optional(),
   knowledgeBaseId: z.string(),
   name: z.string(),

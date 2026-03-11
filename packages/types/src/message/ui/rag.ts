@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
-import { MessageSemanticSearchChunk } from '../../rag';
+import type { MessageSemanticSearchChunk } from '../../rag';
 
 export interface ChatFileChunk {
   fileId: string;
+  filename: string;
   fileType: string;
   fileUrl: string;
-  filename: string;
   id: string;
   similarity?: number;
   text: string;

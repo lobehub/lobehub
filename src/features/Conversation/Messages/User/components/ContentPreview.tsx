@@ -23,11 +23,11 @@ const ContentPreview = ({ content, id }: ContentPreviewProps) => {
         <Button
           block
           color={'default'}
+          size={'small'}
+          variant={'filled'}
           onClick={() => {
             openMessageDetail(id);
           }}
-          size={'small'}
-          variant={'filled'}
         >
           {t('chatList.longMessageDetail')}
         </Button>

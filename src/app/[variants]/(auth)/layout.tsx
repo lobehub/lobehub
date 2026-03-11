@@ -1,17 +1,23 @@
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { type FC, type PropsWithChildren } from 'react';
+import { type PropsWithChildren } from 'react';
 
 import ClientOnly from '@/components/client/ClientOnly';
+import { type DynamicLayoutProps } from '@/types/next';
 
 import AuthContainer from './_layout';
+import AuthGlobalProvider from './_layout/AuthGlobalProvider';
 
-const AuthLayout: FC<PropsWithChildren> = ({ children }) => {
+const AuthLayout = async ({ children, params }: PropsWithChildren<DynamicLayoutProps>) => {
+  const { variants } = await params;
+
   return (
-    <ClientOnly>
-      <NuqsAdapter>
-        <AuthContainer>{children}</AuthContainer>
-      </NuqsAdapter>
-    </ClientOnly>
+    <AuthGlobalProvider variants={variants}>
+      <ClientOnly>
+        <NuqsAdapter>
+          <AuthContainer>{children}</AuthContainer>
+        </NuqsAdapter>
+      </ClientOnly>
+    </AuthGlobalProvider>
   );
 };
 

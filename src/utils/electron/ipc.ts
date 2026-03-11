@@ -1,5 +1,5 @@
 import { getElectronIpc } from '@lobechat/electron-client-ipc';
-import type { DesktopIpcServices } from '@lobehub/desktop-ipc-typings';
+import { type DesktopIpcServices } from '@lobehub/desktop-ipc-typings';
 
 export const ensureElectronIpc = (): DesktopIpcServices => {
   const ipc = getElectronIpc();

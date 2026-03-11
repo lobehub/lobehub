@@ -1,8 +1,8 @@
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
-  type ChatTTS,
   type ChatTranslate,
+  type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
   type MessageMetadata,
@@ -13,7 +13,7 @@ import {
   type UpdateMessageRAGParams,
   type UpdateMessageResult,
 } from '@lobechat/types';
-import type { HeatmapsProps } from '@lobehub/charts';
+import { type HeatmapsProps } from '@lobehub/charts';
 
 import { lambdaClient } from '@/libs/trpc/client';
 

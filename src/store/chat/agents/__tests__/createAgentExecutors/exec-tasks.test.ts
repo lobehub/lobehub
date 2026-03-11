@@ -1,5 +1,5 @@
-import type { AgentRuntimeContext, TasksBatchResultPayload } from '@lobechat/agent-runtime';
-import type { Mock } from 'vitest';
+import { type AgentRuntimeContext, type TasksBatchResultPayload } from '@lobechat/agent-runtime';
+import { type Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 
 import { aiAgentService } from '@/services/aiAgent';

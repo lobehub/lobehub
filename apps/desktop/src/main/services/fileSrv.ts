@@ -1,8 +1,9 @@
-import { DeleteFilesResponse } from '@lobechat/electron-server-ipc';
 import * as fs from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path, { join } from 'node:path';
 import { promisify } from 'node:util';
+
+import type { DeleteFilesResponse } from '@lobechat/electron-server-ipc';
 
 import { FILE_STORAGE_DIR, LOCAL_STORAGE_URL_PREFIX } from '@/const/dir';
 import { makeSureDirExist } from '@/utils/file-system';
@@ -158,7 +159,7 @@ export default class FileService extends ServiceModule {
   async getFile(path: string): Promise<{ content: ArrayBuffer; mimeType: string }> {
     logger.info(`Getting file content: ${path}`);
     try {
-      // 处理desktop://路径
+      // Handle desktop:// paths
       if (!path.startsWith('desktop://')) {
         logger.error(`Invalid desktop file path: ${path}`);
         throw new Error(`Invalid desktop file path: ${path}`);
@@ -208,7 +209,7 @@ export default class FileService extends ServiceModule {
             logger.error(
               `Both legacy and fallback paths failed. Legacy error: ${(firstError as Error).message}, Fallback error: ${(fallbackError as Error).message}`,
             );
-            throw firstError; // 抛出原始错误
+            throw firstError; // Re-throw the original error
           }
         } else {
           throw firstError;
@@ -286,7 +287,7 @@ export default class FileService extends ServiceModule {
   async deleteFile(path: string): Promise<{ success: boolean }> {
     logger.info(`Deleting file: ${path}`);
     try {
-      // 处理desktop://路径
+      // Handle desktop:// paths
       if (!path.startsWith('desktop://')) {
         logger.error(`Invalid desktop file path: ${path}`);
         throw new Error(`Invalid desktop file path: ${path}`);
@@ -333,7 +334,7 @@ export default class FileService extends ServiceModule {
             logger.error(
               `Both legacy and fallback deletion failed. Legacy error: ${(firstError as Error).message}, Fallback error: ${(fallbackError as Error).message}`,
             );
-            throw firstError; // 抛出原始错误
+            throw firstError; // Re-throw the original error
           }
         } else {
           throw firstError;

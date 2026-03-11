@@ -2,7 +2,6 @@ import type { ProxyTRPCStreamRequestParams } from './types';
 import { headersToRecord } from './utils/headers';
 import { getRequestBody } from './utils/request';
 
-// eslint-disable-next-line no-undef
 export const streamInvoke = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = input.toString();
   const parsedUrl = new URL(url, window.location.origin);
@@ -31,7 +30,7 @@ export const streamInvoke = async (input: RequestInfo | URL, init?: RequestInit)
       cancel() {
         // This will be called if the consumer of the stream calls .cancel()
         // We should clean up the IPC listeners
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
         cleanup?.();
       },
       start(controller) {

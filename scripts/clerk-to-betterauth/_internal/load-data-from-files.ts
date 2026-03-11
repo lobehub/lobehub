@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { resolveDataPaths } from './config';
-import { CSVUserRow, ClerkUser } from './types';
+import type { ClerkUser, CSVUserRow } from './types';
 
 export function parseCsvLine(line: string): string[] {
   const cells: string[] = [];

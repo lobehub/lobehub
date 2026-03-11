@@ -1,17 +1,18 @@
 import OpenAI from 'openai';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from './core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from './core/BaseAI';
 import * as debugStreamModule from './utils/debugStream';
 
 interface TesstProviderParams {
-  Runtime: any;
   bizErrorType?: string;
   chatDebugEnv: string;
   chatModel: string;
   defaultBaseURL: string;
   invalidErrorType?: string;
   provider: string;
+  Runtime: any;
   test?: {
     skipAPICall?: boolean;
     skipErrorHandle?: boolean;
@@ -236,7 +237,7 @@ export const testProvider = ({
               // Expect the chat method to throw an error with InvalidHunyuanAPIKey
               expect(e).toEqual({
                 endpoint: defaultBaseURL,
-                error: error,
+                error,
                 errorType: invalidErrorType,
                 provider,
               });

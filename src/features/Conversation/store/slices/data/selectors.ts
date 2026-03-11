@@ -1,9 +1,9 @@
-import type { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
+import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
 
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
-import type { State } from '../../initialState';
+import { type State } from '../../initialState';
 
 const displayMessages = (s: State) => s.displayMessages;
 const displayMessageIds = (s: State) => s.displayMessages.map((m) => m.id);

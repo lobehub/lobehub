@@ -49,17 +49,17 @@ const StatusIndicator = memo<StatusIndicatorProps>(({ intervention, result }) =>
 
   return (
     <Block
+      horizontal
       align={'center'}
       flex={'none'}
       gap={4}
       height={24}
-      horizontal
       justify={'center'}
+      variant={'outlined'}
+      width={24}
       style={{
         fontSize: 12,
       }}
-      variant={'outlined'}
-      width={24}
     >
       {icon}
     </Block>

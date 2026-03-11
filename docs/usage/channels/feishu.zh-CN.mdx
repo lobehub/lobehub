@@ -1,0 +1,177 @@
+---
+title: 将 LobeHub 连接到飞书 / Lark
+description: 了解如何创建飞书（Lark）自定义应用并将其连接到您的 LobeHub 代理作为消息渠道，使您的 AI 助手能够在飞书或 Lark 聊天中与团队成员互动。
+tags:
+  - 飞书
+  - Lark
+  - 消息渠道
+  - 机器人设置
+  - 集成
+---
+
+# 将 LobeHub 连接到飞书 / Lark
+
+<Callout type={'info'}>
+  此功能目前正在开发中，可能尚未完全稳定。您可以通过在 **设置** → **高级设置** → **开发者模式**
+  中启用 **开发者模式** 来使用此功能。
+</Callout>
+
+通过将飞书（或 Lark）渠道连接到您的 LobeHub 代理，团队成员可以直接在飞书的私聊和群组对话中与 AI 助手互动。
+
+> 飞书是中国版本，Lark 是国际版本。设置过程完全相同 —— 只需使用对应的平台门户即可。
+
+## 前置条件
+
+- 一个拥有有效订阅的 LobeHub 账户
+- 一个拥有创建企业应用权限的飞书或 Lark 账户
+
+## 第一步：创建飞书 / Lark 应用
+
+<Steps>
+  ### 打开开发者门户
+
+  - **飞书：** 访问 [open.feishu.cn/app](https://open.feishu.cn/app)
+  - **Lark：** 访问 [open.larksuite.com/app](https://open.larksuite.com/app)
+
+  使用您的账户登录。
+
+  ### 创建企业应用
+
+  点击 **创建企业应用**。填写应用名称（例如 "LobeHub 助手"）、描述和图标，然后提交表单。
+
+  ### 复制应用凭证
+
+  进入 **凭证与基本信息**，复制以下内容：
+
+  - **应用 ID**（格式：`cli_xxx`）
+  - **应用密钥**
+
+  > **重要提示：** 请妥善保管您的应用密钥。切勿公开分享。
+</Steps>
+
+## 第二步：配置应用权限和机器人功能
+
+<Steps>
+  ### 导入所需权限
+
+  在您的应用设置中，进入 **权限与范围**，点击 **批量导入**，然后粘贴以下 JSON 以授予机器人所需的所有权限。
+
+  ```json
+  {
+    "scopes": {
+      "tenant": [
+        "aily:file:read",
+        "aily:file:write",
+        "application:application.app_message_stats.overview:readonly",
+        "application:application:self_manage",
+        "application:bot.menu:write",
+        "cardkit:card:read",
+        "cardkit:card:write",
+        "contact:user.employee_id:readonly",
+        "corehr:file:download",
+        "event:ip_list",
+        "im:chat.access_event.bot_p2p_chat:read",
+        "im:chat.members:bot_access",
+        "im:message",
+        "im:message.group_at_msg:readonly",
+        "im:message.p2p_msg:readonly",
+        "im:message:readonly",
+        "im:message:send_as_bot",
+        "im:resource"
+      ],
+      "user": [
+        "aily:file:read",
+        "aily:file:write",
+        "im:chat.access_event.bot_p2p_chat:read"
+      ]
+    }
+  }
+  ```
+
+  <Callout type={'warning'}>
+    以上 JSON 适用于**飞书**。如果您使用的是 **Lark（国际版）**，部分权限码可能不可用（如 `aily:*`、`corehr:*`、`im:chat.access_event.bot_p2p_chat:read`）。请移除批量导入时提示无效的权限码。
+  </Callout>
+
+  ### 启用机器人功能
+
+  进入 **应用能力** → **机器人**。开启机器人功能并设置您喜欢的机器人名称。
+</Steps>
+
+## 第三步：在 LobeHub 中配置飞书 / Lark
+
+<Steps>
+  ### 打开渠道设置
+
+  在 LobeHub 中，导航到您的代理设置，然后选择 **渠道** 标签。点击平台列表中的 **飞书** 或 **Lark**。
+
+  ### 填写应用凭证
+
+  输入以下字段：
+
+  - **应用 ID** — 来自飞书 / Lark 应用的应用 ID
+  - **应用密钥** — 来自飞书 / Lark 应用的应用密钥
+  - **Verification Token** — 用于验证 webhook 事件是否来自飞书 / Lark
+
+  您还可以选择配置以下内容：
+
+  - **Encrypt Key** — 用于解密飞书 / Lark 的加密事件负载
+
+  > Verification Token 和 Encrypt Key 可以在飞书 / Lark 开发者门户的 **事件订阅** → **加密策略** 中找到（位于页面顶部）。如果您还没有打开过事件订阅页面，可以在完成第四步后再回来填写 Verification Token。
+
+  ### 保存并复制 Webhook URL
+
+  点击 **保存配置**。保存后，将显示一个 **事件订阅 URL**。复制此 URL—— 您将在下一步中需要它。
+</Steps>
+
+## 第四步：在飞书 / Lark 中设置事件订阅
+
+<Steps>
+  ### 打开事件订阅设置
+
+  返回飞书 / Lark 开发者门户中的应用。导航到 **事件订阅**。
+
+  ### 配置请求 URL
+
+  将您从 LobeHub 复制的 **事件订阅 URL** 粘贴到 **请求 URL** 字段中。平台会自动验证端点。
+
+  ### 添加消息事件
+
+  添加以下事件：
+
+  - `im.message.receive_v1` — 当收到消息时触发
+
+  这将使您的应用能够接收消息并将其转发到 LobeHub。
+</Steps>
+
+## 第五步：发布应用
+
+<Steps>
+  ### 创建版本
+
+  在您的应用设置中，进入 **版本管理与发布**。创建一个新版本并填写发布说明。
+
+  ### 提交审核
+
+  提交版本进行审核并发布。对于企业自管理应用，通常会自动批准。
+</Steps>
+
+## 第六步：测试连接
+
+回到 LobeHub 的渠道设置，点击 **测试连接** 以验证凭证。然后在飞书 / Lark 中搜索您的机器人名称并发送消息，确认其是否响应。
+
+## 配置参考
+
+| 字段                     | 是否必需 | 描述                              |
+| ---------------------- | ---- | ------------------------------- |
+| **应用 ID**              | 是    | 您的飞书 / Lark 应用的应用 ID（`cli_xxx`） |
+| **应用密钥**               | 是    | 您的飞书 / Lark 应用的应用密钥             |
+| **Verification Token** | 是    | 验证 webhook 事件来源                 |
+| **Encrypt Key**        | 否    | 解密加密事件负载                        |
+| **事件订阅 URL**           | —    | 保存后自动生成；粘贴到飞书 / Lark 开发者门户      |
+
+## 故障排除
+
+- **事件订阅 URL 验证失败：** 确保您已在 LobeHub 中保存配置，并正确复制了 URL。
+- **机器人未响应：** 验证应用已发布并获得批准，机器人功能已启用，并订阅了 `im.message.receive_v1` 事件。
+- **权限错误：** 确保所有所需权限已在开发者门户中添加并获得批准。
+- **测试连接失败：** 仔细检查应用 ID 和应用密钥。对于 Lark，请确保您在 LobeHub 的渠道设置中选择了 "Lark"（而不是 "飞书"）。

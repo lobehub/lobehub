@@ -1,9 +1,9 @@
-import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import type { FC } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import { type FC } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso } from 'react-virtuoso';
 
+import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
@@ -11,7 +11,7 @@ import { useBuildListItems } from '../../hooks/useBuildListItems';
 import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
-import type { GroupMode } from '../../types';
+import { type GroupMode } from '../../types';
 import { menuKey } from '../../utils';
 import { ListItemRenderer } from './ListItemRenderer';
 
@@ -34,8 +34,9 @@ export const List: FC<ListProps> = ({
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
+  const { isModelRestricted, onRestrictedModelClick } = useBusinessModelListGuard();
+  const proLabel = isModelRestricted ? tCommon('pro') : undefined;
 
-  const [isScrolling, setIsScrolling] = useState(false);
   const enabledList = useEnabledChatModels();
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
@@ -54,47 +55,71 @@ export const List: FC<ListProps> = ({
 
   const activeKey = menuKey(provider, model);
 
-  const handleScrollingStateChange = useCallback((scrolling: boolean) => {
-    setIsScrolling(scrolling);
-  }, []);
+  // Set initial scroll position to keep active model centered
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const activeNodeRef = useRef<HTMLDivElement | null>(null);
+  const hasInitializedPositionRef = useRef(false);
 
-  const itemContent = useCallback(
-    (index: number) => {
-      const item = listItems[index];
-      return (
-        <ListItemRenderer
-          activeKey={activeKey}
-          isScrolling={isScrolling}
-          item={item}
-          newLabel={newLabel}
-          onClose={handleClose}
-          onModelChange={handleModelChange}
-        />
-      );
-    },
-    [activeKey, handleClose, handleModelChange, isScrolling, listItems, newLabel],
-  );
+  const activeItemRef = useCallback((node: HTMLDivElement | null) => {
+    activeNodeRef.current = node;
+  }, []);
 
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;
 
+  useLayoutEffect(() => {
+    if (hasInitializedPositionRef.current) return;
+
+    const container = listRef.current;
+    const activeNode = activeNodeRef.current;
+    if (!container || !activeNode) return;
+
+    const targetScrollTop =
+      activeNode.offsetTop - (container.clientHeight - activeNode.offsetHeight) / 2;
+    container.scrollTop = Math.max(0, targetScrollTop);
+    hasInitializedPositionRef.current = true;
+  }, [listHeight, activeKey]);
+
   return (
-    <Flexbox
-      className={styles.list}
-      flex={1}
-      style={{
-        height: listHeight,
-        paddingBlock: groupMode === 'byModel' ? 8 : 0,
-      }}
-    >
-      <TooltipGroup>
-        <Virtuoso
-          isScrolling={handleScrollingStateChange}
-          itemContent={itemContent}
-          overscan={200}
-          style={{ height: listHeight }}
-          totalCount={listItems.length}
-        />
-      </TooltipGroup>
+    <Flexbox className={styles.list} flex={1} ref={listRef} style={{ height: listHeight }}>
+      {listItems.map((item, index) => {
+        const itemKey = menuKey(
+          'provider' in item && item.provider ? item.provider.id : '',
+          'model' in item && item.model
+            ? item.model.id
+            : 'data' in item && item.data
+              ? item.data.displayName
+              : `${item.type}-${index}`,
+        );
+        const isActive =
+          (item.type === 'provider-model-item' &&
+            menuKey(item.provider.id, item.model.id) === activeKey) ||
+          (item.type === 'model-item-single' &&
+            menuKey(item.data.providers[0].id, item.data.model.id) === activeKey) ||
+          (item.type === 'model-item-multiple' &&
+            item.data.providers.some((p) => menuKey(p.id, item.data.model.id) === activeKey));
+
+        const renderItem = (key?: string) => (
+          <ListItemRenderer
+            activeKey={activeKey}
+            isModelRestricted={isModelRestricted}
+            item={item}
+            key={key}
+            newLabel={newLabel}
+            proLabel={proLabel}
+            onClose={handleClose}
+            onModelChange={handleModelChange}
+            onRestrictedModelClick={onRestrictedModelClick}
+          />
+        );
+
+        return isActive ? (
+          <div key={itemKey} ref={activeItemRef}>
+            {renderItem()}
+          </div>
+        ) : (
+          renderItem(itemKey)
+        );
+      })}
     </Flexbox>
   );
 };

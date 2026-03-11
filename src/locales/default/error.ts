@@ -1,6 +1,7 @@
 export default {
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
+  'error.stack': 'Error Stack',
   'error.retry': 'Reload',
   'error.title': 'Oops, something went wrong..',
   'fetchError.detail': 'Error details',
@@ -10,19 +11,6 @@ export default {
   'import.incompatible.description':
     'This file was exported from a higher version. Please try upgrading to the latest version and then re-importing.',
   'import.incompatible.title': 'Current application does not support importing this file',
-  'inviteCode.continue': 'Continue',
-  'inviteCode.currentEmail': 'Current account: {{email}}',
-  'inviteCode.desc':
-    'An invite code is required to access LobeHub. Please enter a valid invite code to continue.',
-  'inviteCode.friends': 'Ask a friend',
-  'inviteCode.joinUsOn': 'Join us on',
-  'inviteCode.lookingForInvite': 'Looking for an invite?',
-  'inviteCode.notYou': 'Not you?',
-  'inviteCode.openingInStages': 'is opening in stages.',
-  'inviteCode.placeholder': 'Invite code or link',
-  'inviteCode.pleaseEnterCode': 'Enter your invite code to continue.',
-  'inviteCode.switchAccount': 'Switch account',
-  'inviteCode.title': "You're Almost In",
   'loginRequired.desc': 'You will be redirected to the login page shortly',
   'loginRequired.title': 'Please log in to use this feature',
   'notFound.backHome': 'Back to Home',
@@ -118,8 +106,14 @@ export default {
     'Sorry, the message could not be sent successfully. Please copy the content and try sending it again. This message will not be retained after refreshing the page.',
   'response.ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  'response.ExceededContextWindowCloud':
+    'The conversation is too long to process. Please edit your last message to reduce input or delete some messages and try again.',
+  'response.QuotaLimitReachedCloud':
+    'The model service is currently under heavy load. Please try again later.',
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+  'response.InsufficientBudgetForModel':
+    'Your remaining credits are insufficient for this model. Please top up credits, upgrade your plan, or try a less expensive model.',
   'response.GoogleAIBlockReason.BLOCKLIST':
     'Your content contains prohibited terms. Please review and modify your input, then try again.',
   'response.GoogleAIBlockReason.IMAGE_SAFETY':

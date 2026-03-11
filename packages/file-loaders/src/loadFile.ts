@@ -1,6 +1,7 @@
-import debug from 'debug';
 import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
+
+import debug from 'debug';
 
 import { getFileLoader } from './loaders';
 import type { DocumentPage, FileDocument, FileMetadata, SupportedFileType } from './types';

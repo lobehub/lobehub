@@ -24,13 +24,13 @@ interface UsageProps {
 const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={styles.container}
       gap={12}
-      horizontal
       justify={'space-between'}
     >
-      <Center gap={4} horizontal style={{ fontSize: 12 }}>
+      <Center horizontal gap={4} style={{ fontSize: 12 }}>
         <ModelIcon model={model as string} type={'mono'} />
         {model}
       </Center>

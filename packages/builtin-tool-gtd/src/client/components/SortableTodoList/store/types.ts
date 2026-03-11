@@ -1,4 +1,4 @@
-import { DebouncedFunc } from 'es-toolkit/compat';
+import type { DebouncedFunc } from 'es-toolkit/compat';
 
 import type { TodoItem } from '../../../../types';
 

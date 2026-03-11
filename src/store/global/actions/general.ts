@@ -1,41 +1,38 @@
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
 import { type SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
 
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalService } from '@/services/global';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
-import type { SystemStatus } from '@/store/global/initialState';
+import { type SystemStatus } from '@/store/global/initialState';
+import { type StoreSetter } from '@/store/types';
 import { type LocaleMode } from '@/types/locale';
 import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { GlobalStore } from '../store';
+import { type GlobalStore } from '../store';
 
 const n = setNamespace('g');
 
-export interface GlobalGeneralAction {
-  openAgentInNewWindow: (agentId: string) => Promise<void>;
-  openTopicInNewWindow: (agentId: string, topicId: string) => Promise<void>;
-  switchLocale: (locale: LocaleMode, params?: { skipBroadcast?: boolean }) => void;
-  updateResourceManagerColumnWidth: (column: 'name' | 'date' | 'size', width: number) => void;
-  updateSystemStatus: (status: Partial<SystemStatus>, action?: any) => void;
-  useCheckLatestVersion: (enabledCheck?: boolean) => SWRResponse<string>;
-  useCheckServerVersion: () => SWRResponse<string | null>;
-  useInitSystemStatus: () => SWRResponse;
-}
+type Setter = StoreSetter<GlobalStore>;
+export const generalActionSlice = (set: Setter, get: () => GlobalStore, _api?: unknown) =>
+  new GlobalGeneralActionImpl(set, get, _api);
 
-export const generalActionSlice: StateCreator<
-  GlobalStore,
-  [['zustand/devtools', never]],
-  [],
-  GlobalGeneralAction
-> = (set, get) => ({
-  openAgentInNewWindow: async (agentId: string) => {
+export class GlobalGeneralActionImpl {
+  readonly #get: () => GlobalStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => GlobalStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  openAgentInNewWindow = async (agentId: string): Promise<void> => {
     const url = `/agent/${agentId}${isDesktop ? '?mode=single' : ''}`;
 
     if (isDesktop) {
@@ -64,9 +61,9 @@ export const generalActionSlice: StateCreator<
       const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
       window.open(url, `agent_${agentId}`, features);
     }
-  },
+  };
 
-  openTopicInNewWindow: async (agentId: string, topicId: string) => {
+  openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
     const url = `/agent/${agentId}?topic=${topicId}${isDesktop ? '&mode=single' : ''}`;
 
     if (isDesktop) {
@@ -95,10 +92,13 @@ export const generalActionSlice: StateCreator<
       const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
       window.open(url, `agent_${agentId}_topic_${topicId}`, features);
     }
-  },
+  };
 
-  switchLocale: (locale, { skipBroadcast } = {}) => {
-    get().updateSystemStatus({ language: locale });
+  switchLocale = (
+    locale: LocaleMode,
+    { skipBroadcast }: { skipBroadcast?: boolean } = {},
+  ): void => {
+    this.#get().updateSystemStatus({ language: locale });
 
     switchLang(locale);
 
@@ -113,34 +113,36 @@ export const generalActionSlice: StateCreator<
         }
       })();
     }
-  },
-  updateResourceManagerColumnWidth: (column, width) => {
-    const currentWidths = get().status.resourceManagerColumnWidths || {
+  };
+
+  updateResourceManagerColumnWidth = (column: 'name' | 'date' | 'size', width: number): void => {
+    const currentWidths = this.#get().status.resourceManagerColumnWidths || {
       date: 160,
       name: 574,
       size: 140,
     };
 
-    get().updateSystemStatus({
+    this.#get().updateSystemStatus({
       resourceManagerColumnWidths: {
         ...currentWidths,
         [column]: width,
       },
     });
-  },
-  updateSystemStatus: (status, action) => {
-    if (!get().isStatusInit) return;
+  };
 
-    const nextStatus = merge(get().status, status);
+  updateSystemStatus = (status: Partial<SystemStatus>, action?: any): void => {
+    if (!this.#get().isStatusInit) return;
 
-    if (isEqual(get().status, nextStatus)) return;
+    const nextStatus = merge(this.#get().status, status);
 
-    set({ status: nextStatus }, false, action || n('updateSystemStatus'));
-    get().statusStorage.saveToLocalStorage(nextStatus);
-  },
+    if (isEqual(this.#get().status, nextStatus)) return;
 
-  useCheckLatestVersion: (enabledCheck = true) =>
-    useOnlyFetchOnceSWR(
+    this.#set({ status: nextStatus }, false, action || n('updateSystemStatus'));
+    this.#get().statusStorage.saveToLocalStorage(nextStatus);
+  };
+
+  useCheckLatestVersion = (enabledCheck: boolean = true): SWRResponse<string> => {
+    return useOnlyFetchOnceSWR(
       enabledCheck ? 'checkLatestVersion' : null,
       async () => globalService.getLatestVersion(),
       {
@@ -157,28 +159,29 @@ export const generalActionSlice: StateCreator<
           const latestMajorMinor = `${latestVersion.major}.${latestVersion.minor}.0`;
 
           if (gt(latestMajorMinor, currentMajorMinor)) {
-            set({ hasNewVersion: true, latestVersion: data }, false, n('checkLatestVersion'));
+            this.#set({ hasNewVersion: true, latestVersion: data }, false, n('checkLatestVersion'));
           }
         },
       },
-    ),
+    );
+  };
 
-  useCheckServerVersion: () =>
-    useOnlyFetchOnceSWR(
+  useCheckServerVersion = (): SWRResponse<string | null> => {
+    return useOnlyFetchOnceSWR(
       isDesktop &&
-      // only check server version for self-hosted remote server
-      electronSyncSelectors.storageMode(getElectronStoreState()) !== 'cloud'
+        // only check server version for self-hosted remote server
+        electronSyncSelectors.storageMode(getElectronStoreState()) !== 'cloud'
         ? 'checkServerVersion'
         : null,
       async () => globalService.getServerVersion(),
       {
         onSuccess: (data: string | null) => {
           if (data === null) {
-            set({ isServerVersionOutdated: true }, false);
+            this.#set({ isServerVersionOutdated: true }, false);
             return;
           }
 
-          set({ serverVersion: data }, false);
+          this.#set({ serverVersion: data }, false);
 
           if (!valid(CURRENT_VERSION) || !valid(data)) return;
 
@@ -206,19 +209,20 @@ export const generalActionSlice: StateCreator<
             (clientVersion.patch - serverVersion.patch);
 
           if (versionDiff >= DIFF_THRESHOLD) {
-            set({ isServerVersionOutdated: true }, false);
+            this.#set({ isServerVersionOutdated: true }, false);
           }
         },
       },
-    ),
+    );
+  };
 
-  useInitSystemStatus: () =>
-    useOnlyFetchOnceSWR<SystemStatus>(
+  useInitSystemStatus = (): SWRResponse => {
+    return useOnlyFetchOnceSWR<SystemStatus>(
       'initSystemStatus',
-      () => get().statusStorage.getFromLocalStorage(),
+      () => this.#get().statusStorage.getFromLocalStorage(),
       {
         onSuccess: (status) => {
-          set({ isStatusInit: true }, false, 'setStatusInit');
+          this.#set({ isStatusInit: true }, false, 'setStatusInit');
 
           // Reset transient UI states that should not persist across page reloads
           const statusWithResetTransientStates = {
@@ -227,8 +231,11 @@ export const generalActionSlice: StateCreator<
             showHotkeyHelper: false,
           };
 
-          get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus');
+          this.#get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus');
         },
       },
-    ),
-});
+    );
+  };
+}
+
+export type GlobalGeneralAction = Pick<GlobalGeneralActionImpl, keyof GlobalGeneralActionImpl>;

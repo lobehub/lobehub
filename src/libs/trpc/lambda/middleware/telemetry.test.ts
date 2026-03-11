@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appEnv } from '@/envs/app';
 
-import { TelemetryContext, checkTelemetryEnabled } from './telemetry';
+import { type TelemetryContext } from './telemetry';
+import { checkTelemetryEnabled } from './telemetry';
 
 const { mockGetUserSettings, mockGetUserPreference, MockUserModel } = vi.hoisted(() => {
   const mockGetUserSettings = vi.fn();

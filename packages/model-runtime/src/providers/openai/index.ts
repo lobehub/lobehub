@@ -2,11 +2,9 @@ import { ModelProvider } from 'model-bank';
 
 import { responsesAPIModels } from '../../const/models';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
-import { ChatStreamPayload } from '../../types';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface OpenAIModelCard {

@@ -8,14 +8,12 @@ export enum PluginStoreTabs {
   Plugin = 'old',
 }
 
-/* eslint-disable typescript-sort-keys/string-enum */
 export enum PluginInstallStep {
-  FETCHING_MANIFEST = 'FETCHING_MANIFEST',
-  INSTALLING_PLUGIN = 'INSTALLING_PLUGIN',
   COMPLETED = 'COMPLETED',
   ERROR = 'ERROR',
+  FETCHING_MANIFEST = 'FETCHING_MANIFEST',
+  INSTALLING_PLUGIN = 'INSTALLING_PLUGIN',
 }
-/* eslint-enable */
 
 export interface PluginInstallProgress {
   // Error message

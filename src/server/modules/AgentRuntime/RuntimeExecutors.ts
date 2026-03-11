@@ -6,38 +6,54 @@ import {
   type InstructionExecutor,
   UsageCounter,
 } from '@lobechat/agent-runtime';
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  buildStepToolDelta,
+  type LobeToolManifest,
+  type OperationToolSet,
+  type ResolvedToolSet,
+  ToolNameResolver,
+  ToolResolver,
+} from '@lobechat/context-engine';
+import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
-import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
+import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
 import { serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
 import { type MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
+import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
+import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type ToolExecutionService } from '@/server/services/toolExecution';
 
-import type { IStreamEventManager } from './types';
+import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
 
 // Tool pricing configuration (USD per call)
 const TOOL_PRICING: Record<string, number> = {
-  'lobe-web-browsing/craw': 0.002,
-  'lobe-web-browsing/search': 0.001,
+  'lobe-web-browsing/craw': 0,
+  'lobe-web-browsing/search': 0,
 };
 
 export interface RuntimeExecutorContext {
+  agentConfig?: any;
+  discordContext?: any;
+  evalContext?: EvalContext;
   fileService?: any;
   messageModel: MessageModel;
   operationId: string;
   serverDB: LobeChatDatabase;
   stepIndex: number;
+  stream?: boolean;
   streamManager: IStreamEventManager;
   toolExecutionService: ToolExecutionService;
   topicId?: string;
   userId?: string;
+  userTimezone?: string;
 }
 
 export const createRuntimeExecutors = (
@@ -56,8 +72,38 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
-    // Fallback to state's tools if not in payload
-    const tools = llmPayload.tools || state.tools;
+    // Resolve tools via ToolResolver (unified tool injection)
+    const activeDeviceId = state.metadata?.activeDeviceId;
+    const operationToolSet: OperationToolSet = state.operationToolSet ?? {
+      enabledToolIds: [],
+      manifestMap: state.toolManifestMap ?? {},
+      sourceMap: state.toolSourceMap ?? {},
+      tools: state.tools ?? [],
+    };
+
+    const stepDelta = buildStepToolDelta({
+      activeDeviceId,
+      forceFinish: state.forceFinish,
+      localSystemManifest: LocalSystemManifest as unknown as LobeToolManifest,
+      operationManifestMap: operationToolSet.manifestMap,
+    });
+
+    const toolResolver = new ToolResolver();
+    const resolved: ResolvedToolSet = toolResolver.resolve(
+      operationToolSet,
+      stepDelta,
+      state.activatedStepTools ?? [],
+    );
+
+    const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+
+    if (stepDelta.activatedTools.length > 0) {
+      log(
+        `[${operationId}:${stepIndex}] ToolResolver injected %d step-level tools: %o`,
+        stepDelta.activatedTools.length,
+        stepDelta.activatedTools.map((t) => t.id),
+      );
+    }
 
     if (!model || !provider) {
       throw new Error('Model and provider are required for call_llm instruction');
@@ -99,11 +145,7 @@ export const createRuntimeExecutors = (
 
     // Publish stream start event
     await streamManager.publishStreamEvent(operationId, {
-      data: {
-        assistantMessage: assistantMessageItem,
-        model,
-        provider,
-      },
+      data: { assistantMessage: assistantMessageItem, model, provider },
       stepIndex,
       type: 'stream_start',
     });
@@ -113,31 +155,102 @@ export const createRuntimeExecutors = (
       let toolsCalling: ChatToolPayload[] = [];
       let tool_calls: MessageToolCall[] = [];
       let thinkingContent = '';
-      let imageList: any[] = [];
+      const imageList: any[] = [];
       let grounding: any = null;
       let currentStepUsage: any = undefined;
+      let streamError: any = undefined;
 
       // Multimodal content parts tracking
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
-      let contentParts: ContentPart[] = [];
-      let reasoningParts: ContentPart[] = [];
-      let hasContentImages = false;
-      let hasReasoningImages = false;
+      const contentParts: ContentPart[] = [];
+      const reasoningParts: ContentPart[] = [];
+      const hasContentImages = false;
+      const hasReasoningImages = false;
+
+      // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
+      // Rebuild params from agentConfig at execution time (capabilities built dynamically)
+      const agentConfig = ctx.agentConfig;
+      let processedMessages;
+      if (agentConfig) {
+        const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+
+        const contextEngineInput = {
+          additionalVariables: state.metadata?.deviceSystemInfo,
+          userTimezone: ctx.userTimezone,
+          capabilities: {
+            isCanUseFC: (m: string, p: string) => {
+              const info = LOBE_DEFAULT_MODEL_LIST.find(
+                (item) => item.id === m && item.providerId === p,
+              );
+              return info?.abilities?.functionCall ?? true;
+            },
+            isCanUseVideo: (m: string, p: string) => {
+              const info = LOBE_DEFAULT_MODEL_LIST.find(
+                (item) => item.id === m && item.providerId === p,
+              );
+              return info?.abilities?.video ?? false;
+            },
+            isCanUseVision: (m: string, p: string) => {
+              const info = LOBE_DEFAULT_MODEL_LIST.find(
+                (item) => item.id === m && item.providerId === p,
+              );
+              return info?.abilities?.vision ?? true;
+            },
+          },
+          discordContext: ctx.discordContext,
+          enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
+          evalContext: ctx.evalContext,
+          forceFinish: state.forceFinish,
+          historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
+          knowledge: {
+            fileContents: agentConfig.files
+              ?.filter((f: { enabled?: boolean | null }) => f.enabled === true)
+              .map((f: { content?: string | null; id?: string; name?: string }) => ({
+                content: f.content ?? '',
+                fileId: f.id ?? '',
+                filename: f.name ?? '',
+              })),
+            knowledgeBases: agentConfig.knowledgeBases
+              ?.filter((kb: { enabled?: boolean | null }) => kb.enabled === true)
+              .map((kb: { id?: string; name?: string }) => ({
+                id: kb.id ?? '',
+                name: kb.name ?? '',
+              })),
+          },
+          messages: llmPayload.messages as UIChatMessage[],
+          model,
+          provider,
+          systemRole: agentConfig.systemRole ?? undefined,
+          toolsConfig: {
+            manifests: Object.values(resolved.manifestMap),
+            tools: resolved.enabledToolIds,
+          },
+          userMemory: state.metadata?.userMemory,
+        };
+
+        processedMessages = await serverMessagesEngine(contextEngineInput);
+
+        // Emit context engine event for tracing (captures input params and final LLM messages)
+        events.push({
+          input: contextEngineInput,
+          output: processedMessages,
+          type: 'context_engine_result',
+        } as any);
+      } else {
+        processedMessages = llmPayload.messages;
+      }
 
       // Initialize ModelRuntime (read user's keyVaults from database)
       const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
 
       // Construct ChatStreamPayload
-      const chatPayload = {
-        messages: llmPayload.messages,
-        model,
-        tools,
-      };
+      const stream = ctx.stream ?? true;
+      const chatPayload = { messages: processedMessages, model, stream, tools };
 
       log(
         `${stagePrefix} calling model-runtime chat (model: %s, messages: %d, tools: %d)`,
         model,
-        llmPayload.messages.length,
+        processedMessages.length,
         tools?.length ?? 0,
       );
 
@@ -145,9 +258,9 @@ export const createRuntimeExecutors = (
       const BUFFER_INTERVAL = 50;
       let textBuffer = '';
       let reasoningBuffer = '';
-      // eslint-disable-next-line no-undef
+
       let textBufferTimer: NodeJS.Timeout | null = null;
-      // eslint-disable-next-line no-undef
+
       let reasoningBufferTimer: NodeJS.Timeout | null = null;
 
       const flushTextBuffer = async () => {
@@ -264,11 +377,11 @@ export const createRuntimeExecutors = (
             }
           },
           onToolsCalling: async ({ toolsCalling: raw }) => {
-            const resolved = new ToolNameResolver().resolve(raw, state.toolManifestMap);
-            // Add source field from toolSourceMap for routing tool execution
-            const payload = resolved.map((p) => ({
+            const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
+            // Add source field from resolved sourceMap for routing tool execution
+            const payload = resolvedCalls.map((p) => ({
               ...p,
-              source: state.toolSourceMap?.[p.identifier],
+              source: resolved.sourceMap[p.identifier],
             }));
             // log(`[${operationLogId}][toolsCalling]`, payload);
             toolsCalling = payload;
@@ -284,12 +397,25 @@ export const createRuntimeExecutors = (
               toolsCalling: payload,
             });
           },
+          onError: async (errorData) => {
+            streamError = errorData;
+            console.error(`[${operationLogId}][stream_error]`, errorData);
+          },
         },
         user: ctx.userId,
       });
 
       // Consume stream to ensure all callbacks complete execution
       await consumeStreamUntilDone(response);
+
+      // If a stream error was captured via onError callback, throw to propagate the error
+      if (streamError) {
+        const errorMessage =
+          typeof streamError.message === 'string'
+            ? streamError.message
+            : JSON.stringify(streamError);
+        throw new Error(`LLM stream error: ${errorMessage}`);
+      }
 
       await flushTextBuffer();
       await flushReasoningBuffer();
@@ -305,7 +431,13 @@ export const createRuntimeExecutors = (
         reasoningBufferTimer = null;
       }
 
-      log(`[${operationLogId}] finish model-runtime calling`);
+      log(
+        `[${operationLogId}] finish model-runtime calling | content: %d chars | reasoning: %d chars | tools: %d | usage: %s`,
+        content.length,
+        thinkingContent.length,
+        toolsCalling.length,
+        currentStepUsage ? 'yes' : 'none',
+      );
 
       if (thinkingContent) {
         log(`[${operationLogId}][reasoning]`, thinkingContent);
@@ -332,10 +464,10 @@ export const createRuntimeExecutors = (
       await streamManager.publishStreamEvent(operationId, {
         data: {
           finalContent: content,
-          grounding: grounding,
+          grounding,
           imageList: imageList.length > 0 ? imageList : undefined,
           reasoning: thinkingContent || undefined,
-          toolsCalling: toolsCalling,
+          toolsCalling,
           usage: currentStepUsage,
         },
         stepIndex,
@@ -386,7 +518,7 @@ export const createRuntimeExecutors = (
       }
 
       // ===== 2. Then accumulate to AgentState =====
-      let newState = structuredClone(state);
+      const newState = structuredClone(state);
 
       newState.messages.push({
         content,
@@ -417,7 +549,7 @@ export const createRuntimeExecutors = (
             // Pass assistant message ID as parentMessageId for tool calls
             parentMessageId: assistantMessageItem.id,
             result: { content, tool_calls },
-            toolsCalling: toolsCalling,
+            toolsCalling,
           } as GeneralAgentCallLLMResultPayload,
           phase: 'llm_result',
           session: {
@@ -476,11 +608,23 @@ export const createRuntimeExecutors = (
       const agentConfig = state.metadata?.agentConfig;
       const toolResultMaxLength = agentConfig?.chatConfig?.toolResultMaxLength;
 
+      // Build effective manifest map (operation + step-level activations)
+      const effectiveManifestMap = {
+        ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+        ...Object.fromEntries(
+          (state.activatedStepTools ?? [])
+            .filter((a) => a.manifest)
+            .map((a) => [a.id, a.manifest!]),
+        ),
+      };
+
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+        activeDeviceId: state.metadata?.activeDeviceId,
+        memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
         serverDB: ctx.serverDB,
-        toolManifestMap: state.toolManifestMap,
+        toolManifestMap: effectiveManifestMap,
         toolResultMaxLength,
         topicId: ctx.topicId,
         userId: ctx.userId,
@@ -552,6 +696,34 @@ export const createRuntimeExecutors = (
       newState.usage = usage;
       if (cost) newState.cost = cost;
 
+      // Persist ToolsActivator discovery results to state.activatedStepTools
+      const discoveredTools = executionResult.state?.activatedTools as
+        | Array<{ identifier: string }>
+        | undefined;
+      if (discoveredTools?.length) {
+        const existingIds = new Set(
+          (newState.activatedStepTools ?? []).map((t: { id: string }) => t.id),
+        );
+        const newActivations = discoveredTools
+          .filter((t) => !existingIds.has(t.identifier))
+          .map((t) => ({
+            activatedAtStep: state.stepCount,
+            id: t.identifier,
+            manifest: effectiveManifestMap[t.identifier],
+            source: 'discovery' as const,
+          }));
+
+        if (newActivations.length > 0) {
+          newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
+
+          log(
+            `[${operationLogId}] Persisted %d tool activations to state: %o`,
+            newActivations.length,
+            newActivations.map((a) => a.id),
+          );
+        }
+      }
+
       // Find current tool statistics
       const currentToolStats = usage.tools.byTool.find((t) => t.name === toolName);
 
@@ -607,10 +779,7 @@ export const createRuntimeExecutors = (
         type: 'error',
       });
 
-      events.push({
-        error: error,
-        type: 'error',
-      });
+      events.push({ error, type: 'error' });
 
       console.error(
         `[StreamingToolExecutor] Tool execution failed for operation ${operationId}:${stepIndex}:`,
@@ -657,9 +826,24 @@ export const createRuntimeExecutors = (
 
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
+          // Build effective manifest map (operation + step-level activations)
+          const batchManifestMap = {
+            ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+            ...Object.fromEntries(
+              (state.activatedStepTools ?? [])
+                .filter((a) => a.manifest)
+                .map((a) => [a.id, a.manifest!]),
+            ),
+          };
+
+          const batchAgentConfig = state.metadata?.agentConfig;
+
           const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+            activeDeviceId: state.metadata?.activeDeviceId,
+            memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
             serverDB: ctx.serverDB,
-            toolManifestMap: state.toolManifestMap,
+            toolManifestMap: batchManifestMap,
+            toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
             topicId: ctx.topicId,
             userId: ctx.userId,
           });
@@ -717,16 +901,14 @@ export const createRuntimeExecutors = (
 
           events.push({ id: chatToolPayload.id, result: executionResult, type: 'tool_result' });
 
-          // Accumulate usage
+          // Collect per-tool usage for post-batch accumulation
           const toolCost = TOOL_PRICING[toolName] || 0;
-          UsageCounter.accumulateTool({
-            cost: state.cost,
+          toolResults.at(-1).usageParams = {
             executionTime,
             success: isSuccess,
             toolCost,
             toolName,
-            usage: state.usage,
-          });
+          };
         } catch (error) {
           console.error(`[${operationLogId}] Tool execution failed for ${toolName}:`, error);
 
@@ -749,8 +931,55 @@ export const createRuntimeExecutors = (
       `[${operationLogId}][call_tools_batch] All tools executed, created ${toolMessageIds.length} tool messages`,
     );
 
-    // Refresh messages from database to ensure state is in sync
+    // Accumulate tool usage sequentially after all tools have finished
     const newState = structuredClone(state);
+    for (const result of toolResults) {
+      if (result.usageParams) {
+        const { usage, cost } = UsageCounter.accumulateTool({
+          ...result.usageParams,
+          cost: newState.cost,
+          usage: newState.usage,
+        });
+        newState.usage = usage;
+        if (cost) newState.cost = cost;
+      }
+    }
+
+    // Persist ToolsActivator discovery results from batch tool executions
+    const batchEffectiveManifestMap = {
+      ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+      ...Object.fromEntries(
+        (state.activatedStepTools ?? []).filter((a) => a.manifest).map((a) => [a.id, a.manifest!]),
+      ),
+    };
+    const existingActivationIds = new Set(
+      (newState.activatedStepTools ?? []).map((t: { id: string }) => t.id),
+    );
+    for (const result of toolResults) {
+      const discovered = result.data?.state?.activatedTools as
+        | Array<{ identifier: string }>
+        | undefined;
+      if (discovered?.length) {
+        const newActivations = discovered
+          .filter((t) => !existingActivationIds.has(t.identifier))
+          .map((t) => ({
+            activatedAtStep: state.stepCount,
+            id: t.identifier,
+            manifest: batchEffectiveManifestMap[t.identifier],
+            source: 'discovery' as const,
+          }));
+
+        for (const activation of newActivations) {
+          existingActivationIds.add(activation.id);
+        }
+
+        if (newActivations.length > 0) {
+          newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
+        }
+      }
+    }
+
+    // Refresh messages from database to ensure state is in sync
 
     // Query latest messages from database
     // Must pass agentId to ensure correct query scope, otherwise when topicId is undefined,
@@ -761,14 +990,10 @@ export const createRuntimeExecutors = (
       topicId: state.metadata?.topicId,
     });
 
-    // Convert DB messages to LLM format with id
-    newState.messages = latestMessages.map((msg: any) => ({
-      content: msg.content,
-      id: msg.id,
-      role: msg.role,
-      tool_call_id: msg.tool_call_id,
-      tool_calls: msg.tool_calls,
-    }));
+    // Use conversation-flow parse to resolve branching into linear flat list
+    // parse() handles assistantGroup, compare, supervisor, etc. virtual message types
+    const { flatList } = parse(latestMessages);
+    newState.messages = flatList;
 
     log(
       `[${operationLogId}][call_tools_batch] Refreshed ${newState.messages.length} messages from database`,

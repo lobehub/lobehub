@@ -1,5 +1,5 @@
 import * as runtimeModule from '@lobechat/model-runtime';
-import type { AIImageModelCard, EnabledAiModel, ModelParamsSchema } from 'model-bank';
+import { type AIImageModelCard, type EnabledAiModel, type ModelParamsSchema } from 'model-bank';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -39,14 +39,14 @@ describe('aiProvider action helpers', () => {
   });
 
   describe('normalizeChatModel', () => {
-    it('fills missing optional fields with safe defaults', () => {
+    it('fills missing optional fields with safe defaults', async () => {
       const model = createChatModel({
         abilities: undefined,
         contextWindowTokens: undefined,
         displayName: undefined,
       });
 
-      const result = normalizeChatModel(model);
+      const result = await normalizeChatModel(model);
 
       expect(result).toEqual({
         abilities: {},

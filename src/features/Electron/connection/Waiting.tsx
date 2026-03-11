@@ -123,9 +123,9 @@ const WaitingOAuth = memo<WaitingOAuthProps>(({ setWaiting, setIsOpen }) => {
           <Highlighter language={'log'} style={{ maxHeight: 500, maxWidth: 800, overflow: 'auto' }}>
             {errorMessage}
           </Highlighter>
-          <Flexbox gap={12} horizontal>
+          <Flexbox horizontal gap={12}>
             <Button onClick={handleCancel}>{t('waitingOAuth.cancel')}</Button>
-            <Button onClick={handleRetry} type="primary">
+            <Button type="primary" onClick={handleRetry}>
               {t('waitingOAuth.retry')}
             </Button>
           </Flexbox>

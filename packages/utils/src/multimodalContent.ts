@@ -1,4 +1,4 @@
-import { MessageContentPart } from '@lobechat/types';
+import type { MessageContentPart } from '@lobechat/types';
 
 /**
  * Serialize message content parts to JSON string for storage

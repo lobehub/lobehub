@@ -1,4 +1,4 @@
-import type { SharedTopicData } from '@lobechat/types';
+import { type SharedTopicData } from '@lobechat/types';
 import { z } from 'zod';
 
 import { TopicShareModel } from '@/database/models/topicShare';

@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -24,11 +24,11 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
           Search:
         </Text>
         <Highlighter
+          wrap
           language={'text'}
           showLanguage={false}
           style={{ padding: '4px 8px' }}
           variant={'outlined'}
-          wrap
         >
           {search}
         </Highlighter>
@@ -38,11 +38,11 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
           Replace with:
         </Text>
         <Highlighter
+          wrap
           language={'text'}
           showLanguage={false}
           style={{ padding: '4px 8px' }}
           variant={'outlined'}
-          wrap
         >
           {replace}
         </Highlighter>

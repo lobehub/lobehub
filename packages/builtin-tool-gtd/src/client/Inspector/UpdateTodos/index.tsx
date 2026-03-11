@@ -4,7 +4,8 @@ import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CheckCircle, DiffIcon, Minus, Plus } from 'lucide-react';
-import { type ReactNode, memo, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { oneLineEllipsis, shinyTextStyles } from '@/styles';
@@ -69,7 +70,7 @@ export const UpdateTodosInspector = memo<
   const statsParts: ReactNode[] = [];
   if (counts.add > 0) {
     statsParts.push(
-      <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12} key="add">
+      <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12} key="add">
         <Icon icon={Plus} size={12} />
         {counts.add}
       </Text>,
@@ -77,7 +78,7 @@ export const UpdateTodosInspector = memo<
   }
   if (counts.update > 0) {
     statsParts.push(
-      <Text as={'span'} code color={cssVar.colorWarning} fontSize={12} key="update">
+      <Text code as={'span'} color={cssVar.colorWarning} fontSize={12} key="update">
         <Icon icon={DiffIcon} size={12} />
         {counts.update}
       </Text>,
@@ -85,7 +86,7 @@ export const UpdateTodosInspector = memo<
   }
   if (counts.complete > 0) {
     statsParts.push(
-      <Text as={'span'} code color={cssVar.colorPrimary} fontSize={12} key="complete">
+      <Text code as={'span'} color={cssVar.colorPrimary} fontSize={12} key="complete">
         <Icon icon={CheckCircle} size={12} />
         {counts.complete}
       </Text>,
@@ -93,7 +94,7 @@ export const UpdateTodosInspector = memo<
   }
   if (counts.remove > 0) {
     statsParts.push(
-      <Text as={'span'} code color={cssVar.colorError} fontSize={12} key="remove">
+      <Text code as={'span'} color={cssVar.colorError} fontSize={12} key="remove">
         <Icon icon={Minus} size={12} />
         {counts.remove}
       </Text>,

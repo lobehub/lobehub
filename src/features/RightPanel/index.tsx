@@ -1,6 +1,7 @@
-import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
+import { type DraggablePanelProps } from '@lobehub/ui';
+import { DraggablePanel } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Suspense, memo, useState } from 'react';
+import { memo, Suspense, useState } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useGlobalStore } from '@/store/global';
@@ -35,17 +36,17 @@ const RightPanel = memo<RightPanelProps>(
         expandable={false}
         maxWidth={maxWidth}
         minWidth={minWidth}
+        placement="right"
+        size={{
+          height: '100%',
+          width,
+        }}
         onExpandChange={(expand) => toggleRightPanel(expand)}
         onSizeChange={(_, size) => {
           if (size?.width) {
             setWidth(size.width);
           }
           if (size) onSizeChange?.(size);
-        }}
-        placement="right"
-        size={{
-          height: '100%',
-          width,
         }}
         {...rest}
       >

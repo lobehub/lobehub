@@ -1,15 +1,20 @@
+import { type UserMemoryData } from '@lobechat/prompts';
 import { promptUserMemory } from '@lobechat/prompts';
-import type { UserMemoryData } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
-import type { PipelineContext, ProcessorOptions } from '../types';
+import { type PipelineContext, type ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:UserMemoryInjector');
 
 export interface UserMemoryInjectorConfig {
   /** User memories data */
   memories?: UserMemoryData;
+}
+
+export interface MemoryContext {
+  /** Effective memory effort for the current request */
+  effort?: 'high' | 'low' | 'medium';
 }
 
 /**
@@ -26,7 +31,6 @@ export class UserMemoryInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected buildContent(_context: PipelineContext): string | null {
     const { memories } = this.config;
     if (!memories) return null;
@@ -38,13 +42,14 @@ export class UserMemoryInjector extends BaseFirstUserContentProvider {
       return null;
     }
 
+    const hasPersona = !!(memories.persona?.narrative || memories.persona?.tagline);
     const identitiesCount = memories.identities?.length || 0;
     const contextsCount = memories.contexts?.length || 0;
     const experiencesCount = memories.experiences?.length || 0;
     const preferencesCount = memories.preferences?.length || 0;
 
     log(
-      `User memories prepared: ${identitiesCount} identity(ies), ${contextsCount} context(s), ${experiencesCount} experience(s), ${preferencesCount} preference(s)`,
+      `User memories prepared: persona=${hasPersona}, ${identitiesCount} identity(ies), ${contextsCount} context(s), ${experiencesCount} experience(s), ${preferencesCount} preference(s)`,
     );
 
     return content;

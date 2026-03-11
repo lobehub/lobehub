@@ -1,15 +1,11 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
-import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-  AsyncTaskType,
-  type UserMemoryExtractionMetadata,
-} from '@lobechat/types';
+import type { AsyncTaskType, UserMemoryExtractionMetadata } from '@lobechat/types';
+import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
 import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
-import { AsyncTaskSelectItem, NewAsyncTaskItem, asyncTasks } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { AsyncTaskSelectItem, NewAsyncTaskItem } from '../schemas';
+import { asyncTasks } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class AsyncTaskModel {
   private userId: string;
@@ -39,6 +35,12 @@ export class AsyncTaskModel {
 
   findById = async (id: string) => {
     return this.db.query.asyncTasks.findFirst({ where: and(eq(asyncTasks.id, id)) });
+  };
+
+  static findByInferenceId = async (db: LobeChatDatabase, inferenceId: string) => {
+    return db.query.asyncTasks.findFirst({
+      where: eq(asyncTasks.inferenceId, inferenceId),
+    });
   };
 
   update(taskId: string, value: Partial<AsyncTaskSelectItem>) {

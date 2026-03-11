@@ -59,7 +59,7 @@ const MentionedUserItem = memo<MentionedUserItemProps>(({ agent }) => {
   };
 
   return (
-    <Flexbox align={'center'} className={styles.container} horizontal>
+    <Flexbox horizontal align={'center'} className={styles.container}>
       <Center flex={1} height={64} padding={4} style={{ maxWidth: 64 }}>
         <Avatar
           avatar={agent.avatar}

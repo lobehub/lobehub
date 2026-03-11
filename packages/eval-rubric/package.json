@@ -1,0 +1,38 @@
+{
+  "name": "@lobechat/eval-rubric",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rubric evaluator engine for agent evaluation benchmarks",
+  "keywords": [
+    "eval",
+    "rubric",
+    "evaluator",
+    "benchmark",
+    "lobehub"
+  ],
+  "homepage": "https://github.com/lobehub/lobehub/tree/master/packages/eval-rubric",
+  "bugs": {
+    "url": "https://github.com/lobehub/lobehub/issues/new"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lobehub/lobehub.git"
+  },
+  "author": "LobeHub <i@lobehub.com>",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@lobechat/types": "workspace:*",
+    "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5"
+  }
+}

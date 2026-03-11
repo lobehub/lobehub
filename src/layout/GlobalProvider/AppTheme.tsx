@@ -1,19 +1,16 @@
 'use client';
 
-import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import {
-  ConfigProvider,
-  FontLoader,
-  type NeutralColors,
-  type PrimaryColors,
-  ThemeProvider,
-} from '@lobehub/ui';
-import { message as antdMessage } from 'antd';
-import { createStaticStyles, cx, useTheme } from 'antd-style';
 import 'antd/dist/reset.css';
+
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
+import { type NeutralColors, type PrimaryColors } from '@lobehub/ui';
+import { ConfigProvider, FontLoader, ThemeProvider } from '@lobehub/ui';
+import { message as antdMessage } from 'antd';
 import { AppConfigContext } from 'antd/es/app/context';
+import { createStaticStyles, cx, useTheme } from 'antd-style';
 import * as motion from 'motion/react-m';
-import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 import AntdStaticMethods from '@/components/AntdStaticMethods';
 import Link from '@/components/Link';
@@ -42,7 +39,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 100dvh;
     max-height: 100dvh;
 
-    @media (min-device-width: 576px) {
+    @media (device-width >= 576px) {
       overflow: hidden;
     }
   `,
@@ -153,16 +150,16 @@ const AppTheme = memo<AppThemeProps>(
     const currentAppearence = isDark ? 'dark' : 'light';
 
     return (
-      <AppConfigContext.Provider value={appConfig}>
+      <AppConfigContext value={appConfig}>
         <ThemeProvider
           appearance={currentAppearence}
           className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
+          defaultAppearance={currentAppearence}
+          defaultThemeMode={currentAppearence}
           customTheme={{
             neutralColor: neutralColor ?? defaultNeutralColor,
             primaryColor: primaryColor ?? defaultPrimaryColor,
           }}
-          defaultAppearance={currentAppearence}
-          defaultThemeMode={currentAppearence}
           theme={{
             cssVar: { key: 'lobe-vars' },
             token: {
@@ -178,20 +175,20 @@ const AppTheme = memo<AppThemeProps>(
           <GlobalStyle />
           <AntdStaticMethods />
           <ConfigProvider
+            locale={uiLocale}
+            motion={motion}
+            resources={uiResources}
             config={{
               aAs: Link,
               imgAs: Image,
               imgUnoptimized: true,
               proxy: globalCDN ? 'unpkg' : undefined,
             }}
-            locale={uiLocale}
-            motion={motion}
-            resources={uiResources}
           >
             {children}
           </ConfigProvider>
         </ThemeProvider>
-      </AppConfigContext.Provider>
+      </AppConfigContext>
     );
   },
 );

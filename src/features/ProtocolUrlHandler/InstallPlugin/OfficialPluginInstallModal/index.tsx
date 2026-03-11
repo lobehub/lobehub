@@ -25,7 +25,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     const { t } = useTranslation(['plugin', 'common']);
     const [loading, setLoading] = useState(false);
 
-    // 获取 MCP 插件详情
+    // Fetch MCP plugin details
     const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
     const identifier = installRequest?.pluginId || '';
 
@@ -59,14 +59,14 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
 
     if (!installRequest) return null;
 
-    // 渲染内容
+    // Render content
     const renderContent = () => {
-      // 如果正在加载，显示骨架屏
+      // If loading, show skeleton screen
       if (isLoading || !identifier) {
         return <DetailLoading />;
       }
 
-      // 如果加载失败或没有数据，显示错误信息
+      // If loading failed or no data, show error message
       if (!data) {
         return (
           <Block>
@@ -80,7 +80,10 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
 
     return (
       <Modal
+        open
         confirmLoading={loading}
+        title={t('protocolInstall.official.title')}
+        width={800}
         okButtonProps={{
           disabled: installed || isLoading,
           type: installed ? 'default' : 'primary',
@@ -90,9 +93,6 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         }
         onCancel={onComplete}
         onOk={handleConfirm}
-        open
-        title={t('protocolInstall.official.title')}
-        width={800}
       >
         {renderContent()}
       </Modal>

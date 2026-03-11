@@ -68,7 +68,7 @@ describe('RendererProtocolManager', () => {
     mockReadFile.mockImplementation(async (path: string) => Buffer.from(`content:${path}`));
 
     const manager = new RendererProtocolManager({
-      nextExportDir: '/export',
+      rendererDir: '/export',
       resolveRendererFilePath,
     });
 
@@ -79,7 +79,7 @@ describe('RendererProtocolManager', () => {
     const response = await handler({
       headers: new Headers(),
       method: 'GET',
-      url: 'app://next/missing',
+      url: 'app://renderer/missing',
     } as any);
     const body = await response.text();
 
@@ -101,7 +101,7 @@ describe('RendererProtocolManager', () => {
     mockReadFile.mockImplementation(async (path: string) => Buffer.from(`content:${path}`));
 
     const manager = new RendererProtocolManager({
-      nextExportDir: '/export',
+      rendererDir: '/export',
       resolveRendererFilePath,
     });
 
@@ -111,7 +111,7 @@ describe('RendererProtocolManager', () => {
     const response = await handler({
       headers: new Headers(),
       method: 'GET',
-      url: 'app://next/404.html',
+      url: 'app://renderer/404.html',
     } as any);
 
     expect(resolveRendererFilePath).toHaveBeenCalledTimes(1);
@@ -123,14 +123,14 @@ describe('RendererProtocolManager', () => {
     const resolveRendererFilePath = vi.fn(async (_url: URL) => null);
 
     const manager = new RendererProtocolManager({
-      nextExportDir: '/export',
+      rendererDir: '/export',
       resolveRendererFilePath,
     });
 
     manager.registerHandler();
     const handler = protocolHandlerRef.current;
 
-    const response = await handler({ url: 'app://next/logo.png' } as any);
+    const response = await handler({ url: 'app://renderer/logo.png' } as any);
 
     expect(resolveRendererFilePath).toHaveBeenCalledTimes(1);
     expect(response.status).toBe(404);
@@ -144,7 +144,7 @@ describe('RendererProtocolManager', () => {
     mockReadFile.mockImplementation(async () => payload);
 
     const manager = new RendererProtocolManager({
-      nextExportDir: '/export',
+      rendererDir: '/export',
       resolveRendererFilePath,
     });
 
@@ -154,7 +154,7 @@ describe('RendererProtocolManager', () => {
     const response = await handler({
       headers: new Headers({ Range: 'bytes=0-1' }),
       method: 'GET',
-      url: 'app://next/_next/static/media/intro-video.mp4',
+      url: 'app://renderer/assets/intro-video.mp4',
     } as any);
 
     expect(response.status).toBe(206);

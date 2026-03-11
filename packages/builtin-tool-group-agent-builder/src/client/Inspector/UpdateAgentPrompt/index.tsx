@@ -32,6 +32,8 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     display: flex;
     gap: 6px;
     align-items: center;
+
+    min-width: 0;
   `,
 }));
 
@@ -78,24 +80,32 @@ export const UpdateAgentPromptInspector = memo<
 
   return (
     <Flexbox
+      horizontal
       align="center"
       className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
       gap={6}
-      horizontal
     >
       <span className={styles.label}>{t(labelKey)}</span>
       {/* Only show avatar and title for non-supervisor agents */}
       {agent && !isSupervisor && (
         <>
           <Avatar avatar={agent.avatar ?? undefined} size={18} title={agent.title ?? undefined} />
-          <span className={styles.agentName}>{agent.title}</span>
+          <Text
+            className={styles.agentName}
+            ellipsis={{
+              tooltipWhenOverflow: true,
+            }}
+          >
+            {agent.title}
+          </Text>
         </>
       )}
       {/* Show length diff when completed */}
       {!isLoading && !isArgumentsStreaming && lengthDiff !== null && (
         <Text
-          as="span"
           code
+          noWrap
+          as="span"
           color={lengthDiff >= 0 ? cssVar.colorSuccess : cssVar.colorError}
           fontSize={12}
         >
@@ -106,7 +116,7 @@ export const UpdateAgentPromptInspector = memo<
       )}
       {/* Show streaming length */}
       {(isArgumentsStreaming || isLoading) && streamingLength > 0 && (
-        <Text as="span" code color={cssVar.colorTextDescription} fontSize={12}>
+        <Text code as="span" color={cssVar.colorTextDescription} fontSize={12}>
           ({streamingLength}
           {t('builtins.lobe-agent-builder.inspector.chars')})
         </Text>

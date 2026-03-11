@@ -2,7 +2,8 @@ import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
 import { Loader2 } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 export interface StageObjectItem {
   icon?: ReactNode;
@@ -28,8 +29,8 @@ const InitProgress = memo<InitingProps>(({ activeStage, stages }) => {
         showInfo={false}
         strokeColor={cssVar.colorPrimary}
       />
-      <Flexbox align={'center'} gap={4} horizontal>
-        {stage?.icon ? stage?.icon : <Icon icon={Loader2} spin />}
+      <Flexbox horizontal align={'center'} gap={4}>
+        {stage?.icon ? stage?.icon : <Icon spin icon={Loader2} />}
         <Text type={'secondary'}>{stage?.text}</Text>
       </Flexbox>
     </Center>

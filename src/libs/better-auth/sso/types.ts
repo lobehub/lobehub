@@ -1,5 +1,5 @@
-import type { GenericOAuthConfig } from 'better-auth/plugins';
-import type { SocialProviders } from 'better-auth/social-providers';
+import { type GenericOAuthConfig } from 'better-auth/plugins';
+import { type SocialProviders } from 'better-auth/social-providers';
 
 export type BuiltinProviderDefinition<
   E extends Record<string, string | undefined>,

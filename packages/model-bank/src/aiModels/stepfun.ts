@@ -1,8 +1,30 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://platform.stepfun.com/docs/pricing/details
 
 const stepfunChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Stepfun’s flagship language reasoning model.This model has top-notch reasoning capabilities and fast and reliable execution capabilities.Able to decompose and plan complex tasks, call tools quickly and reliably to perform tasks, and be competent in various complex tasks such as logical reasoning, mathematics, software engineering, and in-depth research.',
+    displayName: 'Step 3.5 Flash',
+    enabled: true,
+    id: 'step-3.5-flash',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       reasoning: true,
@@ -17,6 +39,15 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.3, upTo: 0.004 },
+            { rate: 0.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
         {
           name: 'textInput',
           strategy: 'tiered',
@@ -54,6 +85,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -75,6 +107,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -96,6 +129,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 70, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -117,6 +151,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 19, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 95, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 300, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -135,11 +170,11 @@ const stepfunChatModels: AIChatModelCard[] = [
     description:
       'Built on the next-generation in-house MFA attention architecture, delivering Step-1-like results at much lower cost while achieving higher throughput and faster latency. Handles general tasks with strong coding ability.',
     displayName: 'Step 2 Mini',
-    enabled: true,
     id: 'step-2-mini',
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -162,6 +197,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 7.6, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 38, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -184,6 +220,7 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 7.6, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 38, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -207,8 +244,9 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -229,8 +267,9 @@ const stepfunChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 70, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -246,13 +285,13 @@ const stepfunChatModels: AIChatModelCard[] = [
     description:
       'Strong image understanding with better visual performance than the Step-1V series.',
     displayName: 'Step 1o Vision 32K',
-    enabled: true,
     id: 'step-1o-vision-32k',
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 70, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-01-22',
@@ -266,11 +305,11 @@ const stepfunChatModels: AIChatModelCard[] = [
     description:
       'Strong image understanding, outperforming 1o in math and coding. Smaller than 1o with faster output.',
     displayName: 'Step 1o Turbo Vision',
-    enabled: true,
     id: 'step-1o-turbo-vision',
     pricing: {
       currency: 'CNY',
       units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -299,6 +338,10 @@ const stepfunImageModels: AIImageModelCard[] = [
       },
       steps: { default: 50, max: 100, min: 1 },
     },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
+    },
     releasedAt: '2024-08-07',
     type: 'image',
   },
@@ -318,6 +361,10 @@ const stepfunImageModels: AIImageModelCard[] = [
         enum: ['256x256', '512x512', '768x768', '1024x1024', '1280x800', '800x1280'],
       },
       steps: { default: 50, max: 100, min: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-07-15',
     type: 'image',
@@ -339,6 +386,10 @@ const stepfunImageModels: AIImageModelCard[] = [
         enum: ['512x512', '768x768', '1024x1024'],
       },
       steps: { default: 28, max: 100, min: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-03-04',
     type: 'image',

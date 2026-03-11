@@ -30,9 +30,9 @@ const Title = () => {
   const showSwitch = isArtifactTagClosed && artifactType !== ArtifactType.Code;
 
   return (
-    <Flexbox align={'center'} flex={1} gap={12} horizontal justify={'space-between'} width={'100%'}>
-      <Flexbox align={'center'} gap={4} horizontal>
-        <ActionIcon icon={ArrowLeft} onClick={() => closeArtifact()} size={'small'} />
+    <Flexbox horizontal align={'center'} flex={1} gap={12} justify={'space-between'} width={'100%'}>
+      <Flexbox horizontal align={'center'} gap={4}>
+        <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeArtifact()} />
         <Text className={cx(oneLineEllipsis)} type={'secondary'}>
           {artifactTitle}
         </Text>
@@ -48,9 +48,8 @@ const Title = () => {
       >
         {showSwitch && (
           <Segmented
-            onChange={(value) => {
-              useChatStore.setState({ portalArtifactDisplayMode: value as ArtifactDisplayMode });
-            }}
+            size={'small'}
+            value={displayMode}
             options={[
               {
                 icon: <Icon icon={EyeIcon} />,
@@ -63,8 +62,9 @@ const Title = () => {
                 value: ArtifactDisplayMode.Code,
               },
             ]}
-            size={'small'}
-            value={displayMode}
+            onChange={(value) => {
+              useChatStore.setState({ portalArtifactDisplayMode: value as ArtifactDisplayMode });
+            }}
           />
         )}
       </ConfigProvider>

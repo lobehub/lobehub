@@ -1,6 +1,6 @@
 import { authEnv } from '@/envs/auth';
 
-import type { GenericProviderDefinition } from '../types';
+import { type GenericProviderDefinition } from '../types';
 
 const WECHAT_AUTHORIZATION_URL = 'https://open.weixin.qq.com/connect/qrconnect';
 const WECHAT_TOKEN_URL = 'https://api.weixin.qq.com/sns/oauth2/access_token';
@@ -43,7 +43,7 @@ const provider: GenericProviderDefinition<{
        * and returns openid/unionid alongside tokens, so we exchange the code
        * manually instead of proxying through a custom API route.
        */
-getToken: async ({ code }) => {
+      getToken: async ({ code }) => {
         const tokenUrl = new URL(WECHAT_TOKEN_URL);
         tokenUrl.searchParams.set('appid', clientId);
         tokenUrl.searchParams.set('secret', clientSecret);
@@ -74,11 +74,11 @@ getToken: async ({ code }) => {
           tokenType: data.token_type ?? 'Bearer',
         };
       },
-      
+
       /**
        * Use openid/unionid returned in the token response; no custom scope encoding needed.
        */
-getUserInfo: async (tokens) => {
+      getUserInfo: async (tokens) => {
         const accessToken = tokens.accessToken;
         const openId = (tokens as { raw?: WeChatTokenResponse }).raw?.openid;
         const unionId = (tokens as { raw?: WeChatTokenResponse }).raw?.unionid;
@@ -115,7 +115,7 @@ getUserInfo: async (tokens) => {
           ...profile,
         };
       },
-      
+
       pkce: false,
 
       providerId: 'wechat',

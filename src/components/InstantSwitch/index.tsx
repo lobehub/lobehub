@@ -1,4 +1,5 @@
-import { Switch, type SwitchProps } from 'antd';
+import { type SwitchProps } from 'antd';
+import { Switch } from 'antd';
 import { memo, useState } from 'react';
 
 interface InstantSwitchProps {
@@ -13,14 +14,14 @@ const InstantSwitch = memo<InstantSwitchProps>(({ enabled, onChange, size }) => 
   return (
     <Switch
       loading={loading}
+      size={size}
+      value={value}
       onChange={async (enabled) => {
         setLoading(true);
         setValue(enabled);
         await onChange(enabled);
         setLoading(false);
       }}
-      size={size}
-      value={value}
     />
   );
 });

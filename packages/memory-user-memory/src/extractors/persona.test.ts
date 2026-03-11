@@ -3,7 +3,7 @@ import type { ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { userPersonaPrompt } from '../prompts';
-import { PersonaTemplateProps } from '../types';
+import type { PersonaTemplateProps } from '../types';
 import { UserPersonaExtractor } from './persona';
 
 const runtimeMock = { generateObject: vi.fn() } as unknown as ModelRuntime;

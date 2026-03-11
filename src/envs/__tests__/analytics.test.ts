@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { analyticsEnv, getAnalyticsConfig } from '../analytics';
+import { getAnalyticsConfig } from '../analytics';
 
 beforeEach(() => {
   // 在每个测试用例之前,清除所有的 console.warn mock

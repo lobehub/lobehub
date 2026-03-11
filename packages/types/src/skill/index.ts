@@ -9,7 +9,8 @@ export const skillAuthorSchema = z.object({
 
 export const skillManifestSchema = z
   .object({
-    author: skillAuthorSchema.optional(),
+    // Author can be either a string or an object (for compatibility with market skills)
+    author: z.union([z.string(), skillAuthorSchema]).optional(),
 
     // Required: skill description
     description: z.string().min(1, 'Skill description is required'),
@@ -45,6 +46,7 @@ export interface BuiltinSkill {
   description: string;
   identifier: string;
   name: string;
+  source: 'builtin';
 }
 
 // ===== Skill Source =====
@@ -81,6 +83,7 @@ export interface SkillResourceMeta {
 
 export interface SkillResourceTreeNode {
   children?: SkillResourceTreeNode[];
+  content?: string;
   name: string;
   path: string;
   type: 'file' | 'directory';
@@ -88,9 +91,10 @@ export interface SkillResourceTreeNode {
 
 export interface SkillResourceContent {
   content: string;
-  encoding: 'utf-8' | 'base64';
+  encoding: 'utf8' | 'base64';
   fileHash: string;
   fileType: string;
+  fullPath?: string;
   path: string;
   size: number;
 }

@@ -1,7 +1,7 @@
 import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
-import type { FC } from 'react';
+import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,17 +19,17 @@ export const Footer: FC<FooterProps> = ({ onClose }) => {
     <Flexbox className={styles.footer} padding={4}>
       <Block
         clickable
-        gap={8}
         horizontal
+        gap={8}
+        paddingBlock={8}
+        paddingInline={12}
+        variant={'borderless'}
         onClick={() => {
           navigate('/settings/provider/all');
           onClose();
         }}
-        paddingBlock={8}
-        paddingInline={12}
-        variant={'borderless'}
       >
-        <Flexbox align={'center'} gap={8} horizontal style={{ flex: 1 }}>
+        <Flexbox horizontal align={'center'} gap={8} style={{ flex: 1 }}>
           <Icon icon={LucideBolt} size={'small'} />
           {t('ModelSwitchPanel.manageProvider')}
         </Flexbox>

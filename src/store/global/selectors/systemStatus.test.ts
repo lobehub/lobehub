@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { merge } from '@/utils/merge';
 
-import { GlobalState, INITIAL_STATUS, initialState } from '../initialState';
+import { type GlobalState } from '../initialState';
+import { INITIAL_STATUS, initialState } from '../initialState';
 import { systemStatusSelectors } from './systemStatus';
 
 // Mock version constants

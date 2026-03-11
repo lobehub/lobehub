@@ -2,10 +2,8 @@ import type { ChatModelCard } from '@lobechat/types';
 import { uniqueId } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 
 export interface HigressModelCard {
   context_length: number;

@@ -20,6 +20,7 @@ export { createServerAgentToolsEngine, createServerToolsEngine } from './AgentTo
 
 // Context Engineering (Messages Engine)
 export type {
+  EvalContext,
   ServerKnowledgeConfig,
   ServerMessagesEngineParams,
   ServerModelCapabilities,

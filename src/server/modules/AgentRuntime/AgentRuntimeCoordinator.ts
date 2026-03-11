@@ -3,7 +3,7 @@ import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { createAgentStateManager, createStreamEventManager } from './factory';
-import type { IAgentStateManager, IStreamEventManager } from './types';
+import { type IAgentStateManager, type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:coordinator');
 
@@ -178,6 +178,24 @@ export class AgentRuntimeCoordinator {
    */
   async cleanupExpiredOperations(): Promise<number> {
     return this.stateManager.cleanupExpiredOperations();
+  }
+
+  /**
+   * Atomically try to claim a step for execution (distributed lock).
+   */
+  async tryClaimStep(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds?: number,
+  ): Promise<boolean> {
+    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds);
+  }
+
+  /**
+   * Release the step execution lock.
+   */
+  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
+    return this.stateManager.releaseStepLock(operationId, stepIndex);
   }
 
   /**

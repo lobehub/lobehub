@@ -23,11 +23,11 @@ const Params = memo(() => {
     <Action
       icon={SlidersHorizontal}
       loading={updating}
+      showTooltip={false}
+      title={t('settingModel.params.title')}
       popover={{
         content: <Controls setUpdating={setUpdating} updating={updating} />,
       }}
-      showTooltip={false}
-      title={t('settingModel.params.title')}
     />
   );
 });

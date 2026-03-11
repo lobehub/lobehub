@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./executor": "./src/executor/index.ts"
+    "./executor": "./src/executor/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {
@@ -22,7 +23,7 @@
     "promptfoo": "^0.120.17"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^4",
+    "@lobehub/ui": "^5",
     "antd-style": "*",
     "lucide-react": "*",
     "react": "*",

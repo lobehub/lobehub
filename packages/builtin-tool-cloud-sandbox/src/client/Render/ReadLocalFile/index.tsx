@@ -1,11 +1,11 @@
 'use client';
 
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import { type ReadLocalFileState } from '../../../types';
+import type { ReadLocalFileState } from '../../../types';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -74,12 +74,12 @@ const ReadLocalFile = memo<BuiltinRenderProps<ReadLocalFileParams, ReadLocalFile
     return (
       <Flexbox className={styles.container} gap={8}>
         {/* File path and info */}
-        <Flexbox align={'center'} horizontal justify={'space-between'}>
-          <Text as={'span'} code ellipsis fontSize={12}>
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
+          <Text code ellipsis as={'span'} fontSize={12}>
             📄 {args.path}
           </Text>
           {lineInfo && (
-            <Text as={'span'} code fontSize={12} type={'secondary'}>
+            <Text code as={'span'} fontSize={12} type={'secondary'}>
               {lineInfo}
             </Text>
           )}
@@ -88,11 +88,11 @@ const ReadLocalFile = memo<BuiltinRenderProps<ReadLocalFileParams, ReadLocalFile
         {/* File content */}
         <Block padding={0} variant={'outlined'}>
           <Highlighter
-            language={language}
             showLanguage
+            wrap
+            language={language}
             style={{ maxHeight: 400, overflow: 'auto' }}
             variant={'borderless'}
-            wrap
           >
             {pluginState.content}
           </Highlighter>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { merge } from '@/utils/merge';
 
-import { ImageStore } from '../../store';
+import { type ImageStore } from '../../store';
 import { initialCreateImageState } from './initialState';
 import { createImageSelectors } from './selectors';
 

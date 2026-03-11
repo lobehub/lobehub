@@ -1,6 +1,7 @@
 'use client';
 
-import { type ReactNode, memo, useCallback } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useCallback } from 'react';
 
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
@@ -8,9 +9,9 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
 import WideScreenContainer from '../../WideScreenContainer';
+import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
-import SkeletonList from '../components/SkeletonList';
 import { dataSelectors, useConversationStore } from '../store';
 import VirtualizedList from './components/VirtualizedList';
 

@@ -68,9 +68,15 @@ const isInit = useSessionStore(recentSelectors.isRecentTopicsInit);
 ```
 
 **RecentTopic type:**
+
 ```typescript
 interface RecentTopic {
-  agent: { avatar: string | null; backgroundColor: string | null; id: string; title: string | null } | null;
+  agent: {
+    avatar: string | null;
+    backgroundColor: string | null;
+    id: string;
+    title: string | null;
+  } | null;
   id: string;
   title: string | null;
   updatedAt: Date;

@@ -12,8 +12,9 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import { merge } from '@/utils/merge';
 
-import { AiProviderSelectItem, aiModels, aiProviders } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { AiProviderSelectItem } from '../schemas';
+import { aiModels, aiProviders } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
 
@@ -32,7 +33,6 @@ export class AiProviderModel {
     { keyVaults: userKey, ...params }: CreateAiProviderParams,
     encryptor?: EncryptUserKeyVaults,
   ) => {
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const defaultSerialize = (s: string) => s;
     const encrypt = encryptor ?? defaultSerialize;
     const keyVaults = await encrypt(JSON.stringify(userKey));
@@ -111,11 +111,28 @@ export class AiProviderModel {
     id: string,
     value: UpdateAiProviderConfigParams,
     encryptor?: EncryptUserKeyVaults,
+    decryptor?: DecryptUserKeyVaults,
   ) => {
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const defaultSerialize = (s: string) => s;
     const encrypt = encryptor ?? defaultSerialize;
-    const keyVaults = await encrypt(JSON.stringify(value.keyVaults));
+    const decrypt = decryptor ?? JSON.parse;
+
+    // Merge keyVaults with existing values to preserve OAuth tokens
+    // when updating from form values that don't include them
+    let mergedKeyVaults = value.keyVaults || {};
+
+    const existing = await this.findById(id);
+    if (existing?.keyVaults) {
+      try {
+        const existingKeyVaults = await decrypt(existing.keyVaults);
+        // Merge: new values override existing, but preserve fields not in new values
+        mergedKeyVaults = { ...existingKeyVaults, ...value.keyVaults };
+      } catch {
+        // Ignore decryption errors, use new values only
+      }
+    }
+
+    const keyVaults = await encrypt(JSON.stringify(mergedKeyVaults));
 
     const commonFields = {
       checkModel: value.checkModel,
@@ -247,7 +264,7 @@ export class AiProviderModel {
       .where(and(eq(aiProviders.userId, this.userId)));
 
     const decrypt = decryptor ?? JSON.parse;
-    let runtimeConfig: Record<string, AiProviderRuntimeConfig> = {};
+    const runtimeConfig: Record<string, AiProviderRuntimeConfig> = {};
 
     for (const item of result) {
       const builtin = DEFAULT_MODEL_PROVIDER_LIST.find((provider) => provider.id === item.id);

@@ -238,13 +238,15 @@ describe('thinkingResolver', () => {
     describe('gemini-3-pro-preview (the original issue model)', () => {
       const model = 'gemini-3-pro-preview';
 
-      it('should not set thinkingBudget by default for Gemini 3 (let API decide)', () => {
+      it('should not set thinkingBudget or includeThoughts by default for Gemini 3 (let API decide)', () => {
         const result = resolveGoogleThinkingConfig(model, {});
 
         // For Gemini 3 models, when neither thinkingLevel nor thinkingBudget is set,
-        // don't set any thinking params - let API use its default behavior
+        // don't set any thinking params - let API use its default behavior.
+        // includeThoughts must be undefined to avoid Vertex AI error:
+        // "include_thoughts is only enabled when thinking is enabled"
         expect(result).toEqual({
-          includeThoughts: true,
+          includeThoughts: undefined,
           thinkingBudget: undefined,
         });
       });
@@ -274,12 +276,12 @@ describe('thinkingResolver', () => {
     describe('gemini-3-pro-image-preview (thinking-enabled model)', () => {
       const model = 'gemini-3-pro-image-preview';
 
-      it('should not set thinkingBudget by default for Gemini 3 (let API decide)', () => {
+      it('should not set thinkingBudget or includeThoughts by default for Gemini 3 (let API decide)', () => {
         const result = resolveGoogleThinkingConfig(model, {});
 
         // For Gemini 3 models, don't set thinkingBudget by default
         expect(result).toEqual({
-          includeThoughts: true,
+          includeThoughts: undefined,
           thinkingBudget: undefined,
         });
       });
@@ -349,12 +351,12 @@ describe('thinkingResolver', () => {
     describe('gemini-3-flash (supports thinking and thinkingLevel)', () => {
       const model = 'gemini-3-flash';
 
-      it('should not set thinkingBudget by default for Gemini 3 (let API decide)', () => {
+      it('should not set thinkingBudget or includeThoughts by default for Gemini 3 (let API decide)', () => {
         const result = resolveGoogleThinkingConfig(model, {});
 
         // For Gemini 3 models, don't set thinkingBudget by default
         expect(result).toEqual({
-          includeThoughts: true,
+          includeThoughts: undefined,
           thinkingBudget: undefined,
         });
       });
@@ -404,16 +406,29 @@ describe('thinkingResolver', () => {
 
         expect(result.includeThoughts).toBeUndefined();
       });
+
+      it('should not enable includeThoughts when thinkingLevel is set but budget defaults to 0', () => {
+        // flash-lite ignores thinkingLevel (not Gemini 3) and defaults to budget=0.
+        // Must not emit includeThoughts:true with thinkingBudget:0 — Vertex AI rejects this.
+        const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'high' });
+
+        expect(result).toEqual({
+          includeThoughts: undefined,
+          thinkingBudget: 0,
+        });
+      });
     });
 
     describe('nano-banana-pro-preview (thinking-enabled model)', () => {
       const model = 'nano-banana-pro-preview';
 
-      it('should enable includeThoughts by default', () => {
+      it('should not enable includeThoughts when thinkingBudget is undefined', () => {
         const result = resolveGoogleThinkingConfig(model, {});
 
-        // nano-banana-pro is 'other' category, so thinkingBudget is undefined
-        expect(result.includeThoughts).toBe(true);
+        // nano-banana-pro is 'other' category, so thinkingBudget is undefined.
+        // Without an actual thinking budget or level, includeThoughts should not be set
+        // to avoid Vertex AI error.
+        expect(result.includeThoughts).toBeUndefined();
       });
     });
   });

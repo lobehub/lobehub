@@ -42,7 +42,7 @@ describe('ToolNameResolver', () => {
       expect(result).toContain(identifier);
       expect(result).toContain('MD5HASH_');
       expect(result).toContain('____builtin');
-      expect(result).toMatch(/^my-plugin____MD5HASH_[a-f0-9]+____builtin$/);
+      expect(result).toMatch(/^my-plugin_{4}MD5HASH_[\da-f]+_{4}builtin$/);
     });
 
     it('should handle identifier that is itself long', () => {
@@ -258,6 +258,32 @@ describe('ToolNameResolver', () => {
       expect(result).toHaveLength(2);
       expect(result[0].identifier).toBe('plugin1');
       expect(result[1].identifier).toBe('plugin2');
+    });
+
+    it('should recover tool type from manifest if model strips the suffix (e.g. GLM-4)', () => {
+      const toolCalls = [
+        {
+          function: { arguments: '{}', name: 'lobe-notebook____createDocument' },
+          id: 'call_1',
+          type: 'function',
+        },
+      ];
+
+      const manifests = {
+        'lobe-notebook': {
+          api: [{ description: '', name: 'createDocument', parameters: {} }],
+          identifier: 'lobe-notebook',
+          meta: {},
+          type: 'builtin' as const,
+        },
+      };
+
+      const result = resolver.resolve(toolCalls, manifests);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].identifier).toBe('lobe-notebook');
+      expect(result[0].apiName).toBe('createDocument');
+      expect(result[0].type).toBe('builtin'); // Recovered from manifest!
     });
   });
 

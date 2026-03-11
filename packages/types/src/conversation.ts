@@ -1,4 +1,4 @@
-import { IThreadType } from './topic/thread';
+import type { IThreadType } from './topic/thread';
 
 /**
  * Scope types for message map key generation
@@ -6,6 +6,7 @@ import { IThreadType } from './topic/thread';
  * - thread: Agent thread conversation
  * - group: Group main conversation
  * - group_agent: Agent conversation within a group
+ * - sub_agent: Agent-to-agent communication (non-group, uses subAgentId for config/display only)
  */
 export type MessageMapScope =
   | 'main'
@@ -14,7 +15,8 @@ export type MessageMapScope =
   | 'group_agent'
   | 'group_agent_builder'
   | 'page'
-  | 'agent_builder';
+  | 'agent_builder'
+  | 'sub_agent';
 
 /**
  * Context for generating message map key with scope-driven architecture
@@ -73,7 +75,6 @@ export interface MessageMapContext {
   topicId?: string | null;
 }
 
-/* eslint-disable typescript-sort-keys/interface */
 /**
  * Context for identifying a conversation or message list
  * This is the standard type for all conversation-related context passing
@@ -123,21 +124,10 @@ export interface ConversationContext {
    */
   groupId?: string;
   /**
-   * Sub Agent ID for group orchestration scenarios
-   * - Used to get Agent config (model, provider, plugins) instead of agentId
-   * - Used to set message.agentId (mark message source)
-   * - Falls back to agentId if not set
-   *
-   * @example
-   * ```ts
-   * // Supervisor executes: no subAgentId needed
-   * { agentId: 'supervisor', groupId: 'group-1', scope: 'group' }
-   *
-   * // Agent speaks in group: use subAgentId for agent config
-   * { agentId: 'supervisor', subAgentId: 'agent-1', groupId: 'group-1', scope: 'group' }
-   * ```
+   * Whether this is creating a new conversation (new topic or new thread)
+   * Used for optimistic updates
    */
-  subAgentId?: string;
+  isNew?: boolean;
   /**
    * Whether the current agent is the Supervisor in group orchestration
    * - Used to mark assistant messages with metadata.isSupervisor
@@ -145,11 +135,6 @@ export interface ConversationContext {
    * - context-engine will restore role back to 'assistant' for model
    */
   isSupervisor?: boolean;
-  /**
-   * Whether this is creating a new conversation (new topic or new thread)
-   * Used for optimistic updates
-   */
-  isNew?: boolean;
   /**
    * Scope type for the conversation
    * - 'main': Agent main conversation (default)
@@ -168,6 +153,22 @@ export interface ConversationContext {
    * Only used when creating a new thread (isNew=true, scope='thread')
    */
   sourceMessageId?: string;
+  /**
+   * Sub Agent ID for group orchestration scenarios
+   * - Used to get Agent config (model, provider, plugins) instead of agentId
+   * - Used to set message.agentId (mark message source)
+   * - Falls back to agentId if not set
+   *
+   * @example
+   * ```ts
+   * // Supervisor executes: no subAgentId needed
+   * { agentId: 'supervisor', groupId: 'group-1', scope: 'group' }
+   *
+   * // Agent speaks in group: use subAgentId for agent config
+   * { agentId: 'supervisor', subAgentId: 'agent-1', groupId: 'group-1', scope: 'group' }
+   * ```
+   */
+  subAgentId?: string;
   /**
    * Thread ID (takes highest priority if present)
    * When present, scope is auto-detected as 'thread'

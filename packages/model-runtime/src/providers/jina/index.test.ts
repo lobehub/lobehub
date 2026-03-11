@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { JinaModelCard, LobeJinaAI, params } from './index';
+import type { JinaModelCard } from './index';
+import { LobeJinaAI, params } from './index';
 
 const provider = ModelProvider.Jina;
 const defaultBaseURL = 'https://deepsearch.jina.ai/v1';

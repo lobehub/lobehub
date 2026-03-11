@@ -18,7 +18,7 @@ export const POST = async (req: Request): Promise<NextResponse> => {
 
   const { event, data } = payload;
 
-  console.log(`logto webhook payload: ${{ data, event }}`);
+  console.info(`logto webhook payload: ${{ data, event }}`);
 
   const webhookUserService = new WebhookUserService(serverDB);
   switch (event) {

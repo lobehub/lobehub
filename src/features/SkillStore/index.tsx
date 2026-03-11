@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal } from '@lobehub/ui';
+import { createModal, LOBE_THEME_APP_ID } from '@lobehub/ui';
 import { t } from 'i18next';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -21,6 +21,9 @@ export const createSkillStoreModal = () =>
     ),
     destroyOnHidden: false,
     footer: null,
+    // Render the antd Modal inside appElement instead of document.body,
+    // so the modal and DropdownMenu portals share the same stacking context
+    getContainer: () => document.getElementById(LOBE_THEME_APP_ID) || document.body,
     styles: {
       body: { overflow: 'hidden', padding: 0 },
     },

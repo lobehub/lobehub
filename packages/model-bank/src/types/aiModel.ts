@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ModelParamsSchema } from '../standard-parameters';
+import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -18,7 +18,7 @@ export const AiModelTypeSchema = z.enum([
   'tts',
   'stt',
   'image',
-  'text2video',
+  'video',
   'text2music',
   'realtime',
 ] as const);
@@ -144,7 +144,10 @@ export type PricingUnitName =
   | 'imageGeneration' // for image generation models
   | 'imageInput'
   | 'imageInput_cacheRead'
-  | 'imageOutput';
+  | 'imageOutput'
+
+  // Video-based pricing units
+  | 'videoGeneration';
 
 export type PricingUnitType =
   | 'millionTokens' // per 1M tokens
@@ -189,6 +192,10 @@ export interface Pricing {
    * Fallback approximate per-image price (USD) when detailed pricing table is unavailable
    */
   approximatePricePerImage?: number;
+  /**
+   * Fallback approximate per-video price (USD) when detailed pricing table is unavailable
+   */
+  approximatePricePerVideo?: number;
   currency?: ModelPriceCurrency;
   units: PricingUnit[];
 }
@@ -243,13 +250,20 @@ export type ExtendParamsType =
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
+  | 'grok4_20ReasoningEffort'
+  | 'codexMaxReasoningEffort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'
   | 'thinkingLevel'
   | 'thinkingLevel2'
+  | 'thinkingLevel3'
+  | 'thinkingLevel4'
+  | 'thinkingLevel5'
   | 'imageAspectRatio'
+  | 'imageAspectRatio2'
   | 'imageResolution'
+  | 'imageResolution2'
   | 'urlContext';
 
 export interface AiModelSettings {
@@ -272,13 +286,20 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_1ReasoningEffort',
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
+  'grok4_20ReasoningEffort',
+  'codexMaxReasoningEffort',
   'textVerbosity',
   'thinking',
   'thinkingBudget',
   'thinkingLevel',
   'thinkingLevel2',
+  'thinkingLevel3',
+  'thinkingLevel4',
+  'thinkingLevel5',
   'imageAspectRatio',
+  'imageAspectRatio2',
   'imageResolution',
+  'imageResolution2',
   'urlContext',
 ]);
 
@@ -310,6 +331,12 @@ export interface AIImageModelCard extends AIBaseModelCard {
   pricing?: Pricing;
   resolutions?: string[];
   type: 'image';
+}
+
+export interface AIVideoModelCard extends AIBaseModelCard {
+  parameters?: VideoModelParamsSchema;
+  pricing?: Pricing;
+  type: 'video';
 }
 
 export interface AITTSModelCard extends AIBaseModelCard {

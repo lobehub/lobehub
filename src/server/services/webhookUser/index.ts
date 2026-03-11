@@ -3,7 +3,8 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 
 import { UserModel } from '@/database/models/user';
-import { type UserItem, account, nextauthAccounts, session, users } from '@/database/schemas';
+import { type UserItem } from '@/database/schemas';
+import { account, nextauthAccounts, session, users } from '@/database/schemas';
 
 export class WebhookUserService {
   private db: LobeChatDatabase;
@@ -58,7 +59,7 @@ export class WebhookUserService {
     { accountId, providerId }: { accountId: string; providerId: string },
     data: Partial<UserItem>,
   ) => {
-    console.log(`updating user "${JSON.stringify({ accountId, providerId })}" due to webhook`);
+    console.info(`updating user "${JSON.stringify({ accountId, providerId })}" due to webhook`);
 
     const user = await this.getUserByAccount({ accountId, providerId });
 
@@ -88,7 +89,7 @@ export class WebhookUserService {
     accountId: string;
     providerId: string;
   }) => {
-    console.log(`Signing out user "${JSON.stringify({ accountId, providerId })}"`);
+    console.info(`Signing out user "${JSON.stringify({ accountId, providerId })}"`);
 
     const user = await this.getUserByAccount({ accountId, providerId });
 

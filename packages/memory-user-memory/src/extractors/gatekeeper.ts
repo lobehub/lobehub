@@ -2,8 +2,9 @@ import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 
 import { gatekeeperPrompt } from '../prompts';
-import { GatekeeperResult, GatekeeperResultSchema } from '../schemas';
-import { GatekeeperOptions } from '../types';
+import type { GatekeeperResult } from '../schemas';
+import { GatekeeperResultSchema } from '../schemas';
+import type { GatekeeperOptions } from '../types';
 import { BaseMemoryExtractor } from './base';
 
 export class UserMemoryGateKeeper extends BaseMemoryExtractor<GatekeeperResult, GatekeeperOptions> {

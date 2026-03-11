@@ -1,6 +1,8 @@
-import { Avatar, Center, type CenterProps, Flexbox } from '@lobehub/ui';
-import { cssVar, cx , createStaticStyles } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import { type CenterProps } from '@lobehub/ui';
+import { Avatar, Center, Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { type ReactNode } from 'react';
+import { memo } from 'react';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -17,7 +19,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     max-width: 360px;
 
-    @media (max-width: 768px) {
+    @media (width <= 768px) {
       max-width: 90%;
     }
   `,

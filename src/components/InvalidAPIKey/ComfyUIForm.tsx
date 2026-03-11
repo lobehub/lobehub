@@ -4,7 +4,7 @@ import { ComfyUI } from '@lobehub/icons';
 import { Button, Center, Flexbox, Icon, Select } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, Network } from 'lucide-react';
-import { memo, useContext, useEffect, useState } from 'react';
+import { memo, use, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
@@ -48,7 +48,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
   const updateAiProviderConfig = useAiInfraStore((s) => s.updateAiProviderConfig);
   const useFetchAiProviderRuntimeState = useAiInfraStore((s) => s.useFetchAiProviderRuntimeState);
 
-  const { loading, setLoading } = useContext(LoadingContext);
+  const { loading, setLoading } = use(LoadingContext);
 
   // Fetch the runtime state to ensure config is loaded
   // Pass true since this is for auth dialog (not initialization)
@@ -148,17 +148,17 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
               <Flexbox gap={4}>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.baseURL.title')}</div>
                 <FormInput
-                  onChange={(value) => handleValueChange('baseURL', value)}
                   placeholder={s('comfyui.baseURL.placeholder')}
-                  suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
+                  suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                   value={formValues.baseURL}
+                  onChange={(value) => handleValueChange('baseURL', value)}
                 />
               </Flexbox>
             ) : (
               <Button
                 icon={<Icon icon={Network} />}
-                onClick={() => setShowBaseURL(true)}
                 type={'text'}
+                onClick={() => setShowBaseURL(true)}
               >
                 {t('unlock.comfyui.modifyBaseUrl')}
               </Button>
@@ -169,10 +169,10 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
               <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.authType.title')}</div>
               <Select
                 allowClear={false}
-                onChange={(value) => handleValueChange('authType', value)}
                 options={authTypeOptions}
                 placeholder={s('comfyui.authType.placeholder')}
                 value={formValues.authType}
+                onChange={(value) => handleValueChange('authType', value)}
               />
             </Flexbox>
 
@@ -183,20 +183,20 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                   <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.username.title')}</div>
                   <FormInput
                     autoComplete="username"
-                    onChange={(value) => handleValueChange('username', value)}
                     placeholder={s('comfyui.username.placeholder')}
-                    suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
+                    suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                     value={formValues.username}
+                    onChange={(value) => handleValueChange('username', value)}
                   />
                 </Flexbox>
                 <Flexbox gap={4}>
                   <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.password.title')}</div>
                   <FormPassword
                     autoComplete="new-password"
-                    onChange={(value) => handleValueChange('password', value)}
                     placeholder={s('comfyui.password.placeholder')}
-                    suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
+                    suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                     value={formValues.password}
+                    onChange={(value) => handleValueChange('password', value)}
                   />
                 </Flexbox>
               </>
@@ -208,10 +208,10 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.apiKey.title')}</div>
                 <FormPassword
                   autoComplete="new-password"
-                  onChange={(value) => handleValueChange('apiKey', value)}
                   placeholder={s('comfyui.apiKey.placeholder')}
-                  suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
+                  suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                   value={formValues.apiKey}
+                  onChange={(value) => handleValueChange('apiKey', value)}
                 />
               </Flexbox>
             )}
@@ -230,9 +230,9 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                   deleteTooltip={s('comfyui.customHeaders.deleteTooltip')}
                   duplicateKeyErrorText={s('comfyui.customHeaders.duplicateKeyError')}
                   keyPlaceholder={s('comfyui.customHeaders.keyPlaceholder')}
-                  onChange={(value) => handleValueChange('customHeaders', value)}
                   value={formValues.customHeaders}
                   valuePlaceholder={s('comfyui.customHeaders.valuePlaceholder')}
+                  onChange={(value) => handleValueChange('customHeaders', value)}
                 />
               </Flexbox>
             )}

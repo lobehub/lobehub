@@ -1,12 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import {
-  NewUserMemoryContext,
-  UserMemoryContext,
-  userMemories,
-  userMemoriesContexts,
-} from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { NewUserMemoryContext, UserMemoryContext } from '../../schemas';
+import { userMemories, userMemoriesContexts } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
 
 export class UserMemoryContextModel {
   private userId: string;

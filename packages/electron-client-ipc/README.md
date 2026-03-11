@@ -1,6 +1,6 @@
 # @lobechat/electron-client-ipc
 
-This package is a client-side toolkit for handling IPC (Inter-Process Communication) in LobeChat's Electron environment.
+This package is a client-side toolkit for handling IPC (Inter-Process Communication) in LobeHub's Electron environment.
 
 ## Introduction
 
@@ -59,7 +59,7 @@ IPC communication needs vary across different use cases and platforms. We welcom
 
 ### Contribution Process
 
-1. Fork the [LobeChat repository](https://github.com/lobehub/lobe-chat)
+1. Fork the [LobeHub repository](https://github.com/lobehub/lobe-chat)
 2. Make your changes to the IPC client package
 3. Submit a Pull Request describing:
 
@@ -70,4 +70,4 @@ IPC communication needs vary across different use cases and platforms. We welcom
 
 ## 📌 Note
 
-This is an internal module of LobeHub (`"private": true`), designed specifically for LobeChat and not published as a standalone package.
+This is an internal module of LobeHub (`"private": true`), designed specifically for LobeHub and not published as a standalone package.

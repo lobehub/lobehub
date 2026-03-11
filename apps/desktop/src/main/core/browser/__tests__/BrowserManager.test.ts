@@ -79,6 +79,15 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+// Mock RemoteServerConfigCtr
+vi.mock('@/controllers/RemoteServerConfigCtr', () => ({
+  default: class MockRemoteServerConfigCtr {
+    async isRemoteServerConfigured() {
+      return true;
+    }
+  },
+}));
+
 describe('BrowserManager', () => {
   let manager: BrowserManager;
   let mockApp: AppCore;
@@ -90,7 +99,11 @@ describe('BrowserManager', () => {
     MockBrowser.mockClear();
 
     // Create mock App
-    mockApp = {} as unknown as AppCore;
+    mockApp = {
+      getController: vi.fn().mockReturnValue({
+        isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
+      }),
+    } as unknown as AppCore;
 
     manager = new BrowserManager(mockApp);
   });
@@ -229,8 +242,8 @@ describe('BrowserManager', () => {
   });
 
   describe('initializeBrowsers', () => {
-    it('should initialize keepAlive browsers', () => {
-      manager.initializeBrowsers();
+    it('should initialize keepAlive browsers', async () => {
+      await manager.initializeBrowsers();
 
       // app has keepAlive: true, settings has keepAlive: false
       expect(manager.browsers.has('app')).toBe(true);

@@ -1,15 +1,17 @@
-import { GenerateContentResponse, Part } from '@google/genai';
-import { GroundingSearch } from '@lobechat/types';
+import type { GenerateContentResponse, Part } from '@google/genai';
+import type { GroundingSearch } from '@lobechat/types';
 
-import { ChatStreamCallbacks } from '../../../types';
+import type { ChatStreamCallbacks } from '../../../types';
 import { nanoid } from '../../../utils/uuid';
 import { convertGoogleAIUsage } from '../../usageConverters/google-ai';
-import {
+import type {
   ChatPayloadForTransformStream,
   StreamContext,
   StreamPartChunkData,
   StreamProtocolChunk,
   StreamToolCallChunkData,
+} from '../protocol';
+import {
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
@@ -94,7 +96,7 @@ const transformGoogleGenerativeAIStream = (
               name: value.name,
             },
             id: generateToolCallId(index, value.name),
-            index: index,
+            index,
             thoughtSignature: value.thoughtSignature,
             type: 'function',
           }),
@@ -231,26 +233,55 @@ const transformGoogleGenerativeAIStream = (
     }
 
     // return the grounding
-    const { groundingChunks, webSearchQueries } = candidate.groundingMetadata ?? {};
+    const { groundingChunks, imageSearchQueries, webSearchQueries } =
+      candidate.groundingMetadata ?? {};
     if (groundingChunks) {
+      const webChunks = groundingChunks.filter((chunk) => chunk.web);
+      const imageChunks = groundingChunks.filter((chunk) => chunk.image);
+
       return [
-        { data: text, id: context.id, type: 'text' },
+        ...(text ? [{ data: text, id: context.id, type: 'text' as const }] : []),
         {
           data: {
-            citations: groundingChunks?.map((chunk) => ({
-              // Google returns a uri processed by Google itself, so it cannot display the real favicon
-              // Need to use title as a replacement
-              favicon: chunk.web?.title,
-              title: chunk.web?.title,
-              url: chunk.web?.uri,
-            })),
-            searchQueries: webSearchQueries,
+            citations:
+              webChunks.length > 0
+                ? webChunks.map((chunk) => {
+                    // Fall back to hostname when title is empty
+                    let displayTitle = chunk.web?.title?.replaceAll(/<[^>]*>/g, '');
+                    if (!displayTitle) {
+                      try {
+                        displayTitle = new URL(chunk.web?.uri || '').hostname.replace('www.', '');
+                      } catch {
+                        displayTitle = chunk.web?.uri;
+                      }
+                    }
+                    return {
+                      // Google returns a uri processed by Google itself, so it cannot display the real favicon
+                      // Need to use title (or derived hostname) as a replacement
+                      favicon: displayTitle,
+                      title: displayTitle,
+                      url: chunk.web?.uri,
+                    };
+                  })
+                : undefined,
+            imageResults:
+              imageChunks.length > 0
+                ? imageChunks.map((chunk) => ({
+                    domain: chunk.image?.domain,
+                    imageUri: chunk.image?.imageUri,
+                    sourceUri: chunk.image?.sourceUri,
+                    title: chunk.image?.title,
+                  }))
+                : undefined,
+            imageSearchQueries:
+              imageSearchQueries && imageSearchQueries.length > 0 ? imageSearchQueries : undefined,
+            searchQueries: webSearchQueries?.filter(Boolean),
           } as GroundingSearch,
           id: context.id,
           type: 'grounding',
         },
         ...usageChunks,
-      ];
+      ].filter(Boolean) as StreamProtocolChunk[];
     }
 
     // Check for image data before handling finishReason
@@ -326,7 +357,7 @@ export const GoogleGenerativeAIStream = (
   return rawStream
     .pipeThrough(
       createTokenSpeedCalculator(transformWithPayload, {
-        enableStreaming: enableStreaming,
+        enableStreaming,
         inputStartAt,
         streamStack,
       }),

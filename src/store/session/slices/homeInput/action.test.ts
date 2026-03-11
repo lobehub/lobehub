@@ -411,7 +411,7 @@ describe('HomeInputAction', () => {
 
   describe('sendAsResearch', () => {
     it('should log message to console', async () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
       const { result } = renderHook(() => useSessionStore());
 

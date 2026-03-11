@@ -1,11 +1,11 @@
 import { platform } from 'node:os';
 
-import { App } from '@/core/App';
+import type { App } from '@/core/App';
 
 import { LinuxMenu } from './impls/linux';
 import { MacOSMenu } from './impls/macOS';
 import { WindowsMenu } from './impls/windows';
-import { IMenuPlatform } from './types';
+import type { IMenuPlatform } from './types';
 
 export type { IMenuPlatform, MenuOptions } from './types';
 
@@ -24,7 +24,7 @@ export const createMenuImpl = (app: App): IMenuPlatform => {
     }
 
     default: {
-      // 提供一个备用或抛出错误
+      // Provide a fallback or throw an error
       console.warn(
         `Unsupported platform for menu: ${currentPlatform}, using Windows implementation as fallback.`,
       );

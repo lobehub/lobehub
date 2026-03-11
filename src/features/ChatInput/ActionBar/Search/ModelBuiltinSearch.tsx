@@ -47,18 +47,18 @@ const ModelBuiltinSearch = memo(() => {
 
   return (
     <Flexbox
-      align={'center'}
       horizontal
+      align={'center'}
       justify={'space-between'}
+      padding={'8px 12px'}
+      style={{ cursor: 'pointer', userSelect: 'none' }}
       onClick={async () => {
         setLoading(true);
         await updateAgentChatConfig({ useModelBuiltinSearch: !checked });
         setLoading(false);
       }}
-      padding={'8px 12px'}
-      style={{ cursor: 'pointer', userSelect: 'none' }}
     >
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <SearchEngineIcon icon={modelCard?.settings?.searchProvider} />
         {t('search.mode.useModelBuiltin')}
       </Flexbox>

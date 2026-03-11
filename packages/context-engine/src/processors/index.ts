@@ -18,6 +18,7 @@ export {
   PlaceholderVariablesProcessor,
   renderPlaceholderTemplate,
 } from './PlaceholderVariables';
+export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
 export { TaskMessageProcessor } from './TaskMessage';
 export { TasksFlattenProcessor } from './TasksFlatten';
@@ -34,5 +35,6 @@ export type {
   PlaceholderValueMap,
   PlaceholderVariablesConfig,
 } from './PlaceholderVariables';
+export type { ReactionFeedbackConfig } from './ReactionFeedback';
 export type { TaskMessageConfig } from './TaskMessage';
 export type { ToolCallConfig } from './ToolCall';

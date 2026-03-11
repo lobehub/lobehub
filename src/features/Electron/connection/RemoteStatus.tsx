@@ -25,7 +25,6 @@ const RemoteStatus = memo<SyncProps>(({ onClick }) => {
     <ActionIcon
       icon={isIniting ? Loader : isSyncActive ? Wifi : WifiOffIcon}
       loading={isIniting}
-      onClick={onClick}
       size="small"
       title={
         isIniting
@@ -37,6 +36,7 @@ const RemoteStatus = memo<SyncProps>(({ onClick }) => {
       tooltipProps={{
         placement: 'bottomRight',
       }}
+      onClick={onClick}
     />
   );
 });

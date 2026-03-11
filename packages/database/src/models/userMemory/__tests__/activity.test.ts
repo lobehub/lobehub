@@ -2,13 +2,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import {
-  NewUserMemoryActivity,
-  userMemories,
-  userMemoriesActivities,
-  users,
-} from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { NewUserMemoryActivity } from '../../../schemas';
+import { userMemories, userMemoriesActivities, users } from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryActivityModel } from '../activity';
 
 const userId = 'activity-test-user';

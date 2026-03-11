@@ -1,6 +1,6 @@
 # @lobechat/electron-client-ipc
 
-这个包是 LobeChat 在 Electron 环境中用于处理 IPC（进程间通信）的客户端工具包。
+这个包是 LobeHub 在 Electron 环境中用于处理 IPC（进程间通信）的客户端工具包。
 
 ## 介绍
 
@@ -59,7 +59,7 @@
 
 ### 贡献流程
 
-1. Fork [LobeChat 仓库](https://github.com/lobehub/lobe-chat)
+1. Fork [LobeHub 仓库](https://github.com/lobehub/lobe-chat)
 2. 对 IPC 客户端包进行修改
 3. 提交 Pull Request 并描述：
 
@@ -70,4 +70,4 @@
 
 ## 📌 说明
 
-这是 LobeHub 的内部模块（`"private": true`），专为 LobeChat 设计，不作为独立包发布。
+这是 LobeHub 的内部模块（`"private": true`），专为 LobeHub 设计，不作为独立包发布。

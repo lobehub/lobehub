@@ -11,7 +11,7 @@ interface ArtifactProps {
 const SIZE = 28;
 const ArtifactIcon = memo<ArtifactProps>(({ type }) => {
   if (!type)
-    return <Icon icon={Loader2} size={SIZE} spin style={{ color: cssVar.colorTextSecondary }} />;
+    return <Icon spin icon={Loader2} size={SIZE} style={{ color: cssVar.colorTextSecondary }} />;
 
   switch (type) {
     case 'application/lobe.artifacts.code': {

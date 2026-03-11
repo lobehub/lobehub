@@ -9,8 +9,8 @@ import { WorkflowAbort } from '@upstash/workflow';
 import { serve } from '@upstash/workflow/nextjs';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
-  type MemoryExtractionPayloadInput,
   MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';

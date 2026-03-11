@@ -1,4 +1,4 @@
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { z } from 'zod';
 
 import { PluginModel } from '@/database/models/plugin';

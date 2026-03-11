@@ -1,0 +1,144 @@
+---
+title: Custom MCP
+description: >-
+  Connect your own MCP servers to LobeHub — add private APIs, internal tools,
+  and custom integrations beyond what the MCP Marketplace offers.
+tags:
+  - Custom MCP
+  - LobeHub
+  - MCP
+  - Model Context Protocol
+  - Skills
+  - Custom Integration
+---
+
+# Custom MCP
+
+The MCP Marketplace offers thousands of ready-to-use integrations, but sometimes you need to connect a private API, an internal company tool, or a custom MCP server you've built yourself. **Custom MCP** lets you add any MCP-compatible server directly to LobeHub without going through the marketplace.
+
+## Where to Add a Custom MCP
+
+You can open the "Add custom skill" dialog from several places:
+
+- **Settings → Skills** — click **Skill Store**, then switch to the **Custom** tab and click **Add custom skill**
+- **Agent settings** — open any agent's settings, go to **Skills**, and click **Add custom skill**
+- **Chat input** — click the **Tools** button above the input area, then **Add custom skill**
+
+All three paths open the same configuration dialog.
+
+## Quick Import from JSON
+
+The fastest way to add a custom MCP is to paste a JSON config from the MCP server's documentation.
+
+<Steps>
+  ### Open the import panel
+
+  In the "Add custom skill" dialog, click **Import JSON config** at the top of the form. A text area will appear.
+
+  ### Paste your config
+
+  Paste either a full `mcpServers` block or a single-server config:
+
+  ```json
+  {
+    "mcpServers": {
+      "my-server": {
+        "command": "npx",
+        "args": ["-y", "my-mcp-package"],
+        "type": "stdio"
+      }
+    }
+  }
+  ```
+
+  Or for an HTTP server:
+
+  ```json
+  {
+    "mcpServers": {
+      "my-api": {
+        "url": "https://mcp.example.com/sse",
+        "type": "http"
+      }
+    }
+  }
+  ```
+
+  ### Click Import
+
+  LobeHub automatically fills in the identifier, connection type, URL or command, and any other detected parameters. Review the auto-filled fields, adjust if needed, then proceed to test the connection.
+</Steps>
+
+<Callout type={'info'}>Most MCP server documentation provides a ready-to-copy JSON config in this format. Quick Import is the recommended starting point.</Callout>
+
+## Manual Configuration
+
+If you prefer to enter settings by hand, choose a connection type and fill in the fields directly.
+
+### Streamable HTTP
+
+Use this for remote MCP servers — cloud-hosted APIs, SaaS tools, or any server accessible via HTTPS. Available on both web and desktop.
+
+| Field            | Description                                                               |
+| ---------------- | ------------------------------------------------------------------------- |
+| **MCP name**     | A unique identifier for this skill (letters, numbers, hyphens only)       |
+| **Endpoint URL** | The full HTTPS URL of the MCP server (e.g. `https://mcp.example.com/sse`) |
+| **Auth type**    | None, or API Key (sent as a Bearer token)                                 |
+| **API Key**      | Required when Auth type is set to API Key                                 |
+| **HTTP Headers** | Optional additional headers (expand Advanced section)                     |
+| **Description**  | Optional note about what this MCP does                                    |
+
+### STDIO
+
+Use this for local MCP servers that run as a process on your machine — command-line tools, scripts, or locally installed packages. **Available on the LobeHub desktop app only; not supported on the web.**
+
+| Field                     | Description                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| **MCP name**              | A unique identifier for this skill                                              |
+| **Command**               | The executable to run (e.g. `npx`, `python`, `uv`)                              |
+| **Arguments**             | Arguments passed to the command (e.g. `-y @modelcontextprotocol/server-github`) |
+| **Environment variables** | Key-value pairs injected into the process environment (API keys, paths, etc.)   |
+| **Description**           | Optional note about what this MCP does                                          |
+
+## Testing the Connection
+
+Before saving, click **Test connection** to verify that LobeHub can reach your MCP server and fetch its tool list. If the test succeeds, you'll see the available tools listed in the preview panel on the right.
+
+If the test fails:
+
+- **HTTP**: Check that the URL is correct and reachable, and that your API key or headers are set correctly.
+- **STDIO**: Confirm the command is installed and available in your system PATH. Run `which npx` (or the relevant command) in a terminal to check.
+
+## Saving and Managing
+
+Click **Install** to add the custom MCP as a skill. It will appear under **Custom MCPs** in **Settings → Skills**.
+
+To edit a custom MCP later:
+
+1. Go to **Settings → Skills**
+2. Find the custom skill under **Custom MCPs**
+3. Click **Configure** to reopen the full configuration dialog
+4. Make your changes, test the connection, and click **Update**
+
+To remove it, open the skill's menu and select **Uninstall**.
+
+## Enabling Custom MCP for an Agent
+
+Installing a custom MCP makes it available in your workspace, but each agent needs to be configured to use it:
+
+1. Open the agent's settings
+2. Go to **Skills**
+3. Find the custom MCP and toggle it on
+4. The agent will now have access to all tools provided by that MCP server
+
+Skills are per-agent — enabling a skill for one agent doesn't automatically enable it for others.
+
+<Callout type={'info'}>Only install MCP servers from sources you trust. A malicious MCP server could perform unintended actions on your behalf.</Callout>
+
+<Cards>
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+
+  <Card href={'/docs/usage/community/skill-management'} title={'Skill Management'} />
+
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+</Cards>

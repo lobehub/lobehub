@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  type BuiltinInspectorProps,
-  type SearchQuery,
-  type UniformSearchResponse,
-} from '@lobechat/types';
+import type { BuiltinInspectorProps, SearchQuery, UniformSearchResponse } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
@@ -35,7 +31,9 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
-        <span>{t('builtins.lobe-web-browsing.apiName.search')}: </span>
+        <span>
+          {t('builtins.lobe-web-browsing.apiName.search')}:{'\u00A0'}
+        </span>
         {query && <span className={highlightTextStyles.primary}>{query}</span>}
         {!isLoading &&
           !isArgumentsStreaming &&

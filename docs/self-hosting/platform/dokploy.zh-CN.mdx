@@ -25,11 +25,11 @@ curl -sSL https://dokploy.com/install.sh | sh
 
 1. 在 Dokploy 的 Settings / Git 处根据提示将 Github 绑定到 Dokploy
 
-![](/blog/assets0f97d1dfccd5ba07172aff71ff9acd7b.webp)
+![将 GitHub 绑定到 Dokploy](/blog/assets0f97d1dfccd5ba07172aff71ff9acd7b.webp)
 
 2. 进入 Projects 界面创建一个 Project
 
-![](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
+![在 Dokploy 中创建项目](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
 
 ### 配置 S3 存储服务
 
@@ -69,7 +69,7 @@ S3_ENABLE_PATH_STYLE=
 
 进入前面创建的 Project，点击 Create Service 选择 Database，在 Database 界面选择 PostgreSQL ，然后设置数据库名、用户、密码，在 Docker image 中填入 `paradedb/paradedb:latest-pg17` 最后点击 Create 创建数据库。
 
-![](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
+![在 Dokploy 中创建 PostgreSQL 数据库](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
 
 进入创建的数据库，在 External Credentials 设置一个未被占用的端口，使其能能通过外部访问，否则 LobeHub 将无法连接到该数据库。你可以在 External Host 查看 Postgres 数据库连接 URL ，如下：
 
@@ -79,21 +79,21 @@ postgresql://postgres:wAbLxfXSwkxxxxxx@45.577.281.48:5432/postgres
 
 最后点击 Deploy 部署数据库
 
-![](/blog/assets1b9283f9cc5fc5073ff9cffc24880e96.webp)
+![在 Dokploy 中部署数据库](/blog/assets1b9283f9cc5fc5073ff9cffc24880e96.webp)
 
 ## 在 Dokploy 上部署 LobeHub
 
 点击 Create Service 选择 Application，创建 LobeHub 应用
 
-![](/blog/assetsb33085e7553d2b7194005b102184553e.webp)
+![在 Dokploy 中创建 LobeHub 应用](/blog/assetsb33085e7553d2b7194005b102184553e.webp)
 
 进入创建的 LobeHub 应用，选择你 fork 的 lobe-chat 项目及分支，点击 Save 保存
 
-![](/blog/assetsf0ebf396dbe9559eb3478f48f648a6e2.webp)
+![在 Dokploy 中选择仓库和分支](/blog/assetsf0ebf396dbe9559eb3478f48f648a6e2.webp)
 
 切换到 Environment ，在其中填入环境变量，点击保存。
 
-![](/blog/assets6b67dabe7b9226cdff1bace5a3b8ab18.webp)
+![在 Dokploy 中配置环境变量](/blog/assets6b67dabe7b9226cdff1bace5a3b8ab18.webp)
 
 ```shell
 # 构建所必需的环境变量
@@ -124,14 +124,14 @@ S3_ENABLE_PATH_STYLE=
 
 添加完环境变量并保存后，点击 Deploy 进行部署，你可以在 Deployments 处查看部署进程及日志信息
 
-![](/blog/assets7c3eab218c0823fa353b1cd23afe21c3.webp)
+![部署 LobeHub 并查看进度](/blog/assets7c3eab218c0823fa353b1cd23afe21c3.webp)
 
 部署成功后在 Domains 页面，为你的 LobeHub 应用绑定自己的域名并申请证书。
 
-![](/blog/assetseebf66254337ce88357629c34e78c08d.webp)
+![绑定域名并申请证书](/blog/assetseebf66254337ce88357629c34e78c08d.webp)
 
 ## 验证 LobeHub 是否正常工作
 
 进入你的 LobeHub 网址，如果你点击左上角登录，可以正常显示登录弹窗，那么说明你已经配置成功了，尽情享用吧～
 
-![](/blog/assets11a8089b511aaa61e8982dea0a3665c5.webp)
+![LobeHub 登录成功](/blog/assets11a8089b511aaa61e8982dea0a3665c5.webp)

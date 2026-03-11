@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { messages, sessions, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
@@ -110,7 +110,7 @@ describe('Message Router Integration Tests', () => {
         id: result.id,
         agentId: testAgentId, // sessionId 会解析为 agentId 存储
         topicId: testTopicId,
-        userId: userId,
+        userId,
         content: 'Test message',
         role: 'user',
       });

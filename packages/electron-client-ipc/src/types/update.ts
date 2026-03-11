@@ -1,3 +1,5 @@
+export type UpdateChannel = 'stable' | 'nightly' | 'canary';
+
 export interface ReleaseNoteInfo {
   /**
    * The note.
@@ -20,4 +22,13 @@ export interface UpdateInfo {
   releaseDate: string;
   releaseNotes?: string | ReleaseNoteInfo[];
   version: string;
+}
+
+export type UpdaterStage = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'latest' | 'error';
+
+export interface UpdaterState {
+  errorMessage?: string;
+  progress?: ProgressInfo;
+  stage: UpdaterStage;
+  updateInfo?: UpdateInfo;
 }

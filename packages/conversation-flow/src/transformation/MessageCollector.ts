@@ -66,6 +66,7 @@ export class MessageCollector {
       const nextMessages = allMessages.filter((m) => m.parentId === toolMsg.id);
 
       // Stop if there are task children - they should be handled separately, not part of AssistantGroup
+      // This ensures that messages after a task are not merged into the AssistantGroup before the task
       const taskChildren = nextMessages.filter((m) => m.role === 'task');
       if (taskChildren.length > 0) {
         continue;
@@ -142,7 +143,8 @@ export class MessageCollector {
         continue;
       }
 
-      // Stop if there are task children - they should be handled separately, not part of AssistantGroup
+      // Stop if there are ANY task children - they should be processed separately, not part of AssistantGroup
+      // This ensures that messages after a task are not merged into the AssistantGroup before the task
       const taskChildren = toolNode.children.filter((child) => {
         const childMsg = this.messageMap.get(child.id);
         return childMsg?.role === 'task';
@@ -181,7 +183,7 @@ export class MessageCollector {
       return lastNode;
     }
 
-    // Check if lastNode is a tool with task children
+    // Check if lastNode is a tool with ANY task children
     // In this case, return the tool node itself so ContextTreeBuilder can process tasks
     if (lastMsg?.role === 'tool') {
       const taskChildren = lastNode.children.filter((child) => {
@@ -224,7 +226,8 @@ export class MessageCollector {
         continue;
       }
 
-      // Stop if there are task children - they should be handled separately, not part of AssistantGroup
+      // Stop if there are ANY task children - they should be processed separately, not part of AssistantGroup
+      // This ensures that messages after a task are not merged into the AssistantGroup before the task
       const taskNodes = toolNode.children.filter((child) => {
         const childMsg = this.messageMap.get(child.id);
         return childMsg?.role === 'task';

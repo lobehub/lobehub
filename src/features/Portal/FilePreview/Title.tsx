@@ -17,8 +17,8 @@ const Title = () => {
   const { data, isLoading } = useFetchFileItem(previewFileId);
 
   return (
-    <Flexbox align={'center'} gap={4} horizontal>
-      <ActionIcon icon={ArrowLeft} onClick={() => closeFilePreview()} size={'small'} />
+    <Flexbox horizontal align={'center'} gap={4}>
+      <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeFilePreview()} />
 
       {isLoading ? (
         <Skeleton.Button active style={{ height: 28 }} />

@@ -228,7 +228,7 @@ describe('xor-obfuscation', () => {
       const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证Base64格式的正则表达式
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      const base64Regex = /^[\d+/a-z]*={0,2}$/i;
       expect(base64Regex.test(result)).toBe(true);
     });
 

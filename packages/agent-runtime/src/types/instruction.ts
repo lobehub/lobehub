@@ -1,4 +1,4 @@
-import {
+import type {
   ChatToolPayload,
   ModelUsage,
   RuntimeInitialContext,
@@ -6,7 +6,7 @@ import {
 } from '@lobechat/types';
 
 import type { FinishReason } from './event';
-import { AgentState, ToolRegistry } from './state';
+import type { AgentState, ToolRegistry } from './state';
 import type { Cost, CostCalculationContext, Usage } from './usage';
 
 /**
@@ -72,7 +72,7 @@ export interface Agent {
    * @param context - Cost calculation context with usage and limits
    * @returns Updated cost information
    */
-  calculateCost?(context: CostCalculationContext): Cost;
+  calculateCost?: (context: CostCalculationContext) => Cost;
 
   /**
    * Calculate usage statistics from operation results
@@ -81,11 +81,11 @@ export interface Agent {
    * @param previousUsage - Previous usage statistics
    * @returns Updated usage statistics
    */
-  calculateUsage?(
+  calculateUsage?: (
     operationType: 'llm' | 'tool' | 'human_interaction',
     operationResult: any,
     previousUsage: Usage,
-  ): Usage;
+  ) => Usage;
 
   /** Optional custom executors mapping to extend runtime behaviors */
   executors?: Partial<Record<AgentInstruction['type'], any>>;
@@ -103,10 +103,10 @@ export interface Agent {
    * @param context - Current runtime context with phase and payload
    * @param state - Complete agent state for reference
    */
-  runner(
+  runner: (
     context: AgentRuntimeContext,
     state: AgentState,
-  ): Promise<AgentInstruction | AgentInstruction[]>;
+  ) => Promise<AgentInstruction | AgentInstruction[]>;
 
   /** Optional tools registry held by the agent */
   tools?: ToolRegistry;

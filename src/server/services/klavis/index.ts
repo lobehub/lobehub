@@ -1,5 +1,5 @@
-import type { LobeToolManifest } from '@lobechat/context-engine';
-import type { LobeChatDatabase } from '@lobechat/database';
+import { type LobeToolManifest } from '@lobechat/context-engine';
+import { type LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
 import { PluginModel } from '@/database/models/plugin';

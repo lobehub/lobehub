@@ -127,6 +127,24 @@ exports[`promptUserMemory > identities only > should format identities grouped b
 </user_memory>"
 `;
 
+exports[`promptUserMemory > identities only > should format identity with capturedAt Date object 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <identity type="demographic" id="id-2" capturedAt="2025-06-15">User lives in Tokyo</identity>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should format identity with capturedAt string 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <identity type="professional" role="Engineer" id="id-1" capturedAt="2025-02-23">User is a software engineer</identity>
+</identities>
+</user_memory>"
+`;
+
 exports[`promptUserMemory > identities only > should format single type identities (demographic only) 1`] = `
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
@@ -170,6 +188,15 @@ exports[`promptUserMemory > identities only > should handle identity without rol
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
   <identity type="personal" id="id-1">User enjoys hiking</identity>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should skip capturedAt when null 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <identity type="personal" id="id-3">User is a runner</identity>
 </identities>
 </user_memory>"
 `;
@@ -257,6 +284,42 @@ exports[`promptUserMemory > mixed memory types > should format experiences and p
 <preferences count="1">
   <preference id="pref-1">Mention time complexity for algorithms</preference>
 </preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > mixed memory types > should format persona combined with other memory types 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<persona tagline="AI-focused tech lead">
+A tech lead who focuses on AI-powered developer tools and has a strong preference for TypeScript.
+</persona>
+<identities count="1">
+  <identity type="professional" role="Senior Engineer" id="id-1">User is a senior engineer</identity>
+</identities>
+<contexts count="1">
+  <context id="ctx-1" title="Current Work">Working on AI products</context>
+</contexts>
+<preferences count="1">
+  <preference id="pref-1">Prefer concise responses with code examples</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > persona only > should format persona with narrative and tagline 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<persona tagline="Senior frontend engineer & OSS contributor">
+A senior software engineer based in Shanghai who specializes in frontend development with React and TypeScript. Passionate about open source and building developer tools.
+</persona>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > persona only > should format persona with only narrative (no tagline) 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<persona>
+A product designer who transitioned from engineering. Enjoys bridging the gap between design and development.
+</persona>
 </user_memory>"
 `;
 

@@ -1,3 +1,5 @@
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
@@ -9,8 +11,6 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
-import { getBuiltinRender } from '@/tools/renders';
-import { getBuiltinStreaming } from '@/tools/streamings';
 
 import { ToolErrorBoundary } from '../../Tool/ErrorBoundary';
 import Actions from './Actions';
@@ -83,8 +83,11 @@ const Tool = memo<GroupToolProps>(
     );
 
     // Fallback: arguments completed but no final result yet
+    const hasError = !!result?.error;
     const isToolCallingFallback =
-      !isArgumentsStreaming && (!result || result.content === LOADING_FLAT || !result.content);
+      !hasError &&
+      !isArgumentsStreaming &&
+      (!result || result.content === LOADING_FLAT || !result.content);
     const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
 
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);
@@ -96,6 +99,10 @@ const Tool = memo<GroupToolProps>(
       // Block collapse action when alwaysExpand is set
       if (isAlwaysExpand && expand === false) {
         return;
+      }
+      // When collapsing, also turn off debug mode so the accordion can actually collapse
+      if (expand === false) {
+        setShowDebug(false);
       }
       setShowToolRender(!!expand);
     };
@@ -110,6 +117,10 @@ const Tool = memo<GroupToolProps>(
 
     return (
       <AccordionItem
+        expand={isToolDetailExpand}
+        itemKey={id}
+        paddingBlock={4}
+        paddingInline={4}
         action={
           !disableEditing && (
             <Actions
@@ -123,11 +134,6 @@ const Tool = memo<GroupToolProps>(
             />
           )
         }
-        expand={isToolDetailExpand}
-        itemKey={id}
-        onExpandChange={handleExpand}
-        paddingBlock={4}
-        paddingInline={4}
         title={
           <Inspectors
             apiName={apiName}
@@ -138,6 +144,7 @@ const Tool = memo<GroupToolProps>(
             result={result}
           />
         }
+        onExpandChange={handleExpand}
       >
         <Flexbox gap={8} paddingBlock={8}>
           {showDebug && (

@@ -22,8 +22,8 @@ const Title = () => {
 
   if (toolUIIdentifier === WebBrowsingManifest.identifier) {
     return (
-      <Flexbox align={'center'} gap={8} horizontal>
-        <ActionIcon icon={ArrowLeft} onClick={() => closeToolUI()} size={'small'} />
+      <Flexbox horizontal align={'center'} gap={8}>
+        <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeToolUI()} />
         <Icon icon={Globe} size={16} />
         <Text style={{ fontSize: 16 }} type={'secondary'}>
           {t('search.title')}
@@ -32,8 +32,8 @@ const Title = () => {
     );
   }
   return (
-    <Flexbox align={'center'} gap={4} horizontal>
-      <ActionIcon icon={ArrowLeft} onClick={() => closeToolUI()} size={'small'} />
+    <Flexbox horizontal align={'center'} gap={4}>
+      <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeToolUI()} />
       <PluginAvatar identifier={toolUIIdentifier} size={28} />
       <Text style={{ fontSize: 16 }} type={'secondary'}>
         {pluginTitle}

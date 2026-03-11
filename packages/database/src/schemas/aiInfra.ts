@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix  */
 import type { AiProviderConfig, AiProviderSettings } from '@lobechat/types';
 import {
   boolean,
@@ -10,7 +9,7 @@ import {
   text,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { AiModelSettings } from 'model-bank';
+import type { AiModelSettings } from 'model-bank';
 
 import { timestamps } from './_helpers';
 import { users } from './user';

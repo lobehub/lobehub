@@ -4,6 +4,7 @@ import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { getVideoAvgLatency } from '@/server/services/generation/latency';
 
 const generationBatchProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -28,18 +29,18 @@ export const generationBatchRouter = router({
         return;
       }
 
-      const { deletedBatch, thumbnailUrls } = result;
+      const { deletedBatch, filesToDelete } = result;
 
-      // 2. Clean up thumbnail files from S3
+      // 2. Clean up asset files from S3 (videos, covers, thumbnails)
       // Note: Even if file deletion fails, we consider the batch deletion successful
       // since the database record has been removed and users won't see the batch anymore
-      if (thumbnailUrls.length > 0) {
+      if (filesToDelete.length > 0) {
         try {
-          await ctx.fileService.deleteFiles(thumbnailUrls);
+          await ctx.fileService.deleteFiles(filesToDelete);
         } catch (error) {
           // Log the error but don't throw - file cleanup failure shouldn't affect
           // the user experience since the database operation succeeded
-          console.error('Failed to delete thumbnail files from S3:', error);
+          console.error('Failed to delete files from S3:', error);
         }
       }
 
@@ -47,9 +48,25 @@ export const generationBatchRouter = router({
     }),
 
   getGenerationBatches: generationBatchProcedure
-    .input(z.object({ topicId: z.string() }))
+    .input(z.object({ topicId: z.string(), type: z.enum(['image', 'video']).optional() }))
     .query(async ({ ctx, input }) => {
-      return ctx.generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(input.topicId);
+      const batches = await ctx.generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(
+        input.topicId,
+      );
+
+      if (input.type !== 'video') return batches;
+
+      const uniqueModels = [...new Set(batches.map((b) => b.model))];
+      const latencyMap = new Map<string, number | null>();
+
+      await Promise.all(
+        uniqueModels.map(async (model) => {
+          const latency = await getVideoAvgLatency(model).catch(() => null);
+          latencyMap.set(model, latency);
+        }),
+      );
+
+      return batches.map((b) => ({ ...b, avgLatencyMs: latencyMap.get(b.model) ?? null }));
     }),
 });
 

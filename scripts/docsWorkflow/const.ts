@@ -1,5 +1,6 @@
-import { globSync } from 'glob';
 import { resolve } from 'node:path';
+
+import { globSync } from 'glob';
 
 export const WIKI_URL = 'https://github.com/lobehub/lobe-chat/wiki/';
 export const ROOT = resolve(__dirname, '../..');

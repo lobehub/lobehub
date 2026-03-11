@@ -37,7 +37,7 @@ const MoveFileItem = memo<MoveFileItemProps>(({ oldPath, newPath }) => {
   const displayNewPath = useElectronStore(desktopStateSelectors.displayRelativePath(newPath));
 
   return (
-    <Flexbox align="center" className={styles.item} gap={8} horizontal width="100%">
+    <Flexbox horizontal align="center" className={styles.item} gap={8} width="100%">
       <Flexbox flex={1}>
         <Text className={styles.path} type="secondary">
           {displayOldPath}

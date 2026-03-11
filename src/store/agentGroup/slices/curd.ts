@@ -1,55 +1,63 @@
-import type { LobeChatGroupConfig } from '@lobechat/types';
-import { type StateCreator } from 'zustand/vanilla';
+import { type LobeChatGroupConfig } from '@lobechat/types';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
-import type { ChatGroupItem } from '@/database/schemas/chatGroup';
+import { type ChatGroupItem } from '@/database/schemas/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
+import { type StoreSetter } from '@/store/types';
 
 import { agentGroupSelectors } from '../selectors';
 
-export interface ChatGroupCurdAction {
+type Setter = StoreSetter<ChatGroupStore>;
+
+type ChatGroupStoreWithInternal = ChatGroupStore & {
+  internal_dispatchChatGroup: (payload: {
+    payload: { id: string; value: Partial<ChatGroupItem> };
+    type: 'updateGroup';
+  }) => void;
+  refreshGroupDetail: (groupId: string) => Promise<void>;
+};
+
+export class ChatGroupCurdAction {
+  readonly #get: () => ChatGroupStoreWithInternal;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ChatGroupStoreWithInternal, _api?: unknown) {
+    // keep signature aligned with StateCreator params: (set, get, api)
+    void _api;
+
+    this.#set = set;
+    this.#get = get;
+  }
+
   /**
    * Append content chunk to streaming system prompt
    */
-  appendStreamingSystemPrompt: (chunk: string) => void;
+  appendStreamingSystemPrompt = (chunk: string) => {
+    const currentContent = this.#get().streamingSystemPrompt || '';
+    this.#set(
+      { streamingSystemPrompt: currentContent + chunk },
+      false,
+      'appendStreamingSystemPrompt',
+    );
+  };
+
   /**
    * Finish streaming and save final content to group config
    */
-  finishStreamingSystemPrompt: () => Promise<void>;
-  /**
-   * Start streaming system prompt update
-   */
-  startStreamingSystemPrompt: () => void;
-  updateGroup: (id: string, value: Partial<ChatGroupItem>) => Promise<void>;
-  updateGroupConfig: (config: Partial<LobeChatGroupConfig>) => Promise<void>;
-  updateGroupMeta: (meta: Partial<ChatGroupItem>) => Promise<void>;
-}
-
-export const chatGroupCurdSlice: StateCreator<
-  ChatGroupStore,
-  [['zustand/devtools', never]],
-  [],
-  ChatGroupCurdAction
-> = (set, get) => ({
-  appendStreamingSystemPrompt: (chunk) => {
-    const currentContent = get().streamingSystemPrompt || '';
-    set({ streamingSystemPrompt: currentContent + chunk }, false, 'appendStreamingSystemPrompt');
-  },
-
-  finishStreamingSystemPrompt: async () => {
-    const { streamingSystemPrompt, updateGroupConfig } = get();
+  finishStreamingSystemPrompt = async () => {
+    const { streamingSystemPrompt } = this.#get();
 
     if (!streamingSystemPrompt) {
-      set({ streamingSystemPromptInProgress: false }, false, 'finishStreamingSystemPrompt');
+      this.#set({ streamingSystemPromptInProgress: false }, false, 'finishStreamingSystemPrompt');
       return;
     }
 
     // Save the streamed content to group config
-    await updateGroupConfig({ systemPrompt: streamingSystemPrompt });
+    await this.updateGroupConfig({ systemPrompt: streamingSystemPrompt });
 
     // Reset streaming state
-    set(
+    this.#set(
       {
         streamingSystemPrompt: undefined,
         streamingSystemPromptInProgress: false,
@@ -57,10 +65,13 @@ export const chatGroupCurdSlice: StateCreator<
       false,
       'finishStreamingSystemPrompt',
     );
-  },
+  };
 
-  startStreamingSystemPrompt: () => {
-    set(
+  /**
+   * Start streaming system prompt update
+   */
+  startStreamingSystemPrompt = () => {
+    this.#set(
       {
         streamingSystemPrompt: '',
         streamingSystemPromptInProgress: true,
@@ -68,16 +79,16 @@ export const chatGroupCurdSlice: StateCreator<
       false,
       'startStreamingSystemPrompt',
     );
-  },
+  };
 
-  updateGroup: async (id, value) => {
+  updateGroup = async (id: string, value: Partial<ChatGroupItem>) => {
     await chatGroupService.updateGroup(id, value);
-    get().internal_dispatchChatGroup({ payload: { id, value }, type: 'updateGroup' });
-    await get().refreshGroupDetail(id);
-  },
+    this.#get().internal_dispatchChatGroup({ payload: { id, value }, type: 'updateGroup' });
+    await this.#get().refreshGroupDetail(id);
+  };
 
-  updateGroupConfig: async (config) => {
-    const group = agentGroupSelectors.currentGroup(get());
+  updateGroupConfig = async (config: Partial<LobeChatGroupConfig>) => {
+    const group = agentGroupSelectors.currentGroup(this.#get());
     if (!group) return;
 
     const mergedConfig = {
@@ -91,24 +102,24 @@ export const chatGroupCurdSlice: StateCreator<
 
     // Immediately update the local store to ensure configuration is available
     // Note: reducer expects payload: { id, value }
-    get().internal_dispatchChatGroup({
+    this.#get().internal_dispatchChatGroup({
       payload: { id: group.id, value: { config: mergedConfig } },
       type: 'updateGroup',
     });
 
     // Refresh groups to ensure consistency
-    await get().refreshGroupDetail(group.id);
-  },
+    await this.#get().refreshGroupDetail(group.id);
+  };
 
-  updateGroupMeta: async (meta) => {
-    const group = agentGroupSelectors.currentGroup(get());
+  updateGroupMeta = async (meta: Partial<ChatGroupItem>) => {
+    const group = agentGroupSelectors.currentGroup(this.#get());
     if (!group) return;
 
     const id = group.id;
 
     await chatGroupService.updateGroup(id, meta);
     // Keep local store in sync immediately
-    get().internal_dispatchChatGroup({ payload: { id, value: meta }, type: 'updateGroup' });
-    await get().refreshGroupDetail(id);
-  },
-});
+    this.#get().internal_dispatchChatGroup({ payload: { id, value: meta }, type: 'updateGroup' });
+    await this.#get().refreshGroupDetail(id);
+  };
+}

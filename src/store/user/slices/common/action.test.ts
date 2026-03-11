@@ -1,13 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { GlobalServerConfig } from '@/types/serverConfig';
-import { UserInitializationState, UserPreference } from '@/types/user';
+import { type GlobalServerConfig } from '@/types/serverConfig';
+import { type UserInitializationState, type UserPreference } from '@/types/user';
+import { withSWR } from '~test-utils';
 
 vi.mock('zustand/traditional');
 
@@ -78,7 +78,7 @@ describe('createCommonSlice', () => {
           telemetry: true,
         },
         settings: {
-          general: { fontSize: 14 },
+          general: { fontSize: 14, timezone: 'America/New_York' },
         },
         email: 'test@example.com',
       };
@@ -167,7 +167,7 @@ describe('createCommonSlice', () => {
       );
 
       await waitFor(() => {
-        expect(preference.current.data.preference).toEqual(savedPreference);
+        expect(preference.current.data?.preference).toEqual(savedPreference);
         expect(result.current.isUserStateInit).toBeTruthy();
         expect(result.current.preference).toEqual(savedPreference);
       });
@@ -194,7 +194,10 @@ describe('createCommonSlice', () => {
         expect(result.current.isUserStateInit).toBeTruthy();
         // 验证状态未被错误更新
         expect(result.current.user?.avatar).toEqual('abc');
-        expect(result.current.settings).toEqual({});
+        // When settings is null, auto-detect timezone will set it
+        expect(result.current.settings).toEqual({
+          general: { timezone: expect.any(String) },
+        });
       });
     });
 

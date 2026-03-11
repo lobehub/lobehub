@@ -44,7 +44,7 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
   /**
    * Decide the next instruction based on the executor result
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   async decide(result: ExecutorResult, _state: AgentState): Promise<SupervisorInstruction> {
     switch (result.type) {
       case 'init': {

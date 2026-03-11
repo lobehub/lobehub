@@ -100,7 +100,7 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 我们是一群充满热情的设计工程师，希望为 AIGC 提供现代化的设计组件和工具，并以开源的方式分享。
 同时通过 Bootstrapping 的方式，我们希望能够为开发者和用户提供一个更加开放、更加透明友好的产品生态。
 
-不论普通用户与专业开发者，LobeHub 旨在成为所有人的 AI Agent 实验场。LobeChat 目前正在积极开发中，有任何需求或者问题，欢迎提交 [issues][issues-link]
+不论普通用户与专业开发者，LobeHub 旨在成为所有人的 AI Agent 实验场。LobeHub 目前正在积极开发中，有任何需求或者问题，欢迎提交 [issues][issues-link]
 
 | [![](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1065874&theme=light&t=1769347414733)](https://www.producthunt.com/products/lobehub?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lobehub) | 我们已在 Product Hunt 上线！我们很高兴将 LobeHub 推向世界。如果您相信人类与 Agent 共同进化的未来，请支持我们的旅程。 |
 | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------- |
@@ -724,8 +724,13 @@ API Key 是使用 LobeHub 进行大语言模型会话的必要信息，本节以
 $ git clone https://github.com/lobehub/lobe-chat.git
 $ cd lobe-chat
 $ pnpm install
-$ pnpm run dev
+$ pnpm run dev          # 全栈开发（Next.js + Vite SPA）
+$ bun run dev:spa       # 仅 SPA 前端（端口 9876）
 ```
+
+> **Debug Proxy**：运行 `dev:spa` 后，终端会输出代理 URL，如
+> `https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http%3A%2F%2Flocalhost%3A9876`。
+> 打开此链接可在线上环境中加载本地开发服务器，支持 HMR 热更新。
 
 如果你希望了解更多详情，欢迎可以查阅我们的 [📘 开发指南][docs-dev-guide]
 

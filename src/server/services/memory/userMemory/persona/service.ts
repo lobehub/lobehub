@@ -1,12 +1,12 @@
-import type {
-  UserPersonaDocument,
-  UserPersonaDocumentHistoriesItem,
+import {
+  type UserPersonaDocument,
+  type UserPersonaDocumentHistoriesItem,
 } from '@lobechat/database/schemas';
 import { userMemories } from '@lobechat/database/schemas';
+import { type UserPersonaExtractionResult } from '@lobechat/memory-user-memory';
 import {
   RetrievalUserMemoryContextProvider,
   RetrievalUserMemoryIdentitiesProvider,
-  type UserPersonaExtractionResult,
   UserPersonaExtractor,
 } from '@lobechat/memory-user-memory';
 import { desc, eq } from 'drizzle-orm';
@@ -14,17 +14,15 @@ import { desc, eq } from 'drizzle-orm';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
-import { LobeChatDatabase } from '@/database/type';
-import {
-  MemoryAgentConfig,
-  parseMemoryExtractionConfig,
-} from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { type LobeChatDatabase } from '@/database/type';
+import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   type ProviderKeyVaultMap,
   type RuntimeResolveOptions,
-  resolveRuntimeAgentConfig,
 } from '@/server/services/memory/userMemory/extract';
+import { resolveRuntimeAgentConfig } from '@/server/services/memory/userMemory/extract';
 import { LayersEnum } from '@/types/userMemory';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
 
@@ -38,8 +36,8 @@ interface UserPersonaAgentPayload {
   retrievedMemories?: string;
   sourceIds?: string[];
   userId: string;
-  userProfile?: string;
   username?: string;
+  userProfile?: string;
 }
 
 interface UserPersonaAgentResult {

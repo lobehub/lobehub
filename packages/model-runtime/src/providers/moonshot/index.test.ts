@@ -1,12 +1,13 @@
 // @vitest-environment node
-import OpenAI from 'openai';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type OpenAI from 'openai';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  anthropicParams,
   LobeMoonshotAI,
   LobeMoonshotAnthropicAI,
   LobeMoonshotOpenAI,
-  anthropicParams,
   params,
 } from './index';
 
@@ -70,7 +71,7 @@ describe('LobeMoonshotOpenAI', () => {
 
   const getLastRequestPayload = () => {
     const calls = ((instance as any).client.chat.completions.create as Mock).mock.calls;
-    return calls[calls.length - 1]?.[0];
+    return calls.at(-1)?.[0];
   };
 
   beforeEach(() => {
@@ -248,6 +249,65 @@ describe('LobeMoonshotOpenAI', () => {
       });
     });
 
+    describe('kimi-k2-thinking native thinking models', () => {
+      it('should always enable thinking for kimi-k2-thinking', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.frequency_penalty).toBe(0);
+        expect(payload.presence_penalty).toBe(0);
+      });
+
+      it('should always enable thinking for kimi-k2-thinking-turbo', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking-turbo',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+        expect(payload.temperature).toBe(1);
+      });
+
+      it('should ignore thinking disabled for native thinking models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+        expect(payload.temperature).toBe(1);
+      });
+
+      it('should force reasoning_content on assistant messages', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.reasoning_content).toBe('');
+      });
+    });
+
     describe('interleaved thinking', () => {
       it('should convert reasoning to reasoning_content for assistant messages', async () => {
         await instance.chat({
@@ -280,7 +340,7 @@ describe('LobeMoonshotAnthropicAI', () => {
 
   const getLastRequestPayload = () => {
     const calls = ((instance as any).client.messages.create as Mock).mock.calls;
-    return calls[calls.length - 1]?.[0];
+    return calls.at(-1)?.[0];
   };
 
   beforeEach(() => {
@@ -423,6 +483,75 @@ describe('LobeMoonshotAnthropicAI', () => {
       });
     });
 
+    describe('kimi-k2-thinking native thinking models', () => {
+      it('should always enable thinking for kimi-k2-thinking', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+      });
+
+      it('should always enable thinking for kimi-k2-thinking-turbo', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking-turbo',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+      });
+
+      it('should ignore thinking disabled for native thinking models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+      });
+
+      it('should force thinking block on assistant messages', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: 'Response' },
+        ]);
+      });
+    });
+
     describe('interleaved thinking', () => {
       it('should convert reasoning to thinking block for assistant messages', async () => {
         await instance.chat({
@@ -468,12 +597,14 @@ describe('LobeMoonshotAnthropicAI', () => {
           (message: any) => message.role === 'assistant',
         );
 
+        // forceThinking adds a text placeholder for empty content
         expect(assistantMessage?.content).toEqual([
           { type: 'thinking', thinking: 'My reasoning process' },
+          { type: 'text', text: ' ' },
         ]);
       });
 
-      it('should not add thinking block when reasoning has signature', async () => {
+      it('should add placeholder thinking block when reasoning has signature', async () => {
         await instance.chat({
           messages: [
             { content: 'Hello', role: 'user' },
@@ -492,8 +623,11 @@ describe('LobeMoonshotAnthropicAI', () => {
           (message: any) => message.role === 'assistant',
         );
 
-        // Should not have thinking block, just text
-        expect(assistantMessage?.content).toBe('Response');
+        // forceThinking: even with invalid reasoning (has signature), a placeholder thinking block is added
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: 'Response' },
+        ]);
       });
 
       it('should handle assistant message with tool_calls and reasoning', async () => {

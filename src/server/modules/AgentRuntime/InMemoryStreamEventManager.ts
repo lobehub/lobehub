@@ -1,7 +1,7 @@
 import debug from 'debug';
 
-import type { StreamChunkData, StreamEvent } from './StreamEventManager';
-import type { IStreamEventManager } from './types';
+import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
+import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:in-memory-stream-event-manager');
 
@@ -180,7 +180,6 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   ): Promise<StreamEvent> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
         unsubscribe();
         reject(new Error(`Timeout waiting for event ${eventType}`));
       }, timeout);

@@ -2,15 +2,16 @@ import { type DocumentType } from '@lobechat/builtin-tool-notebook';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { type NotebookDocument } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse, mutate } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import { mutate } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { notebookService } from '@/services/notebook';
 import { useChatStore } from '@/store/chat';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { NotebookStore } from './store';
+import { type NotebookStore } from './store';
 
 const n = setNamespace('notebook');
 
@@ -35,33 +36,30 @@ interface UpdateDocumentParams {
   title?: string;
 }
 
-export interface NotebookAction {
-  createDocument: (params: CreateDocumentParams) => Promise<DocumentItem>;
-  deleteDocument: (id: string, topicId: string) => Promise<void>;
-  refreshDocuments: (topicId: string) => Promise<void>;
-  updateDocument: (
-    params: UpdateDocumentParams,
-    topicId: string,
-  ) => Promise<DocumentItem | undefined>;
-  useFetchDocuments: (topicId: string | undefined) => SWRResponse<NotebookDocument[]>;
-}
+type Setter = StoreSetter<NotebookStore>;
+export const createNotebookAction = (set: Setter, get: () => NotebookStore, _api?: unknown) =>
+  new NotebookActionImpl(set, get, _api);
 
-export const createNotebookAction: StateCreator<
-  NotebookStore,
-  [['zustand/devtools', never]],
-  [],
-  NotebookAction
-> = (set, get) => ({
-  createDocument: async (params) => {
+export class NotebookActionImpl {
+  readonly #get: () => NotebookStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => NotebookStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createDocument = async (params: CreateDocumentParams): Promise<DocumentItem> => {
     const document = await notebookService.createDocument(params);
 
     // Refresh the documents list
     await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, params.topicId]);
 
     return document;
-  },
+  };
 
-  deleteDocument: async (id, topicId) => {
+  deleteDocument = async (id: string, topicId: string): Promise<void> => {
     // If the deleted document is currently open, close it
     const portalDocumentId = useChatStore.getState().portalDocumentId;
     if (portalDocumentId === id) {
@@ -73,22 +71,25 @@ export const createNotebookAction: StateCreator<
 
     // Refresh the documents list
     await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId]);
-  },
+  };
 
-  refreshDocuments: async (topicId) => {
+  refreshDocuments = async (topicId: string): Promise<void> => {
     await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId]);
-  },
+  };
 
-  updateDocument: async (params, topicId) => {
+  updateDocument = async (
+    params: UpdateDocumentParams,
+    topicId: string,
+  ): Promise<DocumentItem | undefined> => {
     const document = await notebookService.updateDocument(params);
 
     // Refresh the documents list
     await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId]);
 
     return document;
-  },
+  };
 
-  useFetchDocuments: (topicId) => {
+  useFetchDocuments = (topicId: string | undefined): SWRResponse<NotebookDocument[]> => {
     return useClientDataSWR<NotebookDocument[]>(
       topicId ? [SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId] : null,
       async () => {
@@ -102,14 +103,14 @@ export const createNotebookAction: StateCreator<
         onSuccess: (documents) => {
           if (!topicId) return;
 
-          const currentDocuments = get().notebookMap[topicId];
+          const currentDocuments = this.#get().notebookMap[topicId];
 
           // Skip update if data is the same
           if (currentDocuments && isEqual(documents, currentDocuments)) return;
 
-          set(
+          this.#set(
             {
-              notebookMap: { ...get().notebookMap, [topicId]: documents },
+              notebookMap: { ...this.#get().notebookMap, [topicId]: documents },
             },
             false,
             n('useFetchDocuments(onSuccess)', { topicId }),
@@ -117,5 +118,7 @@ export const createNotebookAction: StateCreator<
         },
       },
     );
-  },
-});
+  };
+}
+
+export type NotebookAction = Pick<NotebookActionImpl, keyof NotebookActionImpl>;

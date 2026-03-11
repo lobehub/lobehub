@@ -1,10 +1,10 @@
 # @lobechat/web-crawler
 
-LobeChat's built-in web crawling module for intelligent extraction of web content and conversion to Markdown format.
+LobeHub's built-in web crawling module for intelligent extraction of web content and conversion to Markdown format.
 
 ## 📝 Introduction
 
-`@lobechat/web-crawler` is a core component of LobeChat responsible for intelligent web content crawling and processing. It extracts valuable content from various webpages, filters out distracting elements, and generates structured Markdown text.
+`@lobechat/web-crawler` is a core component of LobeHub responsible for intelligent web content crawling and processing. It extracts valuable content from various webpages, filters out distracting elements, and generates structured Markdown text.
 
 ## 🛠️ Core Features
 
@@ -48,7 +48,7 @@ const url = [
 
 ### Rule Submission Process
 
-1. Fork the [LobeChat repository](https://github.com/lobehub/lobe-chat)
+1. Fork the [LobeHub repository](https://github.com/lobehub/lobe-chat)
 2. Add or modify URL rules
 3. Submit a Pull Request describing:
 
@@ -58,4 +58,4 @@ const url = [
 
 ## 📌 Note
 
-This is an internal module of LobeHub (`"private": true`), designed specifically for LobeChat and not published as a standalone package.
+This is an internal module of LobeHub (`"private": true`), designed specifically for LobeHub and not published as a standalone package.

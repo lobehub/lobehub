@@ -59,7 +59,7 @@ export const ExecuteTasksStreaming = memo<BuiltinStreamingProps<ExecuteTasksPara
       {tasksWithAgents.map((task, index) => (
         <div className={styles.taskCard} key={task.agentId || index}>
           <Flexbox gap={8}>
-            <Flexbox align={'center'} gap={8} horizontal>
+            <Flexbox horizontal align={'center'} gap={8}>
               <Avatar
                 avatar={task.agent?.avatar || DEFAULT_AVATAR}
                 background={task.agent?.backgroundColor || theme.colorBgContainer}

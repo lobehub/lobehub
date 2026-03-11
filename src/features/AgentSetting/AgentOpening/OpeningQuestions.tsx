@@ -45,7 +45,7 @@ const OpeningQuestions = memo(() => {
   const openingQuestions = useStore(selectors.openingQuestions);
   const updateConfig = useStore((s) => s.setAgentConfig);
 
-  // 乐观更新，不然会抖
+  // Optimistic update to avoid jitter
   const [questions, setQuestions] = useMergeState(openingQuestions, {
     onChange: (questions: string[]) => updateConfig({ openingQuestions: questions }),
     value: openingQuestions,
@@ -75,7 +75,7 @@ const OpeningQuestions = memo(() => {
     [openingQuestions, setQuestions],
   );
 
-  // 处理拖拽排序后的逻辑
+  // Handle logic after drag-and-drop sorting
   const handleSortEnd = useCallback(
     (items: QuestionItem[]) => {
       setQuestions(items.map((item) => item.content));
@@ -90,11 +90,11 @@ const OpeningQuestions = memo(() => {
       <Flexbox gap={4} width={'100%'}>
         <Space.Compact style={{ width: '100%' }}>
           <Input
-            onChange={(e) => setQuestionInput(e.target.value)}
-            onPressEnter={addQuestion}
             placeholder={t('settingOpening.openingQuestions.placeholder')}
             style={{ flex: 1 }}
             value={questionInput}
+            onChange={(e) => setQuestionInput(e.target.value)}
+            onPressEnter={addQuestion}
           />
           <Button
             // don't allow repeat
@@ -113,8 +113,7 @@ const OpeningQuestions = memo(() => {
         {openingQuestions.length > 0 ? (
           <SortableList
             items={items}
-            onChange={handleSortEnd}
-            renderItem={(item) => (
+            renderItem={(item: QuestionItem) => (
               <SortableList.Item
                 className={styles.questionItemContainer}
                 id={item.id}
@@ -124,11 +123,12 @@ const OpeningQuestions = memo(() => {
                 <div className={styles.questionItemContent}>{item.content}</div>
                 <ActionIcon
                   icon={Trash}
-                  onClick={() => removeQuestion(item.content)}
                   size={'small'}
+                  onClick={() => removeQuestion(item.content)}
                 />
               </SortableList.Item>
             )}
+            onChange={handleSortEnd}
           />
         ) : (
           <Empty

@@ -1,6 +1,6 @@
 'use client';
 
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -26,7 +26,7 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   // Render user message
   if (role === 'user') {
     return (
-      <Flexbox gap={8} horizontal paddingBlock={4}>
+      <Flexbox horizontal gap={8} paddingBlock={4}>
         <Avatar avatar={userAvatar} size={28} />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <UserMessageContent {...message} />
@@ -38,13 +38,13 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   // Render assistant message (standalone without tools)
   if (role === 'assistant') {
     return (
-      <Flexbox gap={8} horizontal paddingBlock={4}>
+      <Flexbox horizontal gap={8} paddingBlock={4}>
         <Avatar {...agentAvatar} size={28} />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ContentBlock
+            disableEditing
             assistantId={message.id}
             content={message.content}
-            disableEditing
             id={message.id}
           />
         </Flexbox>
@@ -55,11 +55,11 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   // Render assistantGroup (assistant message with tool calls)
   if (role === 'assistantGroup' && children) {
     return (
-      <Flexbox gap={8} horizontal paddingBlock={4}>
+      <Flexbox horizontal gap={8} paddingBlock={4}>
         <Avatar {...agentAvatar} size={28} />
         <Flexbox flex={1} gap={8} style={{ overflow: 'hidden' }}>
           {children.map((block) => (
-            <ContentBlock {...block} assistantId={message.id} disableEditing key={block.id} />
+            <ContentBlock {...block} disableEditing assistantId={message.id} key={block.id} />
           ))}
         </Flexbox>
       </Flexbox>

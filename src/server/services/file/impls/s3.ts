@@ -1,4 +1,4 @@
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import urlJoin from 'url-join';
 
 import { FileModel } from '@/database/models/file';
@@ -111,6 +111,11 @@ export class S3StaticFileImpl implements FileServiceImpl {
 
   async uploadMedia(key: string, buffer: Buffer): Promise<{ key: string }> {
     await this.s3.uploadMedia(key, buffer);
+    return { key };
+  }
+
+  async uploadBuffer(key: string, buffer: Buffer, contentType: string): Promise<{ key: string }> {
+    await this.s3.uploadBuffer(key, buffer, contentType);
     return { key };
   }
 }

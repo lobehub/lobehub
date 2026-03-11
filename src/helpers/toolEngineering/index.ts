@@ -2,14 +2,17 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { defaultToolIds } from '@lobechat/builtin-tools';
+import { isDesktop } from '@lobechat/const';
+import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import type { PluginEnableChecker } from '@lobechat/context-engine';
 import { type ChatCompletionTool, type WorkingModel } from '@lobechat/types';
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   klavisStoreSelectors,
@@ -78,33 +81,34 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   });
 };
 
-export const createAgentToolsEngine = (workingModel: WorkingModel) =>
-  createToolsEngine({
-    // Add default tools based on configuration
-    defaultToolIds: [WebBrowsingManifest.identifier, KnowledgeBaseManifest.identifier],
-    // Create search-aware enableChecker for this request
-    enableChecker: ({ pluginId }) => {
-      // Check platform-specific constraints (e.g., LocalSystem desktop-only)
-      if (!shouldEnableTool(pluginId)) {
-        return false;
-      }
-      // For WebBrowsingManifest, apply search logic
-      if (pluginId === WebBrowsingManifest.identifier) {
-        const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
-        return searchConfig.useApplicationBuiltinSearchTool;
-      }
+export const createAgentToolsEngine = (workingModel: WorkingModel) => {
+  const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
+  const agentState = getAgentStoreState();
 
-      // For KnowledgeBaseManifest, only enable if knowledge is enabled
-      if (pluginId === KnowledgeBaseManifest.identifier) {
-        const agentState = getAgentStoreState();
+  return createToolsEngine({
+    defaultToolIds,
+    enableChecker: createEnableChecker({
+      allowExplicitActivation: true,
+      platformFilter: ({ pluginId }) => {
+        // Platform-specific constraints (e.g., LocalSystem desktop-only)
+        if (!shouldEnableTool(pluginId)) return false;
 
-        return agentSelectors.hasEnabledKnowledgeBases(agentState);
-      }
+        // Filter stdio MCP tools in non-desktop environments
+        if (!isDesktop) {
+          const plugin = pluginSelectors.getInstalledPluginById(pluginId)(getToolStoreState());
+          if (plugin?.customParams?.mcp?.type === 'stdio') return false;
+        }
 
-      // For all other plugins, enable by default
-      return true;
-    },
+        return undefined; // fall through to rules
+      },
+      rules: {
+        [KnowledgeBaseManifest.identifier]: agentSelectors.hasEnabledKnowledgeBases(agentState),
+        [MemoryManifest.identifier]: agentChatConfigSelectors.isMemoryToolEnabled(agentState),
+        [WebBrowsingManifest.identifier]: searchConfig.useApplicationBuiltinSearchTool,
+      },
+    }),
   });
+};
 
 /**
  * Provides the same functionality using ToolsEngine with enhanced capabilities
@@ -123,8 +127,8 @@ export const getEnabledTools = (
 
   return (
     toolsEngine.generateTools({
-      model: model, // Use provided model or fallback
-      provider: provider, // Use provided provider or fallback
+      model, // Use provided model or fallback
+      provider, // Use provided provider or fallback
       toolIds,
     }) || []
   );

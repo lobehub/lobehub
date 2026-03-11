@@ -18,10 +18,10 @@ const SimpleTitleBar: FC = () => {
   useWatchThemeUpdate();
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={electronStylish.draggable}
       height={TITLE_BAR_HEIGHT}
-      horizontal
       justify={'center'}
       width={'100%'}
     >

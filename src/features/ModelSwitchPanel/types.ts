@@ -1,8 +1,7 @@
-import type { DropdownMenuPlacement } from '@lobehub/ui';
-import type { AiModelForSelect } from 'model-bank';
-import type { ReactNode } from 'react';
+import { type DropdownMenuPlacement } from '@lobehub/ui';
+import { type AiModelForSelect } from 'model-bank';
 
-import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 export type GroupMode = 'byModel' | 'byProvider';
 
@@ -46,7 +45,7 @@ export type ListItem =
 export type DropdownPlacement = DropdownMenuPlacement;
 
 export interface ModelSwitchPanelProps {
-  children?: ReactNode;
+  children?: React.ReactNode;
   /**
    * Current model ID. If not provided, uses currentAgentModel from store.
    */
@@ -57,6 +56,10 @@ export interface ModelSwitchPanelProps {
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  /**
+   * Whether to open the panel on hover. Defaults to true.
+   */
+  openOnHover?: boolean;
   /**
    * Dropdown placement. Defaults to 'topLeft'.
    */

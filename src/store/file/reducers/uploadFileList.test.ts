@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { UploadFileItem } from '@/types/files/upload';
+import { type UploadFileItem } from '@/types/files/upload';
 
 import { uploadFileListReducer } from './uploadFileList';
 

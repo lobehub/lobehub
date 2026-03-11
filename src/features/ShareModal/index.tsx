@@ -1,5 +1,5 @@
-import { Modal, type ModalProps, Segmented } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { type ModalProps } from '@lobehub/ui';
+import { Flexbox, Modal, Segmented } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -50,15 +50,15 @@ const ShareModal = memo<ModalProps>(({ onCancel, open }) => {
       destroyOnHidden={true}
       footer={null}
       height={'80vh'}
-      onCancel={onCancel}
       open={open}
+      title={t('share', { ns: 'common' })}
+      width={'min(90vw, 1024px)'}
       styles={{
         body: {
           height: '80vh',
         },
       }}
-      title={t('share', { ns: 'common' })}
-      width={'min(90vw, 1024px)'}
+      onCancel={onCancel}
     >
       <Flexbox
         gap={isMobile ? 8 : 24}
@@ -67,11 +67,11 @@ const ShareModal = memo<ModalProps>(({ onCancel, open }) => {
       >
         <Segmented
           block
-          onChange={(value) => setTab(value as Tab)}
           options={tabItems}
           style={{ width: '100%' }}
           value={tab}
           variant={'filled'}
+          onChange={(value) => setTab(value as Tab)}
         />
         {tab === Tab.Screenshot && <ShareImage mobile={isMobile} />}
         {tab === Tab.Text && <ShareText />}

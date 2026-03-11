@@ -19,6 +19,7 @@ const Minimax: ModelProviderCard = {
       text: 'smooth',
     },
     sdkType: 'openai',
+    showModelFetcher: false,
   },
   url: 'https://www.minimaxi.com',
 };

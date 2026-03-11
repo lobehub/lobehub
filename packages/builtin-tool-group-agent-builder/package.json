@@ -10,13 +10,14 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/agent-manager-runtime": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^4",
+    "@lobehub/ui": "^5",
     "antd": "^6",
     "lucide-react": "*",
     "react": "*",

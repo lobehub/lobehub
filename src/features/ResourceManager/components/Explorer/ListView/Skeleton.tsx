@@ -23,9 +23,9 @@ const ListViewSkeleton = ({
     <Flexbox>
       {Array.from({ length: count }).map((_, index) => (
         <Flexbox
+          horizontal
           align={'center'}
           height={48}
-          horizontal
           key={index}
           paddingInline={8}
           style={{
@@ -38,8 +38,8 @@ const ListViewSkeleton = ({
             <Checkbox disabled />
           </Center>
           <Flexbox
-            align={'center'}
             horizontal
+            align={'center'}
             style={{
               flexShrink: 0,
               maxWidth: columnWidths.name,

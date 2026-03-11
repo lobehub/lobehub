@@ -3,13 +3,14 @@ name: project-overview
 description: Complete project architecture and structure guide. Use when exploring the codebase, understanding project organization, finding files, or needing comprehensive architectural context. Triggers on architecture questions, directory navigation, or project overview needs.
 ---
 
-# LobeChat Project Overview
+# LobeHub Project Overview
 
 ## Project Description
 
 Open-source, modern-design AI Agent Workspace: **LobeHub** (previously LobeChat).
 
 **Supported platforms:**
+
 - Web desktop/mobile
 - Desktop (Electron)
 - Mobile app (React Native) - coming soon
@@ -18,24 +19,24 @@ Open-source, modern-design AI Agent Workspace: **LobeHub** (previously LobeChat)
 
 ## Complete Tech Stack
 
-| Category | Technology |
-|----------|------------|
-| Framework | Next.js 16 + React 19 |
-| Routing | SPA inside Next.js with `react-router-dom` |
-| Language | TypeScript |
-| UI Components | `@lobehub/ui`, antd |
-| CSS-in-JS | antd-style |
-| Icons | lucide-react, `@ant-design/icons` |
-| i18n | react-i18next |
-| State | zustand |
-| URL Params | nuqs |
-| Data Fetching | SWR |
-| React Hooks | aHooks |
-| Date/Time | dayjs |
-| Utilities | es-toolkit |
-| API | TRPC (type-safe) |
-| Database | Neon PostgreSQL + Drizzle ORM |
-| Testing | Vitest |
+| Category      | Technology                                 |
+| ------------- | ------------------------------------------ |
+| Framework     | Next.js 16 + React 19                      |
+| Routing       | SPA inside Next.js with `react-router-dom` |
+| Language      | TypeScript                                 |
+| UI Components | `@lobehub/ui`, antd                        |
+| CSS-in-JS     | antd-style                                 |
+| Icons         | lucide-react, `@ant-design/icons`          |
+| i18n          | react-i18next                              |
+| State         | zustand                                    |
+| URL Params    | nuqs                                       |
+| Data Fetching | SWR                                        |
+| React Hooks   | aHooks                                     |
+| Date/Time     | dayjs                                      |
+| Utilities     | es-toolkit                                 |
+| API           | TRPC (type-safe)                           |
+| Database      | Neon PostgreSQL + Drizzle ORM              |
+| Testing       | Vitest                                     |
 
 ## Complete Project Structure
 
@@ -100,13 +101,20 @@ lobe-chat/
 │   │   │   ├── oidc/
 │   │   │   ├── trpc/
 │   │   │   └── webapi/
-│   │   ├── [variants]/
-│   │   │   ├── (auth)/
-│   │   │   ├── (main)/
-│   │   │   ├── (mobile)/
-│   │   │   ├── onboarding/
-│   │   │   └── router/
-│   │   └── desktop/
+│   │   ├── spa/                  # SPA HTML template service
+│   │   └── [variants]/
+│   │       └── (auth)/           # Auth pages (SSR required)
+│   ├── routes/                  # SPA page components (Vite)
+│   │   ├── (main)/
+│   │   ├── (mobile)/
+│   │   ├── (desktop)/
+│   │   ├── onboarding/
+│   │   └── share/
+│   ├── spa/                     # SPA entry points and router config
+│   │   ├── entry.web.tsx
+│   │   ├── entry.mobile.tsx
+│   │   ├── entry.desktop.tsx
+│   │   └── router/
 │   ├── business/                # Cloud-only (client/server)
 │   │   ├── client/
 │   │   ├── locales/
@@ -151,24 +159,26 @@ lobe-chat/
 
 ## Architecture Map
 
-| Layer | Location |
-|-------|----------|
-| UI Components | `src/components`, `src/features` |
-| Global Providers | `src/layout` |
-| Zustand Stores | `src/store` |
-| Client Services | `src/services/` |
-| REST API | `src/app/(backend)/webapi` |
-| tRPC Routers | `src/server/routers/{async\|lambda\|mobile\|tools}` |
-| Server Services | `src/server/services` (can access DB) |
-| Server Modules | `src/server/modules` (no DB access) |
-| Feature Flags | `src/server/featureFlags` |
-| Global Config | `src/server/globalConfig` |
-| DB Schema | `packages/database/src/schemas` |
-| DB Model | `packages/database/src/models` |
-| DB Repository | `packages/database/src/repositories` |
-| Third-party | `src/libs` (analytics, oidc, etc.) |
-| Builtin Tools | `src/tools`, `packages/builtin-tool-*` |
-| Cloud-only | `src/business/*`, `packages/business/*` |
+| Layer            | Location                                            |
+| ---------------- | --------------------------------------------------- |
+| UI Components    | `src/components`, `src/features`                    |
+| SPA Pages        | `src/routes/`                                       |
+| React Router     | `src/spa/router/`                                   |
+| Global Providers | `src/layout`                                        |
+| Zustand Stores   | `src/store`                                         |
+| Client Services  | `src/services/`                                     |
+| REST API         | `src/app/(backend)/webapi`                          |
+| tRPC Routers     | `src/server/routers/{async\|lambda\|mobile\|tools}` |
+| Server Services  | `src/server/services` (can access DB)               |
+| Server Modules   | `src/server/modules` (no DB access)                 |
+| Feature Flags    | `src/server/featureFlags`                           |
+| Global Config    | `src/server/globalConfig`                           |
+| DB Schema        | `packages/database/src/schemas`                     |
+| DB Model         | `packages/database/src/models`                      |
+| DB Repository    | `packages/database/src/repositories`                |
+| Third-party      | `src/libs` (analytics, oidc, etc.)                  |
+| Builtin Tools    | `src/tools`, `packages/builtin-tool-*`              |
+| Cloud-only       | `src/business/*`, `packages/business/*`             |
 
 ## Data Flow
 

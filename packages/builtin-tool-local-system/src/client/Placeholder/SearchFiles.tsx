@@ -1,5 +1,5 @@
-import { type LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinPlaceholderProps } from '@lobechat/types';
+import type { LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinPlaceholderProps } from '@lobechat/types';
 import { Center, Flexbox, Icon, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
@@ -23,8 +23,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const SearchFiles = memo<BuiltinPlaceholderProps<LocalSearchFilesParams>>(({ args = {} }) => {
   return (
     <Flexbox gap={4}>
-      <Flexbox align={'center'} distribution={'space-between'} gap={40} height={26} horizontal>
-        <Flexbox align={'center'} className={styles.query} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} distribution={'space-between'} gap={40} height={26}>
+        <Flexbox horizontal align={'center'} className={styles.query} gap={8}>
           <Icon icon={SearchIcon} />
           {args.keywords ? (
             args.keywords

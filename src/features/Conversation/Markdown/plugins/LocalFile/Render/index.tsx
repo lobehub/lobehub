@@ -12,16 +12,16 @@ interface LocalFileProps {
 }
 
 const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
-  // 从 node.properties 中提取属性
+  // Extract properties from node.properties
   const { name, path, isDirectory } = node?.properties || {};
 
   if (!name || !path) {
-    // 如果缺少必要属性，可以选择渲染错误提示或 null
+    // If required properties are missing, render an error or null
     console.error('LocalFile Render component missing required properties:', node?.properties);
-    return null; // 或者返回一个错误占位符
+    return null; // Or return an error placeholder
   }
 
-  // isDirectory 属性可能为 true (来自插件) 或 undefined，我们需要确保它是 boolean
+  // isDirectory may be true (from plugin) or undefined; ensure it is a boolean
   const isDir = isDirectory === true;
 
   return <LocalFile isDirectory={isDir} name={name} path={path} />;

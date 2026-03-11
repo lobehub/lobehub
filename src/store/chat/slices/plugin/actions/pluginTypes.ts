@@ -1,9 +1,7 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
 import { t } from 'i18next';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { truncateToolResult } from '@/server/utils/truncateToolResult';
@@ -14,10 +12,12 @@ import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
 import { hasExecutor } from '@/store/tool/slices/builtin/executors';
+import { type StoreSetter } from '@/store/types';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import { dbMessageSelectors } from '../../message/selectors';
-import { RemoteToolExecutor, klavisExecutor, lobehubSkillExecutor } from './exector';
+import { type RemoteToolExecutor } from './exector';
+import { klavisExecutor, lobehubSkillExecutor } from './exector';
 
 const log = debug('lobe-store:plugin-types');
 
@@ -25,85 +25,33 @@ const log = debug('lobe-store:plugin-types');
  * Plugin type-specific implementations
  * Each method handles a specific type of plugin invocation
  */
-export interface PluginTypesAction {
-  /**
-   * Invoke builtin tool
-   *
-   * @param id - Tool message ID
-   * @param payload - Tool call payload
-   * @param stepContext - Optional step context with dynamic state like GTD todos
-   * @returns The tool execution result (including stop flag for flow control)
-   */
-  invokeBuiltinTool: (
+
+type Setter = StoreSetter<ChatStore>;
+export const pluginTypes = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new PluginTypesActionImpl(set, get, _api);
+
+export class PluginTypesActionImpl {
+  readonly #get: () => ChatStore;
+
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    void set;
+    this.#get = get;
+  }
+
+  invokeBuiltinTool = async (
     id: string,
     payload: ChatToolPayload,
     stepContext?: RuntimeStepContext,
-  ) => Promise<any>;
-
-  /**
-   * Invoke default type plugin (returns data)
-   */
-  invokeDefaultTypePlugin: (id: string, payload: any) => Promise<string | undefined>;
-
-  /**
-   * Invoke Klavis type plugin
-   */
-  invokeKlavisTypePlugin: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
-
-  /**
-   * Invoke LobeHub Skill type plugin
-   */
-  invokeLobehubSkillTypePlugin: (
-    id: string,
-    payload: ChatToolPayload,
-  ) => Promise<string | undefined>;
-
-  /**
-   * Invoke markdown type plugin
-   */
-  invokeMarkdownTypePlugin: (id: string, payload: ChatToolPayload) => Promise<void>;
-
-  /**
-   * Invoke MCP type plugin
-   */
-  invokeMCPTypePlugin: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
-
-  /**
-   * Invoke standalone type plugin
-   */
-  invokeStandaloneTypePlugin: (id: string, payload: ChatToolPayload) => Promise<void>;
-
-  /**
-   * Internal method to call plugin API
-   */
-  internal_callPluginApi: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
-
-  /**
-   * Internal unified method to invoke remote tool plugins (Klavis, LobeHub Skill, etc.)
-   */
-  internal_invokeRemoteToolPlugin: (
-    id: string,
-    payload: ChatToolPayload,
-    executor: RemoteToolExecutor,
-    logPrefix: string,
-  ) => Promise<string | undefined>;
-}
-
-export const pluginTypes: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  PluginTypesAction
-> = (set, get) => ({
-  invokeBuiltinTool: async (id, payload, stepContext) => {
+  ): Promise<any> => {
     // Check if this is a Klavis tool by source field
     if (payload.source === 'klavis') {
-      return await get().invokeKlavisTypePlugin(id, payload);
+      return await this.#get().invokeKlavisTypePlugin(id, payload);
     }
 
     // Check if this is a LobeHub Skill tool by source field
     if (payload.source === 'lobehubSkill') {
-      return await get().invokeLobehubSkillTypePlugin(id, payload);
+      return await this.#get().invokeLobehubSkillTypePlugin(id, payload);
     }
 
     const params = safeParseJSON(payload.arguments);
@@ -111,11 +59,11 @@ export const pluginTypes: StateCreator<
 
     // Check if there's a registered executor in Tool Store (new architecture)
     if (hasExecutor(payload.identifier, payload.apiName)) {
-      const { optimisticUpdateToolMessage, registerAfterCompletionCallback } = get();
+      const { optimisticUpdateToolMessage, registerAfterCompletionCallback } = this.#get();
 
       // Get operation context
-      const operationId = get().messageOperationMap[id];
-      const operation = operationId ? get().operations[operationId] : undefined;
+      const operationId = this.#get().messageOperationMap[id];
+      const operation = operationId ? this.#get().operations[operationId] : undefined;
       const context = operationId ? { operationId } : undefined;
 
       // Get agent ID, group ID, and topic ID from operation context
@@ -127,7 +75,7 @@ export const pluginTypes: StateCreator<
       // This is needed because AgentBuilderProvider uses a separate scope for messages
       // but the tools need the correct agentId for execution
       if (payload.identifier === 'lobe-agent-builder') {
-        const activeAgentId = get().activeAgentId;
+        const activeAgentId = this.#get().activeAgentId;
         if (activeAgentId) {
           agentId = activeAgentId;
         }
@@ -142,7 +90,7 @@ export const pluginTypes: StateCreator<
       }
 
       // Get group orchestration callbacks if available (for group management tools)
-      const groupOrchestration = get().getGroupOrchestrationCallbacks?.();
+      const groupOrchestration = this.#get().getGroupOrchestrationCallbacks?.();
 
       // Find root execAgentRuntime operation for registering afterCompletion callbacks
       // Navigate up the operation tree to find the root runtime operation
@@ -156,7 +104,7 @@ export const pluginTypes: StateCreator<
           }
           // Move up to parent operation
           const parentId = currentOp.parentOperationId;
-          currentOp = parentId ? get().operations[parentId] : undefined;
+          currentOp = parentId ? this.#get().operations[parentId] : undefined;
         }
       }
 
@@ -194,11 +142,14 @@ export const pluginTypes: StateCreator<
           topicId,
         });
 
+      // When error exists but content is empty, backfill error message into content
+      const content = result.content || result.error?.message || '';
+
       // Use optimisticUpdateToolMessage to batch update content, state, error, metadata
       await optimisticUpdateToolMessage(
         id,
         {
-          content: result.content,
+          content,
           metadata: result.metadata,
           pluginError: result.error
             ? {
@@ -228,50 +179,56 @@ export const pluginTypes: StateCreator<
       `[invokeBuiltinTool] No executor found for: ${payload.identifier}/${payload.apiName}`,
     );
     return;
-  },
+  };
 
-  invokeDefaultTypePlugin: async (id, payload) => {
-    const { internal_callPluginApi } = get();
+  invokeDefaultTypePlugin = async (id: string, payload: any): Promise<string | undefined> => {
+    const { internal_callPluginApi } = this.#get();
 
     const data = await internal_callPluginApi(id, payload);
 
     if (!data) return;
 
     return data;
-  },
+  };
 
-  invokeKlavisTypePlugin: async (id, payload) => {
-    return get().internal_invokeRemoteToolPlugin(
+  invokeKlavisTypePlugin = async (
+    id: string,
+    payload: ChatToolPayload,
+  ): Promise<string | undefined> => {
+    return this.#get().internal_invokeRemoteToolPlugin(
       id,
       payload,
       klavisExecutor,
       'invokeKlavisTypePlugin',
     );
-  },
+  };
 
-  invokeLobehubSkillTypePlugin: async (id, payload) => {
-    return get().internal_invokeRemoteToolPlugin(
+  invokeLobehubSkillTypePlugin = async (
+    id: string,
+    payload: ChatToolPayload,
+  ): Promise<string | undefined> => {
+    return this.#get().internal_invokeRemoteToolPlugin(
       id,
       payload,
       lobehubSkillExecutor,
       'invokeLobehubSkillTypePlugin',
     );
-  },
+  };
 
-  invokeMarkdownTypePlugin: async (id, payload) => {
-    const { internal_callPluginApi } = get();
+  invokeMarkdownTypePlugin = async (id: string, payload: ChatToolPayload): Promise<void> => {
+    const { internal_callPluginApi } = this.#get();
 
     await internal_callPluginApi(id, payload);
-  },
+  };
 
-  invokeStandaloneTypePlugin: async (id, payload) => {
+  invokeStandaloneTypePlugin = async (id: string, payload: ChatToolPayload): Promise<void> => {
     const result = await useToolStore.getState().validatePluginSettings(payload.identifier);
     if (!result) return;
 
     // if the plugin settings is not valid, then set the message with error type
     if (!result.valid) {
       // Get message to extract agentId/topicId
-      const message = dbMessageSelectors.getDbMessageById(id)(get());
+      const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
       const updateResult = await messageService.updateMessageError(
         id,
         {
@@ -289,23 +246,26 @@ export const pluginTypes: StateCreator<
       );
 
       if (updateResult?.success && updateResult.messages) {
-        get().replaceMessages(updateResult.messages, {
+        this.#get().replaceMessages(updateResult.messages, {
           context: { agentId: message?.agentId || '', topicId: message?.topicId },
         });
       }
       return;
     }
-  },
+  };
 
-  invokeMCPTypePlugin: async (id, payload) => {
+  invokeMCPTypePlugin = async (
+    id: string,
+    payload: ChatToolPayload,
+  ): Promise<string | undefined> => {
     let data: MCPToolCallResult | undefined;
 
     // Get message to extract agentId/topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
+    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
 
     // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
+    const operationId = this.#get().messageOperationMap[id];
+    const operation = operationId ? this.#get().operations[operationId] : undefined;
     const abortController = operation?.abortController;
 
     log(
@@ -336,25 +296,25 @@ export const pluginTypes: StateCreator<
           topicId: message?.topicId,
         });
         if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
+          this.#get().replaceMessages(result.messages, {
             context: { agentId: message?.agentId || '', topicId: message?.topicId },
           });
         }
       }
     }
 
-    // 如果报错则结束了
+    // If error occurred, exit
 
     if (!data) return;
 
     // Truncate content to prevent context overflow
-    const truncatedContent = truncateToolResult(data.content);
+    const truncatedContent = truncateToolResult(data.content || (data.error as any)?.message || '');
 
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call
-    await get().optimisticUpdateToolMessage(
+    await this.#get().optimisticUpdateToolMessage(
       id,
       {
         content: truncatedContent,
@@ -365,17 +325,22 @@ export const pluginTypes: StateCreator<
     );
 
     return truncatedContent;
-  },
+  };
 
-  internal_invokeRemoteToolPlugin: async (id, payload, executor, logPrefix) => {
+  internal_invokeRemoteToolPlugin = async (
+    id: string,
+    payload: ChatToolPayload,
+    executor: RemoteToolExecutor,
+    logPrefix: string,
+  ): Promise<string | undefined> => {
     let data: MCPToolCallResult | undefined;
 
     // Get message to extract sessionId/topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
+    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
 
     // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
+    const operationId = this.#get().messageOperationMap[id];
+    const operation = operationId ? this.#get().operations[operationId] : undefined;
     const abortController = operation?.abortController;
 
     log(
@@ -402,7 +367,7 @@ export const pluginTypes: StateCreator<
           topicId: message?.topicId,
         });
         if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
+          this.#get().replaceMessages(result.messages, {
             context: {
               agentId: message?.agentId,
               topicId: message?.topicId,
@@ -415,32 +380,36 @@ export const pluginTypes: StateCreator<
     // If error occurred, exit
     if (!data) return;
 
+    const remoteContent = data.content || (data.error as any)?.message || '';
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call
-    await get().optimisticUpdateToolMessage(
+    await this.#get().optimisticUpdateToolMessage(
       id,
       {
-        content: data.content,
+        content: remoteContent,
         pluginError: data.success ? undefined : data.error,
         pluginState: data.success ? data.state : undefined,
       },
       context,
     );
 
-    return data.content;
-  },
+    return remoteContent;
+  };
 
-  internal_callPluginApi: async (id, payload) => {
-    const { optimisticUpdateMessageContent } = get();
+  internal_callPluginApi = async (
+    id: string,
+    payload: ChatToolPayload,
+  ): Promise<string | undefined> => {
+    const { optimisticUpdateMessageContent } = this.#get();
     let data: string;
 
     // Get message to extract agentId/topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
+    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
 
     // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
+    const operationId = this.#get().messageOperationMap[id];
+    const operation = operationId ? this.#get().operations[operationId] : undefined;
     const abortController = operation?.abortController;
 
     log(
@@ -479,7 +448,7 @@ export const pluginTypes: StateCreator<
           topicId: message?.topicId,
         });
         if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
+          this.#get().replaceMessages(result.messages, {
             context: { agentId: message?.agentId || '', topicId: message?.topicId },
           });
         }
@@ -487,7 +456,7 @@ export const pluginTypes: StateCreator<
 
       data = '';
     }
-    // 如果报错则结束了
+    // If error occurred, exit
     if (!data) return;
 
     // operationId already declared above, reuse it
@@ -496,5 +465,7 @@ export const pluginTypes: StateCreator<
     await optimisticUpdateMessageContent(id, data, undefined, context);
 
     return data;
-  },
-});
+  };
+}
+
+export type PluginTypesAction = Pick<PluginTypesActionImpl, keyof PluginTypesActionImpl>;

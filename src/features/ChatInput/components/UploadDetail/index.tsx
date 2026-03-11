@@ -29,7 +29,7 @@ const UploadDetail = memo<UploadDetailProps>(({ uploadState, status, size, tasks
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox align={'center'} gap={8} height={22} horizontal>
+    <Flexbox horizontal align={'center'} gap={8} height={22}>
       <UploadStatus size={size} status={status} uploadState={uploadState} />
       {!!tasks && Object.keys(tasks).length === 0 ? (
         <Text style={{ fontSize: 12 }} type={'secondary'}>
@@ -37,7 +37,7 @@ const UploadDetail = memo<UploadDetailProps>(({ uploadState, status, size, tasks
         </Text>
       ) : (
         <div>
-          <FileParsingStatus {...tasks} className={styles.status} hideEmbeddingButton />
+          <FileParsingStatus {...tasks} hideEmbeddingButton className={styles.status} />
         </div>
       )}
     </Flexbox>

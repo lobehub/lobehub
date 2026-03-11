@@ -1,6 +1,6 @@
 'use client';
 
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import { memo, useEffect, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
@@ -8,11 +8,11 @@ import { createStoreUpdater } from 'zustand-utils';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useConversationStoreApi } from './store';
-import type {
-  ActionsBarConfig,
-  ConversationContext,
-  ConversationHooks,
-  OperationState,
+import {
+  type ActionsBarConfig,
+  type ConversationContext,
+  type ConversationHooks,
+  type OperationState,
 } from './types';
 
 const log = debug('lobe-render:features:Conversation');

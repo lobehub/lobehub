@@ -34,29 +34,29 @@ const Actions = memo<ActionsProps>(
         {canToggleCustomToolRender && (
           <ActionIcon
             icon={showCustomToolRender ? LogsIcon : LayoutPanelTop}
+            size={'small'}
+            title={showCustomToolRender ? t('inspector.args') : t('inspector.pluginRender')}
             onClick={() => {
               setShowCustomToolRender?.(!showCustomToolRender);
             }}
-            size={'small'}
-            title={showCustomToolRender ? t('inspector.args') : t('inspector.pluginRender')}
           />
         )}
         <ActionIcon
           active={showDebug}
           icon={showDebug ? LucideBugOff : LucideBug}
-          onClick={() => setShowDebug?.(!showDebug)}
           size={'small'}
           title={t(showDebug ? 'debug.off' : 'debug.on')}
+          onClick={() => setShowDebug?.(!showDebug)}
         />
         <Settings id={identifier} />
         <ActionIcon
           danger
           icon={Trash2}
+          size={'small'}
+          title={t('inspector.delete')}
           onClick={() => {
             deleteAssistantMessage(assistantMessageId);
           }}
-          size={'small'}
-          title={t('inspector.delete')}
         />
       </>
     );

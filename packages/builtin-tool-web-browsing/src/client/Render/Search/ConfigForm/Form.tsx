@@ -47,31 +47,31 @@ const Form = memo<ProviderApiKeyFormProps>(({ provider, id }) => {
         title={t('search.searchxng.title')}
       >
         <FormInput
+          placeholder={'https://searxng.xxx'}
+          suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
+          value={baseURL}
           onChange={(value) => {
             setConfig(provider, { baseURL: value });
           }}
-          placeholder={'https://searxng.xxx'}
-          suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
-          value={baseURL}
         />
         {showKey ? (
           <FormPassword
             autoComplete={'new-password'}
+            placeholder={t('search.searchxng.keyPlaceholder')}
+            suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
+            value={apiKey}
             onChange={(value) => {
               setConfig(provider, { apiKey: value });
             }}
-            placeholder={t('search.searchxng.keyPlaceholder')}
-            suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
-            value={apiKey}
           />
         ) : (
           <Button
             block
             icon={KeyRoundIcon}
+            type={'text'}
             onClick={() => {
               setShow(true);
             }}
-            type={'text'}
           >
             {t('search.config.addKey')}
           </Button>
@@ -80,6 +80,8 @@ const Form = memo<ProviderApiKeyFormProps>(({ provider, id }) => {
           <Button
             block
             disabled={loading}
+            style={{ marginTop: 8 }}
+            type={'primary'}
             onClick={async () => {
               setLoading(true);
               resend(id).then(() => {
@@ -87,8 +89,6 @@ const Form = memo<ProviderApiKeyFormProps>(({ provider, id }) => {
               });
               // deleteMessage(id);
             }}
-            style={{ marginTop: 8 }}
-            type={'primary'}
           >
             {t('search.config.confirm')}
           </Button>

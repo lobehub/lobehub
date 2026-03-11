@@ -11,6 +11,7 @@ const Clarity = memo<ClarityProps>(
   ({ projectId }) =>
     projectId && (
       <Script
+        id="clarity-script"
         dangerouslySetInnerHTML={{
           __html: `
               (function(c,l,a,r,i,t,y){
@@ -20,7 +21,6 @@ const Clarity = memo<ClarityProps>(
               })(window, document, "clarity", "script", "${projectId}");
             `,
         }}
-        id="clarity-script"
       />
     ),
 );

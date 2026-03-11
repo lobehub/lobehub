@@ -4,8 +4,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { useCreateNewModal } from '@/features/LibraryModal';
+import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 
 const ICON_SIZE = 80;
@@ -75,14 +75,14 @@ const EmptyPlaceholder = () => {
         <Text as={'h4'}>{t('FileManager.emptyStatus.title')}</Text>
         <Text type={'secondary'}>{t('FileManager.emptyStatus.or')}</Text>
       </Flexbox>
-      <Flexbox gap={12} horizontal>
+      <Flexbox horizontal gap={12}>
         {!libraryId && (
           <Flexbox
             className={styles.card}
+            padding={16}
             onClick={() => {
               open();
             }}
-            padding={16}
           >
             <span className={styles.actionTitle}>
               {t('FileManager.emptyStatus.actions.knowledgeBase')}
@@ -98,13 +98,13 @@ const EmptyPlaceholder = () => {
           </Flexbox>
         )}
         <Upload
+          multiple={true}
+          showUploadList={false}
           beforeUpload={async (file) => {
             await pushDockFileList([file], libraryId);
 
             return false;
           }}
-          multiple={true}
-          showUploadList={false}
         >
           <Flexbox className={styles.card} padding={16}>
             <span className={styles.actionTitle}>{t('FileManager.emptyStatus.actions.file')}</span>
@@ -118,14 +118,14 @@ const EmptyPlaceholder = () => {
           </Flexbox>
         </Upload>
         <Upload
+          directory
+          multiple={true}
+          showUploadList={false}
           beforeUpload={async (file) => {
             await pushDockFileList([file], libraryId);
 
             return false;
           }}
-          directory
-          multiple={true}
-          showUploadList={false}
         >
           <Flexbox className={styles.card} padding={16}>
             <span className={styles.actionTitle}>

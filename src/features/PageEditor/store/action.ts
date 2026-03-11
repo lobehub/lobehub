@@ -6,7 +6,8 @@ import { type StateCreator } from 'zustand';
 import { useDocumentStore } from '@/store/document';
 import { useFileStore } from '@/store/file';
 
-import { type State, initialState } from './initialState';
+import { type State } from './initialState';
+import { initialState } from './initialState';
 
 const log = debug('page:editor');
 

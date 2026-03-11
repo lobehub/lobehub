@@ -1,5 +1,4 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix */
-import { createEnv } from '@t3-oss/env-nextjs';
+import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 
 const isInVercel = process.env.VERCEL === '1';
@@ -36,6 +35,7 @@ const PLUGINS_INDEX_URL = 'https://registry.npmmirror.com/@lobehub/plugins-index
 
 export const getAppConfig = () => {
   return createEnv({
+    clientPrefix: 'NEXT_PUBLIC_',
     client: {
       NEXT_PUBLIC_ENABLE_SENTRY: z.boolean(),
     },

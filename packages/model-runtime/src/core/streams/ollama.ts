@@ -1,10 +1,9 @@
-import { ChatResponse } from 'ollama/browser';
+import type { ChatResponse } from 'ollama/browser';
 
-import { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks } from '../../types';
 import { nanoid } from '../../utils/uuid';
+import type { StreamContext, StreamProtocolChunk } from './protocol';
 import {
-  StreamContext,
-  StreamProtocolChunk,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   generateToolCallId,
@@ -23,7 +22,7 @@ const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): Strea
           name: value.function?.name ?? null,
         },
         id: generateToolCallId(index, value.function?.name),
-        index: index,
+        index,
         type: 'function',
       })),
       id: stack.id,

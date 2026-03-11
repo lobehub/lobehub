@@ -1,8 +1,8 @@
 import { Md5 } from 'ts-md5';
 
-import { ChatToolPayload, MessageToolCall } from '@/types/index';
+import type { ChatToolPayload, MessageToolCall } from '@/types/index';
 
-import { LobeChatPluginApi, LobeToolManifest } from './types';
+import type { LobeChatPluginApi, LobeToolManifest } from './types';
 
 // Tool naming constants
 const PLUGIN_SCHEMA_SEPARATOR = '____';
@@ -62,7 +62,9 @@ export class ToolNameResolver {
   ): ChatToolPayload[] {
     return toolCalls
       .map((toolCall): ChatToolPayload | null => {
-        let [identifier, apiName, type] = toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+        const [initialIdentifier, apiName, type] =
+          toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+        let identifier = initialIdentifier;
 
         if (!apiName) return null;
 
@@ -78,13 +80,13 @@ export class ToolNameResolver {
           }
         }
 
-        let payload: ChatToolPayload = {
+        const payload: ChatToolPayload = {
           apiName,
           arguments: toolCall.function.arguments,
           id: toolCall.id,
           identifier,
           thoughtSignature: toolCall.thoughtSignature,
-          type: (type ?? 'default') as any,
+          type: (type ?? manifests[identifier]?.type ?? 'default') as any,
         };
 
         // Step 2: Resolve hashed apiName if needed

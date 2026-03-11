@@ -63,7 +63,7 @@ export class TaskMessageProcessor extends BaseProcessor {
       if (!instruction) {
         clonedContext.messages[i] = {
           ...message,
-          content: content,
+          content,
           role: 'assistant',
         };
         processedCount++;

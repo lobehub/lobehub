@@ -276,7 +276,7 @@ export class ModelResolverService {
       // expectedFiles are already sorted by priority from getModelsByVariant
       const topPriorityFiles = details.expectedFiles.slice(0, 1); // Show top priority options
 
-      let errorMessage = `Model not found: ${topPriorityFiles.join(', ')}, please install one first.`;
+      const errorMessage = `Model not found: ${topPriorityFiles.join(', ')}, please install one first.`;
 
       throw new ModelResolverError(ModelResolverError.Reasons.MODEL_NOT_FOUND, errorMessage, {
         expectedFiles: details.expectedFiles,

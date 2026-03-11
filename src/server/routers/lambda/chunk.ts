@@ -1,9 +1,6 @@
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
-import {
-  type ChatSemanticSearchChunk,
-  type FileSearchResult,
-  SemanticSearchSchema,
-} from '@lobechat/types';
+import { type ChatSemanticSearchChunk, type FileSearchResult } from '@lobechat/types';
+import { SemanticSearchSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { inArray } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -248,8 +245,6 @@ export const chunkRouter = router({
       try {
         const { model, provider } =
           getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
-        let embedding: number[];
-
         // Read user's provider config from database
         const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
@@ -262,7 +257,7 @@ export const chunkRouter = router({
           model,
         });
 
-        embedding = embeddings![0];
+        const embedding = embeddings![0];
 
         let finalFileIds = input.fileIds ?? [];
 

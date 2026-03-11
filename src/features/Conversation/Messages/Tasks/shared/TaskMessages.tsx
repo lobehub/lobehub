@@ -13,7 +13,8 @@ import {
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ScrollText, Workflow } from 'lucide-react';
-import { type RefObject, memo, useEffect, useMemo, useState } from 'react';
+import { type RefObject } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -61,13 +62,13 @@ const InstructionAccordion = memo<{ childrenCount: number; instruction: string }
           paddingBlock={4}
           paddingInline={4}
           title={
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               <Block
+                horizontal
                 align="center"
                 flex="none"
                 gap={4}
                 height={24}
-                horizontal
                 justify="center"
                 style={{ fontSize: 12 }}
                 variant="outlined"
@@ -168,13 +169,13 @@ const ProcessingView = memo<{
 
   return (
     <Flexbox gap={8}>
-      <Flexbox align="center" gap={8} horizontal paddingInline={4}>
+      <Flexbox horizontal align="center" gap={8} paddingInline={4}>
         <Block
+          horizontal
           align="center"
           flex="none"
           gap={4}
           height={24}
-          horizontal
           justify="center"
           style={{ fontSize: 12 }}
           variant="outlined"
@@ -182,7 +183,7 @@ const ProcessingView = memo<{
         >
           <NeuralNetworkLoading size={16} />
         </Block>
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <Text as="span" type="secondary" weight={500}>
             <AnimatedNumber
               duration={500}
@@ -203,13 +204,13 @@ const ProcessingView = memo<{
       <ScrollShadow
         className={styles.contentScroll}
         offset={12}
-        onScroll={handleScroll}
         ref={ref as RefObject<HTMLDivElement>}
         size={8}
+        onScroll={handleScroll}
       >
         <Flexbox gap={8}>
           {blocks.map((block) => (
-            <ContentBlock {...block} assistantId={assistantId} disableEditing key={block.id} />
+            <ContentBlock {...block} disableEditing assistantId={assistantId} key={block.id} />
           ))}
         </Flexbox>
       </ScrollShadow>
@@ -251,13 +252,13 @@ const CompletedView = memo<{
   if (!finalBlock) return null;
 
   const title = (
-    <Flexbox align="center" gap={8} horizontal>
+    <Flexbox horizontal align="center" gap={8}>
       <Block
+        horizontal
         align="center"
         flex="none"
         gap={4}
         height={24}
-        horizontal
         justify="center"
         style={{ fontSize: 12 }}
         variant="outlined"
@@ -265,7 +266,7 @@ const CompletedView = memo<{
       >
         <Icon color={cssVar.colorTextSecondary} icon={Workflow} />
       </Block>
-      <Flexbox align="center" gap={4} horizontal>
+      <Flexbox horizontal align="center" gap={4}>
         <Text as="span" type="secondary" weight={500}>
           {totalToolCalls}
         </Text>
@@ -290,7 +291,7 @@ const CompletedView = memo<{
           <AccordionItem itemKey="intermediate" paddingBlock={4} paddingInline={4} title={title}>
             <Flexbox gap={8} paddingInline={4} style={{ marginTop: 8 }}>
               {intermediateBlocks.map((block) => (
-                <ContentBlock {...block} assistantId={assistantId} disableEditing key={block.id} />
+                <ContentBlock {...block} disableEditing assistantId={assistantId} key={block.id} />
               ))}
             </Flexbox>
           </AccordionItem>
@@ -298,7 +299,7 @@ const CompletedView = memo<{
       )}
 
       {/* Final result - always visible */}
-      <ContentBlock {...finalBlock} assistantId={assistantId} disableEditing />
+      <ContentBlock {...finalBlock} disableEditing assistantId={assistantId} />
 
       {/* Usage display */}
       {model && provider && (

@@ -9,8 +9,12 @@ import { topUpRouter } from '@/business/server/lambda-routers/topUp';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { agentRouter } from './agent';
+import { agentBotProviderRouter } from './agentBotProvider';
 import { agentCronJobRouter } from './agentCronJob';
+import { agentEvalRouter } from './agentEval';
+import { agentEvalExternalRouter } from './agentEvalExternal';
 import { agentGroupRouter } from './agentGroup';
+import { agentSkillsRouter } from './agentSkills';
 import { aiAgentRouter } from './aiAgent';
 import { aiChatRouter } from './aiChat';
 import { aiModelRouter } from './aiModel';
@@ -33,6 +37,7 @@ import { knowledgeBaseRouter } from './knowledgeBase';
 import { marketRouter } from './market';
 import { messageRouter } from './message';
 import { notebookRouter } from './notebook';
+import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { pluginRouter } from './plugin';
 import { ragEvalRouter } from './ragEval';
 import { searchRouter } from './search';
@@ -46,10 +51,15 @@ import { usageRouter } from './usage';
 import { userRouter } from './user';
 import { userMemoriesRouter } from './userMemories';
 import { userMemoryRouter } from './userMemory';
+import { videoRouter } from './video';
 
 export const lambdaRouter = router({
   agent: agentRouter,
+  agentBotProvider: agentBotProviderRouter,
   agentCronJob: agentCronJobRouter,
+  agentEval: agentEvalRouter,
+  agentEvalExternal: agentEvalExternalRouter,
+  agentSkills: agentSkillsRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,
@@ -74,6 +84,7 @@ export const lambdaRouter = router({
   market: marketRouter,
   message: messageRouter,
   notebook: notebookRouter,
+  oauthDeviceFlow: oauthDeviceFlowRouter,
   plugin: pluginRouter,
   ragEval: ragEvalRouter,
   search: searchRouter,
@@ -87,13 +98,12 @@ export const lambdaRouter = router({
   user: userRouter,
   userMemories: userMemoriesRouter,
   userMemory: userMemoryRouter,
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
+  video: videoRouter,
   accountDeletion: accountDeletionRouter,
   referral: referralRouter,
   spend: spendRouter,
   subscription: subscriptionRouter,
   topUp: topUpRouter,
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 });
 
 export type LambdaRouter = typeof lambdaRouter;

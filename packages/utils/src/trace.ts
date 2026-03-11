@@ -1,4 +1,5 @@
-import { LOBE_CHAT_TRACE_HEADER, LOBE_CHAT_TRACE_ID, TracePayload } from '@lobechat/const';
+import type { TracePayload } from '@lobechat/const';
+import { LOBE_CHAT_TRACE_HEADER, LOBE_CHAT_TRACE_ID } from '@lobechat/const';
 
 export const getTracePayload = (req: Request): TracePayload | undefined => {
   const header = req.headers.get(LOBE_CHAT_TRACE_HEADER);
@@ -15,8 +16,7 @@ export const getTracePayload = (req: Request): TracePayload | undefined => {
 export const getTraceId = (res: Response) => res.headers.get(LOBE_CHAT_TRACE_ID);
 
 const createTracePayload = (data: TracePayload) => {
-  const encoder = new TextEncoder();
-  const buffer = encoder.encode(JSON.stringify(data));
+  const buffer = new TextEncoder().encode(JSON.stringify(data));
 
   return Buffer.from(buffer).toString('base64');
 };

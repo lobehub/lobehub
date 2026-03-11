@@ -1,4 +1,5 @@
-import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
+import { type ActionIconProps } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,7 +11,7 @@ export const BACK_BUTTON_ID = 'lobe-back-button';
 const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick, ...rest }) => {
   return (
     // @ts-expect-error
-    <Link onClick={onClick} to={to}>
+    <Link to={to} onClick={onClick}>
       <ActionIcon
         icon={ChevronLeftIcon}
         id={BACK_BUTTON_ID}

@@ -1,7 +1,7 @@
 import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ListTodo } from 'lucide-react';
-import { FC, PropsWithChildren } from 'react';
+import { type FC, type PropsWithChildren } from 'react';
 
 const TaskAvatar: FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -12,14 +12,14 @@ const TaskAvatar: FC<PropsWithChildren> = ({ children }) => {
         flex={'none'}
         height={16}
         justify={'center'}
+        variant={'outlined'}
+        width={16}
         style={{
           borderRadius: 4,
           position: 'absolute',
           right: -4,
           top: -4,
         }}
-        variant={'outlined'}
-        width={16}
       >
         <Icon color={cssVar.colorTextDescription} icon={ListTodo} size={10} />
       </Block>

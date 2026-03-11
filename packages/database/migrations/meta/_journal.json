@@ -546,6 +546,97 @@
       "when": 1770392264696,
       "tag": "0077_add_agent_skills",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1770621740632,
+      "tag": "0078_added_id_nanoid_for_replacing_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1770621892194,
+      "tag": "0079_update_id_nanoid_from_casted_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1770624987735,
+      "tag": "0080_add_constraint_unique_not_null_to_id_nanoid",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1770626135088,
+      "tag": "0081_switch_forgien_key_to_id_nanoid",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1770628390927,
+      "tag": "0082_set_id_nanoid_as_primary",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1770628799077,
+      "tag": "0083_remove_id_seq_identity_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1770631019385,
+      "tag": "0084_rename_id_nanoid_to_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1770632176750,
+      "tag": "0085_remove_id_unique_constraint",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1770955654188,
+      "tag": "0086_video_generation_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1771386090928,
+      "tag": "0087_add_eval_benchmark",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1772277762014,
+      "tag": "0088_fix_benchmark_add_bot_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1772723999146,
+      "tag": "0089_add_api_key_hash",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1773115333051,
+      "tag": "0090_enable_pg_search",
+      "breakpoints": true
     }
   ],
   "version": "6"

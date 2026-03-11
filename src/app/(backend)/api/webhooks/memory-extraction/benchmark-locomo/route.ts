@@ -1,12 +1,12 @@
+import { BenchmarkLocomoContextProvider } from '@lobechat/memory-user-memory';
+import { MemorySourceType } from '@lobechat/types';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { MemorySourceType } from '@lobechat/types';
-import { BenchmarkLocomoContextProvider } from '@lobechat/memory-user-memory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { MemoryExtractionExecutor } from '@/server/services/memory/userMemory/extract';
 import { LayersEnum } from '@/types/userMemory';
-import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
 
 const turnSchema = z.object({
@@ -81,7 +81,7 @@ export const POST = async (req: Request) => {
     const layers = normalizeLayers(parsed.layers);
 
     const results: SessionExtractionResult[] = [];
-    let totalInsertedParts = 0;
+    const totalInsertedParts = 0;
 
     await Promise.all(parsed.sessions.map(async (session) => {
       const sessionSourceId = `${baseSourceId}_${session.sessionId}`;

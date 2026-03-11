@@ -87,7 +87,7 @@ describe('invoke', () => {
         bool: true,
         null: null,
         string: 'test',
-        undefined: undefined,
+        undefined,
       },
       number: 42,
     };

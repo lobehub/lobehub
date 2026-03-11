@@ -3,17 +3,13 @@ import { z } from 'zod';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 const apiKeyProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
-  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-
   return opts.next({
     ctx: {
       apiKeyModel: new ApiKeyModel(ctx.serverDB, ctx.userId),
-      gateKeeper,
     },
   });
 });
@@ -27,7 +23,7 @@ export const apiKeyRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return await ctx.apiKeyModel.create(input, ctx.gateKeeper.encrypt);
+      return await ctx.apiKeyModel.create(input);
     }),
 
   deleteAllApiKeys: apiKeyProcedure.mutation(async ({ ctx }) => {
@@ -35,7 +31,7 @@ export const apiKeyRouter = router({
   }),
 
   deleteApiKey: apiKeyProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.apiKeyModel.delete(input.id);
     }),
@@ -43,23 +39,23 @@ export const apiKeyRouter = router({
   getApiKey: apiKeyProcedure
     .input(z.object({ apiKey: z.string() }))
     .query(async ({ input, ctx }) => {
-      return ctx.apiKeyModel.findByKey(input.apiKey, ctx.gateKeeper.encrypt);
+      return ctx.apiKeyModel.findByKey(input.apiKey);
     }),
 
   getApiKeyById: apiKeyProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.apiKeyModel.findById(input.id);
     }),
 
   getApiKeys: apiKeyProcedure.query(async ({ ctx }) => {
-    return ctx.apiKeyModel.query(ctx.gateKeeper.decrypt);
+    return ctx.apiKeyModel.query();
   }),
 
   updateApiKey: apiKeyProcedure
     .input(
       z.object({
-        id: z.number(),
+        id: z.string(),
         value: z.object({
           description: z.string().optional(),
           enabled: z.boolean().optional(),

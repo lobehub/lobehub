@@ -1,32 +1,40 @@
 import isEqual from 'fast-deep-equal';
-import { type StateCreator } from 'zustand/vanilla';
 
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type PageStore } from '../../store';
-import { type DocumentsDispatch, documentsReducer } from './reducer';
+import { type DocumentsDispatch } from './reducer';
+import { documentsReducer } from './reducer';
 
 const n = setNamespace('page/internal');
 
-export interface InternalAction {
-  /**
-   * Dispatch action to update documents array
-   */
-  internal_dispatchDocuments: (payload: DocumentsDispatch, action?: string) => void;
-}
+type Setter = StoreSetter<PageStore>;
+export const createInternalSlice = (set: Setter, get: () => PageStore, _api?: unknown) =>
+  new InternalActionImpl(set, get, _api);
 
-export const createInternalSlice: StateCreator<
-  PageStore,
-  [['zustand/devtools', never]],
-  [],
-  InternalAction
-> = (set, get) => ({
-  internal_dispatchDocuments: (payload, action) => {
-    const { documents } = get();
+export class InternalActionImpl {
+  readonly #get: () => PageStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => PageStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  internal_dispatchDocuments = (payload: DocumentsDispatch, action?: string): void => {
+    const { documents } = this.#get();
     const nextDocuments = documentsReducer(documents, payload);
 
     if (isEqual(documents, nextDocuments)) return;
 
-    set({ documents: nextDocuments }, false, action ?? n(`dispatchDocuments/${payload.type}`));
-  },
-});
+    this.#set(
+      { documents: nextDocuments },
+      false,
+      action ?? n(`dispatchDocuments/${payload.type}`),
+    );
+  };
+}
+
+export type InternalAction = Pick<InternalActionImpl, keyof InternalActionImpl>;

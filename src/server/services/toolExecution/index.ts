@@ -193,7 +193,7 @@ export class ToolExecutionService {
   private async executeCloudMCPTool(
     payload: ChatToolPayload,
     context: ToolExecutionContext,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _mcpParams: CloudMCPParams,
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;

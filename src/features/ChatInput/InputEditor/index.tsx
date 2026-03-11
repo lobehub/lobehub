@@ -4,8 +4,8 @@ import { isCommandPressed } from '@lobechat/utils';
 import {
   INSERT_MENTION_COMMAND,
   INSERT_TABLE_COMMAND,
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactLinkHighlightPlugin,
   ReactListPlugin,
@@ -119,11 +119,14 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
   return (
     <Editor
       autoFocus
+      pasteAsPlainText
       className={className}
       content={''}
       editor={editor}
-      pasteAsPlainText
       {...richRenderProps}
+      placeholder={<Placeholder />}
+      type={'text'}
+      variant={'chat'}
       mentionOption={
         enableMention
           ? {
@@ -150,6 +153,29 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
             }
           : undefined
       }
+      slashOption={{
+        items: [
+          {
+            icon: Table2Icon,
+            key: 'table',
+            label: t('typobar.table'),
+            onSelect: (editor) => {
+              editor.dispatchCommand(INSERT_TABLE_COMMAND, { columns: '3', rows: '3' });
+            },
+          },
+        ],
+        renderComp: expand
+          ? undefined
+          : (props) => {
+              return (
+                <SlashMenu {...props} getPopupContainer={() => (slashMenuRef as any)?.current} />
+              );
+            },
+      }}
+      style={{
+        minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
+      }}
+      onInit={(editor) => storeApi.setState({ editor })}
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
       }}
@@ -177,7 +203,6 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       onFocus={() => {
         enableScope(HotkeyEnum.AddUserMessage);
       }}
-      onInit={(editor) => storeApi.setState({ editor })}
       onPressEnter={({ event: e }) => {
         if (e.shiftKey || isChineseInput.current) return;
         // when user like alt + enter to add ai message
@@ -196,31 +221,6 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
           }
         }
       }}
-      placeholder={<Placeholder />}
-      slashOption={{
-        items: [
-          {
-            icon: Table2Icon,
-            key: 'table',
-            label: t('typobar.table'),
-            onSelect: (editor) => {
-              editor.dispatchCommand(INSERT_TABLE_COMMAND, { columns: '3', rows: '3' });
-            },
-          },
-        ],
-        renderComp: expand
-          ? undefined
-          : (props) => {
-              return (
-                <SlashMenu {...props} getPopupContainer={() => (slashMenuRef as any)?.current} />
-              );
-            },
-      }}
-      style={{
-        minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
-      }}
-      type={'text'}
-      variant={'chat'}
     />
   );
 });

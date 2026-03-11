@@ -1,22 +1,26 @@
 import debug from 'debug';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { UAParser } from 'ua-parser-js';
 import urlJoin from 'url-join';
 
 import { auth } from '@/auth';
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
-import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
+import { nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
 const logDefault = debug('middleware:default');
 const logBetterAuth = debug('middleware:better-auth');
+
+// Dev-only debug proxy route should bypass all middleware rewrites.
+const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
 
 export function defineConfig() {
   const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc'];
@@ -82,46 +86,52 @@ export function defineConfig() {
       url.port = process.env.PORT || '3210';
     }
 
-    // refs: https://github.com/lobehub/lobe-chat/pull/5866
-    // new handle segment rewrite: /${route}${originalPathname}
-    // / -> /zh-CN__0
-    // /discover -> /zh-CN__0/discover
-    // All SPA routes that use react-router-dom should be rewritten to just /${route}
-    const spaRoutes = [
-      '/chat',
-      '/agent',
-      '/group',
-      '/community',
-      '/resource',
-      '/page',
-      '/settings',
-      '/image',
-      '/labs',
-      '/changelog',
-      '/profile',
-      '/me',
-      '/desktop-onboarding',
-      '/onboarding',
-      '/share',
-    ];
-    const isSpaRoute = spaRoutes.some((route) => url.pathname.startsWith(route));
-
-    let nextPathname: string;
-    if (isSpaRoute) {
-      nextPathname = `/${route}`;
-    } else {
-      nextPathname = `/${route}` + (url.pathname === '/' ? '' : url.pathname);
+    if (
+      url.pathname === dangerousLocalDevProxyRoute ||
+      url.pathname.startsWith(`${dangerousLocalDevProxyRoute}/`)
+    ) {
+      logDefault('Skipping rewrite for dangerous local dev proxy route: %s', url.pathname);
+      return NextResponse.next();
     }
+
+    const isNextjsRoute = nextjsOnlyRoutes.some((r) => url.pathname.startsWith(r));
+
+    // SPA routes: rewrite to /spa/[variants]/[...path] catch-all
+    if (!isNextjsRoute) {
+      const spaPath = `/spa/${route}${url.pathname === '/' ? '' : url.pathname}`;
+      logDefault('SPA route, rewriting to: %s', spaPath);
+      url.pathname = spaPath;
+
+      const response = NextResponse.rewrite(url);
+
+      // If locale explicitly provided via query (?hl=), persist it in cookie
+      if (explicitlyLocale) {
+        const existingLocale = request.cookies.get(LOBE_LOCALE_COOKIE)?.value as
+          | Locales
+          | undefined;
+        if (!existingLocale) {
+          response.cookies.set(LOBE_LOCALE_COOKIE, explicitlyLocale, {
+            maxAge: 60 * 60 * 24 * 90,
+            path: '/',
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+          });
+        }
+      }
+
+      return response;
+    }
+
+    // Next.js App Router routes: rewrite with variants prefix
+    const nextPathname = `/${route}` + (url.pathname === '/' ? '' : url.pathname);
     const nextURL = appEnv.MIDDLEWARE_REWRITE_THROUGH_LOCAL
       ? urlJoin(url.origin, nextPathname)
       : nextPathname;
 
-    console.log(`[rewrite] ${url.pathname} -> ${nextURL}`);
-
     logDefault('URL rewrite: %O', {
       isLocalRewrite: appEnv.MIDDLEWARE_REWRITE_THROUGH_LOCAL,
-      nextPathname: nextPathname,
-      nextURL: nextURL,
+      nextPathname,
+      nextURL,
       originalPathname: url.pathname,
     });
 
@@ -158,6 +168,7 @@ export function defineConfig() {
 
   const isPublicRoute = createRouteMatcher([
     // backend api
+    '/api/v1(.*)', // OpenAPI routes should use OpenAPI auth (API Key/OIDC), not BetterAuth session
     '/api/auth(.*)',
     '/api/webhooks(.*)',
     '/api/workflows(.*)',
@@ -178,12 +189,12 @@ export function defineConfig() {
     // Make only the consent view public (GET page), not other oauth paths
     '/oauth/consent/(.*)',
     '/oidc/handoff',
+    '/oidc/device/auth',
     '/oidc/token',
     // market
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
- 
   ]);
 
   const betterAuthMiddleware = async (req: NextRequest) => {
@@ -211,10 +222,11 @@ export function defineConfig() {
       userId: session?.user?.id,
     });
 
-    if (!isLoggedIn && !isDesktop) {
+    if (!isLoggedIn) {
       // If request a protected route, redirect to sign-in page
       if (isProtected) {
         logBetterAuth('Request a protected route, redirecting to sign-in page');
+
         const callbackUrl = `${appEnv.APP_URL}${req.nextUrl.pathname}${req.nextUrl.search}`;
         const signInUrl = new URL('/signin', appEnv.APP_URL);
         signInUrl.searchParams.set('callbackUrl', callbackUrl);
@@ -231,11 +243,7 @@ export function defineConfig() {
     return response;
   };
 
-  logDefault('Middleware configuration: %O', {
-    enableOIDC: authEnv.ENABLE_OIDC,
-  });
+  logDefault('Middleware configuration: %O', { enableOIDC: authEnv.ENABLE_OIDC });
 
-  return {
-    middleware: betterAuthMiddleware,
-  };
+  return { middleware: betterAuthMiddleware };
 }

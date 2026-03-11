@@ -1,10 +1,10 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { ReadKnowledgeArgs, ReadKnowledgeState } from '../../../types';
+import type { ReadKnowledgeArgs, ReadKnowledgeState } from '../../../types';
 import FileCard from './FileCard';
 
 const ReadKnowledge = memo<BuiltinRenderProps<ReadKnowledgeArgs, ReadKnowledgeState>>(
@@ -16,7 +16,7 @@ const ReadKnowledge = memo<BuiltinRenderProps<ReadKnowledgeArgs, ReadKnowledgeSt
     }
 
     return (
-      <Flexbox gap={12} horizontal style={{ flexWrap: 'wrap' }}>
+      <Flexbox horizontal gap={12} style={{ flexWrap: 'wrap' }}>
         {files.map((file) => (
           <FileCard file={file} key={file.fileId} />
         ))}

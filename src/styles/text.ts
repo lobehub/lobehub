@@ -19,12 +19,14 @@ export const oneLineEllipsis = lineEllipsis(1);
 export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
+    display: flex;
+    align-items: center;
+
+    min-width: 0;
 
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -35,25 +37,24 @@ export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
  * - warning: warning yellow highlight
  * - gold: gold highlight (for page-agent etc.)
  */
-export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => ({
-  gold: css`
+export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => {
+  const highlightBase = (highlightColor: string) => css`
+    overflow: hidden;
+
+    min-width: 0;
+    margin-inline-start: 4px;
     padding-block-end: 1px;
+
     color: ${cssVar.colorText};
-    background: linear-gradient(to top, ${cssVar.gold4} 40%, transparent 40%);
-  `,
-  info: css`
-    padding-block-end: 1px;
-    color: ${cssVar.colorText};
-    background: linear-gradient(to top, ${cssVar.colorInfoBg} 40%, transparent 40%);
-  `,
-  primary: css`
-    padding-block-end: 1px;
-    color: ${cssVar.colorText};
-    background: linear-gradient(to top, ${cssVar.colorPrimaryBgHover} 40%, transparent 40%);
-  `,
-  warning: css`
-    padding-block-end: 1px;
-    color: ${cssVar.colorText};
-    background: linear-gradient(to top, ${cssVar.colorWarningBg} 40%, transparent 40%);
-  `,
-}));
+    text-overflow: ellipsis;
+
+    background: linear-gradient(to top, ${highlightColor} 40%, transparent 40%);
+  `;
+
+  return {
+    gold: highlightBase(cssVar.gold4),
+    info: highlightBase(cssVar.colorInfoBg),
+    primary: highlightBase(cssVar.colorPrimaryBgHover),
+    warning: highlightBase(cssVar.colorWarningBg),
+  };
+});

@@ -1,4 +1,5 @@
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '../types/error';
+import type { ILobeAgentRuntimeErrorType } from '../types/error';
+import { AgentRuntimeErrorType } from '../types/error';
 
 export interface ComfyUIError {
   code?: number | string;

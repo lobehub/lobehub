@@ -1,14 +1,13 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
-import {
+import type {
   ChatGroupAgentItem,
   ChatGroupItem,
   NewChatGroup,
   NewChatGroupAgent,
-  chatGroups,
-  chatGroupsAgents,
 } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import { chatGroups, chatGroupsAgents } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class ChatGroupModel {
   private userId: string;

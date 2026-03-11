@@ -9,7 +9,7 @@ import {
   MERGE_STRATEGIES,
   RELATIONSHIPS,
 } from '@lobechat/types';
-import { JSONSchema7 } from 'json-schema';
+import type { JSONSchema7 } from 'json-schema';
 
 import { systemPrompt } from './systemRole';
 import { MemoryApiName } from './types';
@@ -812,6 +812,8 @@ export const MemoryManifest: BuiltinToolManifest = {
   identifier: 'lobe-user-memory',
   meta: {
     avatar: '🧠',
+    description:
+      'Store and recall user preferences, activities, identities, and experiences across conversations',
     title: 'Memory',
   },
   systemRole: systemPrompt,

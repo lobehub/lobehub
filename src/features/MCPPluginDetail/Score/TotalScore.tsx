@@ -4,7 +4,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ScoreResult, sortItemsByPriority } from '../../MCP/calculateScore';
+import { type ScoreResult } from '../../MCP/calculateScore';
+import { sortItemsByPriority } from '../../MCP/calculateScore';
 
 // 使用 cssVar 的 getGradeColor 版本
 const getGradeColor = (grade: string): string => {
@@ -226,7 +227,7 @@ const TotalScore = memo<TotalScoreProps>(({ scoreResult, scoreItems = [], isVali
 
   return (
     <Block gap={12} padding={16} variant={'outlined'}>
-      <Flexbox align="flex-start" horizontal justify="space-between">
+      <Flexbox horizontal align="flex-start" justify="space-between">
         <Flexbox>
           <h2 style={{ fontWeight: 'bold', margin: 0 }}>
             {t(`mcp.details.scoreLevel.${grade}.fullTitle`)}
@@ -248,6 +249,8 @@ const TotalScore = memo<TotalScoreProps>(({ scoreResult, scoreItems = [], isVali
 
       <div className={styles.progressContainer}>
         <Popover
+          placement="bottom"
+          trigger={['hover', 'click']}
           content={
             <div>
               <div style={{ fontWeight: 'bold', marginBottom: 8 }}>
@@ -256,8 +259,6 @@ const TotalScore = memo<TotalScoreProps>(({ scoreResult, scoreItems = [], isVali
               {renderTooltipContent()}
             </div>
           }
-          placement="bottom"
-          trigger={['hover', 'click']}
         >
           <Progress
             percent={Math.round(percentage)}

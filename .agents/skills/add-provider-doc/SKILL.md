@@ -43,11 +43,13 @@ Reference: `docs/usage/providers/fal.mdx`
 
 ```markdown
 ### `{PROVIDER}_API_KEY`
+
 - Type: Required
 - Description: API key from {Provider Name}
 - Example: `{api-key-format}`
 
 ### `{PROVIDER}_MODEL_LIST`
+
 - Type: Optional
 - Description: Control model list. Use `+` to add, `-` to hide
 - Example: `-all,+model-1,+model-2=Display Name`
@@ -77,7 +79,7 @@ Update all Dockerfiles at the **end** of ENV section:
 
 - Cover image
 - 3-4 API dashboard screenshots
-- 2-3 LobeChat configuration screenshots
+- 2-3 LobeHub configuration screenshots
 - Host on LobeHub CDN: `hub-apac-1.lobeobjects.space`
 
 ## Checklist

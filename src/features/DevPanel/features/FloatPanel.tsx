@@ -1,11 +1,10 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { ActionIcon, Flexbox, FluentEmoji, Icon, SideNav } from '@lobehub/ui';
-import { FloatButton } from 'antd';
+import { ActionIcon, Flexbox, FluentEmoji, SideNav } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BugIcon, BugOff, XIcon } from 'lucide-react';
-import { type ReactNode, memo, useEffect, useState } from 'react';
+import { XIcon } from 'lucide-react';
+import { memo, type ReactNode, useEffect, useState } from 'react';
 import { Rnd } from 'react-rnd';
 
 import { isDesktop } from '@/const/version';
@@ -13,7 +12,6 @@ import { usePathname } from '@/libs/next/navigation';
 
 // 定义样式
 const styles = createStaticStyles(({ css }) => {
-  const prefixCls = 'ant';
   return {
     collapsed: css`
       pointer-events: none;
@@ -25,23 +23,22 @@ const styles = createStaticStyles(({ css }) => {
       transform: scale(1);
       opacity: 1;
     `,
-    floatButton: css`
-      inset-block-end: 16px;
-      inset-inline-end: 16px;
+    debugButton: css`
+      cursor: default;
+      user-select: none;
 
-      width: 36px;
-      height: 36px;
-      border: 1px solid ${cssVar.colorBorderSecondary};
+      position: fixed;
+      inset-block-end: 9px;
+      inset-inline-end: 9px;
 
-      font-size: 20px;
-      .${prefixCls}-float-btn-body {
-        background: ${cssVar.colorBgLayout};
+      padding-block: 1px;
+      padding-inline: 8px;
+      border-radius: 12px;
 
-        &:hover {
-          width: auto;
-          background: ${cssVar.colorBgElevated};
-        }
-      }
+      font-size: 8px;
+      color: ${cssVar.colorBgContainer};
+
+      background-color: ${cssVar.colorText};
     `,
     header: css`
       cursor: move;
@@ -113,9 +110,8 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
       {
         // desktop devtools 下隐藏
         pathname !== '/desktop/devtools' && isDesktop && (
-          <FloatButton
-            className={styles.floatButton}
-            icon={<Icon icon={isExpanded ? BugOff : BugIcon} />}
+          <div
+            className={styles.debugButton}
             onClick={async () => {
               if (isDesktop) {
                 const { electronDevtoolsService } = await import('@/services/electron/devtools');
@@ -126,7 +122,9 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
               }
               setIsExpanded(!isExpanded);
             }}
-          />
+          >
+            DEV
+          </div>
         )
       }
       {isExpanded && (
@@ -136,6 +134,8 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
           dragHandleClassName="panel-drag-handle"
           minHeight={minHeight}
           minWidth={minWidth}
+          position={position}
+          size={size}
           onDragStop={(e, d) => {
             setPosition({ x: d.x, y: d.y });
           }}
@@ -146,12 +146,10 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
             });
             setPosition(position);
           }}
-          position={position}
-          size={size}
         >
           <Flexbox
-            height={'100%'}
             horizontal
+            height={'100%'}
             style={{ overflow: 'hidden', position: 'relative' }}
             width={'100%'}
           >
@@ -167,11 +165,11 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
                   active={tab === item.key}
                   icon={item.icon}
                   key={item.key}
-                  onClick={() => setTab(item.key)}
                   title={item.key}
                   tooltipProps={{
                     placement: 'right',
                   }}
+                  onClick={() => setTab(item.key)}
                 />
               ))}
             />
@@ -181,12 +179,12 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
               width={'100%'}
             >
               <Flexbox
+                horizontal
                 align={'center'}
                 className={cx('panel-drag-handle', styles.header)}
-                horizontal
                 justify={'space-between'}
               >
-                <Flexbox align={'baseline'} gap={6} horizontal>
+                <Flexbox horizontal align={'baseline'} gap={6}>
                   <b>{BRANDING_NAME} Dev Tools</b>
                   <span style={{ color: cssVar.colorTextDescription }}>/</span>
                   <span style={{ color: cssVar.colorTextDescription }}>{tab}</span>

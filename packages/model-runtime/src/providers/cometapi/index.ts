@@ -1,9 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface CometAPIModelCard {
@@ -33,7 +31,7 @@ export const params = {
       const modelsPage = (await client.models.list()) as any;
       const rawList: any[] = modelsPage.data || [];
 
-      // 处理模型列表，移除不必要的字段
+      // Process the model list and remove unnecessary fields
       const modelList: CometAPIModelCard[] = rawList.map((model) => ({
         id: model.id,
         object: model.object,

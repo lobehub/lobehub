@@ -1,11 +1,9 @@
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
-import { OpenRouterModelCard, OpenRouterReasoning } from './type';
+import type { OpenRouterModelCard, OpenRouterReasoning } from './type';
 
 const formatPrice = (price?: string) => {
   if (price === undefined || price === '-1') return undefined;
@@ -16,12 +14,16 @@ export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { reasoning_effort, thinking, reasoning: _reasoning, thinkingLevel, ...rest } = payload;
 
       let reasoning: OpenRouterReasoning | undefined;
 
-      if (thinking?.type || thinking?.budget_tokens !== undefined || reasoning_effort || thinkingLevel) {
+      if (
+        thinking?.type ||
+        thinking?.budget_tokens !== undefined ||
+        reasoning_effort ||
+        thinkingLevel
+      ) {
         if (thinking?.type === 'disabled') {
           reasoning = { enabled: false };
         } else if (thinking?.budget_tokens !== undefined) {
@@ -30,8 +32,7 @@ export const params = {
           };
         } else if (reasoning_effort) {
           reasoning = { effort: reasoning_effort };
-        }
-        else if (thinkingLevel) {
+        } else if (thinkingLevel) {
           reasoning = { effort: thinkingLevel };
         }
       }
@@ -67,13 +68,13 @@ export const params = {
       return [];
     }
 
-    // 处理前端获取的模型信息，转换为标准格式
+    // Process the model info fetched from the frontend and convert to standard format
     const formattedModels = modelList.map((model) => {
       const { top_provider, architecture, pricing, supported_parameters } = model;
 
       const inputModalities = architecture.input_modalities || [];
 
-      // 处理 name，默认去除冒号及其前面的内容
+      // Process the name, by default strip the colon and everything before it
       let displayName = model.name;
       const colonIndex = displayName.indexOf(':');
       if (colonIndex !== -1) {
@@ -129,7 +130,7 @@ export const params = {
           if (model.description && model.description.includes('`reasoning` `enabled`')) {
             extendParams.push('enableReasoning');
           }
-          if (hasReasoning && model.id.includes('gpt-5.2')) {
+          if (hasReasoning && (model.id.includes('gpt-5.2') || model.id.includes('gpt-5.4'))) {
             extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
           } else if (hasReasoning && model.id.includes('gpt-5.1')) {
             extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');

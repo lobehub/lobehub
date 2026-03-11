@@ -1,7 +1,6 @@
-import { t } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
-import { ChatStore } from '@/store/chat';
+import { type ChatStore } from '@/store/chat';
 import { initialState } from '@/store/chat/initialState';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { merge } from '@/utils/merge';
@@ -120,7 +119,7 @@ describe('topicSelectors', () => {
   describe('groupedTopicsSelector', () => {
     it('should return empty array if there are no topics', () => {
       const state = merge(initialStore, { activeAgentId: 'test' });
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
       expect(grouped).toEqual([]);
     });
 
@@ -143,7 +142,7 @@ describe('topicSelectors', () => {
         activeAgentId: 'test',
       });
 
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
       expect(grouped).toHaveLength(1); // One time-based group
       expect(grouped[0].children).toEqual(topics);
     });
@@ -168,7 +167,7 @@ describe('topicSelectors', () => {
         activeAgentId: 'test',
       });
 
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
 
       expect(grouped).toHaveLength(2); // Favorite group + one time-based group
 
@@ -202,7 +201,7 @@ describe('topicSelectors', () => {
         activeAgentId: 'test',
       });
 
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
 
       // Should not have a favorites group
       expect(grouped.find((g) => g.id === 'favorite')).toBeUndefined();

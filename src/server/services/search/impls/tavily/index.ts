@@ -1,4 +1,8 @@
-import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
+import {
+  type SearchParams,
+  type UniformSearchResponse,
+  type UniformSearchResult,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -36,21 +40,21 @@ export class TavilyImpl implements SearchServiceImpl {
       search_depth: process.env.TAVILY_SEARCH_DEPTH || 'basic', // basic or advanced
     };
 
-    let body: TavilySearchParameters = {
+    const body: TavilySearchParameters = {
       ...defaultQueryParams,
       time_range:
         params?.searchTimeRange && params.searchTimeRange !== 'anytime'
           ? params.searchTimeRange
           : undefined,
-      topic: // Tavily only supports news and general types
-      params?.searchCategories?.filter((cat) => ['news', 'general'].includes(cat))?.[0],
+      // Tavily only supports news and general types
+      topic: params?.searchCategories?.find((cat) => ['news', 'general'].includes(cat)),
     };
 
     log('Constructed request body: %o', body);
 
     let response: Response;
     const startAt = Date.now();
-    let costTime = 0;
+    let costTime: number;
     try {
       log('Sending request to endpoint: %s', endpoint);
       response = await fetch(endpoint, {
@@ -106,7 +110,7 @@ export class TavilyImpl implements SearchServiceImpl {
 
       return {
         costTime,
-        query: query,
+        query,
         resultNumbers: mappedResults.length,
         results: mappedResults,
       };

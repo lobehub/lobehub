@@ -1,11 +1,11 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { t } from 'i18next';
 import { sha256 } from 'js-sha256';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { message, notification } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
+import { type StoreSetter } from '@/store/types';
 import { type FileMetadata, type UploadFileItem } from '@/types/files';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
@@ -52,26 +52,20 @@ interface UploadWithProgressResult {
   url: string;
 }
 
-export interface FileUploadAction {
-  uploadBase64FileWithProgress: (
+type Setter = StoreSetter<FileStore>;
+export const createFileUploadSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
+  new FileUploadActionImpl(set, get, _api);
+
+export class FileUploadActionImpl {
+  constructor(set: Setter, get: () => FileStore, _api?: unknown) {
+    void _api;
+    void set;
+    void get;
+  }
+
+  uploadBase64FileWithProgress = async (
     base64: string,
-    params?: {
-      onStatusUpdate?: OnStatusUpdate;
-    },
-  ) => Promise<UploadWithProgressResult | undefined>;
-
-  uploadWithProgress: (
-    params: UploadWithProgressParams,
-  ) => Promise<UploadWithProgressResult | undefined>;
-}
-
-export const createFileUploadSlice: StateCreator<
-  FileStore,
-  [['zustand/devtools', never]],
-  [],
-  FileUploadAction
-> = () => ({
-  uploadBase64FileWithProgress: async (base64) => {
+  ): Promise<UploadWithProgressResult | undefined> => {
     // Extract image dimensions from base64 data
     const dimensions = await getImageDimensions(base64);
 
@@ -82,12 +76,13 @@ export const createFileUploadSlice: StateCreator<
       hash,
       metadata,
       name: metadata.filename,
-      size: size,
+      size,
       url: metadata.path,
     });
     return { ...res, dimensions, filename: metadata.filename };
-  },
-  uploadWithProgress: async ({
+  };
+
+  uploadWithProgress = async ({
     file,
     onStatusUpdate,
     knowledgeBaseId,
@@ -95,7 +90,7 @@ export const createFileUploadSlice: StateCreator<
     parentId,
     source,
     abortController,
-  }) => {
+  }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     try {
       const fileArrayBuffer = await file.arrayBuffer();
 
@@ -195,5 +190,7 @@ export const createFileUploadSlice: StateCreator<
       }
       throw error;
     }
-  },
-});
+  };
+}
+
+export type FileUploadAction = Pick<FileUploadActionImpl, keyof FileUploadActionImpl>;

@@ -3,7 +3,6 @@
  */
 export const PageAgentIdentifier = 'lobe-page-agent';
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const DocumentApiName = {
   // Initialize
   initPage: 'initPage',
@@ -20,7 +19,6 @@ export const DocumentApiName = {
   // Text Operations
   replaceText: 'replaceText',
 };
-/* eslint-enable sort-keys-fix/sort-keys-fix */
 
 // ============ State Types for Renders ============
 

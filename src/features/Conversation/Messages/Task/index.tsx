@@ -7,8 +7,8 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
 import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
+import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -74,27 +74,27 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
 
   return (
     <ChatItem
+      showTitle
       aboveMessage={null}
-      actions={
-        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
-      }
       avatar={{ ...avatar, title }}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
       editing={editing}
-      error={
-        errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
-      }
       id={id}
       loading={generating}
       message={message}
       newScreenMinHeight={minHeight}
-      onAvatarClick={onAvatarClick}
-      onDoubleClick={onDoubleClick}
       placement={'left'}
-      showTitle
       time={createdAt}
       titleAddon={<Tag>{t('task.subtask')}</Tag>}
+      actions={
+        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
+      }
+      error={
+        errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
+      }
+      onAvatarClick={onAvatarClick}
+      onDoubleClick={onDoubleClick}
     >
       {taskDetail?.clientMode ? (
         <ClientTaskDetail

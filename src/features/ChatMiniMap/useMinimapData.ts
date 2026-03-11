@@ -4,7 +4,7 @@ import { useCallback, useMemo } from 'react';
 
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 
-import type { MinimapIndicator } from './types';
+import { type MinimapIndicator } from './types';
 import { getIndicatorWidth, getPreviewText } from './utils';
 
 const log = debug('lobe-react:chat-minimap');

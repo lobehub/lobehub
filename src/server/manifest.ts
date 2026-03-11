@@ -40,7 +40,7 @@ export class Manifest {
       background_color: color,
       cache_busting_mode: 'all',
       categories: ['productivity', 'design', 'development', 'education'],
-      description: description,
+      description,
       display: 'standalone',
       display_override: ['tabbed'],
       edge_side_panel: {
@@ -48,10 +48,10 @@ export class Manifest {
       },
       handle_links: 'auto',
       icons: icons.map((item) => this._getIcon(item)),
-      id: id,
+      id,
       immutable: 'true',
       max_age: MAX_AGE,
-      name: name,
+      name,
       orientation: 'portrait',
       related_applications: [
         {

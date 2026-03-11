@@ -250,8 +250,8 @@ export class RetrievalUserMemoryContextProvider implements MemoryContextProvider
     return {
       context: memoryContext,
       metadata: {},
-      sourceId: sourceId,
-      userId: userId,
+      sourceId,
+      userId,
     };
   }
 }
@@ -343,8 +343,8 @@ export class RetrievalUserMemoryIdentitiesProvider implements MemoryContextProvi
     return {
       context: identityContext,
       metadata: {},
-      sourceId: sourceId,
-      userId: userId,
+      sourceId,
+      userId,
     };
   }
 }

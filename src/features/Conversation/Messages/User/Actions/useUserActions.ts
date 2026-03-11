@@ -1,4 +1,4 @@
-import type { ActionIconGroupItemType } from '@lobehub/ui';
+import { type ActionIconGroupItemType } from '@lobehub/ui';
 import { copyToClipboard } from '@lobehub/ui';
 import { App } from 'antd';
 import { Copy, Edit, LanguagesIcon, Play, RotateCcw, Trash } from 'lucide-react';

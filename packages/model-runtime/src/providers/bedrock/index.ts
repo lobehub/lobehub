@@ -7,16 +7,17 @@ import {
 import { cloudModelIdMapping } from '@lobechat/business-const';
 import { ModelProvider } from 'model-bank';
 
-import { hasTemperatureTopPConflict } from '../../const/models';
-import { LobeRuntimeAI } from '../../core/BaseAI';
+import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
+import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
-import { resolveParameters } from '../../core/parameterResolver';
+import { resolveModelSamplingParameters } from '../../core/parameterResolver';
 import {
   AWSBedrockClaudeStream,
   AWSBedrockLlamaStream,
   createBedrockStream,
 } from '../../core/streams';
-import {
+import type {
   ChatMethodOptions,
   ChatStreamPayload,
   Embeddings,
@@ -28,8 +29,6 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
-import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
-import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -86,9 +85,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     this.id = id ?? ModelProvider.Bedrock;
     this.client = new BedrockRuntimeClient({
       credentials: {
-        accessKeyId: accessKeyId,
+        accessKeyId,
         secretAccessKey: accessKeySecret,
-        sessionToken: sessionToken,
+        sessionToken,
       },
       region: this.region,
     });
@@ -173,6 +172,11 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const inputStartAt = Date.now();
     const system_message = messages.find((m) => m.role === 'system');
     const user_messages = messages.filter((m) => m.role !== 'system');
+    // Filter out empty/whitespace-only system prompts — Anthropic API rejects them
+    const systemPromptText =
+      typeof system_message?.content === 'string' && system_message.content.trim()
+        ? system_message.content
+        : undefined;
 
     const { bedrock: bedrockModels } = await import('model-bank');
 
@@ -183,11 +187,11 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       thinking,
     });
 
-    const systemPrompts = !!system_message?.content
+    const systemPrompts = !!systemPromptText
       ? ([
           {
             cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
-            text: system_message.content as string,
+            text: systemPromptText,
             type: 'text',
           },
         ] as Anthropic.TextBlockParam[])
@@ -199,8 +203,8 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
 
-    // Claude Opus 4.6 does not support assistant turn prefill
-    if (model.includes('opus-4-6') && postMessages.at(-1)?.role === 'assistant') {
+    // Claude 4.6 models do not support assistant turn prefill
+    if (model.includes('-4-6') && postMessages.at(-1)?.role === 'assistant') {
       postMessages.pop();
     }
 
@@ -218,10 +222,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       const resolvedThinking =
         thinking.type === 'enabled'
           ? {
-              budget_tokens: Math.min(
-                thinking?.budget_tokens || 1024,
-                resolvedMaxTokens - 1,
-              ),
+              budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
               type: 'enabled' as const,
             }
           : { type: 'adaptive' as const };
@@ -232,17 +233,18 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         thinking: resolvedThinking,
       };
     } else {
-      // Resolve temperature and top_p parameters based on model constraints
-      const hasConflict = hasTemperatureTopPConflict(model);
-      const resolvedParams = resolveParameters(
+      // Resolve temperature/top_p: Claude 4+ on Bedrock doesn't allow both simultaneously.
+      // normalizeTemperature divides by 2 to map LobeChat's 0-2 range to Anthropic's 0-1 range.
+      const resolvedSamplingParams = resolveModelSamplingParameters(
+        model,
         { temperature, top_p },
-        { hasConflict, normalizeTemperature: true, preferTemperature: true },
+        { normalizeTemperature: true, preferTemperature: true },
       );
 
       anthropicPayload = {
         ...anthropicBase,
-        temperature: resolvedParams.temperature,
-        top_p: resolvedParams.top_p,
+        temperature: resolvedSamplingParams.temperature,
+        top_p: resolvedSamplingParams.top_p,
       };
     }
 

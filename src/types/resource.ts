@@ -1,4 +1,4 @@
-import type { FilesTabs, SortType } from '@/types/files';
+import { type FilesTabs, type SortType } from '@/types/files';
 
 /**
  * Unified resource item that represents both files and documents
@@ -14,9 +14,9 @@ export interface ResourceItem {
   };
 
   chunkCount?: number | null;
-  chunkTaskId?: string | null;
   chunkingError?: any | null;
   chunkingStatus?: string | null;
+  chunkTaskId?: string | null;
 
   // Document-specific (optional)
   content?: string | null;
@@ -82,8 +82,8 @@ export interface ResourceQueryParams {
   parentId?: string | null;
   q?: string;
   showFilesInKnowledgeBase?: boolean;
-  sortType?: SortType;
   sorter?: 'name' | 'createdAt' | 'size';
+  sortType?: SortType;
 }
 
 /**

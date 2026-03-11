@@ -1,8 +1,8 @@
-import { ChatCitationItem, ModelPerformance, ModelUsage } from '@lobechat/types';
+import type { ChatCitationItem, ModelPerformance, ModelUsage } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
 
 import { parseToolCalls } from '../../helpers';
-import { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { nanoid } from '../../utils/uuid';
@@ -144,7 +144,7 @@ const chatStreamable = async function* <T>(stream: AsyncIterable<T>) {
 const ERROR_CHUNK_PREFIX = '%FIRST_CHUNK_ERROR%: ';
 
 export function readableFromAsyncIterable<T>(iterable: AsyncIterable<T>) {
-  let it = iterable[Symbol.asyncIterator]();
+  const it = iterable[Symbol.asyncIterator]();
   return new ReadableStream<T>({
     async cancel(reason) {
       await it.return?.(reason);
@@ -174,7 +174,7 @@ export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
 
   // copy from https://github.com/vercel/ai/blob/d3aa5486529e3d1a38b30e3972b4f4c63ea4ae9a/packages/ai/streams/ai-stream.ts#L284
   // and add an error handle
-  let it = iterable[Symbol.asyncIterator]();
+  const it = iterable[Symbol.asyncIterator]();
 
   return new ReadableStream<T>({
     async cancel(reason) {
@@ -266,8 +266,9 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
   let speed: ModelPerformance | undefined;
   let grounding: any;
   let toolsCalling: any;
+  let streamError: any;
   // Track base64 images for accumulation
-  let base64Images: Array<{ data: string; id: string }> = [];
+  const base64Images: Array<{ data: string; id: string }> = [];
 
   let currentType = '' as unknown as StreamProtocolChunk['type'];
   const callbacks = cb || {};
@@ -275,6 +276,7 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
   return new TransformStream<string, Uint8Array>({
     async flush(): Promise<void> {
       const data = {
+        error: streamError,
         grounding,
         speed,
         text: aggregatedText,
@@ -385,6 +387,13 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
             toolsCalling = parseToolCalls(toolsCalling, data);
 
             await callbacks.onToolsCalling?.({ chunk: data, toolsCalling });
+            break;
+          }
+
+          case 'error': {
+            streamError = data;
+            await callbacks.onError?.(data);
+            break;
           }
         }
       }
@@ -467,7 +476,7 @@ export const createTokenSpeedCalculator = (
   let outputStartAt: number | undefined;
 
   const process = (chunk: StreamProtocolChunk) => {
-    let result = [chunk];
+    const result = [chunk];
     // Set outputStartAt when receiving the first content chunk (for TTFT calculation)
     // - text/reasoning: standard text output events
     // - content_part/reasoning_part: multimodal output events used by Gemini 3+ models

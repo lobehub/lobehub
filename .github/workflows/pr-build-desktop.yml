@@ -20,14 +20,12 @@ env:
 jobs:
   test:
     name: Code quality check
-    # 添加 PR label 触发条件，只有添加了 trigger:build-desktop 标签的 PR 才会触发构建
-    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-desktop')
+    # 添加 PR label 或 release/* 分支触发：有 trigger:build-desktop 标签或 PR 源分支为 release/* 时触发
+    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-desktop') || startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest # 只在 ubuntu 上运行一次检查
     steps:
       - name: Checkout base
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node & Bun
         uses: ./.github/actions/setup-node-bun
@@ -49,15 +47,13 @@ jobs:
   version:
     name: Determine version
     # 与 test job 相同的触发条件
-    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-desktop')
+    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-desktop') || startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
     outputs:
       # 输出版本信息，供后续 job 使用
       version: ${{ steps.set_version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -96,8 +92,6 @@ jobs:
         os: [macos-latest, macos-15-intel, windows-2025, ubuntu-latest]
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -131,10 +125,11 @@ jobs:
       # 注意：fork 的 PR 无法访问 secrets，会构建未签名版本
       - name: Build artifact on macOS
         if: runner.os == 'macOS'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           # 设置更新通道，PR构建为nightly，否则为stable
           UPDATE_CHANNEL: 'nightly'
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           # 默认添加一个加密 SECRET
@@ -155,10 +150,11 @@ jobs:
       # 注意：fork 的 PR 无法访问 secrets，会构建未签名版本
       - name: Build artifact on Windows
         if: runner.os == 'Windows'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           # 设置更新通道，PR构建为nightly，否则为stable
           UPDATE_CHANNEL: 'nightly'
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -171,10 +167,11 @@ jobs:
       # Linux 平台构建处理
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
-        run: npm run desktop:build
+        run: npm run desktop:package:app
         env:
           # 设置更新通道，PR构建为nightly，否则为stable
           UPDATE_CHANNEL: 'nightly'
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -286,8 +283,6 @@ jobs:
       artifact_path: ${{ steps.set_path.outputs.path }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       # 下载合并后的构建产物
       - name: Download merged artifacts
@@ -340,21 +335,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 在 PR 上添加评论，包含构建信息和下载链接
+      # Post comment on PR with build info, release download link, and Actions artifacts link
       - name: Comment on PR
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const releaseUrl = "${{ steps.create_release.outputs.url }}";
+            const artifactsUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}";
             const prCommentGenerator = require('${{ github.workspace }}/.github/scripts/pr-comment.js');
 
             const result = await prCommentGenerator({
               github,
               context,
               releaseUrl,
+              artifactsUrl,
               version: "${{ needs.version.outputs.version }}",
               tag: "v${{ needs.version.outputs.version }}"
             });
 
-            console.log(`评论状态: ${result.updated ? '已更新' : '已创建'}, ID: ${result.id}`);
+            console.log(`Comment ${result.updated ? 'updated' : 'created'}, ID: ${result.id}`);

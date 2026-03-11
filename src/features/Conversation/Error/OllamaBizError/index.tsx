@@ -1,9 +1,10 @@
 import { type ChatMessageError } from '@lobechat/types';
-import { type AlertProps, Skeleton } from '@lobehub/ui';
-import dynamic from '@/libs/next/dynamic';
+import { type AlertProps } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
+import dynamic from '@/libs/next/dynamic';
 
 const loading = () => <Skeleton active style={{ width: 300 }} />;
 
@@ -22,6 +23,7 @@ interface OllamaErrorResponse {
   error: OllamaError;
 }
 
+// eslint-disable-next-line regexp/no-dupe-characters-character-class, regexp/no-obscure-range
 const UNRESOLVED_MODEL_REGEXP = /model "([\w+,-_]+)" not found/;
 
 interface OllamaBizErrorProps {

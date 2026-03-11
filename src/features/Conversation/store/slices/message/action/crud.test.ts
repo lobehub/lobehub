@@ -1,10 +1,10 @@
-import type { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as messageServiceModule from '@/services/message';
 
-import type { ConversationContext } from '../../../../types';
+import { type ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
 
 // Mock conversation-flow parse function (必须 mock，因为这是外部库)

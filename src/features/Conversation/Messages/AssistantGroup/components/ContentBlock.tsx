@@ -37,6 +37,7 @@ const ContentBlock = memo<ContentBlockProps>(
     if (error && (content === LOADING_FLAT || !content)) {
       return (
         <ErrorContent
+          id={id}
           error={
             errorContent && error && (content === LOADING_FLAT || !content)
               ? {
@@ -54,7 +55,6 @@ const ContentBlock = memo<ContentBlockProps>(
                 }
               : undefined
           }
-          id={id}
           onRegenerate={handleRegenerate}
         />
       );

@@ -28,25 +28,25 @@ const EditCustomPlugin = memo<{ identifier: string }>(({ identifier }) => {
     >
       <DevModal
         mode={'edit'}
+        open={showModal}
+        value={customPlugin}
+        onOpenChange={setModal}
+        onValueChange={updateNewDevPlugin}
         onDelete={() => {
           uninstallCustomPlugin(identifier);
           setModal(false);
         }}
-        onOpenChange={setModal}
         onSave={async (devPlugin) => {
           await installCustomPlugin(devPlugin);
           setModal(false);
         }}
-        onValueChange={updateNewDevPlugin}
-        open={showModal}
-        value={customPlugin}
       />
       <ActionIcon
         icon={PackageSearch}
+        title={t('store.actions.manifest')}
         onClick={() => {
           setModal(true);
         }}
-        title={t('store.actions.manifest')}
       />
     </div>
   );

@@ -1,8 +1,5 @@
-import {
-  AiSendMessageServerSchema,
-  type SendMessageServerResponse,
-  StructureOutputSchema,
-} from '@lobechat/types';
+import { type SendMessageServerResponse } from '@lobechat/types';
+import { AiSendMessageServerSchema, StructureOutputSchema } from '@lobechat/types';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -72,7 +69,6 @@ export const aiChatRouter = router({
         if (!!context.sessionId) sessionId = context.sessionId;
       }
 
-      let messageId: string;
       let topicId = input.topicId!;
       let threadId = input.threadId;
       let createdThreadId: string | undefined;
@@ -142,7 +138,7 @@ export const aiChatRouter = router({
         topicId,
       });
 
-      messageId = userMessageItem.id;
+      const messageId = userMessageItem.id;
       log('user message created with id: %s', messageId);
 
       // create assistant message

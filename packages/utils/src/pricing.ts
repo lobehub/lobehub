@@ -1,4 +1,4 @@
-import { Pricing, PricingUnit, PricingUnitName } from 'model-bank';
+import type { Pricing, PricingUnit, PricingUnitName } from 'model-bank';
 
 /**
  * Internal helper to extract the displayed unit rate from a pricing unit by strategy

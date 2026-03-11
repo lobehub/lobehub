@@ -1,9 +1,9 @@
 // @vitest-environment node
-import { GoogleGenAI } from '@google/genai';
+import type { GoogleGenAI } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImagePayload } from '../../types/image';
 import { createGoogleImage } from './createImage';
 
 const provider = 'google';
@@ -12,7 +12,7 @@ const noImageErrorType = 'ProviderNoImageGenerated';
 const invalidErrorType = 'InvalidProviderAPIKey';
 
 // Mock the console.error to avoid polluting test output
-vi.spyOn(console, 'error').mockImplementation(() => { });
+vi.spyOn(console, 'error').mockImplementation(() => {});
 
 let mockClient: GoogleGenAI;
 
@@ -385,6 +385,54 @@ describe('createGoogleImage', () => {
       });
       expect(result).toEqual({
         imageUrl: `data:image/png;base64,${realBase64ImageData}`,
+      });
+    });
+
+    it('should not include imageConfig when aspectRatio is auto', async () => {
+      // Arrange
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-2.5-flash-image:image',
+        params: {
+          prompt: 'Create a beautiful sunset landscape',
+          aspectRatio: 'auto',
+        },
+      };
+
+      // Act
+      await createGoogleImage(mockClient, provider, payload);
+
+      // Assert - imageConfig should NOT be included when aspectRatio is 'auto'
+      expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: 'Create a beautiful sunset landscape' }],
+          },
+        ],
+        model: 'gemini-2.5-flash-image',
+        config: {
+          responseModalities: ['Image'],
+        },
       });
     });
 

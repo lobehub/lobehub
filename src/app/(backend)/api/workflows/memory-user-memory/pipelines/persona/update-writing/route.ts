@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 import { getServerDB } from '@/database/server';
 import {
-  UserPersonaService,
   buildUserPersonaJobInput,
+  UserPersonaService,
 } from '@/server/services/memory/userMemory/persona/service';
 
 const workflowPayloadSchema = z.object({

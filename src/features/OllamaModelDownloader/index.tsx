@@ -2,12 +2,14 @@ import { Ollama } from '@lobehub/icons';
 import { Alert, Button, Center, Flexbox, Input } from '@lobehub/ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
-import { type ReactNode, memo, useCallback, useMemo, useState } from 'react';
+import { type ReactNode } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FormAction from '@/components/FormAction';
 import { useActionSWR } from '@/libs/swr';
-import { type ModelProgressInfo, modelsService } from '@/services/models';
+import { type ModelProgressInfo } from '@/services/models';
+import { modelsService } from '@/services/models';
 import { formatSize } from '@/utils/format';
 
 import { useDownloadMonitor } from './useDownloadMonitor';
@@ -68,24 +70,24 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
         >
           {!isDownloading && (
             <Input
+              value={modelToPull}
               onChange={(e) => {
                 setModelToPull(e.target.value);
               }}
-              value={modelToPull}
             />
           )}
         </FormAction>
         {isDownloading && (
           <Flexbox flex={1} gap={8} style={{ maxWidth: 300 }} width={'100%'}>
             <Progress
-              percent={percent}
               showInfo
+              percent={percent}
               strokeColor={cssVar.colorSuccess}
               trailColor={cssVar.colorSuccessBg}
             />
             <Flexbox
-              distribution={'space-between'}
               horizontal
+              distribution={'space-between'}
               style={{ color: cssVar.colorTextDescription, fontSize: 12 }}
             >
               <span>
@@ -110,11 +112,11 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
           <Button
             block
             loading={isDownloading}
+            style={{ marginTop: 8 }}
+            type={'primary'}
             onClick={() => {
               mutate();
             }}
-            style={{ marginTop: 8 }}
-            type={'primary'}
           >
             {!isDownloading
               ? t('ollama.unlock.confirm')

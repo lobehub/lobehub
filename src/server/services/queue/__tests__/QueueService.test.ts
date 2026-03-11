@@ -245,5 +245,154 @@ describe('QueueService', () => {
       });
       expect(delay).toBe(3200); // 200 base + 1000 for tools + 2000 for errors
     });
+
+    it('should handle high priority with tool calls only', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: true,
+        priority: 'high',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(1200); // 200 base + 1000 for tool calls
+    });
+
+    it('should handle low priority with tool calls only', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: true,
+        priority: 'low',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(6000); // 5000 base + 1000 for tool calls
+    });
+
+    it('should handle high priority with errors at stepIndex 0', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'high',
+        stepIndex: 0,
+      });
+      expect(delay).toBe(200); // 200 base + 0 for errors (0 * 1000)
+    });
+
+    it('should handle low priority with errors at various stepIndex', async () => {
+      const { QueueService } = await import('../QueueService');
+
+      const delay1 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'low',
+        stepIndex: 1,
+      });
+      expect(delay1).toBe(6000); // 5000 base + 1000
+
+      const delay3 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'low',
+        stepIndex: 3,
+      });
+      expect(delay3).toBe(8000); // 5000 base + 3000
+
+      const delay12 = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'low',
+        stepIndex: 12,
+      });
+      expect(delay12).toBe(15000); // 5000 base + 10000 (max)
+    });
+
+    it('should handle all flags combined - normal priority', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'normal',
+        stepIndex: 3,
+      });
+      expect(delay).toBe(5000); // 1000 base + 1000 for tools + 3000 for errors
+    });
+
+    it('should handle all flags combined - low priority', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'low',
+        stepIndex: 4,
+      });
+      expect(delay).toBe(10000); // 5000 base + 1000 for tools + 4000 for errors
+    });
+
+    it('should cap exponential backoff at 10 seconds for stepIndex 10', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 10,
+      });
+      expect(delay).toBe(11000); // 1000 base + 10000 (max, not 10000)
+    });
+
+    it('should cap exponential backoff at 10 seconds for stepIndex 11', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 11,
+      });
+      expect(delay).toBe(11000); // 1000 base + 10000 (max, not 11000)
+    });
+
+    it('should cap exponential backoff at 10 seconds for stepIndex 100', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: false,
+        priority: 'normal',
+        stepIndex: 100,
+      });
+      expect(delay).toBe(11000); // 1000 base + 10000 (max, not 100000)
+    });
+
+    it('should handle maximum delay scenario - low priority with all flags and high stepIndex', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'low',
+        stepIndex: 50,
+      });
+      expect(delay).toBe(16000); // 5000 base + 1000 for tools + 10000 (max for errors)
+    });
+
+    it('should handle minimum delay scenario - high priority with no flags', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: false,
+        hasToolCalls: false,
+        priority: 'high',
+        stepIndex: 100, // stepIndex doesn't matter without errors
+      });
+      expect(delay).toBe(200); // 200 base only
+    });
+
+    it('should handle errors at exact boundary stepIndex 10', async () => {
+      const { QueueService } = await import('../QueueService');
+      const delay = QueueService.calculateDelay({
+        hasErrors: true,
+        hasToolCalls: true,
+        priority: 'high',
+        stepIndex: 10,
+      });
+      expect(delay).toBe(11200); // 200 base + 1000 for tools + 10000 (exactly at max)
+    });
   });
 });

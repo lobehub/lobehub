@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeXinferenceAI, XinferenceModelCard } from './index';
+import type { XinferenceModelCard } from './index';
+import { LobeXinferenceAI } from './index';
 
 testProvider({
   Runtime: LobeXinferenceAI,

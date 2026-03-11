@@ -1,22 +1,16 @@
-import {
-  UserMemoryContextWithoutVectors,
-  UserMemoryExperienceWithoutVectors,
-  UserMemoryPreferenceWithoutVectors,
-  UserMemoryContextsListItem,
-  UserMemoryExperiencesListItem,
-  UserMemoryPreferencesListItem,
+import type { UserMemoryListItem, UserMemoryWithoutVectors } from './base';
+import type { UserMemoryIdentitiesListItem, UserMemoryIdentityWithoutVectors } from './identity';
+import type {
   UserMemoryActivitiesListItem,
   UserMemoryActivityWithoutVectors,
-} from './layers'
-import {
-  UserMemoryIdentityWithoutVectors,
-  UserMemoryIdentitiesListItem,
-} from './identity'
-import {
-  UserMemoryListItem,
-  UserMemoryWithoutVectors,
-} from './base'
-import { LayersEnum } from './shared';
+  UserMemoryContextsListItem,
+  UserMemoryContextWithoutVectors,
+  UserMemoryExperiencesListItem,
+  UserMemoryExperienceWithoutVectors,
+  UserMemoryPreferencesListItem,
+  UserMemoryPreferenceWithoutVectors,
+} from './layers';
+import type { LayersEnum } from './shared';
 
 export interface TopicSource {
   agentId: string | null;
@@ -36,13 +30,13 @@ export enum MemorySourceType {
 export interface ContextMemorySimple {
   context: UserMemoryContextsListItem;
   layer: LayersEnum.Context;
-  memory: UserMemoryListItem
+  memory: UserMemoryListItem;
 }
 
 export interface ContextMemoryDetail {
   context: UserMemoryContextWithoutVectors;
   layer: LayersEnum.Context;
-  memory: UserMemoryWithoutVectors
+  memory: UserMemoryWithoutVectors;
   source?: MemorySource;
   sourceType?: MemorySourceType;
 }

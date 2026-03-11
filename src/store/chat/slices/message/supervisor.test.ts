@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatService } from '@/services/aiChat';
 
-import { GroupChatSupervisor, type SupervisorContext } from './supervisor';
+import { type SupervisorContext } from './supervisor';
+import { GroupChatSupervisor } from './supervisor';
 
 vi.mock('@lobechat/prompts', () => ({
   contextSupervisorMakeDecision: vi.fn(() => ({
@@ -57,7 +58,7 @@ describe('GroupChatSupervisor', () => {
   });
 
   it('should request structured completion and return filtered decisions', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
     vi.mocked(aiChatService.generateJSON).mockResolvedValue([
       { tool_name: 'create_todo', parameter: { content: 'Review action items' } },
@@ -117,7 +118,7 @@ describe('GroupChatSupervisor', () => {
   });
 
   it('should parse structured response from JSON string fallback', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const payload = [
       '```json',
       '[',

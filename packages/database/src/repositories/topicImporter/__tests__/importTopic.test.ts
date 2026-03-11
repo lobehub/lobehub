@@ -1,12 +1,13 @@
-import type { ExportedTopic, ImportedMessage } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+
+import type { ExportedTopic, ImportedMessage } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, messagePlugins, messages, topics, users } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 import { TopicImporterRepo } from '../index';
 
 const userId = 'topic-importer-user';
@@ -62,7 +63,7 @@ describe('TopicImporterRepo.importTopic', () => {
     it('should restore parentId chain from real exported data', async () => {
       const repo = new TopicImporterRepo(serverDB, userId);
       const jsonPath = path.join(__dirname, 'fixtures/exported-topic.json');
-      const fileContent = readFileSync(jsonPath, 'utf-8');
+      const fileContent = readFileSync(jsonPath, 'utf8');
       const exportedData = JSON.parse(fileContent) as ExportedTopic;
 
       const result = await repo.importTopic({
@@ -116,7 +117,7 @@ describe('TopicImporterRepo.importTopic', () => {
     it('should preserve plugin and pluginState fields in message_plugins table', async () => {
       const repo = new TopicImporterRepo(serverDB, userId);
       const jsonPath = path.join(__dirname, 'fixtures/exported-topic.json');
-      const fileContent = readFileSync(jsonPath, 'utf-8');
+      const fileContent = readFileSync(jsonPath, 'utf8');
       const exportedData = JSON.parse(fileContent) as ExportedTopic;
 
       const result = await repo.importTopic({
@@ -171,7 +172,7 @@ describe('TopicImporterRepo.importTopic', () => {
     it('should preserve tools array on assistant messages', async () => {
       const repo = new TopicImporterRepo(serverDB, userId);
       const jsonPath = path.join(__dirname, 'fixtures/exported-topic.json');
-      const fileContent = readFileSync(jsonPath, 'utf-8');
+      const fileContent = readFileSync(jsonPath, 'utf8');
       const exportedData = JSON.parse(fileContent) as ExportedTopic;
 
       const result = await repo.importTopic({
@@ -205,7 +206,7 @@ describe('TopicImporterRepo.importTopic', () => {
     it('should preserve model and provider fields', async () => {
       const repo = new TopicImporterRepo(serverDB, userId);
       const jsonPath = path.join(__dirname, 'fixtures/exported-topic.json');
-      const fileContent = readFileSync(jsonPath, 'utf-8');
+      const fileContent = readFileSync(jsonPath, 'utf8');
       const exportedData = JSON.parse(fileContent) as ExportedTopic;
 
       const result = await repo.importTopic({
@@ -230,7 +231,7 @@ describe('TopicImporterRepo.importTopic', () => {
     it('should verify branching is preserved (2 children for root)', async () => {
       const repo = new TopicImporterRepo(serverDB, userId);
       const jsonPath = path.join(__dirname, 'fixtures/exported-topic.json');
-      const fileContent = readFileSync(jsonPath, 'utf-8');
+      const fileContent = readFileSync(jsonPath, 'utf8');
       const exportedData = JSON.parse(fileContent) as ExportedTopic;
 
       const result = await repo.importTopic({

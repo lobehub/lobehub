@@ -32,26 +32,26 @@ const GroupTasksAvatar = memo<{ avatars: { avatar?: string; background?: string 
       <Flexbox flex={'none'} height={28} style={{ position: 'relative' }} width={28}>
         <GroupAvatar
           avatarShape={'square'}
+          cornerShape={'square'}
+          size={28}
           avatars={avatars.map((a) => ({
             avatar: a.avatar || DEFAULT_AVATAR,
             background: a.background,
           }))}
-          cornerShape={'square'}
-          size={28}
         />
         <Block
           align={'center'}
           flex={'none'}
           height={16}
           justify={'center'}
+          variant={'outlined'}
+          width={16}
           style={{
             borderRadius: 4,
             position: 'absolute',
             right: -4,
             top: -4,
           }}
-          variant={'outlined'}
-          width={16}
         >
           <Icon color={cssVar.colorTextDescription} icon={ListTodo} size={10} />
         </Block>
@@ -124,18 +124,18 @@ const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id, index }) => {
 
   return (
     <ChatItem
+      showTitle
       aboveMessage={null}
-      actions={
-        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
-      }
       avatar={{ title }}
       customAvatarRender={() => <GroupTasksAvatar avatars={taskAgents} />}
       id={id}
       message=""
       placement="left"
-      showTitle
       time={createdAt}
       titleAddon={<Tag>{t('task.groupTasks', { count: tasks.length })}</Tag>}
+      actions={
+        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
+      }
     >
       <Flexbox gap={8} width={'100%'}>
         {tasks.map((task) => (

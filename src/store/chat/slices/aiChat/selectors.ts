@@ -1,6 +1,6 @@
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import type { ChatStoreState } from '../../initialState';
+import { type ChatStoreState } from '../../initialState';
 import { operationSelectors } from '../operation/selectors';
 
 const isMessageInReasoning = (id: string) => (s: ChatStoreState) =>

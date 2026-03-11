@@ -51,7 +51,7 @@ const Preview = memo<PreviewProps>(
             gap={16}
           >
             <div className={styles.header}>
-              <Flexbox align={'flex-start'} gap={12} horizontal>
+              <Flexbox horizontal align={'flex-start'} gap={12}>
                 <Avatar
                   avatar={agentMeta.avatar}
                   background={agentMeta.backgroundColor}
@@ -61,13 +61,13 @@ const Preview = memo<PreviewProps>(
                 />
                 <ChatHeaderTitle
                   desc={displayDesc}
+                  title={displayTitle}
                   tag={
-                    <Flexbox gap={4} horizontal>
+                    <Flexbox horizontal gap={4}>
                       <ModelTag model={model} />
                       {plugins?.length > 0 && <PluginTag plugins={plugins} />}
                     </Flexbox>
                   }
-                  title={displayTitle}
                 />
               </Flexbox>
             </div>
@@ -77,13 +77,13 @@ const Preview = memo<PreviewProps>(
               width={'100%'}
             >
               <ChatItem
+                id={message.id}
+                message={processedContent}
                 avatar={{
                   avatar: agentMeta.avatar,
                   backgroundColor: agentMeta.backgroundColor,
                   title: displayTitle,
                 }}
-                id={message.id}
-                message={processedContent}
               />
             </Flexbox>
             {withFooter ? (

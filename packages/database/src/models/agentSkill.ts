@@ -1,9 +1,10 @@
-import { SkillItem, SkillListItem } from '@lobechat/types';
+import type { SkillItem, SkillListItem } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
 import { and, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 
-import { NewAgentSkill, agentSkills } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type {NewAgentSkill } from '../schemas';
+import { agentSkills } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 const skillItemColumns = {
   content: agentSkills.content,

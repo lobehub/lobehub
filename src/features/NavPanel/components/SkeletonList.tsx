@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, type FlexboxProps, Skeleton } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -8,11 +9,11 @@ export const SkeletonItem = memo<{ avatarSize?: number } & Omit<FlexboxProps, 'c
   ({ padding = 6, height = 36, style, avatarSize = 28, ...rest }) => {
     return (
       <Flexbox
+        horizontal
         align={'center'}
         flex={1}
         gap={8}
         height={height}
-        horizontal
         padding={padding}
         style={style}
         {...rest}

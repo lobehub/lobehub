@@ -1,6 +1,6 @@
-import { app } from 'electron';
-import { pathExistsSync } from 'fs-extra';
 import { join } from 'node:path';
+
+import { app } from 'electron';
 
 export const mainDir = join(__dirname);
 
@@ -10,14 +10,13 @@ export const resourcesDir = join(mainDir, '../../resources');
 
 export const buildDir = join(mainDir, '../../build');
 
+export const binDir = app.isPackaged
+  ? join(process.resourcesPath, 'bin')
+  : join(resourcesDir, 'bin');
+
 const appPath = app.getAppPath();
 
-const nextExportOutDir = join(appPath, 'dist', 'next', 'out');
-const nextExportDefaultDir = join(appPath, 'dist', 'next');
-
-export const nextExportDir = pathExistsSync(nextExportOutDir)
-  ? nextExportOutDir
-  : nextExportDefaultDir;
+export const rendererDir = join(appPath, 'dist', 'renderer');
 
 export const userDataDir = app.getPath('userData');
 

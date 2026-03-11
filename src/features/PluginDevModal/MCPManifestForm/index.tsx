@@ -1,5 +1,6 @@
 import { Alert, Button, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
-import { Divider, Form, type FormInstance, Radio } from 'antd';
+import { type FormInstance } from 'antd';
+import { Divider, Form, Radio } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -161,6 +162,7 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
             desc={t('dev.mcp.identifier.desc')}
             label={t('dev.mcp.identifier.label')}
             name={'identifier'}
+            tag={'identifier'}
             rules={[
               { message: t('dev.mcp.identifier.required'), required: true },
               {
@@ -180,7 +182,6 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                     },
                   },
             ]}
-            tag={'identifier'}
           >
             <Input placeholder={t('dev.mcp.identifier.placeholder')} />
           </FormItem>
@@ -190,6 +191,7 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                 desc={t('dev.mcp.url.desc')}
                 label={t('dev.mcp.url.label')}
                 name={HTTP_URL_KEY}
+                tag={'url'}
                 rules={[
                   { message: t('dev.mcp.url.required'), required: true },
                   {
@@ -202,7 +204,6 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                     },
                   },
                 ]}
-                tag={'url'}
               >
                 <Input placeholder="https://mcp.higress.ai/mcp-github/xxxxx" />
               </FormItem>
@@ -213,6 +214,7 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                 name={AUTH_TYPE}
               >
                 <Radio.Group
+                  style={{ width: '100%' }}
                   options={[
                     {
                       label: t('dev.mcp.auth.none'),
@@ -223,7 +225,6 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                       value: 'bearer',
                     },
                   ]}
-                  style={{ width: '100%' }}
                 />
               </FormItem>
               {authType === 'bearer' && (
@@ -281,11 +282,11 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
             </>
           )}
           <FormItem colon={false} label={t('dev.mcp.testConnectionTip')} layout={'horizontal'}>
-            <Flexbox align={'center'} gap={8} horizontal justify={'flex-end'}>
+            <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
               <Button
                 loading={isTesting}
-                onClick={handleTestConnection}
                 type={!!mcpType ? 'primary' : undefined}
+                onClick={handleTestConnection}
               >
                 {t('dev.mcp.testConnection')}
               </Button>
@@ -294,17 +295,17 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
           {(connectionError || testState.error) && (
             <Alert
               closable
+              showIcon
               extra={errorMetadata ? <ErrorDetails errorInfo={errorMetadata} /> : undefined}
+              title={connectionError || testState.error}
+              type="error"
               onClose={() => {
                 setConnectionError(null);
                 setErrorMetadata(null);
               }}
-              showIcon
-              title={connectionError || testState.error}
-              type="error"
             />
           )}
-          <FormItem name={'manifest'} noStyle />
+          <FormItem noStyle name={'manifest'} />
           <Divider />
           <FormItem
             desc={t('dev.mcp.desc.desc')}

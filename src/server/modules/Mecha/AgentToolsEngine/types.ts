@@ -1,5 +1,5 @@
-import type { LobeToolManifest, PluginEnableChecker } from '@lobechat/context-engine';
-import type { LobeTool } from '@lobechat/types';
+import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
+import { type LobeTool } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest
@@ -43,6 +43,14 @@ export interface ServerCreateAgentToolsEngineParams {
     /** Plugin IDs enabled for this agent */
     plugins?: string[];
   };
+  /** Device gateway context for remote tool calling */
+  deviceContext?: {
+    boundDeviceId?: string;
+    deviceOnline?: boolean;
+    gatewayConfigured: boolean;
+  };
+  /** Whether the user's global memory setting is enabled */
+  globalMemoryEnabled?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
   /** Model name for function calling compatibility check */

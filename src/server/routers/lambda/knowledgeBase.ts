@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
@@ -20,7 +21,22 @@ export const knowledgeBaseRouter = router({
   addFilesToKnowledgeBase: knowledgeBaseProcedure
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.knowledgeBaseModel.addFilesToKnowledgeBase(input.knowledgeBaseId, input.ids);
+      try {
+        return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
+          input.knowledgeBaseId,
+          input.ids,
+        );
+      } catch (e: any) {
+        // Check for PostgreSQL unique constraint violation (code 23505)
+        const pgErrorCode = e?.cause?.cause?.code || e?.cause?.code || e?.code;
+        if (pgErrorCode === '23505') {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'FILE_ALREADY_IN_KNOWLEDGE_BASE',
+          });
+        }
+        throw e;
+      }
     }),
 
   createKnowledgeBase: knowledgeBaseProcedure

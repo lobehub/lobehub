@@ -1,10 +1,10 @@
 import { copyToClipboard } from '@lobehub/ui';
 import { produce } from 'immer';
-import type { StateCreator } from 'zustand';
+import { type StateCreator } from 'zustand';
 
 import { messageService } from '@/services/message';
 
-import type { Store as ConversationStore } from '../../../action';
+import { type Store as ConversationStore } from '../../../action';
 import { dataSelectors } from '../../data/selectors';
 
 /**

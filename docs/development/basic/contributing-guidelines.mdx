@@ -89,14 +89,105 @@ bunx vitest run --silent='passed-only' '[file-path]'
 
 For more testing details, see the [Testing Guide](/docs/development/basic/test).
 
+### Gitmoji Reference
+
+Use the following emojis to prefix your commit messages:
+
+| Emoji | Code                     | Type     | Description              | Triggers Release? |
+| ----- | ------------------------ | -------- | ------------------------ | ----------------- |
+| ✨     | `:sparkles:`             | feat     | New feature              | Yes               |
+| 🐛    | `:bug:`                  | fix      | Bug fix                  | Yes               |
+| 📝    | `:memo:`                 | docs     | Documentation            | No                |
+| 💄    | `:lipstick:`             | style    | UI/styling changes       | No                |
+| ♻️    | `:recycle:`              | refactor | Code refactoring         | No                |
+| ✅     | `:white_check_mark:`     | test     | Tests                    | No                |
+| 🔨    | `:hammer:`               | chore    | Maintenance tasks        | No                |
+| 🚀    | `:rocket:`               | perf     | Performance improvements | No                |
+| 🌐    | `:globe_with_meridians:` | i18n     | Internationalization     | No                |
+
 ### How to Contribute
 
-1. Fork the project to your account.
-2. Create a new branch for development.
-3. After completing development, ensure your code passes code style checks and tests.
-4. Commit your changes and use appropriate gitmoji to label your commit message.
-5. Create a Pull Request to the main branch of the original project.
-6. Ensure all GitHub Actions CI checks pass.
-7. Await code review and make necessary modifications based on feedback.
+**1. Fork and clone the repository**
+
+Fork [lobehub/lobe-chat](https://github.com/lobehub/lobe-chat) on GitHub, then clone your fork locally.
+
+**2. Create a branch**
+
+Use the branch naming format: `username/type/description`
+
+```bash
+git checkout -b yourname/feat/add-voice-input
+git checkout -b yourname/fix/message-duplication
+git checkout -b yourname/docs/update-api-guide
+```
+
+**3. Make changes**
+
+Follow the [code style guidelines](/docs/development/basic/contributing-guidelines#code-style) above. Run linters before committing:
+
+```bash
+pnpm lint:ts       # TypeScript/JavaScript
+pnpm lint:style    # CSS/styles
+bun run type-check # Type checking
+```
+
+**4. Commit with gitmoji**
+
+```bash
+git commit -m "✨ feat: add voice input support"
+git commit -m "🐛 fix: resolve message duplication in group chat"
+git commit -m "📝 docs: update installation guide"
+```
+
+**5. Open a Pull Request**
+
+<Callout type={'warning'}>
+  Always target the **`canary`** branch — not `main`. `canary` is the active development branch.
+  PRs to `main` will be redirected.
+</Callout>
+
+Fill out the PR template in `.github/PULL_REQUEST_TEMPLATE.md`:
+
+```markdown
+## Description
+Clear description of what this PR does.
+
+## Type of Change
+- [ ] ✨ New feature
+- [ ] 🐛 Bug fix
+- [ ] 📝 Documentation
+- [ ] ♻️ Refactoring
+
+## Checklist
+- [ ] Code follows project style guidelines
+- [ ] Tests added/updated
+- [ ] Documentation updated
+- [ ] All tests pass
+
+## Related Issues
+Fixes #123
+```
+
+**PR titles with `✨ feat:` or `🐛 fix:` automatically trigger a new release.** Use other prefixes for changes that don't need a release.
+
+**6. Code review**
+
+Automated checks run on every PR: ESLint, TypeScript type check, Vitest unit tests, E2E tests, and build. Address review feedback by pushing additional commits to the same branch.
+
+### Syncing Your Fork with Upstream
+
+```bash
+git remote add upstream https://github.com/lobehub/lobe-chat.git
+git fetch upstream
+git rebase upstream/canary
+```
+
+### Ways to Contribute
+
+- **Features** — Check [issues labeled `good first issue`](https://github.com/lobehub/lobe-chat/issues?q=is%3Aissue+label%3A%22good+first+issue%22) to find beginner-friendly tasks
+- **Bug fixes** — Search open issues labeled `bug`
+- **Documentation** — Improve docs, fix typos, add examples
+- **Testing** — Add test coverage for uncovered code paths
+- **Translations** — Add missing i18n keys (see [i18n guide](/docs/development/internationalization/internationalization-implementation))
 
 Thank you for following these guidelines, as they help us maintain the quality and consistency of the project. We look forward to your contributions!

@@ -37,15 +37,15 @@ const SearchBar = memo<SearchBarProps>(
         horizontal={!isMobile}
       >
         <Block
+          clickable
+          horizontal
           align={'center'}
           className={cx(styles.query, searching && shinyTextStyles.shinyText)}
-          clickable
           gap={8}
-          horizontal
+          variant={'borderless'}
           onClick={() => {
             onEditingChange(true);
           }}
-          variant={'borderless'}
         >
           <Icon icon={SearchIcon} />
           {defaultQuery}
@@ -54,7 +54,7 @@ const SearchBar = memo<SearchBarProps>(
         {searching ? (
           <Skeleton.Block active style={{ height: 20, width: 40 }} />
         ) : (
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             <EngineAvatarGroup engines={defaultEngines} />
             {!isMobile && (
               <Text style={{ fontSize: 12 }} type={'secondary'}>

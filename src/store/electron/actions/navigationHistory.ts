@@ -1,6 +1,6 @@
-import { type StateCreator } from 'zustand/vanilla';
+import { type StoreSetter } from '@/store/types';
 
-import type { ElectronStore } from '../store';
+import { type ElectronStore } from '../store';
 
 // ======== Types ======== //
 
@@ -38,60 +38,6 @@ export interface NavigationHistoryState {
 
 // ======== Action Interface ======== //
 
-export interface NavigationHistoryAction {
-  /**
-   * Check if can go back in history
-   */
-  canGoBack: () => boolean;
-
-  /**
-   * Check if can go forward in history
-   */
-  canGoForward: () => boolean;
-
-  /**
-   * Get current history entry
-   */
-  getCurrentEntry: () => HistoryEntry | null;
-
-  /**
-   * Navigate back in history
-   * @returns The target entry or null if cannot go back
-   */
-  goBack: () => HistoryEntry | null;
-
-  /**
-   * Navigate forward in history
-   * @returns The target entry or null if cannot go forward
-   */
-  goForward: () => HistoryEntry | null;
-
-  /**
-   * Push a new entry to history (for normal navigation)
-   * Truncates any forward history if not at the end
-   */
-  pushHistory: (
-    entry: Omit<HistoryEntry, 'metadata'> & { metadata?: Partial<HistoryEntry['metadata']> },
-  ) => void;
-
-  /**
-   * Replace current entry in history (for replace navigation)
-   */
-  replaceHistory: (
-    entry: Omit<HistoryEntry, 'metadata'> & { metadata?: Partial<HistoryEntry['metadata']> },
-  ) => void;
-
-  /**
-   * Set current page title (called by PageTitle component)
-   */
-  setCurrentPageTitle: (title: string) => void;
-
-  /**
-   * Set the navigating history flag
-   */
-  setIsNavigatingHistory: (value: boolean) => void;
-}
-
 // ======== Initial State ======== //
 
 export const navigationHistoryInitialState: NavigationHistoryState = {
@@ -103,32 +49,43 @@ export const navigationHistoryInitialState: NavigationHistoryState = {
 
 // ======== Action Implementation ======== //
 
-export const createNavigationHistorySlice: StateCreator<
-  ElectronStore,
-  [['zustand/devtools', never]],
-  [],
-  NavigationHistoryAction
-> = (set, get) => ({
-  canGoBack: () => {
-    const { historyCurrentIndex } = get();
+type Setter = StoreSetter<ElectronStore>;
+export const createNavigationHistorySlice = (
+  set: Setter,
+  get: () => ElectronStore,
+  _api?: unknown,
+) => new NavigationHistoryActionImpl(set, get, _api);
+
+export class NavigationHistoryActionImpl {
+  readonly #get: () => ElectronStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ElectronStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  canGoBack = (): boolean => {
+    const { historyCurrentIndex } = this.#get();
     return historyCurrentIndex > 0;
-  },
+  };
 
-  canGoForward: () => {
-    const { historyCurrentIndex, historyEntries } = get();
+  canGoForward = (): boolean => {
+    const { historyCurrentIndex, historyEntries } = this.#get();
     return historyCurrentIndex < historyEntries.length - 1;
-  },
+  };
 
-  getCurrentEntry: () => {
-    const { historyCurrentIndex, historyEntries } = get();
+  getCurrentEntry = (): HistoryEntry | null => {
+    const { historyCurrentIndex, historyEntries } = this.#get();
     if (historyCurrentIndex < 0 || historyCurrentIndex >= historyEntries.length) {
       return null;
     }
     return historyEntries[historyCurrentIndex];
-  },
+  };
 
-  goBack: () => {
-    const { historyCurrentIndex, historyEntries } = get();
+  goBack = (): HistoryEntry | null => {
+    const { historyCurrentIndex, historyEntries } = this.#get();
 
     if (historyCurrentIndex <= 0) {
       return null;
@@ -137,7 +94,7 @@ export const createNavigationHistorySlice: StateCreator<
     const newIndex = historyCurrentIndex - 1;
     const targetEntry = historyEntries[newIndex];
 
-    set(
+    this.#set(
       {
         historyCurrentIndex: newIndex,
         isNavigatingHistory: true,
@@ -147,10 +104,10 @@ export const createNavigationHistorySlice: StateCreator<
     );
 
     return targetEntry;
-  },
+  };
 
-  goForward: () => {
-    const { historyCurrentIndex, historyEntries } = get();
+  goForward = (): HistoryEntry | null => {
+    const { historyCurrentIndex, historyEntries } = this.#get();
 
     if (historyCurrentIndex >= historyEntries.length - 1) {
       return null;
@@ -159,7 +116,7 @@ export const createNavigationHistorySlice: StateCreator<
     const newIndex = historyCurrentIndex + 1;
     const targetEntry = historyEntries[newIndex];
 
-    set(
+    this.#set(
       {
         historyCurrentIndex: newIndex,
         isNavigatingHistory: true,
@@ -169,10 +126,12 @@ export const createNavigationHistorySlice: StateCreator<
     );
 
     return targetEntry;
-  },
+  };
 
-  pushHistory: (entry) => {
-    const { historyCurrentIndex, historyEntries } = get();
+  pushHistory = (
+    entry: Omit<HistoryEntry, 'metadata'> & { metadata?: Partial<HistoryEntry['metadata']> },
+  ): void => {
+    const { historyCurrentIndex, historyEntries } = this.#get();
 
     // Create full entry with metadata
     const fullEntry: HistoryEntry = {
@@ -194,7 +153,7 @@ export const createNavigationHistorySlice: StateCreator<
     // Add new entry
     newEntries.push(fullEntry);
 
-    set(
+    this.#set(
       {
         historyCurrentIndex: newEntries.length - 1,
         historyEntries: newEntries,
@@ -202,14 +161,16 @@ export const createNavigationHistorySlice: StateCreator<
       false,
       'pushHistory',
     );
-  },
+  };
 
-  replaceHistory: (entry) => {
-    const { historyCurrentIndex, historyEntries } = get();
+  replaceHistory = (
+    entry: Omit<HistoryEntry, 'metadata'> & { metadata?: Partial<HistoryEntry['metadata']> },
+  ): void => {
+    const { historyCurrentIndex, historyEntries } = this.#get();
 
     // If history is empty, just push
     if (historyCurrentIndex < 0 || historyEntries.length === 0) {
-      get().pushHistory(entry);
+      this.#get().pushHistory(entry);
       return;
     }
 
@@ -228,20 +189,25 @@ export const createNavigationHistorySlice: StateCreator<
     const newEntries = [...historyEntries];
     newEntries[historyCurrentIndex] = fullEntry;
 
-    set(
+    this.#set(
       {
         historyEntries: newEntries,
       },
       false,
       'replaceHistory',
     );
-  },
+  };
 
-  setCurrentPageTitle: (title) => {
-    set({ currentPageTitle: title }, false, 'setCurrentPageTitle');
-  },
+  setCurrentPageTitle = (title: string): void => {
+    this.#set({ currentPageTitle: title }, false, 'setCurrentPageTitle');
+  };
 
-  setIsNavigatingHistory: (value) => {
-    set({ isNavigatingHistory: value }, false, 'setIsNavigatingHistory');
-  },
-});
+  setIsNavigatingHistory = (value: boolean): void => {
+    this.#set({ isNavigatingHistory: value }, false, 'setIsNavigatingHistory');
+  };
+}
+
+export type NavigationHistoryAction = Pick<
+  NavigationHistoryActionImpl,
+  keyof NavigationHistoryActionImpl
+>;

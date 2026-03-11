@@ -50,6 +50,9 @@ const CommonSTT = memo<{
     return (
       <Action
         active={isRecording}
+        icon={isLoading ? MicOff : Mic}
+        title={dropdownOpen ? undefined : desc}
+        variant={mobile ? 'outlined' : 'borderless'}
         dropdown={{
           menu: {
             // @ts-expect-error 等待 antd 修复
@@ -66,7 +69,7 @@ const CommonSTT = memo<{
               {
                 key: 'time',
                 label: (
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     <div className={styles.recording} />
                     {time > 0 ? formattedTime : t(isRecording ? 'stt.loading' : 'stt.prettifying')}
                   </Flexbox>
@@ -80,12 +83,15 @@ const CommonSTT = memo<{
           popupRender: error
             ? () => (
                 <Alert
+                  closable
+                  style={{ alignItems: 'center' }}
+                  title={error.message}
+                  type="error"
                   action={
-                    <Button onClick={handleRetry} size={'small'} type={'primary'}>
+                    <Button size={'small'} type={'primary'} onClick={handleRetry}>
                       {t('retry', { ns: 'common' })}
                     </Button>
                   }
-                  closable
                   extra={
                     error.body && (
                       <Highlighter
@@ -98,18 +104,12 @@ const CommonSTT = memo<{
                     )
                   }
                   onClose={handleCloseError}
-                  style={{ alignItems: 'center' }}
-                  title={error.message}
-                  type="error"
                 />
               )
             : undefined,
           trigger: 'click',
         }}
-        icon={isLoading ? MicOff : Mic}
         onClick={handleTriggerStartStop}
-        title={dropdownOpen ? undefined : desc}
-        variant={mobile ? 'outlined' : 'borderless'}
       />
     );
   },

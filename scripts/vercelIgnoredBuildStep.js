@@ -5,7 +5,12 @@ const branchName = process.env.VERCEL_GIT_COMMIT_REF || '';
 
 function shouldProceedBuild() {
   // 如果是 lighthouse 分支或以 testgru 开头的分支，取消构建
-  if (branchName === 'lighthouse' || branchName.startsWith('gru/')) {
+  if (
+    branchName === 'lighthouse' ||
+    ['gru', 'automatic', 'reproduction'].some((item) =>
+      branchName.startsWith(`${item.toLowerCase()}/`),
+    )
+  ) {
     return false;
   }
 
@@ -32,10 +37,10 @@ const shouldBuild = shouldProceedBuild();
 console.log('shouldBuild:', shouldBuild);
 if (shouldBuild) {
   console.log('✅ - Build can proceed');
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(1);
 } else {
   console.log('🛑 - Build cancelled');
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(0);
 }

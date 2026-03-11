@@ -12,7 +12,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(({ thinking, showDetail }) =>
   let icon;
 
   if (thinking) {
-    icon = <Icon color={cssVar.colorTextDescription} icon={Loader2Icon} spin />;
+    icon = <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} />;
   } else {
     icon = (
       <Icon color={showDetail ? cssVar.purple : cssVar.colorTextDescription} icon={AtomIcon} />
@@ -21,17 +21,17 @@ const StatusIndicator = memo<StatusIndicatorProps>(({ thinking, showDetail }) =>
 
   return (
     <Block
+      horizontal
       align={'center'}
       flex={'none'}
       gap={4}
       height={24}
-      horizontal
       justify={'center'}
+      variant={'outlined'}
+      width={24}
       style={{
         fontSize: 12,
       }}
-      variant={'outlined'}
-      width={24}
     >
       {icon}
     </Block>

@@ -1,9 +1,9 @@
-import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { useGlobalStore } from '@/store/global';
+import { type StoreSetter } from '@/store/types';
 import { type LobeDocument } from '@/types/document';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -24,40 +24,21 @@ const isAllowedPage = (page: { fileType: string; sourceType: string }) => {
   );
 };
 
-export interface ListAction {
-  /**
-   * Fetch documents from the server with pagination
-   */
-  fetchDocuments: () => Promise<void>;
-  /**
-   * Load more documents (next page)
-   */
-  loadMoreDocuments: () => Promise<void>;
-  /**
-   * Refresh document list (re-fetch from server)
-   */
-  refreshDocuments: () => Promise<void>;
-  /**
-   * Set search keywords
-   */
-  setSearchKeywords: (keywords: string) => void;
-  /**
-   * Toggle filter to show only pages not in any library
-   */
-  setShowOnlyPagesNotInLibrary: (show: boolean) => void;
-  /**
-   * SWR hook to fetch documents list with caching and auto-sync to store
-   */
-  useFetchDocuments: () => SWRResponse<LobeDocument[]>;
-}
+type Setter = StoreSetter<PageStore>;
+export const createListSlice = (set: Setter, get: () => PageStore, _api?: unknown) =>
+  new ListActionImpl(set, get, _api);
 
-export const createListSlice: StateCreator<
-  PageStore,
-  [['zustand/devtools', never]],
-  [],
-  ListAction
-> = (set, get) => ({
-  fetchDocuments: async () => {
+export class ListActionImpl {
+  readonly #get: () => PageStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => PageStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  fetchDocuments = async (): Promise<void> => {
     try {
       const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
       const queryFilters: PageQueryFilter = {
@@ -79,9 +60,9 @@ export const createListSlice: StateCreator<
       const hasMore = result.items.length >= pageSize;
 
       // Use internal dispatch to set documents
-      get().internal_dispatchDocuments({ documents, type: 'setDocuments' });
+      this.#get().internal_dispatchDocuments({ documents, type: 'setDocuments' });
 
-      set(
+      this.#set(
         {
           currentPage: 0,
           documentsTotal: result.total,
@@ -95,16 +76,17 @@ export const createListSlice: StateCreator<
       console.error('Failed to fetch documents:', error);
       throw error;
     }
-  },
+  };
 
-  loadMoreDocuments: async () => {
-    const { currentPage, isLoadingMoreDocuments, hasMoreDocuments, queryFilter, documents } = get();
+  loadMoreDocuments = async (): Promise<void> => {
+    const { currentPage, isLoadingMoreDocuments, hasMoreDocuments, queryFilter, documents } =
+      this.#get();
 
     if (isLoadingMoreDocuments || !hasMoreDocuments || !documents) return;
 
     const nextPage = currentPage + 1;
 
-    set({ isLoadingMoreDocuments: true }, false, n('loadMoreDocuments/start'));
+    this.#set({ isLoadingMoreDocuments: true }, false, n('loadMoreDocuments/start'));
 
     try {
       const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
@@ -122,9 +104,9 @@ export const createListSlice: StateCreator<
       const hasMore = result.items.length >= pageSize;
 
       // Use internal dispatch to append documents
-      get().internal_dispatchDocuments({ documents: newDocuments, type: 'appendDocuments' });
+      this.#get().internal_dispatchDocuments({ documents: newDocuments, type: 'appendDocuments' });
 
-      set(
+      this.#set(
         {
           currentPage: nextPage,
           documentsTotal: result.total,
@@ -136,23 +118,23 @@ export const createListSlice: StateCreator<
       );
     } catch (error) {
       console.error('Failed to load more documents:', error);
-      set({ isLoadingMoreDocuments: false }, false, n('loadMoreDocuments/error'));
+      this.#set({ isLoadingMoreDocuments: false }, false, n('loadMoreDocuments/error'));
     }
-  },
+  };
 
-  refreshDocuments: async () => {
-    await get().fetchDocuments();
-  },
+  refreshDocuments = async (): Promise<void> => {
+    await this.#get().fetchDocuments();
+  };
 
-  setSearchKeywords: (keywords: string) => {
-    set({ searchKeywords: keywords }, false, n('setSearchKeywords'));
-  },
+  setSearchKeywords = (keywords: string): void => {
+    this.#set({ searchKeywords: keywords }, false, n('setSearchKeywords'));
+  };
 
-  setShowOnlyPagesNotInLibrary: (show: boolean) => {
-    set({ showOnlyPagesNotInLibrary: show }, false, n('setShowOnlyPagesNotInLibrary'));
-  },
+  setShowOnlyPagesNotInLibrary = (show: boolean): void => {
+    this.#set({ showOnlyPagesNotInLibrary: show }, false, n('setShowOnlyPagesNotInLibrary'));
+  };
 
-  useFetchDocuments: () => {
+  useFetchDocuments = (): SWRResponse<LobeDocument[]> => {
     return useClientDataSWRWithSync<LobeDocument[]>(
       ['pageDocuments'],
       async () => {
@@ -183,9 +165,9 @@ export const createListSlice: StateCreator<
           const hasMore = documents.length >= pageSize;
 
           // Use internal dispatch to set documents
-          get().internal_dispatchDocuments({ documents, type: 'setDocuments' });
+          this.#get().internal_dispatchDocuments({ documents, type: 'setDocuments' });
 
-          set(
+          this.#set(
             {
               currentPage: 0,
               documentsTotal: documents.length,
@@ -202,5 +184,7 @@ export const createListSlice: StateCreator<
         revalidateOnFocus: true,
       },
     );
-  },
-});
+  };
+}
+
+export type ListAction = Pick<ListActionImpl, keyof ListActionImpl>;

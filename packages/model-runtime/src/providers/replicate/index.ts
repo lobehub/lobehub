@@ -1,8 +1,8 @@
 import Replicate from 'replicate';
 
-import { LobeRuntimeAI } from '../../core/BaseAI';
-import {
-  type ChatCompletionErrorPayload,
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import type {
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
   CreateImagePayload,
@@ -303,9 +303,9 @@ export class LobeReplicateAI implements LobeRuntimeAI {
       this.debugLog('[Replicate] Final imageUrl:', outputImageUrl);
 
       return {
-        height: height,
+        height,
         imageUrl: outputImageUrl,
-        width: width,
+        width,
       };
     } catch (error) {
       throw this.handleError(error);
@@ -399,7 +399,7 @@ export class LobeReplicateAI implements LobeRuntimeAI {
     // Generic error
     throw AgentRuntimeError.chat({
       endpoint: desensitizedEndpoint,
-      error: error,
+      error,
       errorType: AgentRuntimeErrorType.ProviderBizError,
       provider: this.id,
     });
@@ -416,7 +416,6 @@ export class LobeReplicateAI implements LobeRuntimeAI {
 
     if (!isReplicateDebug) return;
 
-    // eslint-disable-next-line no-console
     console.log(...args);
   }
 }
