@@ -16,7 +16,13 @@ const Home: FC = () => {
   return (
     <>
       {isHomeRoute && <PageTitle title="" />}
-      <NavHeader right={<WideScreenButton />} />
+      <NavHeader
+        right={
+          <Flexbox horizontal align="center">
+            <WideScreenButton />
+          </Flexbox>
+        }
+      />
       <Flexbox height={'100%'} style={{ overflowY: 'auto', paddingBottom: '16vh' }} width={'100%'}>
         <WideScreenContainer>
           <HomeContent />

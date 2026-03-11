@@ -6,7 +6,6 @@ import { memo, Suspense } from 'react';
 
 import AbortResponse from './AbortResponse';
 import Intervention from './Intervention';
-import ModeSelector from './Intervention/ModeSelector';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import RejectedResponse from './RejectedResponse';
 import ToolRender from './Render';
@@ -124,11 +123,6 @@ const Render = memo<RenderProps>(
               type: type as any,
             }}
           />
-          {!disableEditing && (
-            <div>
-              <ModeSelector />
-            </div>
-          )}
         </Flexbox>
       </Suspense>
     );

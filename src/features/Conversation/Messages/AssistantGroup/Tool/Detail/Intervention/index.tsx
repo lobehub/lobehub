@@ -11,10 +11,9 @@ import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import Fallback from './Fallback';
 import KeyValueEditor from './KeyValueEditor';
-import ModeSelector from './ModeSelector';
 import SecurityBlacklistWarning from './SecurityBlacklistWarning';
 
-export type ApprovalMode = 'auto-run' | 'allow-list' | 'manual';
+export type { ApprovalMode } from '@/store/user/slices/settings/selectors';
 
 interface InterventionProps {
   apiName: string;
@@ -110,8 +109,7 @@ const Intervention = memo<InterventionProps>(
             registerBeforeApprove={registerBeforeApprove}
             onArgsChange={handleArgsChange}
           />
-          <Flexbox horizontal justify={'space-between'}>
-            <ModeSelector />
+          <Flexbox horizontal justify={'flex-end'}>
             <ApprovalActions
               apiName={apiName}
               approvalMode={approvalMode}

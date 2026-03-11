@@ -1,14 +1,13 @@
 import { type MenuProps } from '@lobehub/ui';
-import { Button, Center, DropdownMenu, Icon } from '@lobehub/ui';
+import { Button, Center, DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
-
-import { type ApprovalMode } from './index';
+import { type ApprovalMode } from '@/store/user/slices/settings/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   icon: css`
@@ -39,6 +38,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ModeSelector = memo(() => {
   const { t } = useTranslation('chat');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
   const updateHumanIntervention = useUserStore((s) => s.updateHumanIntervention);
 
@@ -112,18 +112,33 @@ const ModeSelector = memo(() => {
     [approvalMode, modeLabels, handleModeChange, styles, t],
   );
 
+  const button = (
+    <Button
+      className={styles.modeButton}
+      color={'default'}
+      icon={ChevronDown}
+      iconPlacement="end"
+      size="small"
+      variant={'text'}
+    >
+      {modeLabels[approvalMode]}
+    </Button>
+  );
+
   return (
-    <DropdownMenu items={menuItems} placement="bottomLeft">
-      <Button
-        className={styles.modeButton}
-        color={'default'}
-        icon={ChevronDown}
-        iconPlacement="end"
-        size="small"
-        variant={'text'}
-      >
-        {modeLabels[approvalMode]}
-      </Button>
+    <DropdownMenu
+      items={menuItems}
+      open={dropdownOpen}
+      placement="bottomLeft"
+      onOpenChange={setDropdownOpen}
+    >
+      <div>
+        {dropdownOpen ? (
+          button
+        ) : (
+          <Tooltip title={t('tool.intervention.approvalMode')}>{button}</Tooltip>
+        )}
+      </div>
     </DropdownMenu>
   );
 });

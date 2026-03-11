@@ -311,7 +311,7 @@ export class AgentRuntimeService {
           userMemory,
           userTimezone,
           webhookDelivery,
-          workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
+          workingDirectory: agentConfig?.chatConfig?.runtimeEnv?.workingDirectory,
           ...appContext,
         },
         maxSteps,
