@@ -40,7 +40,7 @@
     "build:next": "cross-env NODE_OPTIONS=--max-old-space-size=7168 bun run build:next:raw",
     "build:next:raw": "next build",
     "build:raw": "bun run build:spa:raw && bun run build:spa:copy && bun run build:next:raw",
-    "build:spa": "cross-env NODE_OPTIONS=--max-old-space-size=7168 bun run build:spa:raw",
+    "build:spa": "cross-env NODE_OPTIONS=--max-old-space-size=7168 pnpm run build:spa:raw",
     "build:spa:copy": "tsx scripts/copySpaBuild.mts && tsx scripts/generateSpaTemplates.mts",
     "build:spa:mobile": "cross-env NODE_OPTIONS=--max-old-space-size=8192 MOBILE=true vite build",
     "build:spa:raw": "rm -rf public/spa && vite build",
