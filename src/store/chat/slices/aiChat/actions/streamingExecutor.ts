@@ -141,10 +141,10 @@ export class StreamingExecutorActionImpl {
 
     // Generate tools using ToolsEngine (centralized here, passed to chatService via agentConfig)
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
-    const toolsEngine = createAgentToolsEngine({
-      model: agentConfigData.model,
-      provider: agentConfigData.provider!,
-    });
+    const toolsEngine = createAgentToolsEngine(
+      { model: agentConfigData.model, provider: agentConfigData.provider! },
+      pluginIds,
+    );
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,

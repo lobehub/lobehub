@@ -81,7 +81,11 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   });
 };
 
-export const createAgentToolsEngine = (workingModel: WorkingModel) => {
+export const createAgentToolsEngine = (
+  workingModel: WorkingModel,
+  /** Runtime-resolved plugin IDs (from agentConfigResolver), may include tools beyond the active agent */
+  pluginIds?: string[],
+) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
@@ -103,7 +107,10 @@ export const createAgentToolsEngine = (workingModel: WorkingModel) => {
         return undefined; // fall through to rules
       },
       rules: {
-        // User-selected plugins
+        // Runtime-resolved plugins (from agentConfigResolver for the effective agent,
+        // may include sub-agent/group/page scope plugins not on the active agent)
+        ...(pluginIds && Object.fromEntries(pluginIds.map((id) => [id, true]))),
+        // User-selected plugins (from the active agent)
         ...Object.fromEntries(userPlugins.map((id) => [id, true])),
         // Always-on builtin tools
         ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
