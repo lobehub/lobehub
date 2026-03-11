@@ -14,7 +14,6 @@ export function registerTopicCommand(program: Command) {
     .command('list')
     .description('List topics')
     .option('--agent-id <id>', 'Filter by agent ID')
-    .option('--session-id <id>', 'Filter by session ID')
     .option('-L, --limit <n>', 'Page size', '30')
     .option('--page <n>', 'Page number', '1')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
@@ -24,13 +23,11 @@ export function registerTopicCommand(program: Command) {
         json?: string | boolean;
         limit?: string;
         page?: string;
-        sessionId?: string;
       }) => {
         const client = await getTrpcClient();
 
         const input: Record<string, any> = {};
         if (options.agentId) input.agentId = options.agentId;
-        if (options.sessionId) input.sessionId = options.sessionId;
         if (options.limit) input.pageSize = Number.parseInt(options.limit, 10);
         if (options.page) input.current = Number.parseInt(options.page, 10);
 
@@ -98,27 +95,18 @@ export function registerTopicCommand(program: Command) {
     .description('Create a topic')
     .requiredOption('-t, --title <title>', 'Topic title')
     .option('--agent-id <id>', 'Agent ID')
-    .option('--session-id <id>', 'Session ID')
     .option('--favorite', 'Mark as favorite')
-    .action(
-      async (options: {
-        agentId?: string;
-        favorite?: boolean;
-        sessionId?: string;
-        title: string;
-      }) => {
-        const client = await getTrpcClient();
+    .action(async (options: { agentId?: string; favorite?: boolean; title: string }) => {
+      const client = await getTrpcClient();
 
-        const input: Record<string, any> = { title: options.title };
-        if (options.agentId) input.agentId = options.agentId;
-        if (options.sessionId) input.sessionId = options.sessionId;
-        if (options.favorite) input.favorite = true;
+      const input: Record<string, any> = { title: options.title };
+      if (options.agentId) input.agentId = options.agentId;
+      if (options.favorite) input.favorite = true;
 
-        const result = await client.topic.createTopic.mutate(input as any);
-        const r = result as any;
-        console.log(`${pc.green('✓')} Created topic ${pc.bold(r.id || r)}`);
-      },
-    );
+      const result = await client.topic.createTopic.mutate(input as any);
+      const r = result as any;
+      console.log(`${pc.green('✓')} Created topic ${pc.bold(r.id || r)}`);
+    });
 
   // ── edit ──────────────────────────────────────────────
 

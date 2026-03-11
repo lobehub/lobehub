@@ -2,10 +2,19 @@
 
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
-import { ActionIcon, Avatar, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
+import { ActionIcon, Avatar, copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
 import { App, Button, Card, Tag, Typography } from 'antd';
 import { createStyles } from 'antd-style';
-import { ArrowLeft, ChevronDown, ChevronUp, Pencil, Play, Square, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Pencil,
+  Play,
+  Square,
+  Trash2,
+} from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -170,6 +179,14 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
       window.open(AGENT_PROFILE_URL(run.targetAgentId), '_blank');
     }
   };
+  const handleCopyRunId = async () => {
+    try {
+      await copyToClipboard(run.id);
+      message.success(t('run.detail.copyRunIdSuccess'));
+    } catch {
+      message.error(t('run.detail.copyRunIdFailed'));
+    }
+  };
 
   const formatDate = (date?: Date | string) => {
     if (!date) return '';
@@ -194,6 +211,12 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
               <Typography.Title level={4} style={{ margin: 0 }}>
                 {run.name || run.id.slice(0, 8)}
               </Typography.Title>
+              <ActionIcon
+                icon={Copy}
+                size="small"
+                title={t('run.detail.copyRunId')}
+                onClick={handleCopyRunId}
+              />
               <StatusBadge status={run.status} />
             </Flexbox>
             {/* Meta info row */}

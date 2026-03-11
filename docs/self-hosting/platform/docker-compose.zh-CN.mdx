@@ -183,6 +183,17 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
   - 选择访问协议：`http` 或 `https`
   - 安全密钥重新生成：我们强烈建议你重新生成安全密钥，如果你缺少脚本所需的密钥生成库，我们建议你参考 [自定义部署](#自定义部署) 章节对密钥进行修改。
 
+  <Callout type="tip">
+    **单域名部署方案**
+    如果只有一个域名，可以通过不同端口区分服务：
+    - LobeHub 服务的域名设置：`lobe.example.com:${PORT1}`
+    - S3 服务的域名设置：`lobe.example.com:${PORT2}`
+    需在反向代理中配置对应端口的转发规则。
+    **端口模式 vs 域名模式：**
+    - 端口模式：一键安装脚本自动使用默认端口（3210/9000/9001）
+    - 域名模式：可自定义端口（通过反向代理配置）
+  </Callout>
+
   <Callout type="warning">
     以下问题可能导致你的服务无法正常访问：
 
@@ -247,11 +258,6 @@ curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/
 mv .env.zh-CN.example .env
 ```
 
-<Callout type="info">
-  本章节并不包含所有完整变量，剩余的变量可以查阅
-  [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
-</Callout>
-
 ### 预备知识
 
 一般来讲，想要完整的运行 LobeHub，你需要至少拥有如下三个服务：
@@ -275,6 +281,10 @@ mv .env.zh-CN.example .env
 1. S3 对象存储
 
 LobeHub 需要为 LLM 服务提供商提供文件对象的公网访问地址，因此你需要配置 S3 的 Endpoint：
+
+<Callout type="warning">
+  直接使用 `S3_ENDPOINT=http://rustfs:9000` 会导致对话内上传图片不可用（浏览器无法直接访问容器内网），但是头像上传不受影响
+</Callout>
 
 ```env
 S3_ENDPOINT=https://s3.example.com
@@ -341,7 +351,7 @@ environment:
 - `http://127.0.0.1:3210` - 备用本地主机地址
 
 <Callout type="tip">
-  对于使用 `network_mode: 'service:network-service'` 的 Docker Compose 部署，请使用 `http://localhost:3210` 作为 `INTERNAL_APP_URL`。
+  对于 Docker Compose 部署，推荐使用 `http://lobe:3210` 作为 `INTERNAL_APP_URL`（使用服务名称进行容器间通信）。
 </Callout>
 
 ## 反向代理配置

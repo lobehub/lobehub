@@ -59,7 +59,7 @@ describe('chatConfigByIdSelectors', () => {
   });
 
   describe('getEnableHistoryCountById', () => {
-    it('should return false when context caching enabled and model supports it', () => {
+    it('should return enableHistoryCount value even when context caching is enabled', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -69,10 +69,10 @@ describe('chatConfigByIdSelectors', () => {
         },
       });
 
-      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(false);
+      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(true);
     });
 
-    it('should return false when search enabled and model is claude-3-7-sonnet', () => {
+    it('should return enableHistoryCount value even when search is enabled', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -86,10 +86,10 @@ describe('chatConfigByIdSelectors', () => {
         },
       });
 
-      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(false);
+      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(true);
     });
 
-    it('should return enableHistoryCount value when no special cases apply', () => {
+    it('should return enableHistoryCount value directly from config', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -114,7 +114,7 @@ describe('chatConfigByIdSelectors', () => {
             model: 'gpt-4',
           },
           'agent-2': {
-            chatConfig: { disableContextCaching: false, enableHistoryCount: true },
+            chatConfig: { disableContextCaching: false, enableHistoryCount: false },
             model: 'claude-3-5-sonnet',
           },
         },

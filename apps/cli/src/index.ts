@@ -1,9 +1,14 @@
+import { createRequire } from 'node:module';
+
 import { Command } from 'commander';
 
 import { registerAgentCommand } from './commands/agent';
+import { registerBotCommand } from './commands/bot';
 import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
+import { registerDeviceCommand } from './commands/device';
 import { registerDocCommand } from './commands/doc';
+import { registerEvalCommand } from './commands/eval';
 import { registerFileCommand } from './commands/file';
 import { registerGenerateCommand } from './commands/generate';
 import { registerKbCommand } from './commands/kb';
@@ -19,22 +24,27 @@ import { registerSkillCommand } from './commands/skill';
 import { registerStatusCommand } from './commands/status';
 import { registerTopicCommand } from './commands/topic';
 
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
+
 const program = new Command();
 
 program
   .name('lh')
   .description('LobeHub CLI - manage and connect to LobeHub services')
-  .version('0.1.0');
+  .version(version);
 
 registerLoginCommand(program);
 registerLogoutCommand(program);
 registerConnectCommand(program);
+registerDeviceCommand(program);
 registerStatusCommand(program);
 registerDocCommand(program);
 registerSearchCommand(program);
 registerKbCommand(program);
 registerMemoryCommand(program);
 registerAgentCommand(program);
+registerBotCommand(program);
 registerGenerateCommand(program);
 registerFileCommand(program);
 registerSkillCommand(program);
@@ -44,5 +54,6 @@ registerModelCommand(program);
 registerProviderCommand(program);
 registerPluginCommand(program);
 registerConfigCommand(program);
+registerEvalCommand(program);
 
 program.parse();

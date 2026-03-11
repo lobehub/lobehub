@@ -50,3 +50,4 @@ description: TypeScript code style and optimization guidelines. Use when writing
 - Never log user private information (API keys, etc.)
 - Don't use `import { log } from 'debug'` directly (logs to console)
 - Use `console.error` in catch blocks instead of debug package
+- Always log the error in `.catch()` callbacks — silent `.catch(() => fallback)` swallows failures and makes debugging impossible

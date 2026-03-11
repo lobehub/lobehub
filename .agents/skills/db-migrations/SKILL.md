@@ -21,6 +21,23 @@ And updates:
 - `packages/database/src/core/migrations.json`
 - `docs/development/database-schema.dbml`
 
+## Custom Migrations (e.g. CREATE EXTENSION)
+
+For migrations that don't involve Drizzle schema changes (e.g. enabling PostgreSQL extensions), use the `--custom` flag:
+
+```bash
+bunx drizzle-kit generate --custom --name=enable_pg_search
+```
+
+This generates an empty SQL file and properly updates `_journal.json` and snapshot. Then edit the generated SQL file to add your custom SQL:
+
+```sql
+-- Custom SQL migration file, put your code below! --
+CREATE EXTENSION IF NOT EXISTS pg_search;
+```
+
+**Do NOT manually create migration files or edit `_journal.json`** — always use `drizzle-kit generate` to ensure correct journal entries and snapshots.
+
 ## Step 2: Optimize Migration SQL Filename
 
 Rename auto-generated filename to be meaningful:

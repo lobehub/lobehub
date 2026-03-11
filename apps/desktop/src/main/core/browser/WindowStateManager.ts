@@ -1,4 +1,6 @@
-import Electron, { BrowserWindow, screen } from 'electron';
+import type { BrowserWindow} from 'electron';
+import type Electron from 'electron';
+import { screen } from 'electron';
 
 import { createLogger } from '@/utils/logger';
 

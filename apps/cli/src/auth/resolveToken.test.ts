@@ -82,7 +82,6 @@ describe('resolveToken', () => {
       vi.mocked(getValidToken).mockResolvedValue({
         credentials: {
           accessToken: token,
-          serverUrl: 'https://app.lobehub.com',
         },
       });
 
@@ -99,7 +98,6 @@ describe('resolveToken', () => {
       vi.mocked(getValidToken).mockResolvedValue({
         credentials: {
           accessToken: token,
-          serverUrl: 'https://app.lobehub.com',
         },
       });
 

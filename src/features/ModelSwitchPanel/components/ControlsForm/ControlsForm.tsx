@@ -11,6 +11,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
@@ -214,6 +215,17 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'horizontal',
       minWidth: undefined,
       name: 'grok4_20ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <CodexMaxReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'codexMaxReasoningEffort',
       style: {
         paddingBottom: 0,
       },

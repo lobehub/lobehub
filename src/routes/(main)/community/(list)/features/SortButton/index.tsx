@@ -13,6 +13,7 @@ import {
   ModelSorts,
   PluginSorts,
   ProviderSorts,
+  SkillSorts,
 } from '@/types/discover';
 
 const SortButton = memo(() => {
@@ -136,6 +137,30 @@ const SortButton = memo(() => {
           {
             key: McpSorts.CreatedAt,
             label: t('mcp.sorts.createdAt'),
+          },
+        ];
+      }
+      case DiscoverTab.Skills: {
+        return [
+          {
+            key: SkillSorts.InstallCount,
+            label: t('skills.sorts.installCount'),
+          },
+          {
+            key: SkillSorts.UpdatedAt,
+            label: t('skills.sorts.updatedAt'),
+          },
+          {
+            key: SkillSorts.CreatedAt,
+            label: t('skills.sorts.createdAt'),
+          },
+          {
+            key: SkillSorts.Stars,
+            label: t('skills.sorts.stars'),
+          },
+          {
+            key: SkillSorts.Name,
+            label: t('skills.sorts.name'),
           },
         ];
       }

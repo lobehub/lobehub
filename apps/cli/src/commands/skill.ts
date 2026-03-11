@@ -5,6 +5,25 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
+type SourceType = 'github' | 'market' | 'url';
+
+export function detectSourceType(source: string): SourceType {
+  // GitHub URL: https://github.com/owner/repo
+  if (source.startsWith('https://github.com/') || source.startsWith('http://github.com/')) {
+    return 'github';
+  }
+  // GitHub shorthand: owner/repo (contains exactly one slash, no dots or colons)
+  if (/^[\w-]+\/[\w.-]+$/.test(source)) {
+    return 'github';
+  }
+  // Other URLs (ZIP, etc.)
+  if (source.startsWith('https://') || source.startsWith('http://')) {
+    return 'url';
+  }
+  // Marketplace identifier
+  return 'market';
+}
+
 export function registerSkillCommand(program: Command) {
   const skill = program.command('skill').description('Manage agent skills');
 
@@ -209,54 +228,40 @@ export function registerSkillCommand(program: Command) {
       printTable(rows, ['ID', 'NAME', 'DESCRIPTION']);
     });
 
-  // ── import-github ─────────────────────────────────────
+  // ── install (alias: i) ───────────────────────────────────
 
   skill
-    .command('import-github')
-    .description('Import a skill from GitHub')
-    .requiredOption('--url <gitUrl>', 'GitHub repository URL')
-    .option('--branch <branch>', 'Branch name')
-    .action(async (options: { branch?: string; url: string }) => {
+    .command('install <source>')
+    .alias('i')
+    .description(
+      'Install a skill (auto-detects: GitHub URL/shorthand, ZIP URL, or marketplace identifier)',
+    )
+    .option('--branch <branch>', 'Branch name (GitHub only)')
+    .action(async (source: string, options: { branch?: string }) => {
       const client = await getTrpcClient();
+      const sourceType = detectSourceType(source);
 
-      const input: { branch?: string; gitUrl: string } = { gitUrl: options.url };
-      if (options.branch) input.branch = options.branch;
+      if (sourceType === 'github') {
+        const gitUrl = source.startsWith('https://') ? source : `https://github.com/${source}`;
+        const input: { branch?: string; gitUrl: string } = { gitUrl };
+        if (options.branch) input.branch = options.branch;
 
-      const result = await client.agentSkills.importFromGitHub.mutate(input);
-      const r = result as any;
-      console.log(`${pc.green('✓')} Imported skill from GitHub ${pc.bold(r.id || r.name || '')}`);
-    });
-
-  // ── import-url ────────────────────────────────────────
-
-  skill
-    .command('import-url')
-    .description('Import a skill from a ZIP URL')
-    .requiredOption('--url <zipUrl>', 'URL to skill ZIP file')
-    .action(async (options: { url: string }) => {
-      const client = await getTrpcClient();
-
-      const result = await client.agentSkills.importFromUrl.mutate({ url: options.url });
-      const r = result as any;
-      console.log(`${pc.green('✓')} Imported skill from URL ${pc.bold(r.id || r.name || '')}`);
-    });
-
-  // ── import-market ─────────────────────────────────────
-
-  skill
-    .command('import-market')
-    .description('Install a skill from the marketplace')
-    .requiredOption('-i, --identifier <id>', 'Skill identifier in marketplace')
-    .action(async (options: { identifier: string }) => {
-      const client = await getTrpcClient();
-
-      const result = await client.agentSkills.importFromMarket.mutate({
-        identifier: options.identifier,
-      });
-      const r = result as any;
-      console.log(
-        `${pc.green('✓')} Installed skill ${pc.bold(options.identifier)} ${r.id ? `(${r.id})` : ''}`,
-      );
+        const result = await client.agentSkills.importFromGitHub.mutate(input);
+        const r = result as any;
+        console.log(
+          `${pc.green('✓')} Installed skill from GitHub ${pc.bold(r.id || r.name || '')}`,
+        );
+      } else if (sourceType === 'url') {
+        const result = await client.agentSkills.importFromUrl.mutate({ url: source });
+        const r = result as any;
+        console.log(`${pc.green('✓')} Installed skill from URL ${pc.bold(r.id || r.name || '')}`);
+      } else {
+        const result = await client.agentSkills.importFromMarket.mutate({ identifier: source });
+        const r = result as any;
+        console.log(
+          `${pc.green('✓')} Installed skill ${pc.bold(source)} ${r.id ? `(${r.id})` : ''}`,
+        );
+      }
     });
 
   // ── resources ─────────────────────────────────────────

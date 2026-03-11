@@ -1,3 +1,4 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import type {
   AiProviderDetailItem,
   AiProviderListItem,
@@ -239,10 +240,12 @@ export class AiInfraRepos {
 
     const enabledProviderIds = new Set(enabledProviders.map((item) => item.id));
     // User database models, check search settings
+    // Exclude DB residual models for branding provider since they are already handled in builtinModelList
     const appendedUserModels = allModels
-      .filter((item) =>
-        filterEnabled ? enabledProviderIds.has(item.providerId) && item.enabled : true,
-      )
+      .filter((item) => {
+        if (item.providerId === BRANDING_PROVIDER) return false;
+        return filterEnabled ? enabledProviderIds.has(item.providerId) && item.enabled : true;
+      })
       .map((item) => injectSearchSettings(item.providerId, item));
 
     return [...builtinModelList.flat(), ...appendedUserModels].sort(
@@ -271,9 +274,7 @@ export class AiInfraRepos {
       return allModels.some((model) => model.providerId === provider.id && model.type === 'image');
     });
     const enabledVideoAiProviders = enabledAiProviders.filter((provider) => {
-      return allModels.some(
-        (model) => model.providerId === provider.id && model.type === 'video',
-      );
+      return allModels.some((model) => model.providerId === provider.id && model.type === 'video');
     });
 
     return {
@@ -393,6 +394,7 @@ export class AiInfraRepos {
       enabled?: boolean;
       limit?: number;
       offset?: number;
+      type?: string;
     },
   ) => {
     const aiModels = await this.aiModelModel.getModelListByProviderId(providerId);
@@ -400,7 +402,13 @@ export class AiInfraRepos {
     const defaultModels: AiProviderModelListItem[] =
       (await this.fetchBuiltinModels(providerId)) || [];
     // Not modifying search settings here doesn't affect usage, but done for data consistency on get
-    const mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
+    let mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
+
+    // Filter out DB residual models that are no longer in the builtin list for branding provider
+    if (providerId === BRANDING_PROVIDER) {
+      const builtinIds = new Set(defaultModels.map((m) => m.id));
+      mergedModel = mergedModel.filter((m) => builtinIds.has(m.id));
+    }
 
     let list = mergedModel.map((m) =>
       injectSearchSettings(providerId, m),
@@ -408,6 +416,10 @@ export class AiInfraRepos {
 
     if (typeof options?.enabled === 'boolean') {
       list = list.filter((m) => m.enabled === options.enabled);
+    }
+
+    if (options?.type) {
+      list = list.filter((m) => m.type === options.type);
     }
 
     if (typeof options?.offset === 'number' || typeof options?.limit === 'number') {

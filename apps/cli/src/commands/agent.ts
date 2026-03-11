@@ -1,9 +1,37 @@
+import { readFileSync } from 'node:fs';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getAuthInfo } from '../api/http';
+import { replayAgentEvents, streamAgentEvents } from '../utils/agentStream';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
-import { log } from '../utils/logger';
+import { log, setVerbose } from '../utils/logger';
+
+/**
+ * Resolve an agent identifier (agentId or slug) to a concrete agentId.
+ * When a slug is provided, uses getBuiltinAgent to look up the agent.
+ */
+async function resolveAgentId(
+  client: any,
+  opts: { agentId?: string; slug?: string },
+): Promise<string> {
+  if (opts.agentId) return opts.agentId;
+
+  if (opts.slug) {
+    const agent = await client.agent.getBuiltinAgent.query({ slug: opts.slug });
+    if (!agent) {
+      log.error(`Agent not found for slug: ${opts.slug}`);
+      process.exit(1);
+    }
+    return (agent as any).id || (agent as any).agentId;
+  }
+
+  log.error('Either <agentId> or --slug is required.');
+  process.exit(1);
+  return ''; // unreachable
+}
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
@@ -50,39 +78,46 @@ export function registerAgentCommand(program: Command) {
   // ── view ──────────────────────────────────────────────
 
   agent
-    .command('view <agentId>')
+    .command('view [agentId]')
     .description('View agent configuration')
+    .option('-s, --slug <slug>', 'Agent slug (e.g. inbox)')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (agentId: string, options: { json?: string | boolean }) => {
-      const client = await getTrpcClient();
-      const result = await client.agent.getAgentConfigById.query({ agentId });
+    .action(
+      async (
+        agentIdArg: string | undefined,
+        options: { json?: string | boolean; slug?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+        const result = await client.agent.getAgentConfigById.query({ agentId });
 
-      if (!result) {
-        log.error(`Agent not found: ${agentId}`);
-        process.exit(1);
-        return;
-      }
+        if (!result) {
+          log.error(`Agent not found: ${agentId}`);
+          process.exit(1);
+          return;
+        }
 
-      if (options.json !== undefined) {
-        const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(result, fields);
-        return;
-      }
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(result, fields);
+          return;
+        }
 
-      const r = result as any;
-      console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
-      const meta: string[] = [];
-      if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
-      if (r.model) meta.push(`Model: ${r.model}`);
-      if (r.provider) meta.push(`Provider: ${r.provider}`);
-      if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
+        const r = result as any;
+        console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
+        const meta: string[] = [];
+        if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
+        if (r.model) meta.push(`Model: ${r.model}`);
+        if (r.provider) meta.push(`Provider: ${r.provider}`);
+        if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
 
-      if (r.systemRole) {
-        console.log();
-        console.log(pc.bold('System Role:'));
-        console.log(r.systemRole);
-      }
-    });
+        if (r.systemRole) {
+          console.log();
+          console.log(pc.bold('System Role:'));
+          console.log(r.systemRole);
+        }
+      },
+    );
 
   // ── create ────────────────────────────────────────────
 
@@ -126,8 +161,9 @@ export function registerAgentCommand(program: Command) {
   // ── edit ──────────────────────────────────────────────
 
   agent
-    .command('edit <agentId>')
+    .command('edit [agentId]')
     .description('Update agent configuration')
+    .option('--slug <slug>', 'Agent slug (e.g. inbox)')
     .option('-t, --title <title>', 'New title')
     .option('-d, --description <desc>', 'New description')
     .option('-m, --model <model>', 'New model ID')
@@ -135,11 +171,12 @@ export function registerAgentCommand(program: Command) {
     .option('-s, --system-role <role>', 'New system role prompt')
     .action(
       async (
-        agentId: string,
+        agentIdArg: string | undefined,
         options: {
           description?: string;
           model?: string;
           provider?: string;
+          slug?: string;
           systemRole?: string;
           title?: string;
         },
@@ -159,6 +196,7 @@ export function registerAgentCommand(program: Command) {
         }
 
         const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
         await client.agent.updateAgentConfig.mutate({ agentId, value });
         console.log(`${pc.green('✓')} Updated agent ${pc.bold(agentId)}`);
       },
@@ -199,4 +237,143 @@ export function registerAgentCommand(program: Command) {
       const r = result as any;
       console.log(`${pc.green('✓')} Duplicated agent → ${pc.bold(r.agentId || r.id || 'done')}`);
     });
+
+  // ── run ──────────────────────────────────────────────
+
+  agent
+    .command('run')
+    .description('Run an agent with a prompt')
+    .option('-a, --agent-id <id>', 'Agent ID')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .option('-p, --prompt <text>', 'User prompt')
+    .option('-t, --topic-id <id>', 'Reuse an existing topic')
+    .option('--no-auto-start', 'Do not auto-start the agent')
+    .option('--json', 'Output full JSON event stream')
+    .option('-v, --verbose', 'Show detailed tool call info')
+    .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
+    .action(
+      async (options: {
+        agentId?: string;
+        autoStart?: boolean;
+        json?: boolean;
+        prompt?: string;
+        replay?: string;
+        slug?: string;
+        topicId?: string;
+        verbose?: boolean;
+      }) => {
+        if (options.verbose) setVerbose(true);
+
+        // Replay mode: render from saved JSON file, no network needed
+        if (options.replay) {
+          const data = readFileSync(options.replay, 'utf8');
+          const events = JSON.parse(data);
+          replayAgentEvents(events, { json: options.json, verbose: options.verbose });
+          return;
+        }
+
+        if (!options.agentId && !options.slug) {
+          log.error('Either --agent-id or --slug is required.');
+          process.exit(1);
+          return;
+        }
+        if (!options.prompt) {
+          log.error('--prompt is required.');
+          process.exit(1);
+          return;
+        }
+
+        const client = await getTrpcClient();
+
+        // 1. Exec agent to get operationId
+        const input: Record<string, any> = { prompt: options.prompt };
+        if (options.agentId) input.agentId = options.agentId;
+        if (options.slug) input.slug = options.slug;
+        if (options.topicId) input.appContext = { topicId: options.topicId };
+        if (options.autoStart === false) input.autoStart = false;
+
+        const result = await client.aiAgent.execAgent.mutate(input as any);
+        const r = result as any;
+
+        if (!r.success) {
+          log.error(`Failed to start agent: ${r.error || r.message || 'Unknown error'}`);
+          process.exit(1);
+        }
+
+        const operationId = r.operationId;
+        if (!options.json) {
+          log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
+        }
+
+        // 2. Connect to SSE stream
+        const { serverUrl, headers } = await getAuthInfo();
+        const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
+
+        await streamAgentEvents(streamUrl, headers, {
+          json: options.json,
+          verbose: options.verbose,
+        });
+      },
+    );
+
+  // ── status ──────────────────────────────────────────
+
+  agent
+    .command('status <operationId>')
+    .description('Check agent operation status')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .option('--history', 'Include step history')
+    .option('--history-limit <n>', 'Number of history entries', '10')
+    .action(
+      async (
+        operationId: string,
+        options: { history?: boolean; historyLimit?: string; json?: string | boolean },
+      ) => {
+        const client = await getTrpcClient();
+
+        const input: Record<string, any> = { operationId };
+        if (options.history) input.includeHistory = true;
+        if (options.historyLimit) input.historyLimit = Number.parseInt(options.historyLimit, 10);
+
+        const result = await client.aiAgent.getOperationStatus.query(input as any);
+        const r = result as any;
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(r, fields);
+          return;
+        }
+
+        console.log(pc.bold('Operation Status'));
+        console.log(`  ID:     ${operationId}`);
+        console.log(`  Status: ${colorStatus(r.status || r.state || 'unknown')}`);
+
+        if (r.stepCount !== undefined) console.log(`  Steps:  ${r.stepCount}`);
+        if (r.usage?.total_tokens) console.log(`  Tokens: ${r.usage.total_tokens}`);
+        if (r.cost?.total !== undefined) console.log(`  Cost:   $${r.cost.total.toFixed(4)}`);
+        if (r.error) console.log(`  Error:  ${pc.red(r.error)}`);
+        if (r.createdAt) console.log(`  Started: ${r.createdAt}`);
+        if (r.completedAt) console.log(`  Ended:   ${r.completedAt}`);
+      },
+    );
+}
+
+function colorStatus(status: string): string {
+  switch (status) {
+    case 'completed':
+    case 'success': {
+      return pc.green(status);
+    }
+    case 'failed':
+    case 'error': {
+      return pc.red(status);
+    }
+    case 'processing':
+    case 'running': {
+      return pc.yellow(status);
+    }
+    default: {
+      return pc.dim(status);
+    }
+  }
 }

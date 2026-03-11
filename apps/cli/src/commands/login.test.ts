@@ -4,11 +4,16 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { saveCredentials } from '../auth/credentials';
+import { loadSettings, saveSettings } from '../settings';
 import { log } from '../utils/logger';
 import { registerLoginCommand, resolveCommandExecutable } from './login';
 
 vi.mock('../auth/credentials', () => ({
   saveCredentials: vi.fn(),
+}));
+vi.mock('../settings', () => ({
+  loadSettings: vi.fn().mockReturnValue(null),
+  saveSettings: vi.fn(),
 }));
 
 vi.mock('../utils/logger', () => ({
@@ -22,6 +27,10 @@ vi.mock('../utils/logger', () => ({
 
 // Mock child_process to prevent browser opening
 vi.mock('node:child_process', () => ({
+  default: {
+    exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
+    execFile: vi.fn((_cmd: string, _args: string[], cb: any) => cb?.(null)),
+  },
   exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
   execFile: vi.fn((_cmd: string, _args: string[], cb: any) => cb?.(null)),
 }));
@@ -36,6 +45,7 @@ describe('login command', () => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn());
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    vi.mocked(loadSettings).mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -114,10 +124,54 @@ describe('login command', () => {
       expect.objectContaining({
         accessToken: 'new-token',
         refreshToken: 'refresh-tok',
-        serverUrl: 'https://app.lobehub.com',
       }),
     );
+    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://app.lobehub.com' });
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Login successful'));
+  });
+
+  it('should persist custom server into settings', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program, ['--server', 'https://test.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://test.com' });
+  });
+
+  it('should preserve existing gateway when logging into the same server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://test.com',
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program, ['--server', 'https://test.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://test.com',
+    });
+  });
+
+  it('should clear existing gateway when logging into a different server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://old.example.com',
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program, ['--server', 'https://new.example.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://new.example.com' });
   });
 
   it('should strip trailing slash from server URL', async () => {

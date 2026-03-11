@@ -49,6 +49,16 @@ export default class UpdaterCtr extends ControllerModule {
     return this.app.storeManager.get('updateChannel') ?? 'stable';
   }
 
+  /**
+   * Get the build-time channel (stable, nightly, canary, beta).
+   * Used for display in About page to distinguish pre-release builds.
+   */
+  @IpcMethod()
+  async getBuildChannel(): Promise<string> {
+    const { BUILD_CHANNEL } = await import('@/modules/updater/configs');
+    return BUILD_CHANNEL;
+  }
+
   @IpcMethod()
   async setUpdateChannel(channel: UpdateChannel): Promise<void> {
     const validChannels = new Set(['stable', 'nightly', 'canary']);

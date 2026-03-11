@@ -51,6 +51,92 @@ export function registerGenerateCommand(program: Command) {
       }
     });
 
+  // ── download ──────────────────────────────────────────
+  generate
+    .command('download <generationId> <taskId>')
+    .description('Wait for generation to complete and download the result')
+    .option('-o, --output <path>', 'Output file path (default: auto-detect from asset)')
+    .option('--interval <sec>', 'Polling interval in seconds', '5')
+    .option('--timeout <sec>', 'Timeout in seconds (0 = no timeout)', '300')
+    .action(
+      async (
+        generationId: string,
+        taskId: string,
+        options: { interval?: string; output?: string; timeout?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const interval = Number.parseInt(options.interval || '5', 10) * 1000;
+        const timeout = Number.parseInt(options.timeout || '300', 10) * 1000;
+        const startTime = Date.now();
+
+        console.log(`${pc.yellow('⋯')} Waiting for generation ${pc.bold(generationId)}...`);
+
+        // Poll for completion
+        while (true) {
+          const result = (await client.generation.getGenerationStatus.query({
+            asyncTaskId: taskId,
+            generationId,
+          })) as any;
+
+          if (result.status === 'success' && result.generation) {
+            const gen = result.generation;
+            const url = gen.asset?.url;
+
+            if (!url) {
+              console.log(`${pc.red('✗')} Generation succeeded but no asset URL found.`);
+              process.exit(1);
+            }
+
+            // Determine output path
+            const ext = url.split('?')[0].split('.').pop() || 'bin';
+            const outputPath = options.output || `${generationId}.${ext}`;
+
+            console.log(`${pc.green('✓')} Generation complete. Downloading...`);
+
+            // Download
+            const res = await fetch(url);
+            if (!res.ok) {
+              console.log(`${pc.red('✗')} Download failed: ${res.status} ${res.statusText}`);
+              process.exit(1);
+            }
+
+            const { writeFile } = await import('node:fs/promises');
+            const buffer = Buffer.from(await res.arrayBuffer());
+            await writeFile(outputPath, buffer);
+
+            console.log(
+              `${pc.green('✓')} Saved to ${pc.bold(outputPath)} (${(buffer.length / 1024).toFixed(1)} KB)`,
+            );
+            if (gen.asset?.thumbnailUrl) {
+              console.log(`  Thumbnail: ${pc.dim(gen.asset.thumbnailUrl)}`);
+            }
+            return;
+          }
+
+          if (result.status === 'error') {
+            const errMsg =
+              result.error?.body?.detail || result.error?.message || JSON.stringify(result.error);
+            console.log(`${pc.red('✗')} Generation failed: ${errMsg}`);
+            process.exit(1);
+          }
+
+          // Check timeout
+          if (timeout > 0 && Date.now() - startTime > timeout) {
+            console.log(
+              `${pc.red('✗')} Timed out after ${options.timeout}s. Task still ${result.status}.`,
+            );
+            console.log(pc.dim(`Run "lh gen status ${generationId} ${taskId}" to check later.`));
+            process.exit(1);
+          }
+
+          process.stdout.write(
+            `\r${pc.yellow('⋯')} Status: ${colorStatus(result.status)}... (${Math.round((Date.now() - startTime) / 1000)}s)`,
+          );
+          await new Promise((r) => setTimeout(r, interval));
+        }
+      },
+    );
+
   // ── list ────────────────────────────────────────────
   generate
     .command('list')

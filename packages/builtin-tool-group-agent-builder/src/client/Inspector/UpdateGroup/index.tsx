@@ -72,7 +72,7 @@ export const UpdateGroupInspector = memo<
       <span>{t('builtins.lobe-group-agent-builder.apiName.updateGroup')}</span>
       {displayText && (
         <>
-          : <span className={highlightTextStyles.primary}>{displayText}</span>
+          :<span className={highlightTextStyles.primary}>{displayText}</span>
         </>
       )}
       {!isLoading && isSuccess && (

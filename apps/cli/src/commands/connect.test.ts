@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../auth/resolveToken', () => ({
   resolveToken: vi.fn().mockResolvedValue({ token: 'test-token', userId: 'test-user' }),
 }));
+vi.mock('../settings', () => ({
+  loadSettings: vi.fn().mockReturnValue(null),
+  saveSettings: vi.fn(),
+}));
 
 vi.mock('../utils/logger', () => ({
   log: {
@@ -53,11 +57,13 @@ vi.mock('../tools', () => ({
 }));
 
 let clientEventHandlers: Record<string, (...args: any[]) => any> = {};
+let clientOptions: any = {};
 let connectCalled = false;
 let lastSentToolResponse: any = null;
 let lastSentSystemInfoResponse: any = null;
 vi.mock('@lobechat/device-gateway-client', () => ({
-  GatewayClient: vi.fn().mockImplementation(() => {
+  GatewayClient: vi.fn().mockImplementation((opts: any) => {
+    clientOptions = opts;
     clientEventHandlers = {};
     connectCalled = false;
     lastSentToolResponse = null;
@@ -85,6 +91,8 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 import { resolveToken } from '../auth/resolveToken';
 // eslint-disable-next-line import-x/first
 import { spawnDaemon, stopDaemon } from '../daemon/manager';
+// eslint-disable-next-line import-x/first
+import { loadSettings, saveSettings } from '../settings';
 // eslint-disable-next-line import-x/first
 import { executeToolCall } from '../tools';
 // eslint-disable-next-line import-x/first
@@ -122,6 +130,36 @@ describe('connect command', () => {
 
     expect(connectCalled).toBe(true);
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('LobeHub CLI'));
+  });
+
+  it('should require explicit gateway for custom login server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({ serverUrl: 'https://self-hosted.example.com' });
+
+    const program = createProgram();
+    await expect(program.parseAsync(['node', 'test', 'connect'])).rejects.toThrow('process.exit');
+    expect(log.error).toHaveBeenCalledWith(
+      "Current login uses custom --server https://self-hosted.example.com. Please also provide '--gateway <url>' for the device gateway.",
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('should use explicit gateway for custom login server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({ serverUrl: 'https://self-hosted.example.com' });
+
+    const program = createProgram();
+    await program.parseAsync([
+      'node',
+      'test',
+      'connect',
+      '--gateway',
+      'https://gateway.example.com/',
+    ]);
+
+    expect(clientOptions.gatewayUrl).toBe('https://gateway.example.com');
+    expect(saveSettings).toHaveBeenCalledWith({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://self-hosted.example.com',
+    });
   });
 
   it('should handle tool call requests', async () => {

@@ -15,6 +15,16 @@ tags:
 
 LobeHub supports voice capabilities — listen to Agent responses hands-free, speak your messages instead of typing, and hold natural back-and-forth voice conversations. TTS converts text to speech; STT converts your voice to text.
 
+## Overview
+
+Voice features in LobeHub provide:
+
+- **Text-to-Speech (TTS)**: Convert AI text responses into spoken audio
+- **Speech-to-Text (STT)**: Speak your messages instead of typing
+- **Hands-Free Mode**: Continuous voice conversations combining both
+- **Multiple Providers**: Choose from various voice styles and languages
+- **Per-Agent Voices**: Configure unique voices for different agents
+
 ## Text-to-Speech (TTS)
 
 TTS converts AI text responses into spoken audio, allowing you to listen instead of read.
@@ -29,20 +39,28 @@ You can also configure an Agent to automatically read all responses as soon as e
 
 LobeHub supports two voice providers:
 
-**OpenAI Voices** — Premium neural voices with natural prosody and intonation:
+<Tabs>
+  <Tab title="OpenAI Voices">
+    Premium neural voices with natural prosody and intonation:
 
-| Voice   | Character           |
-| ------- | ------------------- |
-| Alloy   | Neutral, balanced   |
-| Echo    | Clear, professional |
-| Fable   | Warm, friendly      |
-| Onyx    | Deep, authoritative |
-| Nova    | Energetic, engaging |
-| Shimmer | Soft, gentle        |
+    | Voice   | Character           |
+    | ------- | ------------------- |
+    | Alloy   | Neutral, balanced   |
+    | Echo    | Clear, professional |
+    | Fable   | Warm, friendly      |
+    | Onyx    | Deep, authoritative |
+    | Nova    | Energetic, engaging |
+    | Shimmer | Soft, gentle        |
 
-Best for long-form content listening, professional use cases, and content requiring natural flow.
+    **Best for**: Long-form content listening, professional use cases, content requiring natural flow.
+  </Tab>
 
-**Microsoft Edge Speech (Azure Neural Voices)** — An extensive library with 100+ voices across languages, regional accents (US, UK, AU, and more), and male/female options. Best for specific accent requirements, multi-language content, and variety.
+  <Tab title="Microsoft Edge Speech">
+    Azure Neural Voices — an extensive library with 100+ voices across languages, regional accents (US, UK, AU, and more), and male/female options.
+
+    **Best for**: Specific accent requirements, multi-language content, variety.
+  </Tab>
+</Tabs>
 
 ### Playback Controls
 
@@ -82,13 +100,23 @@ STT supports a wide range of languages including English (US, UK, AU, CA, IN), S
 
 ### Tips for Best Results
 
-- Speak clearly at a normal pace
-- Use good microphone positioning
-- Minimize background noise
-- Speak in complete sentences
-- Pause briefly between thoughts
+<AccordionGroup>
+  <Accordion title="Speak Clearly">
+    Use a normal pace and enunciate. Avoid mumbling or speaking too quickly.
+  </Accordion>
 
-After voice input, review the transcribed text, edit any mistakes, and send when ready. This hybrid approach combines the speed of voice with the precision of text editing.
+  <Accordion title="Optimize Your Environment">
+    Use good microphone positioning and minimize background noise for better accuracy.
+  </Accordion>
+
+  <Accordion title="Use Complete Sentences">
+    Speak in complete sentences and pause briefly between thoughts for more accurate transcription.
+  </Accordion>
+
+  <Accordion title="Review Before Sending">
+    After voice input, review the transcribed text, edit any mistakes, and send when ready. This hybrid approach combines the speed of voice with the precision of text editing.
+  </Accordion>
+</AccordionGroup>
 
 ## Voice Conversations (Hands-Free Mode)
 
@@ -100,12 +128,32 @@ Combine TTS and STT for natural, continuous voice conversations:
 4. The AI response plays automatically via TTS
 5. Speak your next message when ready
 
-Hands-free mode is ideal for:
+### Use Cases
 
-- **Accessibility** — Screen reader users, users with mobility limitations, or anyone who prefers audio interaction
-- **Language learning** — Practice speaking in a target language and hear correct pronunciation via TTS
-- **Multitasking** — Get AI assistance while cooking, commuting, or exercising
-- **Content consumption** — Listen to long articles, research papers, or learning materials at your own pace
+<Tabs>
+  <Tab title="Accessibility">
+    Screen reader users, users with mobility limitations, or anyone who prefers audio interaction. Voice mode makes LobeHub accessible to a broader range of users.
+  </Tab>
+
+  <Tab title="Language Learning">
+    Practice speaking in a target language and hear correct pronunciation via TTS. The AI can provide feedback on phrasing and suggest improvements.
+  </Tab>
+
+  <Tab title="Multitasking">
+    Get AI assistance while cooking, commuting, or exercising. Hands-free mode lets you interact without looking at a screen.
+  </Tab>
+
+  <Tab title="Content Consumption">
+    Listen to long articles, research papers, or learning materials at your own pace. Adjust speed to match your preference.
+  </Tab>
+</Tabs>
+
+## Performance
+
+- **Sample rates**: Voice output supports standard audio sample rates for high-quality playback
+- **Latency**: First playback requires real-time generation; cached playback is instant
+- **Formats**: Audio is generated in optimized formats for web playback
+- **Caching**: TTS output is cached locally to avoid redundant generation
 
 ## Privacy Note
 

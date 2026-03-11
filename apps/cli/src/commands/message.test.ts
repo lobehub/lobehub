@@ -9,6 +9,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       count: { query: vi.fn() },
       getHeatmaps: { query: vi.fn() },
       getMessages: { query: vi.fn() },
+      listAll: { query: vi.fn() },
       removeMessage: { mutate: vi.fn() },
       removeMessages: { mutate: vi.fn() },
       searchMessages: { query: vi.fn() },
@@ -54,18 +55,20 @@ describe('message command', () => {
   }
 
   describe('list', () => {
-    it('should display messages', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+    it('should use listAll when no filters', async () => {
+      mockTrpcClient.message.listAll.query.mockResolvedValue([
         { content: 'Hello', createdAt: new Date().toISOString(), id: 'm1', role: 'user' },
       ]);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'message', 'list']);
 
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalled();
+      expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledTimes(2);
     });
 
-    it('should filter by topic-id', async () => {
+    it('should filter by topic-id using getMessages', async () => {
       mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
 
       const program = createProgram();
@@ -74,6 +77,7 @@ describe('message command', () => {
       expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
         expect.objectContaining({ topicId: 't1' }),
       );
+      expect(mockTrpcClient.message.listAll.query).not.toHaveBeenCalled();
     });
   });
 

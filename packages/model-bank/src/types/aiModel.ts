@@ -251,6 +251,7 @@ export type ExtendParamsType =
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
   | 'grok4_20ReasoningEffort'
+  | 'codexMaxReasoningEffort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'
@@ -286,6 +287,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
   'grok4_20ReasoningEffort',
+  'codexMaxReasoningEffort',
   'textVerbosity',
   'thinking',
   'thinkingBudget',

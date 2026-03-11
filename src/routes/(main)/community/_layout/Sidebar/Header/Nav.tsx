@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { McpIcon, ProviderIcon } from '@lobehub/ui/icons';
+import { McpIcon, ProviderIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Bot, Brain, ShapesIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +45,12 @@ const Nav = memo(() => {
         key: DiscoverTab.Assistants,
         title: t('tab.assistant'),
         url: '/community/agent',
+      },
+      {
+        icon: SkillsIcon,
+        key: DiscoverTab.Skills,
+        title: t('tab.skill'),
+        url: '/community/skill',
       },
       {
         icon: McpIcon,

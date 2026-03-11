@@ -186,6 +186,18 @@ The script supports the following deployment modes; please choose the appropriat
   - Choose the access protocol: `http` or `https`
   - Regenerate secure keys: We highly recommend regenerating the secure keys; if you lack the key generation library required by the script, we suggest referring to the [Custom Deployment](#custom-deployment) section for key modifications.
 
+  <Callout type="tip">
+    **Single Domain Deployment**
+    If you only have one domain, you can distinguish services by different ports:
+    - Domain setup for the LobeHub service: `lobe.example.com:${PORT1}`
+    - Domain setup for the S3 service: `lobe.example.com:${PORT2}`
+    You need to configure forwarding rules for each port in the reverse proxy.
+
+    **Port Mode vs Domain Mode:**
+    - Port Mode: The script automatically uses default ports (3210/9000/9001)
+    - Domain Mode: You can customize ports (via reverse proxy configuration)
+  </Callout>
+
   <Callout type="warning">
     The following issues may impede access to your service:
 
@@ -250,11 +262,6 @@ curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/
 mv .env.example .env
 ```
 
-<Callout type="info">
-  This section does not cover all complete variables; remaining variables can be referenced in
-  [Deploying with the Server Database](/en/docs/self-hosting/server-database).
-</Callout>
-
 ### Prerequisites
 
 Generally, to fully run the LobeHub database version, you will need at least the following three services:
@@ -279,6 +286,10 @@ Now, we will introduce the necessary configurations for running these services:
 1. S3 Object Storage
 
 LobeHub needs to provide a public access URL for object files for the LLM service provider, so you need to configure the S3 Endpoint:
+
+<Callout type="tip">
+  Using `S3_ENDPOINT=http://rustfs:9000` directly will prevent conversation image uploads from working (browser cannot resolve container names), but avatar uploads are not affected.
+</Callout>
 
 ```env
 S3_ENDPOINT=https://s3.example.com
@@ -345,7 +356,7 @@ If `INTERNAL_APP_URL` is not set, it defaults to `APP_URL`.
 - `http://127.0.0.1:3210` - Alternative localhost address
 
 <Callout type="tip">
-  For Docker Compose deployments with `network_mode: 'service:network-service'`, use `http://localhost:3210` as the `INTERNAL_APP_URL`.
+  For Docker Compose deployments, we recommend using `http://lobe:3210` as the `INTERNAL_APP_URL` (using service name for container-to-container communication).
 </Callout>
 
 ## Reverse Proxy Configuration

@@ -5,6 +5,7 @@ import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/CodexMaxReasoningEffortSlider';
 import EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/EffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
@@ -77,6 +78,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'grok4_20ReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint',
+    key: 'codexMaxReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint',
     key: 'textVerbosity',
   },
@@ -133,6 +138,7 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
 // Map variant keys to their base i18n title key (synced with ControlsForm.tsx)
 // This allows reusing existing i18n translations instead of adding new ones
 const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
+  codexMaxReasoningEffort: 'reasoningEffort',
   gpt5ReasoningEffort: 'reasoningEffort',
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
@@ -153,6 +159,11 @@ type PreviewMeta = {
 };
 
 const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
+  codexMaxReasoningEffort: {
+    labelSuffix: ' (Codex)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
   effort: { labelSuffix: ' (Opus 4.6)', previewWidth: 280, tag: 'output_config.effort' },
   enableAdaptiveThinking: {
@@ -271,6 +282,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   // Preview controls use controlled mode with default values (no store access)
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
+      codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
       disableContextCaching: <Switch checked disabled />,
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,

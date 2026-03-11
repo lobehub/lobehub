@@ -6,6 +6,10 @@ import { registerKbCommand } from './kb';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    file: {
+      getFiles: { query: vi.fn() },
+      getKnowledgeItems: { query: vi.fn() },
+    },
     knowledgeBase: {
       addFilesToKnowledgeBase: { mutate: vi.fn() },
       createKnowledgeBase: { mutate: vi.fn() },
@@ -44,6 +48,9 @@ describe('kb command', () => {
         }
       }
     }
+    // Default: file queries return empty
+    mockTrpcClient.file.getFiles.query.mockResolvedValue([]);
+    mockTrpcClient.file.getKnowledgeItems.query.mockResolvedValue({ hasMore: false, items: [] });
   });
 
   afterEach(() => {
@@ -121,7 +128,7 @@ describe('kb command', () => {
 
   describe('create', () => {
     it('should create a knowledge base', async () => {
-      mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate.mockResolvedValue({ id: 'kb-new' });
+      mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate.mockResolvedValue('kb-new');
 
       const program = createProgram();
       await program.parseAsync([

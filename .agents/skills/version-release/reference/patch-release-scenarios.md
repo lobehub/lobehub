@@ -91,12 +91,13 @@ Database schema changes that need to be released independently. These require a 
 
 ### Steps
 
-1. **Create release branch from canary**
+1. **Create release branch from main and cherry-pick migration commits**
 
 ```bash
-git checkout canary
-git pull origin canary
+git checkout main
+git pull --rebase origin main
 git checkout -b release/db-migration-{name}
+git cherry-pick <migration-commit-hash>
 git push -u origin release/db-migration-{name}
 ```
 

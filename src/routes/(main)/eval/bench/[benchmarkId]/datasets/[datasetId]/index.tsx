@@ -208,6 +208,7 @@ const DatasetDetail = memo(() => {
               }}
             >
               <TestCaseTable
+                datasetEvalMode={dataset?.evalMode}
                 diffFilter={diffFilter}
                 pagination={pagination}
                 search={search}

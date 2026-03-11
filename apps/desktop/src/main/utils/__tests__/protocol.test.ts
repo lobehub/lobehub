@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { McpSchema } from '../../types/protocol';
+import type { McpSchema } from '../../types/protocol';
 import { generateRFCProtocolUrl, parseProtocolUrl } from '../protocol';
 
 describe('Protocol', () => {

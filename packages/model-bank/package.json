@@ -38,6 +38,7 @@
     "./internlm": "./src/aiModels/internlm.ts",
     "./jina": "./src/aiModels/jina.ts",
     "./lmstudio": "./src/aiModels/lmstudio.ts",
+    "./longcat": "./src/aiModels/longcat.ts",
     "./minimax": "./src/aiModels/minimax.ts",
     "./mistral": "./src/aiModels/mistral.ts",
     "./modelscope": "./src/aiModels/modelscope.ts",

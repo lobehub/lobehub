@@ -29,7 +29,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     s.serverVersion,
     s.useCheckServerVersion,
   ]);
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'setting']);
 
   useCheckServerVersion();
 
@@ -37,10 +37,16 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const isDesktop = useMemo(() => !!getElectronIpc(), []);
 
   const [updaterState, setUpdaterState] = useState<UpdaterState>({ stage: 'idle' });
+  const [buildChannel, setBuildChannel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isDesktop) return;
     autoUpdateService.getUpdaterState().then(setUpdaterState);
+  }, [isDesktop]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    autoUpdateService.getBuildChannel().then(setBuildChannel);
   }, [isDesktop]);
 
   useWatchBroadcast('updaterStateChanged', (state: UpdaterState) => {
@@ -128,6 +134,14 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
             <Tag>v{CURRENT_VERSION}</Tag>
+
+            {buildChannel && buildChannel !== 'stable' && (
+              <Tag color={'gold'}>
+                {t(`setting:tab.beta.updateChannel.${buildChannel}`, {
+                  defaultValue: buildChannel.charAt(0).toUpperCase() + buildChannel.slice(1),
+                })}
+              </Tag>
+            )}
             {showServerVersion && (
               <Tag>{t('upgradeVersion.serverVersion', { version: `v${serverVersion}` })}</Tag>
             )}

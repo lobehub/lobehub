@@ -34,7 +34,7 @@ export interface EvalTestCaseMetadata {
 /**
  * Evaluation run status
  */
-export type EvalRunStatus = 'aborted' | 'completed' | 'failed' | 'pending' | 'running';
+export type EvalRunStatus = 'aborted' | 'completed' | 'external' | 'failed' | 'pending' | 'running';
 
 /**
  * Evaluation run configuration
@@ -96,6 +96,7 @@ export interface EvalRunMetrics {
   cost?: number;
   duration?: number;
   errorCases?: number;
+  externalCases?: number;
   failedCases: number;
   llmCalls?: number;
   passAllK?: number;
@@ -183,6 +184,8 @@ export interface EvalRunTopicResult {
   completionReason?: string;
   operationId?: string;
   rubricScores?: EvalRubricScore[];
+  /** Set when evalMode is 'external' — agent finished, awaiting external scoring */
+  awaitingExternalEval?: boolean;
 }
 /*eslint-enable perfectionist/sort-interfaces */
 
@@ -194,14 +197,16 @@ export interface EvalThreadResult {
   cost?: number;
   duration?: number;
   error?: string;
+  llmCalls?: number;
   operationId?: string;
   passed?: boolean;
   rubricScores?: EvalRubricScore[];
   score?: number;
-  status?: 'error' | 'failed' | 'passed' | 'running' | 'timeout';
+  status?: 'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout' | 'completed';
   steps?: number;
   threadId: string;
   tokens?: number;
+  toolCalls?: number;
 }
 
 /**

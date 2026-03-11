@@ -1,4 +1,6 @@
 import { getValidToken } from '../auth/refresh';
+import { OFFICIAL_SERVER_URL } from '../constants/urls';
+import { loadSettings } from '../settings';
 import { log } from '../utils/logger';
 
 // Must match the server's SECRET_XOR_KEY (src/envs/auth.ts)
@@ -35,7 +37,8 @@ export async function getAuthInfo(): Promise<AuthInfo> {
     process.exit(1);
   }
 
-  const { serverUrl, accessToken } = result!.credentials;
+  const accessToken = result!.credentials.accessToken;
+  const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
 
   return {
     accessToken,

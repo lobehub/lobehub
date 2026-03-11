@@ -4,6 +4,7 @@ import isYesterday from 'dayjs/plugin/isYesterday';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import utc from 'dayjs/plugin/utc';
 import { enableMapSet } from 'immer';
+import { scan } from 'react-scan';
 
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
@@ -28,4 +29,8 @@ if (typeof window !== 'undefined') {
       notifyChunkError();
     }
   });
+}
+
+if (__DEV__) {
+  scan({ enabled: true });
 }
