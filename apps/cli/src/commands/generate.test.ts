@@ -7,6 +7,7 @@ import { registerGenerateCommand } from './generate';
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     generation: {
+      deleteGeneration: { mutate: vi.fn() },
       getGenerationStatus: { query: vi.fn() },
     },
     generationTopic: {
@@ -326,6 +327,20 @@ describe('generate command', () => {
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('delete', () => {
+    it('should delete a generation with --yes', async () => {
+      mockTrpcClient.generation.deleteGeneration.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'delete', 'gen-1', '--yes']);
+
+      expect(mockTrpcClient.generation.deleteGeneration.mutate).toHaveBeenCalledWith({
+        generationId: 'gen-1',
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Deleted generation'));
     });
   });
 

@@ -27,6 +27,7 @@ import { registerSkillCommand } from './commands/skill';
 import { registerStatusCommand } from './commands/status';
 import { registerThreadCommand } from './commands/thread';
 import { registerTopicCommand } from './commands/topic';
+import { registerUserCommand } from './commands/user';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
@@ -61,6 +62,7 @@ registerMessageCommand(program);
 registerModelCommand(program);
 registerProviderCommand(program);
 registerPluginCommand(program);
+registerUserCommand(program);
 registerConfigCommand(program);
 registerEvalCommand(program);
 

@@ -8,6 +8,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     aiModel: {
       batchToggleAiModels: { mutate: vi.fn() },
+      batchUpdateAiModels: { mutate: vi.fn() },
       clearModelsByProvider: { mutate: vi.fn() },
       clearRemoteModels: { mutate: vi.fn() },
       createAiModel: { mutate: vi.fn() },
@@ -16,6 +17,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       removeAiModel: { mutate: vi.fn() },
       toggleModelEnabled: { mutate: vi.fn() },
       updateAiModel: { mutate: vi.fn() },
+      updateAiModelOrder: { mutate: vi.fn() },
     },
   },
 }));
@@ -275,6 +277,83 @@ describe('model command', () => {
       ]);
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--enable or --disable'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('batch-update', () => {
+    it('should batch update models', async () => {
+      mockTrpcClient.aiModel.batchUpdateAiModels.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'model',
+        'batch-update',
+        'openai',
+        '--models',
+        '[{"id":"gpt-4","displayName":"GPT-4 Updated"}]',
+      ]);
+
+      expect(mockTrpcClient.aiModel.batchUpdateAiModels.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'openai',
+          models: [{ id: 'gpt-4', displayName: 'GPT-4 Updated' }],
+        }),
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Batch updated'));
+    });
+
+    it('should reject invalid JSON', async () => {
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'model',
+        'batch-update',
+        'openai',
+        '--models',
+        'not-json',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid models JSON'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('sort', () => {
+    it('should update model sort order', async () => {
+      mockTrpcClient.aiModel.updateAiModelOrder.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'model',
+        'sort',
+        'openai',
+        '--sort-map',
+        '[{"id":"gpt-4","sort":0},{"id":"gpt-3.5","sort":1}]',
+      ]);
+
+      expect(mockTrpcClient.aiModel.updateAiModelOrder.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerId: 'openai',
+          sortMap: [
+            { id: 'gpt-4', sort: 0 },
+            { id: 'gpt-3.5', sort: 1 },
+          ],
+        }),
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Updated sort order'));
+    });
+
+    it('should reject invalid JSON', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'model', 'sort', 'openai', '--sort-map', '{bad}']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid sort-map JSON'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });

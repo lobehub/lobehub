@@ -7,11 +7,15 @@ import { registerFileCommand } from './file';
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     file: {
+      checkFileHash: { mutate: vi.fn() },
+      createFile: { mutate: vi.fn() },
       getFileItemById: { query: vi.fn() },
       getFiles: { query: vi.fn() },
+      getKnowledgeItems: { query: vi.fn() },
       recentFiles: { query: vi.fn() },
       removeFile: { mutate: vi.fn() },
       removeFiles: { mutate: vi.fn() },
+      updateFile: { mutate: vi.fn() },
     },
   },
 }));
@@ -149,6 +153,105 @@ describe('file command', () => {
 
       expect(mockTrpcClient.file.removeFiles.mutate).toHaveBeenCalledWith({ ids: ['f1', 'f2'] });
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Deleted 2'));
+    });
+  });
+
+  describe('upload', () => {
+    it('should upload file by URL', async () => {
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({ isExist: false });
+      mockTrpcClient.file.createFile.mutate.mockResolvedValue({
+        id: 'f-new',
+        url: 'https://cdn.example.com/f-new',
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'file',
+        'upload',
+        'https://example.com/doc.pdf',
+        '--hash',
+        'abc123',
+        '--name',
+        'doc.pdf',
+      ]);
+
+      expect(mockTrpcClient.file.checkFileHash.mutate).toHaveBeenCalledWith({ hash: 'abc123' });
+      expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'https://example.com/doc.pdf',
+          name: 'doc.pdf',
+          hash: 'abc123',
+        }),
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('File created'));
+    });
+
+    it('should skip upload when hash exists', async () => {
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({ isExist: true });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'file',
+        'upload',
+        'https://example.com/doc.pdf',
+        '--hash',
+        'abc123',
+      ]);
+
+      expect(mockTrpcClient.file.createFile.mutate).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('already exists'));
+    });
+  });
+
+  describe('edit', () => {
+    it('should update file parent', async () => {
+      mockTrpcClient.file.updateFile.mutate.mockResolvedValue({ success: true });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'file', 'edit', 'f1', '--parent-id', 'folder1']);
+
+      expect(mockTrpcClient.file.updateFile.mutate).toHaveBeenCalledWith({
+        id: 'f1',
+        parentId: 'folder1',
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Updated file'));
+    });
+
+    it('should error when no changes specified', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'file', 'edit', 'f1']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('No changes'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('kb-items', () => {
+    it('should list knowledge items for a file', async () => {
+      mockTrpcClient.file.getKnowledgeItems.query.mockResolvedValue({
+        items: [{ id: 'ki1', name: 'Item 1', type: 'chunk' }],
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'file', 'kb-items', 'f1']);
+
+      expect(mockTrpcClient.file.getKnowledgeItems.query).toHaveBeenCalledWith(
+        expect.objectContaining({ fileId: 'f1' }),
+      );
+      expect(consoleSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should show empty message', async () => {
+      mockTrpcClient.file.getKnowledgeItems.query.mockResolvedValue({ items: [] });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'file', 'kb-items', 'f1']);
+
+      expect(consoleSpy).toHaveBeenCalledWith('No knowledge items found.');
     });
   });
 
