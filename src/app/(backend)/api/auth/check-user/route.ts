@@ -1,3 +1,4 @@
+import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -5,6 +6,8 @@ import { NextResponse } from 'next/server';
 import { account } from '@/database/schemas/betterAuth';
 import { users } from '@/database/schemas/user';
 import { serverDB } from '@/database/server';
+
+const log = debug('api-route:auth:check-user');
 
 export interface CheckUserResponseData {
   exists: boolean;
@@ -56,7 +59,7 @@ export async function POST(req: NextRequest) {
       hasPassword,
     } satisfies CheckUserResponseData);
   } catch (error) {
-    console.error('Error checking user existence:', error);
+    log('Error checking user existence:', error);
     return NextResponse.json({ error: 'Internal server error', exists: false }, { status: 500 });
   }
 }

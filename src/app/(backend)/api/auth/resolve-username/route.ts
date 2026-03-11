@@ -1,9 +1,12 @@
+import debug from 'debug';
 import { eq } from 'drizzle-orm';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { users } from '@/database/schemas/user';
 import { serverDB } from '@/database/server';
+
+const log = debug('api-route:auth:resolve-username');
 
 export interface ResolveUsernameResponseData {
   email?: string | null;
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
       exists: true,
     } satisfies ResolveUsernameResponseData);
   } catch (error) {
-    console.error('Error resolving username to email:', error);
+    log('Error resolving username to email:', error);
     return NextResponse.json({ error: 'Internal server error', exists: false }, { status: 500 });
   }
 }
