@@ -2,9 +2,6 @@
 -- All tables include user_id (keyword tokenizer + fast) for filter pushdown into tantivy index scan.
 -- Messages additionally includes role for the same reason.
 
--- 0. Ensure topics.description column exists (covered by release PR 0091_topics_add_description, idempotent here)
-ALTER TABLE "topics" ADD COLUMN IF NOT EXISTS "description" text;--> statement-breakpoint
-
 -- 1. agents: title, description, slug, tags(jsonb), system_role, user_id
 DROP INDEX IF EXISTS agents_bm25_idx;--> statement-breakpoint
 CREATE INDEX agents_bm25_idx ON agents
@@ -130,13 +127,4 @@ USING bm25 (id, tagline, persona, user_id)
 WITH (
   key_field='id',
   text_fields='{"tagline":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"persona":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);--> statement-breakpoint
-
--- 15. user_memory_persona_document_histories: snapshot_persona, snapshot_tagline, reasoning, summary, user_id
-DROP INDEX IF EXISTS user_memory_persona_document_histories_bm25_idx;--> statement-breakpoint
-CREATE INDEX user_memory_persona_document_histories_bm25_idx ON user_memory_persona_document_histories
-USING bm25 (id, snapshot_persona, snapshot_tagline, reasoning, summary, user_id)
-WITH (
-  key_field='id',
-  text_fields='{"snapshot_persona":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"snapshot_tagline":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"reasoning":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"summary":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
 );
