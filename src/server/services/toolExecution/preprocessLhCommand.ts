@@ -23,7 +23,9 @@ export const preprocessLhCommand = async (
   command: string,
   userId: string,
 ): Promise<PreprocessResult> => {
-  const isLhCommand = /^lh\s/.test(command) || command === 'lh';
+  // Match `lh` at the start of the command or after shell operators (&&, ||, ;)
+  const lhPattern = /(?:^|&&|\|\||;)\s*lh(?:\s|$)/;
+  const isLhCommand = lhPattern.test(command);
 
   if (!isLhCommand) {
     return { command, isLhCommand: false, skipSkillLookup: false };
@@ -34,8 +36,14 @@ export const preprocessLhCommand = async (
 
     const serverUrl = isDev ? 'https://app.lobehub.com' : appEnv.APP_URL;
 
-    const rewritten = command.replace(/^lh/, 'npx -y @lobehub/cli');
-    const finalCommand = `LOBEHUB_JWT=${jwt} LOBEHUB_SERVER=${serverUrl} ${rewritten}`;
+    const envPrefix = `LOBEHUB_JWT=${jwt} LOBEHUB_SERVER=${serverUrl}`;
+
+    // Replace `lh` in all sub-commands separated by &&, ||, or ;
+    const rewritten = command.replaceAll(
+      /(^|&&|\|\||;)(\s*)lh(\s|$)/g,
+      `$1$2${envPrefix} npx -y @lobehub/cli$3`,
+    );
+    const finalCommand = rewritten;
 
     log(
       'Intercepted lh command for user %s, rewritten to: %s',
