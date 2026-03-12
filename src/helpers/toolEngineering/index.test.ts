@@ -95,6 +95,8 @@ vi.mock('@/store/agent/selectors', () => ({
     hasEnabledKnowledgeBases: () => false,
   },
   agentChatConfigSelectors: {
+    isCloudSandboxEnabled: () => false,
+    isLocalSystemEnabled: () => false,
     isMemoryToolEnabled: () => false,
   },
 }));
