@@ -689,7 +689,7 @@ describe('AgentRuntimeService', () => {
                 data: { items: [1, 2, 3] },
                 executionTime: 200,
                 isSuccess: true,
-                toolCall: { identifier: 'lobe-skills', apiName: 'runSkill', id: 'tc-2' },
+                toolCall: { identifier: 'lobe-skills', apiName: 'activateSkill', id: 'tc-2' },
                 toolCallId: 'tc-2',
               },
             ],
@@ -718,7 +718,7 @@ describe('AgentRuntimeService', () => {
               output: 'Result from tool A',
             }),
             expect.objectContaining({
-              apiName: 'runSkill',
+              apiName: 'activateSkill',
               identifier: 'lobe-skills',
               output: JSON.stringify({ items: [1, 2, 3] }),
             }),

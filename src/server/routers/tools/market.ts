@@ -84,8 +84,8 @@ const metaSchema = z
   })
   .optional();
 
-// Schema for code interpreter tool call request
-const callCodeInterpreterToolSchema = z.object({
+// Schema for sandbox tool execution request
+const execInSandboxSchema = z.object({
   params: z.record(z.any()),
   toolName: z.string(),
   topicId: z.string(),
@@ -108,7 +108,9 @@ const callCloudMcpEndpointSchema = z.object({
 });
 
 // ============================== Type Exports ==============================
-export type CallCodeInterpreterToolInput = z.infer<typeof callCodeInterpreterToolSchema>;
+export type ExecInSandboxInput = z.infer<typeof execInSandboxSchema>;
+/** @deprecated Use ExecInSandboxInput */
+export type CallCodeInterpreterToolInput = ExecInSandboxInput;
 export type ExportAndUploadFileInput = z.infer<typeof exportAndUploadFileSchema>;
 
 export interface CallToolResult {
@@ -132,6 +134,129 @@ export interface ExportAndUploadFileResult {
   success: boolean;
   url?: string;
 }
+
+// ============================== Sandbox Handler ==============================
+const execInSandboxHandler = async ({
+  input,
+  ctx,
+}: {
+  ctx: { fileService: FileService; marketService: MarketService; serverDB: any; userId: string };
+  input: ExecInSandboxInput;
+}): Promise<CallToolResult> => {
+  const { toolName, params, topicId } = input;
+  const userId = input?.userId || ctx.userId;
+
+  log('execInSandbox: tool=%s, topicId=%s', toolName, topicId);
+
+  try {
+    let enhancedParams = params;
+
+    // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
+    if ((toolName === 'execScript' || toolName === 'runCommand') && params.command) {
+      const { preprocessLhCommand } =
+        await import('@/server/services/toolExecution/preprocessLhCommand');
+      const lhResult = await preprocessLhCommand(params.command, userId);
+
+      if (lhResult.error) {
+        return {
+          error: { message: lhResult.error, name: 'AuthError' },
+          result: null,
+          sessionExpiredAndRecreated: false,
+          success: false,
+        };
+      }
+
+      if (lhResult.skipSkillLookup) {
+        enhancedParams = { ...params, command: lhResult.command, config: undefined };
+      }
+    }
+
+    // For execScript tool, look up skill zipUrl if config is provided
+    if (toolName === 'execScript' && enhancedParams.config) {
+      const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId);
+
+      let skill;
+      if (enhancedParams.config.name) {
+        skill = await agentSkillModel.findByName(enhancedParams.config.name);
+
+        if (!skill) {
+          const allSkills = await agentSkillModel.findAll();
+          const availableSkills = allSkills.data.map((s) => s.name).join(', ');
+
+          const errorMessage = availableSkills
+            ? `Skill "${enhancedParams.config.name}" not found. Available skills: ${availableSkills}`
+            : `Skill "${enhancedParams.config.name}" not found. No skills available. Please import a skill first.`;
+
+          log(
+            'Skill not found: %s. Available skills: %s',
+            enhancedParams.config.name,
+            availableSkills,
+          );
+
+          return {
+            error: { message: errorMessage, name: 'SkillNotFound' },
+            result: null,
+            sessionExpiredAndRecreated: false,
+            success: false,
+          };
+        }
+      }
+
+      if (skill?.zipFileHash) {
+        const fileModel = new FileModel(ctx.serverDB, userId);
+        const fileInfo = await fileModel.checkHash(skill.zipFileHash);
+
+        if (fileInfo.isExist && fileInfo.url) {
+          const fullUrl = await ctx.fileService.getFullFileUrl(fileInfo.url);
+          if (fullUrl) {
+            enhancedParams = { ...params, zipUrl: fullUrl };
+            log('Added zipUrl to execScript params for skill %s: %s', skill.name, fullUrl);
+          }
+        }
+      }
+    }
+
+    const market = ctx.marketService.market;
+
+    const response = await market.plugins.runBuildInTool(
+      toolName as CodeInterpreterToolName,
+      enhancedParams as any,
+      { topicId, userId },
+    );
+
+    log('execInSandbox response for %s: %O', toolName, response);
+
+    if (!response.success) {
+      return {
+        error: {
+          message: response.error?.message || 'Unknown error',
+          name: response.error?.code,
+        },
+        result: null,
+        sessionExpiredAndRecreated: false,
+        success: false,
+      };
+    }
+
+    return {
+      result: response.data?.result,
+      sessionExpiredAndRecreated: response.data?.sessionExpiredAndRecreated || false,
+      success: true,
+    };
+  } catch (error) {
+    log('execInSandbox error for %s: %O', toolName, error);
+
+    return {
+      error: {
+        message: (error as Error).message,
+        name: (error as Error).name,
+      },
+      result: null,
+      sessionExpiredAndRecreated: false,
+      success: false,
+    };
+  }
+};
 
 // ============================== Router ==============================
 export const marketRouter = router({
@@ -226,119 +351,15 @@ export const marketRouter = router({
       }
     }),
 
-  // ============================== Code Interpreter ==============================
+  /** @deprecated Use execInSandbox instead. Will be removed in a future version. */
   callCodeInterpreterTool: marketToolProcedure
-    .input(callCodeInterpreterToolSchema)
-    .mutation(async ({ input, ctx }) => {
-      const { toolName, params, topicId } = input;
-      // Use client-provided userId if available, otherwise fallback to authenticated userId
-      const userId = input?.userId || ctx.userId;
+    .input(execInSandboxSchema)
+    .mutation(({ input, ctx }) => execInSandboxHandler({ ctx, input })),
 
-      log('Calling cloud code interpreter tool: %s with params: %O', toolName, {
-        params,
-        topicId,
-        userId,
-      });
-
-      try {
-        // For execScript tool, look up skill zipUrl if config is provided
-        let enhancedParams = params;
-        if (toolName === 'execScript' && params.config) {
-          const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId);
-
-          // Look up skill by name
-          let skill;
-          if (params.config.name) {
-            skill = await agentSkillModel.findByName(params.config.name);
-
-            // If skill not found, return error with available skills
-            if (!skill) {
-              const allSkills = await agentSkillModel.findAll();
-              const availableSkills = allSkills.data.map((s) => s.name).join(', ');
-
-              const errorMessage = availableSkills
-                ? `Skill "${params.config.name}" not found. Available skills: ${availableSkills}`
-                : `Skill "${params.config.name}" not found. No skills available. Please import a skill first.`;
-
-              log('Skill not found: %s. Available skills: %s', params.config.name, availableSkills);
-
-              return {
-                error: {
-                  message: errorMessage,
-                  name: 'SkillNotFound',
-                },
-                result: null,
-                sessionExpiredAndRecreated: false,
-                success: false,
-              } as CallToolResult;
-            }
-          }
-
-          // If skill exists and has zipFileHash, get the full URL
-          if (skill?.zipFileHash) {
-            const fileService = ctx.fileService;
-            // Get S3 key from globalFiles
-            const fileModel = new FileModel(ctx.serverDB, userId);
-            const fileInfo = await fileModel.checkHash(skill.zipFileHash);
-
-            if (fileInfo.isExist && fileInfo.url) {
-              // Convert S3 key to full URL
-              const fullUrl = await fileService.getFullFileUrl(fileInfo.url);
-              if (fullUrl) {
-                // Add zipUrl to params
-                enhancedParams = {
-                  ...params,
-                  zipUrl: fullUrl,
-                };
-                log('Added zipUrl to execScript params for skill %s: %s', skill.name, fullUrl);
-              }
-            }
-          }
-        }
-
-        // Use marketService from ctx
-        const market = ctx.marketService.market;
-
-        // Call market-sdk's runBuildInTool
-        const response = await market.plugins.runBuildInTool(
-          toolName as CodeInterpreterToolName,
-          enhancedParams as any,
-          { topicId, userId },
-        );
-
-        log('Cloud code interpreter tool %s response: %O', toolName, response);
-
-        if (!response.success) {
-          return {
-            error: {
-              message: response.error?.message || 'Unknown error',
-              name: response.error?.code,
-            },
-            result: null,
-            sessionExpiredAndRecreated: false,
-            success: false,
-          } as CallToolResult;
-        }
-
-        return {
-          result: response.data?.result,
-          sessionExpiredAndRecreated: response.data?.sessionExpiredAndRecreated || false,
-          success: true,
-        } as CallToolResult;
-      } catch (error) {
-        log('Error calling cloud code interpreter tool %s: %O', toolName, error);
-
-        return {
-          error: {
-            message: (error as Error).message,
-            name: (error as Error).name,
-          },
-          result: null,
-          sessionExpiredAndRecreated: false,
-          success: false,
-        } as CallToolResult;
-      }
-    }),
+  // ============================== Sandbox Execution ==============================
+  execInSandbox: marketToolProcedure
+    .input(execInSandboxSchema)
+    .mutation(({ input, ctx }) => execInSandboxHandler({ ctx, input })),
 
   // ============================== LobeHub Skill ==============================
   /**
@@ -585,7 +606,7 @@ export const marketRouter = router({
 
   /**
    * Export a file from sandbox and upload to S3, then create a persistent file record
-   * This combines the previous getExportFileUploadUrl + callCodeInterpreterTool + createFileRecord flow
+   * This combines the previous getExportFileUploadUrl + execInSandbox + createFileRecord flow
    * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
    */
   exportAndUploadFile: marketToolProcedure
