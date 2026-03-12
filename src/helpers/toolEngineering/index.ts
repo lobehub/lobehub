@@ -7,12 +7,12 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, defaultToolIds } from '@lobechat/builtin-tools';
-import { isDesktop } from '@lobechat/const';
 import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
 import { type ChatCompletionTool, type WorkingModel } from '@lobechat/types';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
+import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
@@ -24,7 +24,6 @@ import {
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
-import { shouldEnableTool } from '../toolFilters';
 
 /**
  * Tools engine configuration options
@@ -97,13 +96,12 @@ export const createAgentToolsEngine = (
     enableChecker: createEnableChecker({
       allowExplicitActivation: true,
       platformFilter: ({ pluginId }) => {
-        // Platform-specific constraints (e.g., LocalSystem desktop-only)
-        if (!shouldEnableTool(pluginId)) return false;
-
-        // Filter stdio MCP tools in non-desktop environments
-        if (!isDesktop) {
-          const plugin = pluginSelectors.getInstalledPluginById(pluginId)(getToolStoreState());
-          if (plugin?.customParams?.mcp?.type === 'stdio') return false;
+        if (
+          !isToolAvailableInCurrentEnv(pluginId, {
+            installedPlugins: getToolStoreState().installedPlugins,
+          })
+        ) {
+          return false;
         }
 
         return undefined; // fall through to rules

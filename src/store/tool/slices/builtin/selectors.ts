@@ -1,7 +1,9 @@
 import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 
-import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
-import { shouldEnableTool } from '@/helpers/toolFilters';
+import {
+  isBuiltinSkillAvailableInCurrentEnv,
+  isBuiltinToolAvailableInCurrentEnv,
+} from '@/helpers/toolAvailability';
 
 import { type ToolStoreState } from '../../initialState';
 import { agentSkillsSelectors } from '../agentSkills/selectors';
@@ -26,7 +28,7 @@ const toBuiltinMetaWithAvailability = (
   t: ToolStoreState['builtinTools'][number],
 ): LobeToolMetaWithAvailability => ({
   ...toBuiltinMeta(t),
-  availableInWeb: shouldEnableTool(t.identifier),
+  availableInWeb: isBuiltinToolAvailableInCurrentEnv(t.identifier),
 });
 
 const toSkillMeta = (s: BuiltinSkill): LobeToolMeta => ({
@@ -42,7 +44,7 @@ const toSkillMeta = (s: BuiltinSkill): LobeToolMeta => ({
 
 const toSkillMetaWithAvailability = (s: BuiltinSkill): LobeToolMetaWithAvailability => ({
   ...toSkillMeta(s),
-  availableInWeb: shouldEnableBuiltinSkill(s.identifier),
+  availableInWeb: isBuiltinSkillAvailableInCurrentEnv(s.identifier),
 });
 
 const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
@@ -79,7 +81,7 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
       if (item.hidden) return false;
 
       // Filter platform-specific tools (e.g., LocalSystem desktop-only)
-      if (!shouldEnableTool(item.identifier)) return false;
+      if (!isBuiltinToolAvailableInCurrentEnv(item.identifier)) return false;
 
       // Exclude uninstalled tools
       if (uninstalledBuiltinTools.includes(item.identifier)) {
@@ -92,7 +94,7 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
 
   const skillMetas = (s.builtinSkills || [])
     .filter((skill) => {
-      if (!shouldEnableBuiltinSkill(skill.identifier)) return false;
+      if (!isBuiltinSkillAvailableInCurrentEnv(skill.identifier)) return false;
       if (uninstalledBuiltinTools.includes(skill.identifier)) return false;
 
       return true;
@@ -158,7 +160,7 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
  */
 const installedBuiltinSkills = (s: ToolStoreState): BuiltinSkill[] =>
   (s.builtinSkills || []).filter((skill) => {
-    if (!shouldEnableBuiltinSkill(skill.identifier)) return false;
+    if (!isBuiltinSkillAvailableInCurrentEnv(skill.identifier)) return false;
     if (s.uninstalledBuiltinTools.includes(skill.identifier)) return false;
 
     return true;

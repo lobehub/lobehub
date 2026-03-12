@@ -1,12 +1,11 @@
-import {
-  getKlavisServerByServerIdentifier,
-  getLobehubSkillProviderById,
-  isDesktop,
-} from '@lobechat/const';
+import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { type RenderDisplayControl } from '@lobechat/types';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
-import { shouldEnableTool } from '@/helpers/toolFilters';
+import {
+  isInstalledPluginAvailableInCurrentEnv,
+  isToolAvailableInCurrentEnv,
+} from '@/helpers/toolAvailability';
 import { type MetaData } from '@/types/meta';
 import { type LobeToolMeta } from '@/types/tool/tool';
 
@@ -117,7 +116,7 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
   const builtinItems = s.builtinTools
     .filter((tool) => tool.discoverable !== false)
     .filter((tool) => !builtinSkillIds.has(tool.identifier))
-    .filter((tool) => shouldEnableTool(tool.identifier)) // platform check (e.g., desktop-only)
+    .filter((tool) => isToolAvailableInCurrentEnv(tool.identifier))
     .map((tool) => ({
       description: tool.manifest.meta?.description || '',
       identifier: tool.identifier,
@@ -131,7 +130,7 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
     .filter((p) => !lobehubSkillIds.has(p.identifier))
     .filter((p) => !agentSkillIds.has(p.identifier))
     .filter((p) => !p.customParams?.klavis) // extra safety for Klavis plugins
-    .filter((p) => isDesktop || p.customParams?.mcp?.type !== 'stdio') // platform check
+    .filter((plugin) => isInstalledPluginAvailableInCurrentEnv(plugin))
     .map((plugin) => {
       const meta = plugin.manifest?.meta;
       return {

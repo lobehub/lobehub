@@ -1,6 +1,6 @@
 import { SkillEngine } from '@lobechat/context-engine';
 
-import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
+import { isBuiltinSkillAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { getToolStoreState } from '@/store/tool';
 
 /**
@@ -15,7 +15,7 @@ export const createSkillEngine = (): SkillEngine => {
 
   // Source 1: builtin skills
   const builtinMetas = (toolState.builtinSkills || [])
-    .filter((s) => shouldEnableBuiltinSkill(s.identifier))
+    .filter((s) => isBuiltinSkillAvailableInCurrentEnv(s.identifier))
     .map((s) => ({
       description: s.description,
       identifier: s.identifier,
