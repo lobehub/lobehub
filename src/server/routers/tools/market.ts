@@ -91,8 +91,8 @@ const activatedSkillSchema = z.object({
   name: z.string(),
 });
 
-// Schema for code interpreter tool call request
-const callCodeInterpreterToolSchema = z.object({
+// Schema for sandbox tool execution request
+const execInSandboxSchema = z.object({
   params: z.record(z.any()),
   toolName: z.string(),
   topicId: z.string(),
@@ -115,7 +115,9 @@ const callCloudMcpEndpointSchema = z.object({
 });
 
 // ============================== Type Exports ==============================
-export type CallCodeInterpreterToolInput = z.infer<typeof callCodeInterpreterToolSchema>;
+export type ExecInSandboxInput = z.infer<typeof execInSandboxSchema>;
+/** @deprecated Use ExecInSandboxInput */
+export type CallCodeInterpreterToolInput = ExecInSandboxInput;
 export type ExportAndUploadFileInput = z.infer<typeof exportAndUploadFileSchema>;
 
 export interface CallToolResult {
@@ -139,6 +141,129 @@ export interface ExportAndUploadFileResult {
   success: boolean;
   url?: string;
 }
+
+// ============================== Sandbox Handler ==============================
+const execInSandboxHandler = async ({
+  input,
+  ctx,
+}: {
+  ctx: { fileService: FileService; marketService: MarketService; serverDB: any; userId: string };
+  input: ExecInSandboxInput;
+}): Promise<CallToolResult> => {
+  const { toolName, params, topicId } = input;
+  const userId = input?.userId || ctx.userId;
+
+  log('execInSandbox: tool=%s, topicId=%s', toolName, topicId);
+
+  try {
+    let enhancedParams = params;
+
+    // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
+    if ((toolName === 'execScript' || toolName === 'runCommand') && params.command) {
+      const { preprocessLhCommand } =
+        await import('@/server/services/toolExecution/preprocessLhCommand');
+      const lhResult = await preprocessLhCommand(params.command, userId);
+
+      if (lhResult.error) {
+        return {
+          error: { message: lhResult.error, name: 'AuthError' },
+          result: null,
+          sessionExpiredAndRecreated: false,
+          success: false,
+        };
+      }
+
+      if (lhResult.skipSkillLookup) {
+        enhancedParams = { ...params, command: lhResult.command, config: undefined };
+      }
+    }
+
+    // For execScript tool, look up skill zipUrl if config is provided
+    if (toolName === 'execScript' && enhancedParams.config) {
+      const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId);
+
+      let skill;
+      if (enhancedParams.config.name) {
+        skill = await agentSkillModel.findByName(enhancedParams.config.name);
+
+        if (!skill) {
+          const allSkills = await agentSkillModel.findAll();
+          const availableSkills = allSkills.data.map((s) => s.name).join(', ');
+
+          const errorMessage = availableSkills
+            ? `Skill "${enhancedParams.config.name}" not found. Available skills: ${availableSkills}`
+            : `Skill "${enhancedParams.config.name}" not found. No skills available. Please import a skill first.`;
+
+          log(
+            'Skill not found: %s. Available skills: %s',
+            enhancedParams.config.name,
+            availableSkills,
+          );
+
+          return {
+            error: { message: errorMessage, name: 'SkillNotFound' },
+            result: null,
+            sessionExpiredAndRecreated: false,
+            success: false,
+          };
+        }
+      }
+
+      if (skill?.zipFileHash) {
+        const fileModel = new FileModel(ctx.serverDB, userId);
+        const fileInfo = await fileModel.checkHash(skill.zipFileHash);
+
+        if (fileInfo.isExist && fileInfo.url) {
+          const fullUrl = await ctx.fileService.getFullFileUrl(fileInfo.url);
+          if (fullUrl) {
+            enhancedParams = { ...params, zipUrl: fullUrl };
+            log('Added zipUrl to execScript params for skill %s: %s', skill.name, fullUrl);
+          }
+        }
+      }
+    }
+
+    const market = ctx.marketService.market;
+
+    const response = await market.plugins.runBuildInTool(
+      toolName as CodeInterpreterToolName,
+      enhancedParams as any,
+      { topicId, userId },
+    );
+
+    log('execInSandbox response for %s: %O', toolName, response);
+
+    if (!response.success) {
+      return {
+        error: {
+          message: response.error?.message || 'Unknown error',
+          name: response.error?.code,
+        },
+        result: null,
+        sessionExpiredAndRecreated: false,
+        success: false,
+      };
+    }
+
+    return {
+      result: response.data?.result,
+      sessionExpiredAndRecreated: response.data?.sessionExpiredAndRecreated || false,
+      success: true,
+    };
+  } catch (error) {
+    log('execInSandbox error for %s: %O', toolName, error);
+
+    return {
+      error: {
+        message: (error as Error).message,
+        name: (error as Error).name,
+      },
+      result: null,
+      sessionExpiredAndRecreated: false,
+      success: false,
+    };
+  }
+};
 
 // ============================== Router ==============================
 export const marketRouter = router({
@@ -233,100 +358,15 @@ export const marketRouter = router({
       }
     }),
 
-  // ============================== Code Interpreter ==============================
+  /** @deprecated Use execInSandbox instead. Will be removed in a future version. */
   callCodeInterpreterTool: marketToolProcedure
-    .input(callCodeInterpreterToolSchema)
-    .mutation(async ({ input, ctx }) => {
-      const { toolName, params, topicId } = input;
-      // Use client-provided userId if available, otherwise fallback to authenticated userId
-      const userId = input?.userId || ctx.userId;
+    .input(execInSandboxSchema)
+    .mutation(({ input, ctx }) => execInSandboxHandler({ ctx, input })),
 
-      log('Calling cloud code interpreter tool: %s with params: %O', toolName, {
-        params,
-        topicId,
-        userId,
-      });
-
-      try {
-        // For execScript tool, look up skill zipUrls from activatedSkills
-        let enhancedParams = params;
-        if (toolName === 'execScript' && params.activatedSkills?.length) {
-          const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId);
-          const fileModel = new FileModel(ctx.serverDB, userId);
-          const fileService = ctx.fileService;
-
-          // Resolve zipUrls for all activated skills
-          const skillZipUrls: Record<string, string> = {};
-
-          for (const activatedSkill of params.activatedSkills) {
-            if (!activatedSkill.name) continue;
-
-            const skill = await agentSkillModel.findByName(activatedSkill.name);
-            if (!skill?.zipFileHash) continue;
-
-            const fileInfo = await fileModel.checkHash(skill.zipFileHash);
-            if (!fileInfo.isExist || !fileInfo.url) continue;
-
-            const fullUrl = await fileService.getFullFileUrl(fileInfo.url);
-            if (fullUrl) {
-              skillZipUrls[activatedSkill.name] = fullUrl;
-              log('Resolved zipUrl for skill %s: %s', activatedSkill.name, fullUrl);
-            }
-          }
-
-          // Add skillZipUrls to params if any were resolved
-          if (Object.keys(skillZipUrls).length > 0) {
-            enhancedParams = {
-              ...params,
-              skillZipUrls,
-            };
-            log('Added skillZipUrls to execScript params: %O', Object.keys(skillZipUrls));
-          }
-        }
-
-        // Use marketService from ctx
-        const market = ctx.marketService.market;
-
-        // Call market-sdk's runBuildInTool
-        const response = await market.plugins.runBuildInTool(
-          toolName as CodeInterpreterToolName,
-          enhancedParams as any,
-          { topicId, userId },
-        );
-
-        log('Cloud code interpreter tool %s response: %O', toolName, response);
-
-        if (!response.success) {
-          return {
-            error: {
-              message: response.error?.message || 'Unknown error',
-              name: response.error?.code,
-            },
-            result: null,
-            sessionExpiredAndRecreated: false,
-            success: false,
-          } as CallToolResult;
-        }
-
-        return {
-          result: response.data?.result,
-          sessionExpiredAndRecreated: response.data?.sessionExpiredAndRecreated || false,
-          success: true,
-        } as CallToolResult;
-      } catch (error) {
-        log('Error calling cloud code interpreter tool %s: %O', toolName, error);
-
-        return {
-          error: {
-            message: (error as Error).message,
-            name: (error as Error).name,
-          },
-          result: null,
-          sessionExpiredAndRecreated: false,
-          success: false,
-        } as CallToolResult;
-      }
-    }),
+  // ============================== Sandbox Execution ==============================
+  execInSandbox: marketToolProcedure
+    .input(execInSandboxSchema)
+    .mutation(({ input, ctx }) => execInSandboxHandler({ ctx, input })),
 
   // ============================== LobeHub Skill ==============================
   /**
@@ -573,7 +613,7 @@ export const marketRouter = router({
 
   /**
    * Export a file from sandbox and upload to S3, then create a persistent file record
-   * This combines the previous getExportFileUploadUrl + callCodeInterpreterTool + createFileRecord flow
+   * This combines the previous getExportFileUploadUrl + execInSandbox + createFileRecord flow
    * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
    */
   exportAndUploadFile: marketToolProcedure

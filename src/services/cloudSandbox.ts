@@ -1,7 +1,7 @@
 import { toolsClient } from '@/libs/trpc/client';
 import {
-  type CallCodeInterpreterToolInput,
   type CallToolResult,
+  type ExecInSandboxInput,
   type ExportAndUploadFileInput,
   type ExportAndUploadFileResult,
 } from '@/server/routers/tools/market';
@@ -18,14 +18,14 @@ class CloudSandboxService {
     params: Record<string, any>,
     context: { topicId: string; userId?: string },
   ): Promise<CallToolResult> {
-    const input: CallCodeInterpreterToolInput = {
+    const input: ExecInSandboxInput = {
       params,
       toolName,
       topicId: context.topicId,
       userId: context.userId,
     };
 
-    return toolsClient.market.callCodeInterpreterTool.mutate(input);
+    return toolsClient.market.execInSandbox.mutate(input);
   }
 
   /**

@@ -2,10 +2,10 @@ import type { LobeChatPluginApi } from '@lobechat/types';
 
 import { SkillsApiName } from './types';
 
-export const runSkillApi: LobeChatPluginApi = {
+export const activateSkillApi: LobeChatPluginApi = {
   description:
     'Activate a skill by name to load its instructions. Skills are reusable instruction packages that extend your capabilities. Returns the skill content that you should follow to complete the task. If the skill is not found, returns a list of available skills.',
-  name: SkillsApiName.runSkill,
+  name: SkillsApiName.activateSkill,
   parameters: {
     properties: {
       name: {
@@ -20,12 +20,12 @@ export const runSkillApi: LobeChatPluginApi = {
 
 export const readReferenceApi: LobeChatPluginApi = {
   description:
-    "Read a reference file attached to a skill. Use this to load additional context files mentioned in a skill's content. Requires the id returned by runSkill and the file path.",
+    "Read a reference file attached to a skill. Use this to load additional context files mentioned in a skill's content. Requires the id returned by activateSkill and the file path.",
   name: SkillsApiName.readReference,
   parameters: {
     properties: {
       id: {
-        description: 'The skill ID or name returned by runSkill.',
+        description: 'The skill ID or name returned by activateSkill.',
         type: 'string',
       },
       path: {
@@ -56,6 +56,27 @@ export const exportFileApi: LobeChatPluginApi = {
       },
     },
     required: ['path', 'filename'],
+    type: 'object',
+  },
+};
+
+export const runCommandApi: LobeChatPluginApi = {
+  description: 'Execute a shell command. Returns the command output, stderr, and exit code.',
+  humanIntervention: 'required',
+  name: SkillsApiName.runCommand,
+  parameters: {
+    properties: {
+      command: {
+        description: 'The shell command to execute.',
+        type: 'string',
+      },
+      description: {
+        description:
+          'Clear description of what this command does (5-10 words, in active voice). Use the same language as the user input.',
+        type: 'string',
+      },
+    },
+    required: ['command'],
     type: 'object',
   },
 };

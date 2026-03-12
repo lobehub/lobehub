@@ -199,7 +199,7 @@ export default {
   'builtins.lobe-skills.apiName.importFromMarket': 'Import from Market',
   'builtins.lobe-skills.apiName.importSkill': 'Import Skill',
   'builtins.lobe-skills.apiName.readReference': 'Read Reference',
-  'builtins.lobe-skills.apiName.runSkill': 'Activate Skill',
+  'builtins.lobe-skills.apiName.activateSkill': 'Activate Skill',
   'builtins.lobe-skills.apiName.searchSkill': 'Search Skills',
   'builtins.lobe-skills.title': 'Skills',
   'builtins.lobe-user-memory.apiName.addContextMemory': 'Add context memory',
