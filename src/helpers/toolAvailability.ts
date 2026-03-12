@@ -23,11 +23,16 @@ export const isBuiltinToolAvailableInCurrentEnv = (id: string) => shouldEnableTo
 export const isBuiltinSkillAvailableInCurrentEnv = (
   id: string,
   context: Omit<ToolAvailabilityContext, 'installedPlugins'> = {},
-) =>
-  shouldEnableBuiltinSkill(id, {
+) => {
+  if (context.isDesktop === undefined && context.isWindows === undefined) {
+    return shouldEnableBuiltinSkill(id);
+  }
+
+  return shouldEnableBuiltinSkill(id, {
     isDesktop: context.isDesktop ?? isDesktop,
     isWindows: context.isWindows,
   });
+};
 
 export const isInstalledPluginAvailableInCurrentEnv = (
   plugin: ToolAvailabilityInstalledPlugin,

@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { filterBuiltinSkills, shouldEnableBuiltinSkill } from './skillFilters';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
 
 describe('skillFilters', () => {
   it('should disable agent-browser on web environment', () => {
@@ -17,6 +22,15 @@ describe('skillFilters', () => {
     expect(
       shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true, isWindows: true }),
     ).toBe(false);
+  });
+
+  it('should preserve Windows detection for partial context overrides', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' });
+    vi.resetModules();
+
+    const { shouldEnableBuiltinSkill } = await import('./skillFilters');
+
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(false);
   });
 
   it('should keep non-desktop-only skills enabled', () => {

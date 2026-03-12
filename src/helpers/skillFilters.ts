@@ -27,13 +27,22 @@ const DEFAULT_CONTEXT: BuiltinSkillFilterContext = {
   isWindows: getIsWindows(),
 };
 
+const resolveBuiltinSkillFilterContext = (
+  context: BuiltinSkillFilterContext = DEFAULT_CONTEXT,
+): BuiltinSkillFilterContext => ({
+  isDesktop: context.isDesktop ?? DEFAULT_CONTEXT.isDesktop,
+  isWindows: context.isWindows ?? DEFAULT_CONTEXT.isWindows,
+});
+
 export const shouldEnableBuiltinSkill = (
   skillId: string,
   context: BuiltinSkillFilterContext = DEFAULT_CONTEXT,
 ): boolean => {
+  const resolvedContext = resolveBuiltinSkillFilterContext(context);
+
   if (DESKTOP_ONLY_BUILTIN_SKILLS.has(skillId)) {
-    if (!context.isDesktop) return false;
-    if (WINDOWS_HIDDEN_BUILTIN_SKILLS.has(skillId) && context.isWindows) return false;
+    if (!resolvedContext.isDesktop) return false;
+    if (WINDOWS_HIDDEN_BUILTIN_SKILLS.has(skillId) && resolvedContext.isWindows) return false;
     return true;
   }
 
