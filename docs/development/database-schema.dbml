@@ -307,6 +307,7 @@ table api_keys {
   id text [pk, not null]
   name varchar(256) [not null]
   key varchar(256) [not null, unique]
+  key_hash varchar(128) [unique]
   enabled boolean [default: true]
   expires_at "timestamp with time zone"
   last_used_at "timestamp with time zone"
@@ -1370,6 +1371,7 @@ table topics {
   group_id text
   user_id text [not null]
   client_id text
+  description text
   history_summary text
   metadata jsonb
   trigger text
@@ -1766,6 +1768,8 @@ ref: message_groups.parent_group_id > message_groups.id
 ref: messages_files.file_id > files.id
 
 ref: messages_files.message_id > messages.id
+
+ref: messages.id - message_translates.id
 
 ref: messages.session_id - sessions.id
 
