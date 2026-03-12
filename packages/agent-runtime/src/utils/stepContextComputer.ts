@@ -6,7 +6,7 @@ import type { RuntimeStepContext, StepActivatedSkill, StepContextTodos } from '@
  */
 export interface ComputeStepContextParams {
   /**
-   * Activated skills accumulated from runSkill messages
+   * Activated skills accumulated from activateSkill messages
    */
   activatedSkills?: StepActivatedSkill[];
   /**

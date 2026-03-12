@@ -449,7 +449,7 @@ export class StreamingExecutorActionImpl {
       const todos = selectTodosFromMessages(currentDBMessages);
       // Accumulate activated tool IDs from lobe-tools messages
       const activatedToolIds = selectActivatedToolIdsFromMessages(currentDBMessages);
-      // Accumulate activated skills from runSkill messages
+      // Accumulate activated skills from activateSkill messages
       const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
       const stepContext = computeStepContext({ activatedSkills, activatedToolIds, todos });
 

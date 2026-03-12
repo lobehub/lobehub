@@ -31,7 +31,7 @@ export interface StepContextTodos {
 }
 
 /**
- * Activated skill info from runSkill messages
+ * Activated skill info from activateSkill messages
  */
 export interface StepActivatedSkill {
   description?: string;
@@ -91,7 +91,7 @@ export interface InitialPageEditorContext {
  */
 export interface RuntimeStepContext {
   /**
-   * Activated skills accumulated from runSkill messages
+   * Activated skills accumulated from activateSkill messages
    * Skills once activated remain active for the rest of the conversation
    */
   activatedSkills?: StepActivatedSkill[];
