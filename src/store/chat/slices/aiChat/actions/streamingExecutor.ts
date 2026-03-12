@@ -36,6 +36,7 @@ import { topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { topicMapKey } from '../../../utils/topicMapKey';
 import {
+  selectActivatedSkillsFromMessages,
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 } from '../../message/selectors/dbMessage';
@@ -448,7 +449,9 @@ export class StreamingExecutorActionImpl {
       const todos = selectTodosFromMessages(currentDBMessages);
       // Accumulate activated tool IDs from lobe-tools messages
       const activatedToolIds = selectActivatedToolIdsFromMessages(currentDBMessages);
-      const stepContext = computeStepContext({ activatedToolIds, todos });
+      // Accumulate activated skills from runSkill messages
+      const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
+      const stepContext = computeStepContext({ activatedSkills, activatedToolIds, todos });
 
       // If page agent is enabled, get the latest XML for stepPageEditor
       if (nextContext.initialContext?.pageEditor) {

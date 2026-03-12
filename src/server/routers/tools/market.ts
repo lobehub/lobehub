@@ -84,6 +84,13 @@ const metaSchema = z
   })
   .optional();
 
+// Schema for activated skill info
+const activatedSkillSchema = z.object({
+  description: z.string().optional(),
+  id: z.string(),
+  name: z.string(),
+});
+
 // Schema for code interpreter tool call request
 const callCodeInterpreterToolSchema = z.object({
   params: z.record(z.any()),
@@ -241,58 +248,39 @@ export const marketRouter = router({
       });
 
       try {
-        // For execScript tool, look up skill zipUrl if config is provided
+        // For execScript tool, look up skill zipUrls from activatedSkills
         let enhancedParams = params;
-        if (toolName === 'execScript' && params.config) {
+        if (toolName === 'execScript' && params.activatedSkills?.length) {
           const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId);
+          const fileModel = new FileModel(ctx.serverDB, userId);
+          const fileService = ctx.fileService;
 
-          // Look up skill by name
-          let skill;
-          if (params.config.name) {
-            skill = await agentSkillModel.findByName(params.config.name);
+          // Resolve zipUrls for all activated skills
+          const skillZipUrls: Record<string, string> = {};
 
-            // If skill not found, return error with available skills
-            if (!skill) {
-              const allSkills = await agentSkillModel.findAll();
-              const availableSkills = allSkills.data.map((s) => s.name).join(', ');
+          for (const activatedSkill of params.activatedSkills) {
+            if (!activatedSkill.name) continue;
 
-              const errorMessage = availableSkills
-                ? `Skill "${params.config.name}" not found. Available skills: ${availableSkills}`
-                : `Skill "${params.config.name}" not found. No skills available. Please import a skill first.`;
+            const skill = await agentSkillModel.findByName(activatedSkill.name);
+            if (!skill?.zipFileHash) continue;
 
-              log('Skill not found: %s. Available skills: %s', params.config.name, availableSkills);
+            const fileInfo = await fileModel.checkHash(skill.zipFileHash);
+            if (!fileInfo.isExist || !fileInfo.url) continue;
 
-              return {
-                error: {
-                  message: errorMessage,
-                  name: 'SkillNotFound',
-                },
-                result: null,
-                sessionExpiredAndRecreated: false,
-                success: false,
-              } as CallToolResult;
+            const fullUrl = await fileService.getFullFileUrl(fileInfo.url);
+            if (fullUrl) {
+              skillZipUrls[activatedSkill.name] = fullUrl;
+              log('Resolved zipUrl for skill %s: %s', activatedSkill.name, fullUrl);
             }
           }
 
-          // If skill exists and has zipFileHash, get the full URL
-          if (skill?.zipFileHash) {
-            const fileService = ctx.fileService;
-            // Get S3 key from globalFiles
-            const fileModel = new FileModel(ctx.serverDB, userId);
-            const fileInfo = await fileModel.checkHash(skill.zipFileHash);
-
-            if (fileInfo.isExist && fileInfo.url) {
-              // Convert S3 key to full URL
-              const fullUrl = await fileService.getFullFileUrl(fileInfo.url);
-              if (fullUrl) {
-                // Add zipUrl to params
-                enhancedParams = {
-                  ...params,
-                  zipUrl: fullUrl,
-                };
-                log('Added zipUrl to execScript params for skill %s: %s', skill.name, fullUrl);
-              }
-            }
+          // Add skillZipUrls to params if any were resolved
+          if (Object.keys(skillZipUrls).length > 0) {
+            enhancedParams = {
+              ...params,
+              skillZipUrls,
+            };
+            log('Added skillZipUrls to execScript params: %O', Object.keys(skillZipUrls));
           }
         }
 

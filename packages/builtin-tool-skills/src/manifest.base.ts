@@ -65,25 +65,6 @@ export const execScriptBaseParams = {
     description: 'The shell command to execute.',
     type: 'string' as const,
   },
-  config: {
-    description:
-      'REQUIRED: Current skill context. Must include the id and name from the most recent runSkill call. The server uses this to locate skill resources (e.g., ZIP package for skill files). Example: { "id": "skill_xxx", "name": "skill-name", "description": "..." }',
-    properties: {
-      description: {
-        description: "Current skill's description (optional)",
-        type: 'string',
-      },
-      id: {
-        description: "Current skill's ID from runSkill state (required for resource lookup)",
-        type: 'string',
-      },
-      name: {
-        description: "Current skill's name from runSkill state (required for resource lookup)",
-        type: 'string',
-      },
-    },
-    type: 'object' as const,
-  },
   description: {
     description:
       'Clear description of what this command does (5-10 words, in active voice). Use the same language as the user input.',

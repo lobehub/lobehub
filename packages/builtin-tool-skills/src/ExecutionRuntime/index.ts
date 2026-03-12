@@ -39,6 +39,7 @@ export interface SkillRuntimeService {
   execScript?: (
     command: string,
     options: {
+      activatedSkills?: Array<{ description?: string; id: string; name: string }>;
       config?: { description?: string; id?: string; name?: string };
       description: string;
     },
@@ -66,12 +67,13 @@ export class SkillsExecutionRuntime {
   }
 
   async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
-    const { command, description, config } = args;
+    const { activatedSkills, command, config, description } = args;
 
     // Try new execScript method first (with cloud sandbox support)
     if (this.service.execScript) {
       try {
         const result = await this.service.execScript(command, {
+          activatedSkills,
           config,
           description,
         });

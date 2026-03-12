@@ -18,24 +18,28 @@ export interface RunSkillState {
   name: string;
 }
 
+/**
+ * Activated skill info passed to execScript
+ */
+export interface ExecScriptActivatedSkill {
+  description?: string;
+  id: string;
+  name: string;
+}
+
 export interface ExecScriptParams {
+  /**
+   * All activated skills from stepContext
+   * Server will resolve zipUrls for all skills
+   */
+  activatedSkills?: ExecScriptActivatedSkill[];
   command: string;
   /**
-   * Skill configuration context
-   * Used by server to locate skill resources (zipUrl will be resolved server-side)
+   * @deprecated Use activatedSkills instead. Kept for backward compatibility.
    */
   config?: {
-    /**
-     * Current skill's description
-     */
     description?: string;
-    /**
-     * Current skill's ID
-     */
     id?: string;
-    /**
-     * Current skill's name
-     */
     name?: string;
   };
   description: string;

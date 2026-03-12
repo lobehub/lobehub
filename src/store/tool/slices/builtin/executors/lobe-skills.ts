@@ -18,10 +18,10 @@ const runtime = new SkillsExecutionRuntime({
   builtinSkills: filterBuiltinSkills(builtinSkills),
   service: {
     execScript: async (command, options) => {
-      const { description, config } = options;
+      const { activatedSkills, config, description } = options;
 
       // Cloud: execute via Cloud Sandbox with execScript tool
-      // Server will automatically resolve zipUrl based on config.name
+      // Server will resolve zipUrls for all activatedSkills
       const chatState = useChatStore.getState();
       const topicId = chatState.activeTopicId || 'default';
 
@@ -30,6 +30,7 @@ const runtime = new SkillsExecutionRuntime({
         const result = await cloudSandboxService.callTool(
           'execScript',
           {
+            activatedSkills,
             command,
             config,
             description,
