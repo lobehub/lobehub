@@ -2,10 +2,10 @@ import type { LobeChatPluginApi } from '@lobechat/types';
 
 import { SkillsApiName } from './types';
 
-export const runSkillApi: LobeChatPluginApi = {
+export const activateSkillApi: LobeChatPluginApi = {
   description:
     'Activate a skill by name to load its instructions. Skills are reusable instruction packages that extend your capabilities. Returns the skill content that you should follow to complete the task. If the skill is not found, returns a list of available skills.',
-  name: SkillsApiName.runSkill,
+  name: SkillsApiName.activateSkill,
   parameters: {
     properties: {
       name: {
@@ -20,12 +20,12 @@ export const runSkillApi: LobeChatPluginApi = {
 
 export const readReferenceApi: LobeChatPluginApi = {
   description:
-    "Read a reference file attached to a skill. Use this to load additional context files mentioned in a skill's content. Requires the id returned by runSkill and the file path.",
+    "Read a reference file attached to a skill. Use this to load additional context files mentioned in a skill's content. Requires the id returned by activateSkill and the file path.",
   name: SkillsApiName.readReference,
   parameters: {
     properties: {
       id: {
-        description: 'The skill ID or name returned by runSkill.',
+        description: 'The skill ID or name returned by activateSkill.',
         type: 'string',
       },
       path: {
@@ -60,6 +60,27 @@ export const exportFileApi: LobeChatPluginApi = {
   },
 };
 
+export const runCommandApi: LobeChatPluginApi = {
+  description: 'Execute a shell command. Returns the command output, stderr, and exit code.',
+  humanIntervention: 'required',
+  name: SkillsApiName.runCommand,
+  parameters: {
+    properties: {
+      command: {
+        description: 'The shell command to execute.',
+        type: 'string',
+      },
+      description: {
+        description:
+          'Clear description of what this command does (5-10 words, in active voice). Use the same language as the user input.',
+        type: 'string',
+      },
+    },
+    required: ['command'],
+    type: 'object',
+  },
+};
+
 export const execScriptBaseParams = {
   command: {
     description: 'The shell command to execute.',
@@ -67,18 +88,18 @@ export const execScriptBaseParams = {
   },
   config: {
     description:
-      'REQUIRED: Current skill context. Must include the id and name from the most recent runSkill call. The server uses this to locate skill resources (e.g., ZIP package for skill files). Example: { "id": "skill_xxx", "name": "skill-name", "description": "..." }',
+      'REQUIRED: Current skill context. Must include the id and name from the most recent activateSkill call. The server uses this to locate skill resources (e.g., ZIP package for skill files). Example: { "id": "skill_xxx", "name": "skill-name", "description": "..." }',
     properties: {
       description: {
         description: "Current skill's description (optional)",
         type: 'string',
       },
       id: {
-        description: "Current skill's ID from runSkill state (required for resource lookup)",
+        description: "Current skill's ID from activateSkill state (required for resource lookup)",
         type: 'string',
       },
       name: {
-        description: "Current skill's name from runSkill state (required for resource lookup)",
+        description: "Current skill's name from activateSkill state (required for resource lookup)",
         type: 'string',
       },
     },

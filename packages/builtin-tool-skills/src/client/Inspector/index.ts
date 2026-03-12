@@ -6,5 +6,7 @@ import { RunSkillInspector } from './RunSkill';
 export const SkillsInspectors = {
   [SkillsApiName.execScript]: ExecScriptInspector,
   [SkillsApiName.readReference]: ReadReferenceInspector,
-  [SkillsApiName.runSkill]: RunSkillInspector,
+  [SkillsApiName.activateSkill]: RunSkillInspector,
+  // @deprecated skill id
+  runSkill: RunSkillInspector,
 };

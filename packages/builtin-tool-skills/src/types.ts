@@ -4,14 +4,15 @@ export const SkillsApiName = {
   execScript: 'execScript',
   exportFile: 'exportFile',
   readReference: 'readReference',
-  runSkill: 'runSkill',
+  runCommand: 'runCommand',
+  activateSkill: 'activateSkill',
 };
 
-export interface RunSkillParams {
+export interface ActivateSkillParams {
   name: string;
 }
 
-export interface RunSkillState {
+export interface ActivateSkillState {
   description?: string;
   hasResources: boolean;
   id: string;
@@ -57,6 +58,11 @@ export interface CommandResult {
   output: string;
   stderr?: string;
   success: boolean;
+}
+
+export interface RunCommandParams {
+  command: string;
+  description?: string;
 }
 
 export interface ReadReferenceParams {
