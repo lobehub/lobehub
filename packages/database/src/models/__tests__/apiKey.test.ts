@@ -45,7 +45,7 @@ describe('ApiKeyModel', () => {
       expect(result.name).toBe(params.name);
       expect(result.enabled).toBe(params.enabled);
       expect(result.key).toBeDefined();
-      expect(result.key).not.toMatch(/^lb-[\da-z]{16}$/);
+      expect(result.key).not.toMatch(/^sk-lh-[\da-z]{16}$/);
       expect(result.userId).toBe(userId);
 
       const apiKey = await serverDB.query.apiKeys.findFirst({
@@ -145,7 +145,7 @@ describe('ApiKeyModel', () => {
 
       const keys = await apiKeyModel.query();
       expect(keys).toHaveLength(2);
-      expect(keys[0].key).toMatch(/^lb-[\da-z]{16}$/);
+      expect(keys[0].key).toMatch(/^sk-lh-[\da-z]{16}$/);
     });
 
     it('should query API keys ordered by updatedAt desc', async () => {
@@ -186,7 +186,7 @@ describe('ApiKeyModel', () => {
   describe('findByKey', () => {
     it('should find API key by key value without custom hasher', async () => {
       // Use a valid hex format key since validateApiKeyFormat checks for hex pattern
-      const validKey = 'lb-abcdef0123456789';
+      const validKey = 'sk-lh-abcdef0123456789';
       await serverDB.insert(apiKeys).values({
         enabled: true,
         key: validKey,
@@ -209,7 +209,7 @@ describe('ApiKeyModel', () => {
     });
 
     it('should return undefined for non-existent key', async () => {
-      const found = await apiKeyModel.findByKey('lb-0123456789abcdef');
+      const found = await apiKeyModel.findByKey('sk-lh-0123456789abcdef');
 
       expect(found).toBeUndefined();
     });
@@ -221,7 +221,7 @@ describe('ApiKeyModel', () => {
       futureDate.setFullYear(futureDate.getFullYear() + 1);
 
       // Use a valid hex format key
-      const validKey = 'lb-0123456789abcdef';
+      const validKey = 'sk-lh-0123456789abcdef';
       await serverDB.insert(apiKeys).values({
         enabled: true,
         expiresAt: futureDate,
@@ -238,7 +238,7 @@ describe('ApiKeyModel', () => {
 
     it('should validate enabled key without expiration with valid hex format', async () => {
       // Use a valid hex format key
-      const validKey = 'lb-fedcba9876543210';
+      const validKey = 'sk-lh-fedcba9876543210';
       await serverDB.insert(apiKeys).values({
         enabled: true,
         key: validKey,
@@ -253,13 +253,13 @@ describe('ApiKeyModel', () => {
     });
 
     it('should reject non-existent key', async () => {
-      const isValid = await apiKeyModel.validateKey('lb-0123456789abcdef');
+      const isValid = await apiKeyModel.validateKey('sk-lh-0123456789abcdef');
 
       expect(isValid).toBe(false);
     });
 
     it('should reject disabled key', async () => {
-      const validKey = 'lb-1111111111111111';
+      const validKey = 'sk-lh-1111111111111111';
       await serverDB.insert(apiKeys).values({
         enabled: false,
         key: validKey,
@@ -277,7 +277,7 @@ describe('ApiKeyModel', () => {
       const pastDate = new Date();
       pastDate.setFullYear(pastDate.getFullYear() - 1);
 
-      const validKey = 'lb-2222222222222222';
+      const validKey = 'sk-lh-2222222222222222';
       await serverDB.insert(apiKeys).values({
         enabled: true,
         expiresAt: pastDate,
