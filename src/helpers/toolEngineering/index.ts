@@ -96,9 +96,12 @@ export const createAgentToolsEngine = (
     enableChecker: createEnableChecker({
       allowExplicitActivation: true,
       platformFilter: ({ pluginId }) => {
+        const toolStoreState = getToolStoreState();
+        const installedPlugin = pluginSelectors.getInstalledPluginById(pluginId)(toolStoreState);
+
         if (
           !isToolAvailableInCurrentEnv(pluginId, {
-            installedPlugins: getToolStoreState().installedPlugins,
+            installedPlugins: installedPlugin ? [installedPlugin] : toolStoreState.installedPlugins,
           })
         ) {
           return false;
