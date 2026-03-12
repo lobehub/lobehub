@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -134,12 +136,46 @@ export function registerTopicCommand(program: Command) {
   // ── delete ────────────────────────────────────────────
 
   topic
-    .command('delete <ids...>')
-    .description('Delete one or more topics')
+    .command('delete [ids...]')
+    .description('Delete one or more topics (pass IDs as args or via --file)')
+    .option('-f, --file <path>', 'Read topic IDs from a file (one per line, or a JSON array)')
     .option('--yes', 'Skip confirmation prompt')
-    .action(async (ids: string[], options: { yes?: boolean }) => {
+    .action(async (ids: string[], options: { file?: string; yes?: boolean }) => {
+      let allIds = [...ids];
+
+      if (options.file) {
+        const content = fs.readFileSync(options.file, 'utf8').trim();
+        let fileIds: string[];
+        try {
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) {
+            fileIds = parsed.map(String).filter(Boolean);
+          } else {
+            log.error('JSON file must contain an array of topic IDs.');
+            process.exit(1);
+          }
+        } catch {
+          // Not JSON, treat as one ID per line
+          fileIds = content
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+        }
+        allIds = [...allIds, ...fileIds];
+      }
+
+      if (allIds.length === 0) {
+        log.error('No topic IDs provided. Pass IDs as arguments or use --file.');
+        process.exit(1);
+      }
+
+      // Deduplicate
+      allIds = [...new Set(allIds)];
+
       if (!options.yes) {
-        const confirmed = await confirm(`Are you sure you want to delete ${ids.length} topic(s)?`);
+        const confirmed = await confirm(
+          `Are you sure you want to delete ${allIds.length} topic(s)?`,
+        );
         if (!confirmed) {
           console.log('Cancelled.');
           return;
@@ -148,13 +184,13 @@ export function registerTopicCommand(program: Command) {
 
       const client = await getTrpcClient();
 
-      if (ids.length === 1) {
-        await client.topic.removeTopic.mutate({ id: ids[0] });
+      if (allIds.length === 1) {
+        await client.topic.removeTopic.mutate({ id: allIds[0] });
       } else {
-        await client.topic.batchDelete.mutate({ ids });
+        await client.topic.batchDelete.mutate({ ids: allIds });
       }
 
-      console.log(`${pc.green('✓')} Deleted ${ids.length} topic(s)`);
+      console.log(`${pc.green('✓')} Deleted ${allIds.length} topic(s)`);
     });
 
   // ── clone ───────────────────────────────────────────
