@@ -70,7 +70,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
   if (bearerToken) {
     log('Bearer token received: %s...', bearerToken.slice(0, 10));
 
-    // Check if bearerToken matches API Key format (lb-{16 alphanumeric chars})
+    // Check if bearerToken matches API Key format (sk-lh-{16 alphanumeric chars})
     const isApiKeyFormat = validateApiKeyFormat(bearerToken);
     log('API Key format validation result: %s', isApiKeyFormat);
 
