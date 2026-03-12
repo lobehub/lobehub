@@ -7,6 +7,6 @@ export const createHeaderWithCambAI = (header?: HeadersInit): HeadersInit => {
 
   return {
     ...header,
-    [CAMBAI_API_KEY_HEADER_KEY]: keyVaults.apiKey || process.env.NEXT_PUBLIC_CAMBAI_API_KEY || '',
+    [CAMBAI_API_KEY_HEADER_KEY]: keyVaults.apiKey || '',
   };
 };

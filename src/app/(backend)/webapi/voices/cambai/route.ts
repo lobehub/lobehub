@@ -32,6 +32,7 @@ export const GET = async (req: Request) => {
   return new Response(JSON.stringify(data), {
     headers: {
       'Cache-Control': 'max-age=3600',
+      'Vary': CAMBAI_API_KEY_HEADER_KEY,
       'content-type': 'application/json;charset=UTF-8',
     },
   });
