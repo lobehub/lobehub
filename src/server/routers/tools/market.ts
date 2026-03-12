@@ -167,7 +167,7 @@ const execInSandboxHandler = async ({
       }
 
       if (lhResult.skipSkillLookup) {
-        enhancedParams = { ...params, command: lhResult.command, config: undefined };
+        enhancedParams = { ...params, command: lhResult.command };
       }
     }
 

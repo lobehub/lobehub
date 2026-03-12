@@ -26,7 +26,7 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
   - Only use paths that are referenced in the skill content
 
 - **execScript**: Call this to execute shell commands mentioned in a skill's content
-  - **IMPORTANT**: Always provide the \`config\` parameter with the current skill's id and name (from activateSkill's state)
+  - The system automatically uses activated skills context from previous activateSkill calls
   - Commands run directly on the local system (OS: {{platform}})
   - Provide the command to execute and a clear description of what it does
   - Returns the command output (stdout/stderr)
@@ -38,7 +38,7 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 - Only activate skills when the user's task clearly matches the skill's purpose
 - Follow the skill's instructions carefully once loaded
 - Use readReference only for files explicitly mentioned in the skill content
-- Use execScript only for commands specified in the skill content, always including config parameter
+- Use execScript only for commands specified in the skill content
 - If activateSkill returns an error with available skills, inform the user what skills are available
 </best_practices>
 `;

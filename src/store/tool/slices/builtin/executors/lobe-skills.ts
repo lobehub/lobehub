@@ -18,7 +18,7 @@ const runtime = new SkillsExecutionRuntime({
   builtinSkills: filterBuiltinSkills(builtinSkills),
   service: {
     execScript: async (command, options) => {
-      const { activatedSkills, config, description } = options;
+      const { activatedSkills, description } = options;
 
       // Cloud: execute via Cloud Sandbox with execScript tool
       // Server will resolve zipUrls for all activatedSkills
@@ -32,7 +32,6 @@ const runtime = new SkillsExecutionRuntime({
           {
             activatedSkills,
             command,
-            config,
             description,
           },
           { topicId },

@@ -13,7 +13,7 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 2. The skill content will be returned - follow those instructions to complete the task
 3. If the skill content references additional files, use readReference to load them
 4. If the skill content instructs you to run CLI commands, use runCommand to execute them
-5. If the command requires skill-bundled resources, use execScript instead (with config parameter)
+5. If the command requires skill-bundled resources, use execScript instead
 6. If the skill execution generates output files, use exportFile to save them for the user
 7. Apply the skill's instructions to fulfill the user's request
 </workflow>
@@ -36,7 +36,7 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
   - Requires user confirmation before execution
 
 - **execScript**: Call this to execute skill-specific scripts that need resource context
-  - **IMPORTANT**: Always provide the \`config\` parameter with the current skill's id and name (from activateSkill's state)
+  - The system automatically uses activated skills context from previous activateSkill calls
   - Automatically locates and provides skill resources (ZIP package with scripts, config files, dependencies)
   - Best for: commands that require skill-bundled files or dependencies
   - Returns the command output (stdout/stderr)
@@ -60,13 +60,13 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 
 - **execScript (For skill-bundled scripts)**:
   - Use only when a command needs access to skill-bundled resources (ZIP packages, config files)
-  - Must include \`config\` parameter with skill id and name from activateSkill's state
+  - The system automatically tracks activated skills and provides their resources
   - Best for: running scripts bundled within a skill package
 
 **Example workflow:**
 1. User activates a skill with activateSkill
 2. Skill content instructs to run a CLI command (e.g., \`lh kb list\`) → use runCommand
-3. Skill content instructs to run a bundled script (e.g., \`python scripts/init.py\`) → use execScript with config
+3. Skill content instructs to run a bundled script (e.g., \`python scripts/init.py\`) → use execScript
 </runcommand_vs_execscript>
 
 <best_practices>
@@ -74,7 +74,7 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 - Follow the skill's instructions carefully once loaded
 - Use readReference only for files explicitly mentioned in the skill content
 - Use runCommand for CLI commands and general operations
-- Use execScript only when the command needs skill-bundled resources, always including config parameter
+- Use execScript when the command needs skill-bundled resources
 - Use exportFile when the skill generates output files that need to be saved
 - If activateSkill returns an error with available skills, inform the user what skills are available
 </best_practices>

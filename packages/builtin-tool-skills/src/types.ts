@@ -35,14 +35,6 @@ export interface ExecScriptParams {
    */
   activatedSkills?: ExecScriptActivatedSkill[];
   command: string;
-  /**
-   * @deprecated Use activatedSkills instead. Kept for backward compatibility.
-   */
-  config?: {
-    description?: string;
-    id?: string;
-    name?: string;
-  };
   description: string;
 }
 
