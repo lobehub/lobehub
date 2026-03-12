@@ -105,7 +105,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       <Flexbox
         className={cx(styles.container, expand && styles.fullscreen)}
         gap={8}
-        paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 16px'}
+        paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
       >
         <ChatInput
           data-testid="chat-input"
