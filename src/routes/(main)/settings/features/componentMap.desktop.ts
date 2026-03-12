@@ -7,8 +7,8 @@ import { SettingsTabs } from '@/store/global/initialState';
 
 import About from '../about';
 import Advanced from '../advanced';
-import Agent from '../agent';
 import APIKey from '../apikey';
+import Appearance from '../appearance';
 import Beta from '../beta';
 import Hotkey from '../hotkey';
 import Memory from '../memory';
