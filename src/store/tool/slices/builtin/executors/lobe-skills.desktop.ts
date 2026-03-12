@@ -17,7 +17,9 @@ const runtime = new SkillsExecutionRuntime({
   builtinSkills: filterBuiltinSkills(builtinSkills),
   service: {
     execScript: async (command, options) => {
-      const cwd = await desktopSkillRuntimeService.resolveExecutionDirectory(options.config);
+      const cwd = await desktopSkillRuntimeService.resolveExecutionDirectory(
+        options.activatedSkills,
+      );
       const result = await localFileService.runCommand({ command, cwd, timeout: undefined });
       return {
         exitCode: result.exit_code ?? 1,

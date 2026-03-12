@@ -1,10 +1,8 @@
-import type { ExecScriptParams } from '@lobechat/builtin-tool-skills';
+import type { ExecScriptActivatedSkill } from '@lobechat/builtin-tool-skills';
 
 import { agentSkillService } from '@/services/skill';
 
 import { localFileService } from './localFileService';
-
-type SkillConfig = ExecScriptParams['config'];
 
 class DesktopSkillRuntimeService {
   private async prepareSkillDirectoryForSkill(skill?: {
@@ -34,8 +32,14 @@ class DesktopSkillRuntimeService {
     return skillById ?? (params.name ? await agentSkillService.getByName(params.name) : undefined);
   }
 
-  async resolveExecutionDirectory(config?: SkillConfig): Promise<string | undefined> {
-    const skill = await this.resolveSkill({ id: config?.id, name: config?.name });
+  async resolveExecutionDirectory(
+    activatedSkills?: ExecScriptActivatedSkill[],
+  ): Promise<string | undefined> {
+    // Use the first activated skill to resolve the execution directory
+    const firstSkill = activatedSkills?.[0];
+    if (!firstSkill) return undefined;
+
+    const skill = await this.resolveSkill({ id: firstSkill.id, name: firstSkill.name });
     return this.prepareSkillDirectoryForSkill(skill);
   }
 

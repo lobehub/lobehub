@@ -36,8 +36,8 @@ describe('desktopSkillRuntimeService', () => {
     vi.clearAllMocks();
   });
 
-  it('should resolve an extracted directory from a skill name', async () => {
-    getByNameMock.mockResolvedValue({
+  it('should resolve an extracted directory from activated skills', async () => {
+    getByIdMock.mockResolvedValue({
       id: 'skill-1',
       name: 'demo-skill',
       zipFileHash: 'zip-hash-1',
@@ -52,11 +52,11 @@ describe('desktopSkillRuntimeService', () => {
       zipPath: '/tmp/demo-skill.zip',
     });
 
-    const result = await desktopSkillRuntimeService.resolveExecutionDirectory({
-      name: 'demo-skill',
-    });
+    const result = await desktopSkillRuntimeService.resolveExecutionDirectory([
+      { id: 'skill-1', name: 'demo-skill' },
+    ]);
 
-    expect(getByNameMock).toHaveBeenCalledWith('demo-skill');
+    expect(getByIdMock).toHaveBeenCalledWith('skill-1');
     expect(getZipUrlMock).toHaveBeenCalledWith('skill-1');
     expect(prepareSkillDirectoryMock).toHaveBeenCalledWith({
       url: 'https://example.com/demo-skill.zip',
@@ -82,10 +82,9 @@ describe('desktopSkillRuntimeService', () => {
       zipPath: '/tmp/demo-skill.zip',
     });
 
-    const result = await desktopSkillRuntimeService.resolveExecutionDirectory({
-      id: 'lobe-skills-run-0',
-      name: 'demo-skill',
-    });
+    const result = await desktopSkillRuntimeService.resolveExecutionDirectory([
+      { id: 'lobe-skills-run-0', name: 'demo-skill' },
+    ]);
 
     expect(getByIdMock).toHaveBeenCalledWith('lobe-skills-run-0');
     expect(getByNameMock).toHaveBeenCalledWith('demo-skill');
@@ -94,15 +93,15 @@ describe('desktopSkillRuntimeService', () => {
   });
 
   it('should return undefined when the skill has no packaged zip', async () => {
-    getByNameMock.mockResolvedValue({
+    getByIdMock.mockResolvedValue({
       id: 'skill-1',
       name: 'demo-skill',
       zipFileHash: null,
     });
 
-    const result = await desktopSkillRuntimeService.resolveExecutionDirectory({
-      name: 'demo-skill',
-    });
+    const result = await desktopSkillRuntimeService.resolveExecutionDirectory([
+      { id: 'skill-1', name: 'demo-skill' },
+    ]);
 
     expect(getZipUrlMock).not.toHaveBeenCalled();
     expect(prepareSkillDirectoryMock).not.toHaveBeenCalled();

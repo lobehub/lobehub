@@ -3,6 +3,7 @@ export { systemPrompt } from './systemRole';
 export {
   type ActivateSkillParams,
   type CommandResult,
+  type ExecScriptActivatedSkill,
   type ExecScriptParams,
   type ReadReferenceParams,
   SkillsApiName,
