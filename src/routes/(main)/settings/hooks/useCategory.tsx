@@ -98,11 +98,6 @@ export const useCategory = () => {
         key: SettingsTabs.Stats,
         label: tAuth('tab.stats'),
       },
-      isDevMode && {
-        icon: KeyIcon,
-        key: SettingsTabs.APIKey,
-        label: tAuth('tab.apikey'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -233,6 +228,11 @@ export const useCategory = () => {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      isDevMode && {
+        icon: KeyIcon,
+        key: SettingsTabs.APIKey,
+        label: tAuth('tab.apikey'),
       },
       {
         icon: EllipsisIcon,
