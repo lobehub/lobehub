@@ -56,15 +56,6 @@ export class GenerationTopicActionImpl {
   };
 
   switchGenerationTopic = (topicId: string): void => {
-    // Check if topic exists
-    const currentTopics = this.#get().generationTopics;
-    const targetTopic = currentTopics.find((topic) => topic.id === topicId);
-
-    if (!targetTopic) {
-      console.warn(`Generation topic with id ${topicId} not found`);
-      return;
-    }
-
     // Don't update if already active
     if (this.#get().activeGenerationTopicId === topicId) return;
 

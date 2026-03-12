@@ -11,6 +11,7 @@ export default {
   'config.imageUrls.label': 'Reference Images',
   'config.model.label': 'Model',
   'config.prompt.placeholder': 'Describe what you want to generate',
+  'config.prompt.placeholderWithRef': 'Describe how you want to adjust the image',
   'config.quality.label': 'Image Quality',
   'config.quality.options.hd': 'High Definition',
   'config.quality.options.standard': 'Standard',

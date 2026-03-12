@@ -11,6 +11,7 @@
   "config.imageUrls.label": "参考图",
   "config.model.label": "模型",
   "config.prompt.placeholder": "描述你想要生成的内容",
+  "config.prompt.placeholderWithRef": "描述你想如何调整图片",
   "config.quality.label": "图片质量",
   "config.quality.options.hd": "高清",
   "config.quality.options.standard": "标准",

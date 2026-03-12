@@ -3,7 +3,7 @@
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
-import GenerationTopicPanel from '@/features/GenerationTopicPanel';
+import GenerationTopicPanel from '@/routes/(main)/(create)/features/GenerationTopicPanel';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 

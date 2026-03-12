@@ -113,6 +113,7 @@ export interface SystemStatus {
   hideTopicSharePrivacyWarning?: boolean;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
+  imageTopicViewMode?: 'grid' | 'list';
   /**
    * Do not enable PGLite on app initialization, only enable when user manually turns it on
    */
@@ -179,6 +180,7 @@ export interface SystemStatus {
   topicPageSize?: number;
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
+  videoTopicViewMode?: 'grid' | 'list';
   zenMode?: boolean;
 }
 
@@ -229,6 +231,7 @@ export const INITIAL_STATUS = {
   hideThreadLimitAlert: false,
   hideTopicSharePrivacyWarning: false,
   imagePanelWidth: 320,
+  imageTopicViewMode: 'grid' as const,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 320,
@@ -259,6 +262,7 @@ export const INITIAL_STATUS = {
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   videoPanelWidth: 320,
+  videoTopicViewMode: 'grid' as const,
   videoTopicPanelWidth: 80,
   zenMode: false,
 } satisfies SystemStatus;

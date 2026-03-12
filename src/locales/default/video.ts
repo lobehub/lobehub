@@ -7,6 +7,7 @@ export default {
   'config.header.title': 'Video',
   'config.imageUrl.label': 'Start Frame',
   'config.prompt.placeholder': 'Describe the video you want to generate',
+  'config.prompt.placeholderWithRef': 'Describe the scene you want to generate with the image',
   'config.referenceImage.label': 'Reference Image',
   'config.resolution.label': 'Resolution',
   'config.seed.label': 'Seed',

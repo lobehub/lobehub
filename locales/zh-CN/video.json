@@ -7,6 +7,7 @@
   "config.header.title": "视频",
   "config.imageUrl.label": "起始画面",
   "config.prompt.placeholder": "描述你想生成的视频内容",
+  "config.prompt.placeholderWithRef": "结合图片，描述你想生成的画面",
   "config.referenceImage.label": "参考图像",
   "config.resolution.label": "分辨率",
   "config.seed.label": "种子",

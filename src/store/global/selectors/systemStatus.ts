@@ -42,8 +42,10 @@ const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
+const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
 const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
+const videoTopicViewMode = (s: GlobalState) => s.status.videoTopicViewMode || 'grid';
 const videoTopicPanelWidth = (s: GlobalState) => s.status.videoTopicPanelWidth;
 const showVideoPanel = (s: GlobalState) => s.status.showVideoPanel;
 const showVideoTopicPanel = (s: GlobalState) => s.status.showVideoTopicPanel;
@@ -84,6 +86,7 @@ export const systemStatusSelectors = {
   groupAgentBuilderPanelWidth,
   hidePWAInstaller,
   imagePanelWidth,
+  imageTopicViewMode,
   imageTopicPanelWidth,
   inZenMode,
   isNotificationRead,
@@ -113,6 +116,7 @@ export const systemStatusSelectors = {
   topicGroupKeys,
   topicPageSize,
   videoPanelWidth,
+  videoTopicViewMode,
   videoTopicPanelWidth,
   wideScreen,
 };
