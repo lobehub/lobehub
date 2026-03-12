@@ -197,6 +197,7 @@ export class AiAgentService {
       discordContext,
       existingMessageIds = [],
       files,
+      instructions,
       stepCallbacks,
       stream,
       title,
@@ -258,6 +259,14 @@ export class AiAgentService {
           log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
         }
       }
+    }
+
+    // 2.5. Append additional instructions to agent's systemRole
+    if (instructions) {
+      agentConfig.systemRole = agentConfig.systemRole
+        ? `${agentConfig.systemRole}\n\n${instructions}`
+        : instructions;
+      log('execAgent: appended additional instructions to systemRole');
     }
 
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing

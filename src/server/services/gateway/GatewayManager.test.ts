@@ -203,7 +203,11 @@ describe('GatewayManager', () => {
 
       await manager.startBot('slack', 'app-123', 'user-abc');
 
-      expect(BotClass).toHaveBeenCalledWith({ token: 'tok123', applicationId: 'app-123' });
+      expect(BotClass).toHaveBeenCalledWith({
+        token: 'tok123',
+        applicationId: 'app-123',
+        platform: 'slack',
+      });
       expect(mockBot.start).toHaveBeenCalled();
     });
 
@@ -248,6 +252,7 @@ describe('GatewayManager', () => {
         apiKey: 'key-abc',
         secret: 'sec-xyz',
         applicationId: 'my-app',
+        platform: 'discord',
       });
     });
   });

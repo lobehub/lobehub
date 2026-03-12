@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "main": "./src/index.ts",
+  "scripts": {
+    "test:response-compliance": "./scripts/compliance-test.sh"
+  },
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
     "@lobechat/model-runtime": "workspace:*",

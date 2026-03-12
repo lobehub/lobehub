@@ -3,6 +3,7 @@ import { type FC } from 'react';
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
@@ -33,6 +34,8 @@ export const List: FC<ListProps> = ({
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
+  const { isModelRestricted, onRestrictedModelClick } = useBusinessModelListGuard();
+  const proLabel = isModelRestricted ? tCommon('pro') : undefined;
 
   const enabledList = useEnabledChatModels();
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
@@ -98,11 +101,14 @@ export const List: FC<ListProps> = ({
         const renderItem = (key?: string) => (
           <ListItemRenderer
             activeKey={activeKey}
+            isModelRestricted={isModelRestricted}
             item={item}
             key={key}
             newLabel={newLabel}
+            proLabel={proLabel}
             onClose={handleClose}
             onModelChange={handleModelChange}
+            onRestrictedModelClick={onRestrictedModelClick}
           />
         );
 

@@ -28,7 +28,7 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 180px;
     padding-block: 2px;
-    padding-inline: 10px;
+    padding-inline-start: 10px;
     border-radius: ${cssVar.borderRadiusSM};
 
     font-size: 12px;

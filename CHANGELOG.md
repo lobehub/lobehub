@@ -2,6 +2,31 @@
 
 # Changelog
 
+### [Version 2.1.39](https://github.com/lobehub/lobe-chat/compare/v2.1.38...v2.1.39)
+
+<sup>Released on **2026-03-09**</sup>
+
+#### 👷 Build System
+
+- **misc**: add api key hash column migration.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **misc**: add api key hash column migration, closes [#12862](https://github.com/lobehub/lobe-chat/issues/12862) ([4e6790e](https://github.com/lobehub/lobe-chat/commit/4e6790e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.38](https://github.com/lobehub/lobe-chat/compare/v2.1.37-canary.4...v2.1.38)
 
 <sup>Released on **2026-03-06**</sup>

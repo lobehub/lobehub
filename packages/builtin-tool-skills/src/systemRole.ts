@@ -1,27 +1,3 @@
-import { isDesktop } from './const';
-
-const runInClientSection = `
-<run_in_client>
-**IMPORTANT: When to use \`runInClient: true\` for execScript**
-
-The \`runInClient\` parameter controls WHERE the command executes:
-- \`runInClient: false\` (default): Command runs in the **cloud sandbox** - suitable for general CLI tools
-- \`runInClient: true\`: Command runs on the **desktop client** - required for local file/shell access
-
-**MUST set \`runInClient: true\` when the command involves:**
-- Accessing local files or directories
-- Installing packages globally on the user's machine
-- Any operation that requires local system access
-
-**Keep \`runInClient: false\` (or omit) when:**
-- Running general CLI tools (e.g., npx, npm search)
-- Command doesn't need local file system access
-- Command can run in a sandboxed environment
-
-**Note:** \`runInClient\` is only available on the **desktop app**. On web platform, commands always run in the cloud sandbox.
-</run_in_client>
-`;
-
 export const systemPrompt = `You have access to a Skills tool that allows you to activate reusable instruction packages (skills) that extend your capabilities. Skills are pre-defined workflows, guidelines, or specialized knowledge that help you handle specific types of tasks.
 
 <core_capabilities>
@@ -90,7 +66,6 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 4. If execScript fails, inform user and optionally try runCommand as fallback
 </execscript_vs_runcommand>
 
-${isDesktop ? runInClientSection : ''}
 <best_practices>
 - Only activate skills when the user's task clearly matches the skill's purpose
 - Follow the skill's instructions carefully once loaded

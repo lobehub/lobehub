@@ -9,6 +9,7 @@ import {
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
+  HistoryTruncateProcessor,
   InputTemplateProcessor,
   MessageCleanupProcessor,
   MessageContentProcessor,
@@ -121,6 +122,8 @@ export class MessagesEngine {
       provider,
       systemRole,
       inputTemplate,
+      enableHistoryCount,
+      historyCount,
       forceFinish,
       historySummary,
       formatHistorySummary,
@@ -168,6 +171,17 @@ export class MessagesEngine {
     const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
 
     return [
+      // =============================================
+      // Phase 0: History Truncation (FIRST - truncate before any processing)
+      // =============================================
+
+      // 0. History truncate (limit message count based on configuration)
+      // This MUST be first to ensure subsequent processors only work with truncated messages
+      new HistoryTruncateProcessor({
+        enableHistoryCount,
+        historyCount,
+      }),
+
       // =============================================
       // Phase 1: System Role Injection
       // =============================================

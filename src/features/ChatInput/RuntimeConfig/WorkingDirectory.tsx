@@ -27,7 +27,7 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   // Actions
-  const updateAgentLocalSystemConfig = useAgentStore((s) => s.updateAgentLocalSystemConfigById);
+  const updateAgentRuntimeEnvConfig = useAgentStore((s) => s.updateAgentRuntimeEnvConfigById);
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   // Local state for editing
@@ -58,7 +58,7 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
     setLoading(true);
     try {
       // Save agent working directory
-      await updateAgentLocalSystemConfig(agentId, {
+      await updateAgentRuntimeEnvConfig(agentId, {
         workingDirectory: agentDir || undefined,
       });
 
@@ -85,7 +85,7 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
     useTopicOverride,
     topicDir,
     topicWorkingDirectory,
-    updateAgentLocalSystemConfig,
+    updateAgentRuntimeEnvConfig,
     updateTopicMetadata,
     onClose,
   ]);

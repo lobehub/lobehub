@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../utils/logger';
-import { registerSkillCommand } from './skill';
+import { detectSourceType, registerSkillCommand } from './skill';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -232,8 +232,8 @@ describe('skill command', () => {
     });
   });
 
-  describe('import-github', () => {
-    it('should import from GitHub', async () => {
+  describe('install', () => {
+    it('should install from GitHub URL', async () => {
       mockTrpcClient.agentSkills.importFromGitHub.mutate.mockResolvedValue({
         id: 'imported',
         name: 'GH Skill',
@@ -244,36 +244,110 @@ describe('skill command', () => {
         'node',
         'test',
         'skill',
-        'import-github',
-        '--url',
+        'install',
         'https://github.com/user/repo',
       ]);
 
       expect(mockTrpcClient.agentSkills.importFromGitHub.mutate).toHaveBeenCalledWith(
         expect.objectContaining({ gitUrl: 'https://github.com/user/repo' }),
       );
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Imported'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Installed'));
     });
-  });
 
-  describe('import-market', () => {
-    it('should install from marketplace', async () => {
-      mockTrpcClient.agentSkills.importFromMarket.mutate.mockResolvedValue({ id: 'mk1' });
+    it('should install from GitHub shorthand (owner/repo)', async () => {
+      mockTrpcClient.agentSkills.importFromGitHub.mutate.mockResolvedValue({
+        id: 'imported',
+        name: 'GH Skill',
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'skill', 'install', 'lobehub/skill-repo']);
+
+      expect(mockTrpcClient.agentSkills.importFromGitHub.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ gitUrl: 'https://github.com/lobehub/skill-repo' }),
+      );
+    });
+
+    it('should install from GitHub with --branch', async () => {
+      mockTrpcClient.agentSkills.importFromGitHub.mutate.mockResolvedValue({ id: 'imported' });
 
       const program = createProgram();
       await program.parseAsync([
         'node',
         'test',
         'skill',
-        'import-market',
-        '--identifier',
-        'some-skill',
+        'install',
+        'lobehub/skill-repo',
+        '--branch',
+        'dev',
       ]);
+
+      expect(mockTrpcClient.agentSkills.importFromGitHub.mutate).toHaveBeenCalledWith({
+        branch: 'dev',
+        gitUrl: 'https://github.com/lobehub/skill-repo',
+      });
+    });
+
+    it('should install from ZIP URL', async () => {
+      mockTrpcClient.agentSkills.importFromUrl.mutate.mockResolvedValue({ id: 'zip1' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'skill',
+        'install',
+        'https://example.com/skill.zip',
+      ]);
+
+      expect(mockTrpcClient.agentSkills.importFromUrl.mutate).toHaveBeenCalledWith({
+        url: 'https://example.com/skill.zip',
+      });
+    });
+
+    it('should install from marketplace by identifier', async () => {
+      mockTrpcClient.agentSkills.importFromMarket.mutate.mockResolvedValue({ id: 'mk1' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'skill', 'install', 'some-skill']);
 
       expect(mockTrpcClient.agentSkills.importFromMarket.mutate).toHaveBeenCalledWith({
         identifier: 'some-skill',
       });
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('some-skill'));
+    });
+
+    it('should work with alias "i"', async () => {
+      mockTrpcClient.agentSkills.importFromMarket.mutate.mockResolvedValue({ id: 'mk1' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'skill', 'i', 'some-skill']);
+
+      expect(mockTrpcClient.agentSkills.importFromMarket.mutate).toHaveBeenCalledWith({
+        identifier: 'some-skill',
+      });
+    });
+  });
+
+  describe('detectSourceType', () => {
+    it('should detect GitHub URLs', () => {
+      expect(detectSourceType('https://github.com/user/repo')).toBe('github');
+      expect(detectSourceType('http://github.com/user/repo')).toBe('github');
+    });
+
+    it('should detect GitHub shorthand', () => {
+      expect(detectSourceType('lobehub/skill-repo')).toBe('github');
+      expect(detectSourceType('user/repo-name')).toBe('github');
+    });
+
+    it('should detect ZIP/other URLs', () => {
+      expect(detectSourceType('https://example.com/skill.zip')).toBe('url');
+      expect(detectSourceType('https://cdn.example.com/pkg')).toBe('url');
+    });
+
+    it('should detect marketplace identifiers', () => {
+      expect(detectSourceType('my-skill')).toBe('market');
+      expect(detectSourceType('some-cool-skill')).toBe('market');
     });
   });
 

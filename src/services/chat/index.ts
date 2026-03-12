@@ -24,7 +24,6 @@ import {
   agentByIdSelectors,
   agentChatConfigSelectors,
   agentSelectors,
-  chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
@@ -241,12 +240,12 @@ class ChatService {
     const modelMessages = await contextEngineering({
       agentBuilderContext,
       agentId: targetAgentId,
-      enableHistoryCount:
-        chatConfigByIdSelectors.getEnableHistoryCountById(targetAgentId)(getAgentStoreState()),
+      // Use raw chatConfig values, not selectors with business logic that may force false
+      enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
       groupId,
-      historyCount:
-        chatConfigByIdSelectors.getHistoryCountById(targetAgentId)(getAgentStoreState()) + 2,
+      // historyCount + 2 accounts for: 1 user message + 1 assistant response being added
+      historyCount: (chatConfig.historyCount ?? 20) + 2,
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,

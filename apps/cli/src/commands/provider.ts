@@ -50,7 +50,7 @@ export function registerProviderCommand(program: Command) {
       const client = await getTrpcClient();
       const result = await client.aiProvider.getAiProviderById.query({ id });
 
-      if (!result) {
+      if (!result || !(result as any).id) {
         log.error(`Provider not found: ${id}`);
         process.exit(1);
         return;
@@ -63,11 +63,214 @@ export function registerProviderCommand(program: Command) {
       }
 
       const r = result as any;
-      console.log(pc.bold(r.name || r.id || 'Unknown'));
+      console.log(pc.bold(r.name || r.id));
       const meta: string[] = [];
       if (r.enabled !== undefined) meta.push(r.enabled ? 'Enabled' : 'Disabled');
       if (r.source) meta.push(`Source: ${r.source}`);
       if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
+    });
+
+  // ── create ────────────────────────────────────────────
+
+  provider
+    .command('create')
+    .description('Create a new AI provider')
+    .requiredOption('--id <id>', 'Provider ID')
+    .requiredOption('-n, --name <name>', 'Provider name')
+    .option('-s, --source <source>', 'Source type (builtin|custom)', 'custom')
+    .option('-d, --description <desc>', 'Provider description')
+    .option('--logo <logo>', 'Provider logo URL')
+    .option('--sdk-type <sdkType>', 'SDK type (openai|anthropic|azure|bedrock|...)')
+    .action(
+      async (options: {
+        description?: string;
+        id: string;
+        logo?: string;
+        name: string;
+        sdkType?: string;
+        source?: string;
+      }) => {
+        const client = await getTrpcClient();
+
+        const input: Record<string, any> = {
+          id: options.id,
+          name: options.name,
+          source: options.source || 'custom',
+        };
+        if (options.description) input.description = options.description;
+        if (options.logo) input.logo = options.logo;
+        if (options.sdkType) input.sdkType = options.sdkType;
+
+        const resultId = await client.aiProvider.createAiProvider.mutate(input as any);
+        console.log(`${pc.green('✓')} Created provider ${pc.bold(resultId || options.id)}`);
+      },
+    );
+
+  // ── edit ─────────────────────────────────────────────
+
+  provider
+    .command('edit <id>')
+    .description('Update provider info')
+    .option('-n, --name <name>', 'Provider name')
+    .option('-d, --description <desc>', 'Provider description')
+    .option('--logo <logo>', 'Provider logo URL')
+    .option('--sdk-type <sdkType>', 'SDK type')
+    .action(
+      async (
+        id: string,
+        options: { description?: string; logo?: string; name?: string; sdkType?: string },
+      ) => {
+        if (!options.name && !options.description && !options.logo && !options.sdkType) {
+          log.error('No changes specified. Use --name, --description, --logo, or --sdk-type.');
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+
+        const value: Record<string, any> = {};
+        if (options.name) value.name = options.name;
+        if (options.description !== undefined) value.description = options.description;
+        if (options.logo !== undefined) value.logo = options.logo;
+        if (options.sdkType) value.sdkType = options.sdkType;
+
+        await client.aiProvider.updateAiProvider.mutate({ id, value: value as any });
+        console.log(`${pc.green('✓')} Updated provider ${pc.bold(id)}`);
+      },
+    );
+
+  // ── config ──────────────────────────────────────────
+
+  provider
+    .command('config <id>')
+    .description('Configure provider settings (API key, base URL, etc.)')
+    .option('--api-key <key>', 'Set API key')
+    .option('--base-url <url>', 'Set base URL')
+    .option('--check-model <model>', 'Set connectivity check model')
+    .option('--enable-response-api', 'Enable Response API mode (OpenAI)')
+    .option('--disable-response-api', 'Disable Response API mode')
+    .option('--fetch-on-client', 'Enable fetching models on client side')
+    .option('--no-fetch-on-client', 'Disable fetching models on client side')
+    .option('--show', 'Show current config')
+    .option('--json [fields]', 'Output JSON (with --show)')
+    .action(
+      async (
+        id: string,
+        options: {
+          apiKey?: string;
+          baseUrl?: string;
+          checkModel?: string;
+          disableResponseApi?: boolean;
+          enableResponseApi?: boolean;
+          fetchOnClient?: boolean;
+          json?: string | boolean;
+          show?: boolean;
+        },
+      ) => {
+        // lobehub is a platform-managed provider, users cannot configure its API key or base URL
+        if (id === 'lobehub' && (options.apiKey !== undefined || options.baseUrl !== undefined)) {
+          log.error(
+            `Provider "lobehub" is managed by the LobeHub platform. You cannot set --api-key or --base-url for it.`,
+          );
+          process.exit(1);
+        }
+
+        const client = await getTrpcClient();
+
+        // Show current config
+        if (options.show) {
+          const detail = await client.aiProvider.getAiProviderById.query({ id });
+          if (!detail) {
+            log.error(`Provider not found: ${id}`);
+            process.exit(1);
+            return;
+          }
+
+          const config: Record<string, any> = {
+            checkModel: (detail as any).checkModel || '',
+            fetchOnClient: (detail as any).fetchOnClient ?? false,
+            keyVaults: (detail as any).keyVaults || {},
+          };
+
+          if (options.json !== undefined) {
+            const fields = typeof options.json === 'string' ? options.json : undefined;
+            outputJson(config, fields);
+          } else {
+            console.log(pc.bold(`Config for ${id}`));
+            if (config.checkModel) console.log(`  Check Model: ${config.checkModel}`);
+            console.log(`  Fetch on Client: ${config.fetchOnClient ? pc.green('✓') : pc.dim('✗')}`);
+            const vaults = config.keyVaults;
+            if (vaults.apiKey)
+              console.log(`  API Key: ${pc.dim(vaults.apiKey.slice(0, 8) + '...')}`);
+            if (vaults.baseURL) console.log(`  Base URL: ${vaults.baseURL}`);
+          }
+          return;
+        }
+
+        // Build config update
+        const hasKeyVaults = options.apiKey !== undefined || options.baseUrl !== undefined;
+        const hasConfig = options.enableResponseApi || options.disableResponseApi;
+        const hasOther = options.checkModel !== undefined || options.fetchOnClient !== undefined;
+
+        if (!hasKeyVaults && !hasConfig && !hasOther) {
+          log.error(
+            'No config specified. Use --api-key, --base-url, --check-model, --enable-response-api, --fetch-on-client, or --show.',
+          );
+          process.exit(1);
+        }
+
+        const input: Record<string, any> = {};
+
+        if (hasKeyVaults) {
+          const keyVaults: Record<string, string> = {};
+          if (options.apiKey !== undefined) keyVaults.apiKey = options.apiKey;
+          if (options.baseUrl !== undefined) keyVaults.baseURL = options.baseUrl;
+          input.keyVaults = keyVaults;
+        }
+
+        if (hasConfig) {
+          input.config = { enableResponseApi: !!options.enableResponseApi };
+        }
+
+        if (options.checkModel !== undefined) input.checkModel = options.checkModel;
+        if (options.fetchOnClient !== undefined) input.fetchOnClient = options.fetchOnClient;
+
+        await client.aiProvider.updateAiProviderConfig.mutate({ id, value: input as any });
+        console.log(`${pc.green('✓')} Updated config for provider ${pc.bold(id)}`);
+      },
+    );
+
+  // ── test ─────────────────────────────────────────────
+
+  provider
+    .command('test <id>')
+    .description('Test provider connectivity')
+    .option('-m, --model <model>', 'Model to test with (defaults to provider checkModel)')
+    .option('--json', 'Output result as JSON')
+    .action(async (id: string, options: { json?: boolean; model?: string }) => {
+      const client = await getTrpcClient();
+
+      console.log(`${pc.yellow('⋯')} Testing provider ${pc.bold(id)}...`);
+
+      const result = (await client.aiProvider.checkProviderConnectivity.mutate({
+        id,
+        model: options.model,
+      })) as any;
+
+      if (options.json) {
+        outputJson(result);
+        return;
+      }
+
+      if (result.ok) {
+        console.log(
+          `${pc.green('✓')} Provider ${pc.bold(id)} is reachable (model: ${result.model})`,
+        );
+      } else {
+        console.log(`${pc.red('✗')} Provider ${pc.bold(id)} check failed`);
+        if (result.model) console.log(`  Model: ${result.model}`);
+        if (result.error) console.log(`  Error: ${pc.dim(result.error)}`);
+        process.exit(1);
+      }
     });
 
   // ── toggle ────────────────────────────────────────────

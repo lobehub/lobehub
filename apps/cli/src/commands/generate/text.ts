@@ -58,6 +58,9 @@ export function registerTextCommand(parent: Command) {
         const payload: Record<string, any> = {
           messages,
           model,
+          // For non-streaming, use responseMode 'json' to get a plain JSON response
+          // instead of SSE (the backend converts non-stream to SSE by default)
+          responseMode: useStream ? 'stream' : 'json',
           stream: useStream,
         };
         if (options.temperature) payload.temperature = Number.parseFloat(options.temperature);
@@ -83,7 +86,12 @@ export function registerTextCommand(parent: Command) {
           if (options.json) {
             console.log(JSON.stringify(body, null, 2));
           } else {
-            const content = (body as any).choices?.[0]?.message?.content || JSON.stringify(body);
+            // Support both OpenAI format (choices[].message.content) and
+            // Anthropic format (content[].text)
+            const content =
+              (body as any).choices?.[0]?.message?.content ||
+              (body as any).content?.[0]?.text ||
+              JSON.stringify(body);
             process.stdout.write(content);
             process.stdout.write('\n');
           }
@@ -128,9 +136,12 @@ async function streamSSEResponse(body: ReadableStream<Uint8Array>, json?: boolea
           const parsed = JSON.parse(data);
           if (json) {
             console.log(JSON.stringify(parsed));
-          } else {
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) process.stdout.write(content);
+          } else if (typeof parsed === 'string' && parsed !== 'stop') {
+            // LobeHub SSE sends content as JSON strings: "Hello", "world"
+            process.stdout.write(parsed);
+          } else if (parsed?.choices?.[0]?.delta?.content) {
+            // Standard OpenAI SSE format
+            process.stdout.write(parsed.choices[0].delta.content);
           }
         } catch {
           // Not JSON, might be raw text chunk

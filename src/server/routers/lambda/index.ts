@@ -23,6 +23,7 @@ import { apiKeyRouter } from './apiKey';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
 import { configRouter } from './config';
+import { deviceRouter } from './device';
 import { documentRouter } from './document';
 import { exporterRouter } from './exporter';
 import { fileRouter } from './file';
@@ -33,6 +34,7 @@ import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
 import { klavisRouter } from './klavis';
+import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
 import { marketRouter } from './market';
 import { messageRouter } from './message';
@@ -68,6 +70,7 @@ export const lambdaRouter = router({
   chunk: chunkRouter,
   comfyui: comfyuiRouter,
   config: configRouter,
+  device: deviceRouter,
   document: documentRouter,
   exporter: exporterRouter,
   file: fileRouter,
@@ -80,6 +83,7 @@ export const lambdaRouter = router({
   image: imageRouter,
   importer: importerRouter,
   klavis: klavisRouter,
+  knowledge: knowledgeRouter,
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,

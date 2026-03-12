@@ -112,6 +112,7 @@ const InputArea = () => {
               dropdownPlacement="bottomLeft"
               extraActionItems={extraActionItems}
               inputContainerProps={inputContainerProps}
+              showRuntimeConfig={false}
             />
           </ChatInputProvider>
         </DragUploadZone>

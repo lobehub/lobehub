@@ -1,4 +1,5 @@
 import { platform } from 'node:os';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { LinuxSearchServiceImpl } from '../impl/linux';

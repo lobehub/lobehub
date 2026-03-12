@@ -1,8 +1,8 @@
-import { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
+import type { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BaseFileSearch } from '../base';
-import { FileResult, SearchOptions } from '../types';
+import type { FileResult, SearchOptions } from '../types';
 
 // Mock logger
 vi.mock('@/utils/logger', () => ({

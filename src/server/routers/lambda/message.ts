@@ -51,7 +51,7 @@ export const messageRouter = router({
   /**
    * Cancel compression by deleting the compression group and restoring original messages
    */
-cancelCompression: messageProcedure
+  cancelCompression: messageProcedure
     .input(
       z.object({
         agentId: z.string(),
@@ -72,8 +72,20 @@ cancelCompression: messageProcedure
       });
     }),
 
-  
-count: messageProcedure
+  listAll: messageProcedure
+    .input(
+      z
+        .object({
+          current: z.number().optional(),
+          pageSize: z.number().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.queryAll(input);
+    }),
+
+  count: messageProcedure
     .input(
       z
         .object({
@@ -87,9 +99,7 @@ count: messageProcedure
       return ctx.messageModel.count(input);
     }),
 
-  
-  
-countWords: messageProcedure
+  countWords: messageProcedure
     .input(
       z
         .object({
@@ -103,13 +113,12 @@ countWords: messageProcedure
       return ctx.messageModel.countWords(input);
     }),
 
-  
-/**
+  /**
    * Create a compression group for old messages
    * Creates a placeholder group, marks messages as compressed
    * Returns messages to summarize for frontend AI generation
    */
-createCompressionGroup: messageProcedure
+  createCompressionGroup: messageProcedure
     .input(
       z.object({
         agentId: z.string(),
@@ -130,9 +139,7 @@ createCompressionGroup: messageProcedure
       });
     }),
 
-  
-  
-createMessage: messageProcedure
+  createMessage: messageProcedure
     .input(CreateNewMessageParamsSchema)
     .mutation(async ({ input, ctx }) => {
       // If there's no agentId but has sessionId, resolve agentId from sessionId
@@ -145,11 +152,10 @@ createMessage: messageProcedure
       return ctx.messageService.createMessage({ ...input, agentId } as any);
     }),
 
-  
   /**
    * Finalize compression by updating the group with generated summary
    */
-finalizeCompression: messageProcedure
+  finalizeCompression: messageProcedure
     .input(
       z.object({
         agentId: z.string(),

@@ -25,11 +25,15 @@ declare global {
     lobeEnv?: {
       darwinMajorVersion?: number;
       isMacTahoe?: boolean;
+      platform?: NodeJS.Platform;
     };
   }
 
   /** Vite define: running in CI environment (e.g. CI=true) */
   const __CI__: boolean;
+
+  /** Vite define: development mode (NODE_ENV !== 'production') */
+  const __DEV__: boolean;
 
   /** Vite define: current bundle is mobile variant */
   const __MOBILE__: boolean;

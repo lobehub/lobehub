@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "improvements": ["add api key hash column migration."]
+    },
+    "date": "2026-03-09",
+    "version": "2.1.39"
+  },
+  {
+    "children": {
       "fixes": ["when use trustclient not register market m2m token."]
     },
     "date": "2026-03-06",

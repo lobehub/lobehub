@@ -1,8 +1,9 @@
-import { DeleteFilesResponse } from '@lobechat/electron-server-ipc';
 import * as fs from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path, { join } from 'node:path';
 import { promisify } from 'node:util';
+
+import type { DeleteFilesResponse } from '@lobechat/electron-server-ipc';
 
 import { FILE_STORAGE_DIR, LOCAL_STORAGE_URL_PREFIX } from '@/const/dir';
 import { makeSureDirExist } from '@/utils/file-system';

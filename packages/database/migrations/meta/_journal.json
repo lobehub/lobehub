@@ -630,6 +630,13 @@
       "when": 1772723999146,
       "tag": "0089_add_api_key_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1773115333051,
+      "tag": "0090_enable_pg_search",
+      "breakpoints": true
     }
   ],
   "version": "6"

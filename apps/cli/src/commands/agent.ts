@@ -9,6 +9,30 @@ import { replayAgentEvents, streamAgentEvents } from '../utils/agentStream';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log, setVerbose } from '../utils/logger';
 
+/**
+ * Resolve an agent identifier (agentId or slug) to a concrete agentId.
+ * When a slug is provided, uses getBuiltinAgent to look up the agent.
+ */
+async function resolveAgentId(
+  client: any,
+  opts: { agentId?: string; slug?: string },
+): Promise<string> {
+  if (opts.agentId) return opts.agentId;
+
+  if (opts.slug) {
+    const agent = await client.agent.getBuiltinAgent.query({ slug: opts.slug });
+    if (!agent) {
+      log.error(`Agent not found for slug: ${opts.slug}`);
+      process.exit(1);
+    }
+    return (agent as any).id || (agent as any).agentId;
+  }
+
+  log.error('Either <agentId> or --slug is required.');
+  process.exit(1);
+  return ''; // unreachable
+}
+
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
 
@@ -54,39 +78,46 @@ export function registerAgentCommand(program: Command) {
   // ── view ──────────────────────────────────────────────
 
   agent
-    .command('view <agentId>')
+    .command('view [agentId]')
     .description('View agent configuration')
+    .option('-s, --slug <slug>', 'Agent slug (e.g. inbox)')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (agentId: string, options: { json?: string | boolean }) => {
-      const client = await getTrpcClient();
-      const result = await client.agent.getAgentConfigById.query({ agentId });
+    .action(
+      async (
+        agentIdArg: string | undefined,
+        options: { json?: string | boolean; slug?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+        const result = await client.agent.getAgentConfigById.query({ agentId });
 
-      if (!result) {
-        log.error(`Agent not found: ${agentId}`);
-        process.exit(1);
-        return;
-      }
+        if (!result) {
+          log.error(`Agent not found: ${agentId}`);
+          process.exit(1);
+          return;
+        }
 
-      if (options.json !== undefined) {
-        const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(result, fields);
-        return;
-      }
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(result, fields);
+          return;
+        }
 
-      const r = result as any;
-      console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
-      const meta: string[] = [];
-      if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
-      if (r.model) meta.push(`Model: ${r.model}`);
-      if (r.provider) meta.push(`Provider: ${r.provider}`);
-      if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
+        const r = result as any;
+        console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
+        const meta: string[] = [];
+        if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
+        if (r.model) meta.push(`Model: ${r.model}`);
+        if (r.provider) meta.push(`Provider: ${r.provider}`);
+        if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
 
-      if (r.systemRole) {
-        console.log();
-        console.log(pc.bold('System Role:'));
-        console.log(r.systemRole);
-      }
-    });
+        if (r.systemRole) {
+          console.log();
+          console.log(pc.bold('System Role:'));
+          console.log(r.systemRole);
+        }
+      },
+    );
 
   // ── create ────────────────────────────────────────────
 
@@ -130,8 +161,9 @@ export function registerAgentCommand(program: Command) {
   // ── edit ──────────────────────────────────────────────
 
   agent
-    .command('edit <agentId>')
+    .command('edit [agentId]')
     .description('Update agent configuration')
+    .option('--slug <slug>', 'Agent slug (e.g. inbox)')
     .option('-t, --title <title>', 'New title')
     .option('-d, --description <desc>', 'New description')
     .option('-m, --model <model>', 'New model ID')
@@ -139,11 +171,12 @@ export function registerAgentCommand(program: Command) {
     .option('-s, --system-role <role>', 'New system role prompt')
     .action(
       async (
-        agentId: string,
+        agentIdArg: string | undefined,
         options: {
           description?: string;
           model?: string;
           provider?: string;
+          slug?: string;
           systemRole?: string;
           title?: string;
         },
@@ -163,6 +196,7 @@ export function registerAgentCommand(program: Command) {
         }
 
         const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
         await client.agent.updateAgentConfig.mutate({ agentId, value });
         console.log(`${pc.green('✓')} Updated agent ${pc.bold(agentId)}`);
       },
@@ -279,6 +313,204 @@ export function registerAgentCommand(program: Command) {
           json: options.json,
           verbose: options.verbose,
         });
+      },
+    );
+
+  // ── pin / unpin ─────────────────────────────────────
+
+  agent
+    .command('pin <agentId>')
+    .description('Pin an agent')
+    .action(async (agentId: string) => {
+      const client = await getTrpcClient();
+      await client.agent.updateAgentPinned.mutate({ id: agentId, pinned: true });
+      console.log(`${pc.green('✓')} Pinned agent ${pc.bold(agentId)}`);
+    });
+
+  agent
+    .command('unpin <agentId>')
+    .description('Unpin an agent')
+    .action(async (agentId: string) => {
+      const client = await getTrpcClient();
+      await client.agent.updateAgentPinned.mutate({ id: agentId, pinned: false });
+      console.log(`${pc.green('✓')} Unpinned agent ${pc.bold(agentId)}`);
+    });
+
+  // ── kb-files ───────────────────────────────────────
+
+  agent
+    .command('kb-files [agentId]')
+    .description('List knowledge bases and files associated with an agent')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(
+      async (
+        agentIdArg: string | undefined,
+        options: { json?: string | boolean; slug?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+        const items = await client.agent.getKnowledgeBasesAndFiles.query({ agentId });
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(items, fields);
+          return;
+        }
+
+        const list = Array.isArray(items) ? items : [];
+        if (list.length === 0) {
+          console.log('No knowledge bases or files found.');
+          return;
+        }
+
+        const rows = list.map((item: any) => [
+          item.id || '',
+          truncate(item.name || '', 40),
+          item.type || '',
+          item.enabled ? 'enabled' : 'disabled',
+        ]);
+
+        printTable(rows, ['ID', 'NAME', 'TYPE', 'STATUS']);
+      },
+    );
+
+  // ── add-file ───────────────────────────────────────
+
+  agent
+    .command('add-file [agentId]')
+    .description('Associate files with an agent')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .requiredOption('--file-ids <ids>', 'Comma-separated file IDs')
+    .option('--enabled', 'Enable files immediately')
+    .action(
+      async (
+        agentIdArg: string | undefined,
+        options: { enabled?: boolean; fileIds: string; slug?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+        const fileIds = options.fileIds.split(',').map((s) => s.trim());
+
+        const input: Record<string, any> = { agentId, fileIds };
+        if (options.enabled !== undefined) input.enabled = options.enabled;
+
+        await client.agent.createAgentFiles.mutate(input as any);
+        console.log(
+          `${pc.green('✓')} Added ${fileIds.length} file(s) to agent ${pc.bold(agentId)}`,
+        );
+      },
+    );
+
+  // ── remove-file ────────────────────────────────────
+
+  agent
+    .command('remove-file [agentId]')
+    .description('Remove a file from an agent')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .requiredOption('--file-id <id>', 'File ID to remove')
+    .action(async (agentIdArg: string | undefined, options: { fileId: string; slug?: string }) => {
+      const client = await getTrpcClient();
+      const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+      await client.agent.deleteAgentFile.mutate({ agentId, fileId: options.fileId });
+      console.log(
+        `${pc.green('✓')} Removed file ${pc.bold(options.fileId)} from agent ${pc.bold(agentId)}`,
+      );
+    });
+
+  // ── toggle-file ────────────────────────────────────
+
+  agent
+    .command('toggle-file [agentId]')
+    .description('Toggle a file on/off for an agent')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .requiredOption('--file-id <id>', 'File ID')
+    .option('--enable', 'Enable the file')
+    .option('--disable', 'Disable the file')
+    .action(
+      async (
+        agentIdArg: string | undefined,
+        options: { disable?: boolean; enable?: boolean; fileId: string; slug?: string },
+      ) => {
+        const enabled = options.enable ? true : options.disable ? false : undefined;
+        const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+        await client.agent.toggleFile.mutate({ agentId, enabled, fileId: options.fileId });
+        console.log(
+          `${pc.green('✓')} Toggled file ${pc.bold(options.fileId)} for agent ${pc.bold(agentId)}`,
+        );
+      },
+    );
+
+  // ── add-kb ─────────────────────────────────────────
+
+  agent
+    .command('add-kb [agentId]')
+    .description('Associate a knowledge base with an agent')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .requiredOption('--kb-id <id>', 'Knowledge base ID')
+    .option('--enabled', 'Enable immediately')
+    .action(
+      async (
+        agentIdArg: string | undefined,
+        options: { enabled?: boolean; kbId: string; slug?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+        const input: Record<string, any> = { agentId, knowledgeBaseId: options.kbId };
+        if (options.enabled !== undefined) input.enabled = options.enabled;
+
+        await client.agent.createAgentKnowledgeBase.mutate(input as any);
+        console.log(
+          `${pc.green('✓')} Added knowledge base ${pc.bold(options.kbId)} to agent ${pc.bold(agentId)}`,
+        );
+      },
+    );
+
+  // ── remove-kb ──────────────────────────────────────
+
+  agent
+    .command('remove-kb [agentId]')
+    .description('Remove a knowledge base from an agent')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .requiredOption('--kb-id <id>', 'Knowledge base ID')
+    .action(async (agentIdArg: string | undefined, options: { kbId: string; slug?: string }) => {
+      const client = await getTrpcClient();
+      const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+      await client.agent.deleteAgentKnowledgeBase.mutate({
+        agentId,
+        knowledgeBaseId: options.kbId,
+      });
+      console.log(
+        `${pc.green('✓')} Removed knowledge base ${pc.bold(options.kbId)} from agent ${pc.bold(agentId)}`,
+      );
+    });
+
+  // ── toggle-kb ──────────────────────────────────────
+
+  agent
+    .command('toggle-kb [agentId]')
+    .description('Toggle a knowledge base on/off for an agent')
+    .option('-s, --slug <slug>', 'Agent slug')
+    .requiredOption('--kb-id <id>', 'Knowledge base ID')
+    .option('--enable', 'Enable the knowledge base')
+    .option('--disable', 'Disable the knowledge base')
+    .action(
+      async (
+        agentIdArg: string | undefined,
+        options: { disable?: boolean; enable?: boolean; kbId: string; slug?: string },
+      ) => {
+        const enabled = options.enable ? true : options.disable ? false : undefined;
+        const client = await getTrpcClient();
+        const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
+        await client.agent.toggleKnowledgeBase.mutate({
+          agentId,
+          enabled,
+          knowledgeBaseId: options.kbId,
+        });
+        console.log(
+          `${pc.green('✓')} Toggled knowledge base ${pc.bold(options.kbId)} for agent ${pc.bold(agentId)}`,
+        );
       },
     );
 

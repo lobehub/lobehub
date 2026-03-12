@@ -12,6 +12,7 @@ import DesktopMainLayout from '@/routes/(main)/_layout';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
+import AgentChannelPage from '@/routes/(main)/agent/channel';
 import AgentCronDetailPage from '@/routes/(main)/agent/cron/[cronId]';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
 import CommunityLayout from '@/routes/(main)/community/_layout';
@@ -93,6 +94,10 @@ export const desktopRoutes: RouteObject[] = [
               {
                 element: <AgentCronDetailPage />,
                 path: 'cron/:cronId',
+              },
+              {
+                element: <AgentChannelPage />,
+                path: 'channel',
               },
             ],
             element: <DesktopChatLayout />,

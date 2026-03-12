@@ -162,6 +162,8 @@ export interface ExecAgentParams {
   autoStart?: boolean;
   /** Optional existing message IDs to include in context */
   existingMessageIds?: string[];
+  /** Additional system instructions appended after the agent's own system role */
+  instructions?: string;
   /** The user input/prompt */
   prompt: string;
   /** The agent slug to run (either agentId or slug is required) */

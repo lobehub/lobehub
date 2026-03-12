@@ -1,12 +1,38 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getAuthInfo } from '../api/http';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
+function formatFileType(fileType: string): string {
+  if (!fileType) return '';
+  // Simplify common MIME types to readable short names
+  const map: Record<string, string> = {
+    'application/msword': 'doc',
+    'application/pdf': 'pdf',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'custom/folder': 'folder',
+    'text/markdown': 'md',
+    'text/plain': 'txt',
+  };
+  if (map[fileType]) return map[fileType];
+  // For other types, extract subtype (e.g. "image/png" → "png")
+  const parts = fileType.split('/');
+  return parts.length > 1 ? parts[1] : fileType;
+}
+
 export function registerKbCommand(program: Command) {
-  const kb = program.command('kb').description('Manage knowledge bases');
+  const kb = program
+    .command('kb')
+    .description('Manage knowledge bases, folders, documents, and files');
 
   // ── list ──────────────────────────────────────────────
 
@@ -54,9 +80,40 @@ export function registerKbCommand(program: Command) {
         return;
       }
 
+      // Recursively fetch all items in the knowledge base (with pagination)
+      const allItems: any[] = [];
+      async function fetchItems(parentId: string | null, depth = 0) {
+        const PAGE_SIZE = 100;
+        let offset = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const query: any = { knowledgeBaseId: id, limit: PAGE_SIZE, offset, parentId };
+          const result = await client.file.getKnowledgeItems.query(query);
+          const list = Array.isArray(result) ? result : ((result as any).items ?? []);
+          hasMore = Array.isArray(result) ? false : ((result as any).hasMore ?? false);
+          offset += list.length;
+
+          // Collect folders for parallel recursive fetch
+          const folders: any[] = [];
+          for (const item of list) {
+            allItems.push({ ...item, _depth: depth });
+            if (item.fileType === 'custom/folder') {
+              folders.push(item);
+            }
+          }
+
+          // Fetch all sub-folders in parallel
+          if (folders.length > 0) {
+            await Promise.all(folders.map((f) => fetchItems(f.id, depth + 1)));
+          }
+        }
+      }
+      await fetchItems(null);
+
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(result, fields);
+        outputJson({ ...result, files: allItems }, fields);
         return;
       }
 
@@ -66,19 +123,23 @@ export function registerKbCommand(program: Command) {
       if ((result as any).updatedAt) meta.push(`Updated ${timeAgo((result as any).updatedAt)}`);
       if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
 
-      // Show files if available
-      if ((result as any).files && Array.isArray((result as any).files)) {
-        const files = (result as any).files;
-        if (files.length > 0) {
-          console.log();
-          console.log(pc.bold(`Files (${files.length}):`));
-          const rows = files.map((f: any) => [
+      if (allItems.length > 0) {
+        console.log();
+        console.log(pc.bold(`Items (${allItems.length}):`));
+        const rows = allItems.map((f: any) => {
+          const indent = '  '.repeat(f._depth);
+          const name = f.name || f.filename || '';
+          return [
             f.id,
-            truncate(f.name || f.filename || '', 50),
-            f.fileType || '',
-          ]);
-          printTable(rows, ['ID', 'NAME', 'TYPE']);
-        }
+            f.sourceType === 'document' ? 'Doc' : 'File',
+            truncate(`${indent}${name}`, 45),
+            formatFileType(f.fileType || ''),
+            f.size ? `${Math.round(f.size / 1024)}KB` : '',
+          ];
+        });
+        printTable(rows, ['ID', 'SOURCE', 'NAME', 'TYPE', 'SIZE']);
+      } else {
+        console.log(pc.dim('\nNo files in this knowledge base.'));
       }
     });
 
@@ -98,8 +159,8 @@ export function registerKbCommand(program: Command) {
       if (options.description) input.description = options.description;
       if (options.avatar) input.avatar = options.avatar;
 
-      const result = await client.knowledgeBase.createKnowledgeBase.mutate(input);
-      console.log(`${pc.green('✓')} Created knowledge base ${pc.bold((result as any).id)}`);
+      const id = await client.knowledgeBase.createKnowledgeBase.mutate(input);
+      console.log(`${pc.green('✓')} Created knowledge base ${pc.bold(String(id))}`);
     });
 
   // ── edit ──────────────────────────────────────────────
@@ -191,6 +252,153 @@ export function registerKbCommand(program: Command) {
       });
       console.log(
         `${pc.green('✓')} Removed ${options.ids.length} file(s) from knowledge base ${pc.bold(knowledgeBaseId)}`,
+      );
+    });
+
+  // ── mkdir ───────────────────────────────────────────
+
+  kb.command('mkdir <knowledgeBaseId>')
+    .description('Create a folder in a knowledge base')
+    .requiredOption('-n, --name <name>', 'Folder name')
+    .option('--parent <parentId>', 'Parent folder ID')
+    .action(async (knowledgeBaseId: string, options: { name: string; parent?: string }) => {
+      const client = await getTrpcClient();
+      const result = await client.document.createDocument.mutate({
+        editorData: JSON.stringify({}),
+        fileType: 'custom/folder',
+        knowledgeBaseId,
+        parentId: options.parent,
+        title: options.name,
+      });
+      console.log(`${pc.green('✓')} Created folder ${pc.bold((result as any).id)}`);
+    });
+
+  // ── create-doc ──────────────────────────────────────
+
+  kb.command('create-doc <knowledgeBaseId>')
+    .description('Create a document in a knowledge base')
+    .requiredOption('-t, --title <title>', 'Document title')
+    .option('-c, --content <content>', 'Document content (text)')
+    .option('--parent <parentId>', 'Parent folder ID')
+    .action(
+      async (
+        knowledgeBaseId: string,
+        options: { content?: string; parent?: string; title: string },
+      ) => {
+        const client = await getTrpcClient();
+        const result = await client.document.createDocument.mutate({
+          content: options.content,
+          editorData: JSON.stringify({}),
+          fileType: 'custom/document',
+          knowledgeBaseId,
+          parentId: options.parent,
+          title: options.title,
+        });
+        console.log(`${pc.green('✓')} Created document ${pc.bold((result as any).id)}`);
+      },
+    );
+
+  // ── move ────────────────────────────────────────────
+
+  kb.command('move <id>')
+    .description('Move a file or document to a different folder')
+    .option('--parent <parentId>', 'Target folder ID (omit to move to root)')
+    .option('--type <type>', 'Item type: file or doc', 'file')
+    .action(async (id: string, options: { parent?: string; type: string }) => {
+      const client = await getTrpcClient();
+      const parentId = options.parent ?? null;
+
+      if (options.type === 'doc') {
+        await client.document.updateDocument.mutate({ id, parentId });
+      } else {
+        await client.file.updateFile.mutate({ id, parentId });
+      }
+
+      const dest = parentId ? `folder ${pc.bold(parentId)}` : 'root';
+      console.log(`${pc.green('✓')} Moved ${pc.bold(id)} to ${dest}`);
+    });
+
+  // ── upload ──────────────────────────────────────────
+
+  kb.command('upload <knowledgeBaseId> <filePath>')
+    .description('Upload a file to a knowledge base')
+    .option('--parent <parentId>', 'Parent folder ID')
+    .action(async (knowledgeBaseId: string, filePath: string, options: { parent?: string }) => {
+      const resolved = path.resolve(filePath);
+      if (!fs.existsSync(resolved)) {
+        log.error(`File not found: ${resolved}`);
+        process.exit(1);
+      }
+
+      const stat = fs.statSync(resolved);
+      const fileName = path.basename(resolved);
+      const fileBuffer = fs.readFileSync(resolved);
+
+      // Compute SHA-256 hash
+      const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+      // Detect MIME type from extension
+      const ext = path.extname(fileName).toLowerCase().slice(1);
+      const mimeMap: Record<string, string> = {
+        csv: 'text/csv',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        gif: 'image/gif',
+        jpeg: 'image/jpeg',
+        jpg: 'image/jpeg',
+        json: 'application/json',
+        md: 'text/markdown',
+        mp3: 'audio/mpeg',
+        mp4: 'video/mp4',
+        pdf: 'application/pdf',
+        png: 'image/png',
+        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        svg: 'image/svg+xml',
+        txt: 'text/plain',
+        webp: 'image/webp',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      const fileType = mimeMap[ext] || 'application/octet-stream';
+
+      const client = await getTrpcClient();
+      const { serverUrl, headers } = await getAuthInfo();
+
+      // 1. Get presigned URL
+      const date = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+      const pathname = `files/${date}/${hash}.${ext}`;
+      const presigned = await client.upload.createS3PreSignedUrl.mutate({ pathname });
+
+      // 2. Upload to S3
+      const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
+      const uploadRes = await fetch(presignedUrl, {
+        body: fileBuffer,
+        headers: { 'Content-Type': fileType },
+        method: 'PUT',
+      });
+      if (!uploadRes.ok) {
+        log.error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+        process.exit(1);
+      }
+
+      // 3. Create file record
+      const result = await client.file.createFile.mutate({
+        fileType,
+        hash,
+        knowledgeBaseId,
+        metadata: {
+          date,
+          dirname: '',
+          filename: fileName,
+          path: pathname,
+        },
+        name: fileName,
+        parentId: options.parent,
+        size: stat.size,
+        url: pathname,
+      });
+
+      console.log(
+        `${pc.green('✓')} Uploaded ${pc.bold(fileName)} → ${pc.bold((result as any).id)}`,
       );
     });
 }

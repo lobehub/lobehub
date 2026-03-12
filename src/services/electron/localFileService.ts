@@ -20,7 +20,11 @@ import {
   type MoveLocalFilesParams,
   type OpenLocalFileParams,
   type OpenLocalFolderParams,
+  type PrepareSkillDirectoryParams,
+  type PrepareSkillDirectoryResult,
   type RenameLocalFileParams,
+  type ResolveSkillResourcePathParams,
+  type ResolveSkillResourcePathResult,
   type RunCommandParams,
   type RunCommandResult,
   type ShowSaveDialogParams,
@@ -66,6 +70,18 @@ class LocalFileService {
 
   async writeFile(params: WriteLocalFileParams) {
     return ensureElectronIpc().localSystem.handleWriteFile(params);
+  }
+
+  async prepareSkillDirectory(
+    params: PrepareSkillDirectoryParams,
+  ): Promise<PrepareSkillDirectoryResult> {
+    return ensureElectronIpc().localSystem.handlePrepareSkillDirectory(params);
+  }
+
+  async resolveSkillResourcePath(
+    params: ResolveSkillResourcePathParams,
+  ): Promise<ResolveSkillResourcePathResult> {
+    return ensureElectronIpc().localSystem.handleResolveSkillResourcePath(params);
   }
 
   async editLocalFile(params: EditLocalFileParams): Promise<EditLocalFileResult> {

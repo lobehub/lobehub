@@ -28,11 +28,11 @@ const TabBar = () => {
 
   const handleActivate = useCallback(
     (id: string, url: string) => {
-      // 优先更新 Tab 激活状态（高优先级）
+      // Prioritize updating the Tab activation state (high priority)
       activateTab(id);
       const tab = tabs.find((t) => t.reference.id === id);
       if (tab) pluginRegistry.onActivate(tab.reference);
-      // 路由跳转降级为 startTransition（低优先级）
+      // Degrade route navigation to startTransition (low priority)
       startTransition(() => navigate(url));
     },
     [activateTab, navigate, tabs],

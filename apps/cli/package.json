@@ -1,9 +1,11 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.1-canary.5",
+  "version": "0.0.1-canary.12",
   "type": "module",
   "bin": {
-    "lh": "./dist/index.js"
+    "lh": "./dist/index.js",
+    "lobe": "./dist/index.js",
+    "lobehub": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -12,7 +14,7 @@
     "build": "npx tsup",
     "cli:link": "bun link",
     "cli:unlink": "bun unlink",
-    "dev": "bun src/index.ts",
+    "dev": "LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts",
     "prepublishOnly": "npm run build",
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
@@ -21,7 +23,8 @@
   "dependencies": {
     "@trpc/client": "^11.8.1",
     "commander": "^13.1.0",
-    "diff": "^7.0.0",
+    "debug": "^4.4.0",
+    "diff": "^8.0.3",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1",
     "superjson": "^2.2.6",
@@ -29,7 +32,7 @@
   },
   "devDependencies": {
     "@lobechat/device-gateway-client": "workspace:*",
-    "@types/diff": "^6.0.0",
+    "@lobechat/local-file-shell": "workspace:*",
     "@types/node": "^22.13.5",
     "@types/ws": "^8.18.1",
     "tsup": "^8.4.0",

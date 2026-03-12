@@ -5,6 +5,8 @@ import { Result } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { persistMarketAuthResult } from '@/layout/AuthProvider/MarketAuth/handoff';
+
 type CallbackStatus = 'loading' | 'success' | 'error';
 
 /**
@@ -31,11 +33,18 @@ const MarketAuthCallbackPage = () => {
       setStatus('error');
       setMessage(t('callback.messages.authFailed', { error: errorDescription || error }));
 
+      persistMarketAuthResult({
+        error: errorDescription || error,
+        state: state || undefined,
+        type: 'MARKET_AUTH_ERROR',
+      });
+
       // Send error message to parent window
       if (window.opener) {
         window.opener.postMessage(
           {
             error: errorDescription || error,
+            state,
             type: 'MARKET_AUTH_ERROR',
           },
           window.location.origin,
@@ -48,6 +57,12 @@ const MarketAuthCallbackPage = () => {
       console.info('[MarketAuthCallback] Authorization successful, code received');
       setStatus('success');
       setMessage(t('callback.messages.successWithRedirect'));
+
+      persistMarketAuthResult({
+        code,
+        state,
+        type: 'MARKET_AUTH_SUCCESS',
+      });
 
       // Send success message to parent window
       if (window.opener) {
@@ -79,10 +94,17 @@ const MarketAuthCallbackPage = () => {
       setStatus('error');
       setMessage(t('callback.messages.missingParams'));
 
+      persistMarketAuthResult({
+        error: 'Missing authorization parameters',
+        state: state || undefined,
+        type: 'MARKET_AUTH_ERROR',
+      });
+
       if (window.opener) {
         window.opener.postMessage(
           {
             error: 'Missing authorization parameters',
+            state,
             type: 'MARKET_AUTH_ERROR',
           },
           window.location.origin,

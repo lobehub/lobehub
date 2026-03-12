@@ -40,6 +40,56 @@ export function registerPluginCommand(program: Command) {
       printTable(rows, ['ID', 'IDENTIFIER', 'TYPE', 'TITLE']);
     });
 
+  // ── create ──────────────────────────────────────────
+
+  plugin
+    .command('create')
+    .description('Create a new plugin (without settings)')
+    .requiredOption('-i, --identifier <id>', 'Plugin identifier')
+    .requiredOption('--manifest <json>', 'Plugin manifest JSON')
+    .option('--type <type>', 'Plugin type: plugin or customPlugin', 'plugin')
+    .option('--custom-params <json>', 'Custom parameters JSON')
+    .action(
+      async (options: {
+        customParams?: string;
+        identifier: string;
+        manifest: string;
+        type: string;
+      }) => {
+        let manifest: any;
+        let customParams: any = {};
+        try {
+          manifest = JSON.parse(options.manifest);
+        } catch {
+          log.error('Invalid manifest JSON.');
+          process.exit(1);
+          return;
+        }
+        if (options.customParams) {
+          try {
+            customParams = JSON.parse(options.customParams);
+          } catch {
+            log.error('Invalid custom-params JSON.');
+            process.exit(1);
+            return;
+          }
+        }
+
+        const client = await getTrpcClient();
+        const result = await client.plugin.createPlugin.mutate({
+          customParams,
+          identifier: options.identifier,
+          manifest,
+          type: options.type as 'plugin' | 'customPlugin',
+        });
+
+        const r = result as any;
+        console.log(
+          `${pc.green('✓')} Created plugin ${pc.bold(r.identifier || options.identifier)}`,
+        );
+      },
+    );
+
   // ── install ───────────────────────────────────────────
 
   plugin

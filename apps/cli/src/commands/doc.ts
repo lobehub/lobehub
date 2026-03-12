@@ -32,36 +32,47 @@ export function registerDocCommand(program: Command) {
     .description('List documents')
     .option('-L, --limit <n>', 'Maximum number of items to fetch', '30')
     .option('--file-type <type>', 'Filter by file type')
+    .option('--source-type <type>', 'Filter by source type (file, web, api, topic)')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { fileType?: string; json?: string | boolean; limit?: string }) => {
-      const client = await getTrpcClient();
-      const pageSize = Number.parseInt(options.limit || '30', 10);
+    .action(
+      async (options: {
+        fileType?: string;
+        json?: string | boolean;
+        limit?: string;
+        sourceType?: string;
+      }) => {
+        const client = await getTrpcClient();
+        const pageSize = Number.parseInt(options.limit || '30', 10);
 
-      const query: { fileTypes?: string[]; pageSize: number } = { pageSize };
-      if (options.fileType) query.fileTypes = [options.fileType];
-      const result = await client.document.queryDocuments.query(query);
-      const docs = Array.isArray(result) ? result : ((result as any).items ?? []);
+        const query: { fileTypes?: string[]; pageSize: number; sourceTypes?: string[] } = {
+          pageSize,
+        };
+        if (options.fileType) query.fileTypes = [options.fileType];
+        if (options.sourceType) query.sourceTypes = [options.sourceType];
+        const result = await client.document.queryDocuments.query(query);
+        const docs = Array.isArray(result) ? result : ((result as any).items ?? []);
 
-      if (options.json !== undefined) {
-        const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(docs, fields);
-        return;
-      }
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(docs, fields);
+          return;
+        }
 
-      if (docs.length === 0) {
-        console.log('No documents found.');
-        return;
-      }
+        if (docs.length === 0) {
+          console.log('No documents found.');
+          return;
+        }
 
-      const rows = docs.map((d: any) => [
-        d.id,
-        truncate(d.title || d.filename || 'Untitled', 120),
-        d.fileType || '',
-        d.updatedAt ? timeAgo(d.updatedAt) : '',
-      ]);
+        const rows = docs.map((d: any) => [
+          d.id,
+          truncate(d.title || d.filename || 'Untitled', 120),
+          d.fileType || '',
+          d.updatedAt ? timeAgo(d.updatedAt) : '',
+        ]);
 
-      printTable(rows, ['ID', 'TITLE', 'TYPE', 'UPDATED']);
-    });
+        printTable(rows, ['ID', 'TITLE', 'TYPE', 'UPDATED']);
+      },
+    );
 
   // ── view ──────────────────────────────────────────────
 
@@ -89,6 +100,7 @@ export function registerDocCommand(program: Command) {
       console.log(pc.bold(document.title || 'Untitled'));
       const meta: string[] = [];
       if (document.fileType) meta.push(document.fileType);
+      if ((document as any).knowledgeBaseId) meta.push(`KB: ${(document as any).knowledgeBaseId}`);
       if (document.updatedAt) meta.push(`Updated ${timeAgo(document.updatedAt)}`);
       if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
       console.log();
@@ -110,10 +122,14 @@ export function registerDocCommand(program: Command) {
     .option('-F, --body-file <path>', 'Read content from file')
     .option('--parent <id>', 'Parent document or folder ID')
     .option('--slug <slug>', 'Custom slug')
+    .option('--kb <id>', 'Knowledge base ID to associate with')
+    .option('--file-type <type>', 'File type (e.g. custom/document, custom/folder)')
     .action(
       async (options: {
         body?: string;
         bodyFile?: string;
+        fileType?: string;
+        kb?: string;
         parent?: string;
         slug?: string;
         title: string;
@@ -124,6 +140,8 @@ export function registerDocCommand(program: Command) {
         const result = await client.document.createDocument.mutate({
           content,
           editorData: JSON.stringify({ content: content || '', type: 'doc' }),
+          fileType: options.fileType,
+          knowledgeBaseId: options.kb,
           parentId: options.parent,
           slug: options.slug,
           title: options.title,
@@ -132,6 +150,54 @@ export function registerDocCommand(program: Command) {
         console.log(`${pc.green('✓')} Created document ${pc.bold(result.id)}`);
       },
     );
+
+  // ── batch-create ───────────────────────────────────────
+
+  doc
+    .command('batch-create <file>')
+    .description('Batch create documents from a JSON file')
+    .action(async (file: string) => {
+      if (!fs.existsSync(file)) {
+        log.error(`File not found: ${file}`);
+        process.exit(1);
+        return;
+      }
+
+      let documents: any[];
+      try {
+        const raw = fs.readFileSync(file, 'utf8');
+        documents = JSON.parse(raw);
+      } catch {
+        log.error('Failed to parse JSON file. Expected an array of document objects.');
+        process.exit(1);
+        return;
+      }
+
+      if (!Array.isArray(documents) || documents.length === 0) {
+        log.error('JSON file must contain a non-empty array of document objects.');
+        process.exit(1);
+        return;
+      }
+
+      const client = await getTrpcClient();
+
+      const items = documents.map((d) => ({
+        content: d.content,
+        editorData: JSON.stringify({ content: d.content || '', type: 'doc' }),
+        fileType: d.fileType,
+        knowledgeBaseId: d.knowledgeBaseId,
+        parentId: d.parentId,
+        slug: d.slug,
+        title: d.title,
+      }));
+
+      const result = await client.document.createDocuments.mutate({ documents: items });
+      const created = Array.isArray(result) ? result : [result];
+      console.log(`${pc.green('✓')} Created ${created.length} document(s)`);
+      for (const doc of created) {
+        console.log(`  ${pc.dim('•')} ${doc.id} — ${doc.title || 'Untitled'}`);
+      }
+    });
 
   // ── edit ──────────────────────────────────────────────
 
@@ -142,15 +208,24 @@ export function registerDocCommand(program: Command) {
     .option('-b, --body <content>', 'New content')
     .option('-F, --body-file <path>', 'Read new content from file')
     .option('--parent <id>', 'Move to parent document (empty string for root)')
+    .option('--file-type <type>', 'Change file type')
     .action(
       async (
         id: string,
-        options: { body?: string; bodyFile?: string; parent?: string; title?: string },
+        options: {
+          body?: string;
+          bodyFile?: string;
+          fileType?: string;
+          parent?: string;
+          title?: string;
+        },
       ) => {
         const content = readBodyContent(options);
 
-        if (!options.title && !content && options.parent === undefined) {
-          log.error('No changes specified. Use --title, --body, --body-file, or --parent.');
+        if (!options.title && !content && options.parent === undefined && !options.fileType) {
+          log.error(
+            'No changes specified. Use --title, --body, --body-file, --parent, or --file-type.',
+          );
           process.exit(1);
         }
 
@@ -165,6 +240,7 @@ export function registerDocCommand(program: Command) {
         if (options.parent !== undefined) {
           params.parentId = options.parent || null;
         }
+        if (options.fileType) params.fileType = options.fileType;
 
         await client.document.updateDocument.mutate(params as any);
         console.log(`${pc.green('✓')} Updated document ${pc.bold(id)}`);
@@ -197,5 +273,99 @@ export function registerDocCommand(program: Command) {
       }
 
       console.log(`${pc.green('✓')} Deleted ${ids.length} document(s)`);
+    });
+
+  // ── parse ─────────────────────────────────────────────
+
+  doc
+    .command('parse <fileId>')
+    .description('Parse an uploaded file into a document')
+    .option('--with-pages', 'Preserve page structure')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(async (fileId: string, options: { json?: string | boolean; withPages?: boolean }) => {
+      const client = await getTrpcClient();
+
+      const result = options.withPages
+        ? await client.document.parseFileContent.mutate({ id: fileId })
+        : await client.document.parseDocument.mutate({ id: fileId });
+
+      if (options.json !== undefined) {
+        const fields = typeof options.json === 'string' ? options.json : undefined;
+        outputJson(result, fields);
+        return;
+      }
+
+      console.log(`${pc.green('✓')} Parsed file ${pc.bold(fileId)}`);
+      if ((result as any).title) console.log(`  Title: ${(result as any).title}`);
+      if ((result as any).content) {
+        const preview = truncate((result as any).content, 200);
+        console.log(`  Content: ${pc.dim(preview)}`);
+      }
+    });
+
+  // ── link-topic ────────────────────────────────────────
+
+  doc
+    .command('link-topic <docId> <topicId>')
+    .description('Associate a document with a topic')
+    .action(async (docId: string, topicId: string) => {
+      const client = await getTrpcClient();
+
+      // Create the document via notebook router which handles topic association
+      // First verify the document exists
+      const document = await client.document.getDocumentById.query({ id: docId });
+      if (!document) {
+        log.error(`Document not found: ${docId}`);
+        process.exit(1);
+        return;
+      }
+
+      // Use notebook.createDocument to create a linked copy, associating with the topic
+      const result = await client.notebook.createDocument.mutate({
+        content: document.content || '',
+        description: document.description || '',
+        title: document.title || 'Untitled',
+        topicId,
+      });
+
+      console.log(
+        `${pc.green('✓')} Linked document ${pc.bold(result.id)} to topic ${pc.bold(topicId)}`,
+      );
+    });
+
+  // ── topic-docs ────────────────────────────────────────
+
+  doc
+    .command('topic-docs <topicId>')
+    .description('List documents associated with a topic')
+    .option('--type <type>', 'Filter by document type (article, markdown, note, report)')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(async (topicId: string, options: { json?: string | boolean; type?: string }) => {
+      const client = await getTrpcClient();
+
+      const query: { topicId: string; type?: any } = { topicId };
+      if (options.type) query.type = options.type;
+      const result = await client.notebook.listDocuments.query(query);
+      const docs = Array.isArray(result) ? result : ((result as any).data ?? []);
+
+      if (options.json !== undefined) {
+        const fields = typeof options.json === 'string' ? options.json : undefined;
+        outputJson(docs, fields);
+        return;
+      }
+
+      if (docs.length === 0) {
+        console.log('No documents found for this topic.');
+        return;
+      }
+
+      const rows = docs.map((d: any) => [
+        d.id,
+        truncate(d.title || 'Untitled', 120),
+        d.fileType || '',
+        d.updatedAt ? timeAgo(d.updatedAt) : '',
+      ]);
+
+      printTable(rows, ['ID', 'TITLE', 'TYPE', 'UPDATED']);
     });
 }

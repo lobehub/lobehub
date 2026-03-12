@@ -1,8 +1,8 @@
 import * as os from 'node:os';
 
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
 
-import { BaseContentSearch } from './base';
+import type { BaseContentSearch } from './base';
 import { LinuxContentSearchImpl } from './impl/linux';
 import { MacOSContentSearchImpl } from './impl/macOS';
 import { WindowsContentSearchImpl } from './impl/windows';

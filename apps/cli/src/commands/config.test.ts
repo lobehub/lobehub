@@ -6,6 +6,7 @@ import { registerConfigCommand } from './config';
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     usage: {
+      findAndGroupByDateRange: { query: vi.fn() },
       findAndGroupByDay: { query: vi.fn() },
       findByMonth: { query: vi.fn() },
     },
@@ -34,6 +35,8 @@ describe('config command', () => {
     mockTrpcClient.user.getUserState.query.mockReset();
     mockTrpcClient.usage.findByMonth.query.mockReset();
     mockTrpcClient.usage.findAndGroupByDay.query.mockReset();
+    mockTrpcClient.usage.findAndGroupByDateRange.query.mockReset();
+    mockTrpcClient.usage.findAndGroupByDateRange.query.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -75,42 +78,51 @@ describe('config command', () => {
   });
 
   describe('usage', () => {
-    it('should display monthly usage', async () => {
-      mockTrpcClient.usage.findByMonth.query.mockResolvedValue({ totalTokens: 1000 });
+    it('should display usage table', async () => {
+      mockTrpcClient.usage.findAndGroupByDay.query.mockResolvedValue([
+        {
+          day: '2024-01-15',
+          records: [{ model: 'claude-opus-4-6', totalInputTokens: 500, totalOutputTokens: 500 }],
+          totalRequests: 1,
+          totalSpend: 0.5,
+          totalTokens: 1000,
+        },
+      ]);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'usage']);
 
-      expect(mockTrpcClient.usage.findByMonth.query).toHaveBeenCalled();
-    });
-
-    it('should display daily usage', async () => {
-      mockTrpcClient.usage.findAndGroupByDay.query.mockResolvedValue([
-        { date: '2024-01-01', totalTokens: 100 },
-      ]);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'usage', '--daily']);
-
       expect(mockTrpcClient.usage.findAndGroupByDay.query).toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('2024-01-15'));
     });
 
     it('should pass month param', async () => {
-      mockTrpcClient.usage.findByMonth.query.mockResolvedValue({});
+      mockTrpcClient.usage.findAndGroupByDay.query.mockResolvedValue([]);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'usage', '--month', '2024-01']);
 
-      expect(mockTrpcClient.usage.findByMonth.query).toHaveBeenCalledWith({ mo: '2024-01' });
+      expect(mockTrpcClient.usage.findAndGroupByDay.query).toHaveBeenCalledWith({ mo: '2024-01' });
     });
 
-    it('should output JSON', async () => {
+    it('should output JSON with --json flag', async () => {
       const data = { totalTokens: 1000 };
       mockTrpcClient.usage.findByMonth.query.mockResolvedValue(data);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'usage', '--json']);
 
+      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(data, null, 2));
+    });
+
+    it('should output JSON daily with --json --daily', async () => {
+      const data = [{ day: '2024-01-01', totalTokens: 100 }];
+      mockTrpcClient.usage.findAndGroupByDay.query.mockResolvedValue(data);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'usage', '--json', '--daily']);
+
+      expect(mockTrpcClient.usage.findAndGroupByDay.query).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(data, null, 2));
     });
   });
