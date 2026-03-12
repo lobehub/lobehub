@@ -7,6 +7,7 @@ import { memo } from 'react';
 import NavHeader from '@/features/NavHeader';
 
 import HeaderActions from './HeaderActions';
+import NotebookButton from './NotebookButton';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
 
