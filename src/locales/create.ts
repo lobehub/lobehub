@@ -17,7 +17,14 @@ import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 
 import { loadI18nNamespaceModule } from '../utils/i18n/loadI18nNamespaceModule';
 
-const defaultResources = { chat, common, error };
+const createBundledResources = () => ({
+  chat: { ...chat },
+  common: { ...common },
+  error: { ...error },
+});
+
+const defaultResources = createBundledResources();
+const bundledNamespaces = Object.keys(defaultResources);
 
 const { I18N_DEBUG, I18N_DEBUG_BROWSER, I18N_DEBUG_SERVER } = getDebugConfig();
 const debugMode = (I18N_DEBUG ?? isOnServerSide) ? I18N_DEBUG_SERVER : I18N_DEBUG_BROWSER;
@@ -48,17 +55,29 @@ export const createI18nNext = (lang?: string) => {
   return {
     init: (params: { initAsync?: boolean } = {}) => {
       const { initAsync = true } = params;
+      const initialLang = normalizeLocale(lang);
+      const bundledLanguageResources =
+        initialLang === DEFAULT_LANG
+          ? {
+              [DEFAULT_LANG]: defaultResources,
+            }
+          : {
+              [DEFAULT_LANG]: defaultResources,
+              [initialLang]: createBundledResources(),
+            };
 
-      return instance.init({
+      const initPromise = instance.init({
         debug: debugMode,
         defaultNS: ['error', 'common', 'chat'],
         fallbackLng: DEFAULT_LANG,
-
         initAsync,
+        // Keep init synchronous so components can render with bundled en-US resources
+        // before the user's actual language finishes loading in the background.
+        ns: [],
 
         // Preload default language (en-US) synchronously to avoid Suspense on first render
         resources: {
-          [DEFAULT_LANG]: defaultResources,
+          ...bundledLanguageResources,
         },
         // Keep backend loading enabled for namespaces that are not preloaded above.
         partialBundledLanguages: true,
@@ -66,10 +85,24 @@ export const createI18nNext = (lang?: string) => {
         interpolation: {
           escapeValue: false,
         },
+        // Re-render components when new language resources are loaded from backend,
+        // so preloaded en-US fallback gets replaced by the user's actual language.
+        react: {
+          bindI18nStore: 'added',
+          useSuspense: false,
+        },
         keySeparator: false,
 
-        lng: lang,
+        lng: initialLang,
       });
+
+      if (initialLang !== DEFAULT_LANG) {
+        initPromise.then(() => {
+          void instance.reloadResources([initialLang], bundledNamespaces);
+        });
+      }
+
+      return initPromise;
     },
     instance,
   };
