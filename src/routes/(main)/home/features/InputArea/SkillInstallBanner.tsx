@@ -43,7 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: space-between;
 
-    margin-block-end: 6px;
+    margin-block-end: -6px;
     padding-block: 42px 10px;
     padding-inline: 16px;
     border: 1px solid ${cssVar.colorFillSecondary};
@@ -114,7 +114,7 @@ const SkillInstallBanner = memo(() => {
 
   return (
     <div className={styles.banner} onClick={handleOpenStore}>
-      <Flexbox horizontal align="center" gap={8}>
+      <Flexbox horizontal align="center" gap={4}>
         <Icon className={styles.icon} icon={Blocks} size={18} />
         <span className={styles.text}>{t('skillInstallBanner.title')}</span>
       </Flexbox>
