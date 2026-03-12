@@ -60,7 +60,7 @@ const Page = memo(() => {
           <img
             alt={tLabs('features.inputMarkdown.title')}
             src="https://github.com/user-attachments/assets/0527a966-3d95-46b4-b880-c0f3fca18f02"
-            style={{ borderRadius: 8, height: 'auto', marginRight: 12, objectFit: 'cover', width: 120 }}
+            style={{ borderRadius: 8, height: 72, marginRight: 12, objectFit: 'cover', width: 120 }}
           />
         ),
         children: (

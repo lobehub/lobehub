@@ -30,24 +30,26 @@ export const AssistantMessageExtra = memo<AssistantMessageExtraProps>(
     const isLogin = useUserStore(authSelectors.isLogin);
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
+    const showUsage = isDevMode && content !== LOADING_FLAT && !!model;
+    const showTts = isLogin && !!extra?.tts;
+    const showTranslate = isLogin && !!extra?.translate;
+
+    if (!showUsage && !showTts && !showTranslate) return null;
+
     return (
       <Flexbox gap={8} style={{ marginTop: !!tools?.length ? 8 : 4 }}>
-        {isDevMode && content !== LOADING_FLAT && model && (
-          <Usage model={model} performance={performance} provider={provider!} usage={usage} />
+        {showUsage && (
+          <Usage model={model!} performance={performance} provider={provider!} usage={usage} />
         )}
-        {isLogin && (
-          <>
-            {!!extra?.tts && (
-              <ExtraContainer>
-                <TTS content={content} id={id} loading={loading} {...extra?.tts} />
-              </ExtraContainer>
-            )}
-            {!!extra?.translate && (
-              <ExtraContainer>
-                <Translate id={id} loading={loading} {...extra?.translate} />
-              </ExtraContainer>
-            )}
-          </>
+        {showTts && (
+          <ExtraContainer>
+            <TTS content={content} id={id} loading={loading} {...extra?.tts} />
+          </ExtraContainer>
+        )}
+        {showTranslate && (
+          <ExtraContainer>
+            <Translate id={id} loading={loading} {...extra?.translate} />
+          </ExtraContainer>
         )}
       </Flexbox>
     );

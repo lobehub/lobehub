@@ -131,7 +131,7 @@ export const useMenu = () => {
 
     ...(isLogin ? settings : []),
     ...businessMenuItems,
-    ...(!isDesktop ? getDesktopApp : []),
+    ...(!isDesktop ? [{ type: 'divider' as const }, ...getDesktopApp] : []),
     ...data,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as MenuProps['items'];
