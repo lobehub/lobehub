@@ -3,8 +3,11 @@ import { type FC } from 'react';
 import { useState } from 'react';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 
 import { DEFAULT_WIDTH, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../const';
+import { usePanelState } from '../hooks/usePanelState';
 import { List } from './List';
 import { Toolbar } from './Toolbar';
 
@@ -23,6 +26,8 @@ export const PanelContent: FC<PanelContentProps> = ({
 }) => {
   const enabledList = useEnabledChatModels();
   const [searchKeyword, setSearchKeyword] = useState('');
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const { groupMode, handleGroupModeChange } = usePanelState();
   const panelHeight =
     enabledList.length === 0
       ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider']
@@ -38,9 +43,15 @@ export const PanelContent: FC<PanelContentProps> = ({
         width: DEFAULT_WIDTH,
       }}
     >
-      <Toolbar searchKeyword={searchKeyword} onSearchKeywordChange={setSearchKeyword} />
+      <Toolbar
+        groupMode={groupMode}
+        searchKeyword={searchKeyword}
+        showGroupModeSwitch={isDevMode}
+        onGroupModeChange={handleGroupModeChange}
+        onSearchKeywordChange={setSearchKeyword}
+      />
       <List
-        groupMode={'byModel'}
+        groupMode={isDevMode ? groupMode : 'byModel'}
         model={modelProp}
         provider={providerProp}
         searchKeyword={searchKeyword}
