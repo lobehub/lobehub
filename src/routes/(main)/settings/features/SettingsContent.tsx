@@ -50,7 +50,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         ...(enableBusinessFeatures
           ? [
               SettingsTabs.Plans,
-              SettingsTabs.Funds,
+              SettingsTabs.Credits,
               SettingsTabs.Billing,
               SettingsTabs.Referral,
             ]

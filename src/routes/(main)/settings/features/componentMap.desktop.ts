@@ -1,5 +1,5 @@
 import Billing from '@/business/client/BusinessSettingPages/Billing';
-import Funds from '@/business/client/BusinessSettingPages/Funds';
+import Credits from '@/business/client/BusinessSettingPages/Credits';
 import Plans from '@/business/client/BusinessSettingPages/Plans';
 import Referral from '@/business/client/BusinessSettingPages/Referral';
 import Usage from '@/business/client/BusinessSettingPages/Usage';
@@ -41,7 +41,7 @@ export const componentMap = {
   [SettingsTabs.Skill]: Skill,
 
   [SettingsTabs.Plans]: Plans,
-  [SettingsTabs.Funds]: Funds,
+  [SettingsTabs.Credits]: Credits,
   [SettingsTabs.Billing]: Billing,
   [SettingsTabs.Referral]: Referral,
 };

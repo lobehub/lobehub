@@ -5,10 +5,10 @@ import { memo } from 'react';
 
 import { SubscriptionIframeWrapper } from './SubscriptionIframeWrapper';
 
-const Funds = memo(() => {
+const Credits = memo(() => {
   if (!isDesktop) return null;
-  return <SubscriptionIframeWrapper page="funds" />;
+  return <SubscriptionIframeWrapper page="credits" />;
 });
 
-Funds.displayName = 'Funds';
-export default Funds;
+Credits.displayName = 'Credits';
+export default Credits;

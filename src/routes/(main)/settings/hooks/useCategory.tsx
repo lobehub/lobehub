@@ -106,8 +106,8 @@ export const useCategory = () => {
       },
       enableBusinessFeatures && {
         icon: Coins,
-        key: SettingsTabs.Funds,
-        label: tSubscription('tab.funds'),
+        key: SettingsTabs.Credits,
+        label: tSubscription('tab.credits'),
       },
       enableBusinessFeatures && {
         icon: CreditCard,

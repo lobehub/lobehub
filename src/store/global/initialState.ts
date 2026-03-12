@@ -49,7 +49,7 @@ export enum SettingsTabs {
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
-  Funds = 'funds',
+  Credits = 'credits',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
