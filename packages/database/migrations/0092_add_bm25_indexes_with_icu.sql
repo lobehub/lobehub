@@ -3,137 +3,137 @@
 -- Messages additionally includes role for the same reason.
 
 -- 0. Ensure topics.description column exists (covered by release PR 0091_topics_add_description, idempotent here)
-ALTER TABLE "topics" ADD COLUMN IF NOT EXISTS "description" text;-->statement-breakpoint
+ALTER TABLE "topics" ADD COLUMN IF NOT EXISTS "description" text;--> statement-breakpoint
 
 -- 1. agents: title, description, slug, tags(jsonb), system_role, user_id
-DROP INDEX IF EXISTS agents_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS agents_bm25_idx;--> statement-breakpoint
 CREATE INDEX agents_bm25_idx ON agents
 USING bm25 (id, title, description, slug, tags, system_role, user_id)
 WITH (
   key_field='id',
   text_fields='{"title":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"description":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"slug":{"tokenizer":{"type":"icu"}},"system_role":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}',
   json_fields='{"tags":{"tokenizer":{"type":"icu"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 2. topics: title, content, description, user_id
-DROP INDEX IF EXISTS topics_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS topics_bm25_idx;--> statement-breakpoint
 CREATE INDEX topics_bm25_idx ON topics
 USING bm25 (id, title, content, description, user_id)
 WITH (
   key_field='id',
   text_fields='{"title":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"content":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"description":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 3. messages: content, user_id, role
-DROP INDEX IF EXISTS messages_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS messages_bm25_idx;--> statement-breakpoint
 CREATE INDEX messages_bm25_idx ON messages
 USING bm25 (id, content, user_id, role)
 WITH (
   key_field='id',
   text_fields='{"content":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}},"role":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 4. files: name, user_id, file_type
-DROP INDEX IF EXISTS files_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS files_bm25_idx;--> statement-breakpoint
 CREATE INDEX files_bm25_idx ON files
 USING bm25 (id, name, user_id, file_type)
 WITH (
   key_field='id',
   text_fields='{"name":{"tokenizer":{"type":"icu"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}},"file_type":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 5. documents: title, description, content, slug, user_id, file_type
-DROP INDEX IF EXISTS documents_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS documents_bm25_idx;--> statement-breakpoint
 CREATE INDEX documents_bm25_idx ON documents
 USING bm25 (id, title, description, content, slug, user_id, file_type)
 WITH (
   key_field='id',
   text_fields='{"title":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"description":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"content":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"slug":{"tokenizer":{"type":"icu"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}},"file_type":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 6. knowledge_bases: name, description, user_id
-DROP INDEX IF EXISTS knowledge_bases_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS knowledge_bases_bm25_idx;--> statement-breakpoint
 CREATE INDEX knowledge_bases_bm25_idx ON knowledge_bases
 USING bm25 (id, name, description, user_id)
 WITH (
   key_field='id',
   text_fields='{"name":{"tokenizer":{"type":"icu"}},"description":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 7. user_memories: title, summary, details, user_id
-DROP INDEX IF EXISTS user_memories_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memories_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memories_bm25_idx ON user_memories
 USING bm25 (id, title, summary, details, user_id)
 WITH (
   key_field='id',
   text_fields='{"title":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"summary":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"details":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 8. chat_groups: title, description, user_id
-DROP INDEX IF EXISTS chat_groups_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS chat_groups_bm25_idx;--> statement-breakpoint
 CREATE INDEX chat_groups_bm25_idx ON chat_groups
 USING bm25 (id, title, description, user_id)
 WITH (
   key_field='id',
   text_fields='{"title":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"description":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 9. user_memories_contexts: title, description, current_status, user_id
-DROP INDEX IF EXISTS user_memories_contexts_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memories_contexts_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memories_contexts_bm25_idx ON user_memories_contexts
 USING bm25 (id, title, description, current_status, user_id)
 WITH (
   key_field='id',
   text_fields='{"title":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"description":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"current_status":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 10. user_memories_preferences: conclusion_directives, suggestions, user_id
-DROP INDEX IF EXISTS user_memories_preferences_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memories_preferences_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memories_preferences_bm25_idx ON user_memories_preferences
 USING bm25 (id, conclusion_directives, suggestions, user_id)
 WITH (
   key_field='id',
   text_fields='{"conclusion_directives":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"suggestions":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 11. user_memories_activities: notes, narrative, feedback, user_id
-DROP INDEX IF EXISTS user_memories_activities_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memories_activities_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memories_activities_bm25_idx ON user_memories_activities
 USING bm25 (id, notes, narrative, feedback, user_id)
 WITH (
   key_field='id',
   text_fields='{"notes":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"narrative":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"feedback":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 12. user_memories_identities: description, role, user_id
-DROP INDEX IF EXISTS user_memories_identities_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memories_identities_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memories_identities_bm25_idx ON user_memories_identities
 USING bm25 (id, description, role, user_id)
 WITH (
   key_field='id',
   text_fields='{"description":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"role":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 13. user_memories_experiences: situation, reasoning, possible_outcome, action, key_learning, user_id
-DROP INDEX IF EXISTS user_memories_experiences_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memories_experiences_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memories_experiences_bm25_idx ON user_memories_experiences
 USING bm25 (id, situation, reasoning, possible_outcome, action, key_learning, user_id)
 WITH (
   key_field='id',
   text_fields='{"situation":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"reasoning":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"possible_outcome":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"action":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"key_learning":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 14. user_memory_persona_documents: tagline, persona, user_id
-DROP INDEX IF EXISTS user_memory_persona_documents_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memory_persona_documents_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memory_persona_documents_bm25_idx ON user_memory_persona_documents
 USING bm25 (id, tagline, persona, user_id)
 WITH (
   key_field='id',
   text_fields='{"tagline":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"persona":{"tokenizer":{"type":"icu","stemmer":"English","stopwords_language":"English"}},"user_id":{"fast":true,"tokenizer":{"type":"keyword"}}}'
-);-->statement-breakpoint
+);--> statement-breakpoint
 
 -- 15. user_memory_persona_document_histories: snapshot_persona, snapshot_tagline, reasoning, summary, user_id
-DROP INDEX IF EXISTS user_memory_persona_document_histories_bm25_idx;-->statement-breakpoint
+DROP INDEX IF EXISTS user_memory_persona_document_histories_bm25_idx;--> statement-breakpoint
 CREATE INDEX user_memory_persona_document_histories_bm25_idx ON user_memory_persona_document_histories
 USING bm25 (id, snapshot_persona, snapshot_tagline, reasoning, summary, user_id)
 WITH (
