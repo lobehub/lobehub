@@ -35,7 +35,7 @@ interface MultipleProvidersModelItemProps {
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   newLabel: string;
   onClose: () => void;
-  onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
   proLabel?: string;
 }
@@ -108,14 +108,15 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                   return (
                     <DropdownMenuItem
                       key={key}
-                      onClick={async () => {
+                      onClick={() => {
                         if (providerRestricted) {
                           onRestrictedModelClick?.();
                           onClose();
                           return;
                         }
-                        await onModelChange(data.model.id, p.id);
+                        setSubmenuOpen(false);
                         onClose();
+                        onModelChange(data.model.id, p.id);
                       }}
                     >
                       <DropdownMenuItemIcon>

@@ -7,9 +7,6 @@ export const MAX_PANEL_HEIGHT = 460;
 export const TOOLBAR_HEIGHT = 40;
 export const FOOTER_HEIGHT = 48;
 
-export const INITIAL_RENDER_COUNT = 15;
-export const RENDER_ALL_DELAY_MS = 500;
-
 export const ITEM_HEIGHT = {
   'empty-model': 32,
   'group-header': 32,

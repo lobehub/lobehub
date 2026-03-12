@@ -38,7 +38,9 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     return (
       <TooltipGroup>
         <DropdownMenuRoot open={isOpen} onOpenChange={handleOpenChange}>
-          <DropdownMenuTrigger openOnHover={openOnHover}>{children}</DropdownMenuTrigger>
+          <DropdownMenuTrigger className={styles.trigger} openOnHover={openOnHover}>
+            {children}
+          </DropdownMenuTrigger>
           <DropdownMenuPortal>
             <DropdownMenuPositioner hoverTrigger={openOnHover} placement={placement}>
               <DropdownMenuPopup className={styles.container} onKeyDown={stopPropagation}>
