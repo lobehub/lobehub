@@ -228,6 +228,64 @@ export function registerModelCommand(program: Command) {
       },
     );
 
+  // ── batch-update ──────────────────────────────────────
+
+  model
+    .command('batch-update <providerId>')
+    .description('Batch update models for a provider')
+    .requiredOption('--models <json>', 'JSON array of model objects')
+    .action(async (providerId: string, options: { models: string }) => {
+      let models: any[];
+      try {
+        models = JSON.parse(options.models);
+      } catch {
+        log.error('Invalid models JSON. Provide a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      if (!Array.isArray(models)) {
+        log.error('--models must be a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      const client = await getTrpcClient();
+      await client.aiModel.batchUpdateAiModels.mutate({ id: providerId, models } as any);
+      console.log(
+        `${pc.green('✓')} Batch updated ${models.length} model(s) for provider ${pc.bold(providerId)}`,
+      );
+    });
+
+  // ── sort ──────────────────────────────────────────────
+
+  model
+    .command('sort <providerId>')
+    .description('Update model sort order')
+    .requiredOption('--sort-map <json>', 'JSON array of {id, sort, type?} objects')
+    .action(async (providerId: string, options: { sortMap: string }) => {
+      let sortMap: any[];
+      try {
+        sortMap = JSON.parse(options.sortMap);
+      } catch {
+        log.error('Invalid sort-map JSON. Provide a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      if (!Array.isArray(sortMap)) {
+        log.error('--sort-map must be a JSON array.');
+        process.exit(1);
+        return;
+      }
+
+      const client = await getTrpcClient();
+      await client.aiModel.updateAiModelOrder.mutate({ providerId, sortMap } as any);
+      console.log(
+        `${pc.green('✓')} Updated sort order for ${sortMap.length} model(s) in provider ${pc.bold(providerId)}`,
+      );
+    });
+
   // ── clear ───────────────────────────────────────────
 
   model

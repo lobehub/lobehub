@@ -1,5 +1,5 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
-import { type LobeTool } from '@lobechat/types';
+import { type LobeTool, type RuntimeEnvConfig } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest
@@ -36,8 +36,9 @@ export interface ServerCreateAgentToolsEngineParams {
   additionalManifests?: LobeToolManifest[];
   /** Agent configuration containing plugins array */
   agentConfig: {
-    /** Optional agent chat config with searchMode */
+    /** Optional agent chat config */
     chatConfig?: {
+      runtimeEnv?: RuntimeEnvConfig;
       searchMode?: 'off' | 'on' | 'auto';
     };
     /** Plugin IDs enabled for this agent */

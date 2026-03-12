@@ -8,12 +8,20 @@ const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     agent: {
       createAgent: { mutate: vi.fn() },
+      createAgentFiles: { mutate: vi.fn() },
+      createAgentKnowledgeBase: { mutate: vi.fn() },
+      deleteAgentFile: { mutate: vi.fn() },
+      deleteAgentKnowledgeBase: { mutate: vi.fn() },
       duplicateAgent: { mutate: vi.fn() },
       getAgentConfigById: { query: vi.fn() },
       getBuiltinAgent: { query: vi.fn() },
+      getKnowledgeBasesAndFiles: { query: vi.fn() },
       queryAgents: { query: vi.fn() },
       removeAgent: { mutate: vi.fn() },
+      toggleFile: { mutate: vi.fn() },
+      toggleKnowledgeBase: { mutate: vi.fn() },
       updateAgentConfig: { mutate: vi.fn() },
+      updateAgentPinned: { mutate: vi.fn() },
     },
     aiAgent: {
       execAgent: { mutate: vi.fn() },
@@ -400,6 +408,158 @@ describe('agent command', () => {
         expect.any(Object),
         expect.objectContaining({ json: true }),
       );
+    });
+  });
+
+  describe('pin/unpin', () => {
+    it('should pin an agent', async () => {
+      mockTrpcClient.agent.updateAgentPinned.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'pin', 'a1']);
+
+      expect(mockTrpcClient.agent.updateAgentPinned.mutate).toHaveBeenCalledWith({
+        id: 'a1',
+        pinned: true,
+      });
+    });
+
+    it('should unpin an agent', async () => {
+      mockTrpcClient.agent.updateAgentPinned.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'unpin', 'a1']);
+
+      expect(mockTrpcClient.agent.updateAgentPinned.mutate).toHaveBeenCalledWith({
+        id: 'a1',
+        pinned: false,
+      });
+    });
+  });
+
+  describe('kb-files', () => {
+    it('should list kb and files', async () => {
+      mockTrpcClient.agent.getKnowledgeBasesAndFiles.query.mockResolvedValue([
+        { enabled: true, id: 'f1', name: 'file.txt', type: 'file' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'kb-files', 'a1']);
+
+      expect(mockTrpcClient.agent.getKnowledgeBasesAndFiles.query).toHaveBeenCalledWith({
+        agentId: 'a1',
+      });
+    });
+
+    it('should show empty message', async () => {
+      mockTrpcClient.agent.getKnowledgeBasesAndFiles.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'kb-files', 'a1']);
+
+      expect(consoleSpy).toHaveBeenCalledWith('No knowledge bases or files found.');
+    });
+  });
+
+  describe('add-file', () => {
+    it('should add files to agent', async () => {
+      mockTrpcClient.agent.createAgentFiles.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'add-file', 'a1', '--file-ids', 'f1,f2']);
+
+      expect(mockTrpcClient.agent.createAgentFiles.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', fileIds: ['f1', 'f2'] }),
+      );
+    });
+  });
+
+  describe('remove-file', () => {
+    it('should remove a file from agent', async () => {
+      mockTrpcClient.agent.deleteAgentFile.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'remove-file', 'a1', '--file-id', 'f1']);
+
+      expect(mockTrpcClient.agent.deleteAgentFile.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        fileId: 'f1',
+      });
+    });
+  });
+
+  describe('toggle-file', () => {
+    it('should toggle file with enable', async () => {
+      mockTrpcClient.agent.toggleFile.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'toggle-file',
+        'a1',
+        '--file-id',
+        'f1',
+        '--enable',
+      ]);
+
+      expect(mockTrpcClient.agent.toggleFile.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        enabled: true,
+        fileId: 'f1',
+      });
+    });
+  });
+
+  describe('add-kb', () => {
+    it('should add kb to agent', async () => {
+      mockTrpcClient.agent.createAgentKnowledgeBase.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'add-kb', 'a1', '--kb-id', 'kb1']);
+
+      expect(mockTrpcClient.agent.createAgentKnowledgeBase.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', knowledgeBaseId: 'kb1' }),
+      );
+    });
+  });
+
+  describe('remove-kb', () => {
+    it('should remove kb from agent', async () => {
+      mockTrpcClient.agent.deleteAgentKnowledgeBase.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'remove-kb', 'a1', '--kb-id', 'kb1']);
+
+      expect(mockTrpcClient.agent.deleteAgentKnowledgeBase.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        knowledgeBaseId: 'kb1',
+      });
+    });
+  });
+
+  describe('toggle-kb', () => {
+    it('should toggle kb with disable', async () => {
+      mockTrpcClient.agent.toggleKnowledgeBase.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'toggle-kb',
+        'a1',
+        '--kb-id',
+        'kb1',
+        '--disable',
+      ]);
+
+      expect(mockTrpcClient.agent.toggleKnowledgeBase.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        enabled: false,
+        knowledgeBaseId: 'kb1',
+      });
     });
   });
 

@@ -31,6 +31,12 @@ const historyCount = (s: AgentStoreState): number =>
 const isMemoryToolEnabled = (s: AgentStoreState) =>
   chatConfigByIdSelectors.isMemoryToolEnabledById(s.activeAgentId || '')(s);
 
+const isLocalSystemEnabled = (s: AgentStoreState) =>
+  chatConfigByIdSelectors.isLocalSystemEnabledById(s.activeAgentId || '')(s);
+
+const isCloudSandboxEnabled = (s: AgentStoreState) =>
+  chatConfigByIdSelectors.getRuntimeModeById(s.activeAgentId || '')(s) === 'cloud';
+
 const enableHistoryDivider =
   (historyLength: number, currentIndex: number) => (s: AgentStoreState) => {
     const config = currentChatConfig(s);
@@ -49,6 +55,8 @@ export const agentChatConfigSelectors = {
   enableHistoryDivider,
   historyCount,
   isAgentEnableSearch,
+  isCloudSandboxEnabled,
+  isLocalSystemEnabled,
   isMemoryToolEnabled,
   searchFCModel,
   useModelBuiltinSearch,

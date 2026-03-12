@@ -1,7 +1,9 @@
 /**
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
+import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, defaultToolIds } from '@lobechat/builtin-tools';
@@ -115,7 +117,10 @@ export const createAgentToolsEngine = (
         // Always-on builtin tools
         ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
         // System-level rules (may override user selection for specific tools)
+        [CloudSandboxManifest.identifier]:
+          agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
         [KnowledgeBaseManifest.identifier]: agentSelectors.hasEnabledKnowledgeBases(agentState),
+        [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
         [MemoryManifest.identifier]: agentChatConfigSelectors.isMemoryToolEnabled(agentState),
         [WebBrowsingManifest.identifier]: searchConfig.useApplicationBuiltinSearchTool,
       },

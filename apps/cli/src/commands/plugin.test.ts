@@ -8,6 +8,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     plugin: {
       createOrInstallPlugin: { mutate: vi.fn() },
+      createPlugin: { mutate: vi.fn() },
       getPlugins: { query: vi.fn() },
       removePlugin: { mutate: vi.fn() },
       updatePlugin: { mutate: vi.fn() },
@@ -72,6 +73,50 @@ describe('plugin command', () => {
       await program.parseAsync(['node', 'test', 'plugin', 'list', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(plugins, null, 2));
+    });
+  });
+
+  describe('create', () => {
+    it('should create a plugin', async () => {
+      mockTrpcClient.plugin.createPlugin.mutate.mockResolvedValue({ identifier: 'my-plugin' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'plugin',
+        'create',
+        '-i',
+        'my-plugin',
+        '--manifest',
+        '{"name":"test"}',
+      ]);
+
+      expect(mockTrpcClient.plugin.createPlugin.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identifier: 'my-plugin',
+          manifest: { name: 'test' },
+          type: 'plugin',
+        }),
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created plugin'));
+    });
+
+    it('should reject invalid manifest JSON', async () => {
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'plugin',
+        'create',
+        '-i',
+        'my-plugin',
+        '--manifest',
+        'not-json',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith('Invalid manifest JSON.');
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 

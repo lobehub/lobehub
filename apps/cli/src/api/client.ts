@@ -16,6 +16,13 @@ let _client: TrpcClient | undefined;
 let _toolsClient: ToolsTrpcClient | undefined;
 
 async function getAuthAndServer() {
+  // LOBEHUB_JWT + LOBEHUB_SERVER env vars (used by server-side sandbox execution)
+  const envJwt = process.env.LOBEHUB_JWT;
+  if (envJwt) {
+    const serverUrl = process.env.LOBEHUB_SERVER || OFFICIAL_SERVER_URL;
+    return { accessToken: envJwt, serverUrl: serverUrl.replace(/\/$/, '') };
+  }
+
   const result = await getValidToken();
   if (!result) {
     log.error("No authentication found. Run 'lh login' first.");

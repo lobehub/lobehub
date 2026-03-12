@@ -8,15 +8,25 @@
 export type AgentMode = 'auto' | 'plan' | 'ask' | 'implement';
 
 /**
- * Local System configuration (desktop only)
+ * Runtime environment mode
+ * - local: Access local files and commands (desktop only)
+ * - cloud: Run in cloud sandbox
+ * - none: No runtime environment
  */
-export interface LocalSystemConfig {
+export type RuntimeEnvMode = 'cloud' | 'local' | 'none';
+
+export type RuntimePlatform = 'desktop' | 'web';
+
+/**
+ * Runtime environment configuration
+ */
+export interface RuntimeEnvConfig {
   /**
-   * Local System working directory (desktop only)
+   * Runtime environment mode per platform
+   */
+  runtimeMode?: Partial<Record<RuntimePlatform, RuntimeEnvMode>>;
+  /**
+   * Working directory (desktop only)
    */
   workingDirectory?: string;
-
-  // Future extensions:
-  // allowedPaths?: string[];
-  // deniedCommands?: string[];
 }

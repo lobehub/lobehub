@@ -15,7 +15,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import {
   type LobeAgentChatConfig,
   type LobeAgentConfig,
-  type LocalSystemConfig,
+  type RuntimeEnvConfig,
 } from '@/types/agent';
 import { type MetaData } from '@/types/meta';
 import { merge } from '@/utils/merge';
@@ -191,13 +191,13 @@ export class AgentSliceActionImpl {
     await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
   };
 
-  updateAgentLocalSystemConfigById = async (
+  updateAgentRuntimeEnvConfigById = async (
     agentId: string,
-    config: Partial<LocalSystemConfig>,
+    config: Partial<RuntimeEnvConfig>,
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentChatConfigById(agentId, { localSystem: config });
+    await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: config });
   };
 
   updateAgentMeta = async (meta: Partial<MetaData>): Promise<void> => {

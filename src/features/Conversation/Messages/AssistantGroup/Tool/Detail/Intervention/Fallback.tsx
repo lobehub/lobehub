@@ -11,7 +11,6 @@ import { useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import KeyValueEditor from './KeyValueEditor';
-import ModeSelector from './ModeSelector';
 
 interface FallbackInterventionProps {
   apiName: string;
@@ -77,8 +76,7 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           }
         />
 
-        <Flexbox horizontal justify={'space-between'}>
-          <ModeSelector />
+        <Flexbox horizontal justify={'flex-end'}>
           <ApprovalActions
             apiName={apiName}
             approvalMode={approvalMode}

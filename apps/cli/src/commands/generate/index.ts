@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
-import { outputJson, printTable, timeAgo, truncate } from '../../utils/format';
+import { confirm, outputJson, printTable, timeAgo, truncate } from '../../utils/format';
 import { registerAsrCommand } from './asr';
 import { registerImageCommand } from './image';
 import { registerTextCommand } from './text';
@@ -136,6 +136,25 @@ export function registerGenerateCommand(program: Command) {
         }
       },
     );
+
+  // ── delete ─────────────────────────────────────────
+  generate
+    .command('delete <generationId>')
+    .description('Delete a generation record')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(async (generationId: string, options: { yes?: boolean }) => {
+      if (!options.yes) {
+        const confirmed = await confirm('Are you sure you want to delete this generation?');
+        if (!confirmed) {
+          console.log('Cancelled.');
+          return;
+        }
+      }
+
+      const client = await getTrpcClient();
+      await client.generation.deleteGeneration.mutate({ generationId });
+      console.log(`${pc.green('✓')} Deleted generation ${pc.bold(generationId)}`);
+    });
 
   // ── list ────────────────────────────────────────────
   generate

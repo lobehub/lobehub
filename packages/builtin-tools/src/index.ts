@@ -29,6 +29,8 @@ export const defaultToolIds = [
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
+  LocalSystemManifest.identifier,
+  CloudSandboxManifest.identifier,
 ];
 
 /**
@@ -61,7 +63,7 @@ export const builtinTools: LobeBuiltinTool[] = [
   },
   {
     discoverable: isDesktop,
-    hidden: !isDesktop,
+    hidden: true,
     identifier: LocalSystemManifest.identifier,
     manifest: LocalSystemManifest,
     type: 'builtin',
@@ -79,6 +81,7 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    hidden: true,
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
     type: 'builtin',
