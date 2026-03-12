@@ -2,9 +2,6 @@
 -- All tables include user_id (keyword tokenizer + fast) for filter pushdown into tantivy index scan.
 -- Messages additionally includes role for the same reason.
 
--- 0. Ensure topics.description column exists (covered by release PR 0091_topics_add_description, idempotent here)
-ALTER TABLE "topics" ADD COLUMN IF NOT EXISTS "description" text;--> statement-breakpoint
-
 -- 1. agents: title, description, slug, tags(jsonb), system_role, user_id
 DROP INDEX IF EXISTS agents_bm25_idx;--> statement-breakpoint
 CREATE INDEX agents_bm25_idx ON agents
