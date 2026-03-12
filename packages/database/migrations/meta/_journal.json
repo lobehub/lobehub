@@ -644,6 +644,13 @@
       "when": 1773308533505,
       "tag": "0091_topics_add_description",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1773316712910,
+      "tag": "0092_add_bm25_indexes_with_icu",
+      "breakpoints": true
     }
   ],
   "version": "6"
