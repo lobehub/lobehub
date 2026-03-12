@@ -12,7 +12,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import DataStatistics from '../DataStatistics';
-import UserInfo from '../UserInfo';
+import UserInfo from '@/features/User/UserInfo';
 import UserLoginOrSignup from '../UserLoginOrSignup';
 import LangButton from './LangButton';
 import { useMenu } from './useMenu';
