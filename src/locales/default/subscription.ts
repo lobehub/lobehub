@@ -72,7 +72,7 @@ export default {
     'The balance amount to restore to when auto top-up triggers',
   'credits.autoTopUp.threshold': 'Threshold',
   'credits.autoTopUp.thresholdDesc':
-    'Auto top-up triggers when your balance falls below this amount',
+    'Auto top-up triggers when your balance falls to or below this amount',
   'credits.autoTopUp.title': 'Auto Top-Up',
   'credits.autoTopUp.toggle': 'Enable Auto Top-Up',
   'credits.autoTopUp.upgradeHint': 'Subscribe to a paid plan to enable auto top-up',
