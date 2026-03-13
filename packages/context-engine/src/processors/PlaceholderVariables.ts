@@ -129,9 +129,6 @@ const replaceAvailablePlaceholders = (
   return changed ? output.join('') : text;
 };
 
-const extractPlaceholderVariables = (text: string): string[] =>
-  extractPlaceholderTokens(text).map((token) => token.key);
-
 /**
  * Replace template variables with actual values, supporting recursive parsing of nested variables
  * @param text - Original text containing variables
