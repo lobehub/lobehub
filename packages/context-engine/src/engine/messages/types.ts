@@ -10,6 +10,7 @@ import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
+import type { AgentContextDocument } from '../../providers/AgentDocumentInjector';
 import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 import type { DiscordContext } from '../../providers/DiscordContextProvider';
 import type { EvalContext } from '../../providers/EvalContextSystemInjector';
@@ -241,6 +242,8 @@ export interface MessagesEngineParams {
   // ========== Knowledge ==========
   /** Knowledge configuration */
   knowledge?: KnowledgeConfig;
+  /** Agent document configuration for context injection */
+  agentDocuments?: AgentContextDocument[];
 
   // ========== Skills ==========
   /** Skills configuration */

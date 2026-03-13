@@ -23,6 +23,7 @@ import {
 } from '../../processors';
 import {
   AgentBuilderContextInjector,
+  AgentDocumentInjector,
   AgentManagementContextInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
@@ -137,12 +138,14 @@ export class MessagesEngine {
       capabilities,
       variableGenerators,
       fileContext,
+      messages,
       agentBuilderContext,
       discordContext,
       evalContext,
       agentManagementContext,
       groupAgentBuilderContext,
       agentGroup,
+      agentDocuments,
       gtd,
       userMemory,
       initialContext,
@@ -163,6 +166,7 @@ export class MessagesEngine {
     const isUserMemoryEnabled = userMemory?.enabled && userMemory?.memories;
     const hasSelectedSkills = (selectedSkills?.length ?? 0) > 0;
 
+    const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
     // GTD is enabled if gtd.enabled is true and either plan or todos is provided
@@ -175,6 +179,11 @@ export class MessagesEngine {
     const hasDateAwareTools =
       toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
     const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+    const currentUserMessage = [...messages]
+      .reverse()
+      .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
+      | string
+      | undefined;
 
     return [
       // =============================================
@@ -234,6 +243,16 @@ export class MessagesEngine {
         fileContents: knowledge?.fileContents,
         knowledgeBases: knowledge?.knowledgeBases,
       }),
+
+      // 7.5 Agent document injection (policy-based autoload documents)
+      ...(hasAgentDocuments
+        ? [
+            new AgentDocumentInjector({
+              currentUserMessage,
+              documents: agentDocuments,
+            }),
+          ]
+        : []),
 
       // 8. Tool Discovery context injection (available tools for dynamic activation)
       ...(toolDiscoveryConfig?.availableTools && toolDiscoveryConfig.availableTools.length > 0
