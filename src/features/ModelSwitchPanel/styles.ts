@@ -51,4 +51,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  trigger: css`
+    display: inline-flex;
+  `,
 }));
