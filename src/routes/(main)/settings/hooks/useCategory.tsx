@@ -38,6 +38,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selec
 export enum SettingsGroupKey {
   Agent = 'agent',
   General = 'general',
+  Subscription = 'subscription',
   System = 'system',
 }
 
@@ -89,35 +90,10 @@ export const useCategory = () => {
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
       },
-      {
-        icon: ChartColumnBigIcon,
-        key: SettingsTabs.Usage,
-        label: t('tab.usage'),
-      },
       !mobile && {
         icon: KeyboardIcon,
         key: SettingsTabs.Hotkey,
         label: t('tab.hotkey'),
-      },
-      enableBusinessFeatures && {
-        icon: Map,
-        key: SettingsTabs.Plans,
-        label: tSubscription('tab.plans'),
-      },
-      enableBusinessFeatures && {
-        icon: Coins,
-        key: SettingsTabs.Credits,
-        label: tSubscription('tab.credits'),
-      },
-      enableBusinessFeatures && {
-        icon: CreditCard,
-        key: SettingsTabs.Billing,
-        label: tSubscription('tab.billing'),
-      },
-      enableBusinessFeatures && {
-        icon: Gift,
-        key: SettingsTabs.Referral,
-        label: tSubscription('tab.referral'),
       },
     ].filter(Boolean) as CategoryItem[];
 
@@ -126,6 +102,23 @@ export const useCategory = () => {
       key: SettingsGroupKey.General,
       title: t('group.common'),
     });
+
+    // Subscription group
+    if (enableBusinessFeatures) {
+      const subscriptionItems: CategoryItem[] = [
+        { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
+        { icon: Coins, key: SettingsTabs.Credits, label: tSubscription('tab.credits') },
+        { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
+        { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },
+        { icon: ChartColumnBigIcon, key: SettingsTabs.Usage, label: t('tab.usage') },
+      ];
+
+      groups.push({
+        items: subscriptionItems,
+        key: SettingsGroupKey.Subscription,
+        title: t('group.subscription'),
+      });
+    }
 
     // Agent group
     const agentItems: CategoryItem[] = [
