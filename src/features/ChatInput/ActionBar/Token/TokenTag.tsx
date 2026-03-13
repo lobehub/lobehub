@@ -17,6 +17,8 @@ import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import { useToolStore } from '@/store/tool';
 import { pluginHelpers } from '@/store/tool/helpers';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import ActionPopover from '../components/ActionPopover';
@@ -109,6 +111,10 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
   // Total token
   const totalToken = systemRoleToken + historySummaryToken + toolsToken + chatsToken;
 
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+
+  if (!isDevMode && maxTokens > 0 && totalToken / maxTokens <= 0.5) return null;
+
   const content = (
     <Flexbox gap={12} style={{ minWidth: 200 }}>
       <Flexbox horizontal align={'center'} gap={4} justify={'space-between'} width={'100%'}>
@@ -135,37 +141,39 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
           </Center>
         </Tooltip>
       </Flexbox>
+      {isDevMode && (
+        <TokenProgress
+          showIcon
+          data={[
+            {
+              color: cssVar.magenta,
+              id: 'systemRole',
+              title: t('tokenDetails.systemRole'),
+              value: systemRoleToken,
+            },
+            {
+              color: cssVar.geekblue,
+              id: 'tools',
+              title: t('tokenDetails.tools'),
+              value: toolsToken,
+            },
+            {
+              color: cssVar.orange,
+              id: 'historySummary',
+              title: t('tokenDetails.historySummary'),
+              value: historySummaryToken,
+            },
+            {
+              color: cssVar.gold,
+              id: 'chats',
+              title: t('tokenDetails.chats'),
+              value: chatsToken,
+            },
+          ]}
+        />
+      )}
       <TokenProgress
-        showIcon
-        data={[
-          {
-            color: cssVar.magenta,
-            id: 'systemRole',
-            title: t('tokenDetails.systemRole'),
-            value: systemRoleToken,
-          },
-          {
-            color: cssVar.geekblue,
-            id: 'tools',
-            title: t('tokenDetails.tools'),
-            value: toolsToken,
-          },
-          {
-            color: cssVar.orange,
-            id: 'historySummary',
-            title: t('tokenDetails.historySummary'),
-            value: historySummaryToken,
-          },
-          {
-            color: cssVar.gold,
-            id: 'chats',
-            title: t('tokenDetails.chats'),
-            value: chatsToken,
-          },
-        ]}
-      />
-      <TokenProgress
-        showIcon
+        showIcon={isDevMode}
         showTotal={t('tokenDetails.total')}
         data={[
           {

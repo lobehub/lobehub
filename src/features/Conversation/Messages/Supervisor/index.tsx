@@ -14,7 +14,7 @@ import { useNewScreen } from '@/features/Conversation/Messages/components/useNew
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
@@ -68,6 +68,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
     messageId: id,
   });
 
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const addReaction = useConversationStore((s) => s.addReaction);
   const removeReaction = useConversationStore((s) => s.removeReaction);
   const userId = useUserStore(userProfileSelectors.userId)!;
@@ -121,7 +122,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
       titleAddon={<Tag>{t('supervisor.label')}</Tag>}
       actions={
         <>
-          {branch && (
+          {isDevMode && branch && (
             <MessageBranch
               activeBranchIndex={branch.activeBranchIndex}
               count={branch.count}
@@ -149,7 +150,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
           messageIndex={index}
         />
       )}
-      {model && (
+      {isDevMode && model && (
         <Usage model={model} performance={performance} provider={provider!} usage={usage} />
       )}
       {reactions.length > 0 && (

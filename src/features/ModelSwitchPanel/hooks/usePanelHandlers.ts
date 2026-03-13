@@ -14,7 +14,7 @@ export const usePanelHandlers = ({
   const updateAgentConfig = useAgentStore((s) => s.updateAgentConfig);
 
   const handleModelChange = useCallback(
-    (modelId: string, providerId: string) => {
+    async (modelId: string, providerId: string) => {
       // Defer store update so the panel close animation completes
       // before React re-renders with new data (prevents detail panel flash).
       setTimeout(() => {

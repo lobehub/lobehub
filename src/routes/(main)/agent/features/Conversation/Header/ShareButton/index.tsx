@@ -8,12 +8,11 @@ import { useTranslation } from 'react-i18next';
 
 import { withSuspense } from '@/components/withSuspense';
 import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
-import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
+import { useShareModal } from '@/features/ShareModal';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
-const ShareModal = dynamic(() => import('@/features/ShareModal'));
 const SharePopover = dynamic(() => import('@/features/SharePopover'));
 
 interface ShareButtonProps {
@@ -23,7 +22,7 @@ interface ShareButtonProps {
 }
 
 const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
-  const [isModalOpen, setIsModalOpen] = useWorkspaceModal(open, setOpen);
+  const { openShareModal } = useShareModal({ open, setOpen });
   const { t } = useTranslation('common');
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
@@ -39,18 +38,17 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
       tooltipProps={{
         placement: 'bottom',
       }}
-      onClick={enableTopicLinkShare ? undefined : () => setIsModalOpen(true)}
+      onClick={enableTopicLinkShare ? undefined : openShareModal}
     />
   );
 
   return (
     <>
       {enableTopicLinkShare ? (
-        <SharePopover onOpenModal={() => setIsModalOpen(true)}>{iconButton}</SharePopover>
+        <SharePopover onOpenModal={openShareModal}>{iconButton}</SharePopover>
       ) : (
         iconButton
       )}
-      <ShareModal open={isModalOpen} onCancel={() => setIsModalOpen(false)} />
     </>
   );
 });

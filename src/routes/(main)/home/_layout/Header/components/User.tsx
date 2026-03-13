@@ -19,6 +19,7 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
     userProfileSelectors.username(s),
     authSelectors.isLogin(s),
   ]);
+
   return (
     <UserPanel>
       <Block
@@ -43,10 +44,8 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
             ) : (
               <Text
                 ellipsis
+                style={{ flex: 1 }}
                 weight={500}
-                style={{
-                  flex: 1,
-                }}
               >
                 {nickname || username}
               </Text>

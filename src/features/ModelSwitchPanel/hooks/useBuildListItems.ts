@@ -71,7 +71,6 @@ export const useBuildListItems = (
       }
 
       return modelArray
-        .sort((a, b) => a.displayName.localeCompare(b.displayName))
         .map((data) => ({
           data,
           type:

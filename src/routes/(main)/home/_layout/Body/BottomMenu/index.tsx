@@ -26,22 +26,16 @@ const BottomMenu = memo(() => {
     () =>
       [
         {
-          icon: getRouteById('settings')!.icon,
-          key: SidebarTabKey.Setting,
-          title: t('tab.setting'),
-          url: '/settings',
-        },
-        {
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
           title: t('tab.resource'),
           url: '/resource',
         },
         {
-          icon: getRouteById('memory')!.icon,
-          key: SidebarTabKey.Memory,
-          title: t('tab.memory'),
-          url: '/memory',
+          icon: getRouteById('page')!.icon,
+          key: SidebarTabKey.Pages,
+          title: t('tab.pages'),
+          url: '/page',
         },
       ].filter(Boolean) as Item[],
     [t],

@@ -1,6 +1,16 @@
 [
   {
     "children": {
+      "improvements": [
+        "add description column to topics table.",
+        "add migration to enable pg_search extension."
+      ]
+    },
+    "date": "2026-03-12",
+    "version": "2.1.40"
+  },
+  {
+    "children": {
       "improvements": ["add api key hash column migration."]
     },
     "date": "2026-03-09",

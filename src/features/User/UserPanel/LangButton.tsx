@@ -1,9 +1,10 @@
 import { type DropdownMenuCheckboxItem, type DropdownMenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
-import { Languages } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ChevronRight, Languages } from 'lucide-react';
+import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Menu from '@/components/Menu';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -61,6 +62,27 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
       return [autoItem, ...localeItems];
     }, [language, switchLocale, t]);
 
+    let trigger: ReactNode;
+
+    if (size) {
+      trigger = <ActionIcon icon={Languages} size={size} />;
+    } else {
+      trigger = (
+        <div>
+          <Menu
+            items={[
+              {
+                extra: <Icon icon={ChevronRight} size={'small'} />,
+                icon: <Icon icon={Languages} />,
+                key: 'language',
+                label: t('settingCommon.lang.title'),
+              },
+            ]}
+          />
+        </div>
+      );
+    }
+
     return (
       <DropdownMenu
         items={items}
@@ -73,7 +95,7 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
           },
         }}
       >
-        <ActionIcon icon={Languages} size={size || { blockSize: 32, size: 16 }} />
+        {trigger}
       </DropdownMenu>
     );
   },

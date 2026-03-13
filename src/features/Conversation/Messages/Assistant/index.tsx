@@ -8,6 +8,8 @@ import { memo, useCallback } from 'react';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
@@ -75,6 +77,8 @@ const AssistantMessage = memo<AssistantMessageProps>(
       useSetMessageItemActionElementPortialContext();
     const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
 
+    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+
     const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
       (e) => {
         setMessageItemActionElementPortialContext(e.currentTarget);
@@ -98,7 +102,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
         time={createdAt}
         actions={
           <>
-            {branch && (
+            {isDevMode && branch && (
               <MessageBranch
                 activeBranchIndex={branch.activeBranchIndex}
                 count={branch.count}

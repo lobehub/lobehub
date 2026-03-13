@@ -137,7 +137,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>
-                {t(`setting:tab.beta.updateChannel.${buildChannel}`, {
+                {t(`setting:tab.advanced.updateChannel.${buildChannel}`, {
                   defaultValue: buildChannel.charAt(0).toUpperCase() + buildChannel.slice(1),
                 })}
               </Tag>
