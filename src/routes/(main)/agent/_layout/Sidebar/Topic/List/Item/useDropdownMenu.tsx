@@ -1,13 +1,23 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { ExternalLink, LucideCopy, PanelTop, PencilLine, Star, Trash, Wand2 } from 'lucide-react';
+import {
+  ExternalLink,
+  LucideCopy,
+  PanelTop,
+  PencilLine,
+  Share2,
+  Star,
+  Trash,
+  Wand2,
+} from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
+import { openShareModal } from '@/features/ShareModal';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
@@ -23,7 +33,7 @@ export const useTopicItemDropdownMenu = ({
   fav,
   id,
   toggleEditing,
-}: TopicItemDropdownMenuProps): (() => MenuProps['items']) => {
+}: TopicItemDropdownMenuProps) => {
   const { t } = useTranslation(['topic', 'common']);
   const { modal } = App.useApp();
   const navigate = useNavigate();
@@ -38,8 +48,13 @@ export const useTopicItemDropdownMenu = ({
     s.removeTopic,
     s.favoriteTopic,
   ]);
+  const handleOpenShareModal = useCallback(() => {
+    if (!id) return;
 
-  return useCallback(() => {
+    openShareModal({ context: { threadId: null, topicId: id } });
+  }, [id]);
+
+  const dropdownMenu = useCallback(() => {
     if (!id) return [];
 
     return [
@@ -105,6 +120,12 @@ export const useTopicItemDropdownMenu = ({
         },
       },
       {
+        icon: <Icon icon={Share2} />,
+        key: 'share',
+        label: t('share', { ns: 'common' }),
+        onClick: handleOpenShareModal,
+      },
+      {
         type: 'divider' as const,
       },
       {
@@ -138,5 +159,7 @@ export const useTopicItemDropdownMenu = ({
     toggleEditing,
     t,
     modal,
+    handleOpenShareModal,
   ]);
+  return { dropdownMenu };
 };

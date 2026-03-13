@@ -2,6 +2,33 @@
 
 # Changelog
 
+### [Version 2.1.40](https://github.com/lobehub/lobe-chat/compare/v2.1.39...v2.1.40)
+
+<sup>Released on **2026-03-12**</sup>
+
+#### 👷 Build System
+
+- **misc**: add description column to topics table.
+- **misc**: add migration to enable `pg_search` extension.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **misc**: add description column to topics table, closes [#12939](https://github.com/lobehub/lobe-chat/issues/12939) ([3091489](https://github.com/lobehub/lobe-chat/commit/3091489))
+- **misc**: add migration to enable `pg_search` extension, closes [#12874](https://github.com/lobehub/lobe-chat/issues/12874) ([258e9cb](https://github.com/lobehub/lobe-chat/commit/258e9cb))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.39](https://github.com/lobehub/lobe-chat/compare/v2.1.38...v2.1.39)
 
 <sup>Released on **2026-03-09**</sup>

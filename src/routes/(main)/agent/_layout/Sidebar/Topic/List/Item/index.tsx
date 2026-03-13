@@ -112,7 +112,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     }
   }, [id, activeAgentId, addTab, navigateToTopic]);
 
-  const dropdownMenu = useTopicItemDropdownMenu({
+  const { dropdownMenu } = useTopicItemDropdownMenu({
     fav,
     id,
     toggleEditing,
