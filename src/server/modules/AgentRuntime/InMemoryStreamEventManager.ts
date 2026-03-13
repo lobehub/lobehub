@@ -131,6 +131,42 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   }
 
   /**
+   * Subscribe to stream events (for SSE endpoint)
+   * Compatible with Redis StreamEventManager.subscribeStreamEvents
+   */
+  async subscribeStreamEvents(
+    operationId: string,
+    _lastEventId: string,
+    onEvents: (events: StreamEvent[]) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const unsubscribe = this.subscribe(operationId, (events) => {
+        onEvents(events);
+        // Check if agent_runtime_end was received — caller will handle closing
+        const hasEnd = events.some((e) => e.type === 'agent_runtime_end');
+        if (hasEnd) {
+          unsubscribe();
+          resolve();
+        }
+      });
+
+      // Handle abort signal
+      if (signal) {
+        const onAbort = () => {
+          unsubscribe();
+          resolve();
+        };
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
+  /**
    * Subscribe to stream events (for testing)
    */
   subscribe(operationId: string, callback: EventCallback): () => void {

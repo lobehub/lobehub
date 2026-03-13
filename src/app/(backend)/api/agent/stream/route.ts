@@ -3,7 +3,7 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { StreamEventManager } from '@/server/modules/AgentRuntime';
+import { createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -13,8 +13,8 @@ const timing = debug('lobe-server:agent-runtime:timing');
  * Provides real-time Agent execution event stream for clients
  */
 export async function GET(request: NextRequest) {
-  // Initialize stream event manager
-  const streamManager = new StreamEventManager();
+  // Initialize stream event manager (uses InMemory singleton in local dev, Redis in production)
+  const streamManager = createStreamEventManager();
 
   const { searchParams } = new URL(request.url);
   const operationId = searchParams.get('operationId');

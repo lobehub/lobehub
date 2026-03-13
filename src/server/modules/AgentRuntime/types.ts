@@ -144,4 +144,14 @@ export interface IStreamEventManager {
     operationId: string,
     event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
   ) => Promise<string>;
+
+  /**
+   * Subscribe to stream events (for SSE endpoint)
+   */
+  subscribeStreamEvents: (
+    operationId: string,
+    lastEventId: string,
+    onEvents: (events: StreamEvent[]) => void,
+    signal?: AbortSignal,
+  ) => Promise<void>;
 }

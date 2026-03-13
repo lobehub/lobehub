@@ -1,5 +1,6 @@
 export * from './agent';
 export * from './agentCronJob';
+export * from './agentExecution';
 export * from './agentGroup';
 export * from './aiChat';
 export * from './aiProvider';

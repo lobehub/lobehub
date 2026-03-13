@@ -145,6 +145,60 @@ describe('createEnableChecker', () => {
     });
   });
 
+  describe('default behavior - should disable unknown tools', () => {
+    it('should disable tools not listed in rules by default', () => {
+      const checker = createEnableChecker({
+        rules: {
+          'knowledge-base': true,
+          'memory': false,
+          'web-browsing': true,
+        },
+      });
+
+      // Tools in rules should follow their rule
+      expect(checker(makeParams('knowledge-base'))).toBe(true);
+      expect(checker(makeParams('memory'))).toBe(false);
+      expect(checker(makeParams('web-browsing'))).toBe(true);
+
+      // BUG: Tools NOT in rules currently default to true,
+      // but should default to false to prevent unintended tool activation
+      // This is the regression test for the "all 7 builtin tools enabled" bug
+      expect(checker(makeParams('lobe-tools'))).toBe(false);
+      expect(checker(makeParams('lobe-skills'))).toBe(false);
+      expect(checker(makeParams('lobe-skill-store'))).toBe(false);
+    });
+  });
+
+  describe('user-selected tools via rules', () => {
+    it('should only enable user-selected tools plus explicitly enabled defaults', () => {
+      // Simulates: user selected only "notebook", system enables knowledge-base and web-browsing
+      const userPlugins = ['notebook'];
+      const rules: Record<string, boolean> = {
+        // System-level rules
+        'knowledge-base': true,
+        'memory': false,
+        'web-browsing': true,
+        // User-selected plugins
+        ...Object.fromEntries(userPlugins.map((id) => [id, true])),
+      };
+
+      const checker = createEnableChecker({ rules });
+
+      // User-selected tool: enabled
+      expect(checker(makeParams('notebook'))).toBe(true);
+
+      // System-enabled tools: follow their rules
+      expect(checker(makeParams('knowledge-base'))).toBe(true);
+      expect(checker(makeParams('web-browsing'))).toBe(true);
+      expect(checker(makeParams('memory'))).toBe(false);
+
+      // Default tools NOT in rules: should be disabled
+      expect(checker(makeParams('lobe-tools'))).toBe(false);
+      expect(checker(makeParams('lobe-skills'))).toBe(false);
+      expect(checker(makeParams('lobe-skill-store'))).toBe(false);
+    });
+  });
+
   describe('priority order', () => {
     it('should apply: explicitActivation > platformFilter > rules > default', () => {
       const checker = createEnableChecker({
