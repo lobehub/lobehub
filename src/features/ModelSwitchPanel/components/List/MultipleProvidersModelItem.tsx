@@ -75,7 +75,11 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
             if (allRestricted) {
               onRestrictedModelClick?.();
               onClose();
+              return;
             }
+            setSubmenuOpen(false);
+            onModelChange(data.model.id, data.providers[0].id);
+            onClose();
           }}
         >
           <ModelItemRender
