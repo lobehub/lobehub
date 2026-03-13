@@ -235,7 +235,7 @@ export const INITIAL_STATUS = {
   leftPanelWidth: 320,
   mobileShowTopic: false,
   modelSwitchPanelGroupMode: 'byProvider',
-  modelSwitchPanelWidth: 430,
+  modelSwitchPanelWidth: 460,
   noWideScreen: true,
   pageAgentPanelWidth: 360,
   pagePageSize: 20,

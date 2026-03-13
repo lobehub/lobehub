@@ -29,7 +29,7 @@ const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
 const language = (s: GlobalState) => s.status.language || 'auto';
 const modelSwitchPanelGroupMode = (s: GlobalState) =>
   s.status.modelSwitchPanelGroupMode || 'byProvider';
-const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 430;
+const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 460;
 const pageAgentPanelWidth = (s: GlobalState) => s.status.pageAgentPanelWidth || 360;
 
 const showChatHeader = (s: GlobalState) => !s.status.zenMode;
