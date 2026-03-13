@@ -1,12 +1,14 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { useState } from 'react';
+import { Rnd } from 'react-rnd';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 
-import { DEFAULT_WIDTH, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../const';
+import { DEFAULT_WIDTH, ENABLE_RESIZING, ITEM_HEIGHT, MAX_PANEL_HEIGHT, MAX_WIDTH, MIN_WIDTH, TOOLBAR_HEIGHT } from '../const';
+import { usePanelSize } from '../hooks/usePanelSize';
 import { usePanelState } from '../hooks/usePanelState';
 import { List } from './List';
 import { Toolbar } from './Toolbar';
@@ -28,21 +30,10 @@ export const PanelContent: FC<PanelContentProps> = ({
   const [searchKeyword, setSearchKeyword] = useState('');
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const { groupMode, handleGroupModeChange } = usePanelState();
-  const panelHeight =
-    enabledList.length === 0
-      ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider']
-      : MAX_PANEL_HEIGHT;
+  const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
 
-  return (
-    <Flexbox
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: panelHeight,
-        position: 'relative',
-        width: DEFAULT_WIDTH,
-      }}
-    >
+  const content = (
+    <>
       <Toolbar
         groupMode={groupMode}
         searchKeyword={searchKeyword}
@@ -58,6 +49,39 @@ export const PanelContent: FC<PanelContentProps> = ({
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}
       />
+    </>
+  );
+
+  if (isDevMode) {
+    return (
+      <Rnd
+        disableDragging
+        enableResizing={ENABLE_RESIZING}
+        maxWidth={MAX_WIDTH}
+        minWidth={MIN_WIDTH}
+        position={{ x: 0, y: 0 }}
+        size={{ height: panelHeight, width: panelWidth }}
+        style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
+        onResizeStop={(_e, _direction, ref) => {
+          handlePanelWidthChange(ref.offsetWidth);
+        }}
+      >
+        {content}
+      </Rnd>
+    );
+  }
+
+  return (
+    <Flexbox
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: panelHeight,
+        position: 'relative',
+        width: DEFAULT_WIDTH,
+      }}
+    >
+      {content}
     </Flexbox>
   );
 };

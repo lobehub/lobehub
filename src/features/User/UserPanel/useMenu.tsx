@@ -2,7 +2,7 @@ import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
-import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
+import { BrainCircuit, Cloudy, Download, LogOut, Settings2 } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,6 @@ import getBusinessMenuItems from '@/business/client/features/User/getBusinessMen
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
-import DataImporter from '@/features/DataImporter';
 import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -95,19 +94,6 @@ export const useMenu = () => {
     },
   ];
 
-  const data = !isLogin
-    ? []
-    : ([
-        {
-          icon: <Icon icon={HardDriveDownload} />,
-          key: 'import',
-          label: <DataImporter>{t('importData')}</DataImporter>,
-        },
-        {
-          type: 'divider',
-        },
-      ].filter(Boolean) as ItemType[]);
-
   const helps: MenuProps['items'] = [
     showCloudPromotion && {
       icon: <Icon icon={Cloudy} />,
@@ -132,7 +118,6 @@ export const useMenu = () => {
     ...(isLogin ? settings : []),
     ...businessMenuItems,
     ...(!isDesktop ? [{ type: 'divider' as const }, ...getDesktopApp] : []),
-    ...data,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as MenuProps['items'];
 
