@@ -9,7 +9,6 @@ import About from '../about';
 import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
-import Beta from '../beta';
 import Hotkey from '../hotkey';
 import Memory from '../memory';
 import Profile from '../profile';
@@ -23,7 +22,6 @@ import SystemTools from '../system-tools';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
-  [SettingsTabs.Beta]: Beta,
   [SettingsTabs.Appearance]: Appearance,
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.ServiceModel]: ServiceModel,
