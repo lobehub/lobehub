@@ -7,7 +7,7 @@ import { useGlobalStore } from '@/store/global';
 
 import { useHotkeyById } from './useHotkeyById';
 
-// Switch to chat tab (and focus on Lobe AI)
+// Switch to chat tab (and focus on Loctek AI)
 export const useNavigateToChatHotkey = () => {
   const navigateToAgent = useNavigateToAgent();
   const [, { unpinAgent }] = usePinnedAgentState();
