@@ -186,6 +186,8 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       style={{
         minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
       }}
+      onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
+      onCompositionStart={({ event }) => compositionProps.onCompositionStart(event)}
       onInit={(editor) => storeApi.setState({ editor })}
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
@@ -193,7 +195,6 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       onChange={() => {
         updateMarkdownContent();
       }}
-      {...compositionProps}
       onContextMenu={async ({ event: e, editor }) => {
         if (isDesktop) {
           e.preventDefault();
