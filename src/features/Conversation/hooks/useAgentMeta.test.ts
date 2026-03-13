@@ -54,7 +54,7 @@ describe('useAgentMeta', () => {
     expect(result.current.avatar).toBe('agent-avatar.png');
   });
 
-  it('should return Lobe AI title for builtin inbox agent, preserving avatar from backend', () => {
+  it('should return Loctek AI title for builtin inbox agent, preserving avatar from backend', () => {
     const mockInboxAgentId = 'inbox-agent-id';
     const mockMeta = {
       avatar: '/icons/icon-lobe.png', // Avatar from backend (merged from builtin-agents package)
@@ -90,7 +90,7 @@ describe('useAgentMeta', () => {
     expect(result.current.description).toBe('Inbox description');
   });
 
-  it('should return Lobe AI title for page agent (builtin), preserving avatar from backend', () => {
+  it('should return Loctek AI title for page agent (builtin), preserving avatar from backend', () => {
     const mockPageAgentId = 'page-agent-id';
     const mockMeta = {
       avatar: '/icons/icon-lobe.png', // Avatar from backend (merged from builtin-agents package)
