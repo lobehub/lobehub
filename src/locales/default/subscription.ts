@@ -58,14 +58,21 @@ export default {
   'downgradePlans.desc': 'The plan change will take effect after the current plan expires.',
   'downgradePlans.success': 'Subscription cancelled successfully',
   'downgradePlans.title': 'Switch to {{plan}}',
-  'credits.autoTopUp.desc':
-    'Automatically top up credits when your balance drops below the threshold',
+  'credits.autoTopUp.currentBalance': 'Current Balance',
+  'credits.autoTopUp.desc': 'Ensure your credits never run out',
   'credits.autoTopUp.monthlyLimit': 'Monthly Limit',
+  'credits.autoTopUp.monthlyLimitDesc':
+    'Maximum amount that can be auto-charged per month. Leave empty for no limit',
+  'credits.autoTopUp.monthlyTopUpAmount': 'Monthly Top-Up Amount',
   'credits.autoTopUp.monthlyLimitPlaceholder': 'No limit',
   'credits.autoTopUp.saveError': 'Failed to save auto top-up settings',
   'credits.autoTopUp.saveSuccess': 'Auto top-up settings saved',
   'credits.autoTopUp.targetBalance': 'Target Balance',
+  'credits.autoTopUp.targetBalanceDesc':
+    'The balance amount to restore to when auto top-up triggers',
   'credits.autoTopUp.threshold': 'Threshold',
+  'credits.autoTopUp.thresholdDesc':
+    'Auto top-up triggers when your balance falls below this amount',
   'credits.autoTopUp.title': 'Auto Top-Up',
   'credits.autoTopUp.toggle': 'Enable Auto Top-Up',
   'credits.autoTopUp.upgradeHint': 'Subscribe to a paid plan to enable auto top-up',
