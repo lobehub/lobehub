@@ -351,7 +351,7 @@ export default {
   'referral.rules.expiry':
     'Credit validity: Available referral credits will be cleared after 100 days of user inactivity',
   'referral.rules.missedCode':
-    'Missed invite code: You can <0>backfill</0> within 3 days of registration. Rewards are granted after performing a valid action',
+    'Missed invite code: You can <0>backfill</0> within 3 days of registration. After backfilling, you still need to perform a valid action to receive rewards',
   'referral.rules.priority':
     'Credit consumption priority: Free credits → Subscription credits → Referral credits → Top-up credits',
   'referral.rules.registration':

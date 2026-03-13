@@ -307,7 +307,7 @@
   "referral.rules.backfill.title": "Backfill Invite Code",
   "referral.rules.description": "Learn about referral reward program rules",
   "referral.rules.expiry": "Credit validity: Available referral credits will be cleared after 100 days of user inactivity",
-  "referral.rules.missedCode": "Missed invite code: You can <0>backfill</0> within 3 days of registration. Rewards are granted after performing a valid action",
+  "referral.rules.missedCode": "Missed invite code: You can <0>backfill</0> within 3 days of registration. After backfilling, you still need to perform a valid action to receive rewards",
   "referral.rules.priority": "Credit consumption priority: Free credits → Subscription credits → Referral credits → Top-up credits",
   "referral.rules.registration": "Registration method: Invited users register via referral link or enter referral code on registration page",
   "referral.rules.reward": "Reward: Referrer and invitee each receive {{reward}}M credits",
