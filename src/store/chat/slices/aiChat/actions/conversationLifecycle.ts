@@ -157,8 +157,9 @@ export class ConversationLifecycleActionImpl {
     // /newTopic — force a fresh topic regardless of current context
     let forceNewTopicFromExisting = false;
     if (commandOverrides.forceNewTopic) {
-      // If no message content besides the action tag, just navigate to a new topic without sending
-      if (!hasNonActionContent(editorData)) {
+      const hasFile = files && files.length > 0;
+      // If no message content besides the action tag and no files, just navigate to a new topic without sending
+      if (!hasNonActionContent(editorData) && !hasFile) {
         await this.#get().switchTopic(null);
         return;
       }
