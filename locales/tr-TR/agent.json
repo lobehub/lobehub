@@ -30,6 +30,8 @@
   "channel.publicKey": "Genel Anahtar",
   "channel.publicKeyHint": "Opsiyonel. Discord'dan gelen etkileşim isteklerini doğrulamak için kullanılır.",
   "channel.publicKeyPlaceholder": "Etkileşim doğrulama için gerekli",
+  "channel.qq.appIdHint": "QQ Açık Platformundan QQ Bot Uygulama Kimliğiniz",
+  "channel.qq.description": "Bu asistanı grup sohbetleri ve doğrudan mesajlar için QQ'ya bağlayın.",
   "channel.removeChannel": "Kanalı Kaldır",
   "channel.removeFailed": "Kanal kaldırılamadı",
   "channel.removed": "Kanal kaldırıldı",

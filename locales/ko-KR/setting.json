@@ -865,6 +865,12 @@
   "tools.plugins.management": "스킬 관리",
   "tools.plugins.noEnabled": "활성화된 기능이 없음",
   "tools.plugins.store": "스킬 추가",
+  "tools.search": "기술 검색...",
+  "tools.skillActivateMode.auto.desc": "AI는 도구를 자율적으로 활성화하고, 기술을 실행하며, 스토어에서 새로운 기술을 설치할 수 있습니다",
+  "tools.skillActivateMode.auto.title": "자동",
+  "tools.skillActivateMode.manual.desc": "사용자가 선택한 도구와 기술만 AI가 사용할 수 있습니다",
+  "tools.skillActivateMode.manual.title": "수동",
+  "tools.skillActivateMode.title": "활성화 모드",
   "tools.tabs.all": "전체",
   "tools.tabs.installed": "활성화됨",
   "tools.title": "확장 도구"

@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Nội dung của bạn bị chặn do chính sách an toàn. Vui lòng điều chỉnh yêu cầu để tránh nội dung có hại hoặc không phù hợp.",
   "response.GoogleAIBlockReason.SPII": "Nội dung của bạn có thể chứa thông tin nhận dạng cá nhân nhạy cảm. Để bảo vệ quyền riêng tư, vui lòng xóa thông tin nhạy cảm và thử lại.",
   "response.GoogleAIBlockReason.default": "Nội dung bị chặn: {{blockReason}}. Vui lòng điều chỉnh yêu cầu và thử lại.",
+  "response.InsufficientBudgetForModel": "Số dư tín dụng của bạn không đủ để sử dụng mô hình này. Vui lòng nạp thêm tín dụng, nâng cấp gói của bạn hoặc thử một mô hình ít tốn kém hơn.",
   "response.InsufficientQuota": "Xin lỗi, hạn mức của khóa này đã đạt giới hạn. Vui lòng kiểm tra số dư tài khoản hoặc tăng hạn mức khóa rồi thử lại.",
   "response.InvalidAccessCode": "Mã truy cập không hợp lệ hoặc để trống. Vui lòng nhập mã truy cập chính xác hoặc thêm API Key tùy chỉnh.",
   "response.InvalidBedrockCredentials": "Xác thực Bedrock thất bại. Vui lòng kiểm tra AccessKeyId/SecretAccessKey và thử lại.",

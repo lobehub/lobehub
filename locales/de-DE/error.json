@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Ihr Inhalt wurde aus Sicherheitsgründen blockiert.",
   "response.GoogleAIBlockReason.SPII": "Ihr Inhalt enthält möglicherweise sensible persönliche Daten.",
   "response.GoogleAIBlockReason.default": "Inhalt blockiert: {{blockReason}}. Bitte passen Sie Ihre Anfrage an.",
+  "response.InsufficientBudgetForModel": "Ihre verbleibenden Guthaben reichen für dieses Modell nicht aus. Bitte laden Sie Guthaben auf, aktualisieren Sie Ihren Plan oder versuchen Sie ein günstigeres Modell.",
   "response.InsufficientQuota": "Das Kontingent für diesen Schlüssel ist aufgebraucht. Bitte prüfen Sie Ihr Guthaben.",
   "response.InvalidAccessCode": "Ungültiger oder leerer Zugangscode. Bitte geben Sie den richtigen Code ein.",
   "response.InvalidBedrockCredentials": "Bedrock-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre Zugangsdaten.",

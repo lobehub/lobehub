@@ -865,6 +865,12 @@
   "tools.plugins.management": "إدارة المهارات",
   "tools.plugins.noEnabled": "لا توجد مهارات مفعلة",
   "tools.plugins.store": "إضافة مهارة",
+  "tools.search": "ابحث عن المهارات...",
+  "tools.skillActivateMode.auto.desc": "يمكن للذكاء الاصطناعي تفعيل الأدوات وتشغيل المهارات وتثبيت مهارات جديدة من المتجر بشكل تلقائي",
+  "tools.skillActivateMode.auto.title": "تلقائي",
+  "tools.skillActivateMode.manual.desc": "فقط الأدوات والمهارات التي يختارها المستخدم تكون متاحة للذكاء الاصطناعي",
+  "tools.skillActivateMode.manual.title": "يدوي",
+  "tools.skillActivateMode.title": "وضع التفعيل",
   "tools.tabs.all": "الكل",
   "tools.tabs.installed": "مفعلة",
   "tools.title": "أدوات التوسعة"

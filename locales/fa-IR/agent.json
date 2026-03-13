@@ -30,6 +30,8 @@
   "channel.publicKey": "کلید عمومی",
   "channel.publicKeyHint": "اختیاری. برای تأیید درخواست‌های تعامل از Discord استفاده می‌شود.",
   "channel.publicKeyPlaceholder": "برای تأیید تعامل مورد نیاز است",
+  "channel.qq.appIdHint": "شناسه برنامه ربات QQ شما از پلتفرم باز QQ",
+  "channel.qq.description": "این دستیار را به QQ متصل کنید برای چت‌های گروهی و پیام‌های مستقیم.",
   "channel.removeChannel": "حذف کانال",
   "channel.removeFailed": "حذف کانال ناموفق بود",
   "channel.removed": "کانال حذف شد",

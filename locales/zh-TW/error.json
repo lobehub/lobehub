@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "您的內容因安全政策而被阻擋。請嘗試調整您的請求內容，避免包含可能有害或不當的內容。",
   "response.GoogleAIBlockReason.SPII": "您的內容可能包含敏感個人身分資訊。為保護隱私，請移除相關敏感資訊後再試。",
   "response.GoogleAIBlockReason.default": "內容被阻擋：{{blockReason}}。請調整您的請求內容後再試。",
+  "response.InsufficientBudgetForModel": "您的剩餘點數不足以使用此模型。請充值點數、升級您的方案，或嘗試使用價格較低的模型。",
   "response.InsufficientQuota": "很抱歉，該金鑰的配額已達上限，請檢查帳戶餘額是否充足，或提升金鑰配額後再試",
   "response.InvalidAccessCode": "密碼不正確或為空，請輸入正確的訪問密碼，或添加自定義 API 金鑰",
   "response.InvalidBedrockCredentials": "Bedrock 驗證未通過，請檢查 AccessKeyId/SecretAccessKey 後重試",

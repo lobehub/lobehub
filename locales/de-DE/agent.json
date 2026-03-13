@@ -30,6 +30,8 @@
   "channel.publicKey": "Öffentlicher Schlüssel",
   "channel.publicKeyHint": "Optional. Wird verwendet, um Interaktionsanfragen von Discord zu überprüfen.",
   "channel.publicKeyPlaceholder": "Erforderlich für Interaktionsüberprüfung",
+  "channel.qq.appIdHint": "Ihre QQ-Bot-App-ID von der QQ Open Platform",
+  "channel.qq.description": "Verbinden Sie diesen Assistenten mit QQ für Gruppenchats und Direktnachrichten.",
   "channel.removeChannel": "Kanal entfernen",
   "channel.removeFailed": "Kanal konnte nicht entfernt werden",
   "channel.removed": "Kanal entfernt",

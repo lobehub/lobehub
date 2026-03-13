@@ -865,6 +865,12 @@
   "tools.plugins.management": "Fähigkeitenverwaltung",
   "tools.plugins.noEnabled": "Keine Fähigkeiten aktiviert",
   "tools.plugins.store": "Fähigkeit hinzufügen",
+  "tools.search": "Fähigkeiten suchen...",
+  "tools.skillActivateMode.auto.desc": "KI kann eigenständig Werkzeuge aktivieren, Fähigkeiten ausführen und neue Fähigkeiten aus dem Store installieren",
+  "tools.skillActivateMode.auto.title": "Automatisch",
+  "tools.skillActivateMode.manual.desc": "Nur vom Benutzer ausgewählte Werkzeuge und Fähigkeiten stehen der KI zur Verfügung",
+  "tools.skillActivateMode.manual.title": "Manuell",
+  "tools.skillActivateMode.title": "Aktivierungsmodus",
   "tools.tabs.all": "Alle",
   "tools.tabs.installed": "Aktiviert",
   "tools.title": "Erweiterungswerkzeuge"

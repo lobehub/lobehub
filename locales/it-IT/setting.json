@@ -865,6 +865,12 @@
   "tools.plugins.management": "Gestione Competenze",
   "tools.plugins.noEnabled": "Nessuna competenza abilitata",
   "tools.plugins.store": "Aggiungi Competenza",
+  "tools.search": "Cerca competenze...",
+  "tools.skillActivateMode.auto.desc": "L'IA può attivare autonomamente strumenti, eseguire competenze e installare nuove competenze dal negozio",
+  "tools.skillActivateMode.auto.title": "Automatico",
+  "tools.skillActivateMode.manual.desc": "Solo gli strumenti e le competenze selezionati dall'utente sono disponibili per l'IA",
+  "tools.skillActivateMode.manual.title": "Manuale",
+  "tools.skillActivateMode.title": "Modalità di attivazione",
   "tools.tabs.all": "Tutti",
   "tools.tabs.installed": "Abilitati",
   "tools.title": "Strumenti Estensione"

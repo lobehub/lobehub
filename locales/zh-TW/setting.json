@@ -865,6 +865,12 @@
   "tools.plugins.management": "技能管理",
   "tools.plugins.noEnabled": "暫無啟用插件",
   "tools.plugins.store": "新增技能",
+  "tools.search": "搜尋技能...",
+  "tools.skillActivateMode.auto.desc": "AI 可以自主啟用工具、執行技能，並從商店安裝新技能",
+  "tools.skillActivateMode.auto.title": "自動",
+  "tools.skillActivateMode.manual.desc": "僅限使用者選擇的工具和技能可供 AI 使用",
+  "tools.skillActivateMode.manual.title": "手動",
+  "tools.skillActivateMode.title": "啟用模式",
   "tools.tabs.all": "全部",
   "tools.tabs.installed": "已啟用",
   "tools.title": "擴展工具"

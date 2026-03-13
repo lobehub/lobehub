@@ -30,6 +30,8 @@
   "channel.publicKey": "公開鍵",
   "channel.publicKeyHint": "任意。Discordからのインタラクションリクエストを検証するために使用されます。",
   "channel.publicKeyPlaceholder": "インタラクション検証に必要",
+  "channel.qq.appIdHint": "QQオープンプラットフォームから取得したQQボットのアプリID",
+  "channel.qq.description": "このアシスタントをQQに接続して、グループチャットやダイレクトメッセージを利用しましょう。",
   "channel.removeChannel": "チャンネルを削除",
   "channel.removeFailed": "チャンネルの削除に失敗しました",
   "channel.removed": "チャンネルが削除されました",

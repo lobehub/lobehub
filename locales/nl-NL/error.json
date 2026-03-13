@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Je inhoud is geblokkeerd vanwege veiligheidsbeleid. Pas je verzoek aan om mogelijk schadelijke of ongepaste inhoud te vermijden.",
   "response.GoogleAIBlockReason.SPII": "Je inhoud bevat mogelijk gevoelige persoonlijke informatie. Verwijder gevoelige gegevens en probeer opnieuw.",
   "response.GoogleAIBlockReason.default": "Inhoud geblokkeerd: {{blockReason}}. Pas je verzoek aan en probeer opnieuw.",
+  "response.InsufficientBudgetForModel": "Uw resterende tegoed is onvoldoende voor dit model. Vul uw tegoed aan, upgrade uw abonnement, of probeer een goedkoper model.",
   "response.InsufficientQuota": "Sorry, het quotum voor deze sleutel is bereikt. Controleer je accountbalans of verhoog het quotum en probeer opnieuw.",
   "response.InvalidAccessCode": "Ongeldige of lege toegangscode. Voer de juiste toegangscode in of voeg een aangepaste API-sleutel toe.",
   "response.InvalidBedrockCredentials": "Bedrock-authenticatie mislukt. Controleer AccessKeyId/SecretAccessKey en probeer opnieuw.",

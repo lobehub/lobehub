@@ -30,6 +30,8 @@
   "channel.publicKey": "공개 키",
   "channel.publicKeyHint": "선택 사항. Discord의 상호작용 요청을 검증하는 데 사용됩니다.",
   "channel.publicKeyPlaceholder": "상호작용 검증에 필요",
+  "channel.qq.appIdHint": "QQ 오픈 플랫폼에서 제공된 QQ 봇 앱 ID를 입력하세요.",
+  "channel.qq.description": "이 어시스턴트를 QQ에 연결하여 그룹 채팅 및 직접 메시지를 이용하세요.",
   "channel.removeChannel": "채널 제거",
   "channel.removeFailed": "채널 제거 실패",
   "channel.removed": "채널이 제거되었습니다",

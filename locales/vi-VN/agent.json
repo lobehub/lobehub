@@ -30,6 +30,8 @@
   "channel.publicKey": "Khóa công khai",
   "channel.publicKeyHint": "Tùy chọn. Dùng để xác minh yêu cầu tương tác từ Discord.",
   "channel.publicKeyPlaceholder": "Yêu cầu để xác minh tương tác",
+  "channel.qq.appIdHint": "ID ứng dụng Bot QQ của bạn từ Nền tảng Mở QQ",
+  "channel.qq.description": "Kết nối trợ lý này với QQ để trò chuyện nhóm và tin nhắn trực tiếp.",
   "channel.removeChannel": "Xóa kênh",
   "channel.removeFailed": "Xóa kênh thất bại",
   "channel.removed": "Kênh đã được xóa",

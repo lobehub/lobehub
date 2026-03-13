@@ -30,6 +30,8 @@
   "channel.publicKey": "Chiave Pubblica",
   "channel.publicKeyHint": "Opzionale. Utilizzata per verificare le richieste di interazione da Discord.",
   "channel.publicKeyPlaceholder": "Richiesta per la verifica delle interazioni",
+  "channel.qq.appIdHint": "Il tuo ID App Bot QQ dalla Piattaforma Aperta QQ",
+  "channel.qq.description": "Collega questo assistente a QQ per chat di gruppo e messaggi diretti.",
   "channel.removeChannel": "Rimuovi Canale",
   "channel.removeFailed": "Impossibile rimuovere il canale",
   "channel.removed": "Canale rimosso",

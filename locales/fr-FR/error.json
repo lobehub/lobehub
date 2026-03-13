@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Votre contenu a été bloqué pour des raisons de sécurité. Veuillez le modifier pour éviter tout contenu potentiellement dangereux ou inapproprié.",
   "response.GoogleAIBlockReason.SPII": "Votre contenu peut contenir des informations personnelles sensibles. Veuillez les supprimer et réessayer.",
   "response.GoogleAIBlockReason.default": "Contenu bloqué : {{blockReason}}. Veuillez ajuster votre demande et réessayer.",
+  "response.InsufficientBudgetForModel": "Vos crédits restants sont insuffisants pour ce modèle. Veuillez recharger vos crédits, passer à un plan supérieur ou essayer un modèle moins coûteux.",
   "response.InsufficientQuota": "Désolé, le quota de cette clé a été atteint. Veuillez vérifier votre solde ou augmenter le quota.",
   "response.InvalidAccessCode": "Code d'accès invalide ou vide. Veuillez entrer le bon code ou ajouter une clé API personnalisée.",
   "response.InvalidBedrockCredentials": "Échec de l'authentification Bedrock. Veuillez vérifier vos identifiants et réessayer.",

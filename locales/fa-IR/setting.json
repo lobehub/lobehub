@@ -865,6 +865,12 @@
   "tools.plugins.management": "مدیریت مهارت‌ها",
   "tools.plugins.noEnabled": "هیچ مهارتی فعال نیست",
   "tools.plugins.store": "افزودن مهارت",
+  "tools.search": "جستجوی مهارت‌ها...",
+  "tools.skillActivateMode.auto.desc": "هوش مصنوعی می‌تواند به‌طور خودکار ابزارها را فعال کند، مهارت‌ها را اجرا کند و مهارت‌های جدید را از فروشگاه نصب کند",
+  "tools.skillActivateMode.auto.title": "خودکار",
+  "tools.skillActivateMode.manual.desc": "فقط ابزارها و مهارت‌های انتخاب‌شده توسط کاربر برای هوش مصنوعی در دسترس هستند",
+  "tools.skillActivateMode.manual.title": "دستی",
+  "tools.skillActivateMode.title": "حالت فعال‌سازی",
   "tools.tabs.all": "همه",
   "tools.tabs.installed": "فعال‌شده",
   "tools.title": "ابزارهای افزونه"

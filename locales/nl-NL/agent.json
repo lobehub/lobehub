@@ -30,6 +30,8 @@
   "channel.publicKey": "Publieke sleutel",
   "channel.publicKeyHint": "Optioneel. Gebruikt om interactieverzoeken van Discord te verifiëren.",
   "channel.publicKeyPlaceholder": "Vereist voor interactieverificatie",
+  "channel.qq.appIdHint": "Uw QQ Bot App ID van het QQ Open Platform",
+  "channel.qq.description": "Verbind deze assistent met QQ voor groepschats en directe berichten.",
   "channel.removeChannel": "Kanaal verwijderen",
   "channel.removeFailed": "Verwijderen van kanaal mislukt",
   "channel.removed": "Kanaal verwijderd",

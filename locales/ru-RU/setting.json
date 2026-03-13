@@ -865,6 +865,12 @@
   "tools.plugins.management": "Управление навыками",
   "tools.plugins.noEnabled": "Нет включённых навыков",
   "tools.plugins.store": "Добавить навык",
+  "tools.search": "Поиск навыков...",
+  "tools.skillActivateMode.auto.desc": "ИИ может автономно активировать инструменты, запускать навыки и устанавливать новые навыки из магазина",
+  "tools.skillActivateMode.auto.title": "Авто",
+  "tools.skillActivateMode.manual.desc": "Только инструменты и навыки, выбранные пользователем, доступны ИИ",
+  "tools.skillActivateMode.manual.title": "Ручной",
+  "tools.skillActivateMode.title": "Режим активации",
   "tools.tabs.all": "Все",
   "tools.tabs.installed": "Включено",
   "tools.title": "Расширения"

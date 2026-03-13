@@ -865,6 +865,12 @@
   "tools.plugins.management": "Zarządzanie umiejętnościami",
   "tools.plugins.noEnabled": "Brak włączonych umiejętności",
   "tools.plugins.store": "Dodaj umiejętność",
+  "tools.search": "Szukaj umiejętności...",
+  "tools.skillActivateMode.auto.desc": "AI może autonomicznie aktywować narzędzia, uruchamiać umiejętności i instalować nowe umiejętności ze sklepu",
+  "tools.skillActivateMode.auto.title": "Automatyczny",
+  "tools.skillActivateMode.manual.desc": "Tylko narzędzia i umiejętności wybrane przez użytkownika są dostępne dla AI",
+  "tools.skillActivateMode.manual.title": "Ręczny",
+  "tools.skillActivateMode.title": "Tryb aktywacji",
   "tools.tabs.all": "Wszystkie",
   "tools.tabs.installed": "Włączone",
   "tools.title": "Narzędzia rozszerzeń"

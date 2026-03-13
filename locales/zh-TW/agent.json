@@ -30,6 +30,8 @@
   "channel.publicKey": "公鑰",
   "channel.publicKeyHint": "可選。用於驗證來自 Discord 的交互請求。",
   "channel.publicKeyPlaceholder": "交互驗證所需",
+  "channel.qq.appIdHint": "來自 QQ 開放平台的 QQ 機器人應用 ID",
+  "channel.qq.description": "將此助手連接到 QQ，以進行群組聊天和私人訊息。",
   "channel.removeChannel": "移除頻道",
   "channel.removeFailed": "移除頻道失敗",
   "channel.removed": "頻道已移除",

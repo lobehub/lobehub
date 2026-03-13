@@ -865,6 +865,12 @@
   "tools.plugins.management": "Quản lý Kỹ năng",
   "tools.plugins.noEnabled": "Chưa bật kỹ năng nào",
   "tools.plugins.store": "Thêm kỹ năng",
+  "tools.search": "Tìm kiếm kỹ năng...",
+  "tools.skillActivateMode.auto.desc": "AI có thể tự động kích hoạt công cụ, chạy kỹ năng và cài đặt kỹ năng mới từ cửa hàng",
+  "tools.skillActivateMode.auto.title": "Tự động",
+  "tools.skillActivateMode.manual.desc": "Chỉ các công cụ và kỹ năng do người dùng chọn mới khả dụng cho AI",
+  "tools.skillActivateMode.manual.title": "Thủ công",
+  "tools.skillActivateMode.title": "Chế độ kích hoạt",
   "tools.tabs.all": "Tất Cả",
   "tools.tabs.installed": "Đã Bật",
   "tools.title": "Công Cụ Mở Rộng"

@@ -865,6 +865,12 @@
   "tools.plugins.management": "Yetenek Yönetimi",
   "tools.plugins.noEnabled": "Etkin yetenek yok",
   "tools.plugins.store": "Yetenek Ekle",
+  "tools.search": "Beceri ara...",
+  "tools.skillActivateMode.auto.desc": "AI, araçları bağımsız olarak etkinleştirebilir, becerileri çalıştırabilir ve mağazadan yeni beceriler yükleyebilir",
+  "tools.skillActivateMode.auto.title": "Otomatik",
+  "tools.skillActivateMode.manual.desc": "Sadece kullanıcı tarafından seçilen araçlar ve beceriler AI için kullanılabilir",
+  "tools.skillActivateMode.manual.title": "Manuel",
+  "tools.skillActivateMode.title": "Etkinleştirme Modu",
   "tools.tabs.all": "Tümü",
   "tools.tabs.installed": "Etkin",
   "tools.title": "Eklenti Araçları"

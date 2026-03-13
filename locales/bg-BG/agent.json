@@ -30,6 +30,8 @@
   "channel.publicKey": "Публичен ключ",
   "channel.publicKeyHint": "По избор. Използва се за проверка на заявки за взаимодействие от Discord.",
   "channel.publicKeyPlaceholder": "Задължително за проверка на взаимодействия",
+  "channel.qq.appIdHint": "Вашият QQ Bot App ID от QQ Open Platform",
+  "channel.qq.description": "Свържете този асистент с QQ за групови чатове и директни съобщения.",
   "channel.removeChannel": "Премахване на канал",
   "channel.removeFailed": "Неуспешно премахване на канала",
   "channel.removed": "Каналът е премахнат",

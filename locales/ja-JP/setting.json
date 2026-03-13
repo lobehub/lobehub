@@ -865,6 +865,12 @@
   "tools.plugins.management": "スキル管理",
   "tools.plugins.noEnabled": "有効なスキルはありません",
   "tools.plugins.store": "スキルを追加",
+  "tools.search": "スキルを検索...",
+  "tools.skillActivateMode.auto.desc": "AIは自律的にツールを有効化し、スキルを実行し、ストアから新しいスキルをインストールできます",
+  "tools.skillActivateMode.auto.title": "自動",
+  "tools.skillActivateMode.manual.desc": "ユーザーが選択したツールとスキルのみがAIで利用可能です",
+  "tools.skillActivateMode.manual.title": "手動",
+  "tools.skillActivateMode.title": "有効化モード",
   "tools.tabs.all": "すべて",
   "tools.tabs.installed": "有効化済み",
   "tools.title": "拡張ツール"

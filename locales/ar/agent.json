@@ -30,6 +30,8 @@
   "channel.publicKey": "المفتاح العام",
   "channel.publicKeyHint": "اختياري. يُستخدم للتحقق من طلبات التفاعل من Discord.",
   "channel.publicKeyPlaceholder": "مطلوب للتحقق من التفاعل",
+  "channel.qq.appIdHint": "معرّف تطبيق QQ Bot الخاص بك من منصة QQ المفتوحة",
+  "channel.qq.description": "قم بتوصيل هذا المساعد بـ QQ للمحادثات الجماعية والرسائل المباشرة.",
   "channel.removeChannel": "إزالة القناة",
   "channel.removeFailed": "فشل في إزالة القناة",
   "channel.removed": "تمت إزالة القناة",

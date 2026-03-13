@@ -865,6 +865,12 @@
   "tools.plugins.management": "Vaardighedenbeheer",
   "tools.plugins.noEnabled": "Geen vaardigheden ingeschakeld",
   "tools.plugins.store": "Vaardigheid toevoegen",
+  "tools.search": "Zoek vaardigheden...",
+  "tools.skillActivateMode.auto.desc": "AI kan zelfstandig tools activeren, vaardigheden uitvoeren en nieuwe vaardigheden uit de winkel installeren",
+  "tools.skillActivateMode.auto.title": "Automatisch",
+  "tools.skillActivateMode.manual.desc": "Alleen door de gebruiker geselecteerde tools en vaardigheden zijn beschikbaar voor AI",
+  "tools.skillActivateMode.manual.title": "Handmatig",
+  "tools.skillActivateMode.title": "Activeer Modus",
   "tools.tabs.all": "Alles",
   "tools.tabs.installed": "Ingeschakeld",
   "tools.title": "Extensietools"

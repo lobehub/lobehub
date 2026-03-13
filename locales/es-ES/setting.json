@@ -865,6 +865,12 @@
   "tools.plugins.management": "Gestión de habilidades",
   "tools.plugins.noEnabled": "No hay habilidades habilitadas",
   "tools.plugins.store": "Agregar habilidad",
+  "tools.search": "Buscar habilidades...",
+  "tools.skillActivateMode.auto.desc": "La IA puede activar herramientas de forma autónoma, ejecutar habilidades e instalar nuevas habilidades desde la tienda",
+  "tools.skillActivateMode.auto.title": "Automático",
+  "tools.skillActivateMode.manual.desc": "Solo las herramientas y habilidades seleccionadas por el usuario están disponibles para la IA",
+  "tools.skillActivateMode.manual.title": "Manual",
+  "tools.skillActivateMode.title": "Modo de Activación",
   "tools.tabs.all": "Todas",
   "tools.tabs.installed": "Habilitadas",
   "tools.title": "Herramientas de Extensión"

@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Seu conteúdo foi bloqueado por motivos de segurança. Ajuste sua solicitação para evitar conteúdo inadequado.",
   "response.GoogleAIBlockReason.SPII": "Seu conteúdo pode conter informações pessoais sensíveis. Remova os dados sensíveis e tente novamente.",
   "response.GoogleAIBlockReason.default": "Conteúdo bloqueado: {{blockReason}}. Ajuste sua solicitação e tente novamente.",
+  "response.InsufficientBudgetForModel": "Seus créditos restantes são insuficientes para este modelo. Por favor, adicione créditos, atualize seu plano ou tente um modelo menos caro.",
   "response.InsufficientQuota": "Desculpe, a cota desta chave foi atingida. Verifique o saldo da conta ou aumente a cota.",
   "response.InvalidAccessCode": "Código de acesso inválido ou vazio. Insira o código correto ou adicione uma API Key personalizada.",
   "response.InvalidBedrockCredentials": "Falha na autenticação do Bedrock. Verifique AccessKeyId/SecretAccessKey e tente novamente.",
