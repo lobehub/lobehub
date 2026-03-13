@@ -6,7 +6,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 
 import { contextSelectors, useConversationStore } from '../store';
 
-const LOBE_AI_TITLE = 'Lobe AI';
+const LOBE_AI_TITLE = 'Loctek AI';
 
 /**
  * Hook to get agent meta data for a specific agent or the current conversation.

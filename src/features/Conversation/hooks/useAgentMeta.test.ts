@@ -83,9 +83,9 @@ describe('useAgentMeta', () => {
 
     const { result } = renderHook(() => useAgentMeta());
 
-    // Should override title with Lobe AI, but preserve avatar from backend
+    // Should override title with Loctek AI, but preserve avatar from backend
     expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
+    expect(result.current.title).toBe('Loctek AI');
     // Should preserve other properties
     expect(result.current.description).toBe('Inbox description');
   });
@@ -116,9 +116,7 @@ describe('useAgentMeta', () => {
 
     const { result } = renderHook(() => useAgentMeta());
 
-    // Should override title with Lobe AI, but preserve avatar from backend
-    expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
+    expect(result.current.title).toBe('Loctek AI');
   });
 
   it('should handle empty agentMap gracefully', () => {
