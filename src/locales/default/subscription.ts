@@ -351,7 +351,7 @@ export default {
   'referral.rules.expiry':
     'Credit validity: Available referral credits will be cleared after 100 days of user inactivity',
   'referral.rules.missedCode':
-    'Missed invite code: You can <0>backfill</0> within 3 days of registration',
+    'Missed invite code: You can <0>backfill</0> within 3 days of registration. Rewards are granted after performing a valid action',
   'referral.rules.priority':
     'Credit consumption priority: Free credits → Subscription credits → Referral credits → Top-up credits',
   'referral.rules.registration':
@@ -360,6 +360,8 @@ export default {
   'referral.rules.title': 'Program Rules',
   'referral.rules.validInvitation':
     'Valid invitation: Invitee registers with your referral code and performs one valid action',
+  'referral.rules.antiAbuse':
+    'Anti-abuse: If fraudulent activity is detected (e.g., mass use of disposable emails to farm credits), the account will be permanently banned',
   'referral.rules.validOperation':
     'Valid action criteria: Send one message on Chat page, or generate one image on image page',
   'referral.stats.availableBalance': 'Available Balance',
