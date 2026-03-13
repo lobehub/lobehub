@@ -32,7 +32,7 @@ const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
         cssVar: { key: 'lobe-vars' },
       }}
     >
-      <App style={{ height: '100%' }}>
+      <App suppressHydrationWarning style={{ height: '100%' }}>
         <AntdStaticMethods />
         <ConfigProvider
           motion={motion}
