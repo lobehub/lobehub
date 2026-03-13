@@ -34,7 +34,7 @@ const InboxWelcome = memo(() => {
     return agentSystemRoleMsg;
   }, [openingMessage, agentSystemRoleMsg, meta.description]);
 
-  const displayTitle = isInbox ? 'Lobe AI' : meta.title || t('defaultSession', { ns: 'common' });
+  const displayTitle = isInbox ? 'Loctek AI' : meta.title || t('defaultSession', { ns: 'common' });
 
   return (
     <>
@@ -57,7 +57,7 @@ const InboxWelcome = memo(() => {
         </Text>
         <Flexbox width={'min(100%, 640px)'}>
           <Markdown fontSize={fontSize} variant={'chat'}>
-            {isInbox ? t('guide.defaultMessageWithoutCreate', { appName: 'Lobe AI' }) : message}
+            {isInbox ? t('guide.defaultMessageWithoutCreate', { appName: 'Loctek AI' }) : message}
           </Markdown>
         </Flexbox>
         {openingQuestions.length > 0 && (

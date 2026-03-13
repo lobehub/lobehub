@@ -12,7 +12,7 @@ const HeaderInfo = memo(() => {
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const title = useAgentStore(agentSelectors.currentAgentTitle);
 
-  const displayTitle = isInbox ? 'Lobe AI' : title;
+  const displayTitle = isInbox ? 'Loctek AI' : title;
 
   return (
     <Flexbox
