@@ -21,7 +21,7 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   const isLoading = useChatStore(operationSelectors.isAgentRuntimeRunning);
-  const inboxAgentTitle = 'Lobe AI';
+  const inboxAgentTitle = 'Loctek AI';
 
   return (
     <Link aria-label={inboxAgentTitle} to={SESSION_CHAT_URL(inboxAgentId, false)}>
