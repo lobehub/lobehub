@@ -6,13 +6,13 @@ import { Link } from 'react-router-dom';
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
+import UserInfo from '@/features/User/UserInfo';
 import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
 import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import DataStatistics from '../DataStatistics';
-import UserInfo from '@/features/User/UserInfo';
 import UserLoginOrSignup from '../UserLoginOrSignup';
 import LangButton from './LangButton';
 import { useMenu } from './useMenu';

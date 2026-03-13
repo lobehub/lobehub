@@ -43,7 +43,6 @@ export enum SettingsTabs {
   Agent = 'agent',
   APIKey = 'apikey',
   Appearance = 'appearance',
-  Beta = 'beta',
   Billing = 'billing',
   /** @deprecated Use Appearance instead */
   ChatAppearance = 'chat-appearance',

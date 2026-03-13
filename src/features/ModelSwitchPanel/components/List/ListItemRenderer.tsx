@@ -1,10 +1,5 @@
 import {
   Block,
-  DropdownMenuGroup,
-  DropdownMenuGroupLabel,
-  DropdownMenuItem,
-  DropdownMenuItemIcon,
-  DropdownMenuItemLabel,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -15,7 +10,7 @@ import {
   menuSharedStyles,
 } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
-import { Check, LucideArrowRight } from 'lucide-react';
+import { LucideArrowRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -133,8 +128,8 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   <ModelItemRender
                     {...item.model}
                     {...item.model.abilities}
-                    newBadgeLabel={newLabel}
                     showInfoTag
+                    newBadgeLabel={newLabel}
                   />
                 </DropdownMenuSubmenuTrigger>
                 <DropdownMenuPortal>
@@ -220,10 +215,10 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               isModelRestricted={isModelRestricted}
               newLabel={newLabel}
               proLabel={proLabel}
+              showInfoTag={isDevMode}
               onClose={onClose}
               onModelChange={onModelChange}
               onRestrictedModelClick={onRestrictedModelClick}
-              showInfoTag={isDevMode}
             />
           </Flexbox>
         );

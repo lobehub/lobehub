@@ -7,7 +7,7 @@ import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 
-import { DEFAULT_WIDTH, ENABLE_RESIZING, ITEM_HEIGHT, MAX_PANEL_HEIGHT, MAX_WIDTH, MIN_WIDTH, TOOLBAR_HEIGHT } from '../const';
+import { DEFAULT_WIDTH, ENABLE_RESIZING, MAX_WIDTH, MIN_WIDTH } from '../const';
 import { usePanelSize } from '../hooks/usePanelSize';
 import { usePanelState } from '../hooks/usePanelState';
 import { List } from './List';
