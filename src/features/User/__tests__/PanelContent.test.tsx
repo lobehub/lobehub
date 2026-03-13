@@ -15,10 +15,6 @@ vi.mock('next/navigation', () => ({
   })),
 }));
 
-vi.mock('@/components/BrandWatermark', () => ({
-  default: vi.fn(() => <div>Mocked BrandWatermark</div>),
-}));
-
 vi.mock('@/components/Menu', () => ({
   default: vi.fn(({ items, onClick }) => (
     <div>
@@ -107,17 +103,17 @@ describe('PanelContent', () => {
 
       renderWithRouter(<PanelContent closePopover={closePopover} />);
 
-      expect(screen.getAllByText('Mocked Menu').length).toBe(2);
+      expect(screen.getAllByText('Mocked Menu').length).toBe(3);
     });
 
-    it('should render BrandWatermark when user is not signed in', () => {
+    it('should render SignInBlock when user is not signed in', () => {
       act(() => {
         useUserStore.setState({ isSignedIn: false });
       });
 
       renderWithRouter(<PanelContent closePopover={closePopover} />);
 
-      expect(screen.getByText('Mocked BrandWatermark')).toBeInTheDocument();
+      expect(screen.getByText('Mocked SignInBlock')).toBeInTheDocument();
     });
   });
 

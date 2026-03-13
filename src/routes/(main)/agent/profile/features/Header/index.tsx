@@ -20,8 +20,7 @@ import ForkConfirmModal from './AgentPublishButton/ForkConfirmModal';
 import PublishResultModal from './AgentPublishButton/PublishResultModal';
 import { type OriginalAgentInfo, useMarketPublish } from './AgentPublishButton/useMarketPublish';
 import AgentStatusTag from './AgentStatusTag';
-import { useVersionReviewStatus } from './AgentVersionReviewTag';
-import AgentVersionReviewTag from './AgentVersionReviewTag';
+import AgentVersionReviewTag, { useVersionReviewStatus } from './AgentVersionReviewTag';
 import AutoSaveHint from './AutoSaveHint';
 
 const Header = memo(() => {
@@ -134,6 +133,14 @@ const Header = memo(() => {
   return (
     <>
       <NavHeader
+        left={
+          <Flexbox horizontal gap={8}>
+            <AutoSaveHint />
+            <AgentStatusTag />
+            <AgentVersionReviewTag />
+            <AgentForkTag />
+          </Flexbox>
+        }
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             <DropdownMenu items={menuItems}>
@@ -146,24 +153,16 @@ const Header = memo(() => {
             <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} />
           </Flexbox>
         }
-        left={
-          <Flexbox horizontal gap={8}>
-            <AutoSaveHint />
-            <AgentStatusTag />
-            <AgentVersionReviewTag />
-            <AgentForkTag />
-          </Flexbox>
-        }
       />
       <ForkConfirmModal
         loading={isPublishing}
         open={showForkModal}
         originalAgent={originalAgentInfo}
+        onConfirm={handleForkConfirm}
         onCancel={() => {
           setShowForkModal(false);
           setOriginalAgentInfo(null);
         }}
-        onConfirm={handleForkConfirm}
       />
       <PublishResultModal
         identifier={publishedIdentifier}

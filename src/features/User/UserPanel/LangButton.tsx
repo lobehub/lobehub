@@ -1,7 +1,7 @@
 import { type DropdownMenuCheckboxItem, type DropdownMenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronRight, Languages } from 'lucide-react';
-import { type ReactNode, memo, useMemo } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Menu from '@/components/Menu';

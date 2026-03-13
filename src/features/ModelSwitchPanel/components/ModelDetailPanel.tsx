@@ -2,7 +2,6 @@ import { getCachedTextInputUnitRate } from '@lobechat/utils';
 import { Accordion, AccordionItem, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
-
 import {
   ArrowDownToDot,
   ArrowUpFromDot,

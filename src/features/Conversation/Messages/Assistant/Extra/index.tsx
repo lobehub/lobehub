@@ -4,8 +4,8 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import ExtraContainer from '../../components/Extras/ExtraContainer';
