@@ -1,5 +1,6 @@
 import {
   CreateNewMessageParamsSchema,
+  MessageMetadataSchema,
   UpdateMessageParamsSchema,
   UpdateMessagePluginSchema,
   UpdateMessageRAGParamsSchema,
@@ -373,7 +374,7 @@ export const messageRouter = router({
       z
         .object({
           id: z.string(),
-          value: z.object({}).passthrough(),
+          value: MessageMetadataSchema,
         })
         .extend(basicContextSchema.shape),
     )
@@ -389,7 +390,13 @@ export const messageRouter = router({
       z
         .object({
           id: z.string(),
-          value: z.object({}).passthrough().nullable(),
+          value: z
+            .object({
+              body: z.unknown().optional(),
+              message: z.string(),
+              type: z.string(),
+            })
+            .nullable(),
         })
         .extend(basicContextSchema.shape),
     )
@@ -405,7 +412,7 @@ export const messageRouter = router({
       z
         .object({
           id: z.string(),
-          value: z.object({}).passthrough(),
+          value: z.record(z.unknown()),
         })
         .extend(basicContextSchema.shape),
     )
@@ -464,9 +471,16 @@ export const messageRouter = router({
           id: z.string(),
           value: z.object({
             content: z.string().optional(),
-            metadata: z.object({}).passthrough().optional(),
-            pluginError: z.any().optional(),
-            pluginState: z.object({}).passthrough().optional(),
+            metadata: MessageMetadataSchema.optional(),
+            pluginError: z
+              .object({
+                body: z.unknown().optional(),
+                message: z.string(),
+                type: z.string(),
+              })
+              .nullable()
+              .optional(),
+            pluginState: z.record(z.unknown()).optional(),
           }),
         })
         .extend(basicContextSchema.shape),
