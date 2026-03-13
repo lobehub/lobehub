@@ -10,10 +10,13 @@ import { useNavigate } from 'react-router-dom';
 
 import { Toolbar } from '@/features/ModelSwitchPanel/components/Toolbar';
 import { useBuildListItems } from '@/features/ModelSwitchPanel/hooks/useBuildListItems';
+import { usePanelState } from '@/features/ModelSwitchPanel/hooks/usePanelState';
 import { styles as modelSwitchPanelStyles } from '@/features/ModelSwitchPanel/styles';
-import type { GroupMode, ListItem } from '@/features/ModelSwitchPanel/types';
+import type { ListItem } from '@/features/ModelSwitchPanel/types';
 import { getListItemKey, menuKey } from '@/features/ModelSwitchPanel/utils';
 import { useModelSwitchButtonContext } from '@/routes/(main)/(create)/features/GenerationInput/ModelSwitchButtonContext';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 import type { EnabledProviderWithModels } from '@/types/index';
 
 import ListItemRenderer from './ListItemRenderer';
@@ -35,7 +38,8 @@ const GenerationModelDropdownList = memo<GenerationModelDropdownListProps>(
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const ctx = useModelSwitchButtonContext();
-    const [groupMode, setGroupMode] = useState<GroupMode>('byProvider');
+    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+    const { groupMode, handleGroupModeChange } = usePanelState();
     const [searchKeyword, setSearchKeyword] = useState('');
 
     const [currentModel, currentProvider] = useStore((s: any) => [
@@ -44,7 +48,8 @@ const GenerationModelDropdownList = memo<GenerationModelDropdownListProps>(
     ]);
     const setModelAndProviderOnSelect = useStore((s: any) => s.setModelAndProviderOnSelect);
 
-    const listItems = useBuildListItems(enabledModelList, groupMode, searchKeyword);
+    const effectiveGroupMode = isDevMode ? groupMode : 'byModel';
+    const listItems = useBuildListItems(enabledModelList, effectiveGroupMode, searchKeyword);
     const activeKey = currentProvider && currentModel ? menuKey(currentProvider, currentModel) : '';
 
     const handleModelChange = useCallback(
@@ -81,7 +86,8 @@ const GenerationModelDropdownList = memo<GenerationModelDropdownListProps>(
         <Toolbar
           groupMode={groupMode}
           searchKeyword={searchKeyword}
-          onGroupModeChange={(m) => setGroupMode(m)}
+          showGroupModeSwitch={isDevMode}
+          onGroupModeChange={handleGroupModeChange}
           onSearchKeywordChange={setSearchKeyword}
         />
         <Flexbox className={modelSwitchPanelStyles.list}>
