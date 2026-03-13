@@ -415,7 +415,7 @@ export default {
     'After switching, yearly billing will take effect immediately after paying the difference. Start date inherits from previous plan.',
   'switchToYearly.title': 'Switch to Yearly Billing',
   'tab.billing': 'Billing Management',
-  'tab.funds': 'Credits Management',
+  'tab.credits': 'Credits Management',
   'tab.plans': 'Subscription Plans',
   'tab.referral': 'Referral Rewards',
   'tab.spend': 'Credits Details',
