@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "جستجوی مهارت‌ها",
   "builtins.lobe-skills.title": "مهارت‌ها",
   "builtins.lobe-tools.apiName.activateTools": "فعال کردن ابزارها",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "دریافت زمینه موضوع",
+  "builtins.lobe-topic-reference.title": "ارجاع به موضوع",
   "builtins.lobe-user-memory.apiName.addContextMemory": "افزودن حافظه زمینه",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "افزودن حافظه تجربه",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "افزودن حافظه هویتی",

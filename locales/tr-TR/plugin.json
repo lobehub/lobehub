@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "Becerileri Ara",
   "builtins.lobe-skills.title": "Beceriler",
   "builtins.lobe-tools.apiName.activateTools": "Araçları Etkinleştir",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "Konu bağlamını al",
+  "builtins.lobe-topic-reference.title": "Konu referansı",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Bağlam hafızası ekle",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Deneyim hafızası ekle",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Kimlik hafızası ekle",

@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "搜尋技能",
   "builtins.lobe-skills.title": "技能",
   "builtins.lobe-tools.apiName.activateTools": "啟用工具",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "取得話題上下文",
+  "builtins.lobe-topic-reference.title": "話題引用",
   "builtins.lobe-user-memory.apiName.addContextMemory": "新增情境記憶",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "新增經驗記憶",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "新增身份記憶",

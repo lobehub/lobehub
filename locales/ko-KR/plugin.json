@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "스킬 검색",
   "builtins.lobe-skills.title": "스킬",
   "builtins.lobe-tools.apiName.activateTools": "도구 활성화",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "토픽 컨텍스트 가져오기",
+  "builtins.lobe-topic-reference.title": "토픽 참조",
   "builtins.lobe-user-memory.apiName.addContextMemory": "상황 기억 추가",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "경험 기억 추가",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "신원 기억 추가",

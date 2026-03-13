@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "Търсене на умения",
   "builtins.lobe-skills.title": "Умения",
   "builtins.lobe-tools.apiName.activateTools": "Активиране на инструменти",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "Вземи контекста на темата",
+  "builtins.lobe-topic-reference.title": "Препратка към тема",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Добавяне на контекстна памет",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Добавяне на памет за опит",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Добавяне на памет за идентичност",

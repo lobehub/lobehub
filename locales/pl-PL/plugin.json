@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "Wyszukaj Umiejętności",
   "builtins.lobe-skills.title": "Umiejętności",
   "builtins.lobe-tools.apiName.activateTools": "Aktywuj Narzędzia",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "Pobierz kontekst tematu",
+  "builtins.lobe-topic-reference.title": "Odwołanie do tematu",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Dodaj pamięć kontekstu",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Dodaj pamięć doświadczenia",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Dodaj pamięć tożsamości",

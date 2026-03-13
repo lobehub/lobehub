@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "Поиск навыков",
   "builtins.lobe-skills.title": "Навыки",
   "builtins.lobe-tools.apiName.activateTools": "Активировать инструменты",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "Получить контекст темы",
+  "builtins.lobe-topic-reference.title": "Ссылка на тему",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Добавить контекстную память",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Добавить память опыта",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Добавить память личности",

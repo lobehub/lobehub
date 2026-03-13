@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "البحث عن المهارات",
   "builtins.lobe-skills.title": "المهارات",
   "builtins.lobe-tools.apiName.activateTools": "تفعيل الأدوات",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "الحصول على سياق الموضوع",
+  "builtins.lobe-topic-reference.title": "مرجع الموضوع",
   "builtins.lobe-user-memory.apiName.addContextMemory": "إضافة ذاكرة السياق",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "إضافة ذاكرة الخبرة",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "إضافة ذاكرة الهوية",

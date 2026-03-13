@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "スキルを検索",
   "builtins.lobe-skills.title": "スキル",
   "builtins.lobe-tools.apiName.activateTools": "ツールをアクティブ化",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "トピックコンテキストを取得",
+  "builtins.lobe-topic-reference.title": "トピック参照",
   "builtins.lobe-user-memory.apiName.addContextMemory": "コンテキスト記憶を追加",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "経験記憶を追加",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "アイデンティティ記憶を追加",

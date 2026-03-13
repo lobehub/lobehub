@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "Buscar Habilidades",
   "builtins.lobe-skills.title": "Habilidades",
   "builtins.lobe-tools.apiName.activateTools": "Ativar Ferramentas",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "Obter contexto do tópico",
+  "builtins.lobe-topic-reference.title": "Referência de tópico",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Adicionar memória de contexto",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Adicionar memória de experiência",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Adicionar memória de identidade",

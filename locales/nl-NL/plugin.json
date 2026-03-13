@@ -197,6 +197,8 @@
   "builtins.lobe-skills.apiName.searchSkill": "Vaardigheden Zoeken",
   "builtins.lobe-skills.title": "Vaardigheden",
   "builtins.lobe-tools.apiName.activateTools": "Hulpmiddelen Activeren",
+  "builtins.lobe-topic-reference.apiName.getTopicContext": "Onderwerpcontext ophalen",
+  "builtins.lobe-topic-reference.title": "Onderwerpverwijzing",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Contextgeheugen toevoegen",
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "Ervaringsgeheugen toevoegen",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "Identiteitsgeheugen toevoegen",

@@ -8,8 +8,8 @@ const ReactReferTopicPlugin: FC = () => {
   const [editor] = useLexicalComposerContext();
 
   useLayoutEffect(() => {
-    (editor as any).registerPlugin(ReferTopicPlugin, {
-      decorator: (node: any, _lexicalEditor: any) => {
+    editor.registerPlugin(ReferTopicPlugin, {
+      decorator: (node) => {
         return <ReferTopic node={node} />;
       },
     });

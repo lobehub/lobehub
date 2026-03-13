@@ -10,8 +10,8 @@ const ReactActionTagPlugin: FC = () => {
   const { t } = useTranslation('editor');
 
   useLayoutEffect(() => {
-    (editor as any).registerPlugin(ActionTagPlugin, {
-      decorator: (node: any, lexicalEditor: any) => {
+    editor.registerPlugin(ActionTagPlugin, {
+      decorator: (node, lexicalEditor) => {
         const label =
           node.actionCategory === 'command'
             ? t(`slash.${node.actionType}` as any)
