@@ -296,7 +296,7 @@
   "referral.inviteCode.title": "我的推荐码",
   "referral.inviteLink.description": "复制链接并分享给好友，完成注册即可获得奖励",
   "referral.inviteLink.title": "推荐链接",
-  "referral.rules.antiAbuse": "反作弊：如检测到使用不正当手段（如批量使用临时邮箱刷积分），将采取封号处理",
+  "referral.rules.antiAbuse": "如检测到通过不正当手段获取积分（如批量注册临时邮箱账号），相关账号将被永久封禁",
   "referral.rules.backfill.alreadyBound": "你已经绑定过邀请码",
   "referral.rules.backfill.description": "忘记填写邀请码？注册三天内可以补填",
   "referral.rules.backfill.expiredTip": "补填期限已过，注册超过三天后无法补填",

@@ -361,7 +361,7 @@ export default {
   'referral.rules.validInvitation':
     'Valid invitation: Invitee registers with your referral code and performs one valid action',
   'referral.rules.antiAbuse':
-    'Anti-abuse: If fraudulent activity is detected (e.g., mass use of disposable emails to farm credits), the account will be permanently banned',
+    'If fraudulent activity is detected (e.g., mass registration of disposable email accounts), the associated accounts will be permanently banned',
   'referral.rules.validOperation':
     'Valid action criteria: Send one message on Chat page, or generate one image on image page',
   'referral.stats.availableBalance': 'Available Balance',

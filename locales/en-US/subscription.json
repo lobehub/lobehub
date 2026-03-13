@@ -296,7 +296,7 @@
   "referral.inviteCode.title": "My Referral Code",
   "referral.inviteLink.description": "Copy the link and share with friends. Complete registration to receive rewards",
   "referral.inviteLink.title": "Referral Link",
-  "referral.rules.antiAbuse": "Anti-abuse: If fraudulent activity is detected (e.g., mass use of disposable emails to farm credits), the account will be permanently banned",
+  "referral.rules.antiAbuse": "If fraudulent activity is detected (e.g., mass registration of disposable email accounts), the associated accounts will be permanently banned",
   "referral.rules.backfill.alreadyBound": "You have already bound an invite code",
   "referral.rules.backfill.description": "Forgot to enter invite code? You can backfill within 3 days of registration",
   "referral.rules.backfill.expiredTip": "Backfill period has expired. Cannot backfill after 3 days of registration",
