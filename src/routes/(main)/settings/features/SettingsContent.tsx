@@ -11,7 +11,6 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { componentMap } from './componentMap';
 
 const REDIRECT_MAP: Record<string, string> = {
-  beta: SettingsTabs.Advanced,
   [SettingsTabs.Common]: SettingsTabs.Appearance,
   [SettingsTabs.ChatAppearance]: SettingsTabs.Appearance,
   [SettingsTabs.Agent]: SettingsTabs.ServiceModel,
