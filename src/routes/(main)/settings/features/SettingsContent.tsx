@@ -11,6 +11,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { componentMap } from './componentMap';
 
 const REDIRECT_MAP: Record<string, string> = {
+  beta: SettingsTabs.Advanced,
   [SettingsTabs.Common]: SettingsTabs.Appearance,
   [SettingsTabs.ChatAppearance]: SettingsTabs.Appearance,
   [SettingsTabs.Agent]: SettingsTabs.ServiceModel,
@@ -48,12 +49,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         SettingsTabs.Usage,
         SettingsTabs.Security,
         ...(enableBusinessFeatures
-          ? [
-              SettingsTabs.Plans,
-              SettingsTabs.Credits,
-              SettingsTabs.Billing,
-              SettingsTabs.Referral,
-            ]
+          ? [SettingsTabs.Plans, SettingsTabs.Credits, SettingsTabs.Billing, SettingsTabs.Referral]
           : []),
       ].includes(tab as any)
     ) {
