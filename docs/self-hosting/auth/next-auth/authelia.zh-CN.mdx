@@ -20,7 +20,7 @@ tags:
 
   现在，我们打开 Authelia 实例的配置文件进行编辑：
 
-  在 `identity_providers`-> `oidc` 下新增一个 `lobe-chat` 的项目：
+  在 `identity_providers`-> `oidc` 下新增一个 `lobehub` 的项目：
 
   ```yaml
   ...
@@ -29,7 +29,7 @@ tags:
       ...
       ## The other portions of the mandatory OpenID Connect 1.0 configuration go here.
       ## See: https://www.authelia.com/c/oidc
-      - id: lobe-chat
+      - id: lobehub
         description: LobeHub
         secret: '$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKn50cFzzvE9RXV88h1wJn5KGiHrD0YKtZaR/nCb2CJPOsKaPK0hjf.9yHxzQGZziziccp6Yng'  # The digest of 'insecure_secret'.
         public: false
@@ -55,7 +55,7 @@ tags:
   | ------------------------- | -- | ------------------------------------------------------------------------------------------------ |
   | `AUTH_SECRET`             | 必选 | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令生成秘钥： `openssl rand -base64 32`                                    |
   | `NEXT_AUTH_SSO_PROVIDERS` | 必选 | 选择 LoboChat 的单点登录提供商。使用 Authelia 请填写 `authelia`。                                                 |
-  | `AUTH_AUTHELIA_ID`        | 必选 | 刚刚在 Authelia 配置的 `id`，示例值是 `lobe-chat`                                                           |
+  | `AUTH_AUTHELIA_ID`        | 必选 | 刚刚在 Authelia 配置的 `id`，示例值是 `lobehub`                                                             |
   | `AUTH_AUTHELIA_SECRET`    | 必选 | 刚刚在 Authelia 配置的 `secret` 对应的明文，示例值是 `insecure_secret`                                           |
   | `AUTH_AUTHELIA_ISSUER`    | 必选 | 您的 Authelia 的网址，例如 `https://sso.example.com`                                                     |
   | `AUTH_URL`                | 必选 | 该 URL 用于指定 Auth.js 在执行 OAuth 验证时的回调地址，当默认生成的重定向地址发生不正确时才需要设置。`https://chat.example.com/api/auth` |

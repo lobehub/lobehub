@@ -1,6 +1,6 @@
 # 🤯 LobeHub Desktop Application
 
-LobeHub Desktop is a cross-platform desktop application for [LobeHub](https://github.com/lobehub/lobe-chat), built with Electron, providing a more native desktop experience and functionality.
+LobeHub Desktop is a cross-platform desktop application for [LobeHub](https://github.com/lobehub/lobehub), built with Electron, providing a more native desktop experience and functionality.
 
 ## ✨ Features
 
@@ -347,7 +347,7 @@ Desktop application development involves complex cross-platform considerations a
 
 ### Contribution Process
 
-1. Fork the [LobeHub repository](https://github.com/lobehub/lobe-chat)
+1. Fork the [LobeHub repository](https://github.com/lobehub/lobehub)
 2. Set up the desktop development environment following our setup guide
 3. Make your changes to the desktop application
 4. Submit a Pull Request describing:
@@ -372,4 +372,4 @@ Desktop application development involves complex cross-platform considerations a
 - **Development Guide**: [`Development.md`](./Development.md) - Comprehensive development documentation
 - **Architecture Docs**: [`/docs`](../../docs/) - Detailed technical specifications
 - **Contributing**: [`CONTRIBUTING.md`](../../CONTRIBUTING.md) - Contribution guidelines
-- **Issues & Support**: [GitHub Issues](https://github.com/lobehub/lobe-chat/issues)
+- **Issues & Support**: [GitHub Issues](https://github.com/lobehub/lobehub/issues)

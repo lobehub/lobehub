@@ -105,7 +105,7 @@ tags:
   ```
 
   ⚠️ 请不要在此类面板软件的反向代理设置中开启任何形式的缓存，以免影响服务的正常运行。
-  详情请见 [https://github.com/lobehub/lobe-chat/discussions/5986](https://github.com/lobehub/lobe-chat/discussions/5986)
+  详情请见 [https://github.com/lobehub/lobehub/discussions/5986](https://github.com/lobehub/lobehub/discussions/5986)
 </Callout>
 
 ### 必要配置
@@ -194,13 +194,13 @@ origin=https://auth.example.com
 请根据容器日志检查是否存在以下错误：
 
 ```sh
-docker logs -f lobe-chat
+docker logs -f lobehub
 ```
 
 **r3: "response" is not a conform Authorization Server Metadata response**
 
 ```log
-lobe-chat      | [auth][error] r3: "response" is not a conform Authorization Server Metadata response (unexpected HTTP status code)
+lobehub      | [auth][error] r3: "response" is not a conform Authorization Server Metadata response (unexpected HTTP status code)
 ```
 
 成因：该问题一般是由于你的反向代理配置不正确导致的，你需要确保你的反向代理配置不会拦截 Casdoor 的 OAuth2 配置请求。
@@ -216,7 +216,7 @@ lobe-chat      | [auth][error] r3: "response" is not a conform Authorization Ser
 **TypeError: fetch failed**
 
 ```log
-lobe-chat      | [auth][error] TypeError: fetch failed
+lobehub      | [auth][error] TypeError: fetch failed
 ```
 
 成因：LobeHub 无法访问鉴权服务。
@@ -240,7 +240,7 @@ docker compose up -d
 
 ### Docker Compose 配置文件
 
-Casdoor 的 Docker Compose 配置文件可以在 [docker-compose/local/casdoor](https://github.com/lobehub/lobe-chat/tree/main/docker-compose/local/casdoor) 目录中找到。
+Casdoor 的 Docker Compose 配置文件可以在 [docker-compose/local/casdoor](https://github.com/lobehub/lobehub/tree/main/docker-compose/local/casdoor) 目录中找到。
 
 ## 相关资源
 

@@ -186,10 +186,11 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
   <Callout type="tip">
     **单域名部署方案**
     如果只有一个域名，可以通过不同端口区分服务：
+
     - LobeHub 服务的域名设置：`lobe.example.com:${PORT1}`
     - S3 服务的域名设置：`lobe.example.com:${PORT2}`
-    需在反向代理中配置对应端口的转发规则。
-    **端口模式 vs 域名模式：**
+      需在反向代理中配置对应端口的转发规则。
+      **端口模式 vs 域名模式：**
     - 端口模式：一键安装脚本自动使用默认端口（3210/9000/9001）
     - 域名模式：可自定义端口（通过反向代理配置）
   </Callout>
@@ -250,11 +251,11 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
 
 ## 自定义部署
 
-该章节主要为你介绍在不同的网络环境下自定义部署 LobeHub 服务必须要修改的配置。在开始前，你可以先下载 [Docker Compose 配置文件](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml) 以及 [环境变量配置文件](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-CN.example)。
+该章节主要为你介绍在不同的网络环境下自定义部署 LobeHub 服务必须要修改的配置。在开始前，你可以先下载 [Docker Compose 配置文件](https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml) 以及 [环境变量配置文件](https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.zh-CN.example)。
 
 ```sh
-curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml
-curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-CN.example
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.zh-CN.example
 mv .env.zh-CN.example .env
 ```
 

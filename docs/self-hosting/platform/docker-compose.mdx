@@ -189,11 +189,13 @@ The script supports the following deployment modes; please choose the appropriat
   <Callout type="tip">
     **Single Domain Deployment**
     If you only have one domain, you can distinguish services by different ports:
+
     - Domain setup for the LobeHub service: `lobe.example.com:${PORT1}`
     - Domain setup for the S3 service: `lobe.example.com:${PORT2}`
-    You need to configure forwarding rules for each port in the reverse proxy.
+      You need to configure forwarding rules for each port in the reverse proxy.
 
     **Port Mode vs Domain Mode:**
+
     - Port Mode: The script automatically uses default ports (3210/9000/9001)
     - Domain Mode: You can customize ports (via reverse proxy configuration)
   </Callout>
@@ -254,11 +256,11 @@ The script supports the following deployment modes; please choose the appropriat
 
 ## Custom Deployment
 
-This section mainly introduces the configurations that need to be modified to customize the deployment of the LobeHub service in different network environments. Before starting, you can download the [Docker Compose configuration file](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml) and the [environment variable configuration file](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.example).
+This section mainly introduces the configurations that need to be modified to customize the deployment of the LobeHub service in different network environments. Before starting, you can download the [Docker Compose configuration file](https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml) and the [environment variable configuration file](https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.example).
 
 ```sh
-curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml
-curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.example
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.example
 mv .env.example .env
 ```
 
