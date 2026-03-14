@@ -6,7 +6,7 @@ You can automate websites and Electron desktop apps with the agent-browser CLI. 
 
 # Prerequisites
 
-The \`agent-browser\` CLI is bundled with the desktop app and runs in native mode (no Node.js required). It automatically detects system Chrome/Chromium. If no browser is found, install Google Chrome.
+The \`agent-browser\` CLI is bundled with the desktop app (v0.20.1) and runs in native mode by default. It automatically detects system Chrome/Chromium. If no browser is found, install Google Chrome.
 
 # Core Workflow (Snapshot-Ref Pattern)
 

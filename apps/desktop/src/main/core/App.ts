@@ -93,9 +93,6 @@ export class App {
     const pathSep = process.platform === 'win32' ? ';' : ':';
     process.env.PATH = `${process.env.PATH}${pathSep}${binDir}`;
 
-    // Use native mode (pure Rust/CDP) so agent-browser works without Node.js
-    process.env.AGENT_BROWSER_NATIVE = '1';
-
     logger.debug('Initializing App');
     // Initialize store manager
     this.storeManager = new StoreManager(this);
