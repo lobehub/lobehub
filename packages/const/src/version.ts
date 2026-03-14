@@ -7,6 +7,6 @@ export const CURRENT_VERSION = pkg.version;
 export const isDesktop = typeof __ELECTRON__ !== 'undefined' && !!__ELECTRON__;
 
 // @ts-ignore
-export const isCustomBranding = BRANDING_NAME !== 'Pictura AI';
+export const isCustomBranding = BRANDING_NAME !== 'LobeHub';
 // @ts-ignore
-export const isCustomORG = ORG_NAME !== 'Pictura AI';
+export const isCustomORG = ORG_NAME !== 'LobeHub';
