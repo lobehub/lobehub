@@ -1,19 +1,13 @@
-import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
-import { type ItemType } from 'antd/es/menu/interface';
-import { BrainCircuit, Cloudy, Download, LogOut, Settings2 } from 'lucide-react';
+import { BrainCircuit, LogOut, Settings2 } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import getBusinessMenuItems from '@/business/client/features/User/getBusinessMenuItems';
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
-import { OFFICIAL_URL } from '@/const/url';
-import { usePlatform } from '@/hooks/usePlatform';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
@@ -46,19 +40,10 @@ const NewVersionBadge = memo(
 export const useMenu = () => {
   const hasNewVersion = useNewVersion();
   const { t } = useTranslation(['common', 'setting', 'auth']);
-  const { showCloudPromotion, hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const [isLogin, isLoginWithAuth] = useUserStore((s) => [
     authSelectors.isLogin(s),
     authSelectors.isLoginWithAuth(s),
   ]);
-  const businessMenuItems = getBusinessMenuItems(isLogin);
-  const { isIOS, isAndroid } = usePlatform();
-
-  const downloadUrl = useMemo(() => {
-    if (isIOS) return DOWNLOAD_URL.ios;
-    if (isAndroid) return DOWNLOAD_URL.android;
-    return DOWNLOAD_URL.default;
-  }, [isIOS, isAndroid]);
 
   const settings: MenuProps['items'] = [
     {
@@ -82,45 +67,6 @@ export const useMenu = () => {
     },
   ];
 
-  const getDesktopApp: MenuProps['items'] = [
-    {
-      icon: <Icon icon={Download} />,
-      key: 'get-desktop-app',
-      label: (
-        <a href={downloadUrl} rel="noopener noreferrer" target="_blank">
-          {t('getDesktopApp')}
-        </a>
-      ),
-    },
-  ];
-
-  const helps: MenuProps['items'] = [
-    showCloudPromotion && {
-      icon: <Icon icon={Cloudy} />,
-      key: 'cloud',
-      label: (
-        <a
-          href={`${OFFICIAL_URL}?utm_source=${UTM_SOURCE}`}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          {t('userPanel.cloud', { name: LOBE_CHAT_CLOUD })}
-        </a>
-      ),
-    },
-  ].filter(Boolean) as ItemType[];
-
-  const mainItems = [
-    {
-      type: 'divider',
-    },
-
-    ...(isLogin ? settings : []),
-    ...businessMenuItems,
-    ...(!isDesktop ? [{ type: 'divider' as const }, ...getDesktopApp] : []),
-    ...(!hideDocs ? helps : []),
-  ].filter(Boolean) as MenuProps['items'];
-
   const logoutItems: MenuProps['items'] = isLoginWithAuth
     ? [
         {
@@ -134,5 +80,5 @@ export const useMenu = () => {
       ]
     : [];
 
-  return { logoutItems, mainItems };
+  return { logoutItems, mainItems: settings };
 };

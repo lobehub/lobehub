@@ -1,22 +1,17 @@
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { DiscordIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import {
   Bot,
   FeatherIcon,
   FilePen,
-  Github,
   LibraryBig,
   MessageSquarePlusIcon,
   Monitor,
-  Star,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getNavigableRoutes, getRouteById } from '@/config/routes';
-import { FEEDBACK } from '@/const/url';
-import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
@@ -26,7 +21,6 @@ import { useCommandMenu } from './useCommandMenu';
 const MainMenu = memo(() => {
   const { pathname, menuContext, setPages, pages } = useCommandMenuContext();
   const { t } = useTranslation('common');
-  const { open: openFeedbackModal } = useFeedbackModal();
 
   const {
     handleCreateSession,
@@ -34,7 +28,6 @@ const MainMenu = memo(() => {
     handleCreateLibrary,
     handleCreatePage,
     handleNavigate,
-    handleExternalLink,
     handleCreateAgentTeam,
   } = useCommandMenu();
 
@@ -136,38 +129,16 @@ const MainMenu = memo(() => {
       </Command.Group>
 
       <Command.Group heading={t('cmdk.about')}>
-        <CommandItem
-          icon={<FeatherIcon />}
-          keywords={t('cmdk.keywords.contactUs').split(' ')}
-          value="contact-via-email"
-          onSelect={() => openFeedbackModal()}
-        >
-          {t('cmdk.contactUs')}
-        </CommandItem>
-        <CommandItem
-          icon={<Github />}
-          keywords={t('cmdk.keywords.submitIssue').split(' ')}
-          value="submit-issue"
-          onSelect={() => handleExternalLink(FEEDBACK)}
-        >
-          {t('cmdk.submitIssue')}
-        </CommandItem>
-        <CommandItem
-          icon={<Star />}
-          keywords={t('cmdk.keywords.starGitHub').split(' ')}
-          value="star-github"
-          onSelect={() => handleExternalLink(SOCIAL_URL.github)}
-        >
-          {t('cmdk.starOnGitHub')}
-        </CommandItem>
-        <CommandItem
-          icon={<DiscordIcon />}
-          keywords={t('cmdk.keywords.discord').split(' ')}
-          value="discord"
-          onSelect={() => handleExternalLink(SOCIAL_URL.discord)}
-        >
-          {t('cmdk.communitySupport')}
-        </CommandItem>
+        {SOCIAL_URL.telegram && (
+          <CommandItem
+            icon={<FeatherIcon />}
+            keywords={t('cmdk.keywords.contactUs').split(' ')}
+            value="contact-via-telegram"
+            onSelect={() => window.open(SOCIAL_URL.telegram, '_blank')}
+          >
+            {t('cmdk.contactUs')}
+          </CommandItem>
+        )}
       </Command.Group>
     </>
   );
