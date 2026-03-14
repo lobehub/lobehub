@@ -190,26 +190,26 @@ export class RbacModel {
   };
 
   /**
-   * 更新用户角色，使用事务保证原子性
-   * @param userId 用户ID
-   * @param roleIds 角色ID数组
+   * Update user roles using a transaction to ensure atomicity
+   * @param userId User ID
+   * @param roleIds Array of role IDs
    */
   updateUserRoles = async (userId: string, roleIds: string[]): Promise<void> => {
-    // 校验角色是否存在
+    // Validate that the roles exist
     const existingRoles = await this.db.query.roles.findMany({
       where: inArray(roles.id, roleIds),
     });
     if (existingRoles.length !== roleIds.length) {
       const missingRoleIds = roleIds.filter((id) => !existingRoles.some((r) => r.id === id));
 
-      throw new Error(`角色 ${missingRoleIds.join(', ')} 不存在`);
+      throw new Error(`Roles ${missingRoleIds.join(', ')} do not exist`);
     }
 
     return await this.db.transaction(async (tx) => {
-      // 1. 删除用户现有的所有角色
+      // 1. Delete all existing roles for the user
       await tx.delete(userRoles).where(eq(userRoles.userId, userId));
 
-      // 2. 如果有新角色，则插入新角色
+      // 2. Insert new roles if any are provided
       if (roleIds.length > 0) {
         await tx.insert(userRoles).values(
           roleIds.map((roleId) => ({
