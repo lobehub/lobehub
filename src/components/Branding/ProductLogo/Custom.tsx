@@ -1,4 +1,4 @@
-import { BRANDING_COLOR, BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
 import { type IconType } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
@@ -26,7 +26,6 @@ const CustomTextLogo = memo<FlexboxProps & { size: number }>(({ size, style, ...
       style={{
         fontSize: size / 1.5,
         fontWeight: 'bolder',
-        color: BRANDING_COLOR,
         userSelect: 'none',
         ...style,
       }}
