@@ -12,11 +12,12 @@ const TRACE_PREFIX = 'agent-traces';
  *
  * S3 paths:
  * - Final:   agent-traces/{agentId}/{operationId}.json
- * - Partial: agent-traces/_partial/{operationId}.json
+ * - Partial: agent-traces/_partial/{operationId}.json  (temporary, deleted after finalization)
  *
- * Partial snapshots accumulate step data via S3 read-modify-write per step.
- * This is acceptable since each step takes seconds (LLM call time dominates).
- * On completion, the partial is finalized to the agent-scoped path and deleted.
+ * Partial snapshots are needed because QStash executes each step in a
+ * separate HTTP request (no shared memory). Step data is accumulated
+ * via S3 read-modify-write per step, then finalized on completion.
+ * The overhead (~100ms per step) is negligible vs LLM call time.
  */
 export class S3SnapshotStore implements ISnapshotStore {
   private readonly s3: FileS3;
@@ -37,6 +38,8 @@ export class S3SnapshotStore implements ISnapshotStore {
     await this.s3.uploadContent(key, JSON.stringify(snapshot));
   }
 
+  // === Query methods — not supported, use OTEL backend ===
+
   async get(_traceId: string): Promise<ExecutionSnapshot | null> {
     return null;
   }
@@ -48,6 +51,8 @@ export class S3SnapshotStore implements ISnapshotStore {
   async list(_options?: { limit?: number }): Promise<SnapshotSummary[]> {
     return [];
   }
+
+  // === Partial methods — S3 read-modify-write for QStash cross-request accumulation ===
 
   async listPartials(): Promise<string[]> {
     return [];

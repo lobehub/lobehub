@@ -1,24 +1,32 @@
-import { FileSnapshotStore, type ISnapshotStore } from '@lobechat/agent-tracing';
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
-import { fileEnv } from '@/envs/file';
 import { verifyQStashSignature } from '@/libs/qstash';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
-import { S3SnapshotStore } from '@/server/modules/AgentTracing';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 const log = debug('api-route:agent:execute-step');
 
-const snapshotStore: ISnapshotStore =
-  fileEnv.S3_ACCESS_KEY_ID &&
-  fileEnv.S3_SECRET_ACCESS_KEY &&
-  fileEnv.S3_ENDPOINT &&
-  fileEnv.S3_BUCKET
-    ? new S3SnapshotStore()
-    : new FileSnapshotStore();
+function createSnapshotStore(): ISnapshotStore | undefined {
+  if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
+    const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
+    return new S3SnapshotStore();
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const { FileSnapshotStore } = require('@lobechat/agent-tracing');
+      return new FileSnapshotStore();
+    } catch {
+      // agent-tracing not available, skip
+    }
+  }
+}
+
+const snapshotStore = createSnapshotStore();
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
