@@ -749,60 +749,49 @@ export class AgentRuntimeService {
         }
       }
 
-      // Record step snapshot for agent-tracing (injected store or dev-mode FileSnapshotStore)
-      {
-        let store = this.snapshotStore;
-        if (!store && process.env.NODE_ENV === 'development') {
-          try {
-            const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
-            store = new FileSnapshotStore();
-          } catch {
-            // agent-tracing not available in dev, skip silently
+      // Record step snapshot via injected snapshot store
+      if (this.snapshotStore) {
+        try {
+          const partial = (await this.snapshotStore.loadPartial(operationId)) ?? { steps: [] };
+
+          if (!partial.startedAt) {
+            partial.startedAt = Date.now();
+            partial.model =
+              (agentState?.metadata as any)?.agentConfig?.model ??
+              agentState?.modelRuntimeConfig?.model;
+            partial.provider =
+              (agentState?.metadata as any)?.agentConfig?.provider ??
+              agentState?.modelRuntimeConfig?.provider;
           }
-        }
-        if (store) {
-          try {
-            const partial = (await store.loadPartial(operationId)) ?? { steps: [] };
 
-            if (!partial.startedAt) {
-              partial.startedAt = Date.now();
-              partial.model =
-                (agentState?.metadata as any)?.agentConfig?.model ??
-                agentState?.modelRuntimeConfig?.model;
-              partial.provider =
-                (agentState?.metadata as any)?.agentConfig?.provider ??
-                agentState?.modelRuntimeConfig?.provider;
-            }
+          if (!partial.steps) partial.steps = [];
+          partial.steps.push({
+            completedAt: Date.now(),
+            content: stepPresentationData.content,
+            context: {
+              payload: currentContext?.payload,
+              phase: currentContext?.phase ?? 'unknown',
+              stepContext: currentContext?.stepContext,
+            },
+            events: stepResult.events as any,
+            executionTimeMs: stepPresentationData.executionTimeMs,
+            inputTokens: stepPresentationData.stepInputTokens,
+            messages: agentState?.messages,
+            messagesAfter: stepResult.newState.messages,
+            outputTokens: stepPresentationData.stepOutputTokens,
+            reasoning: stepPresentationData.reasoning,
+            startedAt: startAt,
+            stepIndex,
+            stepType: stepPresentationData.stepType,
+            toolsCalling: stepPresentationData.toolsCalling,
+            toolsResult: stepPresentationData.toolsResult,
+            totalCost: stepPresentationData.totalCost,
+            totalTokens: stepPresentationData.totalTokens,
+          });
 
-            if (!partial.steps) partial.steps = [];
-            partial.steps.push({
-              completedAt: Date.now(),
-              content: stepPresentationData.content,
-              context: {
-                payload: currentContext?.payload,
-                phase: currentContext?.phase ?? 'unknown',
-                stepContext: currentContext?.stepContext,
-              },
-              events: stepResult.events as any,
-              executionTimeMs: stepPresentationData.executionTimeMs,
-              inputTokens: stepPresentationData.stepInputTokens,
-              messages: agentState?.messages,
-              messagesAfter: stepResult.newState.messages,
-              outputTokens: stepPresentationData.stepOutputTokens,
-              reasoning: stepPresentationData.reasoning,
-              startedAt: startAt,
-              stepIndex,
-              stepType: stepPresentationData.stepType,
-              toolsCalling: stepPresentationData.toolsCalling,
-              toolsResult: stepPresentationData.toolsResult,
-              totalCost: stepPresentationData.totalCost,
-              totalTokens: stepPresentationData.totalTokens,
-            });
-
-            await store.savePartial(operationId, partial);
-          } catch (e) {
-            log('[%s] snapshot step recording failed: %O', operationId, e);
-          }
+          await this.snapshotStore.savePartial(operationId, partial);
+        } catch (e) {
+          log('[%s] snapshot step recording failed: %O', operationId, e);
         }
       }
 
@@ -876,53 +865,42 @@ export class AgentRuntimeService {
           }
         }
 
-        // Finalize tracing snapshot (injected store or dev-mode FileSnapshotStore)
-        {
-          let store = this.snapshotStore;
-          if (!store && process.env.NODE_ENV === 'development') {
-            try {
-              const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
-              store = new FileSnapshotStore();
-            } catch {
-              // agent-tracing not available in dev, skip silently
-            }
-          }
-          if (store) {
-            try {
-              const partial = await store.loadPartial(operationId);
+        // Finalize tracing snapshot via injected snapshot store
+        if (this.snapshotStore) {
+          try {
+            const partial = await this.snapshotStore.loadPartial(operationId);
 
-              if (partial) {
-                const metadata = agentState?.metadata as any;
-                const snapshot = {
-                  agentId: metadata?.agentId,
-                  completedAt: Date.now(),
-                  completionReason: reason,
-                  error: stepResult.newState.error
-                    ? {
-                        message: String(
-                          stepResult.newState.error.message ?? stepResult.newState.error,
-                        ),
-                        type: String(stepResult.newState.error.type ?? 'unknown'),
-                      }
-                    : undefined,
-                  model: partial.model,
-                  operationId,
-                  provider: partial.provider,
-                  startedAt: partial.startedAt ?? Date.now(),
-                  steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
-                  totalCost: stepResult.newState.cost?.total ?? 0,
-                  totalSteps: stepResult.newState.stepCount,
-                  totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
-                  traceId: operationId,
-                  userId: metadata?.userId,
-                };
+            if (partial) {
+              const metadata = agentState?.metadata as any;
+              const snapshot = {
+                agentId: metadata?.agentId,
+                completedAt: Date.now(),
+                completionReason: reason,
+                error: stepResult.newState.error
+                  ? {
+                      message: String(
+                        stepResult.newState.error.message ?? stepResult.newState.error,
+                      ),
+                      type: String(stepResult.newState.error.type ?? 'unknown'),
+                    }
+                  : undefined,
+                model: partial.model,
+                operationId,
+                provider: partial.provider,
+                startedAt: partial.startedAt ?? Date.now(),
+                steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
+                totalCost: stepResult.newState.cost?.total ?? 0,
+                totalSteps: stepResult.newState.stepCount,
+                totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                traceId: operationId,
+                userId: metadata?.userId,
+              };
 
-                await store.save(snapshot as any);
-                await store.removePartial(operationId);
-              }
-            } catch (e) {
-              log('[%s] snapshot finalization failed: %O', operationId, e);
+              await this.snapshotStore.save(snapshot as any);
+              await this.snapshotStore.removePartial(operationId);
             }
+          } catch (e) {
+            log('[%s] snapshot finalization failed: %O', operationId, e);
           }
         }
       }
