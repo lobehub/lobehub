@@ -14,6 +14,18 @@ import {
   renderSystemRole,
 } from '../viewer';
 
+async function fetchSnapshotFromUrl(url: string): Promise<ExecutionSnapshot> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch snapshot: ${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as ExecutionSnapshot;
+}
+
+function isUrl(input: string): boolean {
+  return input.startsWith('http://') || input.startsWith('https://');
+}
+
 function findStep(snapshot: ExecutionSnapshot, stepIndex: number): StepSnapshot {
   const step = snapshot.steps.find((s) => s.stepIndex === stepIndex);
   if (!step) {
@@ -50,6 +62,7 @@ function getEnvContent(step: StepSnapshot): string | undefined {
 export function registerInspectCommand(program: Command) {
   program
     .command('inspect', { isDefault: true })
+    .alias('i')
     .description('Inspect trace details')
     .argument('[traceId]', 'Trace ID to inspect (defaults to latest)')
     .option('-s, --step <n>', 'View specific step (default: 0 for -r/--env)')
@@ -95,8 +108,15 @@ export function registerInspectCommand(program: Command) {
           tools?: boolean;
         },
       ) => {
-        const store = new FileSnapshotStore();
-        const snapshot = traceId ? await store.get(traceId) : await store.getLatest();
+        let snapshot: ExecutionSnapshot | null;
+
+        if (traceId && isUrl(traceId)) {
+          snapshot = await fetchSnapshotFromUrl(traceId);
+        } else {
+          const store = new FileSnapshotStore();
+          snapshot = traceId ? await store.get(traceId) : await store.getLatest();
+        }
+
         if (!snapshot) {
           console.error(
             traceId

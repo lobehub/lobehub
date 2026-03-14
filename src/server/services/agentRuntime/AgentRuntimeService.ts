@@ -1,5 +1,6 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
@@ -90,6 +91,12 @@ export interface AgentRuntimeServiceOptions {
    */
   queueService?: QueueService | null;
   /**
+   * Optional snapshot store for persisting agent execution traces.
+   * When provided, execution snapshots are recorded on every step and finalized on completion.
+   * In dev mode without this option, falls back to FileSnapshotStore automatically.
+   */
+  snapshotStore?: ISnapshotStore;
+  /**
    * Custom StreamEventManager
    * Defaults to Redis-based StreamEventManager
    * Can pass InMemoryStreamEventManager in test environments
@@ -117,6 +124,7 @@ export class AgentRuntimeService {
   private coordinator: AgentRuntimeCoordinator;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
+  private snapshotStore: ISnapshotStore | null;
   private toolExecutionService: ToolExecutionService;
   /**
    * Step lifecycle callback registry
@@ -144,6 +152,7 @@ export class AgentRuntimeService {
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
+    this.snapshotStore = options?.snapshotStore ?? this.createDefaultSnapshotStore();
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
@@ -740,13 +749,10 @@ export class AgentRuntimeService {
         }
       }
 
-      // Dev mode: record step snapshot to disk for agent-tracing CLI
-      if (process.env.NODE_ENV === 'development') {
+      // Record step snapshot via injected snapshot store
+      if (this.snapshotStore) {
         try {
-          const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
-          const store = new FileSnapshotStore();
-
-          const partial = (await store.loadPartial(operationId)) ?? { steps: [] };
+          const partial = (await this.snapshotStore.loadPartial(operationId)) ?? { steps: [] };
 
           if (!partial.startedAt) {
             partial.startedAt = Date.now();
@@ -783,9 +789,9 @@ export class AgentRuntimeService {
             totalTokens: stepPresentationData.totalTokens,
           });
 
-          await store.savePartial(operationId, partial);
-        } catch {
-          // agent-tracing not available, skip silently
+          await this.snapshotStore.savePartial(operationId, partial);
+        } catch (e) {
+          log('[%s] snapshot step recording failed: %O', operationId, e);
         }
       }
 
@@ -859,15 +865,15 @@ export class AgentRuntimeService {
           }
         }
 
-        // Dev mode: finalize tracing snapshot
-        if (process.env.NODE_ENV === 'development') {
+        // Finalize tracing snapshot via injected snapshot store
+        if (this.snapshotStore) {
           try {
-            const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
-            const store = new FileSnapshotStore();
-            const partial = await store.loadPartial(operationId);
+            const partial = await this.snapshotStore.loadPartial(operationId);
 
             if (partial) {
+              const metadata = agentState?.metadata as any;
               const snapshot = {
+                agentId: metadata?.agentId,
                 completedAt: Date.now(),
                 completionReason: reason,
                 error: stepResult.newState.error
@@ -886,14 +892,16 @@ export class AgentRuntimeService {
                 totalCost: stepResult.newState.cost?.total ?? 0,
                 totalSteps: stepResult.newState.stepCount,
                 totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                topicId: metadata?.topicId,
                 traceId: operationId,
+                userId: metadata?.userId,
               };
 
-              await store.save(snapshot as any);
-              await store.removePartial(operationId);
+              await this.snapshotStore.save(snapshot as any);
+              await this.snapshotStore.removePartial(operationId);
             }
-          } catch {
-            // agent-tracing not available, skip silently
+          } catch (e) {
+            log('[%s] snapshot finalization failed: %O', operationId, e);
           }
         }
       }
@@ -1348,6 +1356,34 @@ export class AgentRuntimeService {
     });
 
     return { agent, runtime };
+  }
+
+  /**
+   * Create default snapshot store based on environment.
+   * - ENABLE_AGENT_S3_TRACING=1 → S3SnapshotStore
+   * - NODE_ENV=development → FileSnapshotStore
+   * - Otherwise → null (no tracing)
+   */
+  private createDefaultSnapshotStore(): ISnapshotStore | null {
+    if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
+      try {
+        const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
+        return new S3SnapshotStore();
+      } catch {
+        // S3SnapshotStore not available
+      }
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const { FileSnapshotStore } = require('@lobechat/agent-tracing');
+        return new FileSnapshotStore();
+      } catch {
+        // agent-tracing not available
+      }
+    }
+
+    return null;
   }
 
   /**

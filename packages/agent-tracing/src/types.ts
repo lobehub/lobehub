@@ -1,4 +1,5 @@
 export interface ExecutionSnapshot {
+  agentId?: string;
   completedAt?: number;
   completionReason?:
     | 'done'
@@ -13,10 +14,12 @@ export interface ExecutionSnapshot {
   provider?: string;
   startedAt: number;
   steps: StepSnapshot[];
+  topicId?: string;
   totalCost: number;
   totalSteps: number;
   totalTokens: number;
   traceId: string;
+  userId?: string;
 }
 
 export interface StepSnapshot {
