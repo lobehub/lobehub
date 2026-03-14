@@ -1,5 +1,10 @@
 [
   {
+    "children": {},
+    "date": "2026-03-14",
+    "version": "2.1.42"
+  },
+  {
     "children": {
       "improvements": [
         "add description column to topics table.",

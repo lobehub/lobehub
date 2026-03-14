@@ -83,7 +83,21 @@ runs:
           fi
         done
 
-        # 2. 为所有 yml manifest 的 URL 加版本目录前缀
+        # 2. stable 渠道补充 stable*.yml
+        # electron-builder 对稳定版默认生成 latest*.yml
+        echo ""
+        if [ "$CHANNEL" = "stable" ]; then
+          echo "📋 Creating stable*.yml from latest*.yml..."
+          for yml in release/latest*.yml; do
+            if [ -f "$yml" ]; then
+              stable_yml=$(basename "$yml" | sed 's/^latest/stable/')
+              cp "$yml" "release/$stable_yml"
+              echo "   📄 Created $stable_yml from $(basename "$yml")"
+            fi
+          done
+        fi
+
+        # 3. 为所有 yml manifest 的 URL 加版本目录前缀
         # merge-mac-files 步骤已生成 {channel}*.yml (如 canary-mac.yml)
         # 安装包在 s3://$BUCKET/$CHANNEL/$VERSION/ 下，URL 需加 $VERSION/ 前缀
         echo ""
@@ -95,7 +109,7 @@ runs:
           fi
         done
 
-        # 3. 创建 renderer manifest (仅 stable 渠道有 renderer tar)
+        # 4. 创建 renderer manifest (仅 stable 渠道有 renderer tar)
         RENDERER_TAR="release/lobehub-renderer.tar.gz"
         if [ -f "$RENDERER_TAR" ]; then
           echo ""
@@ -116,7 +130,7 @@ runs:
           echo "   📄 Created ${CHANNEL}-renderer.yml"
         fi
 
-        # 4. 上传 manifest 到根目录和版本目录
+        # 5. 上传 manifest 到根目录和版本目录
         # 根目录: electron-updater 需要，每次发版覆盖
         # 版本目录: 作为存档保留
         echo ""

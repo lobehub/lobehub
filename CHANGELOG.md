@@ -2,6 +2,31 @@
 
 # Changelog
 
+### [Version 2.1.42](https://github.com/lobehub/lobe-chat/compare/v2.1.41...v2.1.42)
+
+<sup>Released on **2026-03-14**</sup>
+
+#### 🐛 Bug Fixes
+
+- **ci**: create stable update manifests for S3 publish.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **ci**: create stable update manifests for S3 publish, closes [#12974](https://github.com/lobehub/lobe-chat/issues/12974) ([9bb9222](https://github.com/lobehub/lobe-chat/commit/9bb9222))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.40](https://github.com/lobehub/lobe-chat/compare/v2.1.39...v2.1.40)
 
 <sup>Released on **2026-03-12**</sup>
