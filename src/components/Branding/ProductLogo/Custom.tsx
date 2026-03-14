@@ -106,7 +106,7 @@ const CustomLogo = memo<LobeChatProps>(({ extra, size = 32, className, style, ty
       break;
     }
     default: {
-      logoComponent = <CustomImageLogo size={size} style={style} {...rest} />;
+      logoComponent = <CustomTextLogo size={size} style={style} {...rest} />;
       break;
     }
   }

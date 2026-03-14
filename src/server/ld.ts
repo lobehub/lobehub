@@ -84,6 +84,7 @@ export class Ld {
   }
 
   genOrganization() {
+    const sameAs = [SOCIAL_URL.x, SOCIAL_URL.github, SOCIAL_URL.medium, SOCIAL_URL.youtube];
     return {
       '@id': this.getId(OFFICIAL_URL, '#organization'),
       '@type': 'Organization',
@@ -106,7 +107,7 @@ export class Ld {
         'width': 512,
       },
       'name': 'LobeHub',
-      'sameAs': [SOCIAL_URL.x, SOCIAL_URL.github, SOCIAL_URL.medium, SOCIAL_URL.youtube],
+      'sameAs': sameAs,
       'url': OFFICIAL_SITE,
     };
   }
