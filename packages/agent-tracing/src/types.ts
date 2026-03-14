@@ -14,6 +14,7 @@ export interface ExecutionSnapshot {
   provider?: string;
   startedAt: number;
   steps: StepSnapshot[];
+  topicId?: string;
   totalCost: number;
   totalSteps: number;
   totalTokens: number;

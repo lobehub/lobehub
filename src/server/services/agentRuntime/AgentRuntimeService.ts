@@ -892,6 +892,7 @@ export class AgentRuntimeService {
                 totalCost: stepResult.newState.cost?.total ?? 0,
                 totalSteps: stepResult.newState.stepCount,
                 totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                topicId: metadata?.topicId,
                 traceId: operationId,
                 userId: metadata?.userId,
               };

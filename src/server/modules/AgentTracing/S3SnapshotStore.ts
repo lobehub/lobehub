@@ -11,7 +11,7 @@ const TRACE_PREFIX = 'agent-traces';
  * S3-backed snapshot store for production agent trace persistence.
  *
  * S3 paths:
- * - Final:   agent-traces/{agentId}/{operationId}.json
+ * - Final:   agent-traces/{agentId}/{topicId}/{operationId}.json
  * - Partial: agent-traces/_partial/{operationId}.json  (temporary, deleted after finalization)
  *
  * Partial snapshots are needed because QStash executes each step in a
@@ -32,7 +32,8 @@ export class S3SnapshotStore implements ISnapshotStore {
 
   async save(snapshot: ExecutionSnapshot): Promise<void> {
     const agentId = snapshot.agentId ?? 'unknown';
-    const key = `${TRACE_PREFIX}/${agentId}/${snapshot.operationId}.json`;
+    const topicId = snapshot.topicId ?? 'unknown';
+    const key = `${TRACE_PREFIX}/${agentId}/${topicId}/${snapshot.operationId}.json`;
 
     log('Saving snapshot to S3: %s', key);
     await this.s3.uploadContent(key, JSON.stringify(snapshot));
