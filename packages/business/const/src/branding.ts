@@ -1,14 +1,9 @@
-// the code below can only be modified with commercial license
-// if you want to use it in the commercial usage
-// please contact us for more information: info@picturaai.sbs
+// Pictura AI Branding Configuration
 
 export const LOBE_CHAT_CLOUD = 'Pictura AI Cloud';
 
 export const BRANDING_NAME = 'Pictura AI';
-export const BRANDING_LOGO_URL = '';
-
-// Custom logo color for Pictura AI (purple gradient)
-export const BRANDING_COLOR = '#8B5CF6';
+export const BRANDING_LOGO_URL = '/images/pictura-icon.svg';
 
 export const ORG_NAME = 'Pictura AI';
 
@@ -21,12 +16,8 @@ export const BRANDING_URL = {
 };
 
 export const SOCIAL_URL = {
-  discord: undefined,
-  github: undefined,
-  medium: undefined,
-  x: 'https://x.com/GetPicturaAI',
-  youtube: undefined,
   telegram: 'https://t.me/picturaai_bot',
+  x: 'https://x.com/GetPicturaAI',
 };
 
 export const FILE_URL = {

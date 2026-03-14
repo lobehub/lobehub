@@ -27,20 +27,16 @@ const Follow = memo(() => {
   const { t } = useTranslation('common');
   return (
     <Flexbox horizontal gap={8}>
-      {SOCIAL_URL.x && (
-        <a href={SOCIAL_URL.x} rel="noreferrer" target="_blank">
-          <ActionIcon className={styles.icon} icon={SiX as any} title={t('follow', { name: 'X' })} />
-        </a>
-      )}
-      {SOCIAL_URL.telegram && (
-        <a href={SOCIAL_URL.telegram} rel="noreferrer" target="_blank">
-          <ActionIcon
-            className={styles.icon}
-            icon={SiTelegram as any}
-            title={t('follow', { name: 'Telegram' })}
-          />
-        </a>
-      )}
+      <a href={SOCIAL_URL.x} rel="noreferrer" target="_blank">
+        <ActionIcon className={styles.icon} icon={SiX as any} title={t('follow', { name: 'X' })} />
+      </a>
+      <a href={SOCIAL_URL.telegram} rel="noreferrer" target="_blank">
+        <ActionIcon
+          className={styles.icon}
+          icon={SiTelegram as any}
+          title={t('follow', { name: 'Telegram' })}
+        />
+      </a>
     </Flexbox>
   );
 });

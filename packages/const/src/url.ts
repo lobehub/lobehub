@@ -8,8 +8,8 @@ export const OFFICIAL_DOMAIN = 'picturaai.sbs';
 
 export const OG_URL = '/og/og.webp?v=1';
 
-export const GITHUB = undefined;
-export const GITHUB_ISSUES = undefined;
+export const GITHUB = '';
+export const GITHUB_ISSUES = '';
 export const CHANGELOG = 'https://picturaai.sbs/changelog';
 
 export const DOCUMENTS = urlJoin(OFFICIAL_SITE, '/docs');
@@ -26,18 +26,18 @@ export const MANUAL_UPGRADE_URL = urlJoin(SELF_HOSTING_DOCUMENTS, '/advanced/ups
 export const BLOG = urlJoin(OFFICIAL_SITE, 'blog');
 
 export const ABOUT = OFFICIAL_SITE;
-export const FEEDBACK = undefined;
+export const FEEDBACK = '';
 export const PRIVACY_URL = urlJoin(OFFICIAL_SITE, '/privacy');
 export const TERMS_URL = urlJoin(OFFICIAL_SITE, '/terms');
 
-export const PLUGINS_INDEX_URL = 'https://chat-plugins.lobehub.com';
+export const PLUGINS_INDEX_URL = 'https://picturaai.sbs/plugins';
 
-export const MORE_MODEL_PROVIDER_REQUEST_URL = undefined;
+export const MORE_MODEL_PROVIDER_REQUEST_URL = '';
 
-export const MORE_FILE_PREVIEW_REQUEST_URL = undefined;
+export const MORE_FILE_PREVIEW_REQUEST_URL = '';
 
-export const AGENTS_INDEX_GITHUB = undefined;
-export const AGENTS_INDEX_GITHUB_ISSUE = undefined;
+export const AGENTS_INDEX_GITHUB = '';
+export const AGENTS_INDEX_GITHUB_ISSUE = '';
 export const AGENTS_OFFICIAL_URL = 'https://picturaai.sbs/agent';
 
 export const SESSION_CHAT_URL = (agentId: string, mobile?: boolean) => {

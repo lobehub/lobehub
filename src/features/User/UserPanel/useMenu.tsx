@@ -1,6 +1,8 @@
+import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
-import { BrainCircuit, LogOut, Settings2 } from 'lucide-react';
+import { type ItemType } from 'antd/es/menu/interface';
+import { BrainCircuit, Cloudy, LogOut, Settings2 } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +10,8 @@ import { Link } from 'react-router-dom';
 
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
+import { OFFICIAL_URL } from '@/const/url';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
@@ -44,6 +48,7 @@ export const useMenu = () => {
     authSelectors.isLogin(s),
     authSelectors.isLoginWithAuth(s),
   ]);
+  const businessMenuItems = getBusinessMenuItems(isLogin);
 
   const settings: MenuProps['items'] = [
     {
@@ -66,6 +71,32 @@ export const useMenu = () => {
       label: <Link to="/memory">{t('tab.memory')}</Link>,
     },
   ];
+
+  const helps: MenuProps['items'] = [
+    showCloudPromotion && {
+      icon: <Icon icon={Cloudy} />,
+      key: 'cloud',
+      label: (
+        <a
+          href={`${OFFICIAL_URL}?utm_source=${UTM_SOURCE}`}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          {t('userPanel.cloud', { name: LOBE_CHAT_CLOUD })}
+        </a>
+      ),
+    },
+  ].filter(Boolean) as ItemType[];
+
+  const mainItems = [
+    {
+      type: 'divider',
+    },
+
+    ...(isLogin ? settings : []),
+    ...businessMenuItems,
+    ...(!hideDocs ? helps : []),
+  ].filter(Boolean) as MenuProps['items'];
 
   const logoutItems: MenuProps['items'] = isLoginWithAuth
     ? [

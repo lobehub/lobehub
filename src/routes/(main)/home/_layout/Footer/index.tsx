@@ -1,11 +1,11 @@
 'use client';
 
-import { SOCIAL_URL } from '@lobechat/business-const';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import {
   CircleHelp,
   FileClockIcon,
+  FlaskConical,
   Settings2,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -42,19 +42,18 @@ const Footer = memo(() => {
       {
         type: 'divider' as const,
       },
-      ...(SOCIAL_URL.telegram
-        ? [
-            {
-              icon: <Icon icon={CircleHelp} />,
-              key: 'telegram',
-              label: (
-                <a href={SOCIAL_URL.telegram} rel="noopener noreferrer" target="_blank">
-                  Telegram
-                </a>
-              ),
-            },
-          ]
-        : []),
+      {
+        icon: <Icon icon={Book} />,
+        key: 'docs',
+        label: (
+          <a href={DOCUMENTS_REFER_URL} rel="noopener noreferrer" target="_blank">
+            {t('userPanel.docs')}
+          </a>
+        ),
+      },
+      {
+        type: 'divider',
+      },
       {
         icon: <Icon icon={FileClockIcon} />,
         key: 'changelog',

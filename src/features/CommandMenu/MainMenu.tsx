@@ -1,4 +1,3 @@
-import { SOCIAL_URL } from '@lobechat/business-const';
 import { Command } from 'cmdk';
 import {
   Bot,
@@ -12,6 +11,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getNavigableRoutes, getRouteById } from '@/config/routes';
+import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
@@ -129,16 +129,14 @@ const MainMenu = memo(() => {
       </Command.Group>
 
       <Command.Group heading={t('cmdk.about')}>
-        {SOCIAL_URL.telegram && (
-          <CommandItem
-            icon={<FeatherIcon />}
-            keywords={t('cmdk.keywords.contactUs').split(' ')}
-            value="contact-via-telegram"
-            onSelect={() => window.open(SOCIAL_URL.telegram, '_blank')}
-          >
-            {t('cmdk.contactUs')}
-          </CommandItem>
-        )}
+        <CommandItem
+          icon={<FeatherIcon />}
+          keywords={t('cmdk.keywords.contactUs').split(' ')}
+          value="contact-via-email"
+          onSelect={() => openFeedbackModal()}
+        >
+          {t('cmdk.contactUs')}
+        </CommandItem>
       </Command.Group>
     </>
   );
