@@ -1,4 +1,3 @@
-import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -9,13 +8,6 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 const log = debug('api-route:agent:execute-step');
-
-// S3 tracing for production — dev mode FileSnapshotStore is auto-created by AgentRuntimeService
-let snapshotStore: ISnapshotStore | undefined;
-if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
-  const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
-  snapshotStore = new S3SnapshotStore();
-}
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -58,9 +50,7 @@ export async function POST(request: NextRequest) {
 
     // Initialize service with userId from operation metadata
     const serverDB = await getServerDB();
-    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId, {
-      snapshotStore,
-    });
+    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId);
 
     // Execute step using AgentRuntimeService
     const result = await agentRuntimeService.executeStep({

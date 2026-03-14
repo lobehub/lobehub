@@ -1360,9 +1360,20 @@ export class AgentRuntimeService {
 
   /**
    * Create default snapshot store based on environment.
-   * Dev mode → FileSnapshotStore, otherwise → null.
+   * - ENABLE_AGENT_S3_TRACING=1 → S3SnapshotStore
+   * - NODE_ENV=development → FileSnapshotStore
+   * - Otherwise → null (no tracing)
    */
   private createDefaultSnapshotStore(): ISnapshotStore | null {
+    if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
+      try {
+        const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
+        return new S3SnapshotStore();
+      } catch {
+        // S3SnapshotStore not available
+      }
+    }
+
     if (process.env.NODE_ENV === 'development') {
       try {
         const { FileSnapshotStore } = require('@lobechat/agent-tracing');
@@ -1371,6 +1382,7 @@ export class AgentRuntimeService {
         // agent-tracing not available
       }
     }
+
     return null;
   }
 
