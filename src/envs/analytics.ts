@@ -28,6 +28,11 @@ export const getAnalyticsConfig = () => {
       GOOGLE_ANALYTICS_MEASUREMENT_ID: z.string().optional(),
 
       REACT_SCAN_MONITOR_API_KEY: z.string().optional(),
+
+      ENABLED_NEW_RELIC_ANALYTICS: z.boolean(),
+      NEW_RELIC_BROWSER_ACCOUNT_ID: z.string().optional(),
+      NEW_RELIC_BROWSER_APPLICATION_ID: z.string().optional(),
+      NEW_RELIC_BROWSER_LICENSE_KEY: z.string().optional(),
     },
     runtimeEnv: {
       // Plausible Analytics
@@ -61,6 +66,15 @@ export const getAnalyticsConfig = () => {
       // React Scan Monitor
       // https://dashboard.react-scan.com
       REACT_SCAN_MONITOR_API_KEY: process.env.REACT_SCAN_MONITOR_API_KEY,
+
+      // New Relic Browser
+      ENABLED_NEW_RELIC_ANALYTICS:
+        !!process.env.NEW_RELIC_BROWSER_LICENSE_KEY &&
+        !!process.env.NEW_RELIC_BROWSER_ACCOUNT_ID &&
+        !!process.env.NEW_RELIC_BROWSER_APPLICATION_ID,
+      NEW_RELIC_BROWSER_ACCOUNT_ID: process.env.NEW_RELIC_BROWSER_ACCOUNT_ID,
+      NEW_RELIC_BROWSER_APPLICATION_ID: process.env.NEW_RELIC_BROWSER_APPLICATION_ID,
+      NEW_RELIC_BROWSER_LICENSE_KEY: process.env.NEW_RELIC_BROWSER_LICENSE_KEY,
     },
   });
 };

@@ -10,6 +10,7 @@ const Plausible = dynamic(() => import('./Plausible'));
 const Umami = dynamic(() => import('./Umami'));
 const Clarity = dynamic(() => import('./Clarity'));
 const ReactScan = dynamic(() => import('./ReactScan'));
+const NewRelic = dynamic(() => import('./NewRelic'));
 
 const Analytics = () => {
   return (
@@ -33,6 +34,13 @@ const Analytics = () => {
       )}
       {!!analyticsEnv.REACT_SCAN_MONITOR_API_KEY && (
         <ReactScan apiKey={analyticsEnv.REACT_SCAN_MONITOR_API_KEY} />
+      )}
+      {analyticsEnv.ENABLED_NEW_RELIC_ANALYTICS && (
+        <NewRelic
+          accountId={analyticsEnv.NEW_RELIC_BROWSER_ACCOUNT_ID!}
+          applicationId={analyticsEnv.NEW_RELIC_BROWSER_APPLICATION_ID!}
+          licenseKey={analyticsEnv.NEW_RELIC_BROWSER_LICENSE_KEY!}
+        />
       )}
       {isDesktop && <Desktop />}
     </>
