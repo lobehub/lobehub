@@ -62,6 +62,7 @@ function getEnvContent(step: StepSnapshot): string | undefined {
 export function registerInspectCommand(program: Command) {
   program
     .command('inspect', { isDefault: true })
+    .alias('i')
     .description('Inspect trace details')
     .argument('[traceId]', 'Trace ID to inspect (defaults to latest)')
     .option('-s, --step <n>', 'View specific step (default: 0 for -r/--env)')

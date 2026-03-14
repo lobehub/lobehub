@@ -9,7 +9,8 @@
   },
   "main": "./src/index.ts",
   "bin": {
-    "agent-tracing": "./src/cli/index.ts"
+    "agent-tracing": "./src/cli/index.ts",
+    "at": "./src/cli/index.ts"
   },
   "dependencies": {
     "commander": "^13.1.0",
