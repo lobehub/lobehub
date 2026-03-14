@@ -10,23 +10,12 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 const log = debug('api-route:agent:execute-step');
 
-function createSnapshotStore(): ISnapshotStore | undefined {
-  if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
-    const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
-    return new S3SnapshotStore();
-  }
-
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      const { FileSnapshotStore } = require('@lobechat/agent-tracing');
-      return new FileSnapshotStore();
-    } catch {
-      // agent-tracing not available, skip
-    }
-  }
+// S3 tracing for production — dev mode FileSnapshotStore is auto-created by AgentRuntimeService
+let snapshotStore: ISnapshotStore | undefined;
+if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
+  const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
+  snapshotStore = new S3SnapshotStore();
 }
-
-const snapshotStore = createSnapshotStore();
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();

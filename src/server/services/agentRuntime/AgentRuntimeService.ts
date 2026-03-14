@@ -152,7 +152,7 @@ export class AgentRuntimeService {
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
-    this.snapshotStore = options?.snapshotStore ?? null;
+    this.snapshotStore = options?.snapshotStore ?? this.createDefaultSnapshotStore();
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
@@ -1356,6 +1356,22 @@ export class AgentRuntimeService {
     });
 
     return { agent, runtime };
+  }
+
+  /**
+   * Create default snapshot store based on environment.
+   * Dev mode → FileSnapshotStore, otherwise → null.
+   */
+  private createDefaultSnapshotStore(): ISnapshotStore | null {
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const { FileSnapshotStore } = require('@lobechat/agent-tracing');
+        return new FileSnapshotStore();
+      } catch {
+        // agent-tracing not available
+      }
+    }
+    return null;
   }
 
   /**
