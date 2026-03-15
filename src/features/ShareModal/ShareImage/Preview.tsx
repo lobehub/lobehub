@@ -19,11 +19,21 @@ import { WidthMode } from './type';
 interface PreviewProps extends FieldType {
   context: ConversationContext;
   messages: UIChatMessage[];
+  previewId?: string;
   title?: string;
 }
 
 const Preview = memo<PreviewProps>(
-  ({ context, messages, title, withSystemRole, withBackground, withFooter, widthMode }) => {
+  ({
+    context,
+    messages,
+    previewId = 'preview',
+    title,
+    withSystemRole,
+    withBackground,
+    withFooter,
+    widthMode,
+  }) => {
     const [model, plugins, systemRole, isInbox, avatar, backgroundColor] = useAgentStore((s) => [
       agentSelectors.currentAgentModel(s),
       agentSelectors.displayableAgentPlugins(s),
@@ -45,7 +55,7 @@ const Preview = memo<PreviewProps>(
             : containerStyles.previewWide,
         )}
       >
-        <div className={withBackground ? styles.background : undefined} id={'preview'}>
+        <div className={withBackground ? styles.background : undefined} id={previewId}>
           <Flexbox
             className={cx(styles.container, withBackground && styles.container_withBackground_true)}
             gap={16}
