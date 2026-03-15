@@ -2,13 +2,13 @@ import type { PERMISSION_ACTIONS, PermissionScope } from '@/const/rbac';
 import { getAllowedScopesForAction, RBAC_PERMISSIONS } from '@/const/rbac';
 
 /**
- * 获取指定权限的所有scope权限值数组
- * 直接从预编译的 RBAC_PERMISSIONS 中提取权限码
- * @param key 权限动作键名
- * @returns 权限值数组
+ * Get all scope permission value arrays for a given permission
+ * Extracts permission codes directly from the precompiled RBAC_PERMISSIONS
+ * @param key Permission action key name
+ * @returns Array of permission values
  */
 export function getAllScopePermissions(key: keyof typeof PERMISSION_ACTIONS): string[] {
-  // 获取允许的scope，有些资源只有all/workspace权限级别的scope
+  // Get allowed scopes; some resources only have all/workspace scope levels
   const allowed = getAllowedScopesForAction(key);
 
   return allowed
@@ -20,20 +20,20 @@ export function getAllScopePermissions(key: keyof typeof PERMISSION_ACTIONS): st
 }
 
 /**
- * 获取指定权限的特定scope权限值数组
- * 直接从预编译的 RBAC_PERMISSIONS 中提取权限码
- * @param key 权限动作键名
- * @param scopes 需要的scope数组
- * @returns 权限值数组
+ * Get specific scope permission value arrays for a given permission
+ * Extracts permission codes directly from the precompiled RBAC_PERMISSIONS
+ * @param key Permission action key name
+ * @param scopes Array of required scopes
+ * @returns Array of permission values
  */
 export function getScopePermissions(
   key: keyof typeof PERMISSION_ACTIONS,
   scopes: PermissionScope[],
 ): string[] {
-  // 获取允许的scope，有些资源只有all/workspace权限级别的scope
+  // Get allowed scopes; some resources only have all/workspace scope levels
   const allowed = new Set(getAllowedScopesForAction(key));
 
-  // 过滤掉不允许的scope
+  // Filter out disallowed scopes
   return scopes
     .filter((scope) => allowed.has(scope))
     .map((scope) => {

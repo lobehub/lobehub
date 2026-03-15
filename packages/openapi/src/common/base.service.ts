@@ -93,15 +93,15 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
-   * 统一错误处理方法
-   * @param error 捕获的错误
-   * @param operation 操作名称
-   * @param fallbackMessage 默认错误消息
+   * Unified error handling method
+   * @param error Caught error
+   * @param operation Operation name
+   * @param fallbackMessage Default error message
    */
   protected handleServiceError(error: unknown, operation: string): never {
     this.log('error', `${operation}失败`, { error });
 
-    // 如果是已知的业务错误，直接抛出
+    // If it is a known business error, throw it directly
     if (
       error instanceof Error &&
       [
@@ -117,7 +117,7 @@ export abstract class BaseService implements IBaseService {
 
     const errorMessage = `${operation}失败: ${error instanceof Error ? error.message : '未知错误'}`;
 
-    // 其他错误统一包装为业务错误
+    // Wrap all other errors as business errors
     throw this.createBusinessError(errorMessage);
   }
 
@@ -151,9 +151,9 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
-   * 检查用户是否有全局权限 ALL
-   * @param permissionKey 权限键名
-   * @returns 是否有权限
+   * Check whether the user has global ALL permission
+   * @param permissionKey Permission key name
+   * @returns Whether the user has the permission
    */
   protected async hasGlobalPermission(
     permissionKey: keyof typeof PERMISSION_ACTIONS,
@@ -165,9 +165,9 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
-   * 检查用户是否有 owner 权限
-   * @param permissionKey 权限键名
-   * @returns 是否有权限
+   * Check whether the user has owner permission
+   * @param permissionKey Permission key name
+   * @returns Whether the user has the permission
    */
   protected async hasOwnerPermission(
     permissionKey: keyof typeof PERMISSION_ACTIONS,
@@ -179,26 +179,26 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
-   * 获取资源所属用户 ID
-   * @param target 目标资源的条件信息，如果没有传入，则默认查询范围为当前用户，如果传入 ALL，则返回默认全量查询
-   * @returns 资源所属用户 ID
+   * Get the user ID that a resource belongs to
+   * @param target Target resource condition. If not provided, defaults to current user scope. If ALL is passed, returns full data query.
+   * @returns The user ID the resource belongs to
    */
   protected async getResourceBelongTo(
     target?: TTarget | typeof ALL_SCOPE,
   ): Promise<string | undefined | null> {
-    // 查询全量数据，则直接返回undefined
+    // Query all data, return undefined directly
     if (target === ALL_SCOPE) {
       return;
     }
 
-    // 如果目标条件为空，默认查询范围为当前用户
+    // If target condition is empty, default scope is current user
     if (!target || isNilOrEmptyObject(target)) {
       return this.userId;
     }
 
     try {
       switch (true) {
-        // 查询 sessions 表
+        // Query sessions table
         case !!target?.targetSessionId: {
           const targetSession = await this.db.query.sessions.findFirst({
             columns: { userId: true },
@@ -207,7 +207,7 @@ export abstract class BaseService implements IBaseService {
           return targetSession?.userId;
         }
 
-        // 查询 agents 表
+        // Query agents table
         case !!target?.targetAgentId: {
           const targetAgent = await this.db.query.agents.findFirst({
             columns: { userId: true },
@@ -217,7 +217,7 @@ export abstract class BaseService implements IBaseService {
           return targetAgent?.userId;
         }
 
-        // 查询 topics 表
+        // Query topics table
         case !!target?.targetTopicId: {
           const targetTopic = await this.db.query.topics.findFirst({
             columns: { userId: true },
@@ -226,7 +226,7 @@ export abstract class BaseService implements IBaseService {
           return targetTopic?.userId;
         }
 
-        // 查询 providers 表
+        // Query providers table
         case !!target?.targetProviderId: {
           const currentUserProvider = await this.db.query.aiProviders.findFirst({
             columns: { userId: true },
@@ -247,12 +247,12 @@ export abstract class BaseService implements IBaseService {
           return targetProvider?.userId;
         }
 
-        // 直接传递 targetUserId 的情况
+        // Case where targetUserId is passed directly
         case !!target?.targetUserId: {
           return target.targetUserId;
         }
 
-        // 查询 knowledgeBases 表
+        // Query knowledgeBases table
         case !!target?.targetKnowledgeBaseId: {
           const targetKnowledgeBase = await this.db.query.knowledgeBases.findFirst({
             columns: { userId: true },
@@ -261,7 +261,7 @@ export abstract class BaseService implements IBaseService {
           return targetKnowledgeBase?.userId;
         }
 
-        // 查询 files 表
+        // Query files table
         case !!target?.targetFileId: {
           const targetFile = await this.db.query.files.findFirst({
             columns: { userId: true },
@@ -270,7 +270,7 @@ export abstract class BaseService implements IBaseService {
           return targetFile?.userId;
         }
 
-        // 查询 messages 表
+        // Query messages table
         case !!target?.targetMessageId: {
           const targetMessage = await this.db.query.messages.findFirst({
             columns: { userId: true },
@@ -279,7 +279,7 @@ export abstract class BaseService implements IBaseService {
           return targetMessage?.userId;
         }
 
-        // 查询 aiModels 表
+        // Query aiModels table
         case !!target?.targetModelId: {
           const targetModel = await this.db.query.aiModels.findFirst({
             columns: { userId: true },
@@ -299,19 +299,19 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
-   * 解析权限并返回目标信息
-   * 用于处理数据访问权限的通用逻辑，支持以下场景：
-   * 1. 查询/操作当前用户的数据：需要 ALL/owner 权限
-   * 2. 查询/操作指定用户的数据：需要 ALL 权限
-   * 3. 查询/操作所有数据：需要 ALL 权限
+   * Resolve permissions and return target info
+   * Common logic for handling data access permissions, supporting the following scenarios:
+   * 1. Query/operate on current user's data: requires ALL/owner permission
+   * 2. Query/operate on a specific user's data: requires ALL permission
+   * 3. Query/operate on all data: requires ALL permission
    *
-   * @param permissionKey - 权限键名
-   * @param targetInfoId - 目标ID，可选。传入字符串表示查询/操作特定用户的数据，传入对象键值表示查询/操作特定对象的数据
-   * @param queryAll - 是否查询所有数据，可选。如果提供，表示要查询所有数据，否则只查询当前用户的数据
-   * @returns 返回权限检查结果和查询/操作条件
-   *          - isPermitted: 是否允许查询/操作
-   *          - condition: 目标信息，包含 userId 过滤条件
-   *          - message: 权限被拒绝时的错误信息
+   * @param permissionKey - Permission key name
+   * @param targetInfoId - Target ID, optional. A string means query/operate on a specific user's data; an object key-value means query/operate on a specific object's data
+   * @param queryAll - Whether to query all data, optional. If provided, queries all data; otherwise only queries current user's data
+   * @returns Returns permission check result and query/operation condition
+   *          - isPermitted: Whether query/operation is permitted
+   *          - condition: Target info containing userId filter
+   *          - message: Error message when permission is denied
    */
   protected async resolveOperationPermission(
     permissionKey: keyof typeof PERMISSION_ACTIONS,
@@ -321,13 +321,13 @@ export abstract class BaseService implements IBaseService {
     isPermitted: boolean;
     message?: string;
   }> {
-    // 检查是否有对应动作的 ALL 权限
+    // Check if the user has ALL permission for the corresponding action
     const hasGlobalAccess = await this.hasGlobalPermission(permissionKey);
 
-    // 获取目标资源所属用户 ID
+    // Get the user ID that the target resource belongs to
     const resourceBelongTo = await this.getResourceBelongTo(resourceInfo);
 
-    // 记录用户希望访问的资源与当前用户信息
+    // Log the resource the user wants to access and current user info
     const logContext = {
       resourceInfo,
       userId: this.userId,
@@ -336,7 +336,7 @@ export abstract class BaseService implements IBaseService {
     this.log('info', '权限检查', logContext);
 
     /**
-     * 当用户拥有 ALL 权限时，直接通过校验
+     * When the user has ALL permission, pass the check directly
      */
     if (hasGlobalAccess) {
       this.log('info', `权限通过：当前user拥有 ${permissionKey} 的最高权限`, logContext);
@@ -347,9 +347,9 @@ export abstract class BaseService implements IBaseService {
     }
 
     /**
-     * 当用户没有 ALL 权限时，以下场景不允许操作：
-     * 1. 查询的是全量数据
-     * 2. 查询的是指定用户的数据，但目标资源不属于当前用户
+     * When the user does not have ALL permission, the following scenarios are not allowed:
+     * 1. Querying all data
+     * 2. Querying a specific user's data, but the target resource does not belong to the current user
      */
     if (!resourceBelongTo || resourceBelongTo !== this.userId) {
       this.log('warn', '权限拒绝：当前user没有ALL权限，或目标资源不属于当前用户', logContext);
@@ -360,11 +360,11 @@ export abstract class BaseService implements IBaseService {
     }
 
     /**
-     * 当查询的目标资源属于当前用户时，只要有任意权限就允许操作
-     * 由于 ALL 权限已经在前面校验过，所以这里只需要检查 owner 权限
+     * When the target resource belongs to the current user, any permission allows the operation
+     * Since ALL permission was already checked above, only owner permission needs to be checked here
      */
     if (resourceBelongTo === this.userId) {
-      // 检查是否有对应动作的 owner 权限
+      // Check if the user has owner permission for the corresponding action
       const hasOwnerAccess = await this.hasOwnerPermission(permissionKey);
 
       if (hasOwnerAccess) {
@@ -382,7 +382,7 @@ export abstract class BaseService implements IBaseService {
       };
     }
 
-    // 如果走到这里，走兜底逻辑
+    // If we reach here, apply fallback logic
     this.log('info', `兜底: no permission`, logContext);
     return {
       isPermitted: false,
@@ -391,15 +391,15 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
-   * 解析批量操作的权限
-   * 用于处理批量数据访问权限的通用逻辑
-   * 1. 批量操作必须要有 ALL 权限
-   * 2. 如果所有资源都属于当前用户，且有 owner 权限，也允许操作
-   * 3. 如果有 ALL 权限，允许操作所有指定的资源
+   * Resolve permissions for batch operations
+   * Common logic for handling batch data access permissions
+   * 1. Batch operations require ALL permission
+   * 2. If all resources belong to the current user and the user has owner permission, the operation is also allowed
+   * 3. If the user has ALL permission, all specified resources can be operated on
    *
-   * @param permissionKey - 权限键名
-   * @param targetInfoIds - 目标资源 ID 数组
-   * @returns 返回权限检查结果
+   * @param permissionKey - Permission key name
+   * @param targetInfoIds - Array of target resource IDs
+   * @returns Returns the permission check result
    */
   protected async resolveBatchQueryPermission(
     permissionKey: keyof typeof PERMISSION_ACTIONS,
@@ -409,19 +409,19 @@ export abstract class BaseService implements IBaseService {
     isPermitted: boolean;
     message?: string;
   }> {
-    // 先检查是否有全局权限，如果有则直接通过
+    // First check if the user has global permission; if so, pass directly
     const hasGlobalAccess = await this.hasGlobalPermission(permissionKey);
 
-    // 如果有全局权限，直接允许批量操作
+    // If the user has global permission, allow the batch operation directly
     if (hasGlobalAccess) {
       this.log('info', `权限通过：批量操作，当前user拥有 ${permissionKey} ALL权限`);
       return { isPermitted: true };
     }
 
-    // 获取所有资源的用户 ID
+    // Get the user IDs for all resources
     let userIds: string[];
     try {
-      // 根据 targetInfoIds 中的属性自动判断资源类型
+      // Automatically determine the resource type based on properties in targetInfoIds
       switch (true) {
         case !!targetInfoIds.targetSessionIds?.length: {
           const sessionList = await this.db.query.sessions.findMany({
@@ -450,7 +450,7 @@ export abstract class BaseService implements IBaseService {
             where: and(inArray(aiProviders.id, providerIds), eq(aiProviders.userId, this.userId)),
           });
 
-          // 先尝试按复合主键 (id, userId) 命中当前用户，避免同 provider id 多用户时误判
+          // First try to match the current user by composite key (id, userId) to avoid false positives when multiple users share the same provider id
           if (ownedProviders.length === providerIds.length) {
             userIds = ownedProviders.map(() => this.userId);
             break;
@@ -509,7 +509,7 @@ export abstract class BaseService implements IBaseService {
       };
     }
 
-    // 如果找不到任何资源
+    // If no resources are found
     if (userIds.length === 0) {
       this.log('warn', '未找到任何目标资源', { permissionKey, targetInfoIds });
       return {
@@ -519,10 +519,10 @@ export abstract class BaseService implements IBaseService {
       };
     }
 
-    // 检查是否所有资源都属于当前用户
+    // Check if all resources belong to the current user
     const allBelongToCurrentUser = userIds.every((id) => id === this.userId);
     if (allBelongToCurrentUser) {
-      // 检查用户是否有 owner 权限
+      // Check if the user has owner permission
       const hasOwnerAccess = await this.hasOwnerPermission(permissionKey);
 
       if (hasOwnerAccess) {
@@ -533,7 +533,7 @@ export abstract class BaseService implements IBaseService {
         return { condition: { userIds }, isPermitted: true };
       }
 
-      // 如果所有资源都属于当前用户，但用户没有 owner 权限，则不允许操作
+      // If all resources belong to the current user but the user has no owner permission, deny the operation
       this.log('warn', '权限拒绝：批量操作需要 ${permissionKey} ALL/owner 权限', {
         permissionKey,
         targetInfoIds,
@@ -545,7 +545,7 @@ export abstract class BaseService implements IBaseService {
       };
     }
 
-    // 操作的资源中有不属于当前用户的资源，直接拒绝
+    // Some resources in the operation do not belong to the current user; deny directly
     this.log('warn', `权限拒绝：批量操作需要 ${permissionKey} ALL/owner 权限`, {
       permissionKey,
       targetInfoIds,
@@ -559,16 +559,16 @@ export abstract class BaseService implements IBaseService {
   }
 
   /**
-   * 检查用户是否拥有聊天相关的所有必要权限
-   * 包括：
-   * - 消息读写权限 (MESSAGE_READ, MESSAGE_WRITE)
-   * - 话题读写权限 (TOPIC_READ, TOPIC_WRITE)
-   * - 会话读写权限 (SESSION_READ, SESSION_WRITE)
-   * - AI 模型读权限 (AI_MODEL_READ)
-   * - 助手读权限 (AGENT_READ)
-   * - 文件读权限 (FILE_READ)
+   * Check if the user has all required chat-related permissions
+   * Including:
+   * - Message read/write permissions (MESSAGE_READ, MESSAGE_WRITE)
+   * - Topic read/write permissions (TOPIC_READ, TOPIC_WRITE)
+   * - Session read/write permissions (SESSION_READ, SESSION_WRITE)
+   * - AI model read permission (AI_MODEL_READ)
+   * - Agent read permission (AGENT_READ)
+   * - File read permission (FILE_READ)
    *
-   * @returns 返回权限检查结果和缺失的权限列表
+   * @returns Returns the permission check result and list of missing permissions
    */
   protected async resolveChatPermissions(): Promise<{
     isPermitted: boolean;

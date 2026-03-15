@@ -29,7 +29,7 @@ export class RoleService extends BaseService {
    */
   async getRoles(request: RolesListQuery): ServiceResult<RolesListResponse> {
     try {
-      // 权限检查
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('RBAC_ROLE_READ');
       if (!permissionResult.isPermitted) {
         throw this.createAuthorizationError(permissionResult.message || '无权访问角色列表');
@@ -82,7 +82,7 @@ export class RoleService extends BaseService {
    * @returns Promise<RoleItem[]> - Array of active roles
    */
   async getActiveRoles(): ServiceResult<RoleItem[]> {
-    // 权限检查
+    // Permission check
     const permissionResult = await this.resolveOperationPermission('RBAC_ROLE_READ');
     if (!permissionResult.isPermitted) {
       throw this.createAuthorizationError(permissionResult.message || '无权访问活跃角色列表');
@@ -104,7 +104,7 @@ export class RoleService extends BaseService {
    * @returns Promise<RoleItem | undefined> - Role item or undefined if not found
    */
   async getRoleById(id: string): ServiceResult<RoleItem | null> {
-    // 权限检查
+    // Permission check
     const permissionResult = await this.resolveOperationPermission('RBAC_ROLE_READ');
     if (!permissionResult.isPermitted) {
       throw this.createAuthorizationError(permissionResult.message || '无权访问此角色');
@@ -126,7 +126,7 @@ export class RoleService extends BaseService {
    * @returns Promise<RoleItem | undefined> - Role item or undefined if not found
    */
   async getRoleByName(name: string): ServiceResult<RoleItem | null> {
-    // 权限检查
+    // Permission check
     const permissionResult = await this.resolveOperationPermission('RBAC_ROLE_READ');
     if (!permissionResult.isPermitted) {
       throw this.createAuthorizationError(permissionResult.message || '无权访问此角色');
@@ -191,7 +191,7 @@ export class RoleService extends BaseService {
     request: RolePermissionsListRequest,
   ): ServiceResult<RolePermissionsListResponse> {
     try {
-      // 权限检查
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('RBAC_PERMISSION_READ');
       if (!permissionResult.isPermitted) {
         throw this.createAuthorizationError(permissionResult.message || '无权访问角色权限');
@@ -213,7 +213,7 @@ export class RoleService extends BaseService {
 
       const { limit, offset } = processPaginationConditions(request);
 
-      // 构建列表查询基础
+      // Build the base list query
       const baseListQuery = this.db
         .select({
           category: permissions.category,
@@ -229,7 +229,7 @@ export class RoleService extends BaseService {
 
       const listQuery = limit ? baseListQuery.limit(limit).offset(offset!) : baseListQuery;
 
-      // 构建计数查询
+      // Build the count query
       const countQuery = this.db
         .select({ count: count() })
         .from(permissions)
@@ -267,7 +267,7 @@ export class RoleService extends BaseService {
     const grantSet = new Set(rawGrantIds.filter((id) => typeof id === 'string' && !!id.trim()));
     const revokeSet = new Set(rawRevokeIds.filter((id) => typeof id === 'string' && !!id.trim()));
 
-    // 解决grant和revoke的交集，交集的权限操作相抵，实际上等于没有操作
+    // Resolve the intersection of grant and revoke sets; intersecting permissions cancel out, effectively resulting in no operation
     const intersection = new Set<string>();
     grantSet.forEach((id) => {
       if (revokeSet.has(id)) {
@@ -365,7 +365,7 @@ export class RoleService extends BaseService {
   async updateRole(id: string, updateData: UpdateRoleRequest): ServiceResult<RoleItem> {
     this.log('info', '更新角色信息', { roleId: id, updateData });
 
-    // 权限检查
+    // Permission check
     const permissionResult = await this.resolveOperationPermission('RBAC_ROLE_UPDATE');
     if (!permissionResult.isPermitted) {
       throw this.createAuthorizationError(permissionResult.message || '无权更新角色');
@@ -373,7 +373,7 @@ export class RoleService extends BaseService {
 
     try {
       return await this.db.transaction(async (tx) => {
-        // 检查角色是否存在
+        // Check if the role exists
         const existingRole = await tx.query.roles.findFirst({
           where: eq(roles.id, id),
         });
@@ -382,12 +382,12 @@ export class RoleService extends BaseService {
           throw this.createNotFoundError(`角色 ID "${id}" 不存在`);
         }
 
-        // 检查是否为系统角色，系统角色不允许修改某些字段
+        // Check if it is a system role; system roles cannot have certain fields modified
         if (existingRole.isSystem && (updateData.name || updateData.isSystem === false)) {
           throw this.createBusinessError('系统角色不允许修改名称或系统属性');
         }
 
-        // 如果要修改角色名称，检查新名称是否已存在
+        // If the role name is being modified, check whether the new name already exists
         if (updateData.name && updateData.name !== existingRole.name) {
           const duplicateRole = await tx.query.roles.findFirst({
             where: eq(roles.name, updateData.name),
@@ -398,7 +398,7 @@ export class RoleService extends BaseService {
           }
         }
 
-        // 准备更新数据
+        // Prepare update fields
         const updateFields = {
           ...(updateData.name !== undefined && { name: updateData.name }),
           ...(updateData.displayName !== undefined && { displayName: updateData.displayName }),
@@ -408,7 +408,7 @@ export class RoleService extends BaseService {
           updatedAt: new Date(),
         };
 
-        // 执行更新
+        // Execute the update
         const [updatedRole] = await tx
           .update(roles)
           .set(updateFields)
@@ -429,20 +429,20 @@ export class RoleService extends BaseService {
   async clearRolePermissions(roleId: string): ServiceResult<{ removed: number; roleId: string }> {
     this.log('info', '清空角色权限', { roleId });
 
-    // 权限检查
+    // Permission check
     const permissionResult = await this.resolveOperationPermission('RBAC_ROLE_UPDATE');
     if (!permissionResult.isPermitted) {
       throw this.createAuthorizationError(permissionResult.message || '无权清空角色权限');
     }
 
     try {
-      // 检查角色是否存在
+      // Check if the role exists
       const existingRole = await this.db.query.roles.findFirst({ where: eq(roles.id, roleId) });
       if (!existingRole) {
         throw this.createNotFoundError(`角色 ID "${roleId}" 不存在`);
       }
 
-      // 统计并删除
+      // Count and delete
       const before = await this.db
         .select({ count: sql<number>`count(*)` })
         .from(rolePermissions)
