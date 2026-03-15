@@ -18,6 +18,7 @@ const Preview = memo<PreviewProps>(
       <ShareTopicPreview
         {...fieldValue}
         context={context}
+        headerAgentId={message.agentId}
         messages={[message]}
         previewId={previewId}
         title={title}
