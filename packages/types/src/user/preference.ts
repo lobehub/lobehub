@@ -72,7 +72,12 @@ export interface UserPreference {
   useCmdEnterToSend?: boolean;
 }
 
-export type ReferralStatusString = 'registered' | 'suspected' | 'rewarded' | 'revoked';
+export type ReferralStatusString =
+  | 'pending_reward'
+  | 'registered'
+  | 'suspected'
+  | 'rewarded'
+  | 'revoked';
 
 export interface UserInitializationState {
   avatar?: string;
