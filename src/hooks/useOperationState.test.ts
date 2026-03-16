@@ -298,8 +298,8 @@ describe('useOperationState', () => {
         useChatStore.getState().cancelOperations({
           agentId: context.agentId,
           status: 'running',
-          threadId: context.threadId,
-          topicId: context.topicId,
+          threadId: context.threadId ?? undefined,
+          topicId: context.topicId ?? undefined,
           type: ['sendMessage', 'execAgentRuntime', 'execServerAgentRuntime'],
         });
       });
