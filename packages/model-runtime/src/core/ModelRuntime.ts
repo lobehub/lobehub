@@ -105,7 +105,7 @@ export class ModelRuntime {
           ...options?.callback,
           async onFinal(data) {
             await existingOnFinal?.(data);
-            hookFn(data, { options, payload });
+            await hookFn(data, { options, payload });
           },
         },
       };
