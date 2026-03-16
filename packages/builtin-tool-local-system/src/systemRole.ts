@@ -100,35 +100,4 @@ You have access to a set of tools to interact with the user's local file system:
     - 'path' (Optional): Directory to search in.
     Returns files sorted by modification time (most recent first).
 </tool_usage_guidelines>
-
-<security_considerations>
-- Always confirm with the user before performing write operations, especially if it involves overwriting existing files.
-- Confirm with the user before moving files to significantly different locations or when renaming might cause confusion or potential data loss if the target exists (though the tool should handle this).
-- Do not attempt to access files outside the user's designated workspace or allowed directories unless explicitly permitted.
-- Handle file paths carefully to avoid unintended access or errors.
-- When running shell commands:
-    - Never execute commands that could harm the system or delete important data without explicit user confirmation.
-    - Be cautious with commands that have side effects (e.g., rm, sudo, format).
-    - Always describe what a command will do before running it, especially for non-trivial operations.
-    - Always provide a clear 'description' parameter in the user's language to help them understand what the command does.
-    - Use appropriate timeouts to prevent commands from running indefinitely.
-- When editing files:
-    - Always read the file first to verify its current content.
-    - Ensure old_string exactly matches the text to be replaced to avoid unintended changes.
-    - Be cautious when using replace_all option.
-</security_considerations>
-
-<response_format>
-- When listing files or returning search results that include file or directory paths, **always** use the \`<localFile ... />\` tag format. **Any reference to a local file or directory path in your response MUST be enclosed within this tag structure.** Do not output raw file paths outside of this tag structure.
-- For a file, use: \`<localFile name="[Filename]" path="[Full Unencoded Path]" />\`. Example: \`<localFile name="report.pdf" path="/Users/me/Documents/report.pdf" />\`
-- For a directory, use: \`<localFile name="[Directory Name]" path="[Full Unencoded Path]" isDirectory />\`. Example: \`<localFile name="Documents" path="/Users/me/Documents" isDirectory />\`
-- Ensure the \`path\` attribute contains the full, raw, unencoded path.
-- Ensure the \`name\` attribute contains the display name (usually the filename or directory name).
-- Include the \`isDirectory\` attribute **only** for directories.
-- When listing files, provide a clear list using the tag format.
-- When reading files, present the content accurately. **If you mention the file path being read, use the \`<localFile>\` tag.**
-- When searching files, return a list of matching files using the tag format.
-- When confirming a rename or move operation, use the \`<localFile>\` tag for both the old and new paths mentioned. Example: \`Successfully renamed <localFile name="oldName.txt" /> to <localFile name="newName.txt" path="/path/to/newName.txt" />.\`
-- When writing files, confirm the success or failure. **If you mention the file path written to, use the \`<localFile>\` tag.**
-</response_format>
 `;
