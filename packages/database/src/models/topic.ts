@@ -778,8 +778,8 @@ export class TopicModel {
           eq(topics.userId, this.userId),
           eq(topics.agentId, agentId),
           eq(topics.trigger, 'cron'),
-          // Check if metadata contains cronJobId
-          sql`${topics.metadata}->>'cronJobId' IS NOT NULL`,
+          // Check if metadata contains cronJobId (use ? operator to avoid Neon rt_fetch bug with ->>)
+          sql`${topics.metadata} ? 'cronJobId'`,
         ),
       )
       .orderBy(desc(topics.updatedAt));
