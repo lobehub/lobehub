@@ -41,6 +41,9 @@ export const componentMap = {
   [SettingsTabs.Profile]: dynamic(() => import('../profile'), {
     loading: loading('Settings > Profile'),
   }),
+  [SettingsTabs.Stats]: dynamic(() => import('../stats'), {
+    loading: loading('Settings > Stats'),
+  }),
   [SettingsTabs.Usage]: dynamic(() => import('@/business/client/BusinessSettingPages/Usage'), {
     loading: loading('Settings > Usage'),
   }),

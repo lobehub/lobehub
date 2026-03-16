@@ -205,7 +205,7 @@ export default {
   'group.aiConfig': 'Agent',
   'group.common': 'General',
   'group.profile': 'Account',
-  'group.subscription': 'Subscription',
+  'group.subscription': 'Plans',
   'group.system': 'System',
   'groupTab.chat': 'Chat',
   'groupTab.members': 'Members',

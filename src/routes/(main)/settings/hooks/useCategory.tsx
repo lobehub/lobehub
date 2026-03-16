@@ -85,6 +85,11 @@ export const useCategory = () => {
         label: username ? username : tAuth('tab.profile'),
       },
       {
+        icon: ChartColumnBigIcon,
+        key: SettingsTabs.Stats,
+        label: tAuth('tab.stats'),
+      },
+      {
         icon: PaletteIcon,
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
@@ -106,10 +111,10 @@ export const useCategory = () => {
     if (enableBusinessFeatures) {
       const subscriptionItems: CategoryItem[] = [
         { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
+        { icon: ChartColumnBigIcon, key: SettingsTabs.Usage, label: t('tab.usage') },
         { icon: Coins, key: SettingsTabs.Credits, label: tSubscription('tab.credits') },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
         { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },
-        { icon: ChartColumnBigIcon, key: SettingsTabs.Usage, label: t('tab.usage') },
       ];
 
       groups.push({
