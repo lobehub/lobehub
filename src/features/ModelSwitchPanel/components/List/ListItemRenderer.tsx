@@ -11,7 +11,7 @@ import {
 } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -32,9 +32,10 @@ interface ListItemRendererProps {
   item: ListItem;
   newLabel: string;
   onClose: () => void;
-  onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
   proLabel?: string;
+  scrollCount?: number;
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
@@ -47,11 +48,16 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     onClose,
     onRestrictedModelClick,
     proLabel,
+    scrollCount,
   }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
     const [detailOpen, setDetailOpen] = useState(false);
+
+    useEffect(() => {
+      setDetailOpen(false);
+    }, [scrollCount]);
 
     switch (item.type) {
       case 'no-provider': {
@@ -119,10 +125,11 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 <DropdownMenuSubmenuTrigger
                   className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
                   style={{ paddingBlock: 8, paddingInline: 8 }}
-                  onClick={async () => {
+                  onClick={(e) => {
+                    e.preventDefault();
                     setDetailOpen(false);
-                    onModelChange(item.model.id, item.provider.id);
                     onClose();
+                    onModelChange(item.model.id, item.provider.id);
                   }}
                 >
                   <ModelItemRender
@@ -146,28 +153,37 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
-            <Block
-              clickable
-              className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-              style={{ paddingBlock: 8, paddingInline: 8 }}
-              variant={'borderless'}
-              onClick={async () => {
-                if (restricted) {
-                  onRestrictedModelClick?.();
+            <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
+              <DropdownMenuSubmenuTrigger
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDetailOpen(false);
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
                   onClose();
-                  return;
-                }
-                onModelChange(item.model.id, item.provider.id);
-                onClose();
-              }}
-            >
-              <ModelItemRender
-                {...item.model}
-                {...item.model.abilities}
-                newBadgeLabel={newLabel}
-                proBadgeLabel={restricted ? proLabel : undefined}
-              />
-            </Block>
+                  onModelChange(item.model.id, item.provider.id);
+                }}
+              >
+                <ModelItemRender
+                  {...item.model}
+                  {...item.model.abilities}
+                  newBadgeLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
+                />
+              </DropdownMenuSubmenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
+                  <DropdownMenuPopup className={styles.detailPopup}>
+                    <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
+                  </DropdownMenuPopup>
+                </DropdownMenuPositioner>
+              </DropdownMenuPortal>
+            </DropdownMenuSubmenuRoot>
           </Flexbox>
         );
       }
@@ -180,28 +196,37 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
 
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
-            <Block
-              clickable
-              className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-              style={{ paddingBlock: 8, paddingInline: 8 }}
-              variant={'borderless'}
-              onClick={async () => {
-                if (restricted) {
-                  onRestrictedModelClick?.();
+            <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
+              <DropdownMenuSubmenuTrigger
+                className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+                style={{ paddingBlock: 8, paddingInline: 8 }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDetailOpen(false);
+                  if (restricted) {
+                    onRestrictedModelClick?.();
+                    onClose();
+                    return;
+                  }
                   onClose();
-                  return;
-                }
-                onModelChange(item.data.model.id, singleProvider.id);
-                onClose();
-              }}
-            >
-              <SingleProviderModelItem
-                data={item.data}
-                newLabel={newLabel}
-                proBadgeLabel={restricted ? proLabel : undefined}
-                showInfoTag={isDevMode}
-              />
-            </Block>
+                  onModelChange(item.data.model.id, singleProvider.id);
+                }}
+              >
+                <SingleProviderModelItem
+                  data={item.data}
+                  newLabel={newLabel}
+                  proBadgeLabel={restricted ? proLabel : undefined}
+                  showInfoTag={isDevMode}
+                />
+              </DropdownMenuSubmenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuPositioner anchor={null} placement="right" sideOffset={16}>
+                  <DropdownMenuPopup className={styles.detailPopup}>
+                    <ModelDetailPanel model={item.data.model.id} provider={singleProvider.id} />
+                  </DropdownMenuPopup>
+                </DropdownMenuPositioner>
+              </DropdownMenuPortal>
+            </DropdownMenuSubmenuRoot>
           </Flexbox>
         );
       }
