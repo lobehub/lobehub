@@ -35,7 +35,7 @@ interface ListItemRendererProps {
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
   proLabel?: string;
-  scrollCount?: number;
+  subscribeScroll?: (cb: () => void) => () => void;
 }
 
 export const ListItemRenderer = memo<ListItemRendererProps>(
@@ -48,7 +48,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     onClose,
     onRestrictedModelClick,
     proLabel,
-    scrollCount,
+    subscribeScroll,
   }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
@@ -56,8 +56,8 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     const [detailOpen, setDetailOpen] = useState(false);
 
     useEffect(() => {
-      setDetailOpen(false);
-    }, [scrollCount]);
+      return subscribeScroll?.(() => setDetailOpen(false));
+    }, [subscribeScroll]);
 
     switch (item.type) {
       case 'no-provider': {

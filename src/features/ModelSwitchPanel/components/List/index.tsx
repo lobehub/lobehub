@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
@@ -66,9 +66,15 @@ export const List: FC<ListProps> = ({
 
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;
 
-  const [scrollCount, setScrollCount] = useState(0);
+  const scrollListenersRef = useRef(new Set<() => void>());
+  const subscribeScroll = useCallback((cb: () => void) => {
+    scrollListenersRef.current.add(cb);
+    return () => {
+      scrollListenersRef.current.delete(cb);
+    };
+  }, []);
   const handleListScroll = useCallback(() => {
-    setScrollCount((c) => c + 1);
+    scrollListenersRef.current.forEach((cb) => cb());
   }, []);
 
   useLayoutEffect(() => {
@@ -117,7 +123,7 @@ export const List: FC<ListProps> = ({
             key={key}
             newLabel={newLabel}
             proLabel={proLabel}
-            scrollCount={scrollCount}
+            subscribeScroll={subscribeScroll}
             onClose={handleClose}
             onModelChange={handleModelChange}
             onRestrictedModelClick={onRestrictedModelClick}
