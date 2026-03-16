@@ -330,13 +330,17 @@ export class AiAgentService {
     log('execAgent: got %d klavis manifests', klavisManifests.length);
 
     // 8. Fetch user settings (memory config + timezone)
-    let globalMemoryEnabled = false;
+    // Agent-level memory config takes priority; fallback to user-level setting
+    const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
+    let globalMemoryEnabled = agentMemoryEnabled ?? false;
     let userTimezone: string | undefined;
     try {
       const userModel = new UserModel(this.db, this.userId);
       const settings = await userModel.getUserSettings();
       const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
-      globalMemoryEnabled = memorySettings?.enabled !== false;
+
+      globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
+
       const generalSettings = settings?.general as { timezone?: string } | undefined;
       userTimezone = generalSettings?.timezone;
     } catch (error) {

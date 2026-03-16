@@ -14,6 +14,7 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { useMemoryEnabled } from './useMemoryEnabled';
 
 const MEMORY_EFFORT_LEVELS: readonly UserMemoryEffort[] = ['low', 'medium', 'high'];
 
@@ -61,9 +62,7 @@ interface ToggleOption {
 const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const isEnabled = useAgentStore((s) =>
-    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
-  );
+  const isEnabled = useMemoryEnabled(agentId);
 
   const isActive = value === 'on' ? isEnabled : !isEnabled;
 
@@ -92,10 +91,8 @@ const Controls = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [isEnabled, effort] = useAgentStore((s) => [
-    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
-    chatConfigByIdSelectors.getMemoryToolEffortById(agentId)(s),
-  ]);
+  const isEnabled = useMemoryEnabled(agentId);
+  const effort = useAgentStore((s) => chatConfigByIdSelectors.getMemoryToolEffortById(agentId)(s));
 
   const toggleOptions: ToggleOption[] = [
     {
