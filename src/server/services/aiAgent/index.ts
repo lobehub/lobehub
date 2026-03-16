@@ -1,5 +1,6 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
+import { builtinSkills } from '@lobechat/builtin-skills';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   type DeviceAttachment,
@@ -25,6 +26,7 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -735,7 +737,28 @@ export class AiAgentService {
       Object.keys(toolManifestMap).length,
     );
 
-    // 18. Create operation using AgentRuntimeService
+    // 18. Build skill metas for <available_skills> prompt injection
+    // Combine builtin skills + user DB skills so AI can discover all installed skills
+    let skillMetas: Array<{ description: string; identifier: string; name: string }> = [];
+    try {
+      const builtinMetas = builtinSkills.map((s) => ({
+        description: s.description,
+        identifier: s.identifier,
+        name: s.name,
+      }));
+      const skillModel = new AgentSkillModel(this.db, this.userId);
+      const { data: dbSkills } = await skillModel.findAll();
+      const dbMetas = dbSkills.map((s) => ({
+        description: s.description ?? '',
+        identifier: s.identifier,
+        name: s.name,
+      }));
+      skillMetas = [...builtinMetas, ...dbMetas];
+    } catch (error) {
+      log('execAgent: failed to fetch skill metas: %O', error);
+    }
+
+    // 19. Create operation using AgentRuntimeService
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
@@ -768,12 +791,7 @@ export class AiAgentService {
           sourceMap: toolSourceMap,
           tools,
         },
-        // Skill metas for <available_skills> prompt injection
-        skillMetas: lobehubSkillManifests.map((m) => ({
-          description: m.meta?.description ?? '',
-          identifier: m.identifier,
-          name: m.meta?.title || m.identifier,
-        })),
+        skillMetas,
         userId: this.userId,
         userInterventionConfig,
         userMemory,
