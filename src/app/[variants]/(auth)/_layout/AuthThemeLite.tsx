@@ -22,31 +22,33 @@ const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
   const currentAppearance = isDark ? 'dark' : 'light';
 
   return (
-    <ThemeProvider
-      appearance={currentAppearance}
-      className={'auth-layout'}
-      defaultAppearance={currentAppearance}
-      defaultThemeMode={currentAppearance}
-      style={{ height: '100%' }}
-      theme={{
-        cssVar: { key: 'lobe-vars' },
-      }}
-    >
-      <App suppressHydrationWarning style={{ height: '100%' }}>
-        <AntdStaticMethods />
-        <ConfigProvider
-          motion={motion}
-          config={{
-            aAs: Link,
-            imgAs: Image,
-            imgUnoptimized: true,
-            proxy: globalCDN ? 'unpkg' : undefined,
-          }}
-        >
-          {children}
-        </ConfigProvider>
-      </App>
-    </ThemeProvider>
+    <div suppressHydrationWarning style={{ height: '100%' }}>
+      <ThemeProvider
+        appearance={currentAppearance}
+        className={'auth-layout'}
+        defaultAppearance={currentAppearance}
+        defaultThemeMode={currentAppearance}
+        style={{ height: '100%' }}
+        theme={{
+          cssVar: { key: 'lobe-vars' },
+        }}
+      >
+        <App style={{ height: '100%' }}>
+          <AntdStaticMethods />
+          <ConfigProvider
+            motion={motion}
+            config={{
+              aAs: Link,
+              imgAs: Image,
+              imgUnoptimized: true,
+              proxy: globalCDN ? 'unpkg' : undefined,
+            }}
+          >
+            {children}
+          </ConfigProvider>
+        </App>
+      </ThemeProvider>
+    </div>
   );
 });
 
