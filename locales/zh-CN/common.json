@@ -162,6 +162,8 @@
   "cmdk.search.agents": "助理",
   "cmdk.search.assistant": "助理",
   "cmdk.search.assistants": "助理",
+  "cmdk.search.chatGroup": "团队",
+  "cmdk.search.chatGroups": "团队",
   "cmdk.search.communityAgent": "社区助理",
   "cmdk.search.file": "文件",
   "cmdk.search.files": "文件",

@@ -222,6 +222,10 @@ export default {
 
   'cmdk.search.assistants': 'Agents',
 
+  'cmdk.search.chatGroup': 'Agent Team',
+
+  'cmdk.search.chatGroups': 'Agent Teams',
+
   'cmdk.search.communityAgent': 'Community Agent',
 
   'cmdk.search.file': 'File',

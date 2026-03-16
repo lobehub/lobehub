@@ -32,7 +32,10 @@ beforeEach(async () => {
   searchRepo = new SearchRepo(serverDB, userId);
 });
 
-describe('SearchRepo', () => {
+// BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+const isServerDB = process.env.TEST_SERVER_DB === '1';
+
+describe.skipIf(!isServerDB)('SearchRepo', () => {
   describe('search - empty query', () => {
     it('should return empty array for empty query', async () => {
       const results = await searchRepo.search({ query: '' });

@@ -12,6 +12,7 @@ import {
   Plug,
   Puzzle,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +46,10 @@ const SearchResults = memo<SearchResultsProps>(
       switch (result.type) {
         case 'agent': {
           navigate(`/agent/${result.id}?agent=${result.id}`);
+          break;
+        }
+        case 'chatGroup': {
+          navigate(`/group/${result.id}`);
           break;
         }
         case 'topic': {
@@ -125,6 +130,9 @@ const SearchResults = memo<SearchResultsProps>(
         case 'agent': {
           return <Sparkles size={16} />;
         }
+        case 'chatGroup': {
+          return <Users size={16} />;
+        }
         case 'topic': {
           return <MessageSquare size={16} />;
         }
@@ -162,6 +170,9 @@ const SearchResults = memo<SearchResultsProps>(
       switch (type) {
         case 'agent': {
           return t('cmdk.search.agent');
+        }
+        case 'chatGroup': {
+          return t('cmdk.search.chatGroup');
         }
         case 'topic': {
           return t('cmdk.search.topic');
@@ -235,6 +246,7 @@ const SearchResults = memo<SearchResultsProps>(
 
     // Group results by type
     const messageResults = results.filter((r) => r.type === 'message');
+    const chatGroupResults = results.filter((r) => r.type === 'chatGroup');
     const agentResults = results.filter((r) => r.type === 'agent');
     const topicResults = results.filter((r) => r.type === 'topic');
     const fileResults = results.filter((r) => r.type === 'file');
@@ -335,6 +347,13 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group forceMount>
             {agentResults.map((result) => renderResultItem(result))}
             {renderSearchMore('agent', agentResults.length)}
+          </Command.Group>
+        )}
+
+        {chatGroupResults.length > 0 && (
+          <Command.Group forceMount>
+            {chatGroupResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('chatGroup', chatGroupResults.length)}
           </Command.Group>
         )}
 

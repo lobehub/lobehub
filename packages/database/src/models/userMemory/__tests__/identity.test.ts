@@ -451,7 +451,9 @@ describe('UserMemoryIdentityModel', () => {
       expect(result.pageSize).toBe(100);
     });
 
-    it('should search by query in title', async () => {
+    // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+    const isServerDB = process.env.TEST_SERVER_DB === '1';
+    it.skipIf(!isServerDB)('should search by query in title', async () => {
       const result = await identityModel.queryList({
         q: 'Searchable Title',
         relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
@@ -461,14 +463,14 @@ describe('UserMemoryIdentityModel', () => {
       expect(result.items[0].id).toBe('list-id-3');
     });
 
-    it('should search by query in description', async () => {
+    it.skipIf(!isServerDB)('should search by query in description', async () => {
       const result = await identityModel.queryList({ q: 'Searchable description' });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('list-id-2');
     });
 
-    it('should search by query in role', async () => {
+    it.skipIf(!isServerDB)('should search by query in role', async () => {
       const result = await identityModel.queryList({ q: 'Searchable role' });
 
       expect(result.items).toHaveLength(1);

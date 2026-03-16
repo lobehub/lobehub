@@ -1403,7 +1403,9 @@ describe('MessageModel Query Tests', () => {
     });
   });
 
-  describe('queryByKeyWord', () => {
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('queryByKeyWord', () => {
     it('should query messages by keyword', async () => {
       // Create test data
       await serverDB.insert(messages).values([
