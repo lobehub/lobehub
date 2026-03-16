@@ -33,12 +33,12 @@ const qwenChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
-    contextWindowTokens: 204_800,
+    contextWindowTokens: 196_608,
     description:
       'MiniMax-M2.5 is a flagship open-source large model from MiniMax, focusing on solving complex real-world tasks. Its core strengths are multi-language programming capabilities and the ability to solve complex tasks as an Agent.',
     displayName: 'MiniMax-M2.5',
     id: 'MiniMax-M2.5',
-    maxOutput: 131_072,
+    maxOutput: 32_768,
     pricing: {
       currency: 'CNY',
       units: [
