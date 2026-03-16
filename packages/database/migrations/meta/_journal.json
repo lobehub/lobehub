@@ -651,6 +651,13 @@
       "when": 1773419250145,
       "tag": "0092_add_agent_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1773653550268,
+      "tag": "0093_add_bm25_indexes_with_icu",
+      "breakpoints": true
     }
   ],
   "version": "6"
