@@ -146,7 +146,12 @@ export class ModelRuntime {
         ...options?.callback,
         async onFinal(data) {
           await existingOnFinal?.(data);
-          await hookFn(data, { options, payload });
+          try {
+            await hookFn(data, { options, payload });
+          } catch (e) {
+            // Hook failures (billing, tracing) must not interfere with response completion
+            console.error('[ModelRuntime] onChatFinal hook error:', e);
+          }
         },
       },
     };
@@ -160,7 +165,12 @@ export class ModelRuntime {
           ...options,
           onUsage: async (usage: ModelUsage) => {
             await options?.onUsage?.(usage);
-            await this._hooks!.onGenerateObjectFinal!({ usage }, { options, payload });
+            try {
+              await this._hooks!.onGenerateObjectFinal!({ usage }, { options, payload });
+            } catch (e) {
+              // Hook failures (billing, tracing) must not interfere with response completion
+              console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
+            }
           },
         }
       : options;
