@@ -4,10 +4,12 @@
 
 export const LOBE_CHAT_CLOUD = 'LobeHub Cloud';
 
-export const BRANDING_NAME = 'LobeHub';
-export const BRANDING_LOGO_URL = '';
+// Branding name used throughout the application UI
+export const BRANDING_NAME = 'LoctekToolOs';
+export const BRANDING_LOGO_URL = '/loctek_logo.png';
 
-export const ORG_NAME = 'LobeHub';
+// Organization name used in copyright and legal notices
+export const ORG_NAME = 'LoctekToolOs';
 
 export const BRANDING_URL = {
   help: undefined,

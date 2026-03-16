@@ -1,31 +1,17 @@
 'use client';
 
-import { SOCIAL_URL } from '@lobechat/business-const';
 import { useAnalytics } from '@lobehub/analytics/react';
-import { type MenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { DiscordIcon } from '@lobehub/ui/icons';
-import {
-  Book,
-  CircleHelp,
-  Feather,
-  FileClockIcon,
-  FlaskConical,
-  Github,
-  Rocket,
-  Settings,
-  Settings2,
-} from 'lucide-react';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { FlaskConical } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import ChangelogModal from '@/components/ChangelogModal';
 import HighlightNotification from '@/components/HighlightNotification';
-import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
+import LabsModal from '@/components/LabsModal';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
-import { useNavLayout } from '@/hooks/useNavLayout';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import { useUserStore } from '@/store/user';
@@ -42,10 +28,7 @@ const PRODUCT_HUNT_NOTIFICATION = {
 const Footer = memo(() => {
   const { t } = useTranslation('common');
   const { analytics } = useAnalytics();
-  const { footer } = useNavLayout();
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const location = useLocation();
-  const isSettingsPage = location.pathname.startsWith('/settings');
   const [shouldLoadChangelog, setShouldLoadChangelog] = useState(false);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
   const [isProductHuntCardOpen, setIsProductHuntCardOpen] = useState(false);
@@ -92,17 +75,17 @@ const Footer = memo(() => {
     setIsChangelogModalOpen(false);
   };
 
-  const handleOpenFeedbackModal = useCallback(() => {
+  const handleOpenFeedbackModal = () => {
     openFeedbackModal();
-  }, [openFeedbackModal]);
+  };
 
-  const handleOpenProductHuntCard = useCallback(() => {
+  const handleOpenProductHuntCard = () => {
     setIsProductHuntCardOpen(true);
     trackProductHuntEvent('product_hunt_card_viewed', {
       spm: 'homepage.product_hunt.viewed',
       trigger: 'menu_click',
     });
-  }, [setIsProductHuntCardOpen, trackProductHuntEvent]);
+  };
 
   const handleCloseProductHuntCard = () => {
     setIsProductHuntCardOpen(false);
@@ -123,130 +106,19 @@ const Footer = memo(() => {
     });
   };
 
-  const helpMenuItems: MenuProps['items'] = useMemo(
-    () => [
-      ...(footer.showSettingsEntry && !isDevMode
-        ? [
-            {
-              icon: <Icon icon={Settings2} />,
-              key: 'setting',
-              label: <Link to="/settings">{t('userPanel.setting')}</Link>,
-            },
-            {
-              type: 'divider' as const,
-            },
-          ]
-        : []),
-      {
-        icon: <Icon icon={Book} />,
-        key: 'docs',
-        label: (
-          <a href={DOCUMENTS_REFER_URL} rel="noopener noreferrer" target="_blank">
-            {t('userPanel.docs')}
-          </a>
-        ),
-      },
-      {
-        icon: <Icon icon={Feather} />,
-        key: 'feedback',
-        label: t('userPanel.feedback'),
-        onClick: handleOpenFeedbackModal,
-      },
-      {
-        icon: <Icon icon={DiscordIcon} />,
-        key: 'discord',
-        label: (
-          <a href={SOCIAL_URL.discord} rel="noopener noreferrer" target="_blank">
-            {t('userPanel.discord')}
-          </a>
-        ),
-      },
-      {
-        type: 'divider',
-      },
-      {
-        icon: <Icon icon={FileClockIcon} />,
-        key: 'changelog',
-        label: t('changelog'),
-        onClick: handleOpenChangelogModal,
-      },
-      ...(footer.layout === 'compact' && !footer.hideGitHub
-        ? [
-            {
-              icon: <Icon icon={Github} />,
-              key: 'github',
-              label: (
-                <a href={GITHUB} rel="noopener noreferrer" target="_blank">
-                  GitHub
-                </a>
-              ),
-            },
-          ]
-        : []),
-      ...(footer.showEvalEntry && footer.layout === 'compact'
-        ? [
-            {
-              icon: <Icon icon={FlaskConical} />,
-              key: 'eval',
-              label: <Link to="/eval">Evaluation Lab</Link>,
-            },
-          ]
-        : []),
-      ...(isWithinTimeWindow
-        ? [
-            {
-              icon: <Icon icon={Rocket} />,
-              key: 'productHunt',
-              label: 'Product Hunt',
-              onClick: handleOpenProductHuntCard,
-            },
-          ]
-        : []),
-    ],
-    [
-      footer.showSettingsEntry,
-      footer.layout,
-      footer.hideGitHub,
-      footer.showEvalEntry,
-      isDevMode,
-      t,
-      handleOpenFeedbackModal,
-      isWithinTimeWindow,
-      handleOpenProductHuntCard,
-    ],
-  );
-
   return (
     <>
-      {footer.layout === 'expanded' ? (
-        <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
-          <Flexbox horizontal align={'center'} flex={1} gap={2}>
-            <DropdownMenu items={helpMenuItems} placement="topLeft">
-              <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
-            </DropdownMenu>
-            {!footer.hideGitHub && (
-              <a aria-label={'GitHub'} href={GITHUB} rel="noopener noreferrer" target={'_blank'}>
-                <ActionIcon icon={Github} size={16} title={'GitHub'} />
-              </a>
-            )}
+      <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
+        <Flexbox horizontal align={'center'} flex={1} gap={2}>
+          {/* TODO: Help menu hidden for Loctek AI branding - restore if needed */}
+          {isDevMode && (
             <Link to="/eval">
               <ActionIcon icon={FlaskConical} size={16} title="Evaluation Lab" />
             </Link>
-          </Flexbox>
-          <ThemeButton placement={'topCenter'} size={16} />
-        </Flexbox>
-      ) : (
-        <Flexbox horizontal align={'center'} gap={2} padding={8}>
-          <DropdownMenu items={helpMenuItems} placement="topLeft">
-            <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
-          </DropdownMenu>
-          {isDevMode && !isSettingsPage && (
-            <Link to="/settings">
-              <ActionIcon aria-label={t('userPanel.setting')} icon={Settings} size={16} />
-            </Link>
           )}
         </Flexbox>
-      )}
+        <ThemeButton placement={'topCenter'} size={16} />
+      </Flexbox>
       <ChangelogModal
         open={isChangelogModalOpen}
         shouldLoad={shouldLoadChangelog}
