@@ -6,6 +6,7 @@ import type { LobeCloudflareParams } from '../providers/cloudflare';
 import { LobeOpenAI } from '../providers/openai';
 import { providerRuntimeMap } from '../runtimeMap';
 import type {
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
   EmbeddingsOptions,
@@ -33,6 +34,14 @@ export interface ModelRuntimeHooks {
    * Runs before the LLM call. Throw to abort (e.g., budget exceeded).
    */
   beforeChat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<void>;
+  /**
+   * Called when chat() throws. Handle side effects (sanitize, log, DB record).
+   * The error is re-thrown after the hook completes — callers still handle response formatting.
+   */
+  onChatError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
   /**
    * Called after the stream completes. ModelRuntime handles merging into onFinal internally.
    * Hook consumers only need to implement the callback — no need to deal with option merging.
@@ -90,28 +99,41 @@ export class ModelRuntime {
       });
     }
 
-    // Hook: beforeChat — budget check, etc.
+    const finalOptions = await this.applyHooks(payload, options);
+
+    try {
+      return await this._runtime.chat(payload, finalOptions);
+    } catch (error) {
+      if (this._hooks?.onChatError) {
+        await this._hooks.onChatError(error as ChatCompletionErrorPayload, { options, payload });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Apply lifecycle hooks: beforeChat (budget check) + onChatFinal (cost tracking callback injection).
+   */
+  private async applyHooks(
+    payload: ChatStreamPayload,
+    options?: ChatMethodOptions,
+  ): Promise<ChatMethodOptions | undefined> {
     await this._hooks?.beforeChat?.(payload, options);
 
-    // Hook: onChatFinal — inject only the onFinal callback without wrapping other callbacks
-    // through mergeMultipleChatMethodOptions (which swallows errors via try/catch)
-    let finalOptions = options;
-    if (this._hooks?.onChatFinal) {
-      const hookFn = this._hooks.onChatFinal;
-      const existingOnFinal = options?.callback?.onFinal;
-      finalOptions = {
-        ...options,
-        callback: {
-          ...options?.callback,
-          async onFinal(data) {
-            await existingOnFinal?.(data);
-            await hookFn(data, { options, payload });
-          },
-        },
-      };
-    }
+    if (!this._hooks?.onChatFinal) return options;
 
-    return this._runtime.chat(payload, finalOptions);
+    const hookFn = this._hooks.onChatFinal;
+    const existingOnFinal = options?.callback?.onFinal;
+    return {
+      ...options,
+      callback: {
+        ...options?.callback,
+        async onFinal(data) {
+          await existingOnFinal?.(data);
+          await hookFn(data, { options, payload });
+        },
+      },
+    };
   }
 
   async generateObject(payload: GenerateObjectPayload) {
