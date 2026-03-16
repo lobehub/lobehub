@@ -55,10 +55,6 @@ const getErrorAlertConfig = (
       type: 'secondary',
     };
 
-  /* ↓ cloud slot ↓ */
-
-  /* ↑ cloud slot ↑ */
-
   switch (errorType) {
     case ChatErrorType.SystemTimeNotMatchError:
     case AgentRuntimeErrorType.PermissionDenied:

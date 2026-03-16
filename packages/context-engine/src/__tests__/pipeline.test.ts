@@ -176,9 +176,9 @@ describe('ContextEngine', () => {
 
       expect(result.isAborted).toBe(false);
       expect(result.messages).toEqual(input.messages);
-      expect(result.metadata.p1).toBe(true);
-      expect(result.metadata.p2).toBe(true);
-      expect(result.metadata.p3).toBe(true);
+      expect((result.metadata as any).p1).toBe(true);
+      expect((result.metadata as any).p2).toBe(true);
+      expect((result.metadata as any).p3).toBe(true);
       expect(result.stats.processedCount).toBe(3);
     });
 

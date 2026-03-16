@@ -1,7 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
 import { type FormInstance, type InputRef } from 'antd';
-import { Divider, Form } from 'antd';
+import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -27,6 +27,7 @@ export interface SignInEmailStepProps {
   disableEmailPassword?: boolean;
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
+  lastAuthProvider?: string | null;
   loading: boolean;
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
@@ -40,6 +41,7 @@ export const SignInEmailStep = ({
   disableEmailPassword,
   form,
   isSocialOnly,
+  lastAuthProvider,
   loading,
   oAuthSSOProviders,
   serverConfigInit,
@@ -114,27 +116,41 @@ export const SignInEmailStep = ({
       )}
       {serverConfigInit && oAuthSSOProviders.length > 0 && (
         <Flexbox gap={12}>
-          {oAuthSSOProviders.map((provider) => (
-            <Button
-              block
-              key={provider}
-              loading={socialLoading === provider}
-              size="large"
-              icon={
-                <Icon
-                  icon={AuthIcons(provider, 18)}
-                  style={{
-                    left: 12,
-                    position: 'absolute',
-                    top: 13,
-                  }}
-                />
-              }
-              onClick={() => onSocialSignIn(provider)}
-            >
-              {getProviderLabel(provider)}
-            </Button>
-          ))}
+          {oAuthSSOProviders.map((provider) => {
+            const button = (
+              <Button
+                block
+                key={provider}
+                loading={socialLoading === provider}
+                size="large"
+                icon={
+                  <Icon
+                    icon={AuthIcons(provider, 18)}
+                    style={{
+                      left: 12,
+                      position: 'absolute',
+                      top: 13,
+                    }}
+                  />
+                }
+                onClick={() => onSocialSignIn(provider)}
+              >
+                {getProviderLabel(provider)}
+              </Button>
+            );
+            return provider === lastAuthProvider ? (
+              <Badge.Ribbon
+                color="var(--ant-color-info-fill-tertiary)"
+                key={provider}
+                styles={{ content: { color: 'var(--ant-color-info)' } }}
+                text={t('betterAuth.signin.lastUsed')}
+              >
+                {button}
+              </Badge.Ribbon>
+            ) : (
+              button
+            );
+          })}
           {!disableEmailPassword && divider}
         </Flexbox>
       )}

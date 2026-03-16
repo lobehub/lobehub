@@ -21,7 +21,7 @@ const SuggestQuestions = memo<SuggestQuestionsProps>(({ mode }) => {
   const { t } = useTranslation('common');
   const { questions, refresh } = useRandomQuestions(mode);
 
-  if (!mode || !['agent', 'group', 'write'].includes(mode)) {
+  if (mode && !['agent', 'group', 'write'].includes(mode)) {
     return null;
   }
 

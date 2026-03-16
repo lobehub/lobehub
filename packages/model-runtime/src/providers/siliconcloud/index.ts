@@ -68,8 +68,7 @@ export const params = {
         return {
           error: status,
           errorType: AgentRuntimeErrorType.ProviderBizError,
-          message:
-            '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
+          message: '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
         };
       }
 

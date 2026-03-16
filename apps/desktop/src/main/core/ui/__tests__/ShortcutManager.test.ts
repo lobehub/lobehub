@@ -175,11 +175,17 @@ describe('ShortcutManager', () => {
       expect(result.errorType).toBe('INVALID_ID');
     });
 
-    it('should reject empty accelerator', () => {
+    it('should clear shortcut when accelerator is empty', () => {
       const result = shortcutManager.updateShortcutConfig('showApp', '');
 
-      expect(result.success).toBe(false);
-      expect(result.errorType).toBe('INVALID_FORMAT');
+      expect(result.success).toBe(true);
+      expect(result.errorType).toBeUndefined();
+      expect(mockStoreManager.set).toHaveBeenCalledWith(
+        'shortcuts',
+        expect.objectContaining({
+          showApp: '',
+        }),
+      );
     });
 
     it('should reject accelerator without modifier keys', () => {

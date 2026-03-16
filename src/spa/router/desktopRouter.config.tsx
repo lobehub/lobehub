@@ -41,10 +41,10 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/agent/integration'),
-                  'Desktop > Chat > Integration',
+                  () => import('@/routes/(main)/agent/channel'),
+                  'Desktop > Chat > Channel',
                 ),
-                path: 'integration',
+                path: 'channel',
               },
             ],
             element: dynamicLayout(
@@ -142,6 +142,22 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   {
                     element: dynamicElement(
+                      () => import('@/routes/(main)/community/(list)/skill'),
+                      'Desktop > Discover > List > Skill',
+                    ),
+                    index: true,
+                  },
+                ],
+                element: dynamicElement(
+                  () => import('@/routes/(main)/community/(list)/skill/_layout'),
+                  'Desktop > Discover > List > Skill > Layout',
+                ),
+                path: 'skill',
+              },
+              {
+                children: [
+                  {
+                    element: dynamicElement(
                       () => import('@/routes/(main)/community/(list)/mcp'),
                       'Desktop > Discover > List > MCP',
                     ),
@@ -197,6 +213,13 @@ export const desktopRoutes: RouteObject[] = [
                   'Desktop > Discover > Detail > Provider',
                 ),
                 path: 'provider/:slug',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/community/(detail)/skill'),
+                  'Desktop > Discover > Detail > Skill',
+                ),
+                path: 'skill/:slug',
               },
               {
                 element: dynamicElement(

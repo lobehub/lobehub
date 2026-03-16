@@ -137,7 +137,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3 Pro is Google’s most powerful agent and vibe-coding model, delivering richer visuals and deeper interaction on top of state-of-the-art reasoning.',
     displayName: 'Gemini 3 Pro Preview',
-    id: 'gemini-3-pro-preview',
+    id: 'gemini-3-pro-preview', // deprecated on 2026-03-26
     maxOutput: 65_536,
     pricing: {
       units: [

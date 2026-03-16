@@ -2,12 +2,11 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { convertSenseNovaMessage } from '../../core/contextBuilders/sensenova';
 import { testProvider } from '../../providerTestUtils';
 import { LobeSenseNovaAI, params } from './index';
 
 const provider = ModelProvider.SenseNova;
-const defaultBaseURL = 'https://api.sensenova.cn/compatible-mode/v1';
+const defaultBaseURL = 'https://api.sensenova.cn/compatible-mode/v2';
 
 // Basic provider tests
 testProvider({
@@ -23,17 +22,17 @@ testProvider({
 
 // Custom feature tests
 describe('LobeSenseNovaAI - custom features', () => {
-  let instance: InstanceType<typeof LobeSenseNovaAI>;
+  let _instance: InstanceType<typeof LobeSenseNovaAI>;
 
   beforeEach(() => {
-    instance = new LobeSenseNovaAI({ apiKey: 'test_api_key' });
+    _instance = new LobeSenseNovaAI({ apiKey: 'test_api_key' });
     vi.clearAllMocks();
   });
 
   describe('params object', () => {
     it('should export params with correct structure', () => {
       expect(params).toBeDefined();
-      expect(params.baseURL).toBe('https://api.sensenova.cn/compatible-mode/v1');
+      expect(params.baseURL).toBe('https://api.sensenova.cn/compatible-mode/v2');
       expect(params.provider).toBe('sensenova');
       expect(params.chatCompletion).toBeDefined();
       expect(params.debug).toBeDefined();
@@ -326,112 +325,6 @@ describe('LobeSenseNovaAI - custom features', () => {
       });
     });
 
-    describe('Vision model message conversion', () => {
-      it('should convert messages for SenseNova-V6 models', () => {
-        const payload = createMockPayload({
-          messages: [
-            {
-              content: [
-                { text: 'Hello', type: 'text' },
-                {
-                  image_url: { url: 'https://example.com/image.jpg' },
-                  type: 'image_url',
-                },
-              ],
-              role: 'user',
-            },
-          ],
-          model: 'SenseNova-V6',
-        });
-
-        const result = params.chatCompletion.handlePayload(payload as any);
-        expect(result.messages[0].content).toEqual([
-          { text: 'Hello', type: 'text' },
-          { image_url: 'https://example.com/image.jpg', type: 'image_url' },
-        ]);
-      });
-
-      it('should convert messages for SenseChat-Vision models', () => {
-        const payload = createMockPayload({
-          messages: [
-            {
-              content: [
-                { text: 'Describe this image', type: 'text' },
-                {
-                  image_url: { url: 'data:image/jpeg;base64,/9j/4AAQ...' },
-                  type: 'image_url',
-                },
-              ],
-              role: 'user',
-            },
-          ],
-          model: 'SenseChat-Vision',
-        });
-
-        const result = params.chatCompletion.handlePayload(payload as any);
-        expect(result.messages[0].content).toEqual([
-          { text: 'Describe this image', type: 'text' },
-          { image_base64: '/9j/4AAQ...', type: 'image_base64' },
-        ]);
-      });
-
-      it('should not convert messages for non-vision models', () => {
-        const originalContent = [
-          { text: 'Hello', type: 'text' },
-          {
-            image_url: { url: 'https://example.com/image.jpg' },
-            type: 'image_url',
-          },
-        ];
-        const payload = createMockPayload({
-          messages: [{ content: originalContent, role: 'user' }],
-          model: 'SenseChat-5',
-        });
-
-        const result = params.chatCompletion.handlePayload(payload as any);
-        expect(result.messages[0].content).toEqual(originalContent);
-      });
-
-      it('should not convert messages for assistant role', () => {
-        const originalContent = [
-          { text: 'Hello', type: 'text' },
-          {
-            image_url: { url: 'https://example.com/image.jpg' },
-            type: 'image_url',
-          },
-        ];
-        const payload = createMockPayload({
-          messages: [{ content: originalContent, role: 'assistant' }],
-          model: 'SenseNova-V6',
-        });
-
-        const result = params.chatCompletion.handlePayload(payload as any);
-        expect(result.messages[0].content).toEqual(originalContent);
-      });
-
-      it('should handle string content without conversion', () => {
-        const payload = createMockPayload({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'SenseNova-V6',
-        });
-
-        const result = params.chatCompletion.handlePayload(payload as any);
-        // convertSenseNovaMessage converts string to text array format
-        expect(result.messages[0].content).toEqual([{ text: 'Hello', type: 'text' }]);
-      });
-
-      it('should handle messages when model is undefined', () => {
-        const originalContent = [{ text: 'Hello', type: 'text' }];
-        const payload = createMockPayload({
-          messages: [{ content: originalContent, role: 'user' }],
-          model: undefined,
-        });
-
-        const result = params.chatCompletion.handlePayload(payload as any);
-        expect(result.messages[0].content).toEqual(originalContent);
-      });
-    });
-
     it('should always set stream to true', () => {
       const payload = createMockPayload({ stream: false });
       const result = params.chatCompletion.handlePayload(payload as any);
@@ -453,7 +346,7 @@ describe('LobeSenseNovaAI - custom features', () => {
     it('should fetch and process model list', async () => {
       const mockClient = {
         apiKey: 'test',
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
@@ -475,7 +368,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect function call capability by keyword 1202', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-1202' }, { id: 'normal-model' }],
@@ -493,7 +386,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect vision capability by keyword vision', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-vision' }, { id: 'normal-model' }],
@@ -511,7 +404,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect vision capability by keyword sensenova-v6', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'sensenova-v6' }, { id: 'sensenova-v5' }],
@@ -529,7 +422,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect reasoning capability by keyword deepseek-r1', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'deepseek-r1' }, { id: 'deepseek' }],
@@ -547,7 +440,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect reasoning capability by keyword reasoner', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-reasoner' }, { id: 'model' }],
@@ -565,7 +458,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should merge with LOBE_DEFAULT_MODEL_LIST when model is known', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'SenseChat-5' }],
@@ -583,7 +476,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should use default values for unknown models', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'unknown-model-xyz' }],
@@ -602,7 +495,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should handle case-insensitive model matching', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'SENSECHAT-5' }],
@@ -617,7 +510,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should merge abilities from known model', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'test-model' }],
@@ -636,7 +529,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should handle API errors gracefully', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockRejectedValue(new Error('API Error')),
         },
@@ -647,7 +540,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should handle empty model list', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [],
@@ -661,7 +554,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should change client baseURL to models endpoint', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'test-model' }],
@@ -675,7 +568,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should detect multiple ability keywords in one model', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'model-1202-vision-reasoner' }],
@@ -693,7 +586,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should prioritize keyword detection over known model abilities', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [{ id: 'custom-1202-model' }],
@@ -710,7 +603,7 @@ describe('LobeSenseNovaAI - custom features', () => {
 
     it('should use OR logic for combining keyword and known model abilities', async () => {
       const mockClient = {
-        baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+        baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
@@ -860,228 +753,6 @@ describe('LobeSenseNovaAI - chat integration', () => {
         }),
         expect.anything(),
       );
-    });
-  });
-});
-
-describe('convertSenseNovaMessage', () => {
-  describe('string content', () => {
-    it('should convert string content to text array', () => {
-      const result = convertSenseNovaMessage('Hello world');
-      expect(result).toEqual([{ text: 'Hello world', type: 'text' }]);
-    });
-
-    it('should convert empty string to text array', () => {
-      const result = convertSenseNovaMessage('');
-      expect(result).toEqual([{ text: '', type: 'text' }]);
-    });
-  });
-
-  describe('non-array content', () => {
-    it('should return empty array for null', () => {
-      const result = convertSenseNovaMessage(null);
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array for undefined', () => {
-      const result = convertSenseNovaMessage(undefined);
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array for object', () => {
-      const result = convertSenseNovaMessage({ key: 'value' });
-      expect(result).toEqual([]);
-    });
-
-    it('should return empty array for number', () => {
-      const result = convertSenseNovaMessage(123);
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('text type content', () => {
-    it('should keep text type content as is', () => {
-      const content = [{ text: 'Hello', type: 'text' }];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([{ text: 'Hello', type: 'text' }]);
-    });
-
-    it('should handle multiple text items', () => {
-      const content = [
-        { text: 'Hello', type: 'text' },
-        { text: 'World', type: 'text' },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([
-        { text: 'Hello', type: 'text' },
-        { text: 'World', type: 'text' },
-      ]);
-    });
-  });
-
-  describe('image_url type content', () => {
-    it('should convert HTTP image_url to image_url type', () => {
-      const content = [
-        {
-          image_url: { url: 'https://example.com/image.jpg' },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([{ image_url: 'https://example.com/image.jpg', type: 'image_url' }]);
-    });
-
-    it('should convert base64 JPEG to image_base64 type', () => {
-      const content = [
-        {
-          image_url: { url: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([{ image_base64: '/9j/4AAQSkZJRg==', type: 'image_base64' }]);
-    });
-
-    it('should convert base64 PNG to image_base64 type', () => {
-      const content = [
-        {
-          image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([{ image_base64: 'iVBORw0KGgo=', type: 'image_base64' }]);
-    });
-
-    it('should filter out image_url with missing url', () => {
-      const content = [
-        {
-          image_url: {},
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([]);
-    });
-
-    it('should filter out image_url with null url', () => {
-      const content = [
-        {
-          image_url: { url: null },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([]);
-    });
-
-    it('should filter out image_url with non-string url', () => {
-      const content = [
-        {
-          image_url: { url: 123 },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([]);
-    });
-
-    it('should filter out image_url without image_url property', () => {
-      const content = [
-        {
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('mixed content', () => {
-    it('should handle mixed text and image_url', () => {
-      const content = [
-        { text: 'Describe this image:', type: 'text' },
-        {
-          image_url: { url: 'https://example.com/image.jpg' },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([
-        { text: 'Describe this image:', type: 'text' },
-        { image_url: 'https://example.com/image.jpg', type: 'image_url' },
-      ]);
-    });
-
-    it('should handle mixed text and base64 image', () => {
-      const content = [
-        { text: 'Look at this:', type: 'text' },
-        {
-          image_url: { url: 'data:image/jpeg;base64,/9j/4AAQ' },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([
-        { text: 'Look at this:', type: 'text' },
-        { image_base64: '/9j/4AAQ', type: 'image_base64' },
-      ]);
-    });
-  });
-
-  describe('edge cases', () => {
-    it('should filter out null items', () => {
-      const content = [{ text: 'Hello', type: 'text' }, null, { text: 'World', type: 'text' }];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([
-        { text: 'Hello', type: 'text' },
-        { text: 'World', type: 'text' },
-      ]);
-    });
-
-    it('should filter out undefined items', () => {
-      const content = [{ text: 'Hello', type: 'text' }, undefined, { text: 'World', type: 'text' }];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([
-        { text: 'Hello', type: 'text' },
-        { text: 'World', type: 'text' },
-      ]);
-    });
-
-    it('should filter out unknown type items', () => {
-      const content = [
-        { text: 'Hello', type: 'text' },
-        { data: 'unknown', type: 'unknown' },
-        { text: 'World', type: 'text' },
-      ];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([
-        { text: 'Hello', type: 'text' },
-        { text: 'World', type: 'text' },
-      ]);
-    });
-
-    it('should return empty array when all items are filtered', () => {
-      const content = [null, undefined, { data: 'unknown', type: 'unknown' }];
-      const result = convertSenseNovaMessage(content);
-      expect(result).toEqual([]);
-    });
-
-    it('should handle empty array', () => {
-      const result = convertSenseNovaMessage([]);
-      expect(result).toEqual([]);
-    });
-
-    it('should handle base64 with different case (jpeg)', () => {
-      const content = [
-        {
-          image_url: { url: 'data:image/JPEG;base64,ABC123' },
-          type: 'image_url',
-        },
-      ];
-      const result = convertSenseNovaMessage(content);
-      // Should not convert because case doesn't match
-      expect(result).toEqual([{ image_url: 'data:image/JPEG;base64,ABC123', type: 'image_url' }]);
     });
   });
 });

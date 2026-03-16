@@ -341,12 +341,12 @@ const AgentModal = memo(() => {
       itemsType={'group'}
       variant={'borderless'}
       onFinish={(values) => {
-        // 清理 params 中的 undefined 和 null 值，确保禁用的参数被正确移除
+        // Clean up undefined and null values in params to ensure disabled parameters are properly removed
         const cleanedValues = { ...values };
         if (cleanedValues.params) {
           const cleanedParams = { ...cleanedValues.params };
           (Object.keys(cleanedParams) as Array<keyof typeof cleanedParams>).forEach((key) => {
-            // 使用 null 作为禁用标记（JSON 可以序列化 null，而 undefined 会被忽略）
+            // Use null as disabled marker (JSON can serialize null, while undefined will be ignored)
             if (cleanedParams[key] === undefined) {
               cleanedParams[key] = null as any;
             }

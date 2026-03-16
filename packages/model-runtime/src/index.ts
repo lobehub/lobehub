@@ -1,6 +1,7 @@
 export * from './const/models';
 export * from './core/BaseAI';
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
+export type { ModelRuntimeHooks } from './core/ModelRuntime';
 export { ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
 export * from './core/RouterRuntime';
@@ -19,6 +20,7 @@ export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeGoogleAI } from './providers/google';
 export { LobeGroq } from './providers/groq';
 export { LobeHubAI } from './providers/lobehub';
+export { LobeLongCatAI } from './providers/longcat';
 export { LobeMinimaxAI } from './providers/minimax';
 export { LobeMistralAI } from './providers/mistral';
 export { LobeMoonshotAI } from './providers/moonshot';

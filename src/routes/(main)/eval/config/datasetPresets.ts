@@ -36,6 +36,26 @@ export interface DatasetPreset {
 }
 
 export const DATASET_PRESETS: Record<string, DatasetPreset> = {
+  'browsecomp': {
+    id: 'browsecomp',
+    category: 'research',
+    name: 'BrowseComp',
+    description: 'Measuring the ability for agents to browse the web, comprises 1,266 questions.',
+    icon: Globe,
+    formatDescription: 'format: Topic (category/tags), Question (input), Answer (expected)',
+    requiredFields: ['question', 'answer', 'problem_topic', 'canary'],
+    optionalFields: [],
+    fieldInference: {
+      input: ['question'],
+      expected: ['answer'],
+      choices: [],
+      category: ['problem_topic'],
+    },
+    validation: {
+      requireExpected: true,
+      expectedFormat: 'string',
+    },
+  },
   // === Deep Research / QA Category ===
   'browsecomp-zh': {
     id: 'browsecomp-zh',
@@ -51,6 +71,129 @@ export const DATASET_PRESETS: Record<string, DatasetPreset> = {
       expected: ['Answer', 'answer'],
       choices: [],
       category: ['Topic', 'topic', 'category'],
+    },
+    validation: {
+      requireExpected: true,
+      expectedFormat: 'string',
+    },
+  },
+
+  'widesearch': {
+    id: 'widesearch',
+    category: 'research',
+    name: 'WideSearch',
+    description:
+      'Evaluating the capabilities of agents in broad information-seeking tasks, consisting of 200 questions.',
+    icon: Globe,
+    formatDescription: 'format: instance_id, query (input), evaluation (expected), language',
+    requiredFields: ['instance_id', 'query', 'evaluation', 'language'],
+    optionalFields: [],
+    fieldInference: {
+      input: ['query'],
+      expected: ['evaluation'],
+      choices: [],
+      category: ['language'],
+      sortOrder: [],
+    },
+    validation: {
+      requireExpected: true,
+      expectedFormat: 'string',
+    },
+  },
+
+  'hle-text': {
+    id: 'hle-text',
+    category: 'research',
+    name: "Humanity's Last Exam, HLE (Text Only)",
+    description:
+      "Humanity's Last Exam (HLE) is a multi-modal benchmark at the frontier of human knowledge, consisting of 2150 questions.",
+    icon: Globe,
+    formatDescription:
+      'format: id, question (input), answer (expected), answer_type, rationale, raw_subject, category',
+    requiredFields: [
+      'id',
+      'question',
+      'answer',
+      'answer_type',
+      'rationale',
+      'raw_subject',
+      'category',
+    ],
+    optionalFields: ['canary'],
+    fieldInference: {
+      input: ['question'],
+      expected: ['answer'],
+      choices: [],
+      category: ['category'],
+    },
+  },
+
+  'hle-verified': {
+    id: 'hle-verified',
+    category: 'research',
+    name: "Humanity's Last Exam, HLE (Verified Answers)",
+    description:
+      "A subset of Humanity's Last Exam (HLE) with verified answers, designed to evaluate the ability to produce correct answers rather than just plausible ones.",
+    icon: Globe,
+    formatDescription:
+      'format: id, question (input), answer (expected), answer_type, rationale, raw_subject, category, Verified_Classes',
+    requiredFields: [
+      'id',
+      'question',
+      'answer',
+      'answer_type',
+      'rationale',
+      'raw_subject',
+      'category',
+      'Verified_Classes',
+    ],
+    optionalFields: ['canary'],
+    fieldInference: {
+      input: ['question'],
+      expected: ['answer'],
+      choices: [],
+      category: ['category'],
+    },
+  },
+
+  'deepsearchqa': {
+    id: 'deepsearchqa',
+    category: 'research',
+    name: 'DeepSearchQA',
+    description:
+      'A 900-prompt factuality benchmark from Google DeepMind, designed to evaluate agents on difficult multi-step information-seeking tasks across 17 different fields.',
+    icon: Globe,
+    formatDescription: 'problem, problem_category, answer, answer_type',
+    requiredFields: ['problem', 'answer', 'problem_category', 'answer_type'],
+    optionalFields: [],
+    fieldInference: {
+      input: ['problem'],
+      expected: ['answer'],
+      choices: [],
+      category: ['problem_category'],
+      sortOrder: [],
+    },
+    validation: {
+      requireExpected: true,
+      expectedFormat: 'string',
+    },
+  },
+
+  'sealqa': {
+    id: 'sealqa',
+    category: 'research',
+    name: 'SealQA',
+    description:
+      'SealQA is a new challenge benchmark for evaluating SEarch- Augmented Language models on fact-seeking questions where web search yields conflicting, noisy, or unhelpful results.',
+    icon: Globe,
+    formatDescription: 'format: question (input), answer (expected), topic (category)',
+    requiredFields: ['question', 'answer', 'topic', 'canary'],
+    optionalFields: [],
+    fieldInference: {
+      input: ['question'],
+      expected: ['answer'],
+      choices: [],
+      category: ['topic'],
     },
     validation: {
       requireExpected: true,

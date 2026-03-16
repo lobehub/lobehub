@@ -10,9 +10,11 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { LobeToolsManifest } from '@lobechat/builtin-tool-tools';
+import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { isDesktop } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
@@ -28,7 +30,16 @@ export const defaultToolIds = [
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
+  LocalSystemManifest.identifier,
+  CloudSandboxManifest.identifier,
+  TopicReferenceManifest.identifier,
 ];
+
+/**
+ * Tool IDs that are always enabled regardless of user selection.
+ * These are core system tools that the agent needs to function properly.
+ */
+export const alwaysOnToolIds = [LobeToolsManifest.identifier, SkillsManifest.identifier];
 
 export const builtinTools: LobeBuiltinTool[] = [
   {
@@ -54,7 +65,7 @@ export const builtinTools: LobeBuiltinTool[] = [
   },
   {
     discoverable: isDesktop,
-    hidden: !isDesktop,
+    hidden: true,
     identifier: LocalSystemManifest.identifier,
     manifest: LocalSystemManifest,
     type: 'builtin',
@@ -72,6 +83,7 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    hidden: true,
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
     type: 'builtin',
@@ -129,6 +141,19 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     identifier: CalculatorManifest.identifier,
     manifest: CalculatorManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: RemoteDeviceManifest.identifier,
+    manifest: RemoteDeviceManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: TopicReferenceManifest.identifier,
+    manifest: TopicReferenceManifest,
     type: 'builtin',
   },
 ];

@@ -14,7 +14,7 @@ Guidelines for using Claude Code in this LobeHub repository.
 ## Project Structure
 
 ```
-lobe-chat/
+lobehub/
 ├── apps/desktop/           # Electron desktop app
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories

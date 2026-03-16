@@ -19,6 +19,8 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import ContentBlock from '../../AssistantGroup/components/ContentBlock';
 import Usage from '../../components/Extras/Usage';
@@ -143,6 +145,7 @@ const ProcessingView = memo<{
   totalToolCalls: number;
 }>(({ blocks, assistantId, startTime, model, provider, totalToolCalls, accumulatedUsage }) => {
   const { t } = useTranslation('chat');
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const [elapsedTime, setElapsedTime] = useState(0);
   const { ref, handleScroll } = useAutoScroll<HTMLDivElement>({
     deps: [blocks],
@@ -216,7 +219,9 @@ const ProcessingView = memo<{
       </ScrollShadow>
 
       {/* Usage display */}
-      {model && provider && <Usage model={model} provider={provider} usage={accumulatedUsage} />}
+      {isDevMode && model && provider && (
+        <Usage model={model} provider={provider} usage={accumulatedUsage} />
+      )}
     </Flexbox>
   );
 });
@@ -237,6 +242,7 @@ const CompletedView = memo<{
   totalToolCalls: number;
 }>(({ blocks, assistantId, duration, totalToolCalls, model, provider, totalTokens, totalCost }) => {
   const { t } = useTranslation('chat');
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   // Split blocks: intermediate steps (all but last) and final result (last)
   const { intermediateBlocks, finalBlock } = useMemo(() => {
@@ -302,7 +308,7 @@ const CompletedView = memo<{
       <ContentBlock {...finalBlock} disableEditing assistantId={assistantId} />
 
       {/* Usage display */}
-      {model && provider && (
+      {isDevMode && model && provider && (
         <Usage model={model} provider={provider} usage={{ cost: totalCost, totalTokens }} />
       )}
     </Flexbox>

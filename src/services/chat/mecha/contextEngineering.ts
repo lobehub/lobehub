@@ -44,12 +44,9 @@ import {
 } from '@/store/tool/selectors';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
-import {
-  combineUserMemoryData,
-  resolveGlobalIdentities,
-  resolveTopicMemories,
-} from './memoryManager';
+import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { createSkillEngine } from './skillEngineering';
+import { stripActionTagsFromText } from './skillPreload';
 
 const log = debug('context-engine:contextEngineering');
 
@@ -91,6 +88,39 @@ interface ContextEngineeringContext {
   topicId?: string;
 }
 
+type TextContentPart = {
+  text?: string;
+  type?: string;
+  [key: string]: unknown;
+};
+
+const preprocessActionTags = (messages: UIChatMessage[]): UIChatMessage[] =>
+  messages.map((message) => {
+    if (message.role !== 'user') return message;
+
+    if (typeof message.content === 'string') {
+      return {
+        ...message,
+        content: stripActionTagsFromText(message.content),
+      };
+    }
+
+    if (Array.isArray(message.content)) {
+      const contentParts = message.content as TextContentPart[];
+
+      return {
+        ...message,
+        content: contentParts.map((part) =>
+          part?.type === 'text' && typeof part.text === 'string'
+            ? { ...part, text: stripActionTagsFromText(part.text) }
+            : part,
+        ),
+      } as unknown as UIChatMessage;
+    }
+
+    return message;
+  });
+
 // REVIEW: Maybe we can constrain identity, preference, exp to reorder or trim the context instead of passing everything in
 export const contextEngineering = async ({
   messages = [],
@@ -113,6 +143,8 @@ export const contextEngineering = async ({
   topicId,
   memoryContext,
 }: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
+  messages = preprocessActionTags(messages);
+
   log('tools: %o', tools);
 
   // Check if Agent Builder tool is enabled
@@ -296,13 +328,13 @@ export const contextEngineering = async ({
     .filter((kb) => kb.enabled)
     .map((kb) => ({ description: kb.description, id: kb.id, name: kb.name }));
 
-  // Resolve user memories: topic memories and global identities are independent layers
+  // Resolve user memories: topic memories and user persona are independent layers
   // Both functions now read from cache only (no network requests) to avoid blocking sendMessage
   let userMemoryData: UserMemoryData | undefined;
   if (enableUserMemories) {
     const topicMemories = resolveTopicMemories();
-    const globalIdentities = resolveGlobalIdentities();
-    userMemoryData = combineUserMemoryData(topicMemories, globalIdentities);
+    const persona = resolveUserPersona();
+    userMemoryData = combineUserMemoryData(topicMemories, persona);
   }
 
   // Resolve GTD context: plan and todos
@@ -469,6 +501,20 @@ export const contextEngineering = async ({
     );
   }
 
+  // Inject mentionedAgents independently of isAgentManagementEnabled.
+  // When user @mentions an agent, delegation context must always be injected
+  // even if the agent doesn't have agent-management tool in its config.
+  const hasMentionedAgents =
+    initialContext?.mentionedAgents && initialContext.mentionedAgents.length > 0;
+
+  if (hasMentionedAgents) {
+    agentManagementContext = {
+      ...agentManagementContext,
+      mentionedAgents: initialContext!.mentionedAgents,
+    };
+    log('mentionedAgents injected: %d agents', initialContext!.mentionedAgents!.length);
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -533,7 +579,7 @@ export const contextEngineering = async ({
     // Extended contexts - only pass when enabled
     ...(isAgentBuilderEnabled && { agentBuilderContext }),
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
-    ...(isAgentManagementEnabled && { agentManagementContext }),
+    ...((isAgentManagementEnabled || hasMentionedAgents) && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
     ...(gtdConfig && { gtd: gtdConfig }),
   });

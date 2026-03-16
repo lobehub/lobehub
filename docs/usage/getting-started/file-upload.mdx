@@ -1,0 +1,186 @@
+---
+title: File Upload & Management
+description: >-
+  Upload files to conversations and knowledge bases — documents, code, images,
+  and more. AI agents analyze and reference your files.
+tags:
+  - LobeHub
+  - File Upload
+  - Documents
+  - Knowledge Base
+  - File Management
+---
+
+# File Upload & Management
+
+LobeHub provides comprehensive file upload capabilities, enabling AI agents to access, analyze, and reference documents, images, code, and other files during conversations.
+
+## Upload Methods
+
+<Tabs>
+  <Tab title="Drag & Drop">
+    Drag files directly from your file explorer into the chat input area or conversation window:
+
+    - Works with single or multiple files
+    - Supports any file type
+    - Files upload and preview automatically
+    - Add context or questions, then send
+  </Tab>
+
+  <Tab title="Click to Upload">
+    Click the paperclip or attachment icon in the input area:
+
+    - Browse your file system
+    - Select one or more files
+    - Preview before upload
+    - Multi-select support
+  </Tab>
+
+  <Tab title="Paste from Clipboard">
+    Copy any file or take a screenshot, then press `Ctrl+V` (`Cmd+V` on Mac) in the message input:
+
+    - Screenshots appear instantly
+    - Ideal for quick screenshot questions
+    - Works with copied images and files
+  </Tab>
+</Tabs>
+
+## Supported File Types
+
+<Tabs>
+  <Tab title="Documents">
+    - **PDF** — Portable Document Format
+    - **Microsoft Office** — Word (.docx), Excel (.xlsx), PowerPoint (.pptx)
+    - **Text files** — .txt, .md, .rtf
+    - **HTML** — Web pages
+
+    **Capabilities:** Text extraction, summarization, content search, data extraction from spreadsheets.
+  </Tab>
+
+  <Tab title="Code & Data">
+    - **Code files** — .js, .ts, .py, .java, .cpp, .go, .rs, and more
+    - **Web files** — .html, .css, .json, .xml
+    - **Data formats** — .csv, .json, .yaml, .sql
+    - **Configuration** — .env, .config, .toml
+
+    **Capabilities:** Code review, bug detection, documentation generation, data parsing, syntax highlighting.
+  </Tab>
+
+  <Tab title="Images">
+    - **Photos** — .jpg, .jpeg, .png, .webp
+    - **Graphics** — .gif, .bmp, .svg
+    - **Screenshots** — Any image format
+
+    **Capabilities:** Visual analysis (with vision models), text extraction (OCR), image description, design feedback. See [Vision](/docs/usage/getting-started/vision) for details.
+  </Tab>
+
+  <Tab title="Media">
+    - **Video** — .mp4, .webm, .mov
+    - **Audio** — .mp3, .wav, .m4a, .flac
+
+    **Capabilities:** Playback, transcription (with appropriate tools), content analysis.
+  </Tab>
+</Tabs>
+
+### File Size Limits
+
+- Maximum file size: typically 50 MB per file
+- Recommended: Under 20 MB for best performance
+- Large files are automatically chunked for processing
+
+## Using Files in Conversations
+
+### Contextual Conversations
+
+When you upload files to a conversation, the AI agent can reference them directly:
+
+```
+You: [uploads API_Documentation.pdf]
+     "What are the rate limits for the free tier?"
+
+Agent: According to the API documentation, rate limits are:
+       - Free tier: 100 requests/hour
+       - Pro tier: 1,000 requests/hour
+       - Enterprise: Custom limits
+       Source: API_Documentation.pdf (page 12)
+```
+
+### Multi-File Analysis
+
+Reference multiple files in a single conversation:
+
+```
+"Compare the architectures described in design_v1.pdf and design_v2.pdf"
+"Summarize all meeting notes from this folder"
+"Find contradictions between doc_a.txt and doc_b.txt"
+```
+
+### File-Based Workflows
+
+Create workflows around files:
+
+1. Upload source material
+2. Extract information or insights
+3. Generate derived content (summaries, reports, translations)
+4. Export or iterate on results
+
+## File Viewer
+
+LobeHub includes an integrated file viewer:
+
+- **PDF Viewer** — Page navigation, zoom, text selection, search, fullscreen
+- **Code Viewer** — Syntax highlighting, line numbers, search, 50+ languages
+- **Image Viewer** — Full-resolution viewing, zoom and pan, gallery mode
+- **Office Documents** — Formatted preview preserving layout and styling
+
+Click on any file name or thumbnail in chat to open the viewer.
+
+## Knowledge Base Integration
+
+Files uploaded to conversations are automatically saved to the [Resource Library](/docs/usage/getting-started/resource). You can also organize files into dedicated knowledge bases for persistent, searchable access across all your agents.
+
+See [Resource Library](/docs/usage/getting-started/resource) for the full knowledge base workflow.
+
+## Tips for Effective File Use
+
+<AccordionGroup>
+  <Accordion title="Organize Files Logically">
+    Use descriptive filenames and organize into themed knowledge bases for better retrieval.
+  </Accordion>
+
+  <Accordion title="Include Context Documents">
+    Upload README files, glossaries, or context documents to help AI understand domain-specific content.
+  </Accordion>
+
+  <Accordion title="Keep Files Updated">
+    Replace outdated files with new versions to ensure AI references current information.
+  </Accordion>
+
+  <Accordion title="Use Text-Extractable Formats">
+    Text-extractable formats (PDF, DOCX, TXT) work better than image-only documents for search and analysis.
+  </Accordion>
+
+  <Accordion title="Split Large Documents">
+    Very large files may benefit from being split into topical sections for better search performance.
+  </Accordion>
+</AccordionGroup>
+
+## Privacy & Security
+
+<Callout type={'warning'}>
+  Uploaded files may be processed by AI services. Avoid uploading sensitive or confidential
+  information unless using a private or self-hosted deployment.
+</Callout>
+
+- Files are stored in your LobeHub instance
+- Content may be sent to AI providers for analysis
+- Knowledge base data persists in local/server database
+- Delete files when no longer needed
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/getting-started/vision'} title={'Vision & Image Understanding'} />
+
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+</Cards>

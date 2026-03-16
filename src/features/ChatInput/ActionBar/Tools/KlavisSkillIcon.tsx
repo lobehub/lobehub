@@ -6,7 +6,7 @@ import { memo } from 'react';
 export const SKILL_ICON_SIZE = 20;
 
 /**
- * Klavis 服务器图标组件
+ * Klavis server icon component
  */
 const KlavisSkillIcon = memo<Pick<KlavisServerType, 'icon' | 'label'> & { size: number }>(
   ({ icon, label, size = SKILL_ICON_SIZE }) => {

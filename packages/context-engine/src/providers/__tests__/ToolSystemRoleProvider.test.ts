@@ -44,8 +44,8 @@ describe('ToolSystemRoleProvider', () => {
 
     // Should update metadata
     expect(result.metadata.toolSystemRole).toBeDefined();
-    expect(result.metadata.toolSystemRole.injected).toBe(true);
-    expect(result.metadata.toolSystemRole.supportsFunctionCall).toBe(true);
+    expect(result.metadata.toolSystemRole!.injected).toBe(true);
+    expect(result.metadata.toolSystemRole!.supportsFunctionCall).toBe(true);
   });
 
   it('should merge tool system role with existing system message', async () => {

@@ -5,6 +5,12 @@ import debug from 'debug';
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import { type PipelineContext, type ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    userMemoryInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:UserMemoryInjector');
 
 export interface UserMemoryInjectorConfig {

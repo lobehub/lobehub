@@ -1,9 +1,11 @@
-import { type UserMemoryData, type UserMemoryIdentityItem } from '@lobechat/context-engine';
+import { type UserMemoryData } from '@lobechat/context-engine';
 import { type RetrieveMemoryResult } from '@lobechat/types';
 
 import { getChatStoreState } from '@/store/chat';
 import { getUserMemoryStoreState } from '@/store/userMemory';
-import { agentMemorySelectors, identitySelectors } from '@/store/userMemory/selectors';
+import { agentMemorySelectors } from '@/store/userMemory/selectors';
+
+type UserMemoryPersona = UserMemoryData['persona'];
 
 const EMPTY_MEMORIES: RetrieveMemoryResult = {
   activities: [],
@@ -13,20 +15,18 @@ const EMPTY_MEMORIES: RetrieveMemoryResult = {
 };
 
 /**
- * Resolves global identities from user memory store
- * Returns identities that apply across all topics
+ * Resolves user persona from user memory store
  */
-export const resolveGlobalIdentities = (): UserMemoryIdentityItem[] => {
+export const resolveUserPersona = (): UserMemoryPersona | undefined => {
   const memoryState = getUserMemoryStoreState();
-  const globalIdentities = identitySelectors.globalIdentities(memoryState);
+  const persona = memoryState.persona;
 
-  return globalIdentities.map((identity) => ({
-    capturedAt: identity.capturedAt,
-    description: identity.description,
-    id: identity.id,
-    role: identity.role,
-    type: identity.type,
-  }));
+  if (!persona?.content && !persona?.summary) return undefined;
+
+  return {
+    narrative: persona.content,
+    tagline: persona.summary,
+  };
 };
 
 /**
@@ -63,16 +63,16 @@ export const resolveTopicMemories = (ctx?: TopicMemoryResolverContext): Retrieve
 };
 
 /**
- * Combines topic memories and global identities into UserMemoryData
+ * Combines topic memories and user persona into UserMemoryData
  * This is a utility for assembling the final memory data structure
  */
 export const combineUserMemoryData = (
   topicMemories: RetrieveMemoryResult,
-  identities: UserMemoryIdentityItem[],
+  persona?: UserMemoryPersona,
 ): UserMemoryData => ({
   activities: topicMemories.activities,
   contexts: topicMemories.contexts,
   experiences: topicMemories.experiences,
-  identities,
+  persona,
   preferences: topicMemories.preferences,
 });

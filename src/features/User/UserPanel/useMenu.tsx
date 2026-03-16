@@ -2,17 +2,16 @@ import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
-import { Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
+import { BrainCircuit, Cloudy, Download, LogOut, Settings2 } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import useBusinessMenuItems from '@/business/client/features/User/useBusinessMenuItems';
+import getBusinessMenuItems from '@/business/client/features/User/getBusinessMenuItems';
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
-import DataImporter from '@/features/DataImporter';
 import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -52,7 +51,7 @@ export const useMenu = () => {
     authSelectors.isLogin(s),
     authSelectors.isLoginWithAuth(s),
   ]);
-  const businessMenuItems = useBusinessMenuItems(isLogin);
+  const businessMenuItems = getBusinessMenuItems(isLogin);
   const { isIOS, isAndroid } = usePlatform();
 
   const downloadUrl = useMemo(() => {
@@ -76,6 +75,11 @@ export const useMenu = () => {
         </Link>
       ),
     },
+    {
+      icon: <Icon icon={BrainCircuit} />,
+      key: 'memory',
+      label: <Link to="/memory">{t('tab.memory')}</Link>,
+    },
   ];
 
   const getDesktopApp: MenuProps['items'] = [
@@ -88,23 +92,7 @@ export const useMenu = () => {
         </a>
       ),
     },
-    {
-      type: 'divider',
-    },
   ];
-
-  const data = !isLogin
-    ? []
-    : ([
-        {
-          icon: <Icon icon={HardDriveDownload} />,
-          key: 'import',
-          label: <DataImporter>{t('importData')}</DataImporter>,
-        },
-        {
-          type: 'divider',
-        },
-      ].filter(Boolean) as ItemType[]);
 
   const helps: MenuProps['items'] = [
     showCloudPromotion && {
@@ -129,8 +117,7 @@ export const useMenu = () => {
 
     ...(isLogin ? settings : []),
     ...businessMenuItems,
-    ...(!isDesktop ? getDesktopApp : []),
-    ...data,
+    ...(!isDesktop ? [{ type: 'divider' as const }, ...getDesktopApp] : []),
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as MenuProps['items'];
 

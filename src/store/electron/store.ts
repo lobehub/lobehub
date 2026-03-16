@@ -14,6 +14,8 @@ import { type ElectronSettingsAction } from './actions/settings';
 import { settingsSlice } from './actions/settings';
 import { type ElectronRemoteServerAction } from './actions/sync';
 import { remoteSyncSlice } from './actions/sync';
+import { type TabPagesAction } from './actions/tabPages';
+import { createTabPagesSlice } from './actions/tabPages';
 import { type ElectronState } from './initialState';
 import { initialState } from './initialState';
 
@@ -26,7 +28,8 @@ export interface ElectronStore
     ElectronAppAction,
     ElectronSettingsAction,
     NavigationHistoryAction,
-    RecentPagesAction {
+    RecentPagesAction,
+    TabPagesAction {
   /* empty */
 }
 
@@ -34,7 +37,8 @@ type ElectronStoreAction = ElectronRemoteServerAction &
   ElectronAppAction &
   ElectronSettingsAction &
   NavigationHistoryAction &
-  RecentPagesAction;
+  RecentPagesAction &
+  TabPagesAction;
 
 const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<ElectronStore, [['zustand/devtools', never]]>>
@@ -46,6 +50,7 @@ const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = 
     settingsSlice(...parameters),
     createNavigationHistorySlice(...parameters),
     createRecentPagesSlice(...parameters),
+    createTabPagesSlice(...parameters),
   ]),
 });
 

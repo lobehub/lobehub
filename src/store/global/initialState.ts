@@ -38,13 +38,19 @@ export enum GroupSettingsTabs {
 
 export enum SettingsTabs {
   About = 'about',
+  Advanced = 'advanced',
+  /** @deprecated Use ServiceModel instead */
   Agent = 'agent',
   APIKey = 'apikey',
+  Appearance = 'appearance',
   Billing = 'billing',
+  /** @deprecated Use Appearance instead */
   ChatAppearance = 'chat-appearance',
+  /** @deprecated Use Appearance instead */
   Common = 'common',
-  Funds = 'funds',
+  Credits = 'credits',
   Hotkey = 'hotkey',
+  /** @deprecated Use ServiceModel instead */
   Image = 'image',
   LLM = 'llm',
   Memory = 'memory',
@@ -55,11 +61,13 @@ export enum SettingsTabs {
   Proxy = 'proxy',
   Referral = 'referral',
   Security = 'security',
+  ServiceModel = 'service-model',
   Skill = 'skill',
 
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
+  /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
 }
@@ -225,7 +233,7 @@ export const INITIAL_STATUS = {
   leftPanelWidth: 320,
   mobileShowTopic: false,
   modelSwitchPanelGroupMode: 'byProvider',
-  modelSwitchPanelWidth: 430,
+  modelSwitchPanelWidth: 460,
   noWideScreen: true,
   pageAgentPanelWidth: 360,
   pagePageSize: 20,

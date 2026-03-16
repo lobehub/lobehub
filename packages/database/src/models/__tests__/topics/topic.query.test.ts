@@ -895,7 +895,9 @@ describe('TopicModel - Query', () => {
     });
   });
 
-  describe('queryByKeyword', () => {
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('queryByKeyword', () => {
     it('should return topics matching topic title keyword', async () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(topics).values([

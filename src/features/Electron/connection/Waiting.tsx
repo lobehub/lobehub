@@ -109,7 +109,7 @@ const WaitingOAuth = memo<WaitingOAuthProps>(({ setWaiting, setIsOpen }) => {
     setErrorMessage(error);
   });
 
-  // 错误状态
+  // Error state
   if (errorMessage) {
     return (
       <div className={styles.container}>
@@ -134,7 +134,7 @@ const WaitingOAuth = memo<WaitingOAuthProps>(({ setWaiting, setIsOpen }) => {
     );
   }
 
-  // 正常等待状态
+  // Normal waiting state
   return (
     <div className={styles.container}>
       <div className={styles.content}>

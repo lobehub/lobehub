@@ -110,8 +110,8 @@ const ChatInput = memo<ChatInputProps>(
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
 
-    // Generation state from ConversationStore (bridged from ChatStore)
-    const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
+    // Loading state from ConversationStore (bridged from ChatStore)
+    const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
 
     // Send message error from ConversationStore
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
@@ -124,23 +124,26 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const disabled = isInputEmpty || isUploadingFiles || isAIGenerating;
+    const disabled = isInputEmpty || isUploadingFiles || isInputLoading;
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
-      async ({ clearContent, getMarkdownContent }) => {
+      async ({ clearContent, getMarkdownContent, getEditorData }) => {
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
         const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
         const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
 
-        if (currentIsUploading || isAIGenerating) return;
+        if (currentIsUploading || isInputLoading) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
+
+        // Capture editor JSON state before clearing for rich text rendering
+        const editorData = getEditorData();
 
         // Clear content immediately for responsive UX
         clearContent();
@@ -156,14 +159,14 @@ const ChatInput = memo<ChatInputProps>(
         }));
 
         // Fire and forget - send with captured message
-        await sendMessage({ files: currentFileList, message, pageSelections });
+        await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [isAIGenerating, sendMessage],
+      [isInputLoading, sendMessage],
     );
 
     const sendButtonProps: SendButtonProps = {
       disabled,
-      generating: isAIGenerating,
+      generating: isInputLoading,
       onStop: stopGenerating,
       ...customSendButtonProps,
     };
@@ -199,6 +202,7 @@ const ChatInput = memo<ChatInputProps>(
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
         sendMenu={sendMenu}
+        slashPlacement="top"
         chatInputEditorRef={(instance) => {
           if (instance) {
             setEditor(instance);

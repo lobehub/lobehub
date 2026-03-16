@@ -157,6 +157,7 @@ const DatasetCreateModal = memo<DatasetCreateModalProps>(
                 { label: t('evalMode.equals'), value: 'equals' },
                 { label: t('evalMode.contains'), value: 'contains' },
                 { label: t('evalMode.llm-rubric'), value: 'llm-rubric' },
+                { label: t('evalMode.external'), value: 'external' },
               ]}
             />
           </Form.Item>

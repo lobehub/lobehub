@@ -3,7 +3,7 @@
 import { Accordion, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
-import React, { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -12,12 +12,15 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { preferenceSelectors } from '@/store/user/selectors';
 
 import GroupItem from './GroupItem';
 
 const ByTimeMode = memo(() => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
+  const topicDisplayMode = useUserStore(preferenceSelectors.topicDisplayMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopics(s),
@@ -25,12 +28,22 @@ const ByTimeMode = memo(() => {
     s.openAllTopicsDrawer,
   ]);
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
-  const groupTopics = useChatStore(topicSelectors.groupedTopicsForSidebar(topicPageSize), isEqual);
+
+  const groupSelector = useMemo(
+    () => topicSelectors.groupedTopicsForSidebar(topicPageSize, topicDisplayMode),
+    [topicPageSize, topicDisplayMode],
+  );
+  const groupTopics = useChatStore(groupSelector, isEqual);
 
   const [topicGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.topicGroupKeys(s),
     s.updateSystemStatus,
   ]);
+
+  // Reset expanded keys when display mode changes so all groups start expanded
+  useEffect(() => {
+    updateSystemStatus({ expandTopicGroupKeys: undefined });
+  }, [topicDisplayMode, updateSystemStatus]);
 
   const expandedKeys = useMemo(() => {
     return topicGroupKeys || groupTopics.map((group) => group.id);

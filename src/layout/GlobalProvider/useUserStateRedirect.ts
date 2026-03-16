@@ -1,12 +1,8 @@
 'use client';
 
-import { OFFICIAL_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
 import { isDesktop } from '@/const/version';
-import { getDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
-import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
 import { type UserInitializationState } from '@/types/user';
 
@@ -17,45 +13,9 @@ const redirectIfNotOn = (currentPath: string, path: string) => {
 };
 
 export const useDesktopUserStateRedirect = () => {
-  const dataSyncConfig = useElectronStore((s) => s.dataSyncConfig);
-  const logout = useUserStore((s) => s.logout);
-
-  const openExternalAndLogout = useCallback(
-    async (path: string) => {
-      const baseUrl = dataSyncConfig.remoteServerUrl || OFFICIAL_URL;
-      let targetUrl = baseUrl;
-      try {
-        targetUrl = new URL(path, baseUrl).toString();
-      } catch {
-        // Ignore: keep fallback URL for external open attempt.
-      }
-
-      try {
-        const { electronSystemService } = await import('@/services/electron/system');
-        await electronSystemService.openExternalLink(targetUrl);
-      } catch {
-        // Ignore: fallback to logout flow even if IPC is unavailable.
-      }
-
-      try {
-        const { remoteServerService } = await import('@/services/electron/remoteServer');
-        await remoteServerService.clearRemoteServerConfig();
-      } catch {
-        // Ignore: fallback to logout flow even if IPC is unavailable.
-      }
-
-      await logout();
-    },
-    [dataSyncConfig.remoteServerUrl, logout],
-  );
-
-  return useCallback(
-    (state: UserInitializationState) => {
-      if (!getDesktopOnboardingCompleted()) return;
-      // Desktop onboarding is handled by desktop-only flow.
-    },
-    [openExternalAndLogout],
-  );
+  // Desktop onboarding redirect is now handled by main process (BrowserManager)
+  // No need to check localStorage here
+  return useCallback(() => {}, []);
 };
 
 export const useWebUserStateRedirect = () =>

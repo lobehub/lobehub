@@ -3,4 +3,5 @@ packages:
   - '../../packages/electron-client-ipc'
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
+  - '../../packages/local-file-shell'
   - '.'

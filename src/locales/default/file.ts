@@ -109,6 +109,7 @@ export default {
   'pageEditor.saving': 'Saving...',
   'pageEditor.titlePlaceholder': 'Untitled',
   'pageEditor.wordCount': '{{wordCount}} words',
+  'pageList.actions.openInNewTab': 'Open in New Tab',
   'pageList.copyContent': 'Copy Full Text',
   'pageList.duplicate': 'Duplicate',
   'pageList.empty': 'No pages yet. Click the button above to create your first one.',

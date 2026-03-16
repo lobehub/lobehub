@@ -99,6 +99,7 @@ export interface MessageCRUDAction {
     id: string,
     content: string,
     extra?: {
+      editorData?: Record<string, any> | null;
       imageList?: ChatImageItem[];
       metadata?: MessageMetadata;
       model?: string;
@@ -409,7 +410,7 @@ export const messageCRUDSlice: StateCreator<
       internal_dispatchMessage({
         id,
         type: 'updateMessage',
-        value: { content },
+        value: { content, editorData: extra?.editorData },
       });
     }
 
@@ -418,6 +419,7 @@ export const messageCRUDSlice: StateCreator<
       id,
       {
         content,
+        editorData: extra?.editorData,
         imageList: extra?.imageList,
         metadata: extra?.metadata,
         model: extra?.model,

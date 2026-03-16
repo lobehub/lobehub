@@ -1,4 +1,3 @@
-import { createDiscordAdapter } from '@chat-adapter/discord';
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
@@ -10,6 +9,7 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { AgentBridgeService } from './AgentBridgeService';
+import { getPlatformDescriptor, platformDescriptors } from './platforms';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -18,10 +18,8 @@ interface ResolvedAgentInfo {
   userId: string;
 }
 
-interface DiscordCredentials {
-  applicationId: string;
-  botToken: string;
-  publicKey: string;
+interface StoredCredentials {
+  [key: string]: string;
 }
 
 /**
@@ -29,17 +27,17 @@ interface DiscordCredentials {
  * and triggers message processing via AgentBridgeService.
  */
 export class BotMessageRouter {
-  /** botToken → Chat instance (for webhook routing via x-discord-gateway-token) */
+  /** botToken → Chat instance (for Discord webhook routing via x-discord-gateway-token) */
   private botInstancesByToken = new Map<string, Chat<any>>();
 
-  /** applicationId → { agentId, userId } */
-  private discordAgentMap = new Map<string, ResolvedAgentInfo>();
+  /** "platform:applicationId" → { agentId, userId } */
+  private agentMap = new Map<string, ResolvedAgentInfo>();
 
-  /** Cached Chat instances keyed by applicationId */
+  /** "platform:applicationId" → Chat instance */
   private botInstances = new Map<string, Chat<any>>();
 
-  /** Store credentials for getDiscordBotConfigs() */
-  private credentialsByAppId = new Map<string, DiscordCredentials>();
+  /** "platform:applicationId" → credentials */
+  private credentialsByKey = new Map<string, StoredCredentials>();
 
   // ------------------------------------------------------------------
   // Public API
@@ -48,21 +46,30 @@ export class BotMessageRouter {
   /**
    * Get the webhook handler for a given platform.
    * Returns a function compatible with Next.js Route Handler: `(req: Request) => Promise<Response>`
+   *
+   * @param appId  Optional application ID for direct bot lookup (e.g. Telegram bot-specific endpoints).
    */
-  getWebhookHandler(platform: string): (req: Request) => Promise<Response> {
+  getWebhookHandler(platform: string, appId?: string): (req: Request) => Promise<Response> {
     return async (req: Request) => {
       await this.ensureInitialized();
 
+      const descriptor = getPlatformDescriptor(platform);
+      if (!descriptor) {
+        return new Response('No bot configured for this platform', { status: 404 });
+      }
+
+      // Discord has special routing via gateway token header and interaction payloads
       if (platform === 'discord') {
         return this.handleDiscordWebhook(req);
       }
 
-      return new Response('No bot configured for this platform', { status: 404 });
+      // All other platforms use direct lookup by appId with fallback iteration
+      return this.handleGenericWebhook(req, platform, appId);
     };
   }
 
   // ------------------------------------------------------------------
-  // Discord webhook routing
+  // Discord webhook routing (special: gateway token + interaction payload)
   // ------------------------------------------------------------------
 
   private async handleDiscordWebhook(req: Request): Promise<Response> {
@@ -109,7 +116,7 @@ export class BotMessageRouter {
       const appId = payload.application_id;
 
       if (appId) {
-        const bot = this.botInstances.get(appId);
+        const bot = this.botInstances.get(`discord:${appId}`);
         if (bot?.webhooks && 'discord' in bot.webhooks) {
           return bot.webhooks.discord(this.cloneRequest(req, bodyBuffer));
         }
@@ -118,8 +125,9 @@ export class BotMessageRouter {
       // Not valid JSON — fall through
     }
 
-    // Fallback: try all registered bots
-    for (const bot of this.botInstances.values()) {
+    // Fallback: try all registered Discord bots
+    for (const [key, bot] of this.botInstances) {
+      if (!key.startsWith('discord:')) continue;
       if (bot.webhooks && 'discord' in bot.webhooks) {
         try {
           const resp = await bot.webhooks.discord(this.cloneRequest(req, bodyBuffer));
@@ -131,6 +139,46 @@ export class BotMessageRouter {
     }
 
     return new Response('No bot configured for Discord', { status: 404 });
+  }
+
+  // ------------------------------------------------------------------
+  // Generic webhook routing (Telegram, Lark, Feishu, and future platforms)
+  // ------------------------------------------------------------------
+
+  private async handleGenericWebhook(
+    req: Request,
+    platform: string,
+    appId?: string,
+  ): Promise<Response> {
+    log('handleGenericWebhook: platform=%s, appId=%s', platform, appId);
+
+    const bodyBuffer = await req.arrayBuffer();
+
+    // Direct lookup by applicationId
+    if (appId) {
+      const key = `${platform}:${appId}`;
+      const bot = this.botInstances.get(key);
+      if (bot?.webhooks && platform in bot.webhooks) {
+        return (bot.webhooks as any)[platform](this.cloneRequest(req, bodyBuffer));
+      }
+      log('handleGenericWebhook: no bot registered for %s', key);
+      return new Response(`No bot configured for ${platform}`, { status: 404 });
+    }
+
+    // Fallback: try all registered bots for this platform
+    for (const [key, bot] of this.botInstances) {
+      if (!key.startsWith(`${platform}:`)) continue;
+      if (bot.webhooks && platform in bot.webhooks) {
+        try {
+          const resp = await (bot.webhooks as any)[platform](this.cloneRequest(req, bodyBuffer));
+          if (resp.status !== 401) return resp;
+        } catch {
+          // try next
+        }
+      }
+    }
+
+    return new Response(`No bot configured for ${platform}`, { status: 404 });
   }
 
   private cloneRequest(req: Request, body: ArrayBuffer): Request {
@@ -185,49 +233,58 @@ export class BotMessageRouter {
       const serverDB = await getServerDB();
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
 
-      const providers = await AgentBotProviderModel.findEnabledByPlatform(
-        serverDB,
-        'discord',
-        gateKeeper,
-      );
+      // Load all supported platforms from the descriptor registry
+      for (const platform of Object.keys(platformDescriptors)) {
+        const providers = await AgentBotProviderModel.findEnabledByPlatform(
+          serverDB,
+          platform,
+          gateKeeper,
+        );
+
+        log('Found %d %s bot providers in DB', providers.length, platform);
+
+        for (const provider of providers) {
+          const { agentId, userId, applicationId, credentials } = provider;
+          const key = `${platform}:${applicationId}`;
+
+          if (this.agentMap.has(key)) {
+            log('Skipping provider %s: already registered', key);
+            continue;
+          }
+
+          const descriptor = getPlatformDescriptor(platform);
+          if (!descriptor) {
+            log('Unsupported platform: %s', platform);
+            continue;
+          }
+
+          const adapters = descriptor.createAdapter(credentials, applicationId);
+
+          const bot = this.createBot(adapters, `agent-${agentId}`);
+          this.registerHandlers(bot, serverDB, {
+            agentId,
+            applicationId,
+            platform,
+            userId,
+          });
+          await bot.initialize();
+
+          this.botInstances.set(key, bot);
+          this.agentMap.set(key, { agentId, userId });
+          this.credentialsByKey.set(key, credentials);
+
+          // Platform-specific post-registration hook
+          await descriptor.onBotRegistered?.({
+            applicationId,
+            credentials,
+            registerByToken: (token: string) => this.botInstancesByToken.set(token, bot),
+          });
+
+          log('Created %s bot for agent=%s, appId=%s', platform, agentId, applicationId);
+        }
+      }
 
       this.lastLoadedAt = Date.now();
-
-      log('Found %d Discord bot providers in DB', providers.length);
-
-      for (const provider of providers) {
-        const { agentId, userId, applicationId, credentials } = provider;
-        const { botToken, publicKey } = credentials as any;
-
-        if (this.botInstances.has(applicationId)) {
-          log('Skipping provider %s: already registered', applicationId);
-          continue;
-        }
-
-        const adapters: Record<string, any> = {
-          discord: createDiscordAdapter({
-            applicationId,
-            botToken,
-            publicKey,
-          }),
-        };
-
-        const bot = this.createBot(adapters, `agent-${agentId}`);
-        this.registerHandlers(bot, serverDB, {
-          agentId,
-          applicationId,
-          platform: 'discord',
-          userId,
-        });
-        await bot.initialize();
-
-        this.botInstances.set(applicationId, bot);
-        this.botInstancesByToken.set(botToken, bot);
-        this.discordAgentMap.set(applicationId, { agentId, userId });
-        this.credentialsByAppId.set(applicationId, { applicationId, botToken, publicKey });
-
-        log('Created Discord bot for agent=%s, appId=%s', agentId, applicationId);
-      }
     } catch (error) {
       log('Failed to load agent bots: %O', error);
     }
@@ -245,7 +302,11 @@ export class BotMessageRouter {
 
     const redisClient = getAgentRuntimeRedisClient();
     if (redisClient) {
-      config.state = createIoRedisState({ client: redisClient, logger: new ConsoleLogger() });
+      config.state = createIoRedisState({
+        client: redisClient,
+        keyPrefix: `chat-sdk:${label}`,
+        logger: new ConsoleLogger(),
+      });
     }
 
     return new Chat(config);
@@ -260,7 +321,13 @@ export class BotMessageRouter {
     const bridge = new AgentBridgeService(serverDB, userId);
 
     bot.onNewMention(async (thread, message) => {
-      log('onNewMention: agent=%s, author=%s', agentId, message.author.userName);
+      log(
+        'onNewMention: agent=%s, platform=%s, author=%s, thread=%s',
+        agentId,
+        platform,
+        message.author.userName,
+        thread.id,
+      );
       await bridge.handleMention(thread, message, {
         agentId,
         botContext: { applicationId, platform, platformThreadId: thread.id },
@@ -270,13 +337,41 @@ export class BotMessageRouter {
     bot.onSubscribedMessage(async (thread, message) => {
       if (message.author.isBot === true) return;
 
-      log('onSubscribedMessage: agent=%s, author=%s', agentId, message.author.userName);
+      log(
+        'onSubscribedMessage: agent=%s, platform=%s, author=%s, thread=%s',
+        agentId,
+        platform,
+        message.author.userName,
+        thread.id,
+      );
 
       await bridge.handleSubscribedMessage(thread, message, {
         agentId,
         botContext: { applicationId, platform, platformThreadId: thread.id },
       });
     });
+
+    // Register onNewMessage handler based on platform descriptor
+    const descriptor = getPlatformDescriptor(platform);
+    if (descriptor?.handleDirectMessages) {
+      bot.onNewMessage(/./, async (thread, message) => {
+        if (message.author.isBot === true) return;
+
+        log(
+          'onNewMessage (%s catch-all): agent=%s, author=%s, thread=%s, text=%s',
+          platform,
+          agentId,
+          message.author.userName,
+          thread.id,
+          message.text?.slice(0, 80),
+        );
+
+        await bridge.handleMention(thread, message, {
+          agentId,
+          botContext: { applicationId, platform, platformThreadId: thread.id },
+        });
+      });
+    }
   }
 }
 

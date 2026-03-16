@@ -1,7 +1,8 @@
 'use client';
 
+import { ThemeProvider } from '@lobehub/ui';
 import { type ComponentType, type ReactElement } from 'react';
-import { createElement, lazy, memo, Suspense, useCallback, useEffect } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import {
   createBrowserRouter,
@@ -14,6 +15,7 @@ import {
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
+import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { useGlobalStore } from '@/store/global';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
@@ -111,7 +113,11 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
     notifyChunkError();
   }
 
-  return createElement(ErrorCapture, { error, reset });
+  return (
+    <ThemeProvider theme={{ cssVar: { key: 'lobe-vars' } }}>
+      <ErrorCapture error={error} reset={reset} />
+    </ThemeProvider>
+  );
 };
 
 /**
@@ -146,6 +152,16 @@ export interface CreateAppRouterOptions {
   basename?: string;
 }
 
+const RouterRoot = memo(() => (
+  <SPAGlobalProvider>
+    <BusinessGlobalProvider>
+      <Outlet />
+    </BusinessGlobalProvider>
+  </SPAGlobalProvider>
+));
+
+RouterRoot.displayName = 'RouterRoot';
+
 /**
  * Create a React Router data router with root error boundary.
  * Use with <RouterProvider router={router} />.
@@ -153,9 +169,7 @@ export interface CreateAppRouterOptions {
  * @example
  * const router = createAppRouter(desktopRoutes, { basename: '/app' });
  * createRoot(document.getElementById('root')!).render(
- *   <SPAGlobalProvider>
- *     <RouterProvider router={router} />
- *   </SPAGlobalProvider>
+ *   <RouterProvider router={router} />
  * );
  */
 export function createAppRouter(routes: RouteObject[], options?: CreateAppRouterOptions) {
@@ -163,11 +177,7 @@ export function createAppRouter(routes: RouteObject[], options?: CreateAppRouter
     [
       {
         children: routes,
-        element: (
-          <BusinessGlobalProvider>
-            <Outlet />
-          </BusinessGlobalProvider>
-        ),
+        element: <RouterRoot />,
         errorElement: <ErrorBoundary resetPath="/" />,
         path: '/',
       },

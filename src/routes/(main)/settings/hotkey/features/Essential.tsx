@@ -25,6 +25,19 @@ const HotkeySetting = memo(() => {
 
   if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
+  const clearHotkeyBinding = async (id: HotkeyItem['id']) => {
+    if (!hotkey[id]) return;
+
+    setLoading(true);
+    form.setFieldValue(id, '');
+
+    try {
+      await setSettings({ hotkey: { [id]: '' } });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const mapHotkeyItem = (item: HotkeyItem) => {
     const hotkeyConflicts = Object.entries(hotkey)
       .map(([key, value]) => {
@@ -36,10 +49,13 @@ const HotkeySetting = memo(() => {
     return {
       children: (
         <HotkeyInput
+          allowClear={!item.nonEditable}
           disabled={item.nonEditable}
           hotkeyConflicts={hotkeyConflicts}
           placeholder={t('hotkey.record')}
           resetValue={item.keys}
+          texts={{ clear: t('hotkey.clearBinding') }}
+          onClear={() => void clearHotkeyBinding(item.id)}
         />
       ),
       desc: hotkeyMeta[`${item.id}.desc`] ? t(`${item.id}.desc`, { ns: 'hotkey' }) : undefined,
@@ -66,8 +82,11 @@ const HotkeySetting = memo(() => {
       variant={'filled'}
       onValuesChange={async (values) => {
         setLoading(true);
-        await setSettings({ hotkey: values });
-        setLoading(false);
+        try {
+          await setSettings({ hotkey: values });
+        } finally {
+          setLoading(false);
+        }
       }}
       {...FORM_STYLE}
     />

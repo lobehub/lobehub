@@ -339,6 +339,14 @@ export const createRouterRuntime = ({
               channelId ?? '',
               remark ?? '',
             );
+          } else {
+            log(
+              'request success without fallback for model=%s apiType=%s channelId=%s remark=%s',
+              model,
+              resolvedApiType,
+              channelId ?? '',
+              remark ?? '',
+            );
           }
 
           params

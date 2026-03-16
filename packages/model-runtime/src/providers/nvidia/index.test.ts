@@ -83,7 +83,7 @@ describe('LobeNvidiaAI - custom features', () => {
       });
     });
 
-    it('should use enable_thinking and clear_thinking for GLM models when enabled', () => {
+    it('should use enable_thinking and clear_thinking for GLM models', () => {
       const payload = {
         model: 'z-ai/glm5',
         messages: [{ role: 'user', content: 'test' }],

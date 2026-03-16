@@ -4,7 +4,7 @@ import { type PublicState, type State } from './initialState';
 import { initialState } from './initialState';
 
 export interface Action {
-  getJSONState: () => any;
+  getJSONState: () => Record<string, any> | undefined;
   getMarkdownContent: () => string;
   handleSendButton: () => void;
   handleStop: () => void;
@@ -26,7 +26,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   ...publicState,
 
   getJSONState: () => {
-    return get().editor?.getDocument('json');
+    return get().editor?.getDocument('json') as Record<string, any> | undefined;
   },
   getMarkdownContent: () => {
     return String(get().editor?.getDocument('markdown') || '').trimEnd();
@@ -39,6 +39,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     get().onSend?.({
       clearContent: () => editor?.cleanDocument(),
       editor: editor!,
+      getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
     });
   },

@@ -181,7 +181,14 @@ class OIDCAdapter {
         try {
           const { userId } = await getUserAuth();
           if (userId) {
-            payload.accountId = userId;
+            // For DeviceCode, only set record.userId (DB column) without modifying payload.
+            // oidc-provider uses payload.accountId to track authorization state:
+            // it's unset during inFlight stage and set only after consent completes.
+            // Injecting accountId into payload would cause the token endpoint to
+            // mistake an in-flight code as fully authorized.
+            if (this.name !== 'DeviceCode') {
+              payload.accountId = userId;
+            }
             record.userId = userId;
             log('[%s] Setting userId from auth context: %s', this.name, userId);
           }

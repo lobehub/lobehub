@@ -21,14 +21,24 @@ const useModelBuiltinSearch = (s: AgentStoreState) =>
 const searchFCModel = (s: AgentStoreState) =>
   chatConfigByIdSelectors.getSearchFCModelById(s.activeAgentId || '')(s);
 
+// Use raw chatConfig value, not the selector with business logic that may force false
 const enableHistoryCount = (s: AgentStoreState) =>
-  chatConfigByIdSelectors.getEnableHistoryCountById(s.activeAgentId || '')(s);
+  chatConfigByIdSelectors.getChatConfigById(s.activeAgentId || '')(s).enableHistoryCount;
 
 const historyCount = (s: AgentStoreState): number =>
   chatConfigByIdSelectors.getHistoryCountById(s.activeAgentId || '')(s);
 
 const isMemoryToolEnabled = (s: AgentStoreState) =>
   chatConfigByIdSelectors.isMemoryToolEnabledById(s.activeAgentId || '')(s);
+
+const isLocalSystemEnabled = (s: AgentStoreState) =>
+  chatConfigByIdSelectors.isLocalSystemEnabledById(s.activeAgentId || '')(s);
+
+const isCloudSandboxEnabled = (s: AgentStoreState) =>
+  chatConfigByIdSelectors.getRuntimeModeById(s.activeAgentId || '')(s) === 'cloud';
+
+const skillActivateMode = (s: AgentStoreState) =>
+  chatConfigByIdSelectors.getSkillActivateModeById(s.activeAgentId || '')(s);
 
 const enableHistoryDivider =
   (historyLength: number, currentIndex: number) => (s: AgentStoreState) => {
@@ -48,7 +58,10 @@ export const agentChatConfigSelectors = {
   enableHistoryDivider,
   historyCount,
   isAgentEnableSearch,
+  isCloudSandboxEnabled,
+  isLocalSystemEnabled,
   isMemoryToolEnabled,
   searchFCModel,
+  skillActivateMode,
   useModelBuiltinSearch,
 };

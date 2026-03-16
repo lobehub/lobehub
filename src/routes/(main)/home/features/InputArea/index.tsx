@@ -18,7 +18,7 @@ import SkillInstallBanner from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
-const leftActions: ActionKeys[] = ['model', 'search', 'memory', 'fileUpload', 'tools'];
+const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
 
 const InputArea = () => {
   const { loading, send, inboxAgentId } = useSend();
@@ -62,8 +62,9 @@ const InputArea = () => {
     [],
   );
 
+  const hideStarterList = inputActiveMode && ['agent', 'group', 'write'].includes(inputActiveMode);
   const showSuggestQuestions =
-    inputActiveMode && ['agent', 'group', 'write'].includes(inputActiveMode);
+    !inputActiveMode || ['agent', 'group', 'write'].includes(inputActiveMode);
 
   const extraActionItems = useMemo(
     () =>
@@ -93,6 +94,7 @@ const InputArea = () => {
             agentId={inboxAgentId}
             allowExpand={false}
             leftActions={leftActions}
+            slashPlacement="bottom"
             chatInputEditorRef={(instance) => {
               if (!instance) return;
               useChatStore.setState({ mainInputEditor: instance });
@@ -112,13 +114,14 @@ const InputArea = () => {
               dropdownPlacement="bottomLeft"
               extraActionItems={extraActionItems}
               inputContainerProps={inputContainerProps}
+              showRuntimeConfig={false}
             />
           </ChatInputProvider>
         </DragUploadZone>
       </Flexbox>
 
       {/* Keep StarterList mounted to prevent useInitBuiltinAgent hooks from re-running */}
-      <div style={{ display: showSuggestQuestions ? 'none' : undefined }}>
+      <div style={{ display: hideStarterList ? 'none' : undefined }}>
         <StarterList />
       </div>
       <AnimatePresence mode="popLayout">
@@ -127,7 +130,8 @@ const InputArea = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 8 }}
             initial={{ opacity: 0, scale: 0.98, y: 8 }}
-            key={inputActiveMode}
+            key={inputActiveMode ?? 'chat'}
+            style={{ marginTop: inputActiveMode ? 0 : 24 }}
             transition={{
               duration: 0.2,
               ease: [0.4, 0, 0.2, 1],

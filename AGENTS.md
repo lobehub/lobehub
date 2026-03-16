@@ -18,7 +18,7 @@ You are developing an open-source, modern-design AI Agent Workspace: LobeHub (pr
 ## Directory Structure
 
 ```
-lobe-chat/
+lobehub/
 ├── apps/desktop/           # Electron desktop app
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories

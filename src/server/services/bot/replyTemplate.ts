@@ -46,6 +46,7 @@ export interface RenderStepParams extends StepPresentationData {
   elapsedMs?: number;
   lastContent?: string;
   lastToolsCalling?: ToolCallItem[];
+  platform?: string;
   totalToolCalls?: number;
 }
 
@@ -123,11 +124,12 @@ export function formatDuration(ms: number): string {
 
 function renderInlineStats(params: {
   elapsedMs?: number;
+  platform?: string;
   totalCost: number;
   totalTokens: number;
   totalToolCalls?: number;
 }): { footer: string; header: string } {
-  const { elapsedMs, totalToolCalls, totalTokens, totalCost } = params;
+  const { elapsedMs, platform, totalToolCalls, totalTokens, totalCost } = params;
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
 
   const header =
@@ -137,7 +139,10 @@ function renderInlineStats(params: {
 
   if (totalTokens <= 0) return { footer: '', header };
 
-  const footer = `\n\n-# ${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}`;
+  const stats = `${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}`;
+  // Discord uses -# for small text; other platforms render it as literal text
+  const useSmallText = !platform || platform === 'discord';
+  const footer = useSmallText ? `\n\n-# ${stats}` : `\n\n${stats}`;
 
   return { footer, header };
 }
@@ -159,6 +164,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
     content,
     elapsedMs,
     lastContent,
+    platform,
     reasoning,
     toolsCalling,
     totalCost,
@@ -168,6 +174,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
   const displayContent = (content || lastContent)?.trim();
   const { header, footer } = renderInlineStats({
     elapsedMs,
+    platform,
     totalCost,
     totalTokens,
     totalToolCalls,
@@ -205,6 +212,7 @@ export function renderToolExecuting(params: RenderStepParams): string {
     elapsedMs,
     lastContent,
     lastToolsCalling,
+    platform,
     toolsResult,
     totalCost,
     totalTokens,
@@ -212,6 +220,7 @@ export function renderToolExecuting(params: RenderStepParams): string {
   } = params;
   const { header, footer } = renderInlineStats({
     elapsedMs,
+    platform,
     totalCost,
     totalTokens,
     totalToolCalls,
@@ -240,15 +249,19 @@ export function renderFinalReply(
   params: {
     elapsedMs?: number;
     llmCalls: number;
+    platform?: string;
     toolCalls: number;
     totalCost: number;
     totalTokens: number;
   },
 ): string {
-  const { totalTokens, totalCost, llmCalls, toolCalls, elapsedMs } = params;
+  const { totalTokens, totalCost, llmCalls, toolCalls, elapsedMs, platform } = params;
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
   const calls = llmCalls > 1 || toolCalls > 0 ? ` | llm×${llmCalls} | tools×${toolCalls}` : '';
-  const footer = `-# ${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
+  const stats = `${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
+  // Discord uses -# for small text; other platforms render it as literal text
+  const useSmallText = !platform || platform === 'discord';
+  const footer = useSmallText ? `-# ${stats}` : stats;
   return `${content.trimEnd()}\n\n${footer}`;
 }
 

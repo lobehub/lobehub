@@ -9,11 +9,14 @@
 import { type ToolExecutionContext } from '../types';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
+import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { notebookRuntime } from './notebook';
+import { remoteDeviceRuntime } from './remoteDevice';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
 import { toolsActivatorRuntime } from './tools';
+import { topicReferenceRuntime } from './topicReference';
 import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
 import { webBrowsingRuntime } from './webBrowsing';
 
@@ -41,6 +44,9 @@ registerRuntimes([
   skillsRuntime,
   memoryRuntime,
   toolsActivatorRuntime,
+  localSystemRuntime,
+  remoteDeviceRuntime,
+  topicReferenceRuntime,
 ]);
 
 // ==================== Registry API ====================

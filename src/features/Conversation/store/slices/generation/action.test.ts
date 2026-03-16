@@ -1,7 +1,7 @@
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
@@ -9,6 +9,7 @@ import { createStore } from '../../index';
 // Mock useChatStore
 const mockCancelOperations = vi.fn();
 const mockCancelOperation = vi.fn();
+const mockCancelSendMessageInServer = vi.fn();
 const mockRegenerateUserMessage = vi.fn();
 const mockRegenerateAssistantMessage = vi.fn();
 const mockContinueGenerationMessage = vi.fn();
@@ -32,6 +33,7 @@ vi.mock('@/store/chat', () => ({
       messageLoadingIds: [],
       cancelOperations: mockCancelOperations,
       cancelOperation: mockCancelOperation,
+      cancelSendMessageInServer: mockCancelSendMessageInServer,
       regenerateUserMessage: mockRegenerateUserMessage,
       regenerateAssistantMessage: mockRegenerateAssistantMessage,
       continueGenerationMessage: mockContinueGenerationMessage,
@@ -71,7 +73,7 @@ describe('Generation Actions', () => {
 
       expect(mockCancelOperations).toHaveBeenCalledWith(
         {
-          type: AI_RUNTIME_OPERATION_TYPES,
+          type: INPUT_LOADING_OPERATION_TYPES,
           status: 'running',
           agentId: 'session-1',
           topicId: 'topic-1',

@@ -15,11 +15,12 @@ import { type ResolvedAgentConfig } from './mecha';
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
+  const tz = 'UTC';
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `Current date: ${year}-${month}-${day}`;
+  const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
+  const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
+  const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
+  return `Current date: ${year}-${month}-${day} (${tz})`;
 };
 
 /**
@@ -829,7 +830,7 @@ describe('ChatService', () => {
 </plugins>`,
                 role: 'system',
               },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n', role: 'user' },
+              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
             ],
           },
           expect.anything(),
@@ -982,7 +983,7 @@ describe('ChatService', () => {
 </plugins>`,
                 role: 'system',
               },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n', role: 'user' },
+              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
             ],
           },
           expect.anything(),
@@ -1020,7 +1021,7 @@ describe('ChatService', () => {
                 content: 'system\n\n' + getCurrentDateContent(),
                 role: 'system',
               },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n', role: 'user' },
+              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
             ],
           },
           expect.anything(),

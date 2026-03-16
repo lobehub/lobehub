@@ -25,7 +25,7 @@ Lobe Chat is an open-source project, and we welcome your collaboration. Before y
 📦 Clone your forked repository to your local machine using the `git clone` command:
 
 ```bash
-git clone https://github.com/YourUsername/lobe-chat.git
+git clone https://github.com/YourUsername/lobehub.git
 ```
 
 ## Create a New Branch
@@ -64,7 +64,7 @@ Please keep your commits focused and clear. And remember to be kind to your fell
 ⚙️ Periodically, sync your forked repository with the original (upstream) repository to stay up-to-date with the latest changes.
 
 ```bash
-git remote add upstream https://github.com/lobehub/lobe-chat.git
+git remote add upstream https://github.com/lobehub/lobehub.git
 git fetch upstream
 git merge upstream/main
 ```

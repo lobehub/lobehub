@@ -14,6 +14,9 @@ description: TypeScript code style and optimization guidelines. Use when writing
 - Prefer `as const satisfies XyzInterface` over plain `as const`
 - Prefer `@ts-expect-error` over `@ts-ignore` over `as any`
 - Avoid meaningless null/undefined parameters; design strict function contracts
+- Prefer ES module augmentation (`declare module '...'`) over `namespace`; do not introduce `namespace`-based extension patterns
+- When a type needs extensibility, expose a small mergeable interface at the source type and let each feature/plugin augment it locally instead of centralizing all extension fields in one registry file
+- For package-local extensibility patterns like `PipelineContext.metadata`, define the metadata fields next to the processor/provider/plugin that reads or writes them
 
 ## Async Patterns
 
@@ -50,3 +53,4 @@ description: TypeScript code style and optimization guidelines. Use when writing
 - Never log user private information (API keys, etc.)
 - Don't use `import { log } from 'debug'` directly (logs to console)
 - Use `console.error` in catch blocks instead of debug package
+- Always log the error in `.catch()` callbacks — silent `.catch(() => fallback)` swallows failures and makes debugging impossible

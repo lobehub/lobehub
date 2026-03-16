@@ -34,7 +34,10 @@ export default {
     'Current topic is not saved, please save it first to use subtopic feature',
   'cancel': 'Cancel',
   'changelog': 'Changelog',
+  'alreadyUpToDate': 'Already Up to Date',
   'checkForUpdates': 'Check for Updates',
+  'downloadingUpdate': 'Downloading {{percent}}%',
+  'restartToUpdate': 'Restart to Update',
   'clientDB.autoInit.title': 'Initializing PGlite Database',
   'clientDB.error.desc':
     'PGlite failed to initialize. Retry first. If it helps, open Self-serve fixes and follow the steps. Still stuck after a few tries? Use Report issue to send us the error details.',
@@ -218,6 +221,10 @@ export default {
   'cmdk.search.assistant': 'Agent',
 
   'cmdk.search.assistants': 'Agents',
+
+  'cmdk.search.chatGroup': 'Agent Team',
+
+  'cmdk.search.chatGroups': 'Agent Teams',
 
   'cmdk.search.communityAgent': 'Community Agent',
 
@@ -416,6 +423,7 @@ export default {
   'navPanel.searchAgent': 'Search Agent...',
   'navPanel.searchResultEmpty': 'No search results found',
   'new': 'New',
+  'pro': 'Pro',
   'noContent': 'No content',
   'oauth': 'SSO Login',
   'officialSite': 'Official Website',
@@ -476,6 +484,7 @@ export default {
   'tab.files': 'Files',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
+  'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.pages': 'Pages',

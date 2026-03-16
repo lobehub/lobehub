@@ -2,7 +2,7 @@ import type { ModelProviderCard } from '@/types/llm';
 
 const Moonshot: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'kimi-latest',
+  checkModel: 'kimi-k2.5',
   description:
     'Moonshot, from Moonshot AI (Beijing Moonshot Technology), offers multiple NLP models for use cases like content creation, research, recommendations, and medical analysis, with strong long-context and complex generation support.',
   id: 'moonshot',
@@ -12,7 +12,7 @@ const Moonshot: ModelProviderCard = {
   settings: {
     disableBrowserRequest: true, // CORS error
     proxyUrl: {
-      placeholder: 'https://api.moonshot.ai/v1',
+      placeholder: 'https://api.moonshot.cn/v1',
     },
     responseAnimation: {
       speed: 2,

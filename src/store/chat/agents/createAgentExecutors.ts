@@ -42,6 +42,7 @@ import { messageService } from '@/services/message';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 import { type ChatStore } from '@/store/chat/store';
+import { getCompressionCandidateMessageIds } from '@/store/chat/utils/compression';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getFileStoreState } from '@/store/file/store';
 import { sleep } from '@/utils/sleep';
@@ -56,6 +57,16 @@ const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/craw': 0.002,
   'lobe-web-browsing/search': 0.001,
 };
+
+const isAbortError = (error: unknown, abortController?: AbortController) =>
+  !!abortController?.signal.aborted ||
+  (error instanceof Error &&
+    (error.name === 'AbortError' ||
+      error.message.includes('aborted') ||
+      error.message.includes('cancelled')));
+
+const createAbortError = () =>
+  Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
 
 /**
  * Creates custom executors for the Chat Agent Runtime
@@ -806,6 +817,28 @@ export const createAgentExecutors = (context: {
         context.get().completeOperation(executeToolOpId);
 
         const executionTime = Math.round(performance.now() - startTime);
+
+        // Fallback for undefined result (e.g. tool executor not found or returned nothing)
+        if (result === undefined || result === null) {
+          const fallbackResult = {
+            content: `Tool ${toolName} execution failed: no result returned`,
+            error: { type: 'ToolExecutionError', message: 'Tool returned no result' },
+            success: false,
+          };
+
+          if (toolOperationId) {
+            context.get().failOperation(toolOperationId, {
+              message: 'Tool returned no result',
+              type: 'ToolExecutionError',
+            });
+          }
+
+          events.push({ id: chatToolPayload.id, result: fallbackResult, type: 'tool_result' });
+
+          const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
+          return { events, newState: { ...state, messages: updatedMessages } };
+        }
+
         const isSuccess = result && !result.error;
 
         log(
@@ -2534,7 +2567,7 @@ export const createAgentExecutors = (context: {
 
       // Get message IDs from dbMessagesMap (raw db messages)
       const dbMessages = context.get().dbMessagesMap[context.messageKey] || [];
-      const messageIds = dbMessages.map((m) => m.id).filter(Boolean);
+      const messageIds = getCompressionCandidateMessageIds(dbMessages);
 
       if (!topicId || messageIds.length === 0) {
         // No topicId or no messages, skip compression
@@ -2618,13 +2651,16 @@ export const createAgentExecutors = (context: {
         let summaryContent = '';
 
         // Start generateSummary operation attached to the compressed group message
-        const { operationId: summaryOperationId } = context.get().startOperation({
-          context: { ...getOperationContext(), messageId: messageGroupId },
-          type: 'generateSummary',
-          parentOperationId: compressOperationId,
-        });
+        const { abortController: summaryAbortController, operationId: summaryOperationId } = context
+          .get()
+          .startOperation({
+            context: { ...getOperationContext(), messageId: messageGroupId },
+            type: 'generateSummary',
+            parentOperationId: compressOperationId,
+          });
 
         await chatService.fetchPresetTaskResult({
+          abortController: summaryAbortController,
           params: { ...compressionPayload, model, provider },
           onMessageHandle: (chunk) => {
             if (chunk.type === 'text') {
@@ -2645,6 +2681,8 @@ export const createAgentExecutors = (context: {
             });
           },
         });
+
+        if (summaryAbortController.signal.aborted) throw createAbortError();
 
         log(`${stagePrefix} Generated summary: %d chars`, summaryContent.length);
 
@@ -2701,6 +2739,34 @@ export const createAgentExecutors = (context: {
           } as AgentRuntimeContext,
         };
       } catch (error) {
+        if (isAbortError(error)) {
+          log(`${stagePrefix} Compression cancelled`);
+
+          if (context.get().operations[compressOperationId]?.status === 'running') {
+            context.get().completeOperation(compressOperationId, { cancelled: true });
+          }
+
+          events.push({ type: 'compression_error', error });
+
+          return {
+            events,
+            newState: state,
+            nextContext: {
+              payload: {
+                compressedMessages: messages,
+                skipped: true,
+              } as GeneralAgentCompressionResultPayload,
+              phase: 'compression_result',
+              session: {
+                messageCount: state.messages.length,
+                sessionId: state.operationId,
+                status: 'running',
+                stepCount: state.stepCount + 1,
+              },
+            } as AgentRuntimeContext,
+          };
+        }
+
         log(`${stagePrefix} Compression failed: %O`, error);
 
         // Complete the compress_context operation with error

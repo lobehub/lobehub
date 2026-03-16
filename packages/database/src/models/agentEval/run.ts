@@ -31,7 +31,7 @@ export class AgentEvalRunModel {
     datasetId?: string;
     limit?: number;
     offset?: number;
-    status?: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+    status?: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
   }) => {
     const conditions = [eq(agentEvalRuns.userId, this.userId)];
 

@@ -488,7 +488,9 @@ describe('UserMemoryModel', () => {
         expect(result.total).toBe(2);
       });
 
-      it('should filter by text query', async () => {
+      // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+      const isServerDB = process.env.TEST_SERVER_DB === '1';
+      it.skipIf(!isServerDB)('should filter by text query', async () => {
         await createContextPair({ title: 'Apple project' });
         await createContextPair({ title: 'Banana project' });
 

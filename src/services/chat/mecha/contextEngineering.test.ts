@@ -39,11 +39,12 @@ afterEach(() => {
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
+  const tz = 'UTC';
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `Current date: ${year}-${month}-${day}`;
+  const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
+  const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
+  const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
+  return `Current date: ${year}-${month}-${day} (${tz})`;
 };
 
 describe('contextEngineering', () => {
@@ -291,6 +292,34 @@ describe('contextEngineering', () => {
     expect(systemMessage!.content).toContain(historySummary);
     expect(Object.keys(systemMessage!).length).toEqual(2);
   });
+
+  it('should strip raw action tags from user messages before sending to model', async () => {
+    vi.spyOn(isCanUseFCModule, 'isCanUseFC').mockReturnValue(true);
+
+    const messages: UIChatMessage[] = [
+      {
+        role: 'user',
+        content:
+          '<action type="grep" category="skill" /> <action type="lobe-notebook" category="tool" /> hi',
+        createdAt: Date.now(),
+        id: 'selected-skill-user',
+        updatedAt: Date.now(),
+      },
+    ];
+
+    const result = await contextEngineering({
+      messages,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+    expect(result[1].role).toBe('user');
+    expect(result[1].content).toContain('hi');
+    expect(result[1].content).not.toContain('<action type="grep" category="skill" />');
+    expect(result[1].content).not.toContain('<action type="lobe-notebook" category="tool" />');
+  });
+
   describe('getAssistantContent', () => {
     it('should handle assistant message with imageList and content', async () => {
       // Mock isCanUseVision to return true for vision models
@@ -464,7 +493,7 @@ describe('contextEngineering', () => {
         },
       ];
 
-      // Mock topic memories and global identities separately
+      // Mock topic memories and user persona separately
       vi.spyOn(memoryManager, 'resolveTopicMemories').mockReturnValue({
         activities: [],
         contexts: [
@@ -489,7 +518,7 @@ describe('contextEngineering', () => {
         experiences: [],
         preferences: [],
       });
-      vi.spyOn(memoryManager, 'resolveGlobalIdentities').mockReturnValue([]);
+      vi.spyOn(memoryManager, 'resolveUserPersona').mockReturnValue(undefined);
 
       const result = await contextEngineering({
         enableUserMemories: true,

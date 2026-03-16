@@ -1,4 +1,4 @@
-import { type SendMessageServerResponse } from '@lobechat/types';
+import { type CreateMessageParams, type SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, StructureOutputSchema } from '@lobechat/types';
 import debug from 'debug';
 
@@ -117,6 +117,31 @@ export const aiChatRouter = router({
         }
       }
 
+      let parentId = input.newUserMessage.parentId;
+
+      if (input.preloadMessages?.length) {
+        log('creating %d preload messages before user message', input.preloadMessages.length);
+
+        for (const preloadMessage of input.preloadMessages) {
+          const preloadItem = await ctx.messageModel.create({
+            agentId: input.agentId,
+            content: preloadMessage.content,
+            groupId: input.groupId,
+            metadata: preloadMessage.metadata,
+            parentId,
+            plugin: preloadMessage.plugin as CreateMessageParams['plugin'],
+            role: preloadMessage.role,
+            sessionId,
+            threadId,
+            tool_call_id: preloadMessage.tool_call_id,
+            tools: preloadMessage.tools as CreateMessageParams['tools'],
+            topicId,
+          });
+
+          parentId = preloadItem.id;
+        }
+      }
+
       // create user message
       log('creating user message with content length: %d', input.newUserMessage.content.length);
 
@@ -128,10 +153,11 @@ export const aiChatRouter = router({
       const userMessageItem = await ctx.messageModel.create({
         agentId: input.agentId,
         content: input.newUserMessage.content,
+        editorData: input.newUserMessage.editorData,
         files: input.newUserMessage.files,
         groupId: input.groupId,
         metadata: userMessageMetadata,
-        parentId: input.newUserMessage.parentId,
+        parentId,
         role: 'user',
         sessionId,
         threadId,

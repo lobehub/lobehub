@@ -90,6 +90,7 @@ export default defineConfig({
       '**/public/**',
       '**/apps/desktop/**',
       '**/apps/mobile/**',
+      '**/apps/cli/**',
       '**/packages/**',
       '**/e2e/**',
     ],

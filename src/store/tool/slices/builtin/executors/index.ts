@@ -14,6 +14,7 @@ import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/executor';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
+import { topicReferenceExecutor } from '@lobechat/builtin-tool-topic-reference/executor';
 
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
 import { notebookExecutor } from './lobe-notebook';
@@ -140,5 +141,6 @@ registerExecutors([
   skillStoreExecutor,
   skillsExecutor,
   toolsActivatorExecutor,
+  topicReferenceExecutor,
   webBrowsing,
 ]);

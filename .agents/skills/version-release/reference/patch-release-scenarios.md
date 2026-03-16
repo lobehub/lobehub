@@ -91,12 +91,13 @@ Database schema changes that need to be released independently. These require a 
 
 ### Steps
 
-1. **Create release branch from canary**
+1. **Create release branch from main and cherry-pick migration commits**
 
 ```bash
-git checkout canary
-git pull origin canary
+git checkout main
+git pull --rebase origin main
 git checkout -b release/db-migration-{name}
+git cherry-pick <migration-commit-hash>
 git push -u origin release/db-migration-{name}
 ```
 
@@ -104,6 +105,7 @@ git push -u origin release/db-migration-{name}
    - What tables/columns are added, modified, or removed
    - Whether the migration is backwards-compatible
    - Any action required by self-hosted users
+   - **Migration owner**: Use the actual PR author (retrieve via `gh pr view <number> --json author --jq '.author.login'` or `git log` commit author), never hardcode a username
 
 3. **Create PR to main** with the migration changelog as the PR body
 

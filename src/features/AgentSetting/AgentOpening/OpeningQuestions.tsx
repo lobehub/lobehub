@@ -45,7 +45,7 @@ const OpeningQuestions = memo(() => {
   const openingQuestions = useStore(selectors.openingQuestions);
   const updateConfig = useStore((s) => s.setAgentConfig);
 
-  // 乐观更新，不然会抖
+  // Optimistic update to avoid jitter
   const [questions, setQuestions] = useMergeState(openingQuestions, {
     onChange: (questions: string[]) => updateConfig({ openingQuestions: questions }),
     value: openingQuestions,
@@ -75,7 +75,7 @@ const OpeningQuestions = memo(() => {
     [openingQuestions, setQuestions],
   );
 
-  // 处理拖拽排序后的逻辑
+  // Handle logic after drag-and-drop sorting
   const handleSortEnd = useCallback(
     (items: QuestionItem[]) => {
       setQuestions(items.map((item) => item.content));

@@ -1,5 +1,9 @@
 {
-  "common.checkUpdates": "Comprobando actualizaciones...",
+  "common.checkUpdates": "Comprobar actualizaciones...",
+  "common.checkingUpdates": "Comprobando actualizaciones...",
+  "common.downloadingUpdate": "Descargando actualización...",
+  "common.isLatestVersion": "Ya está actualizado",
+  "common.restartToUpdate": "Reiniciar para actualizar",
   "context.copyImage": "Copiar imagen",
   "context.copyImageAddress": "Copiar dirección de la imagen",
   "context.copyLink": "Copiar enlace",

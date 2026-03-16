@@ -4,6 +4,15 @@ import debug from 'debug';
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    toolDiscoveryContext?: {
+      injected: boolean;
+      toolsCount: number;
+    };
+  }
+}
+
 const log = debug('context-engine:provider:ToolDiscoveryProvider');
 
 export interface ToolDiscoveryMeta {

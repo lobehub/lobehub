@@ -100,6 +100,7 @@
   "pageEditor.saving": "Salvando...",
   "pageEditor.titlePlaceholder": "Sem título",
   "pageEditor.wordCount": "{{wordCount}} palavras",
+  "pageList.actions.openInNewTab": "Abrir em Nova Aba",
   "pageList.copyContent": "Copiar Texto Completo",
   "pageList.duplicate": "Duplicar",
   "pageList.empty": "Nenhuma página ainda. Clique no botão acima para criar a primeira.",

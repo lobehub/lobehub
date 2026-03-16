@@ -11,7 +11,7 @@ const mockStreamEventManager = {
 };
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
-  StreamEventManager: vi.fn(() => mockStreamEventManager),
+  createStreamEventManager: vi.fn(() => mockStreamEventManager),
 }));
 
 describe('/api/agent/stream route', () => {
@@ -93,7 +93,7 @@ describe('/api/agent/stream route', () => {
             readCount++;
           }
         }
-      } catch (error) {
+      } catch {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -164,7 +164,7 @@ describe('/api/agent/stream route', () => {
             readCount++;
           }
         }
-      } catch (error) {
+      } catch {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -246,7 +246,7 @@ describe('/api/agent/stream route', () => {
             readCount++;
           }
         }
-      } catch (error) {
+      } catch {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -316,7 +316,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
             readCount++;
           }
         }
-      } catch (error) {
+      } catch {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -425,7 +425,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
             readCount++;
           }
         }
-      } catch (error) {
+      } catch {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -485,7 +485,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
       let capturedCallback: ((events: any[]) => void) | null = null;
 
       mockStreamEventManager.subscribeStreamEvents.mockImplementation(
-        (operationId, lastEventId, callback, signal) => {
+        (operationId, lastEventId, callback, _signal) => {
           capturedCallback = callback;
           return Promise.resolve();
         },
@@ -521,7 +521,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
       let capturedCallback: ((events: any[]) => void) | null = null;
 
       mockStreamEventManager.subscribeStreamEvents.mockImplementation(
-        (operationId, lastEventId, callback, signal) => {
+        (operationId, lastEventId, callback, _signal) => {
           capturedCallback = callback;
           return Promise.resolve();
         },
@@ -557,7 +557,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
       let capturedCallback: ((events: any[]) => void) | null = null;
 
       mockStreamEventManager.subscribeStreamEvents.mockImplementation(
-        (operationId, lastEventId, callback, signal) => {
+        (operationId, lastEventId, callback, _signal) => {
           capturedCallback = callback;
           return Promise.resolve();
         },
@@ -689,7 +689,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
       let capturedCallback: ((events: any[]) => void) | null = null;
 
       mockStreamEventManager.subscribeStreamEvents.mockImplementation(
-        (operationId, lastEventId, callback, signal) => {
+        (operationId, lastEventId, callback, _signal) => {
           capturedCallback = callback;
           return new Promise(() => {});
         },
@@ -724,7 +724,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
       let capturedCallback: ((events: any[]) => void) | null = null;
 
       mockStreamEventManager.subscribeStreamEvents.mockImplementation(
-        (operationId, lastEventId, callback, signal) => {
+        (operationId, lastEventId, callback, _signal) => {
           capturedCallback = callback;
           return new Promise(() => {});
         },
@@ -777,8 +777,9 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
         },
       );
 
-      await GET(request);
+      const response = await GET(request);
 
+      expect(response.status).toBe(200);
       expect(capturedCallback).toBeDefined();
       expect(capturedSignal).toBeDefined();
       expect(capturedSignal!.aborted).toBe(false);

@@ -1,4 +1,4 @@
-import { ModelProvider,zhipu as zhipuChatModels } from 'model-bank';
+import { ModelProvider, zhipu as zhipuChatModels } from 'model-bank';
 
 import {
   createOpenAICompatibleRuntime,

@@ -37,6 +37,9 @@ const styles = createStaticStyles(({ css }) => ({
       margin-inline-end: var(--ant-margin-xs);
     }
   `,
+  trigger: css`
+    outline: none;
+  `,
 }));
 
 export type ActionDropdownMenuItem = MenuItemType;
@@ -267,7 +270,9 @@ const ActionDropdown = memo<ActionDropdownProps>(
         onOpenChange={handleOpenChange}
         onOpenChangeComplete={handleOpenChangeComplete}
       >
-        <DropdownMenuTrigger {...resolvedTriggerProps}>{children}</DropdownMenuTrigger>
+        <DropdownMenuTrigger className={styles.trigger} {...resolvedTriggerProps}>
+          {children}
+        </DropdownMenuTrigger>
         <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
           <DropdownMenuPositioner
             {...positionerProps}

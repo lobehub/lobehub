@@ -1,6 +1,11 @@
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
-import { type StepContextTodos, type UIChatMessage } from '@lobechat/types';
+import {
+  type StepActivatedSkill,
+  type StepContextTodos,
+  type UIChatMessage,
+} from '@lobechat/types';
 
 import { chatHelpers } from '../../../helpers';
 import { type ChatStoreState } from '../../../initialState';
@@ -185,6 +190,42 @@ export const selectActivatedToolIdsFromMessages = (
   return ids.size > 0 ? [...ids] : undefined;
 };
 
+// ============= Activated Skills Selectors ========== //
+
+/**
+ * Accumulate activated skills from all activateSkill messages.
+ *
+ * Skills once activated remain active for the rest of the conversation.
+ * Uses skill id as key to deduplicate (later calls update the entry).
+ *
+ * @param messages - Array of chat messages to scan
+ * @returns Array of activated skills, or undefined if none
+ */
+export const selectActivatedSkillsFromMessages = (
+  messages: UIChatMessage[],
+): StepActivatedSkill[] | undefined => {
+  const skillsMap = new Map<string, StepActivatedSkill>();
+
+  for (const msg of messages) {
+    if (
+      msg.role === 'tool' &&
+      msg.plugin?.identifier === SkillsIdentifier &&
+      msg.plugin?.apiName === 'activateSkill' &&
+      msg.pluginState?.id &&
+      msg.pluginState?.name
+    ) {
+      const id = msg.pluginState.id as string;
+      skillsMap.set(id, {
+        description: msg.pluginState.description as string | undefined,
+        id,
+        name: msg.pluginState.name as string,
+      });
+    }
+  }
+
+  return skillsMap.size > 0 ? [...skillsMap.values()] : undefined;
+};
+
 // ============= GTD Todos Selectors ========== //
 
 /**
@@ -256,6 +297,7 @@ export const dbMessageSelectors = {
   isCurrentDbChatLoaded,
   latestDbMessage,
   latestUserMessage,
+  selectActivatedSkillsFromMessages,
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 };

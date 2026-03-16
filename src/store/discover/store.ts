@@ -16,6 +16,8 @@ import { type PluginAction } from './slices/plugin/action';
 import { createPluginSlice } from './slices/plugin/action';
 import { type ProviderAction } from './slices/provider/action';
 import { createProviderSlice } from './slices/provider/action';
+import { type SkillAction } from './slices/skill';
+import { createSkillSlice } from './slices/skill';
 import { type SocialAction } from './slices/social';
 import { createSocialSlice } from './slices/social';
 import { type UserAction } from './slices/user';
@@ -29,6 +31,7 @@ export type DiscoverStore = MCPAction &
   ProviderAction &
   ModelAction &
   PluginAction &
+  SkillAction &
   SocialAction &
   UserAction;
 
@@ -38,6 +41,7 @@ type DiscoverStoreAction = MCPAction &
   ProviderAction &
   ModelAction &
   PluginAction &
+  SkillAction &
   SocialAction &
   UserAction;
 
@@ -51,6 +55,7 @@ const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = 
     createProviderSlice(...parameters),
     createModelSlice(...parameters),
     createPluginSlice(...parameters),
+    createSkillSlice(...parameters),
     createSocialSlice(...parameters),
     createUserSlice(...parameters),
   ]);

@@ -88,6 +88,11 @@ export interface OperationState {
   isAIGenerating: boolean;
 
   /**
+   * Check if input should be in loading state (from sendMessage through AI generation)
+   */
+  isInputLoading: boolean;
+
+  /**
    * Send message error for this context (if any)
    */
   sendMessageError?: string;
@@ -120,5 +125,6 @@ export const DEFAULT_OPERATION_STATE: OperationState = {
   getMessageOperationState: () => DEFAULT_MESSAGE_OPERATION_STATE,
   getToolOperationState: () => DEFAULT_TOOL_OPERATION_STATE,
   isAIGenerating: false,
+  isInputLoading: false,
   sendMessageError: undefined,
 };

@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       threadId,
       topicId,
       userId,
-      operationId,
+      operationId: _operationId,
       reason,
       status,
       cost,

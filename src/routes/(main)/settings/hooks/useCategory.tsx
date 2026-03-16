@@ -8,20 +8,16 @@ import {
   Coins,
   CreditCard,
   Database,
+  EllipsisIcon,
   EthernetPort,
   Gift,
-  Image as ImageIcon,
   Info,
   KeyboardIcon,
   KeyIcon,
   Map,
-  MessageSquareTextIcon,
-  Mic2,
   PaletteIcon,
-  PieChart,
   Sparkles,
   TerminalSquare,
-  UserCircle,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,11 +32,11 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
-  Account = 'account',
-  AIConfig = 'ai-config',
-  Profile = 'profile',
+  Agent = 'agent',
+  General = 'general',
   Subscription = 'subscription',
   System = 'system',
 }
@@ -62,15 +58,14 @@ export const useCategory = () => {
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { enableSTT, hideDocs, showAiImage, showApiKeyManage } =
-    useServerConfigStore(featureFlagsSelectors);
+  const { hideDocs, showApiKeyManage } = useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
-  // Process avatar URL for desktop environment
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
     if (isDesktop && avatar.startsWith('/') && remoteServerUrl) {
@@ -82,10 +77,10 @@ export const useCategory = () => {
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
-    // Profile group - Profile-related settings
-    const profileItems: CategoryItem[] = [
+    // General group
+    const generalItems: CategoryItem[] = [
       {
-        icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : UserCircle,
+        icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : undefined,
         key: SettingsTabs.Profile,
         label: username ? username : tAuth('tab.profile'),
       },
@@ -94,66 +89,10 @@ export const useCategory = () => {
         key: SettingsTabs.Stats,
         label: tAuth('tab.stats'),
       },
-      showApiKeyManage && {
-        icon: KeyIcon,
-        key: SettingsTabs.APIKey,
-        label: tAuth('tab.apikey'),
-      },
-    ].filter(Boolean) as CategoryItem[];
-
-    groups.push({
-      items: profileItems,
-      key: SettingsGroupKey.Profile,
-      title: t('group.profile'),
-    });
-
-    if (enableBusinessFeatures) {
-      const subscriptionItems: CategoryItem[] = [
-        {
-          icon: Map,
-          key: SettingsTabs.Plans,
-          label: tSubscription('tab.plans'),
-        },
-        {
-          icon: Coins,
-          key: SettingsTabs.Funds,
-          label: tSubscription('tab.funds'),
-        },
-        {
-          icon: PieChart,
-          key: SettingsTabs.Usage,
-          label: tSubscription('tab.usage'),
-        },
-        {
-          icon: CreditCard,
-          key: SettingsTabs.Billing,
-          label: tSubscription('tab.billing'),
-        },
-        {
-          icon: Gift,
-          key: SettingsTabs.Referral,
-          label: tSubscription('tab.referral'),
-        },
-      ];
-
-      groups.push({
-        items: subscriptionItems,
-        key: SettingsGroupKey.Subscription,
-        title: t('group.subscription'),
-      });
-    }
-
-    // Account group - personal settings
-    const commonItems: CategoryItem[] = [
       {
         icon: PaletteIcon,
-        key: SettingsTabs.Common,
-        label: t('tab.common'),
-      },
-      {
-        icon: MessageSquareTextIcon,
-        key: SettingsTabs.ChatAppearance,
-        label: t('tab.chatAppearance'),
+        key: SettingsTabs.Appearance,
+        label: t('tab.appearance'),
       },
       !mobile && {
         icon: KeyboardIcon,
@@ -163,13 +102,30 @@ export const useCategory = () => {
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
-      items: commonItems,
-      key: SettingsGroupKey.Account,
+      items: generalItems,
+      key: SettingsGroupKey.General,
       title: t('group.common'),
     });
 
-    // AI configuration group - AI-related settings
-    const aiConfigItems: CategoryItem[] = [
+    // Subscription group
+    if (enableBusinessFeatures) {
+      const subscriptionItems: CategoryItem[] = [
+        { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
+        { icon: ChartColumnBigIcon, key: SettingsTabs.Usage, label: t('tab.usage') },
+        { icon: Coins, key: SettingsTabs.Credits, label: tSubscription('tab.credits') },
+        { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
+        { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },
+      ];
+
+      groups.push({
+        items: subscriptionItems,
+        key: SettingsGroupKey.Subscription,
+        title: t('group.subscription'),
+      });
+    }
+
+    // Agent group
+    const agentItems: CategoryItem[] = [
       {
         icon: Brain,
         key: SettingsTabs.Provider,
@@ -177,8 +133,8 @@ export const useCategory = () => {
       },
       {
         icon: Sparkles,
-        key: SettingsTabs.Agent,
-        label: t('tab.agent'),
+        key: SettingsTabs.ServiceModel,
+        label: t('tab.serviceModel'),
       },
       {
         icon: Blocks,
@@ -190,25 +146,20 @@ export const useCategory = () => {
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
       },
-      showAiImage && {
-        icon: ImageIcon,
-        key: SettingsTabs.Image,
-        label: t('tab.image'),
-      },
-      enableSTT && {
-        icon: Mic2,
-        key: SettingsTabs.TTS,
-        label: t('tab.tts'),
+      showApiKeyManage && {
+        icon: KeyIcon,
+        key: SettingsTabs.APIKey,
+        label: tAuth('tab.apikey'),
       },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
-      items: aiConfigItems,
-      key: SettingsGroupKey.AIConfig,
+      items: agentItems,
+      key: SettingsGroupKey.Agent,
       title: t('group.aiConfig'),
     });
 
-    // System group - system-related settings
+    // System group
     const systemItems: CategoryItem[] = [
       isDesktop && {
         icon: EthernetPort,
@@ -224,6 +175,16 @@ export const useCategory = () => {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      isDevMode && {
+        icon: KeyIcon,
+        key: SettingsTabs.APIKey,
+        label: tAuth('tab.apikey'),
+      },
+      {
+        icon: EllipsisIcon,
+        key: SettingsTabs.Advanced,
+        label: t('tab.advanced'),
       },
       !hideDocs && {
         icon: Info,
@@ -242,12 +203,12 @@ export const useCategory = () => {
   }, [
     t,
     tAuth,
-    enableSTT,
+    tSubscription,
     enableBusinessFeatures,
     hideDocs,
     mobile,
-    showAiImage,
     showApiKeyManage,
+    isDevMode,
     avatarUrl,
     username,
   ]);

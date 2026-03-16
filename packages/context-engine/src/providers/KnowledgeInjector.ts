@@ -5,6 +5,14 @@ import debug from 'debug';
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    filesCount?: number;
+    knowledgeBasesCount?: number;
+    knowledgeInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:KnowledgeInjector');
 
 export interface KnowledgeInjectorConfig {

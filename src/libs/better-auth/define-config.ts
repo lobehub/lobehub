@@ -253,6 +253,12 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         },
       },
     },
+    rateLimit: {
+      customRules: {
+        '/request-password-reset': { max: 3, window: 60 },
+        '/send-verification-email': { max: 3, window: 60 },
+      },
+    },
     plugins: [
       ...customOptions.plugins,
       emailWhitelist(),

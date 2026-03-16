@@ -1194,7 +1194,7 @@ describe('MessageModel Query Tests', () => {
   });
 
   describe('queryAll', () => {
-    it('should return all messages belonging to the user in ascending order', async () => {
+    it('should return all messages belonging to the user in descending order', async () => {
       // Create test data
       await serverDB.insert(messages).values([
         {
@@ -1223,10 +1223,10 @@ describe('MessageModel Query Tests', () => {
       // Call queryAll method
       const result = await messageModel.queryAll();
 
-      // Assert result
+      // Assert result - descending by createdAt
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('1');
-      expect(result[1].id).toBe('2');
+      expect(result[0].id).toBe('2');
+      expect(result[1].id).toBe('1');
     });
   });
 
@@ -1403,7 +1403,9 @@ describe('MessageModel Query Tests', () => {
     });
   });
 
-  describe('queryByKeyWord', () => {
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('queryByKeyWord', () => {
     it('should query messages by keyword', async () => {
       // Create test data
       await serverDB.insert(messages).values([

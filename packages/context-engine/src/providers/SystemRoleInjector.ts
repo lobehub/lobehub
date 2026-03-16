@@ -3,6 +3,12 @@ import debug from 'debug';
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    systemRoleInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:SystemRoleInjector');
 
 export interface SystemRoleInjectorConfig {

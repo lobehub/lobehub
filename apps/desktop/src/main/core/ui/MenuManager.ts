@@ -1,6 +1,7 @@
-import { Menu } from 'electron';
+import type { Menu } from 'electron';
 
-import { IMenuPlatform, MenuOptions, createMenuImpl } from '@/menus';
+import type {IMenuPlatform, MenuOptions } from '@/menus';
+import { createMenuImpl } from '@/menus';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';

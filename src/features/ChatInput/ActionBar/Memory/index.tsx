@@ -1,25 +1,25 @@
+import { BrainOffIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
-import { Brain, BrainCircuit } from 'lucide-react';
+import { Brain } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import Action from '../components/Action';
 import Controls from './Controls';
+import { useMemoryEnabled } from './useMemoryEnabled';
 
 const Memory = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [isLoading, isEnabled] = useAgentStore((s) => [
-    agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
-    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
-  ]);
+  const isLoading = useAgentStore((s) => agentByIdSelectors.isAgentConfigLoadingById(agentId)(s));
+  const isEnabled = useMemoryEnabled(agentId);
   const isMobile = useIsMobile();
 
   if (isLoading) return <Action disabled icon={Brain} />;
@@ -27,7 +27,7 @@ const Memory = memo(() => {
   return (
     <Action
       color={isEnabled ? cssVar.colorInfo : undefined}
-      icon={isEnabled ? BrainCircuit : Brain}
+      icon={isEnabled ? Brain : BrainOffIcon}
       showTooltip={false}
       title={t('memory.title')}
       popover={{

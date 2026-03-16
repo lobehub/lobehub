@@ -11,10 +11,10 @@ interface ElapsedTimeProps {
 const getSessionStorageKey = (generationId: string) => `generation_start_time_${generationId}`;
 
 /**
- * 显示图片生成的耗时
- * - 少于1分钟：显示秒数，精度0.1秒
- * - 1分钟或以上：显示分钟数，精度1位小数
- * - 使用 sessionStorage 在页面刷新时保持准确计时
+ * Display elapsed time for image generation
+ * - Less than 1 minute: show seconds with 0.1s precision
+ * - 1 minute or more: show minutes with 1 decimal precision
+ * - Uses sessionStorage to maintain accurate timing across page refreshes
  */
 export function ElapsedTime({ generationId, isActive }: ElapsedTimeProps) {
   const [elapsedTime, setElapsedTime] = useState<number | null>(null);
@@ -23,13 +23,13 @@ export function ElapsedTime({ generationId, isActive }: ElapsedTimeProps) {
 
   useEffect(() => {
     if (!isActive) {
-      // 如果不是活跃状态，清理计时器并重置时间
+      // If not active, clear the timer and reset elapsed time
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
         frameRef.current = null;
       }
 
-      // 清理 sessionStorage 中的数据
+      // Clear data from sessionStorage
       const storageKey = getSessionStorageKey(generationId);
       sessionStorage.removeItem(storageKey);
       setElapsedTime(null);
@@ -38,7 +38,7 @@ export function ElapsedTime({ generationId, isActive }: ElapsedTimeProps) {
 
     const storageKey = getSessionStorageKey(generationId);
 
-    // 只在组件挂载时设置开始时间
+    // Only set start time when the component mounts
     const clientStartTime = (() => {
       const stored = sessionStorage.getItem(storageKey);
       if (stored) return Number(stored);
@@ -66,18 +66,18 @@ export function ElapsedTime({ generationId, isActive }: ElapsedTimeProps) {
     };
   }, [generationId, isActive]);
 
-  // 格式化耗时显示
+  // Format elapsed time display
   const formattedTime = (() => {
     if (elapsedTime === null) return '';
 
     const totalSeconds = elapsedTime / 10;
 
-    // 少于60秒，显示秒数，精度0.1秒
+    // Less than 60 seconds: show seconds with 0.1s precision
     if (totalSeconds < 60) {
       return `${totalSeconds.toFixed(1)}s`;
     }
 
-    // 60秒或以上，显示分钟数，精度1位小数
+    // 60 seconds or more: show minutes with 1 decimal precision
     const minutes = totalSeconds / 60;
     return `${minutes.toFixed(1)}min`;
   })();

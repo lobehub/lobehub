@@ -13,6 +13,7 @@ import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
+import { getPlatformDescriptor } from './platforms';
 import {
   renderError,
   renderFinalReply,
@@ -67,19 +68,16 @@ async function safeReaction(fn: () => Promise<void>, label: string): Promise<voi
 }
 
 /**
- * Workaround for Chat SDK adapter bug: addReaction/removeReaction only use
- * `channelId` (parts[2]) from the decoded thread ID, ignoring `threadId` (parts[3]).
- * In Discord threads, the correct channel for API calls is the thread ID itself.
+ * Extract the parent channel thread ID for reacting to the original mention message.
+ * In Discord, when a thread is created on a message, that message still belongs to
+ * the parent channel. To add/remove reactions on it, we need to use the parent channel ID.
  *
- * This function rewrites the encoded thread ID so that the adapter picks up
- * the thread channel ID in the `channelId` position.
- *
- * e.g. "discord:guild:parentChannel:thread" → "discord:guild:thread"
+ * e.g. "discord:guild:parentChannel:thread" → "discord:guild:parentChannel"
  */
-function rewriteThreadIdForReaction(threadId: string): string {
+function parentChannelThreadId(threadId: string): string {
   const parts = threadId.split(':');
-  if (parts.length >= 4 && parts[0] === 'discord' && parts[3]) {
-    return `discord:${parts[1]}:${parts[3]}`;
+  if (parts.length >= 4 && parts[0] === 'discord') {
+    return `discord:${parts[1]}:${parts[2]}`;
   }
   return threadId;
 }
@@ -137,17 +135,31 @@ export class AgentBridgeService {
     );
 
     // Immediate feedback: mark as received + show typing
+    // The mention message lives in the parent channel (not the thread), so we strip
+    // the thread segment from the ID to target the parent channel for reactions.
     await safeReaction(
       () =>
-        thread.adapter.addReaction(
-          rewriteThreadIdForReaction(thread.id),
-          message.id,
-          RECEIVED_EMOJI,
-        ),
+        thread.adapter.addReaction(parentChannelThreadId(thread.id), message.id, RECEIVED_EMOJI),
       'add eyes',
     );
-    await thread.subscribe();
+
+    // Only subscribe to actual Discord threads, not regular channels.
+    // Subscribing to a regular channel would cause the bot to respond to ALL messages in it.
+    // Discord thread ID format: "discord:guild:channel[:thread]" — the 4th segment is present
+    // only when the message is inside a Discord thread.
+    const isDiscordTopLevelChannel =
+      botContext?.platform === 'discord' &&
+      !(thread.adapter.decodeThreadId(thread.id) as { threadId?: string }).threadId;
+    if (!isDiscordTopLevelChannel) {
+      await thread.subscribe();
+    }
+
     await thread.startTyping();
+
+    // Keep typing indicator alive (Telegram's expires after ~5s)
+    const typingInterval = setInterval(() => {
+      thread.startTyping().catch(() => {});
+    }, 4000);
 
     // Fetch channel context for Discord context injection
     const channelContext = await this.fetchChannelContext(thread);
@@ -161,11 +173,13 @@ export class AgentBridgeService {
         agentId,
         botContext,
         channelContext,
+        reactionThreadId: parentChannelThreadId(thread.id),
         trigger: 'bot',
       });
 
       // Persist topic mapping and channel context in thread state for follow-up messages
-      if (topicId) {
+      // Skip for non-threaded Discord channels (no subscribe = no follow-up)
+      if (topicId && !isDiscordTopLevelChannel) {
         await thread.setState({ channelContext, topicId });
         log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
       }
@@ -174,9 +188,11 @@ export class AgentBridgeService {
       const msg = error instanceof Error ? error.message : String(error);
       await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
     } finally {
+      clearInterval(typingInterval);
       // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
-        await this.removeReceivedReaction(thread, message);
+        // Mention message is in parent channel
+        await this.removeReceivedReaction(thread, message, parentChannelThreadId(thread.id));
       }
     }
   }
@@ -206,16 +222,17 @@ export class AgentBridgeService {
     const queueMode = isQueueAgentRuntimeEnabled();
 
     // Immediate feedback: mark as received + show typing
+    // Subscribed messages are inside the thread, so pass thread.id directly
     await safeReaction(
-      () =>
-        thread.adapter.addReaction(
-          rewriteThreadIdForReaction(thread.id),
-          message.id,
-          RECEIVED_EMOJI,
-        ),
+      () => thread.adapter.addReaction(thread.id, message.id, RECEIVED_EMOJI),
       'add eyes',
     );
     await thread.startTyping();
+
+    // Keep typing indicator alive (Telegram's expires after ~5s)
+    const typingInterval = setInterval(() => {
+      thread.startTyping().catch(() => {});
+    }, 4000);
 
     try {
       // executeWithCallback handles progress message (post + edit at each step)
@@ -227,10 +244,22 @@ export class AgentBridgeService {
         trigger: 'bot',
       });
     } catch (error) {
+      // If the cached topicId references a deleted topic (FK violation),
+      // clear thread state and retry as a fresh mention instead of surfacing the DB error.
+      const errMsg = error instanceof Error ? error.message : String(error);
+      if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+        log(
+          'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
+          topicId,
+        );
+        await thread.setState({ ...threadState, topicId: undefined });
+        return this.handleMention(thread, message, { agentId, botContext });
+      }
+
       log('handleSubscribedMessage error: %O', error);
-      const msg = error instanceof Error ? error.message : String(error);
-      await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${msg}\n\`\`\``);
+      await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
     } finally {
+      clearInterval(typingInterval);
       // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
         await this.removeReceivedReaction(thread, message);
@@ -248,6 +277,8 @@ export class AgentBridgeService {
       agentId: string;
       botContext?: ChatTopicBotContext;
       channelContext?: DiscordChannelContext;
+      /** Thread ID to use for removing the user message reaction in queue mode */
+      reactionThreadId?: string;
       topicId?: string;
       trigger?: string;
     },
@@ -270,11 +301,12 @@ export class AgentBridgeService {
       agentId: string;
       botContext?: ChatTopicBotContext;
       channelContext?: DiscordChannelContext;
+      reactionThreadId?: string;
       topicId?: string;
       trigger?: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    const { agentId, botContext, channelContext, topicId, trigger } = opts;
+    const { agentId, botContext, channelContext, reactionThreadId, topicId, trigger } = opts;
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
@@ -305,10 +337,14 @@ export class AgentBridgeService {
     const callbackUrl = urlJoin(baseURL, '/api/agent/webhooks/bot-callback');
 
     // Shared webhook body with bot context
+    // reactionChannelId: the Discord channel where the user message lives (for reaction removal).
+    // For mention messages this is the parent channel; for thread messages it's the thread itself.
+    const reactionChannelId = reactionThreadId ? reactionThreadId.split(':')[2] : undefined;
     const webhookBody = {
       applicationId: botContext?.applicationId,
       platformThreadId: botContext?.platformThreadId,
       progressMessageId,
+      reactionChannelId,
       userMessageId: userMessage.id,
     };
 
@@ -379,6 +415,8 @@ export class AgentBridgeService {
       log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
     }
 
+    const platform = botContext?.platform;
+
     // Track the last LLM content and tool calls for showing during tool execution
     let lastLLMContent = '';
     let lastToolsCalling:
@@ -431,6 +469,7 @@ export class AgentBridgeService {
                 elapsedMs: getElapsedMs(),
                 lastContent: lastLLMContent,
                 lastToolsCalling,
+                platform,
                 totalToolCalls,
               });
 
@@ -475,12 +514,15 @@ export class AgentBridgeService {
                   const finalText = renderFinalReply(lastAssistantContent, {
                     elapsedMs: getElapsedMs(),
                     llmCalls: finalState.usage?.llm?.apiCalls ?? 0,
+                    platform,
                     toolCalls: finalState.usage?.tools?.totalCalls ?? 0,
                     totalCost: finalState.cost?.total ?? 0,
                     totalTokens: finalState.usage?.llm?.tokens?.total ?? 0,
                   });
 
-                  const chunks = splitMessage(finalText);
+                  const descriptor = platform ? getPlatformDescriptor(platform) : undefined;
+                  const charLimit = descriptor?.charLimit;
+                  const chunks = splitMessage(finalText, charLimit);
 
                   if (progressMessage) {
                     try {
@@ -691,18 +733,18 @@ export class AgentBridgeService {
 
   /**
    * Remove the received reaction from a user message (fire-and-forget).
+   * @param reactionThreadId - The thread ID to use for the reaction API call.
+   *   For messages in parent channels (handleMention), use parentChannelThreadId(thread.id).
+   *   For messages inside threads (handleSubscribedMessage), use thread.id directly.
    */
   private async removeReceivedReaction(
     thread: Thread<ThreadState>,
     message: Message,
+    reactionThreadId?: string,
   ): Promise<void> {
     await safeReaction(
       () =>
-        thread.adapter.removeReaction(
-          rewriteThreadIdForReaction(thread.id),
-          message.id,
-          RECEIVED_EMOJI,
-        ),
+        thread.adapter.removeReaction(reactionThreadId ?? thread.id, message.id, RECEIVED_EMOJI),
       'remove eyes',
     );
   }

@@ -1,6 +1,10 @@
 /* eslint-disable perfectionist/sort-interfaces */
 import type { FileContent, KnowledgeBaseInfo, PageContentContext } from '@lobechat/prompts';
-import type { RuntimeInitialContext, RuntimeStepContext } from '@lobechat/types';
+import type {
+  RuntimeInitialContext,
+  RuntimeSelectedSkill,
+  RuntimeStepContext,
+} from '@lobechat/types';
 
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
@@ -15,6 +19,7 @@ import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
+import type { PipelineContextMetadata } from '../../types';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -207,6 +212,8 @@ export interface MessagesEngineParams {
   // ========== System date ==========
   /** Whether to inject current date into system message (default: true) */
   enableSystemDate?: boolean;
+  /** User timezone for system date formatting (e.g. 'Asia/Shanghai') */
+  timezone?: string | null;
 
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */
@@ -237,6 +244,8 @@ export interface MessagesEngineParams {
   // ========== Skills ==========
   /** Skills configuration */
   skillsConfig?: SkillsConfig;
+  /** Skills explicitly selected by the user for the current request */
+  selectedSkills?: RuntimeSelectedSkill[];
 
   // ========== Tool Discovery ==========
   /** Tool Discovery configuration (available tools for dynamic activation) */
@@ -297,7 +306,7 @@ export interface MessagesEngineResult {
   /** Processed messages in OpenAI format */
   messages: OpenAIChatMessage[];
   /** Processing metadata */
-  metadata: Record<string, any>;
+  metadata: PipelineContextMetadata;
   /** Processing statistics */
   stats: {
     /** Number of processors executed */

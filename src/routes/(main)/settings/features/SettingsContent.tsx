@@ -1,6 +1,7 @@
 'use client';
 
-import { Fragment } from 'react';
+import { Fragment, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
@@ -9,6 +10,14 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import { componentMap } from './componentMap';
 
+const REDIRECT_MAP: Record<string, string> = {
+  [SettingsTabs.Common]: SettingsTabs.Appearance,
+  [SettingsTabs.ChatAppearance]: SettingsTabs.Appearance,
+  [SettingsTabs.Agent]: SettingsTabs.ServiceModel,
+  [SettingsTabs.TTS]: SettingsTabs.ServiceModel,
+  [SettingsTabs.Image]: SettingsTabs.ServiceModel,
+};
+
 interface SettingsContentProps {
   activeTab?: string;
   mobile?: boolean;
@@ -16,28 +25,30 @@ interface SettingsContentProps {
 
 const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (activeTab && REDIRECT_MAP[activeTab]) {
+      navigate(`/settings/${REDIRECT_MAP[activeTab]}`, { replace: true });
+    }
+  }, [activeTab, navigate]);
 
   const renderComponent = (tab: string) => {
-    const Component = componentMap[tab as keyof typeof componentMap] || componentMap.common;
+    const Component = componentMap[tab as keyof typeof componentMap] || componentMap.appearance;
     if (!Component) return null;
 
     const componentProps: { mobile?: boolean } = {};
     if (
       [
         SettingsTabs.About,
-        SettingsTabs.Agent,
+        SettingsTabs.ServiceModel,
         SettingsTabs.Provider,
         SettingsTabs.Profile,
         SettingsTabs.Stats,
+        SettingsTabs.Usage,
         SettingsTabs.Security,
         ...(enableBusinessFeatures
-          ? [
-              SettingsTabs.Plans,
-              SettingsTabs.Funds,
-              SettingsTabs.Usage,
-              SettingsTabs.Billing,
-              SettingsTabs.Referral,
-            ]
+          ? [SettingsTabs.Plans, SettingsTabs.Credits, SettingsTabs.Billing, SettingsTabs.Referral]
           : []),
       ].includes(tab as any)
     ) {
@@ -46,6 +57,8 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
 
     return <Component {...componentProps} />;
   };
+
+  if (activeTab && REDIRECT_MAP[activeTab]) return null;
 
   if (mobile) {
     return activeTab ? renderComponent(activeTab) : renderComponent(SettingsTabs.Profile);

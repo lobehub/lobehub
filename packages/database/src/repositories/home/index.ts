@@ -4,7 +4,7 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, desc, eq, ilike, inArray, not, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, not, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -15,6 +15,7 @@ import {
   sessions,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
+import { sanitizeBm25Query } from '../../utils/bm25';
 
 // Re-export types for backward compatibility
 export type {
@@ -199,52 +200,54 @@ export class HomeRepository {
   async searchAgents(keyword: string): Promise<SidebarAgentItem[]> {
     if (!keyword.trim()) return [];
 
-    const searchPattern = `%${keyword.toLowerCase()}%`;
+    const bm25Query = sanitizeBm25Query(keyword);
 
-    // 1. Search agents by title or description
-    const agentResults = await this.db
-      .select({
-        avatar: agents.avatar,
-        backgroundColor: agents.backgroundColor,
-        description: agents.description,
-        id: agents.id,
-        pinned: agents.pinned,
-        sessionId: sessions.id,
-        sessionPinned: sessions.pinned,
-        title: agents.title,
-        updatedAt: agents.updatedAt,
-      })
-      .from(agents)
-      .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
-      .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
-      .where(
-        and(
-          eq(agents.userId, this.userId),
-          not(eq(agents.virtual, true)),
-          or(ilike(agents.title, searchPattern), ilike(agents.description, searchPattern)),
-        ),
-      )
-      .orderBy(desc(agents.updatedAt));
-
-    // 2. Search chat groups by title or description
-    const chatGroupResults = await this.db
-      .select({
-        avatar: chatGroups.avatar,
-        backgroundColor: chatGroups.backgroundColor,
-        description: chatGroups.description,
-        id: chatGroups.id,
-        pinned: chatGroups.pinned,
-        title: chatGroups.title,
-        updatedAt: chatGroups.updatedAt,
-      })
-      .from(chatGroups)
-      .where(
-        and(
-          eq(chatGroups.userId, this.userId),
-          or(ilike(chatGroups.title, searchPattern), ilike(chatGroups.description, searchPattern)),
-        ),
-      )
-      .orderBy(desc(chatGroups.updatedAt));
+    // Run agent and chat group searches in parallel
+    const [agentResults, chatGroupResults] = await Promise.all([
+      // 1. Search agents by title or description (BM25)
+      this.db
+        .select({
+          avatar: agents.avatar,
+          backgroundColor: agents.backgroundColor,
+          description: agents.description,
+          id: agents.id,
+          pinned: agents.pinned,
+          sessionId: sessions.id,
+          sessionPinned: sessions.pinned,
+          title: agents.title,
+          updatedAt: agents.updatedAt,
+        })
+        .from(agents)
+        .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
+        .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
+        .where(
+          and(
+            eq(agents.userId, this.userId),
+            not(eq(agents.virtual, true)),
+            sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
+          ),
+        )
+        .orderBy(desc(agents.updatedAt)),
+      // 2. Search chat groups by title or description (BM25)
+      this.db
+        .select({
+          avatar: chatGroups.avatar,
+          backgroundColor: chatGroups.backgroundColor,
+          description: chatGroups.description,
+          id: chatGroups.id,
+          pinned: chatGroups.pinned,
+          title: chatGroups.title,
+          updatedAt: chatGroups.updatedAt,
+        })
+        .from(chatGroups)
+        .where(
+          and(
+            eq(chatGroups.userId, this.userId),
+            sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
+          ),
+        )
+        .orderBy(desc(chatGroups.updatedAt)),
+    ]);
 
     // 2.1 Query member avatars for matching chat groups
     const memberAvatarsMap = await this.getChatGroupMemberAvatars(
