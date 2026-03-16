@@ -1,7 +1,8 @@
 'use client';
 
+import { ThemeProvider } from '@lobehub/ui';
 import { type ComponentType, type ReactElement } from 'react';
-import { createElement, lazy, memo, Suspense, useCallback, useEffect } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import {
   createBrowserRouter,
@@ -112,7 +113,11 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
     notifyChunkError();
   }
 
-  return createElement(ErrorCapture, { error, reset });
+  return (
+    <ThemeProvider theme={{ cssVar: { key: 'lobe-vars' } }}>
+      <ErrorCapture error={error} reset={reset} />
+    </ThemeProvider>
+  );
 };
 
 /**

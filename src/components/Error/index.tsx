@@ -18,7 +18,7 @@ const ErrorCapture = ({ error, reset }: ErrorCaptureProps) => {
   const defaultStackKeys = typeof __CI__ !== 'undefined' && __CI__ ? ['stack'] : [];
 
   return (
-    <Flexbox align={'center'} justify={'center'} style={{ minHeight: '100%', width: '100%' }}>
+    <Flexbox align={'center'} justify={'center'} style={{ minHeight: '100dvh', width: '100%' }}>
       <h1
         style={{
           filter: 'blur(8px)',
