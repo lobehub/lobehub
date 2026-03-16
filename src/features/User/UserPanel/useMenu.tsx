@@ -2,7 +2,7 @@ import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
-import { BrainCircuit, Cloudy, Download, LogOut, Settings2 } from 'lucide-react';
+import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,8 @@ import getBusinessMenuItems from '@/business/client/features/User/getBusinessMen
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
+import DataImporter from '@/features/DataImporter';
+import { useNavLayout } from '@/hooks/useNavLayout';
 import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -51,6 +53,7 @@ export const useMenu = () => {
     authSelectors.isLogin(s),
     authSelectors.isLoginWithAuth(s),
   ]);
+  const { userPanel } = useNavLayout();
   const businessMenuItems = getBusinessMenuItems(isLogin);
   const { isIOS, isAndroid } = usePlatform();
 
@@ -75,11 +78,15 @@ export const useMenu = () => {
         </Link>
       ),
     },
-    {
-      icon: <Icon icon={BrainCircuit} />,
-      key: 'memory',
-      label: <Link to="/memory">{t('tab.memory')}</Link>,
-    },
+    ...(userPanel.showMemory
+      ? [
+          {
+            icon: <Icon icon={BrainCircuit} />,
+            key: 'memory',
+            label: <Link to="/memory">{t('tab.memory')}</Link>,
+          },
+        ]
+      : []),
   ];
 
   const getDesktopApp: MenuProps['items'] = [
@@ -118,6 +125,18 @@ export const useMenu = () => {
     ...(isLogin ? settings : []),
     ...businessMenuItems,
     ...(!isDesktop ? [{ type: 'divider' as const }, ...getDesktopApp] : []),
+    ...(userPanel.showDataImporter && isLogin
+      ? [
+          {
+            icon: <Icon icon={HardDriveDownload} />,
+            key: 'import',
+            label: <DataImporter>{t('importData')}</DataImporter>,
+          },
+          {
+            type: 'divider' as const,
+          },
+        ]
+      : []),
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as MenuProps['items'];
 
