@@ -60,6 +60,9 @@ export default {
   'downgradePlans.title': 'Switch to {{plan}}',
   'credits.autoTopUp.currentBalance': 'Current Balance',
   'credits.autoTopUp.desc': 'Ensure your credits never run out',
+  'credits.autoTopUp.noPaymentMethodHint':
+    'Auto top-up requires a saved payment method for automatic billing. Please set up a payment method in the Stripe billing portal first.',
+  'credits.autoTopUp.setupPaymentMethod': 'Set Up Payment Method',
   'credits.autoTopUp.monthlyLimit': 'Monthly Limit',
   'credits.autoTopUp.monthlyLimitDesc':
     'Maximum amount that can be auto-charged per month. Leave empty for no limit',
