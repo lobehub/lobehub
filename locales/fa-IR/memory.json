@@ -10,7 +10,7 @@
   "activity.notes": "یادداشت‌ها",
   "analysis.action.button": "درخواست تحلیل خاطرات",
   "analysis.modal.cancel": "لغو",
-  "analysis.modal.helper": "به‌طور پیش‌فرض، Lobe AI تمام گفتگوهای پردازش‌نشده را تحلیل می‌کند. انتخاب بازه زمانی برای تحلیل اختیاری است.",
+  "analysis.modal.helper": "به‌طور پیش‌فرض، Loctek AI تمام گفتگوهای پردازش‌نشده را تحلیل می‌کند. انتخاب بازه زمانی برای تحلیل اختیاری است.",
   "analysis.modal.rangePlaceholder": "بازه‌ای انتخاب نشده است؛ تمام گفتگوها تحلیل خواهند شد.",
   "analysis.modal.rangeSelected": "در حال تحلیل گفتگوها از {{start}} تا {{end}}",
   "analysis.modal.submit": "درخواست تحلیل خاطرات",

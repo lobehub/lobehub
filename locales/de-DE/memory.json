@@ -10,7 +10,7 @@
   "activity.notes": "Notizen",
   "analysis.action.button": "Analyse der Erinnerungen anfordern",
   "analysis.modal.cancel": "Abbrechen",
-  "analysis.modal.helper": "Standardmäßig analysiert Lobe AI alle nicht verarbeiteten Chats. Es ist optional, einen Datumsbereich für die Analyse auszuwählen.",
+  "analysis.modal.helper": "Standardmäßig analysiert Loctek AI alle nicht verarbeiteten Chats. Es ist optional, einen Datumsbereich für die Analyse auszuwählen.",
   "analysis.modal.rangePlaceholder": "Kein Zeitraum ausgewählt; alle Unterhaltungen werden analysiert.",
   "analysis.modal.rangeSelected": "Analysiere Chats vom {{start}} bis {{end}}",
   "analysis.modal.submit": "Analyse der Erinnerungen anfordern",

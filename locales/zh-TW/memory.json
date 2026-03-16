@@ -10,7 +10,7 @@
   "activity.notes": "備註",
   "analysis.action.button": "請求記憶分析",
   "analysis.modal.cancel": "取消",
-  "analysis.modal.helper": "預設情況下，Lobe AI 將分析所有未處理的對話。您也可以選擇特定的日期範圍進行分析（可選）。",
+  "analysis.modal.helper": "預設情況下，Loctek AI 將分析所有未處理的對話。您也可以選擇特定的日期範圍進行分析（可選）。",
   "analysis.modal.rangePlaceholder": "未選擇範圍；將分析所有對話。",
   "analysis.modal.rangeSelected": "正在分析 {{start}} 到 {{end}} 的對話",
   "analysis.modal.submit": "請求記憶分析",

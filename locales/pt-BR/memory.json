@@ -10,7 +10,7 @@
   "activity.notes": "Notas",
   "analysis.action.button": "Solicitar análise de memórias",
   "analysis.modal.cancel": "Cancelar",
-  "analysis.modal.helper": "Por padrão, a Lobe AI analisará todos os chats não processados. É opcional selecionar um intervalo de datas para análise.",
+  "analysis.modal.helper": "Por padrão, a Loctek AI analisará todos os chats não processados. É opcional selecionar um intervalo de datas para análise.",
   "analysis.modal.rangePlaceholder": "Nenhum intervalo selecionado; todas as conversas serão analisadas.",
   "analysis.modal.rangeSelected": "Analisando chats de {{start}} até {{end}}",
   "analysis.modal.submit": "Solicitar análise de memórias",
