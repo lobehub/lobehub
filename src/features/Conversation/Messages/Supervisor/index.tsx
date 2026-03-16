@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
@@ -18,7 +17,7 @@ import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
-import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import { dataSelectors, useConversationStore } from '../../store';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
 import {
@@ -40,7 +39,7 @@ interface GroupMessageProps {
   isLatestItem?: boolean;
 }
 
-const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLatestItem }) => {
+const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => {
   const { t } = useTranslation('chat');
 
   // Get message and actionsConfig from ConversationStore
@@ -60,14 +59,6 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
   const groupMeta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta);
 
   // Get editing state from ConversationStore
-  const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
-  const { minHeight } = useNewScreen({
-    creating: creating || generating,
-    isLatestItem,
-    messageId: id,
-  });
-
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const addReaction = useConversationStore((s) => s.addReaction);
   const removeReaction = useConversationStore((s) => s.removeReaction);
@@ -116,7 +107,6 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
     <ChatItem
       showTitle
       avatar={{ ...avatar, title: groupMeta.title }}
-      newScreenMinHeight={minHeight}
       placement={'left'}
       time={createdAt}
       titleAddon={<Tag>{t('supervisor.label')}</Tag>}

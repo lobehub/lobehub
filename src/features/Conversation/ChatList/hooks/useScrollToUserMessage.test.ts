@@ -1,11 +1,19 @@
-import { renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useScrollToUserMessage } from './useScrollToUserMessage';
 
 describe('useScrollToUserMessage', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   describe('when user sends a new message', () => {
-    it('should scroll to user message when 2 new messages are added (user + assistant pair)', () => {
+    it('should retry scrolling to user message when 2 new messages are added (user + assistant pair)', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
@@ -29,9 +37,14 @@ describe('useScrollToUserMessage', () => {
         isSecondLastMessageFromUser: true,
       });
 
-      expect(scrollToIndex).toHaveBeenCalledTimes(1);
-      // Should scroll to index 2 (dataSourceLength - 2 = 4 - 2 = 2, the user message)
-      expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(scrollToIndex).toHaveBeenCalledTimes(3);
+      expect(scrollToIndex).toHaveBeenNthCalledWith(1, 2, { align: 'start', smooth: true });
+      expect(scrollToIndex).toHaveBeenNthCalledWith(2, 2, { align: 'start', smooth: true });
+      expect(scrollToIndex).toHaveBeenNthCalledWith(3, 2, { align: 'start', smooth: true });
     });
 
     it('should scroll to correct index when multiple user messages are sent', () => {
@@ -58,8 +71,11 @@ describe('useScrollToUserMessage', () => {
         isSecondLastMessageFromUser: true,
       });
 
-      // Should scroll to index 4 (dataSourceLength - 2 = 6 - 2 = 4)
-      expect(scrollToIndex).toHaveBeenCalledWith(4, { align: 'start', smooth: true });
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(scrollToIndex).toHaveBeenNthCalledWith(1, 4, { align: 'start', smooth: true });
     });
   });
 

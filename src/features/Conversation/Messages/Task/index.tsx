@@ -7,7 +7,6 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
 import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useAgentStore } from '@/store/agent';
@@ -29,7 +28,7 @@ interface TaskMessageProps {
   isLatestItem?: boolean;
 }
 
-const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLatestItem }) => {
+const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
   const { t } = useTranslation('chat');
 
   // Get message and actionsConfig from ConversationStore
@@ -43,12 +42,6 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   // Get editing and generating state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
-  const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const { minHeight } = useNewScreen({
-    creating: generating || creating,
-    isLatestItem,
-    messageId: id,
-  });
 
   const errorContent = useErrorContent(error);
 
@@ -83,7 +76,6 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
       id={id}
       loading={generating}
       message={message}
-      newScreenMinHeight={minHeight}
       placement={'left'}
       time={createdAt}
       titleAddon={<Tag>{t('task.subtask')}</Tag>}
