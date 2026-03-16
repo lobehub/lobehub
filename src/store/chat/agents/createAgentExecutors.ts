@@ -817,6 +817,28 @@ export const createAgentExecutors = (context: {
         context.get().completeOperation(executeToolOpId);
 
         const executionTime = Math.round(performance.now() - startTime);
+
+        // Fallback for undefined result (e.g. tool executor not found or returned nothing)
+        if (result === undefined || result === null) {
+          const fallbackResult = {
+            content: `Tool ${toolName} execution failed: no result returned`,
+            error: { type: 'ToolExecutionError', message: 'Tool returned no result' },
+            success: false,
+          };
+
+          if (toolOperationId) {
+            context.get().failOperation(toolOperationId, {
+              message: 'Tool returned no result',
+              type: 'ToolExecutionError',
+            });
+          }
+
+          events.push({ id: chatToolPayload.id, result: fallbackResult, type: 'tool_result' });
+
+          const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
+          return { events, newState: { ...state, messages: updatedMessages } };
+        }
+
         const isSuccess = result && !result.error;
 
         log(
