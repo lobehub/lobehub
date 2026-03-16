@@ -9,6 +9,7 @@ import { OpenAIStream } from '../../core/streams/openai';
 import { convertIterableToStream } from '../../core/streams/protocol';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { createZhipuVideo } from './createVideo';
 
 export interface ZhipuModelCard {
   description: string;
@@ -141,6 +142,7 @@ export const params = {
       });
     },
   },
+  createVideo: createZhipuVideo,
   debug: {
     chatCompletion: () => process.env.DEBUG_ZHIPU_CHAT_COMPLETION === '1',
   },

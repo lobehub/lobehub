@@ -8,6 +8,7 @@ import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAf
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { GenerationModel } from '@/database/models/generation';
 import {
   asyncTasks,
   generationBatches,
@@ -20,12 +21,16 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
+import { VideoGenerationService } from '@/server/services/generation/video';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@/types/asyncTask';
+import { FileSource } from '@/types/files';
+import type { VideoGenerationAsset } from '@/types/generation';
+import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:lambda');
 
@@ -141,9 +146,10 @@ export const videoRouter = router({
 
     // Step 1: Atomically create all database records in a transaction
     const {
+      asyncTaskCreatedAt,
+      asyncTaskId,
       batch: createdBatch,
       generation: createdGeneration,
-      asyncTaskId,
     } = await serverDB.transaction(async (tx) => {
       log('Starting database transaction for video generation');
 
@@ -191,6 +197,7 @@ export const videoRouter = router({
         .where(and(eq(generations.id, generation.id), eq(generations.userId, userId)));
 
       return {
+        asyncTaskCreatedAt: asyncTask.createdAt,
         asyncTaskId: asyncTask.id,
         batch,
         generation,
@@ -215,11 +222,77 @@ export const videoRouter = router({
 
       log('Video task submitted successfully, inferenceId: %s', response?.inferenceId);
 
-      // Update asyncTask with inferenceId and set status to Processing
-      await asyncTaskModel.update(asyncTaskId, {
-        inferenceId: response?.inferenceId,
-        status: AsyncTaskStatus.Processing,
-      });
+      // Check if provider uses polling (returns videoUrl immediately) vs webhook (returns only inferenceId)
+      if (response && 'videoUrl' in response && response.videoUrl) {
+        log('Polling-based provider detected (videoUrl present), processing video immediately');
+
+        // Process video immediately (same logic as webhook success path)
+        const videoService = new VideoGenerationService(serverDB, userId);
+        const processResult = await videoService.processVideoForGeneration(response.videoUrl);
+
+        const asset: VideoGenerationAsset = {
+          coverUrl: processResult.coverKey,
+          duration: processResult.duration,
+          height: processResult.height,
+          originalUrl: response.videoUrl,
+          thumbnailUrl: processResult.thumbnailKey,
+          type: 'video',
+          url: processResult.videoKey,
+          width: processResult.width,
+        };
+
+        const generationModel = new GenerationModel(serverDB, userId);
+        await generationModel.createAssetAndFile(
+          createdGeneration.id,
+          asset,
+          {
+            fileHash: processResult.fileHash,
+            fileType: processResult.mimeType,
+            name: `${sanitizeFileName(createdBatch.prompt ?? '', createdGeneration.id)}.mp4`,
+            size: processResult.fileSize,
+            url: processResult.videoKey,
+          },
+          FileSource.VideoGeneration,
+        );
+
+        await asyncTaskModel.update(asyncTaskId, {
+          duration: Date.now() - asyncTaskCreatedAt.getTime(),
+          inferenceId: response.inferenceId,
+          status: AsyncTaskStatus.Success,
+        });
+
+        // Charge after successful video generation
+        try {
+          await chargeAfterGenerate({
+            computePriceParams: {
+              generateAudio: input.params.generateAudio,
+            },
+            latency: Date.now() - asyncTaskCreatedAt.getTime(),
+            metadata: {
+              asyncTaskId,
+              generationBatchId: createdBatch.id,
+              modelId: model,
+              topicId: generationTopicId,
+            },
+            model,
+            prechargeResult: prechargeResult ?? undefined,
+            provider,
+            userId,
+          });
+        } catch (chargeError) {
+          console.error('[video] chargeAfterGenerate failed:', chargeError);
+        }
+
+        log('Polling-based video processing completed successfully');
+      } else {
+        // Webhook-based provider: update status to Processing and wait for callback
+        log('Webhook-based provider detected, waiting for callback');
+
+        await asyncTaskModel.update(asyncTaskId, {
+          inferenceId: response?.inferenceId,
+          status: AsyncTaskStatus.Processing,
+        });
+      }
     } catch (e) {
       console.error('Failed to submit video generation task:', e);
 

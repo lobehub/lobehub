@@ -6,9 +6,14 @@ export type CreateVideoPayload = {
   params: RuntimeVideoGenParams;
 };
 
-export type CreateVideoResponse = {
-  inferenceId: string;
-};
+export type CreateVideoResponse =
+  | {
+      inferenceId: string;
+    }
+  | {
+      inferenceId: string;
+      videoUrl: string;
+    };
 
 export type HandleCreateVideoWebhookPayload = {
   body: unknown;

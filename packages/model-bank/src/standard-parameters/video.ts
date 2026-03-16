@@ -70,8 +70,9 @@ export const VideoModelParamsMetaSchema = z.object({
     .object({
       default: z.number(),
       description: z.string().optional(),
-      max: z.number(),
-      min: z.number(),
+      enum: z.array(z.number()).optional(),
+      max: z.number().optional(),
+      min: z.number().optional(),
       step: z.number().optional().default(1),
       type: z.literal('number').optional(),
     })
