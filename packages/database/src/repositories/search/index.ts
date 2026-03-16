@@ -1,4 +1,4 @@
-import { and, eq, ilike, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -418,10 +418,7 @@ export class SearchRepo {
       .where(
         and(
           eq(topics.userId, this.userId),
-          or(
-            sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
-            ilike(topics.historySummary, `%${query}%`),
-          ),
+          sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${topics.id}) DESC`)
@@ -512,13 +509,12 @@ export class SearchRepo {
   private async searchFiles(query: string, limit: number): Promise<FileSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    // BM25 search on files table first (no JOINs to avoid interfering with paradedb.score)
+    const matchedFiles = await this.db
       .select({
-        content: documents.content,
         createdAt: files.createdAt,
         fileType: files.fileType,
         id: files.id,
-        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
         name: files.name,
         score: sql<number>`paradedb.score(${files.id})`,
         size: files.size,
@@ -526,32 +522,50 @@ export class SearchRepo {
         url: files.url,
       })
       .from(files)
-      .leftJoin(documents, eq(files.id, documents.fileId))
-      .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
       .where(
         and(
           eq(files.userId, this.userId),
           ne(files.fileType, 'custom/document'),
-          or(sql`${files.name} @@@ ${bm25Query}`, ilike(files.name, `%${query}%`)),
+          sql`${files.name} @@@ ${bm25Query}`,
         ),
       )
       .orderBy(sql`paradedb.score(${files.id}) DESC`)
       .limit(limit);
 
-    return this.mapScoresToRelevance(rows).map((row) => ({
-      createdAt: row.createdAt,
-      description: this.truncate(row.content),
-      fileType: row.fileType,
-      id: row.id,
-      knowledgeBaseId: row.knowledgeBaseId,
-      name: row.name,
-      relevance: row.relevance,
-      size: row.size,
-      title: row.name,
-      type: 'file' as const,
-      updatedAt: row.updatedAt,
-      url: row.url,
-    }));
+    if (matchedFiles.length === 0) return [];
+
+    // Enrich with document content and knowledgeBase info via JOIN
+    const fileIds = matchedFiles.map((f) => f.id);
+    const enriched = await this.db
+      .select({
+        content: documents.content,
+        fileId: files.id,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+      })
+      .from(files)
+      .leftJoin(documents, eq(files.id, documents.fileId))
+      .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
+      .where(inArray(files.id, fileIds));
+
+    const enrichMap = new Map(enriched.map((e) => [e.fileId, e]));
+
+    return this.mapScoresToRelevance(matchedFiles).map((row) => {
+      const extra = enrichMap.get(row.id);
+      return {
+        createdAt: row.createdAt,
+        description: this.truncate(extra?.content ?? null),
+        fileType: row.fileType,
+        id: row.id,
+        knowledgeBaseId: extra?.knowledgeBaseId ?? null,
+        name: row.name,
+        relevance: row.relevance,
+        size: row.size,
+        title: row.name,
+        type: 'file' as const,
+        updatedAt: row.updatedAt,
+        url: row.url,
+      };
+    });
   }
 
   /**
@@ -577,10 +591,7 @@ export class SearchRepo {
         and(
           eq(documents.userId, this.userId),
           eq(documents.fileType, 'custom/folder'),
-          or(
-            sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
-            ilike(documents.filename, `%${query}%`),
-          ),
+          sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${documents.id}) DESC`)
@@ -622,10 +633,7 @@ export class SearchRepo {
         and(
           eq(documents.userId, this.userId),
           eq(documents.fileType, 'custom/document'),
-          or(
-            sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
-            ilike(documents.filename, `%${query}%`),
-          ),
+          sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${documents.id}) DESC`)
