@@ -19,19 +19,12 @@ export const toolPrompt = (tool: Tool) => {
 </tool>`;
   }
 
-  if (tool.description) {
-    return `<tool name="${tool.name}">${tool.description}</tool>`;
-  }
-
-  return '';
+  return `<tool name="${tool.name}">${tool.description || 'no description'}</tool>`;
 };
 
 export const toolsPrompts = (tools: Tool[]) => {
   const hasTools = tools.length > 0;
   if (!hasTools) return '';
 
-  return tools
-    .map((tool) => toolPrompt(tool))
-    .filter(Boolean)
-    .join('\n');
+  return tools.map((tool) => toolPrompt(tool)).join('\n');
 };

@@ -37,14 +37,14 @@ describe('Prompt Generation Utils', () => {
       expect(toolPrompt(tool)).toBe(`<tool name="testTool">A useful tool for testing</tool>`);
     });
 
-    it('should return empty when no systemRole and no description', () => {
+    it('should fallback to "no description" when no systemRole and no description', () => {
       const tool: Tool = {
         name: 'testTool',
         identifier: 'test-id',
         apis: [{ name: 'api1', desc: 'API 1' }],
       };
 
-      expect(toolPrompt(tool)).toBe('');
+      expect(toolPrompt(tool)).toBe('<tool name="testTool">no description</tool>');
     });
   });
 
@@ -73,7 +73,8 @@ describe('Prompt Generation Utils', () => {
       const expected = `<tool name="tool1">
 <tool.instructions>Instructions for tool1</tool.instructions>
 </tool>
-<tool name="tool2">Tool 2 description</tool>`;
+<tool name="tool2">Tool 2 description</tool>
+<tool name="tool3">no description</tool>`;
 
       expect(toolsPrompts(tools)).toBe(expected);
     });
