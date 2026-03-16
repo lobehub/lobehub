@@ -488,6 +488,7 @@ export class AiAgentService {
             documentsPath: systemInfo.documentsPath,
             downloadsPath: systemInfo.downloadsPath,
             homePath: systemInfo.homePath,
+            hostname: activeDevice?.hostname ?? 'unknown',
             musicPath: systemInfo.musicPath,
             picturesPath: systemInfo.picturesPath,
             platform: activeDevice?.platform ?? 'unknown',
