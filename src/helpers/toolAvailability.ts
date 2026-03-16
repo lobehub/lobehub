@@ -15,7 +15,6 @@ export interface ToolAvailabilityInstalledPlugin {
 export interface ToolAvailabilityContext {
   installedPlugins?: ToolAvailabilityInstalledPlugin[];
   isDesktop?: boolean;
-  isWindows?: boolean;
 }
 
 export const isBuiltinToolAvailableInCurrentEnv = (id: string) => shouldEnableTool(id);
@@ -24,13 +23,12 @@ export const isBuiltinSkillAvailableInCurrentEnv = (
   id: string,
   context: Omit<ToolAvailabilityContext, 'installedPlugins'> = {},
 ) => {
-  if (context.isDesktop === undefined && context.isWindows === undefined) {
+  if (context.isDesktop === undefined) {
     return shouldEnableBuiltinSkill(id);
   }
 
   return shouldEnableBuiltinSkill(id, {
     isDesktop: context.isDesktop ?? isDesktop,
-    isWindows: context.isWindows,
   });
 };
 
