@@ -13,24 +13,20 @@ describe('skillFilters', () => {
   });
 
   it('should enable agent-browser on desktop (non-Windows) environment', () => {
-    expect(
-      shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true, isWindows: false }),
-    ).toBe(true);
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
   });
 
-  it('should disable agent-browser on desktop Windows', () => {
-    expect(
-      shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true, isWindows: true }),
-    ).toBe(false);
+  it('should enable agent-browser on desktop Windows', () => {
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
   });
 
-  it('should preserve Windows detection for partial context overrides', async () => {
+  it('should not be affected by Windows platform detection when desktop is enabled', async () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' });
     vi.resetModules();
 
     const { shouldEnableBuiltinSkill } = await import('./skillFilters');
 
-    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(false);
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
   });
 
   it('should keep non-desktop-only skills enabled', () => {
