@@ -69,7 +69,7 @@ const Nav = memo<NavProps>(
       identifier,
     } = useDetailContext();
 
-    // 检查插件是否已安装
+    // Check if the plugin is installed
     const installedPlugin = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
 
     const deploymentCount = deploymentOptions?.length || 0;
@@ -83,7 +83,7 @@ const Nav = memo<NavProps>(
         compact={mobile}
         items={
           [
-            // 只有已安装的插件才显示设置 tab
+            // Only show the settings tab for installed plugins
             !noSettings &&
               installedPlugin && {
                 icon: <Icon icon={SettingsIcon} size={16} />,
