@@ -79,21 +79,25 @@ afterEach(async () => {
   inMemoryStreamEventManager.clear();
 });
 
+const createTestAgent = async (chatConfig: Record<string, any> = {}) => {
+  const [agent] = await serverDB
+    .insert(agents)
+    .values({
+      chatConfig: chatConfig as any,
+      model: 'gpt-5-pro',
+      provider: 'openai',
+      systemRole: 'test',
+      title: 'Test',
+      userId,
+    })
+    .returning();
+  return agent;
+};
+
 describe('execAgent - memory enabled priority', () => {
   it('should disable memory tools when agent config sets memory.enabled = false, even if user enables it', async () => {
     await setUserMemorySettings(true);
-
-    const [agent] = await serverDB
-      .insert(agents)
-      .values({
-        chatConfig: { memory: { enabled: false } },
-        model: 'gpt-5-pro',
-        provider: 'openai',
-        systemRole: 'test',
-        title: 'Test',
-        userId,
-      })
-      .returning();
+    const agent = await createTestAgent({ memory: { enabled: false } });
 
     const caller = aiAgentRouter.createCaller(createTestContext());
     const result = await caller.execAgent({ agentId: agent.id, prompt: 'Hello' });
@@ -105,18 +109,7 @@ describe('execAgent - memory enabled priority', () => {
 
   it('should enable memory tools when agent config sets memory.enabled = true, even if user disables it', async () => {
     await setUserMemorySettings(false);
-
-    const [agent] = await serverDB
-      .insert(agents)
-      .values({
-        chatConfig: { memory: { enabled: true } },
-        model: 'gpt-5-pro',
-        provider: 'openai',
-        systemRole: 'test',
-        title: 'Test',
-        userId,
-      })
-      .returning();
+    const agent = await createTestAgent({ memory: { enabled: true } });
 
     const caller = aiAgentRouter.createCaller(createTestContext());
     const result = await caller.execAgent({ agentId: agent.id, prompt: 'Hello' });
@@ -128,18 +121,7 @@ describe('execAgent - memory enabled priority', () => {
 
   it('should fallback to user setting when agent has no memory config', async () => {
     await setUserMemorySettings(false);
-
-    const [agent] = await serverDB
-      .insert(agents)
-      .values({
-        chatConfig: {},
-        model: 'gpt-5-pro',
-        provider: 'openai',
-        systemRole: 'test',
-        title: 'Test',
-        userId,
-      })
-      .returning();
+    const agent = await createTestAgent();
 
     const caller = aiAgentRouter.createCaller(createTestContext());
     const result = await caller.execAgent({ agentId: agent.id, prompt: 'Hello' });
@@ -150,17 +132,7 @@ describe('execAgent - memory enabled priority', () => {
   });
 
   it('should enable memory by default when neither agent nor user configures it', async () => {
-    const [agent] = await serverDB
-      .insert(agents)
-      .values({
-        chatConfig: {},
-        model: 'gpt-5-pro',
-        provider: 'openai',
-        systemRole: 'test',
-        title: 'Test',
-        userId,
-      })
-      .returning();
+    const agent = await createTestAgent();
 
     const caller = aiAgentRouter.createCaller(createTestContext());
     const result = await caller.execAgent({ agentId: agent.id, prompt: 'Hello' });
