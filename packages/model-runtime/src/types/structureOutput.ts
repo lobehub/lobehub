@@ -1,3 +1,5 @@
+import type { ModelUsage } from '@lobechat/types';
+
 import type { ChatCompletionTool } from './chat';
 
 interface GenerateObjectMessage {
@@ -31,6 +33,8 @@ export interface GenerateObjectOptions {
    * response headers
    */
   headers?: Record<string, any>;
+
+  onUsage?: (usage: ModelUsage) => void | Promise<void>;
 
   signal?: AbortSignal;
   /**

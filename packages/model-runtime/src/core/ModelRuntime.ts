@@ -1,4 +1,4 @@
-import type { TracePayload } from '@lobechat/types';
+import type { ModelUsage, TracePayload } from '@lobechat/types';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -11,6 +11,7 @@ import type {
   ChatStreamPayload,
   EmbeddingsOptions,
   EmbeddingsPayload,
+  GenerateObjectOptions,
   GenerateObjectPayload,
   ModelRequestOptions,
   OnFinishData,
@@ -34,6 +35,10 @@ export interface ModelRuntimeHooks {
    * Runs before the LLM call. Throw to abort (e.g., budget exceeded).
    */
   beforeChat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<void>;
+  beforeGenerateObject?: (
+    payload: GenerateObjectPayload,
+    options?: GenerateObjectOptions,
+  ) => Promise<void>;
   /**
    * Called when chat() throws. Handle side effects (sanitize, log, DB record).
    * The error is re-thrown after the hook completes — callers still handle response formatting.
@@ -42,6 +47,7 @@ export interface ModelRuntimeHooks {
     error: ChatCompletionErrorPayload,
     context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
   ) => void | Promise<void>;
+
   /**
    * Called after the stream completes. ModelRuntime handles merging into onFinal internally.
    * Hook consumers only need to implement the callback — no need to deal with option merging.
@@ -49,6 +55,16 @@ export interface ModelRuntimeHooks {
   onChatFinal?: (
     data: OnFinishData,
     context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
+  onGenerateObjectError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
+  ) => void | Promise<void>;
+
+  onGenerateObjectFinal?: (
+    data: { usage?: ModelUsage },
+    context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
   ) => void | Promise<void>;
 }
 
@@ -136,8 +152,30 @@ export class ModelRuntime {
     };
   }
 
-  async generateObject(payload: GenerateObjectPayload) {
-    return this._runtime.generateObject!(payload);
+  async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    await this._hooks?.beforeGenerateObject?.(payload, options);
+
+    const finalOptions = this._hooks?.onGenerateObjectFinal
+      ? {
+          ...options,
+          onUsage: async (usage: ModelUsage) => {
+            await options?.onUsage?.(usage);
+            await this._hooks!.onGenerateObjectFinal!({ usage }, { options, payload });
+          },
+        }
+      : options;
+
+    try {
+      return await this._runtime.generateObject!(payload, finalOptions);
+    } catch (error) {
+      if (this._hooks?.onGenerateObjectError) {
+        await this._hooks.onGenerateObjectError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
   }
 
   async createImage(payload: CreateImagePayload) {
