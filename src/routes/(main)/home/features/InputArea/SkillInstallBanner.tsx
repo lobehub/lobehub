@@ -113,7 +113,7 @@ const SkillInstallBanner = memo(() => {
   }, []);
 
   return (
-    <div className={styles.banner} onClick={handleOpenStore}>
+    <div className={styles.banner} data-testid="skill-install-banner" onClick={handleOpenStore}>
       <Flexbox horizontal align="center" gap={4}>
         <Icon className={styles.icon} icon={Blocks} size={18} />
         <span className={styles.text}>{t('skillInstallBanner.title')}</span>
