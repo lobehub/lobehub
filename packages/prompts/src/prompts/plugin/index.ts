@@ -5,7 +5,7 @@ export const pluginPrompts = ({ tools }: { tools: Tool[] }) => {
   const content = toolsPrompts(tools);
   if (!content) return '';
 
-  return `<tools>
+  return `<tools description="The tools you can use below">
 ${content}
 </tools>`;
 };
