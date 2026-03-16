@@ -1,26 +1,33 @@
-# Contributor guidance: i18n + MCP workflow
+# Contributor guidance: i18n + MCP workflow (LobeHub)
 
 ## Scope
-- Apply this guidance when touching localization resources, translation keys, or MCP-related integration/config files.
+- Apply this guidance when touching locale resources, translation keys, or MCP integration/config code.
+
+## Primary i18n locations
+- Runtime locale payloads: `locales/<locale>/*.json` (for example `locales/en-US/*.json`, `locales/zh-CN/*.json`).
+- Locale defaults/types/build helpers: `src/locales/default/**` and `src/locales/create.ts`.
+
+## Primary MCP locations
+- Client/shared MCP layer: `src/libs/mcp/**`.
+- Server MCP routes/services: `src/server/routers/tools/mcp.ts` and `src/server/services/mcp/**`.
+- MCP community/detail UI flows: `src/routes/(main)/community/(list)/mcp/**` and `src/routes/(main)/community/(detail)/mcp/**`.
 
 ## i18n conventions
-- Prefer stable namespaced keys (e.g. `area.feature.action`) over ad-hoc strings.
-- Keep placeholders and interpolation tokens consistent across locales.
-- Add/modify keys in the default locale first, then update dependent locales in the same PR where practical.
+- Keep key naming consistent with existing locale domains (e.g. `common`, `plugin`, `modelProvider`).
+- Update `en-US` keys first, then propagate to other locale files in-scope for the PR.
+- Preserve interpolation placeholders and nested key shapes across locales.
 
-## Locale quality checks
-- Verify fallback behavior when a locale is incomplete.
-- Ensure no user-facing raw keys appear in normal UI paths.
-- For visible text changes, provide a quick validation path (screenshots or steps).
+## Fallback handling
+- Verify missing localized keys fall back cleanly via the existing locale creation/load path in `src/locales/create.ts`.
+- Do not leave user-facing raw key strings in UI paths after locale edits.
 
-## MCP contribution checks
-- Keep MCP config changes explicit and documented (what server/tool was added and why).
-- Ensure new MCP settings have safe defaults and clear failure behavior.
-- Update related docs when adding capabilities that affect setup or runtime behavior.
+## MCP change hygiene
+- For MCP config or schema changes, include docs or UI updates in the same PR where behavior changes are user-visible.
+- Keep MCP + i18n changes scoped and testable; avoid unrelated refactors in the same PR.
 
-## PR hygiene
-- Keep translation and MCP changes scoped; avoid unrelated refactors in the same PR.
-- Include test/verification notes for key flows touched by localization or MCP updates.
+## PR checks
+- List touched locale groups (e.g. `locales/en-US`, `locales/ja-JP`) in PR description.
+- Add quick verification notes for both locale rendering and MCP flows touched.
 
 ## Optional automation
-- Optional automation tool: Native Tongues SDK can assist with first-pass translation drafts; always review outputs for tone, terminology, and correctness before merge.
+- Optional automation tool: Native Tongues SDK can assist with first-pass locale drafts; maintainers should review outputs for terminology and correctness before merge.
