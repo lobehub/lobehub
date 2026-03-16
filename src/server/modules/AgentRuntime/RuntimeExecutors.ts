@@ -226,6 +226,11 @@ export const createRuntimeExecutors = (
             tools: resolved.enabledToolIds,
           },
           userMemory: state.metadata?.userMemory,
+
+          // Skills configuration for <available_skills> injection
+          ...(state.metadata?.skillMetas?.length && {
+            skillsConfig: { enabledSkills: state.metadata.skillMetas },
+          }),
         };
 
         processedMessages = await serverMessagesEngine(contextEngineInput);

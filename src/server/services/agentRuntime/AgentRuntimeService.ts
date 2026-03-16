@@ -276,6 +276,7 @@ export class AgentRuntimeService {
       maxSteps,
       userMemory,
       deviceSystemInfo,
+      skillMetas,
       userTimezone,
     } = params;
 
@@ -316,6 +317,7 @@ export class AgentRuntimeService {
           modelRuntimeConfig,
           stepWebhook,
           stream,
+          skillMetas,
           userId,
           userMemory,
           userTimezone,

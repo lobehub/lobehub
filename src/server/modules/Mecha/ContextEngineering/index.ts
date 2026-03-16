@@ -59,6 +59,7 @@ export const serverMessagesEngine = async ({
   historySummary,
   formatHistorySummary,
   knowledge,
+  skillsConfig,
   toolsConfig,
   capabilities,
   userMemory,
@@ -135,6 +136,9 @@ export const serverMessagesEngine = async ({
         Object.entries(additionalVariables ?? {}).map(([k, v]) => [k, () => v]),
       ),
     },
+
+    // Skills configuration
+    ...(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0 && { skillsConfig }),
 
     // Extended contexts
     ...(agentBuilderContext && { agentBuilderContext }),

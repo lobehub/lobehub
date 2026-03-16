@@ -768,6 +768,12 @@ export class AiAgentService {
           sourceMap: toolSourceMap,
           tools,
         },
+        // Skill metas for <available_skills> prompt injection
+        skillMetas: lobehubSkillManifests.map((m) => ({
+          description: m.meta?.description ?? '',
+          identifier: m.identifier,
+          name: m.meta?.title || m.identifier,
+        })),
         userId: this.userId,
         userInterventionConfig,
         userMemory,
