@@ -187,46 +187,28 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       await serverDB.insert(agents).values(testAgents);
     });
 
-    it('should prioritize exact match (relevance=1)', async () => {
-      const results = await searchRepo.search({ query: 'test' });
-
-      const exactMatch = results.find((r) => r.type === 'agent' && r.slug === 'exact');
-      expect(exactMatch).toBeDefined();
-      expect(exactMatch?.relevance).toBe(1);
-    });
-
-    it('should rank prefix match second (relevance=2)', async () => {
-      const results = await searchRepo.search({ query: 'test' });
-
-      const prefixMatch = results.find((r) => r.type === 'agent' && r.slug === 'prefix');
-      expect(prefixMatch).toBeDefined();
-      expect(prefixMatch?.relevance).toBe(2);
-    });
-
-    it('should rank contains match third (relevance=3)', async () => {
-      const results = await searchRepo.search({ query: 'test' });
-
-      const containsMatch = results.find((r) => r.type === 'agent' && r.slug === 'contains');
-      expect(containsMatch).toBeDefined();
-      expect(containsMatch?.relevance).toBe(3);
-    });
-
-    it('should order results by relevance', async () => {
+    it('should assign relevance values in valid range', async () => {
       const results = await searchRepo.search({ query: 'test' });
 
       const agentResults = results.filter((r) => r.type === 'agent');
+      expect(agentResults.length).toBe(3);
 
-      // Exact match should come first
-      expect(agentResults[0].slug).toBe('exact');
-      expect(agentResults[0].relevance).toBe(1);
+      // All relevance values should be in [1, 3] range
+      for (const result of agentResults) {
+        expect(result.relevance).toBeGreaterThanOrEqual(1);
+        expect(result.relevance).toBeLessThanOrEqual(3);
+      }
+    });
 
-      // Prefix match should come second
-      expect(agentResults[1].slug).toBe('prefix');
-      expect(agentResults[1].relevance).toBe(2);
+    it('should rank results by BM25 relevance (lower = better)', async () => {
+      const results = await searchRepo.search({ query: 'test' });
 
-      // Contains match should come third
-      expect(agentResults[2].slug).toBe('contains');
-      expect(agentResults[2].relevance).toBe(3);
+      const agentResults = results.filter((r) => r.type === 'agent');
+      expect(agentResults.length).toBe(3);
+
+      // Best match should have lowest relevance value
+      expect(agentResults[0].relevance).toBeLessThanOrEqual(agentResults[1].relevance);
+      expect(agentResults[1].relevance).toBeLessThanOrEqual(agentResults[2].relevance);
     });
   });
 

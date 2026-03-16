@@ -13,7 +13,7 @@ describe('sanitizeBm25Query', () => {
 
   it('should escape tantivy special characters', () => {
     expect(sanitizeBm25Query('hello+world')).toBe('hello\\+world');
-    expect(sanitizeBm25Query('a-b')).toBe('a\\-b');
+    expect(sanitizeBm25Query('a-b')).toBe('a AND b');
     expect(sanitizeBm25Query('a&b|c')).toBe('a\\&b\\|c');
     expect(sanitizeBm25Query('a &b| c')).toBe('a AND \\&b\\| AND c');
     expect(sanitizeBm25Query('test!')).toBe('test\\!');
@@ -32,6 +32,7 @@ describe('sanitizeBm25Query', () => {
 
   it('should escape multiple special characters and join with AND', () => {
     expect(sanitizeBm25Query('(a+b) & c!')).toBe('\\(a\\+b\\) AND \\& AND c\\!');
+    expect(sanitizeBm25Query('react-component')).toBe('react AND component');
   });
 
   it('should trim whitespace', () => {

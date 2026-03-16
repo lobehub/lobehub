@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, ilike, ne, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -418,7 +418,10 @@ export class SearchRepo {
       .where(
         and(
           eq(topics.userId, this.userId),
-          sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
+          or(
+            sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
+            ilike(topics.historySummary, `%${query}%`),
+          ),
         ),
       )
       .orderBy(sql`paradedb.score(${topics.id}) DESC`)
@@ -574,7 +577,10 @@ export class SearchRepo {
         and(
           eq(documents.userId, this.userId),
           eq(documents.fileType, 'custom/folder'),
-          sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
+          or(
+            sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
+            ilike(documents.filename, `%${query}%`),
+          ),
         ),
       )
       .orderBy(sql`paradedb.score(${documents.id}) DESC`)
@@ -616,7 +622,10 @@ export class SearchRepo {
         and(
           eq(documents.userId, this.userId),
           eq(documents.fileType, 'custom/document'),
-          sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
+          or(
+            sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
+            ilike(documents.filename, `%${query}%`),
+          ),
         ),
       )
       .orderBy(sql`paradedb.score(${documents.id}) DESC`)
