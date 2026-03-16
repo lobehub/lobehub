@@ -3,14 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeBm25Query } from './bm25';
 
 describe('sanitizeBm25Query', () => {
-  it('should return plain text as-is', () => {
-    expect(sanitizeBm25Query('hello world')).toBe('hello world');
+  it('should join multiple words with AND', () => {
+    expect(sanitizeBm25Query('hello world')).toBe('hello AND world');
+  });
+
+  it('should return single word as-is', () => {
+    expect(sanitizeBm25Query('hello')).toBe('hello');
   });
 
   it('should escape tantivy special characters', () => {
     expect(sanitizeBm25Query('hello+world')).toBe('hello\\+world');
     expect(sanitizeBm25Query('a-b')).toBe('a\\-b');
     expect(sanitizeBm25Query('a&b|c')).toBe('a\\&b\\|c');
+    expect(sanitizeBm25Query('a &b| c')).toBe('a AND \\&b\\| AND c');
     expect(sanitizeBm25Query('test!')).toBe('test\\!');
     expect(sanitizeBm25Query('(group)')).toBe('\\(group\\)');
     expect(sanitizeBm25Query('{curly}')).toBe('\\{curly\\}');
@@ -25,13 +30,13 @@ describe('sanitizeBm25Query', () => {
     expect(sanitizeBm25Query('a/b')).toBe('a\\/b');
   });
 
-  it('should escape multiple special characters in one string', () => {
-    expect(sanitizeBm25Query('(a+b) & c!')).toBe('\\(a\\+b\\) \\& c\\!');
+  it('should escape multiple special characters and join with AND', () => {
+    expect(sanitizeBm25Query('(a+b) & c!')).toBe('\\(a\\+b\\) AND \\& AND c\\!');
   });
 
   it('should trim whitespace', () => {
     expect(sanitizeBm25Query('  hello  ')).toBe('hello');
-    expect(sanitizeBm25Query('  hello world  ')).toBe('hello world');
+    expect(sanitizeBm25Query('  hello world  ')).toBe('hello AND world');
   });
 
   it('should throw on empty string', () => {
