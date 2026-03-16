@@ -137,7 +137,8 @@ export const createServerAgentToolsEngine = (
           !!deviceContext?.gatewayConfigured &&
           !!deviceContext?.deviceOnline,
         [MemoryManifest.identifier]: globalMemoryEnabled,
-        [RemoteDeviceManifest.identifier]: !!deviceContext?.gatewayConfigured,
+        [RemoteDeviceManifest.identifier]:
+          !!deviceContext?.gatewayConfigured && !deviceContext?.autoActivated,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
       },
     }),

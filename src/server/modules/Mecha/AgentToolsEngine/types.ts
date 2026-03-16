@@ -46,6 +46,8 @@ export interface ServerCreateAgentToolsEngineParams {
   };
   /** Device gateway context for remote tool calling */
   deviceContext?: {
+    /** When true, a device has been auto-activated — Remote Device tool is unnecessary */
+    autoActivated?: boolean;
     boundDeviceId?: string;
     deviceOnline?: boolean;
     gatewayConfigured: boolean;

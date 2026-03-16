@@ -393,6 +393,25 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
 
+      // Restore default AgentService mock (previous test overrides with boundDeviceId)
+      const { AgentService } = await import('@/server/services/agent');
+      vi.mocked(AgentService).mockImplementation(
+        () =>
+          ({
+            getAgentConfig: vi.fn().mockResolvedValue({
+              chatConfig: {},
+              files: [],
+              id: 'agent-1',
+              knowledgeBases: [],
+              model: 'gpt-4',
+              plugins: [],
+              provider: 'openai',
+              systemRole: 'You are a helpful assistant',
+            }),
+          }) as any,
+      );
+      service = new AiAgentService(mockDb, userId);
+
       await service.execAgent({
         agentId: 'agent-1',
         botContext: { platform: 'discord' } as any,
