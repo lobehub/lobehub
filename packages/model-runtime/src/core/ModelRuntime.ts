@@ -1,7 +1,6 @@
 import type { TracePayload } from '@lobechat/types';
 import type { ClientOptions } from 'openai';
 
-import { mergeMultipleChatMethodOptions } from '../helpers/mergeChatMethodOptions';
 import type { LobeBedrockAIParams } from '../providers/bedrock';
 import type { LobeCloudflareParams } from '../providers/cloudflare';
 import { LobeOpenAI } from '../providers/openai';
@@ -94,17 +93,22 @@ export class ModelRuntime {
     // Hook: beforeChat — budget check, etc.
     await this._hooks?.beforeChat?.(payload, options);
 
-    // Hook: onChatFinal — inject as onFinal callback, merged with existing options
+    // Hook: onChatFinal — inject only the onFinal callback without wrapping other callbacks
+    // through mergeMultipleChatMethodOptions (which swallows errors via try/catch)
     let finalOptions = options;
     if (this._hooks?.onChatFinal) {
       const hookFn = this._hooks.onChatFinal;
-      const hookCallback: ChatMethodOptions = {
+      const existingOnFinal = options?.callback?.onFinal;
+      finalOptions = {
+        ...options,
         callback: {
-          onFinal: (data) => hookFn(data, { options, payload }),
+          ...options?.callback,
+          async onFinal(data) {
+            await existingOnFinal?.(data);
+            hookFn(data, { options, payload });
+          },
         },
       };
-      const merged = mergeMultipleChatMethodOptions([hookCallback, ...(options ? [options] : [])]);
-      finalOptions = { ...options, ...merged };
     }
 
     return this._runtime.chat(payload, finalOptions);
