@@ -18,7 +18,11 @@ import type {
   TaskResultPayload,
   TasksBatchResultPayload,
 } from '@lobechat/agent-runtime';
-import { calculateMessageTokens, UsageCounter } from '@lobechat/agent-runtime';
+import {
+  calculateMessageTokens,
+  shouldForceFinishAfterToolResult,
+  UsageCounter,
+} from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
 import type { ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
@@ -399,6 +403,7 @@ export const createAgentExecutors = (context: {
           messages,
           model: llmPayload.model,
           provider: llmPayload.provider,
+          forceFinish: state.forceFinish,
           resolvedAgentConfig,
           topicId: topicId ?? undefined,
           ...agentConfigData.params,
@@ -883,6 +888,21 @@ export const createAgentExecutors = (context: {
 
         newState.usage = usage;
         if (cost) newState.cost = cost;
+
+        if (
+          shouldForceFinishAfterToolResult({
+            isSuccess,
+            result,
+            toolCall: chatToolPayload,
+          })
+        ) {
+          newState.forceFinish = true;
+          log(
+            '[%s][call_tool] Tool %s produced terminal media output, enabling forceFinish',
+            sessionLogId,
+            toolName,
+          );
+        }
 
         // Find current tool statistics
         const currentToolStats = usage.tools.byTool.find((t) => t.name === toolName);

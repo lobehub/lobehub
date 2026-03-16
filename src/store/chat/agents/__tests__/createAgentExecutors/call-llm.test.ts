@@ -1672,4 +1672,36 @@ describe('call_llm executor', () => {
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalled();
     });
   });
+
+  describe('Force Finish', () => {
+    it('should forward forceFinish to chatService.createAssistantMessageStream', async () => {
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const instruction = createCallLLMInstruction({
+        model: 'gpt-4',
+        provider: 'openai',
+        messages: [createUserMessage({ content: 'Finalize this result' })],
+      });
+      const state = createInitialState({ forceFinish: true });
+
+      mockStreamResponse({ content: 'Done' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({
+            forceFinish: true,
+          }),
+        }),
+      );
+    });
+  });
 });

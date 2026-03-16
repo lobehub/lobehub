@@ -57,6 +57,7 @@ interface ContextEngineeringContext {
   agentId?: string;
   enableHistoryCount?: boolean;
   enableUserMemories?: boolean;
+  forceFinish?: boolean;
   /** Group ID for multi-agent scenarios */
   groupId?: string;
   historyCount?: number;
@@ -132,6 +133,7 @@ export const contextEngineering = async ({
   inputTemplate,
   enableUserMemories,
   enableHistoryCount,
+  forceFinish,
   historyCount,
   historySummary,
   agentBuilderContext,
@@ -534,6 +536,8 @@ export const contextEngineering = async ({
 
     // File context configuration
     fileContext: { enabled: true, includeFileUrl: !isDesktop },
+
+    forceFinish,
 
     // Knowledge injection
     knowledge: {

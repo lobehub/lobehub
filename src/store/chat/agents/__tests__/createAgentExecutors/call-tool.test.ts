@@ -2421,4 +2421,38 @@ describe('call_tool executor', () => {
       );
     });
   });
+
+  describe('Force Finish', () => {
+    it('should enable forceFinish after a successful terminal media tool result', async () => {
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          kind: 'edit_image',
+          result: 'https://example.com/generated/image.jpg',
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_media_1',
+        identifier: 'doubao_grok',
+        apiName: 'edit_image',
+        arguments: JSON.stringify({ prompt: 'make it anime' }),
+        type: 'mcp',
+      };
+
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction: createCallToolInstruction(toolCall),
+        state: createInitialState(),
+        mockStore,
+        context,
+      });
+
+      expect(result.newState.forceFinish).toBe(true);
+      expect(result.nextContext?.phase).toBe('tool_result');
+    });
+  });
 });
