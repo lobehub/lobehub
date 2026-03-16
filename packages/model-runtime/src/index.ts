@@ -1,6 +1,7 @@
 export * from './const/models';
 export * from './core/BaseAI';
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
+export type { ModelRuntimeHooks } from './core/ModelRuntime';
 export { ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
 export * from './core/RouterRuntime';

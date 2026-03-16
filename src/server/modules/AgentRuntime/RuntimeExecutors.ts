@@ -402,6 +402,10 @@ export const createRuntimeExecutors = (
             console.error(`[${operationLogId}][stream_error]`, errorData);
           },
         },
+        metadata: {
+          operationId,
+          topicId: state.metadata?.topicId,
+        },
         user: ctx.userId,
       });
 

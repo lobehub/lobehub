@@ -1,6 +1,7 @@
 import type { TracePayload } from '@lobechat/types';
 import type { ClientOptions } from 'openai';
 
+import { mergeMultipleChatMethodOptions } from '../helpers/mergeChatMethodOptions';
 import type { LobeBedrockAIParams } from '../providers/bedrock';
 import type { LobeCloudflareParams } from '../providers/cloudflare';
 import { LobeOpenAI } from '../providers/openai';
@@ -12,6 +13,7 @@ import type {
   EmbeddingsPayload,
   GenerateObjectPayload,
   ModelRequestOptions,
+  OnFinishData,
   PullModelParams,
   TextToSpeechPayload,
 } from '../types';
@@ -27,11 +29,28 @@ export interface AgentChatOptions {
   trace?: TracePayload;
 }
 
+export interface ModelRuntimeHooks {
+  /**
+   * Runs before the LLM call. Throw to abort (e.g., budget exceeded).
+   */
+  beforeChat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<void>;
+  /**
+   * Called after the stream completes. ModelRuntime handles merging into onFinal internally.
+   * Hook consumers only need to implement the callback — no need to deal with option merging.
+   */
+  onChatFinal?: (
+    data: OnFinishData,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+}
+
 export class ModelRuntime {
+  private _hooks?: ModelRuntimeHooks;
   private _runtime: LobeRuntimeAI;
 
-  constructor(runtime: LobeRuntimeAI) {
+  constructor(runtime: LobeRuntimeAI, hooks?: ModelRuntimeHooks) {
     this._runtime = runtime;
+    this._hooks = hooks;
   }
 
   /**
@@ -72,7 +91,23 @@ export class ModelRuntime {
       });
     }
 
-    return this._runtime.chat(payload, options);
+    // Hook: beforeChat — budget check, etc.
+    await this._hooks?.beforeChat?.(payload, options);
+
+    // Hook: onChatFinal — inject as onFinal callback, merged with existing options
+    let finalOptions = options;
+    if (this._hooks?.onChatFinal) {
+      const hookFn = this._hooks.onChatFinal;
+      const hookCallback: ChatMethodOptions = {
+        callback: {
+          onFinal: (data) => hookFn(data, { options, payload }),
+        },
+      };
+      const merged = mergeMultipleChatMethodOptions([hookCallback, ...(options ? [options] : [])]);
+      finalOptions = { ...options, ...merged };
+    }
+
+    return this._runtime.chat(payload, finalOptions);
   }
 
   async generateObject(payload: GenerateObjectPayload) {
@@ -117,6 +152,7 @@ export class ModelRuntime {
    * @description Initialize the runtime with the provider and the options
    * @param provider choose a model provider
    * @param params options of the choosed provider
+   * @param hooks optional hooks for lifecycle interception (billing, etc.)
    * @returns the runtime instance
    * Try to initialize the runtime with the provider and the options.
    * @example
@@ -135,12 +171,13 @@ export class ModelRuntime {
         LobeBedrockAIParams &
         LobeCloudflareParams & { apiKey?: string; apiVersion?: string; baseURL?: string }
     >,
+    hooks?: ModelRuntimeHooks,
   ) {
     // @ts-expect-error runtime map not include vertex so it will be undefined
     const providerAI = providerRuntimeMap[provider] ?? LobeOpenAI;
 
     const runtimeModel: LobeRuntimeAI = new providerAI(params);
 
-    return new ModelRuntime(runtimeModel);
+    return new ModelRuntime(runtimeModel, hooks);
   }
 }
