@@ -222,7 +222,7 @@ describe('ModelRuntime', () => {
 
       const result = await mockModelRuntime.generateObject(payload);
 
-      expect(LobeOpenAI.prototype.generateObject).toHaveBeenCalledWith(payload);
+      expect(LobeOpenAI.prototype.generateObject).toHaveBeenCalledWith(payload, undefined);
       expect(result).toBe(mockResponse);
     });
   });
