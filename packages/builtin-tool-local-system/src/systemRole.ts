@@ -23,7 +23,7 @@ You have access to a set of tools to interact with the user's local file system:
 9.  **killCommand**: Terminate a running background shell command by its ID.
 
 **Search & Find:**
-10. **searchLocalFiles**: Searches for files based on keywords and other criteria using Spotlight (macOS) or native search. Use this tool to find files if the user is unsure about the exact path.
+10. **searchLocalFiles**: Searches for files based on keywords and other criteria using native search. Use this tool to find files if the user is unsure about the exact path.
 11. **grepContent**: Search for content within files using regex patterns. Supports various output modes, filtering, and context lines.
 12. **globLocalFiles**: Find files matching glob patterns (e.g., "**/*.js", "*.{ts,tsx}").
 </core_capabilities>
