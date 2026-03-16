@@ -16,6 +16,17 @@ import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
 
+/**
+ * Normalize callback URL to support IP address access
+ * If callback URL is root path, use current host origin
+ */
+const normalizeCallbackUrl = (callbackUrl: string): string => {
+  if (typeof window !== 'undefined' && callbackUrl === '/') {
+    return `${window.location.origin}/`;
+  }
+  return callbackUrl;
+};
+
 type Step = 'email' | 'password';
 
 interface SignInFormValues {
@@ -68,11 +79,7 @@ export const useSignIn = () => {
           .catch(() => null));
       if (!emailValue) return;
 
-      let callbackUrl = searchParams.get('callbackUrl') || '/';
-      // Use current host for callback URL to support IP address access
-      if (typeof window !== 'undefined' && callbackUrl === '/') {
-        callbackUrl = `${window.location.origin}/`;
-      }
+      const callbackUrl = normalizeCallbackUrl(searchParams.get('callbackUrl') || '/');
       const { error } = await signIn.magicLink({ callbackURL: callbackUrl, email: emailValue });
       if (error) {
         message.error(error.message || t('betterAuth.signin.magicLinkError'));
@@ -171,11 +178,7 @@ export const useSignIn = () => {
   const handleSignIn = async (values: Pick<SignInFormValues, 'password'>) => {
     setLoading(true);
     try {
-      let callbackUrl = searchParams.get('callbackUrl') || '/';
-      // Use current host for callback URL to support IP address access
-      if (typeof window !== 'undefined' && callbackUrl === '/') {
-        callbackUrl = `${window.location.origin}/`;
-      }
+      const callbackUrl = normalizeCallbackUrl(searchParams.get('callbackUrl') || '/');
       const result = await signIn.email(
         { callbackURL: callbackUrl, email, password: values.password },
         {
@@ -217,11 +220,7 @@ export const useSignIn = () => {
         // Ignore localStorage errors (e.g., quota exceeded, private mode)
       }
 
-      let callbackUrl = searchParams.get('callbackUrl') || '/';
-      // Use current host for callback URL to support IP address access
-      if (typeof window !== 'undefined' && callbackUrl === '/') {
-        callbackUrl = `${window.location.origin}/`;
-      }
+      const callbackUrl = normalizeCallbackUrl(searchParams.get('callbackUrl') || '/');
       const additionalData = await getAdditionalData();
       const result = isBuiltinProvider(normalizedProvider)
         ? await signIn.social({
