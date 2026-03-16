@@ -107,6 +107,7 @@ export class ToolSystemRoleProvider extends BaseProvider {
             name: this.toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
           }),
         ),
+        description: manifest.meta?.description,
         identifier: manifest.identifier,
         name: manifest.meta?.title || manifest.identifier,
         systemRole: manifest.systemRole,

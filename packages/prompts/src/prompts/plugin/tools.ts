@@ -4,6 +4,7 @@ export interface API {
 }
 export interface Tool {
   apis: API[];
+  description?: string;
   identifier: string;
   name?: string;
   systemRole?: string;
@@ -12,14 +13,17 @@ export interface Tool {
 export const apiPrompt = (api: API) => `<api identifier="${api.name}">${api.desc}</api>`;
 
 export const toolPrompt = (tool: Tool) => {
-  // Only emit <tool> if there's a systemRole (usage instructions).
-  // API identifiers + descriptions are already in the tools schema,
-  // so repeating them here wastes tokens.
-  if (!tool.systemRole) return '';
-
-  return `<tool name="${tool.name}">
+  if (tool.systemRole) {
+    return `<tool name="${tool.name}">
 <tool.instructions>${tool.systemRole}</tool.instructions>
 </tool>`;
+  }
+
+  if (tool.description) {
+    return `<tool name="${tool.name}">${tool.description}</tool>`;
+  }
+
+  return '';
 };
 
 export const toolsPrompts = (tools: Tool[]) => {

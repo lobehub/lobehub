@@ -6,36 +6,42 @@ import { apiPrompt, toolPrompt, toolsPrompts } from './tools';
 describe('Prompt Generation Utils', () => {
   describe('apiPrompt', () => {
     it('should generate correct api prompt', () => {
-      const api = {
-        name: 'testApi',
-        desc: 'Test API Description',
-      };
-
+      const api = { name: 'testApi', desc: 'Test API Description' };
       expect(apiPrompt(api)).toBe(`<api identifier="testApi">Test API Description</api>`);
     });
   });
 
   describe('toolPrompt', () => {
-    it('should generate tool prompt with instruction', () => {
+    it('should use tool.instructions when systemRole is present', () => {
       const tool: Tool = {
         name: 'testTool',
         identifier: 'test-id',
-        systemRole: 'Test System Role',
-        apis: [{ name: 'api1', desc: 'API 1 Description' }],
+        description: 'Short desc',
+        systemRole: 'Detailed instructions',
+        apis: [{ name: 'api1', desc: 'API 1' }],
       };
 
-      const expected = `<tool name="testTool">
-<tool.instructions>Test System Role</tool.instructions>
-</tool>`;
-
-      expect(toolPrompt(tool)).toBe(expected);
+      expect(toolPrompt(tool)).toBe(`<tool name="testTool">
+<tool.instructions>Detailed instructions</tool.instructions>
+</tool>`);
     });
 
-    it('should return empty string when no systemRole', () => {
+    it('should use description as children when no systemRole', () => {
       const tool: Tool = {
         name: 'testTool',
         identifier: 'test-id',
-        apis: [{ name: 'api1', desc: 'API 1 Description' }],
+        description: 'A useful tool for testing',
+        apis: [{ name: 'api1', desc: 'API 1' }],
+      };
+
+      expect(toolPrompt(tool)).toBe(`<tool name="testTool">A useful tool for testing</tool>`);
+    });
+
+    it('should return empty when no systemRole and no description', () => {
+      const tool: Tool = {
+        name: 'testTool',
+        identifier: 'test-id',
+        apis: [{ name: 'api1', desc: 'API 1' }],
       };
 
       expect(toolPrompt(tool)).toBe('');
@@ -43,7 +49,7 @@ describe('Prompt Generation Utils', () => {
   });
 
   describe('toolsPrompts', () => {
-    it('should only include tools with systemRole', () => {
+    it('should include tools with systemRole and description', () => {
       const tools: Tool[] = [
         {
           name: 'tool1',
@@ -54,31 +60,26 @@ describe('Prompt Generation Utils', () => {
         {
           name: 'tool2',
           identifier: 'id2',
+          description: 'Tool 2 description',
           apis: [{ name: 'api2', desc: 'API 2' }],
+        },
+        {
+          name: 'tool3',
+          identifier: 'id3',
+          apis: [{ name: 'api3', desc: 'API 3' }],
         },
       ];
 
       const expected = `<tool name="tool1">
 <tool.instructions>Instructions for tool1</tool.instructions>
-</tool>`;
+</tool>
+<tool name="tool2">Tool 2 description</tool>`;
 
       expect(toolsPrompts(tools)).toBe(expected);
     });
 
     it('should return empty for empty tools array', () => {
       expect(toolsPrompts([])).toBe('');
-    });
-
-    it('should return empty when no tools have systemRole', () => {
-      const tools: Tool[] = [
-        {
-          name: 'tool1',
-          identifier: 'id1',
-          apis: [{ name: 'api1', desc: 'API 1' }],
-        },
-      ];
-
-      expect(toolsPrompts(tools)).toBe('');
     });
   });
 });
