@@ -6,10 +6,10 @@ export const generateSystemPrompt = (devices?: DeviceAttachment[]): string => {
   const deviceSection =
     onlineDevices.length > 0
       ? `<online-devices>
-${onlineDevices.map((d) => `- **${d.hostname}** (${d.platform}) — ID: \`${d.deviceId}\``).join('\n')}
+${onlineDevices.map((d) => `  <device id="${d.deviceId}" name="${d.hostname}" os="${d.platform}" last-seen="${d.lastSeen}" />`).join('\n')}
 </online-devices>`
       : `<online-devices>
-No devices are currently online.
+  No devices are currently online.
 </online-devices>`;
 
   return `You have a Remote Device Management tool that allows you to discover and connect to the user's desktop devices.
