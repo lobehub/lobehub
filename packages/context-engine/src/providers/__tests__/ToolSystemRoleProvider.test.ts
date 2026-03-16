@@ -72,9 +72,10 @@ describe('ToolSystemRoleProvider', () => {
     const ctx = createContext(messages);
     const result = await provider.process(ctx);
 
-    // No systemRole → no injection
+    // Has apis → still injects tool info even without systemRole
     const systemMessage = result.messages.find((msg) => msg.role === 'system');
-    expect(systemMessage).toBeUndefined();
+    expect(systemMessage).toBeDefined();
+    expect(systemMessage!.content).toContain('No Instructions');
   });
 
   it('should merge tool system role with existing system message', async () => {
