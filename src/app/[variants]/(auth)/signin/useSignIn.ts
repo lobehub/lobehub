@@ -68,7 +68,11 @@ export const useSignIn = () => {
           .catch(() => null));
       if (!emailValue) return;
 
-      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      let callbackUrl = searchParams.get('callbackUrl') || '/';
+      // Use current host for callback URL to support IP address access
+      if (typeof window !== 'undefined' && callbackUrl === '/') {
+        callbackUrl = `${window.location.origin}/`;
+      }
       const { error } = await signIn.magicLink({ callbackURL: callbackUrl, email: emailValue });
       if (error) {
         message.error(error.message || t('betterAuth.signin.magicLinkError'));
@@ -167,7 +171,11 @@ export const useSignIn = () => {
   const handleSignIn = async (values: Pick<SignInFormValues, 'password'>) => {
     setLoading(true);
     try {
-      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      let callbackUrl = searchParams.get('callbackUrl') || '/';
+      // Use current host for callback URL to support IP address access
+      if (typeof window !== 'undefined' && callbackUrl === '/') {
+        callbackUrl = `${window.location.origin}/`;
+      }
       const result = await signIn.email(
         { callbackURL: callbackUrl, email, password: values.password },
         {
@@ -209,7 +217,11 @@ export const useSignIn = () => {
         // Ignore localStorage errors (e.g., quota exceeded, private mode)
       }
 
-      const callbackUrl = searchParams.get('callbackUrl') || '/';
+      let callbackUrl = searchParams.get('callbackUrl') || '/';
+      // Use current host for callback URL to support IP address access
+      if (typeof window !== 'undefined' && callbackUrl === '/') {
+        callbackUrl = `${window.location.origin}/`;
+      }
       const additionalData = await getAdditionalData();
       const result = isBuiltinProvider(normalizedProvider)
         ? await signIn.social({
