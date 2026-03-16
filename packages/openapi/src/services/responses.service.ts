@@ -22,7 +22,7 @@ import type {
  * Response API Service
  * Handles OpenResponses protocol request execution via AiAgentService.execAgent
  *
- * The `model` field is treated as an agent slug.
+ * The `model` field is treated as an agent ID.
  * Execution is delegated to execAgent (background mode),
  * with executeSync used when synchronous results are needed.
  */
@@ -191,7 +191,7 @@ export class ResponsesService extends BaseService {
     const createdAt = Math.floor(Date.now() / 1000);
 
     try {
-      const slug = params.model;
+      const model = params.model;
       const prompt = this.extractPrompt(params.input);
       const instructions = this.buildInstructions(params);
 
@@ -202,19 +202,20 @@ export class ResponsesService extends BaseService {
 
       this.log('info', 'Creating response via execAgent', {
         hasInstructions: !!instructions,
+        model,
         previousTopicId,
         prompt: prompt.slice(0, 50),
-        slug,
       });
 
       // 1. Create agent operation without auto-start
+      // model field is used as agentId
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
         instructions,
         prompt,
-        slug,
         stream: false,
       });
 
@@ -277,7 +278,7 @@ export class ResponsesService extends BaseService {
     const contentIndex = 0;
 
     try {
-      const slug = params.model;
+      const model = params.model;
       const prompt = this.extractPrompt(params.input);
       const instructions = this.buildInstructions(params);
 
@@ -287,13 +288,14 @@ export class ResponsesService extends BaseService {
         : null;
 
       // 1. Create agent operation (before generating responseId so we have topicId)
+      // model field is used as agentId
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
         instructions,
         prompt,
-        slug,
         stream: true,
       });
 
