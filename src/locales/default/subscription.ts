@@ -426,7 +426,7 @@ export default {
   'switchToYearly.title': 'Switch to Yearly Billing',
   'tab.billing': 'Billing Management',
   'tab.credits': 'Credits Management',
-  'tab.plans': 'Subscription Plans',
+  'tab.plans': 'Plans',
   'tab.referral': 'Referral Rewards',
   'tab.spend': 'Credits Details',
   'tab.usage': 'Usage Statistics',
