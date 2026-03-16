@@ -532,7 +532,7 @@ export class SearchRepo {
         and(
           eq(files.userId, this.userId),
           ne(files.fileType, 'custom/document'),
-          sql`${files.name} @@@ ${bm25Query}`,
+          or(sql`${files.name} @@@ ${bm25Query}`, ilike(files.name, `%${query}%`)),
         ),
       )
       .orderBy(sql`paradedb.score(${files.id}) DESC`)
