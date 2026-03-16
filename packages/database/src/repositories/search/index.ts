@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -505,16 +505,19 @@ export class SearchRepo {
 
   /**
    * Search files by name (BM25)
+   * Note: ICU tokenizer treats hyphenated/dotted names (e.g. "react-component.jsx") as single tokens,
+   * so partial searches like "component" won't match. Full words or prefixes work fine.
    */
   private async searchFiles(query: string, limit: number): Promise<FileSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
-    // BM25 search on files table first (no JOINs to avoid interfering with paradedb.score)
-    const matchedFiles = await this.db
+    const rows = await this.db
       .select({
+        content: documents.content,
         createdAt: files.createdAt,
         fileType: files.fileType,
         id: files.id,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
         name: files.name,
         score: sql<number>`paradedb.score(${files.id})`,
         size: files.size,
@@ -522,6 +525,8 @@ export class SearchRepo {
         url: files.url,
       })
       .from(files)
+      .leftJoin(documents, eq(files.id, documents.fileId))
+      .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
       .where(
         and(
           eq(files.userId, this.userId),
@@ -532,40 +537,20 @@ export class SearchRepo {
       .orderBy(sql`paradedb.score(${files.id}) DESC`)
       .limit(limit);
 
-    if (matchedFiles.length === 0) return [];
-
-    // Enrich with document content and knowledgeBase info via JOIN
-    const fileIds = matchedFiles.map((f) => f.id);
-    const enriched = await this.db
-      .select({
-        content: documents.content,
-        fileId: files.id,
-        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
-      })
-      .from(files)
-      .leftJoin(documents, eq(files.id, documents.fileId))
-      .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
-      .where(inArray(files.id, fileIds));
-
-    const enrichMap = new Map(enriched.map((e) => [e.fileId, e]));
-
-    return this.mapScoresToRelevance(matchedFiles).map((row) => {
-      const extra = enrichMap.get(row.id);
-      return {
-        createdAt: row.createdAt,
-        description: this.truncate(extra?.content ?? null),
-        fileType: row.fileType,
-        id: row.id,
-        knowledgeBaseId: extra?.knowledgeBaseId ?? null,
-        name: row.name,
-        relevance: row.relevance,
-        size: row.size,
-        title: row.name,
-        type: 'file' as const,
-        updatedAt: row.updatedAt,
-        url: row.url,
-      };
-    });
+    return this.mapScoresToRelevance(rows).map((row) => ({
+      createdAt: row.createdAt,
+      description: this.truncate(row.content),
+      fileType: row.fileType,
+      id: row.id,
+      knowledgeBaseId: row.knowledgeBaseId,
+      name: row.name,
+      relevance: row.relevance,
+      size: row.size,
+      title: row.name,
+      type: 'file' as const,
+      updatedAt: row.updatedAt,
+      url: row.url,
+    }));
   }
 
   /**
