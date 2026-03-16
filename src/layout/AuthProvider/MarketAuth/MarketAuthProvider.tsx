@@ -191,8 +191,9 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         refreshToken: refreshTokenValue,
       });
 
-      // Calculate new expiration time
-      const expiresAt = Date.now() + response.expiresIn * 1000;
+      // Calculate new expiration time (default to 1 hour if not provided)
+      const expiresIn = response.expiresIn ?? 3600;
+      const expiresAt = Date.now() + expiresIn * 1000;
 
       // Save new tokens to DB
       await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
@@ -204,7 +205,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       const newSession: MarketAuthSession = {
         accessToken: response.accessToken,
         expiresAt,
-        expiresIn: response.expiresIn,
+        expiresIn,
         scope: response.scope || 'openid profile email',
         tokenType: 'Bearer',
         userInfo: userInfo || undefined,
@@ -513,8 +514,9 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         refreshToken: dbTokens.refreshToken,
       });
 
-      // Calculate new expiration time
-      const expiresAt = Date.now() + response.expiresIn * 1000;
+      // Calculate new expiration time (default to 1 hour if not provided)
+      const expiresIn = response.expiresIn ?? 3600;
+      const expiresAt = Date.now() + expiresIn * 1000;
 
       // Save new tokens to DB
       await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
@@ -526,7 +528,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       const newSession: MarketAuthSession = {
         accessToken: response.accessToken,
         expiresAt,
-        expiresIn: response.expiresIn,
+        expiresIn,
         scope: response.scope || 'openid profile email',
         tokenType: 'Bearer',
         userInfo: userInfo || undefined,
