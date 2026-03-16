@@ -17,12 +17,23 @@ const errorHandlingLink: TRPCLink<ToolsRouter> = () => {
         complete: () => observer.complete(),
         error: async (err) => {
           const status = err.data?.httpStatus as number;
+          const code = err.data?.code as string;
+
+          console.info('[toolsClient] Error:', {
+            code,
+            message: err.message,
+            path: op.path,
+            status,
+          });
 
           // Check if this is a market API call with 401 error
-          if (status === 401 && op.path.startsWith('market.')) {
+          // UNAUTHORIZED tRPC code maps to HTTP 401
+          const is401 = status === 401 || code === 'UNAUTHORIZED';
+          if (is401 && op.path.startsWith('market.')) {
             const now = Date.now();
             if (now - lastMarket401Time > MIN_401_INTERVAL) {
               lastMarket401Time = now;
+              console.info('[toolsClient] Emitting market-unauthorized event for path:', op.path);
               // Emit event for MarketAuthProvider to handle
               const { marketAuthEvents } = await import('@/layout/AuthProvider/MarketAuth/events');
               marketAuthEvents.emit('market-unauthorized', {
