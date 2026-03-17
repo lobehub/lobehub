@@ -356,11 +356,15 @@ export const resolveRuntimeAgentConfig = (
 
     // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
     // to system config to avoid mixing credentials.
-    return ModelRuntime.initializeWithProvider(provider, {
-      apiKey: userApiKey,
-      baseURL: userBaseURL,
-      userId: options?.userId,
-    });
+    return ModelRuntime.initializeWithProvider(
+      provider,
+      {
+        apiKey: userApiKey,
+        baseURL: userBaseURL,
+        userId: options?.userId,
+      },
+      hooks,
+    );
   }
 
   debugRuntimeInit(agent, {
@@ -370,11 +374,15 @@ export const resolveRuntimeAgentConfig = (
     source: 'system-config' as const,
   });
 
-  return ModelRuntime.initializeWithProvider(agent.provider || 'openai', {
-    apiKey: agent.apiKey || options?.fallback?.apiKey,
-    baseURL: agent.baseURL || options?.fallback?.baseURL,
-    userId: options?.userId,
-  });
+  return ModelRuntime.initializeWithProvider(
+    agent.provider || 'openai',
+    {
+      apiKey: agent.apiKey || options?.fallback?.apiKey,
+      baseURL: agent.baseURL || options?.fallback?.baseURL,
+      userId: options?.userId,
+    },
+    hooks,
+  );
 };
 
 const logRuntime = debug('lobe-server:memory:user-memory:runtime');
