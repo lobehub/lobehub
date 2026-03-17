@@ -41,8 +41,7 @@
     "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.70",
-    "electron-liquid-glass": "^1.1.1"
+    "@napi-rs/canvas": "^0.1.70"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -68,9 +67,9 @@
     "cookie": "^1.1.1",
     "cross-env": "^10.1.0",
     "diff": "^8.0.2",
-    "electron": "^38.7.2",
-    "electron-builder": "^26.0.12",
-    "electron-devtools-installer": "^3.2.0",
+    "electron": "41.0.2",
+    "electron-builder": "^26.8.1",
+    "electron-devtools-installer": "4.0.0",
     "electron-is": "^3.0.0",
     "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",
