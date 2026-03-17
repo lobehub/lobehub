@@ -341,6 +341,7 @@ export class ChatService extends BaseService {
 
       // 调用聊天 API
       const response = await modelRuntime.chat(chatPayload, {
+        metadata: { trigger: 'api' },
         user: this.userId!,
       });
 

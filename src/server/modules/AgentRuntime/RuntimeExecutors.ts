@@ -410,6 +410,7 @@ export const createRuntimeExecutors = (
         metadata: {
           operationId,
           topicId: state.metadata?.topicId,
+          trigger: state.metadata?.trigger,
         },
         user: ctx.userId,
       });

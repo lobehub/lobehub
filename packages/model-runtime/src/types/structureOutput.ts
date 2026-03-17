@@ -34,6 +34,9 @@ export interface GenerateObjectOptions {
    */
   headers?: Record<string, any>;
 
+  /** Metadata passed to hooks (billing, tracing, etc.) */
+  metadata?: Record<string, unknown>;
+
   onUsage?: (usage: ModelUsage) => void | Promise<void>;
 
   signal?: AbortSignal;

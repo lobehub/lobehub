@@ -778,6 +778,7 @@ export class AiAgentService {
           groupId: appContext?.groupId,
           threadId: appContext?.threadId,
           topicId,
+          trigger,
         },
         autoStart,
         completionWebhook,

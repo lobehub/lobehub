@@ -135,6 +135,7 @@ export interface OperationCreationParams {
     groupId?: string | null;
     threadId?: string | null;
     topicId?: string | null;
+    trigger?: string;
   };
   autoStart?: boolean;
   /**
