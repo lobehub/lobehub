@@ -302,6 +302,36 @@ describe('convertOpenAIMessages', () => {
     expect((result[0] as any).reasoning_content).toBe('some reasoning content');
   });
 
+  it('should filter internal thinking content parts but preserve reasoning_content', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            signature: 'sig_123',
+            thinking: 'internal reasoning',
+            type: 'thinking',
+          },
+          {
+            text: 'Visible answer',
+            type: 'text',
+          },
+        ],
+        reasoning_content: 'internal reasoning',
+      },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'assistant',
+        content: [{ text: 'Visible answer', type: 'text' }],
+        reasoning_content: 'internal reasoning',
+      },
+    ]);
+  });
+
   it('should filter out reasoning but preserve reasoning_content field', async () => {
     const messages = [
       {
