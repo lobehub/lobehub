@@ -389,7 +389,7 @@ export default {
     'Registration method: Invited users register via referral link or enter referral code on registration page',
   'referral.rules.reward': 'Reward: Referrer and invitee each receive {{reward}}M credits',
   'referral.rules.rewardDelay':
-    'Reward processing: Credits may take up to 1 hour to be distributed after completing a valid action. Please be patient',
+    'Reward processing: Credits may take up to 6 hours to be distributed after completing a valid action. Please be patient',
   'referral.rules.title': 'Program Rules',
   'referral.rules.validInvitation':
     'Valid invitation: Invitee registers with your referral code and performs one valid action',
