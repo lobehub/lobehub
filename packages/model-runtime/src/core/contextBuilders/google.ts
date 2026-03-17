@@ -289,6 +289,16 @@ const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, an
       continue;
     }
 
+    // Normalize array type to scalar (Gemini rejects type: ['string', 'null'])
+    if (key === 'type' && Array.isArray(value)) {
+      const scalarType = value.find((t: string) => t !== 'null');
+      result[key] = scalarType ?? 'string';
+      if (value.includes('null')) {
+        result['nullable'] = true;
+      }
+      continue;
+    }
+
     // Recursively process nested objects
     if (value && typeof value === 'object') {
       result[key] = sanitizeSchemaForGoogle(value);
