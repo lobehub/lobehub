@@ -1123,6 +1123,49 @@ describe('LobeOpenAICompatibleFactory', () => {
         { timeout: 10000 },
       );
 
+      it('should enable strictToolPairing when building Responses API input', async () => {
+        const LobeMockProviderUseResponses = createOpenAICompatibleRuntime({
+          baseURL: 'https://api.test.com/v1',
+          chatCompletion: {
+            useResponse: true,
+          },
+          provider: ModelProvider.OpenAI,
+        });
+
+        const inst = new LobeMockProviderUseResponses({ apiKey: 'test' });
+        const convertSpy = vi
+          .spyOn(openaiHelpers, 'convertOpenAIResponseInputs')
+          .mockResolvedValue([{ role: 'user', content: 'mocked input' }] as any);
+
+        vi.spyOn(inst['client'].responses, 'create').mockResolvedValue({
+          toReadableStream: () =>
+            new ReadableStream({
+              start(controller) {
+                controller.close();
+              },
+            }),
+        } as any);
+
+        try {
+          await inst.chat({
+            messages: [{ content: 'hi', role: 'user' }],
+            model: 'any-model',
+            temperature: 0,
+          });
+        } catch {
+          // Ignore stream mock limitations; we only care about input conversion options.
+        }
+
+        expect(convertSpy).toHaveBeenCalledWith(
+          [{ content: 'hi', role: 'user' }],
+          expect.objectContaining({
+            forceImageBase64: undefined,
+            forceVideoBase64: undefined,
+            strictToolPairing: true,
+          }),
+        );
+      });
+
       it(
         'should route to Responses API when model matches useResponseModels',
         async () => {
