@@ -5,14 +5,14 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
-import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
-import { isMacOS } from '@/utils/platform';
+import { getPlatform, isMacOS } from '@/utils/platform';
 
 import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
 import WinControl, { WINDOW_CONTROL_WIDTH } from './WinControl';
 
 const isMac = isMacOS();
+const isLinux = getPlatform() === 'Linux';
 
 /**
  * A simple, minimal TitleBar for Electron windows.
@@ -20,16 +20,9 @@ const isMac = isMacOS();
  * Use this for secondary windows like onboarding, settings, etc.
  */
 const SimpleTitleBar: FC = () => {
-  const [isAppStateInit, isLinux, initElectronAppState] = useElectronStore((s) => [
-    s.isAppStateInit,
-    s.appState.isLinux,
-    s.useInitElectronAppState,
-  ]);
-
-  initElectronAppState();
   useWatchThemeUpdate();
 
-  const showWinControl = isAppStateInit && !isMac && !!isLinux;
+  const showWinControl = isLinux && !isMac;
 
   return (
     <Flexbox

@@ -258,6 +258,11 @@ export class BrowserManager {
     }
   }
 
+  isWindowMaximized(identifier: string) {
+    const browser = this.browsers.get(identifier);
+    return browser?.browserWindow.isMaximized() ?? false;
+  }
+
   setWindowSize(identifier: string, size: { height?: number; width?: number }) {
     const browser = this.browsers.get(identifier);
     browser?.setWindowSize(size);

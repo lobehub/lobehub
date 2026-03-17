@@ -2,8 +2,8 @@
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { Maximize2, MinusIcon, XIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { Maximize2Icon, Minimize2Icon, MinusIcon, XIcon } from 'lucide-react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
@@ -38,6 +38,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const WinControl = memo(() => {
   const { t } = useTranslation('electron');
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const syncWindowState = async () => {
+      const nextState = await electronSystemService.isWindowMaximized();
+      if (mounted) setIsMaximized(nextState);
+    };
+
+    void syncWindowState();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const controls = useMemo(
     () => [
@@ -48,10 +64,13 @@ const WinControl = memo(() => {
         onClick: () => void electronSystemService.minimizeWindow(),
       },
       {
-        icon: Maximize2,
+        icon: isMaximized ? Minimize2Icon : Maximize2Icon,
         key: 'maximize',
-        label: t('window.maximize'),
-        onClick: () => void electronSystemService.maximizeWindow(),
+        label: t(isMaximized ? 'window.restore' : 'window.maximize'),
+        onClick: async () => {
+          await electronSystemService.maximizeWindow();
+          setIsMaximized(await electronSystemService.isWindowMaximized());
+        },
       },
       {
         icon: XIcon,
@@ -60,7 +79,7 @@ const WinControl = memo(() => {
         onClick: () => void electronSystemService.closeWindow(),
       },
     ],
-    [t],
+    [isMaximized, t],
   );
 
   return (

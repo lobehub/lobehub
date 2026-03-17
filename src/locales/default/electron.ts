@@ -130,4 +130,5 @@ export default {
   'window.close': 'Close window',
   'window.maximize': 'Maximize window',
   'window.minimize': 'Minimize window',
+  'window.restore': 'Restore window',
 };

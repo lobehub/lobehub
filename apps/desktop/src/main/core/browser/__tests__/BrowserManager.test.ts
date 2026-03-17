@@ -398,6 +398,24 @@ describe('BrowserManager', () => {
         expect(browser?.browserWindow.maximize).not.toHaveBeenCalled();
       });
     });
+
+    describe('isWindowMaximized', () => {
+      it('should return false when window is not maximized', () => {
+        manager.retrieveByIdentifier('app');
+        const browser = manager.browsers.get('app');
+        browser!.browserWindow.isMaximized = vi.fn().mockReturnValue(false);
+
+        expect(manager.isWindowMaximized('app')).toBe(false);
+      });
+
+      it('should return true when window is maximized', () => {
+        manager.retrieveByIdentifier('app');
+        const browser = manager.browsers.get('app');
+        browser!.browserWindow.isMaximized = vi.fn().mockReturnValue(true);
+
+        expect(manager.isWindowMaximized('app')).toBe(true);
+      });
+    });
   });
 
   describe('getIdentifierByWebContents', () => {
