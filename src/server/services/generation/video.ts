@@ -58,7 +58,7 @@ export class VideoGenerationService {
   async processVideoForGeneration(
     videoUrl: string,
     options?: {
-      apiKey?: string;
+      headers?: Record<string, string>;
     },
   ): Promise<VideoProcessResult> {
     log('Processing video from URL: %s', videoUrl);
@@ -170,21 +170,15 @@ export class VideoGenerationService {
   private async downloadVideo(
     url: string,
     options?: {
-      apiKey?: string;
+      headers?: Record<string, string>;
     },
   ): Promise<string> {
     const ext = path.extname(new URL(url).pathname).toLowerCase() || '.mp4';
     const tempVideoPath = path.join(os.tmpdir(), `lobe-video-${nanoid()}${ext}`);
     log('Downloading video to: %s', tempVideoPath);
 
-    const headers = options?.apiKey
-      ? {
-          Authorization: `Bearer ${options.apiKey}`,
-        }
-      : undefined;
-
     const response = await fetch(url, {
-      headers,
+      headers: options?.headers,
       signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
     });
     if (!response.ok) {

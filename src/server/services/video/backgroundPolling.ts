@@ -50,7 +50,7 @@ async function processBackgroundPolling(
   } = params;
 
   log(
-    '🎬 Starting background video polling for task: %s (provider: %s, inferenceId: %s)',
+    'Starting background video polling for task: %s (provider: %s, inferenceId: %s)',
     asyncTaskId,
     provider,
     inferenceId,
@@ -71,7 +71,7 @@ async function processBackgroundPolling(
     log('Video polling succeeded for task: %s, processing video...', asyncTaskId);
 
     const processResult = await videoService.processVideoForGeneration(pollResult.videoUrl, {
-      apiKey: pollResult.apiKey,
+      headers: pollResult.headers,
     });
 
     const asset: VideoGenerationAsset = {
@@ -121,7 +121,7 @@ async function processBackgroundPolling(
 async function pollUntilCompletion(
   modelRuntime: any,
   inferenceId: string,
-): Promise<{ videoUrl: string; apiKey?: string } | null> {
+): Promise<{ headers?: Record<string, string>; videoUrl: string } | null> {
   const maxRetries = 120;
   const pollingInterval = 5000;
 
@@ -133,7 +133,7 @@ async function pollUntilCompletion(
 
       if (result.status === 'success') {
         log('Video generation succeeded for task: %s', inferenceId);
-        return { apiKey: result.apiKey, videoUrl: result.videoUrl };
+        return { headers: result.headers, videoUrl: result.videoUrl };
       }
 
       if (result.status === 'failed') {

@@ -51,7 +51,7 @@ import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';
 import { createOpenAICompatibleImage } from './createImage';
-import { createOpenAICompatibleVideo, handlePollOpenAICompatibleVideoStatus } from './createVideo';
+import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 
 export type { PollVideoStatusResult };
@@ -594,11 +594,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
 
       log('using default createOpenAICompatibleVideo');
-      const videoClient = new OpenAI({
+      return createOpenAICompatibleVideo(payload, {
+        ...this._options,
         apiKey: this._options.apiKey!,
-        baseURL: this._options.baseURL || 'https://api.openai.com/v1',
+        baseURL: this._options.baseURL || '',
+        provider,
       });
-      return createOpenAICompatibleVideo(videoClient, payload, provider);
     }
 
     async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
@@ -624,12 +625,13 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         });
       }
 
-      log('using default handlePollOpenAICompatibleVideoStatus');
-      const videoClient = new OpenAI({
+      log('using default pollOpenAICompatibleVideoStatus');
+      return pollOpenAICompatibleVideoStatus(inferenceId, {
+        ...this._options,
         apiKey: this._options.apiKey!,
-        baseURL: this._options.baseURL || 'https://api.openai.com/v1',
+        baseURL: this._options.baseURL || '',
+        provider,
       });
-      return handlePollOpenAICompatibleVideoStatus(videoClient, inferenceId, provider);
     }
 
     async models() {

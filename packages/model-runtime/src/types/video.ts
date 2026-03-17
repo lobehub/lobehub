@@ -23,7 +23,7 @@ export type CreateVideoResponse =
 
 export type PollVideoStatusResult =
   | {
-      apiKey?: string;
+      headers?: Record<string, string>;
       status: 'success';
       videoUrl: string;
     }
