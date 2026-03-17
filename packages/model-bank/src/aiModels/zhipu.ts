@@ -1264,7 +1264,6 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     description:
       'Vidu Q1 is Vidu’s next-generation video generation foundation model, focused on high-quality video creation. It produces content with fixed specifications of 5 seconds, 24 FPS, and 1080P resolution. Through deep optimization of visual clarity, the overall image quality and texture are significantly improved, while issues such as hand deformation and frame jitter are greatly reduced. The realistic style closely approaches real-world scenes, and 2D animation styles are preserved with high fidelity. Transitions between start and end frames are smoother, making it well suited for high-demand creative scenarios such as film production, advertising, and animated short dramas.',
     displayName: 'ViduQ1-Start-End',
-    enabled: true,
     id: 'viduq1-start-end',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -1321,7 +1320,6 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     description:
       'Vidu Q1 is Vidu’s next-generation video generation foundation model, focused on high-quality video creation. It produces content with fixed specifications of 5 seconds, 24 FPS, and 1080P resolution. Through deep optimization of visual clarity, the overall image quality and texture are significantly improved, while issues such as hand deformation and frame jitter are greatly reduced. The realistic style closely approaches real-world scenes, and 2D animation styles are preserved with high fidelity. Transitions between start and end frames are smoother, making it well suited for high-demand creative scenarios such as film production, advertising, and animated short dramas.',
     displayName: 'ViduQ1-Image',
-    enabled: true,
     id: 'viduq1-image',
     parameters: {
       aspectRatio: {
@@ -1411,7 +1409,6 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     description:
       'CogVideoX-2 is Zhipu’s new-generation video generation foundation model, with image-to-video capabilities improved by 38%. It delivers significant enhancements in large-scale motion handling, visual stability, instruction adherence, artistic style, and overall visual aesthetics.',
     displayName: 'CogVideoX-2',
-    enabled: true,
     id: 'cogvideox-2',
     parameters: {
       generateAudio: { default: true },

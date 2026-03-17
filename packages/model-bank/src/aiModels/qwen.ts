@@ -3500,15 +3500,16 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
       prompt: { default: '' },
       resolution: {
-        default: '1080p',
-        enum: ['720p', '1080p'],
+        default: '1080P',
+        enum: ['720P', '1080P'],
       },
       seed: { default: null },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2026-01-17',
     type: 'video',
   },
   {
@@ -3524,15 +3525,16 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
       prompt: { default: '' },
       resolution: {
-        default: '1080p',
-        enum: ['720p', '1080p'],
+        default: '1080P',
+        enum: ['720P', '1080P'],
       },
       seed: { default: null },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-12-16',
     type: 'video',
   },
   {
@@ -3562,16 +3564,16 @@ const qwenVideoModels: AIVideoModelCard[] = [
       seed: { default: null },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-12-16',
     type: 'video',
   },
   {
     description:
       'Wanxiang 2.5 Preview supports automatic voiceover generation and the ability to incorporate custom audio files.',
     displayName: 'Wan2.5 I2V Preview',
-    enabled: true,
     id: 'wan2.5-i2v-preview',
     parameters: {
       imageUrl: {
@@ -3580,21 +3582,21 @@ const qwenVideoModels: AIVideoModelCard[] = [
       duration: { default: 5, enum: [5, 10] },
       prompt: { default: '' },
       resolution: {
-        default: '1080p',
-        enum: ['480p', '720p', '1080p'],
+        default: '1080P',
+        enum: ['480P', '720P', '1080P'],
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-09-23',
     type: 'video',
   },
   {
     description:
       'Wanxiang 2.5 Preview supports automatic voiceover generation and the ability to incorporate custom audio files.',
     displayName: 'Wan2.5 T2V Preview',
-    enabled: true,
     id: 'wan2.5-t2v-preview',
     parameters: {
       duration: { default: 5, enum: [5, 10] },
@@ -3619,9 +3621,10 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-09-23',
     type: 'video',
   },
   {
@@ -3640,13 +3643,14 @@ const qwenVideoModels: AIVideoModelCard[] = [
       prompt: { default: '' },
       resolution: {
         default: '720P',
-        enum: ['480p', '720p', '1080p'],
+        enum: ['480P', '720P', '1080P'],
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-09-12',
     type: 'video',
   },
   {
@@ -3665,20 +3669,20 @@ const qwenVideoModels: AIVideoModelCard[] = [
       prompt: { default: '' },
       resolution: {
         default: '720P',
-        enum: ['720p'],
+        enum: ['720P'],
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-09-12',
     type: 'video',
   },
   {
     description:
       'Wanxiang 2.2 Speed Edition delivers ultra-fast generation, with more accurate prompt understanding and camera control. It maintains consistency of visual elements while significantly improving overall stability and success rate.',
     displayName: 'Wan2.2 I2V Flash',
-    enabled: true,
     id: 'wan2.2-i2v-flash',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -3688,20 +3692,20 @@ const qwenVideoModels: AIVideoModelCard[] = [
       prompt: { default: '' },
       resolution: {
         default: '720P',
-        enum: ['480p', '720p', '1080p'],
+        enum: ['480P', '720P', '1080P'],
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-08-11',
     type: 'video',
   },
   {
     description:
       'Wanxiang 2.2 Pro Edition offers more accurate prompt understanding and controllable camera movements. It maintains consistency of visual elements while significantly improving stability and success rate, and generates richer, more detailed content.',
     displayName: 'Wan2.2 I2V Plus',
-    enabled: true,
     id: 'wan2.2-i2v-plus',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -3710,21 +3714,21 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
       prompt: { default: '' },
       resolution: {
-        default: '1080p',
-        enum: ['480p', '1080p'],
+        default: '1080P',
+        enum: ['480P', '1080P'],
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-07-28',
     type: 'video',
   },
   {
     description:
       'Wanxiang 2.2 Pro Edition provides more accurate prompt understanding, delivers stable and smooth motion generation, and produces richer, more detailed visuals.',
     displayName: 'Wan2.2 T2V Plus',
-    enabled: true,
     id: 'wan2.2-t2v-plus',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -3744,15 +3748,15 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-07-28',
     type: 'video',
   },
   {
     description: 'Wanxiang 2.1 Speed Edition offers high cost-performance.',
     displayName: 'Wanxiang2.1 I2V Turbo',
-    enabled: true,
     id: 'wanx2.1-i2v-turbo',
     parameters: {
       duration: { default: 5, enum: [3, 4, 5] },
@@ -3761,21 +3765,21 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
       prompt: { default: '' },
       resolution: {
-        default: '720p',
-        enum: ['480p', '720p'],
+        default: '720P',
+        enum: ['480P', '720P'],
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-02-25',
     type: 'video',
   },
   {
     description:
       'Wanxiang 2.1 Pro Edition delivers more visually refined and higher-quality imagery.',
     displayName: 'Wanxiang2.1 I2V Plus',
-    enabled: true,
     id: 'wanx2.1-i2v-plus',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -3784,20 +3788,20 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
       prompt: { default: '' },
       resolution: {
-        default: '720p',
-        enum: ['720p'],
+        default: '720P',
+        enum: ['720P'],
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-01-17',
     type: 'video',
   },
   {
     description: 'Wanxiang 2.1 Speed Edition offers excellent cost-performance.',
     displayName: 'Wanxiang2.1 T2V Turbo',
-    enabled: true,
     id: 'wanx2.1-t2v-turbo',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -3817,16 +3821,16 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-01-08',
     type: 'video',
   },
   {
     description:
       'Wanxiang 2.1 Pro Edition delivers richer visual texture and higher-quality imagery.',
     displayName: 'Wanxiang2.1 T2V Plus',
-    enabled: true,
     id: 'wanx2.1-t2v-plus',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -3837,9 +3841,10 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
     },
     pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
     },
-    releasedAt: '2026-01-28',
+    releasedAt: '2025-01-08',
     type: 'video',
   },
 ];

@@ -510,7 +510,7 @@ const xaiImageModels: AIImageModelCard[] = [
 
 const xaiVideoModels: AIVideoModelCard[] = [
   {
-    description: 'Generate video from text prompts, ',
+    description: 'State-of-the-art video generation across quality, cost, and latency.',
     displayName: 'Grok Imagine Video',
     enabled: true,
     id: 'grok-imagine-video',

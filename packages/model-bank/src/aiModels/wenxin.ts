@@ -1888,7 +1888,8 @@ const wenxinImageModels: AIImageModelCard[] = [
 
 const wenxinVideoModels: AIVideoModelCard[] = [
   {
-    description: '',
+    description:
+      'Supports 5s and 10s 720P dynamic video generation with sound. Enables multi-person conversational audio-visual creation, with synchronized sound and visuals, cinematic-quality imagery, and master-level camera movements.',
     displayName: 'MuseSteamer-2.0-Turbo-I2V-Audio',
     enabled: true,
     id: 'musesteamer-2.0-turbo-i2v-audio',
@@ -1906,7 +1907,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
-    description: '',
+    description:
+      'Supports 5-second 720P silent dynamic video generation, featuring cinematic-quality visuals, complex camera movements, and realistic character emotions and actions.',
     displayName: 'MuseSteamer-2.0-Turbo-I2V',
     enabled: true,
     id: 'musesteamer-2.0-turbo-i2v',
@@ -1924,7 +1926,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
-    description: '',
+    description:
+      'Based on Turbo, supports 1080P dynamic video generation, offering higher visual quality and enhanced video expressiveness.',
     displayName: 'MuseSteamer-2.0-Pro-I2V',
     enabled: true,
     id: 'musesteamer-2.0-pro-i2v',
@@ -1942,7 +1945,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
-    description: '',
+    description:
+      'Compared to Turbo, it offers superior performance with excellent cost-effectiveness.',
     displayName: 'MuseSteamer-2.0-Lite-I2V',
     enabled: true,
     id: 'musesteamer-2.0-lite-i2v',
@@ -1960,7 +1964,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
-    description: '',
+    description:
+      'The Baidu MuseSteamer Air video generation model performs well in subject consistency, physical realism, camera movement effects, and generation speed. It supports 5-second 720P silent dynamic video generation, delivering cinematic-quality visuals, fast generation, and excellent cost-effectiveness.',
     displayName: 'Musesteamer Air I2V',
     enabled: true,
     id: 'musesteamer-air-i2v',
