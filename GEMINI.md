@@ -38,7 +38,6 @@ lobehub/
 - Use rebase for `git pull`
 - Commit messages: prefix with gitmoji
 - Branch format: `<type>/<feature-name>`
-- PR titles with `✨ feat/` or `🐛 fix` trigger releases
 
 ### Package Management
 
