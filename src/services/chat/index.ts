@@ -244,8 +244,8 @@ class ChatService {
       enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
       groupId,
-      // historyCount + 2 accounts for: 1 user message + 1 assistant response being added
-      historyCount: (chatConfig.historyCount ?? 20) + 2,
+      // historyCount is number of history messages; add 1 for current user message
+      historyCount: (chatConfig.historyCount ?? 20) + 1,
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,

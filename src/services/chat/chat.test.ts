@@ -160,6 +160,182 @@ describe('ChatService', () => {
       );
     });
 
+    describe('historyCount functionality', () => {
+      it('should include historyCount + 1 messages when historyCount is enabled', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            content: 'History 1',
+            createdAt: Date.now(),
+            id: '1',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 1',
+            createdAt: Date.now(),
+            id: '2',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'History 2',
+            createdAt: Date.now(),
+            id: '3',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 2',
+            createdAt: Date.now(),
+            id: '4',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Current message',
+            createdAt: Date.now(),
+            id: '5',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'gpt-4',
+          provider: 'openai',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4', provider: 'openai' },
+            chatConfig: { enableHistoryCount: true, historyCount: 2, searchMode: 'off' },
+          }),
+        });
+
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
+
+        // System date + (2 history messages + 1 current user message)
+        expect(calledMessages).toHaveLength(4);
+        expect(calledMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(calledMessages.slice(1)).toEqual([
+          expect.objectContaining({ content: 'History 2', role: 'user' }),
+          expect.objectContaining({ content: 'Response 2', role: 'assistant' }),
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        ]);
+      });
+
+      it('should include only current message when historyCount is 0 and enabled', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            content: 'History 1',
+            createdAt: Date.now(),
+            id: '1',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 1',
+            createdAt: Date.now(),
+            id: '2',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Current message',
+            createdAt: Date.now(),
+            id: '3',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'gpt-4',
+          provider: 'openai',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4', provider: 'openai' },
+            chatConfig: { enableHistoryCount: true, historyCount: 0, searchMode: 'off' },
+          }),
+        });
+
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
+
+        // System date + current user message only
+        expect(calledMessages).toHaveLength(2);
+        expect(calledMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(calledMessages[1]).toEqual(
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        );
+      });
+
+      it('should include all messages when historyCount is disabled', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            content: 'History 1',
+            createdAt: Date.now(),
+            id: '1',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 1',
+            createdAt: Date.now(),
+            id: '2',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Current message',
+            createdAt: Date.now(),
+            id: '3',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'gpt-4',
+          provider: 'openai',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4', provider: 'openai' },
+            chatConfig: { enableHistoryCount: false, historyCount: 0, searchMode: 'off' },
+          }),
+        });
+
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
+
+        // System date + all original messages
+        expect(calledMessages).toHaveLength(4);
+        expect(calledMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(calledMessages.slice(1)).toEqual([
+          expect.objectContaining({ content: 'History 1', role: 'user' }),
+          expect.objectContaining({ content: 'Response 1', role: 'assistant' }),
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        ]);
+      });
+    });
+
     describe('extendParams functionality', () => {
       it('should add reasoning parameters when model supports enableReasoning and user enables it', async () => {
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
