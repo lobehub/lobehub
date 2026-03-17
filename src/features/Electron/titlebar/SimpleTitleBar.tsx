@@ -20,15 +20,16 @@ const isMac = isMacOS();
  * Use this for secondary windows like onboarding, settings, etc.
  */
 const SimpleTitleBar: FC = () => {
-  const [isAppStateInit, initElectronAppState] = useElectronStore((s) => [
+  const [isAppStateInit, isLinux, initElectronAppState] = useElectronStore((s) => [
     s.isAppStateInit,
+    s.appState.isLinux,
     s.useInitElectronAppState,
   ]);
 
   initElectronAppState();
   useWatchThemeUpdate();
 
-  const showWinControl = isAppStateInit && !isMac;
+  const showWinControl = isAppStateInit && !isMac && !!isLinux;
 
   return (
     <Flexbox
