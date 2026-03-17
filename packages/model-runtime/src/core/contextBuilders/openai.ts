@@ -168,7 +168,7 @@ export const convertOpenAIResponseInputs = async (
           });
         });
 
-        if (toolCalls.length > 0) return items;
+        return items;
       }
 
       if (message.role === 'tool') {

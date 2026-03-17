@@ -642,6 +642,38 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
+  it('should drop assistant message with all orphaned tool_calls in strict mode', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'user', content: 'Do something' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_orphan_1',
+            type: 'function',
+            function: { name: 'fn_a', arguments: '{}' },
+          },
+          {
+            id: 'call_orphan_2',
+            type: 'function',
+            function: { name: 'fn_b', arguments: '{}' },
+          },
+        ],
+      },
+      { role: 'assistant', content: 'Final answer' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { strictToolPairing: true });
+
+    // The assistant message with all-orphaned tool_calls should produce no items,
+    // NOT fall through to the default builder which would spread tool_calls back.
+    expect(result).toEqual([
+      { role: 'user', content: 'Do something' },
+      { role: 'assistant', content: 'Final answer' },
+    ]);
+  });
+
   it('should extract reasoning.content into a separate reasoning item', async () => {
     const messages: OpenAIChatMessage[] = [
       { content: 'system prompts', role: 'system' },
