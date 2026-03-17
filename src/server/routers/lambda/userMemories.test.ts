@@ -157,6 +157,10 @@ describe('memoryRouter.reEmbedMemories', () => {
     });
 
     expect(embeddingsMock).toHaveBeenCalledTimes(6);
+
+    for (const call of embeddingsMock.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ user: 'test-user' }));
+    }
   });
 });
 
@@ -359,6 +363,10 @@ describe('userMemories.retrieveMemory', () => {
     });
 
     expect(embeddingsMock).toHaveBeenCalledTimes(1);
+    expect(embeddingsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ user: 'test-user' }),
+    );
     expect(searchWithEmbedding.mock.calls[0][0]).toBeTypeOf('object');
     expect(searchWithEmbedding.mock.calls[0][0]).toStrictEqual({
       embedding: [1],
@@ -456,5 +464,9 @@ describe('userMemories.toolAddActivityMemory', () => {
       success: true,
     });
     expect(embeddingsMock).toHaveBeenCalledTimes(4);
+
+    for (const call of embeddingsMock.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ user: 'test-user' }));
+    }
   });
 });

@@ -574,6 +574,7 @@ export class MemoryExtractionExecutor {
     runtimes: ModelRuntime,
     model: string,
     texts: Array<string | undefined | null>,
+    userId: string,
     tokenLimit?: number,
   ) {
     const attributes = {
@@ -610,7 +611,7 @@ export class MemoryExtractionExecutor {
             input: requests.map((item) => item.text),
             model,
           },
-          { metadata: { trigger: RequestTrigger.Memory }, user: 'memory-extraction' },
+          { metadata: { trigger: RequestTrigger.Memory }, user: userId },
         );
 
         const vectors = texts.map<Embeddings | null>(() => null);
@@ -668,6 +669,7 @@ export class MemoryExtractionExecutor {
           runtime,
           model,
           [item.summary, item.details, item.withActivity?.narrative, item.withActivity?.feedback],
+          job.userId,
           tokenLimit,
         );
       const baseMetadata = this.buildBaseMetadata(
@@ -730,6 +732,7 @@ export class MemoryExtractionExecutor {
         runtime,
         model,
         [item.summary, item.details, item.withContext?.description],
+        job.userId,
         tokenLimit,
       );
       const baseMetadata = this.buildBaseMetadata(
@@ -799,6 +802,7 @@ export class MemoryExtractionExecutor {
             item.withExperience?.action,
             item.withExperience?.keyLearning,
           ],
+          job.userId,
           tokenLimit,
         );
       const baseMetadata = this.buildBaseMetadata(
@@ -858,6 +862,7 @@ export class MemoryExtractionExecutor {
         runtime,
         model,
         [item.summary, item.details, item.withPreference?.conclusionDirectives],
+        job.userId,
         tokenLimit,
       );
       const baseMetadata = this.buildBaseMetadata(
@@ -919,6 +924,7 @@ export class MemoryExtractionExecutor {
         runtime,
         model,
         [action.summary, action.details, action.withIdentity.description],
+        job.userId,
         tokenLimit,
       );
       const metadata = this.buildBaseMetadata(
@@ -964,6 +970,7 @@ export class MemoryExtractionExecutor {
             runtime,
             model,
             [set.summary, set.details, set.withIdentity.description],
+            job.userId,
             tokenLimit,
           )
         : [];
@@ -1063,7 +1070,7 @@ export class MemoryExtractionExecutor {
         input: [aggregatedContent],
         model: embeddingModel,
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.Memory }, user: userId },
     );
 
     const vector = embeddings?.[0];

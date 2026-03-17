@@ -155,7 +155,7 @@ const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) =
   return { agentRuntime, embeddingModel };
 };
 
-const createEmbedder = (agentRuntime: any, embeddingModel: string) => {
+const createEmbedder = (agentRuntime: any, embeddingModel: string, userId: string) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
 
@@ -165,7 +165,7 @@ const createEmbedder = (agentRuntime: any, embeddingModel: string) => {
         input: value,
         model: embeddingModel,
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.Memory }, user: userId },
     );
 
     return embeddings?.[0];
@@ -202,7 +202,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         input: params.query,
         model: embeddingModel,
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.Memory }, user: this.userId },
     );
 
     const effectiveEffort = normalizeMemoryEffort(params.effort ?? this.memoryEffort);
@@ -233,7 +233,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -287,7 +287,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -348,7 +348,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -403,7 +403,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -470,7 +470,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -529,7 +529,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
       let summaryVector1024: number[] | null | undefined;
       if (input.set.summary !== undefined) {

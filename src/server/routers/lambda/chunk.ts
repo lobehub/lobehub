@@ -230,7 +230,7 @@ export const chunkRouter = router({
           input: input.query,
           model,
         },
-        { metadata: { trigger: RequestTrigger.SemanticSearch } },
+        { metadata: { trigger: RequestTrigger.SemanticSearch }, user: ctx.userId },
       );
 
       return ctx.chunkModel.semanticSearch({
@@ -258,7 +258,7 @@ export const chunkRouter = router({
             input: query,
             model,
           },
-          { metadata: { trigger: RequestTrigger.SemanticSearch } },
+          { metadata: { trigger: RequestTrigger.SemanticSearch }, user: ctx.userId },
         );
 
         const embedding = embeddings![0];

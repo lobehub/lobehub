@@ -71,7 +71,7 @@ export const ragEvalRouter = router({
               input: question,
               model: !!embeddingModel ? embeddingModel : DEFAULT_EMBEDDING_MODEL,
             },
-            { metadata: { trigger: RequestTrigger.Eval } },
+            { metadata: { trigger: RequestTrigger.Eval }, user: ctx.userId },
           );
 
           const embeddingId = await ctx.embeddingModel.create({
