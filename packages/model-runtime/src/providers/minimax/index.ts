@@ -74,7 +74,7 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
   },
   createImage: createMiniMaxImage,
   createVideo: createMiniMaxVideo,
-  pollVideoStatus: async (inferenceId, options) => {
+  handlePollVideoStatus: async (inferenceId, options) => {
     const { pollMiniMaxVideoStatus } = await import('./createVideo');
     return pollMiniMaxVideoStatus(inferenceId, {
       apiKey: options.apiKey,

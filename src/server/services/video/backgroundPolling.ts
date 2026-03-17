@@ -62,21 +62,23 @@ async function processBackgroundPolling(
     const generationModel = new GenerationModel(db, userId);
 
     const modelRuntime = await initModelRuntimeFromDB(db, userId, provider);
-    const videoUrl = await pollUntilCompletion(modelRuntime, inferenceId);
+    const pollResult = await pollUntilCompletion(modelRuntime, inferenceId);
 
-    if (!videoUrl) {
+    if (!pollResult) {
       throw new Error('Polling completed but no video URL returned');
     }
 
     log('Video polling succeeded for task: %s, processing video...', asyncTaskId);
 
-    const processResult = await videoService.processVideoForGeneration(videoUrl);
+    const processResult = await videoService.processVideoForGeneration(pollResult.videoUrl, {
+      apiKey: pollResult.apiKey,
+    });
 
     const asset: VideoGenerationAsset = {
       coverUrl: processResult.coverKey,
       duration: processResult.duration,
       height: processResult.height,
-      originalUrl: videoUrl,
+      originalUrl: pollResult.videoUrl,
       thumbnailUrl: processResult.thumbnailKey,
       type: 'video',
       url: processResult.videoKey,
@@ -116,7 +118,10 @@ async function processBackgroundPolling(
   }
 }
 
-async function pollUntilCompletion(modelRuntime: any, inferenceId: string): Promise<string | null> {
+async function pollUntilCompletion(
+  modelRuntime: any,
+  inferenceId: string,
+): Promise<{ videoUrl: string; apiKey?: string } | null> {
   const maxRetries = 120;
   const pollingInterval = 5000;
 
@@ -124,11 +129,11 @@ async function pollUntilCompletion(modelRuntime: any, inferenceId: string): Prom
     try {
       log('Polling attempt %d/%d for task: %s', attempt + 1, maxRetries, inferenceId);
 
-      const result = await modelRuntime.pollVideoStatus(inferenceId);
+      const result = await modelRuntime.handlePollVideoStatus(inferenceId);
 
       if (result.status === 'success') {
         log('Video generation succeeded for task: %s', inferenceId);
-        return result.videoUrl;
+        return { apiKey: result.apiKey, videoUrl: result.videoUrl };
       }
 
       if (result.status === 'failed') {

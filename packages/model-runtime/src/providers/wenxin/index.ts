@@ -37,7 +37,7 @@ export const params = {
   },
   createImage: createWenxinImage,
   createVideo: createWenxinVideo,
-  pollVideoStatus: async (inferenceId, options) => {
+  handlePollVideoStatus: async (inferenceId, options) => {
     const { pollWenxinVideoStatus } = await import('./createVideo');
     return pollWenxinVideoStatus(inferenceId, {
       apiKey: options.apiKey,

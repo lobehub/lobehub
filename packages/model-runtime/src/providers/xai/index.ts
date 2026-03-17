@@ -43,7 +43,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   },
   createImage: createXAIImage,
   createVideo: createXAIVideo,
-  pollVideoStatus: async (inferenceId, options) => {
+  handlePollVideoStatus: async (inferenceId, options) => {
     const { pollXAIVideoStatus } = await import('./createVideo');
     return pollXAIVideoStatus(inferenceId, {
       apiKey: options.apiKey,

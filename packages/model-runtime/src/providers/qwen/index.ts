@@ -85,7 +85,7 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
     chatCompletion: () => process.env.DEBUG_QWEN_CHAT_COMPLETION === '1',
   },
   createVideo: createQwenVideo,
-  pollVideoStatus: async (inferenceId, options) => {
+  handlePollVideoStatus: async (inferenceId, options) => {
     const { pollQwenVideoStatus } = await import('./createVideo');
     return pollQwenVideoStatus(inferenceId, options.apiKey || '', options.baseURL || '');
   },

@@ -31,6 +31,7 @@ import type {
   CreateVideoResponse,
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
+  PollVideoStatusResult,
 } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugResponse, debugStream } from '../../utils/debugStream';
@@ -50,8 +51,11 @@ import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';
 import { createOpenAICompatibleImage } from './createImage';
+import { createOpenAICompatibleVideo, handlePollOpenAICompatibleVideoStatus } from './createVideo';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 
+export type { PollVideoStatusResult };
+export * from './createVideo';
 export * from './nonStreamToStream';
 
 // the model contains the following keywords is not a chat model, so we should filter them out
@@ -169,19 +173,15 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     payload: HandleCreateVideoWebhookPayload,
     options: CreateVideoOptions,
   ) => Promise<HandleCreateVideoWebhookResult>;
+  handlePollVideoStatus?: (
+    inferenceId: string,
+    options: CreateVideoOptions,
+  ) => Promise<PollVideoStatusResult>;
   models?:
     | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
-  pollVideoStatus?: (
-    inferenceId: string,
-    options: CreateVideoOptions,
-  ) => Promise<
-    | { status: 'success'; videoUrl: string }
-    | { status: 'failed'; error: string }
-    | { status: 'pending' }
-  >;
   provider: string;
   responses?: {
     handlePayload?: (
@@ -205,7 +205,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   createImage: customCreateImage,
   createVideo: customCreateVideo,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
-  pollVideoStatus: customPollVideoStatus,
+  handlePollVideoStatus: customHandlePollVideoStatus,
   generateObject: generateObjectConfig,
 }: OpenAICompatibleFactoryOptions<T>) => {
   const ErrorType = {
@@ -582,14 +582,23 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async createVideo(payload: CreateVideoPayload) {
-      if (!customCreateVideo) {
-        throw new Error('createVideo is not supported by this provider');
+      const log = debug(`${this.logPrefix}:createVideo`);
+
+      if (customCreateVideo) {
+        log('using custom createVideo implementation');
+        return customCreateVideo(payload, {
+          ...this._options,
+          apiKey: this._options.apiKey!,
+          provider,
+        });
       }
-      return customCreateVideo(payload, {
-        ...this._options,
+
+      log('using default createOpenAICompatibleVideo');
+      const videoClient = new OpenAI({
         apiKey: this._options.apiKey!,
-        provider,
+        baseURL: this._options.baseURL || 'https://api.openai.com/v1',
       });
+      return createOpenAICompatibleVideo(videoClient, payload, provider);
     }
 
     async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
@@ -603,15 +612,24 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       });
     }
 
-    async pollVideoStatus(inferenceId: string) {
-      if (!customPollVideoStatus) {
-        throw new Error('pollVideoStatus is not supported by this provider');
+    async handlePollVideoStatus(inferenceId: string): Promise<PollVideoStatusResult> {
+      const log = debug(`${this.logPrefix}:handlePollVideoStatus`);
+
+      if (customHandlePollVideoStatus) {
+        log('using custom handlePollVideoStatus implementation');
+        return customHandlePollVideoStatus(inferenceId, {
+          ...this._options,
+          apiKey: this._options.apiKey!,
+          provider,
+        });
       }
-      return customPollVideoStatus(inferenceId, {
-        ...this._options,
+
+      log('using default handlePollOpenAICompatibleVideoStatus');
+      const videoClient = new OpenAI({
         apiKey: this._options.apiKey!,
-        provider,
+        baseURL: this._options.baseURL || 'https://api.openai.com/v1',
       });
+      return handlePollOpenAICompatibleVideoStatus(videoClient, inferenceId, provider);
     }
 
     async models() {

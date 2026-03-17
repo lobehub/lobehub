@@ -121,7 +121,7 @@ export const params = {
   },
   createImage: createSiliconCloudImage,
   createVideo: createSiliconCloudVideo,
-  pollVideoStatus: async (inferenceId, options) => {
+  handlePollVideoStatus: async (inferenceId, options) => {
     const { pollSiliconCloudVideoStatus } = await import('./createVideo');
     return pollSiliconCloudVideoStatus(inferenceId, {
       apiKey: options.apiKey,

@@ -143,7 +143,7 @@ export const params = {
     },
   },
   createVideo: createZhipuVideo,
-  pollVideoStatus: async (inferenceId, options) => {
+  handlePollVideoStatus: async (inferenceId, options) => {
     const { pollZhipuVideoStatus } = await import('./createVideo');
     return pollZhipuVideoStatus(inferenceId, {
       apiKey: options.apiKey,

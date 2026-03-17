@@ -39,15 +39,15 @@ export interface LobeRuntimeAI {
     payload: HandleCreateVideoWebhookPayload,
   ) => Promise<HandleCreateVideoWebhookResult>;
 
-  models?: () => Promise<any>;
-
-  pollVideoStatus?: (
+  handlePollVideoStatus?: (
     inferenceId: string,
   ) => Promise<
     | { status: 'success'; videoUrl: string }
     | { status: 'failed'; error: string }
     | { status: 'pending' }
   >;
+
+  models?: () => Promise<any>;
 
   // Model management related interface
   pullModel?: (params: PullModelParams, options?: ModelRequestOptions) => Promise<Response>;

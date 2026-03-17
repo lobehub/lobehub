@@ -1,7 +1,11 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type {
+  CreateVideoPayload,
+  CreateVideoResponse,
+  PollVideoStatusResult,
+} from '../../types/video';
 
 const log = createDebug('lobe-video:zhipu');
 
@@ -56,11 +60,7 @@ export async function queryZhipuVideoStatus(
 export async function pollZhipuVideoStatus(
   inferenceId: string,
   options: { apiKey: string; baseURL: string },
-): Promise<
-  | { status: 'success'; videoUrl: string }
-  | { status: 'failed'; error: string }
-  | { status: 'pending' }
-> {
+): Promise<PollVideoStatusResult> {
   const response = await queryZhipuVideoStatus(inferenceId, options);
 
   if (response.task_status === 'SUCCESS') {

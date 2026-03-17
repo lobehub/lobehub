@@ -21,6 +21,20 @@ export type CreateVideoResponse =
       videoUrl: string;
     };
 
+export type PollVideoStatusResult =
+  | {
+      apiKey?: string;
+      status: 'success';
+      videoUrl: string;
+    }
+  | {
+      error: string;
+      status: 'failed';
+    }
+  | {
+      status: 'pending';
+    };
+
 export type HandleCreateVideoWebhookPayload = {
   body: unknown;
   headers?: Record<string, string>;
