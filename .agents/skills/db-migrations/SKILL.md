@@ -1,6 +1,6 @@
 ---
 name: db-migrations
-description: Database migration guide (Drizzle ORM + PostgreSQL). MUST USE when any of these occur: (1) generating or regenerating migration files (drizzle-kit generate), (2) adding/removing/modifying columns or tables in database schema, (3) resolving migration sequence conflicts after rebase, (4) writing or reviewing migration SQL (idempotent patterns), (5) renaming migration files. Triggers on keywords: migration, db:generate, ALTER TABLE, ADD COLUMN, CREATE TABLE, schema change, migration conflict.
+description: 'Use when generating or regenerating Drizzle migration files, changing database schema tables or columns, resolving migration sequence conflicts after rebase, reviewing migration SQL for idempotent patterns, or renaming migration files.'
 ---
 
 # Database Migrations Guide
