@@ -1,4 +1,4 @@
-import { ModelProvider } from 'model-bank';
+import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
@@ -9,24 +9,24 @@ export interface XAIModelCard {
   id: string;
 }
 
-const isXAIReasoningModel = (model: string) => {
-  if (model.includes('non-reasoning')) return false;
+const xaiReasoningModels = new Set(
+  LOBE_DEFAULT_MODEL_LIST.filter(
+    (model) =>
+      model.providerId === ModelProvider.XAI &&
+      model.type === 'chat' &&
+      !!model.abilities?.reasoning,
+  ).map((model) => model.id),
+);
 
-  return (
-    model === 'grok-3-mini' ||
-    model === 'grok-4' ||
-    model === 'grok-code-fast-1' ||
-    model.includes('multi-agent') ||
-    model.includes('reasoning')
-  );
-};
+const isXAIReasoningModel = (model: string) => xaiReasoningModels.has(model);
 
 const pruneUnsupportedReasoningParameters = (payload: ChatStreamPayload) => {
   if (!isXAIReasoningModel(payload.model)) return payload;
 
   return {
     ...payload,
-    // xAI rejects penalties on reasoning models such as grok-4.
+    // xAI reasoning models reject these parameters:
+    // https://docs.x.ai/developers/model-capabilities/text/reasoning
     frequency_penalty: undefined,
     presence_penalty: undefined,
     stop: undefined,

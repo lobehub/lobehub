@@ -45,6 +45,22 @@ describe('LobeXAI - custom features', () => {
       expect(createCall.stream).toBe(true);
     });
 
+    it('should remove unsupported penalty parameters for grok-4.1 reasoning variants', async () => {
+      await instance.chat({
+        apiMode: 'chatCompletion',
+        frequency_penalty: 0.4,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-4-1-fast-reasoning',
+        presence_penalty: 0.6,
+      } as any);
+
+      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+
+      expect(createCall.frequency_penalty).toBeUndefined();
+      expect(createCall.presence_penalty).toBeUndefined();
+      expect(createCall.stream).toBe(true);
+    });
+
     it('should preserve penalty parameters for non-reasoning models', async () => {
       await instance.chat({
         apiMode: 'chatCompletion',
