@@ -1,4 +1,4 @@
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 // https://cloud.baidu.com/doc/qianfan/s/rmh4stp0j
 
@@ -1886,6 +1886,99 @@ const wenxinImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...wenxinChatModels, ...wenxinImageModels];
+const wenxinVideoModels: AIVideoModelCard[] = [
+  {
+    description: '',
+    displayName: 'MuseSteamer-2.0-Turbo-I2V-Audio',
+    enabled: true,
+    id: 'musesteamer-2.0-turbo-i2v-audio',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: '',
+    displayName: 'MuseSteamer-2.0-Turbo-I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-turbo-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.4, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: '',
+    displayName: 'MuseSteamer-2.0-Pro-I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-pro-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: '',
+    displayName: 'MuseSteamer-2.0-Lite-I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-lite-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description: '',
+    displayName: 'Musesteamer Air I2V',
+    enabled: true,
+    id: 'musesteamer-air-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+];
+
+export const allModels = [...wenxinChatModels, ...wenxinImageModels, ...wenxinVideoModels];
 
 export default allModels;
