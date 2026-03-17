@@ -820,6 +820,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           { headers: options?.headers, signal: options?.signal },
         );
 
+        if (res.usage && options?.onUsage) {
+          const pricing = await getModelPricing(payload.model, this.id);
+          await options.onUsage(
+            convertOpenAIUsage(res.usage as any, {
+              model: payload.model,
+              pricing,
+              provider: this.id,
+            }),
+          );
+        }
+
         log('received %d embeddings', res.data.length);
         return res.data.map((item) => item.embedding);
       } catch (error) {

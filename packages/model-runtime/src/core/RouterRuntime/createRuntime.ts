@@ -499,8 +499,10 @@ export const createRouterRuntime = ({
     }
 
     async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
-      return this.runWithFallback(payload.model, (runtime) =>
-        runtime.embeddings!(payload, options),
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.embeddings!(payload, options),
+        options?.metadata,
       );
     }
 

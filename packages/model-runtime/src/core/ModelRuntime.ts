@@ -35,6 +35,7 @@ export interface ModelRuntimeHooks {
    * Runs before the LLM call. Throw to abort (e.g., budget exceeded).
    */
   beforeChat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<void>;
+  beforeEmbeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<void>;
   beforeGenerateObject?: (
     payload: GenerateObjectPayload,
     options?: GenerateObjectOptions,
@@ -55,6 +56,16 @@ export interface ModelRuntimeHooks {
   onChatFinal?: (
     data: OnFinishData,
     context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
+  onEmbeddingsError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
+  ) => void | Promise<void>;
+
+  onEmbeddingsFinal?: (
+    data: { usage?: ModelUsage },
+    context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
   ) => void | Promise<void>;
 
   onGenerateObjectError?: (
@@ -205,7 +216,33 @@ export class ModelRuntime {
   }
 
   async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
-    return this._runtime.embeddings?.(payload, options);
+    await this._hooks?.beforeEmbeddings?.(payload, options);
+
+    const finalOptions = this._hooks?.onEmbeddingsFinal
+      ? {
+          ...options,
+          onUsage: async (usage: ModelUsage) => {
+            await options?.onUsage?.(usage);
+            try {
+              await this._hooks!.onEmbeddingsFinal!({ usage }, { options, payload });
+            } catch (e) {
+              console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
+            }
+          },
+        }
+      : options;
+
+    try {
+      return await this._runtime.embeddings?.(payload, finalOptions);
+    } catch (error) {
+      if (this._hooks?.onEmbeddingsError) {
+        await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
   }
   async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
     return this._runtime.textToSpeech?.(payload, options);

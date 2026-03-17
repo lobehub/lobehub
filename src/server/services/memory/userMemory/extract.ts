@@ -606,7 +606,7 @@ export class MemoryExtractionExecutor {
             input: requests.map((item) => item.text),
             model,
           },
-          { user: 'memory-extraction' },
+          { metadata: { trigger: 'memory' }, user: 'memory-extraction' },
         );
 
         const vectors = texts.map<Embeddings | null>(() => null);
@@ -1053,11 +1053,14 @@ export class MemoryExtractionExecutor {
       tokenLimit,
     );
 
-    const embeddings = await runtime.embeddings({
-      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: [aggregatedContent],
-      model: embeddingModel,
-    });
+    const embeddings = await runtime.embeddings(
+      {
+        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        input: [aggregatedContent],
+        model: embeddingModel,
+      },
+      { metadata: { trigger: 'memory' } },
+    );
 
     const vector = embeddings?.[0];
     if (vector) {
