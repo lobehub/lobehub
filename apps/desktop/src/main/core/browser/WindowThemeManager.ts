@@ -4,7 +4,7 @@ import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type BrowserWindow, type BrowserWindowConstructorOptions, nativeTheme } from 'electron';
 
 import { buildDir } from '@/const/dir';
-import { isDev, isMac, isMacTahoe, isWindows } from '@/const/env';
+import { isDev, isLinux, isMac, isMacTahoe, isWindows } from '@/const/env';
 import { createLogger } from '@/utils/logger';
 
 import {
@@ -28,9 +28,15 @@ interface WindowsThemeConfig {
   titleBarStyle: 'hidden';
 }
 
+interface LinuxThemeConfig {
+  backgroundColor: string;
+  hasShadow: true;
+}
+
 // Lazy-load liquid glass only on macOS Tahoe to avoid import errors on other platforms.
 // Dynamic require is intentional: native .node addons cannot be loaded via
 // async import() and must be synchronously required at module init time.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- dynamic require, type from module
 let liquidGlass: typeof import('electron-liquid-glass').default | undefined;
 if (isMacTahoe) {
   try {
@@ -139,6 +145,9 @@ export class WindowThemeManager {
         visualEffectState: 'active',
       };
     }
+    if (isLinux) {
+      return this.getLinuxConfig();
+    }
     return {};
   }
 
@@ -151,6 +160,13 @@ export class WindowThemeManager {
       icon: isDev ? join(buildDir, 'icon-dev.ico') : undefined,
       titleBarOverlay: this.getWindowsTitleBarOverlay(isDarkMode),
       titleBarStyle: 'hidden',
+    };
+  }
+
+  private getLinuxConfig(): LinuxThemeConfig {
+    return {
+      backgroundColor: this.resolveIsDarkMode() ? BACKGROUND_DARK : BACKGROUND_LIGHT,
+      hasShadow: true,
     };
   }
 
@@ -206,6 +222,8 @@ export class WindowThemeManager {
     try {
       if (isWindows) {
         this.applyWindowsVisualEffects(isDarkMode);
+      } else if (isLinux) {
+        this.applyLinuxVisualEffects();
       } else if (isMac) {
         this.applyMacVisualEffects();
       }
@@ -228,6 +246,18 @@ export class WindowThemeManager {
     const config = this.getWindowsConfig(isDarkMode);
     this.browserWindow.setBackgroundColor(config.backgroundColor);
     this.browserWindow.setTitleBarOverlay(config.titleBarOverlay);
+  }
+
+  private applyLinuxVisualEffects(): void {
+    if (!this.browserWindow) return;
+
+    const config = this.getLinuxConfig();
+    const browserWindow = this.browserWindow as BrowserWindow & {
+      setHasShadow?: (hasShadow: boolean) => void;
+    };
+
+    browserWindow.setBackgroundColor(config.backgroundColor);
+    browserWindow.setHasShadow?.(true);
   }
 
   /**

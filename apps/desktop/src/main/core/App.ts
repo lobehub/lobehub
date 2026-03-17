@@ -250,8 +250,8 @@ export class App {
     this.isQuiting = false;
 
     app.on('window-all-closed', () => {
-      if (windows()) {
-        logger.info('All windows closed, quitting application (Windows)');
+      if (windows() || process.platform === 'linux') {
+        logger.info(`All windows closed, quitting application (${process.platform})`);
         app.quit();
       }
     });

@@ -5,9 +5,14 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
+import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
+import { isMacOS } from '@/utils/platform';
 
 import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
+import WinControl, { WINDOW_CONTROL_WIDTH } from './WinControl';
+
+const isMac = isMacOS();
 
 /**
  * A simple, minimal TitleBar for Electron windows.
@@ -15,17 +20,29 @@ import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
  * Use this for secondary windows like onboarding, settings, etc.
  */
 const SimpleTitleBar: FC = () => {
+  const [isAppStateInit, initElectronAppState] = useElectronStore((s) => [
+    s.isAppStateInit,
+    s.useInitElectronAppState,
+  ]);
+
+  initElectronAppState();
   useWatchThemeUpdate();
+
+  const showWinControl = isAppStateInit && !isMac;
+
   return (
     <Flexbox
       horizontal
       align={'center'}
       className={electronStylish.draggable}
       height={TITLE_BAR_HEIGHT}
-      justify={'center'}
+      justify={showWinControl ? 'space-between' : 'center'}
+      style={{ minHeight: TITLE_BAR_HEIGHT, padding: '0 12px' }}
       width={'100%'}
     >
+      {showWinControl && <div style={{ width: WINDOW_CONTROL_WIDTH }} />}
       <ProductLogo size={16} type={'text'} />
+      {showWinControl && <WinControl />}
     </Flexbox>
   );
 };

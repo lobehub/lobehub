@@ -88,6 +88,10 @@ vi.mock('@/controllers/RemoteServerConfigCtr', () => ({
   },
 }));
 
+vi.mock('@/const/env', () => ({
+  isLinux: false,
+}));
+
 describe('BrowserManager', () => {
   let manager: BrowserManager;
   let mockApp: AppCore;
