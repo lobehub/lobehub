@@ -30,7 +30,7 @@ import type {
   SearchMemoryResult,
   UpdateIdentityMemoryResult,
 } from '@lobechat/types';
-import { LayersEnum } from '@lobechat/types';
+import { LayersEnum, RequestTrigger } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -159,11 +159,14 @@ const createEmbedder = (agentRuntime: any, embeddingModel: string) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
 
-    const embeddings = await agentRuntime.embeddings({
-      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: value,
-      model: embeddingModel,
-    });
+    const embeddings = await agentRuntime.embeddings(
+      {
+        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        input: value,
+        model: embeddingModel,
+      },
+      { metadata: { trigger: RequestTrigger.Memory } },
+    );
 
     return embeddings?.[0];
   };
@@ -193,11 +196,14 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
 
     const modelRuntime = await initModelRuntimeFromDB(this.serverDB, this.userId, provider);
 
-    const queryEmbeddings = await modelRuntime.embeddings({
-      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: params.query,
-      model: embeddingModel,
-    });
+    const queryEmbeddings = await modelRuntime.embeddings(
+      {
+        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        input: params.query,
+        model: embeddingModel,
+      },
+      { metadata: { trigger: RequestTrigger.Memory } },
+    );
 
     const effectiveEffort = normalizeMemoryEffort(params.effort ?? this.memoryEffort);
     const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];

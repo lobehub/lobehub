@@ -38,14 +38,15 @@ import {
   tracer,
 } from '@lobechat/observability-otel/modules/memory-user-memory';
 import { attributesCommon } from '@lobechat/observability-otel/node';
-import {
-  type AiProviderRuntimeState,
-  type ChatTopicMetadata,
-  type IdentityMemoryDetail,
-  type MemoryExtractionAgentCallTrace,
-  type MemoryExtractionTraceError,
-  type MemoryExtractionTracePayload,
+import type {
+  AiProviderRuntimeState,
+  ChatTopicMetadata,
+  IdentityMemoryDetail,
+  MemoryExtractionAgentCallTrace,
+  MemoryExtractionTraceError,
+  MemoryExtractionTracePayload,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { type FlowControl } from '@upstash/qstash';
 import { Client } from '@upstash/workflow';
 import debug from 'debug';
@@ -606,7 +607,7 @@ export class MemoryExtractionExecutor {
             input: requests.map((item) => item.text),
             model,
           },
-          { metadata: { trigger: 'memory' }, user: 'memory-extraction' },
+          { metadata: { trigger: RequestTrigger.Memory }, user: 'memory-extraction' },
         );
 
         const vectors = texts.map<Embeddings | null>(() => null);
@@ -1059,7 +1060,7 @@ export class MemoryExtractionExecutor {
         input: [aggregatedContent],
         model: embeddingModel,
       },
-      { metadata: { trigger: 'memory' } },
+      { metadata: { trigger: RequestTrigger.Memory } },
     );
 
     const vector = embeddings?.[0];

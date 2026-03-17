@@ -16,7 +16,7 @@ import {
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory';
 import { type SearchMemoryResult } from '@lobechat/types';
-import { LayersEnum, searchMemorySchema } from '@lobechat/types';
+import { LayersEnum, RequestTrigger, searchMemorySchema } from '@lobechat/types';
 import { type SQL } from 'drizzle-orm';
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -167,11 +167,14 @@ const searchUserMemories = async (
   // Read user's provider config from database
   const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
-  const queryEmbeddings = await modelRuntime.embeddings({
-    dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-    input: input.query,
-    model: embeddingModel,
-  });
+  const queryEmbeddings = await modelRuntime.embeddings(
+    {
+      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+      input: input.query,
+      model: embeddingModel,
+    },
+    { metadata: { trigger: RequestTrigger.Memory } },
+  );
 
   const effectiveEffort = normalizeMemoryEffort(input.effort ?? ctx.memoryEffort);
   const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
@@ -210,11 +213,14 @@ const createEmbedder = (agentRuntime: any, embeddingModel: string) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
 
-    const embeddings = await agentRuntime.embeddings({
-      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: value,
-      model: embeddingModel,
-    });
+    const embeddings = await agentRuntime.embeddings(
+      {
+        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        input: value,
+        model: embeddingModel,
+      },
+      { metadata: { trigger: RequestTrigger.Memory } },
+    );
 
     return embeddings?.[0];
   };
@@ -485,11 +491,14 @@ export const userMemoriesRouter = router({
         const embedTexts = async (texts: string[]): Promise<number[][]> => {
           if (texts.length === 0) return [];
 
-          const response = await agentRuntime.embeddings({
-            dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-            input: texts,
-            model: embeddingModel,
-          });
+          const response = await agentRuntime.embeddings(
+            {
+              dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+              input: texts,
+              model: embeddingModel,
+            },
+            { metadata: { trigger: RequestTrigger.Memory } },
+          );
 
           if (!response || response.length !== texts.length) {
             throw new Error('Embedding response length mismatch');
@@ -957,17 +966,14 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  searchMemory: memoryProcedure
-    .input(searchMemorySchema)
-    .query(async ({ input, ctx }) => {
-      try {
-        return await searchUserMemories(ctx, input);
-      } catch (error) {
-        console.error('Failed to retrieve memories:', error);
-        return EMPTY_SEARCH_RESULT;
-      }
+  searchMemory: memoryProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
+    try {
+      return await searchUserMemories(ctx, input);
+    } catch (error) {
+      console.error('Failed to retrieve memories:', error);
+      return EMPTY_SEARCH_RESULT;
     }
-  ),
+  }),
 
   toolAddActivityMemory: memoryProcedure
     .input(ActivityMemoryItemSchema)

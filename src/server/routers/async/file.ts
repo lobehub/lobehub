@@ -1,4 +1,5 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
+import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { chunk } from 'es-toolkit/compat';
 import pMap from 'p-map';
@@ -97,11 +98,14 @@ export const fileRouter = router({
                   provider,
                 );
 
-                const embeddings = await modelRuntime.embeddings({
-                  dimensions: 1024,
-                  input: chunks.map((c) => c.text),
-                  model,
-                });
+                const embeddings = await modelRuntime.embeddings(
+                  {
+                    dimensions: 1024,
+                    input: chunks.map((c) => c.text),
+                    model,
+                  },
+                  { metadata: { trigger: RequestTrigger.FileEmbedding } },
+                );
 
                 const items: NewEmbeddingsItem[] =
                   embeddings?.map((e, idx) => ({

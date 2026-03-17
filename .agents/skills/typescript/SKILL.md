@@ -25,6 +25,17 @@ description: TypeScript code style and optimization guidelines. Use when writing
 - Use promise-based variants: `import { readFile } from 'fs/promises'`
 - Use `Promise.all`, `Promise.race` for concurrent operations where safe
 
+## Imports
+
+- This project uses `simple-import-sort/imports` and `consistent-type-imports` (`fixStyle: 'separate-type-imports'`)
+- **Separate type imports**: always use `import type { ... }` for type-only imports, NOT `import { type ... }` inline syntax
+- When a file already has `import type { ... }` from a package and you need to add a value import, keep them as **two separate statements**:
+  ```ts
+  import type { ChatTopicBotContext } from '@lobechat/types';
+  import { RequestTrigger } from '@lobechat/types';
+  ```
+- Within each import statement, specifiers are sorted **alphabetically by name**
+
 ## Code Structure
 
 - Prefer object destructuring

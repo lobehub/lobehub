@@ -1,4 +1,5 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
+import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
 import { userPersonaPrompt } from '../prompts';
@@ -121,7 +122,7 @@ export class UserPersonaExtractor extends BaseMemoryExtractor<
         model: this.model,
         tools: this.getTools(options || {}),
       },
-      { metadata: { trigger: 'memory' } },
+      { metadata: { trigger: RequestTrigger.Memory } },
     )) as unknown;
 
     if (Array.isArray(result)) {

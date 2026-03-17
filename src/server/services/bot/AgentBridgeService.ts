@@ -1,4 +1,5 @@
 import type { ChatTopicBotContext } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import { emoji } from 'chat';
 import debug from 'debug';
@@ -174,7 +175,7 @@ export class AgentBridgeService {
         botContext,
         channelContext,
         reactionThreadId: parentChannelThreadId(thread.id),
-        trigger: 'bot',
+        trigger: RequestTrigger.Bot,
       });
 
       // Persist topic mapping and channel context in thread state for follow-up messages
@@ -241,7 +242,7 @@ export class AgentBridgeService {
         botContext,
         channelContext,
         topicId,
-        trigger: 'bot',
+        trigger: RequestTrigger.Bot,
       });
     } catch (error) {
       // If the cached topicId references a deleted topic (FK violation),

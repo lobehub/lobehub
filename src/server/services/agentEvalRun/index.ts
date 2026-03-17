@@ -9,6 +9,7 @@ import type {
   EvalRunTopicResult,
   RubricType,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 import {
   AgentEvalBenchmarkModel,
@@ -78,7 +79,7 @@ export class AgentEvalRunService {
         testCases.map((tc) => ({
           agentId: params.targetAgentId ?? undefined,
           title: `[Eval Case #${(tc.sortOrder ?? 0) + 1}] ${tc.content?.input?.slice(0, 50) || 'Test Case'}...`,
-          trigger: 'eval',
+          trigger: RequestTrigger.Eval,
         })),
       );
 
@@ -165,7 +166,7 @@ export class AgentEvalRunService {
       errorTestCases.map((tc) => ({
         agentId: run.targetAgentId ?? undefined,
         title: `[Eval Case #${(tc.sortOrder ?? 0) + 1}] ${tc.input?.slice(0, 50) || 'Test Case'}...`,
-        trigger: 'eval',
+        trigger: RequestTrigger.Eval,
       })),
     );
 
@@ -204,7 +205,7 @@ export class AgentEvalRunService {
       {
         agentId: run.targetAgentId ?? undefined,
         title: `[Eval Case #${(runTopic.testCase?.sortOrder ?? 0) + 1}] ${runTopic.testCase?.content?.input?.slice(0, 50) || 'Test Case'}...`,
-        trigger: 'eval',
+        trigger: RequestTrigger.Eval,
       },
     ]);
 

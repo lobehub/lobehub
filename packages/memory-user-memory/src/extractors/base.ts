@@ -11,6 +11,7 @@ import {
   ATTR_GEN_AI_REQUEST_MODEL,
 } from '@lobechat/observability-otel/gen-ai';
 import { tracer } from '@lobechat/observability-otel/modules/memory-user-memory';
+import { RequestTrigger } from '@lobechat/types';
 import type { z } from 'zod';
 
 import type {
@@ -156,7 +157,7 @@ export abstract class BaseMemoryExtractor<
 
               span.addEvent('gen_ai.request.send');
               const result = await this.runtime.generateObject(payload, {
-                metadata: { trigger: 'memory' },
+                metadata: { trigger: RequestTrigger.Memory },
               });
               span.addEvent('gen_ai.response.receive');
 

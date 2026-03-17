@@ -1,5 +1,5 @@
 import { type CreateMessageParams, type SendMessageServerResponse } from '@lobechat/types';
-import { AiSendMessageServerSchema, StructureOutputSchema } from '@lobechat/types';
+import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -42,12 +42,15 @@ export const aiChatRouter = router({
     const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, input.provider);
 
     log('calling generateObject');
-    const result = await modelRuntime.generateObject({
-      messages: input.messages,
-      model: input.model,
-      schema: input.schema,
-      tools: input.tools,
-    });
+    const result = await modelRuntime.generateObject(
+      {
+        messages: input.messages,
+        model: input.model,
+        schema: input.schema,
+        tools: input.tools,
+      },
+      { metadata: { trigger: RequestTrigger.Chat } },
+    );
 
     log('generateObject completed, result: %O', result);
     return result;

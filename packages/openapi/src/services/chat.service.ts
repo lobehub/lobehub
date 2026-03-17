@@ -1,5 +1,6 @@
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
@@ -341,7 +342,7 @@ export class ChatService extends BaseService {
 
       // 调用聊天 API
       const response = await modelRuntime.chat(chatPayload, {
-        metadata: { trigger: 'api' },
+        metadata: { trigger: RequestTrigger.Api },
         user: this.userId!,
       });
 
