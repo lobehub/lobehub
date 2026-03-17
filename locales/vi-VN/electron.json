@@ -123,5 +123,6 @@
   "waitingOAuth.title": "Đang chờ kết nối xác thực",
   "window.close": "Đóng cửa sổ",
   "window.maximize": "Phóng to cửa sổ",
-  "window.minimize": "Thu nhỏ cửa sổ"
+  "window.minimize": "Thu nhỏ cửa sổ",
+  "window.restore": "Khôi phục cửa sổ"
 }

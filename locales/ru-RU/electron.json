@@ -123,5 +123,6 @@
   "waitingOAuth.title": "Ожидание подключения к авторизации",
   "window.close": "Закрыть окно",
   "window.maximize": "Развернуть окно",
-  "window.minimize": "Свернуть окно"
+  "window.minimize": "Свернуть окно",
+  "window.restore": "Восстановить окно"
 }

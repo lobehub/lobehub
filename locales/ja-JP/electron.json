@@ -123,5 +123,6 @@
   "waitingOAuth.title": "認証接続を待機中",
   "window.close": "ウィンドウを閉じる",
   "window.maximize": "ウィンドウを最大化",
-  "window.minimize": "ウィンドウを最小化"
+  "window.minimize": "ウィンドウを最小化",
+  "window.restore": "ウィンドウを復元"
 }

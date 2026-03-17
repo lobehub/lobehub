@@ -123,5 +123,6 @@
   "waitingOAuth.title": "في انتظار الاتصال بالتفويض",
   "window.close": "إغلاق النافذة",
   "window.maximize": "تكبير النافذة",
-  "window.minimize": "تصغير النافذة"
+  "window.minimize": "تصغير النافذة",
+  "window.restore": "استعادة النافذة"
 }

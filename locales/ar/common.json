@@ -162,6 +162,8 @@
   "cmdk.search.agents": "وكلاء",
   "cmdk.search.assistant": "وكيل",
   "cmdk.search.assistants": "وكلاء",
+  "cmdk.search.chatGroup": "فريق الوكلاء",
+  "cmdk.search.chatGroups": "فرق الوكلاء",
   "cmdk.search.communityAgent": "وكيل المجتمع",
   "cmdk.search.file": "ملف",
   "cmdk.search.files": "ملفات",

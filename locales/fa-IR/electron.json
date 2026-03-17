@@ -123,5 +123,6 @@
   "waitingOAuth.title": "در انتظار اتصال احراز هویت",
   "window.close": "بستن پنجره",
   "window.maximize": "حداکثر کردن پنجره",
-  "window.minimize": "حداقل کردن پنجره"
+  "window.minimize": "حداقل کردن پنجره",
+  "window.restore": "بازیابی پنجره"
 }

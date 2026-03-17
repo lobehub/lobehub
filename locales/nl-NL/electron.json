@@ -123,5 +123,6 @@
   "waitingOAuth.title": "Wachten op autorisatieverbinding",
   "window.close": "Venster sluiten",
   "window.maximize": "Venster maximaliseren",
-  "window.minimize": "Venster minimaliseren"
+  "window.minimize": "Venster minimaliseren",
+  "window.restore": "Venster herstellen"
 }

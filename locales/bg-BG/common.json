@@ -162,6 +162,8 @@
   "cmdk.search.agents": "Агенти",
   "cmdk.search.assistant": "Агент",
   "cmdk.search.assistants": "Агенти",
+  "cmdk.search.chatGroup": "Екип на агент",
+  "cmdk.search.chatGroups": "Екипи на агенти",
   "cmdk.search.communityAgent": "Агент от общността",
   "cmdk.search.file": "Файл",
   "cmdk.search.files": "Файлове",

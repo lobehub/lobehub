@@ -123,5 +123,6 @@
   "waitingOAuth.title": "Warten auf Autorisierungsverbindung",
   "window.close": "Fenster schließen",
   "window.maximize": "Fenster maximieren",
-  "window.minimize": "Fenster minimieren"
+  "window.minimize": "Fenster minimieren",
+  "window.restore": "Fenster wiederherstellen"
 }

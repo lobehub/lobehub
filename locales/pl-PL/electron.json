@@ -123,5 +123,6 @@
   "waitingOAuth.title": "Oczekiwanie na połączenie autoryzacyjne",
   "window.close": "Zamknij okno",
   "window.maximize": "Maksymalizuj okno",
-  "window.minimize": "Minimalizuj okno"
+  "window.minimize": "Minimalizuj okno",
+  "window.restore": "Przywróć okno"
 }

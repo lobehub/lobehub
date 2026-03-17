@@ -162,6 +162,8 @@
   "cmdk.search.agents": "도우미",
   "cmdk.search.assistant": "도우미",
   "cmdk.search.assistants": "도우미",
+  "cmdk.search.chatGroup": "에이전트 팀",
+  "cmdk.search.chatGroups": "에이전트 팀들",
   "cmdk.search.communityAgent": "커뮤니티 도우미",
   "cmdk.search.file": "파일",
   "cmdk.search.files": "파일",

@@ -162,6 +162,8 @@
   "cmdk.search.agents": "助理",
   "cmdk.search.assistant": "AI 助手",
   "cmdk.search.assistants": "AI 助手",
+  "cmdk.search.chatGroup": "代理團隊",
+  "cmdk.search.chatGroups": "代理團隊",
   "cmdk.search.communityAgent": "社群助手",
   "cmdk.search.file": "檔案",
   "cmdk.search.files": "檔案",

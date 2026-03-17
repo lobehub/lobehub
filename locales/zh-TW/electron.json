@@ -123,5 +123,6 @@
   "waitingOAuth.title": "等待授權連接",
   "window.close": "關閉視窗",
   "window.maximize": "最大化視窗",
-  "window.minimize": "最小化視窗"
+  "window.minimize": "最小化視窗",
+  "window.restore": "還原視窗"
 }

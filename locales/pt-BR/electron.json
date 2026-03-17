@@ -123,5 +123,6 @@
   "waitingOAuth.title": "Aguardando conexão de autorização",
   "window.close": "Fechar janela",
   "window.maximize": "Maximizar janela",
-  "window.minimize": "Minimizar janela"
+  "window.minimize": "Minimizar janela",
+  "window.restore": "Restaurar janela"
 }

@@ -123,5 +123,6 @@
   "waitingOAuth.title": "Yetkilendirme Bağlantısı Bekleniyor",
   "window.close": "Pencereyi kapat",
   "window.maximize": "Pencereyi büyüt",
-  "window.minimize": "Pencereyi küçült"
+  "window.minimize": "Pencereyi küçült",
+  "window.restore": "Pencereyi geri yükle"
 }

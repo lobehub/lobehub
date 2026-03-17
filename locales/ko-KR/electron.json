@@ -123,5 +123,6 @@
   "waitingOAuth.title": "인증 연결 대기 중",
   "window.close": "창 닫기",
   "window.maximize": "창 최대화",
-  "window.minimize": "창 최소화"
+  "window.minimize": "창 최소화",
+  "window.restore": "창 복원"
 }

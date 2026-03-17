@@ -162,6 +162,8 @@
   "cmdk.search.agents": "アシスタント",
   "cmdk.search.assistant": "アシスタント",
   "cmdk.search.assistants": "アシスタント",
+  "cmdk.search.chatGroup": "エージェントチーム",
+  "cmdk.search.chatGroups": "エージェントチーム",
   "cmdk.search.communityAgent": "コミュニティアシスタント",
   "cmdk.search.file": "ファイル",
   "cmdk.search.files": "ファイル",
