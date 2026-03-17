@@ -76,6 +76,7 @@ describe('IdentityExtractor', () => {
         schema: expect.objectContaining({ name: expect.stringContaining('identity') }),
         tools: undefined,
       }),
+      expect.objectContaining({ metadata: { trigger: 'memory' } }),
     );
     expect(result).toEqual(structuredResult);
   });
