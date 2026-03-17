@@ -1220,6 +1220,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1280x720',
+        enum: ['1280x720'],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1244,6 +1248,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: ['1920x1080'],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1268,6 +1276,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: ['1920x1080'],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1293,6 +1305,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: ['1920x1080'],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1318,6 +1334,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: ['1920x1080'],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1339,6 +1359,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
       },
       duration: { default: 5, enum: [5] },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: ['1920x1080'],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1363,6 +1387,18 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '1280x720',
+          '720x1280',
+          '1024x1024',
+          '1920x1080',
+          '1080x1920',
+          '2048x1080',
+          '3840x2160',
+        ],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1383,6 +1419,19 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '720x480',
+          '1024x1024',
+          '1280x960',
+          '960x1280',
+          '1920x1080',
+          '1080x1920',
+          '2048x1080',
+          '3840x2160',
+        ],
+      },
     },
     pricing: {
       currency: 'CNY',
@@ -1402,6 +1451,19 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '720x480',
+          '1024x1024',
+          '1280x960',
+          '960x1280',
+          '1920x1080',
+          '1080x1920',
+          '2048x1080',
+          '3840x2160',
+        ],
+      },
     },
     pricing: {
       currency: 'CNY',

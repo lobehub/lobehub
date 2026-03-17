@@ -64,7 +64,7 @@ export async function createZhipuVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
-  const { prompt, imageUrl, endImageUrl, aspectRatio, duration, generateAudio } = params;
+  const { prompt, imageUrl, endImageUrl, aspectRatio, duration, generateAudio, size } = params;
 
   log('Creating video with Zhipu API - model: %s, params: %O', model, params);
 
@@ -93,6 +93,7 @@ export async function createZhipuVideo(
   if (aspectRatio) body.aspect_ratio = aspectRatio;
   if (duration) body.duration = duration;
   if (generateAudio !== undefined) body.with_audio = generateAudio;
+  if (size) body.size = size;
 
   log('Zhipu video API request body: %O', body);
 

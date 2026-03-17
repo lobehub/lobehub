@@ -2558,12 +2558,12 @@ const siliconcloudVideoModels: AIVideoModelCard[] = [
     enabled: true,
     id: 'Wan-AI/Wan2.2-T2V-A14B',
     parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['16:9', '9:16', '1:1'],
-      },
       prompt: { default: '' },
       seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: ['1280x720', '720x1280', '960x960'],
+      },
     },
     pricing: {
       currency: 'CNY',

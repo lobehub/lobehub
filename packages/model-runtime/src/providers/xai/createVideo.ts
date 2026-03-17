@@ -53,7 +53,7 @@ export async function createXAIVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
-  const { prompt, imageUrl, aspectRatio, duration, resolution } = params;
+  const { prompt, imageUrl, aspectRatio, duration, resolution, size } = params;
 
   log('Creating video with XAI API - model: %s, params: %O', model, params);
 
@@ -78,6 +78,10 @@ export async function createXAIVideo(
 
   if (resolution) {
     body.resolution = resolution;
+  }
+
+  if (size) {
+    body.size = size;
   }
 
   log('XAI video API request body: %O', body);

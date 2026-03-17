@@ -25,6 +25,7 @@ import { generateUniqueSeeds } from '@/utils/number';
 
 import FrameUpload from './components/FrameUpload';
 import ModelSelect from './components/ModelSelect';
+import SizeSelect from './components/SizeSelect';
 import VideoConfigSkeleton from './VideoConfigSkeleton';
 
 interface ConfigItemLayoutProps {
@@ -170,6 +171,7 @@ const ConfigPanel = memo(() => {
   const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
   const isSupportAspectRatio = useVideoStore(isSupportedParamSelector('aspectRatio'));
   const isSupportResolution = useVideoStore(isSupportedParamSelector('resolution'));
+  const isSupportSize = useVideoStore(isSupportedParamSelector('size'));
   const isSupportDuration = useVideoStore(isSupportedParamSelector('duration'));
   const isSupportSeed = useVideoStore(isSupportedParamSelector('seed'));
   const isSupportGenerateAudio = useVideoStore(isSupportedParamSelector('generateAudio'));
@@ -211,6 +213,12 @@ const ConfigPanel = memo(() => {
       {isSupportResolution && (
         <ConfigItemLayout label={t('config.resolution.label')}>
           <ResolutionItem />
+        </ConfigItemLayout>
+      )}
+
+      {isSupportSize && (
+        <ConfigItemLayout label={t('config.size.label')}>
+          <SizeSelect />
         </ConfigItemLayout>
       )}
 

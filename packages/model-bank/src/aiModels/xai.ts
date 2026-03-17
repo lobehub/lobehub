@@ -528,6 +528,10 @@ const xaiVideoModels: AIVideoModelCard[] = [
         default: '480p',
         enum: ['480p', '720p'],
       },
+      size: {
+        default: '848x480',
+        enum: ['848x480', '1696x960', '1280x720', '1920x1080'],
+      },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],

@@ -59,7 +59,7 @@ export async function createSiliconCloudVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
-  const { prompt, imageUrl, aspectRatio, seed } = params;
+  const { prompt, imageUrl, size, seed } = params;
 
   log('Creating video with SiliconCloud API - model: %s, params: %O', model, params);
 
@@ -70,15 +70,8 @@ export async function createSiliconCloudVideo(
     prompt,
   };
 
-  if (aspectRatio) {
-    const aspectRatioMap: Record<string, string> = {
-      '16:9': '1280x720',
-      '9:16': '720x1280',
-      '1:1': '960x960',
-    };
-    if (aspectRatioMap[aspectRatio]) {
-      body['image_size'] = aspectRatioMap[aspectRatio];
-    }
+  if (size) {
+    body['image_size'] = size;
   }
 
   if (seed !== undefined && seed !== null) body['seed'] = seed;
