@@ -5,6 +5,7 @@ import { resolveParameters } from '../../core/parameterResolver';
 import { QwenAIStream } from '../../core/streams';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { createQwenImage } from './createImage';
+import { createQwenVideo } from './createVideo';
 
 export interface QwenModelCard {
   id: string;
@@ -83,6 +84,7 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_QWEN_CHAT_COMPLETION === '1',
   },
+  createVideo: createQwenVideo,
   models: async ({ client }) => {
     const modelsPage = (await client.models.list()) as any;
     const modelList: QwenModelCard[] = modelsPage.data;
