@@ -32,15 +32,19 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     return String(get().editor?.getDocument('markdown') || '').trimEnd();
   },
   handleSendButton: () => {
-    if (!get().editor) return;
-
     const editor = get().editor;
+    if (!editor) return;
 
     get().onSend?.({
       clearContent: () => editor?.cleanDocument(),
       editor: editor!,
       getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
+    });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        editor.focus();
+      });
     });
   },
 
