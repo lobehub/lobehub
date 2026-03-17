@@ -1,5 +1,11 @@
 import type { RuntimeVideoGenParams } from 'model-bank';
 
+export type CreateVideoErrorPayload = {
+  error: any;
+  errorType: string;
+  provider?: string;
+};
+
 export type CreateVideoPayload = {
   callbackUrl?: string;
   model: string;
