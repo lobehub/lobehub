@@ -43,6 +43,13 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   },
   createImage: createXAIImage,
   createVideo: createXAIVideo,
+  pollVideoStatus: async (inferenceId, options) => {
+    const { pollXAIVideoStatus } = await import('./createVideo');
+    return pollXAIVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_XAI_CHAT_COMPLETION === '1',
     responses: () => process.env.DEBUG_XAI_RESPONSES === '1',

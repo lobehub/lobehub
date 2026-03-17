@@ -143,6 +143,13 @@ export const params = {
     },
   },
   createVideo: createZhipuVideo,
+  pollVideoStatus: async (inferenceId, options) => {
+    const { pollZhipuVideoStatus } = await import('./createVideo');
+    return pollZhipuVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_ZHIPU_CHAT_COMPLETION === '1',
   },

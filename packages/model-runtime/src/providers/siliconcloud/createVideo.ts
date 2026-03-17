@@ -2,8 +2,6 @@ import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
-import type { TaskResult } from '../../utils/asyncifyPolling';
-import { asyncifyPolling } from '../../utils/asyncifyPolling';
 
 const log = createDebug('lobe-video:siliconcloud');
 
@@ -26,7 +24,10 @@ interface SiliconCloudVideoStatusResponse {
   status?: string;
 }
 
-async function queryVideoStatus(
+/**
+ * Query the status of a video generation task
+ */
+export async function querySiliconCloudVideoStatus(
   requestId: string,
   options: { apiKey: string; baseURL: string },
 ): Promise<SiliconCloudVideoStatusResponse> {
@@ -54,6 +55,43 @@ async function queryVideoStatus(
   return data;
 }
 
+/**
+ * Poll video status and return standardized result
+ */
+export async function pollSiliconCloudVideoStatus(
+  requestId: string,
+  options: { apiKey: string; baseURL: string },
+): Promise<
+  | { status: 'success'; videoUrl: string }
+  | { status: 'failed'; error: string }
+  | { status: 'pending' }
+> {
+  const response = await querySiliconCloudVideoStatus(requestId, options);
+
+  if (response.status === 'Succeed') {
+    const videoUrl = response.results?.videos?.[0]?.url;
+    if (!videoUrl) {
+      return { error: 'Task succeeded but no video URL found', status: 'failed' };
+    }
+    return { status: 'success', videoUrl };
+  }
+
+  if (response.status === 'Failed') {
+    return {
+      error: response.reason || response.error?.message || 'Video generation failed',
+      status: 'failed',
+    };
+  }
+
+  return { status: 'pending' };
+}
+
+/**
+ * SiliconCloud video generation implementation
+ *
+ * Creates a video generation task and returns immediately with inferenceId.
+ * The frontend polls the task status using async task polling mechanism.
+ */
 export async function createSiliconCloudVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
@@ -105,51 +143,10 @@ export async function createSiliconCloudVideo(
   }
 
   const inferenceId = data.requestId;
-  log('Video task created with id: %s, starting polling...', inferenceId);
+  log('Video task created with id: %s, returning immediately for frontend polling', inferenceId);
 
-  const result = await asyncifyPolling<SiliconCloudVideoStatusResponse, CreateVideoResponse>({
-    checkStatus: (
-      statusResponse: SiliconCloudVideoStatusResponse,
-    ): TaskResult<CreateVideoResponse> => {
-      log('Task %s status: %s', inferenceId, statusResponse.status);
-
-      if (statusResponse.status === 'Succeed') {
-        const videoUrl = statusResponse.results?.videos?.[0]?.url;
-        if (!videoUrl) {
-          return {
-            error: new Error('Missing url in success response'),
-            status: 'failed',
-          };
-        }
-        log('Video generation succeeded: %s', inferenceId);
-
-        return {
-          data: { inferenceId, videoUrl },
-          status: 'success',
-        };
-      }
-
-      if (statusResponse.status === 'Failed') {
-        const errorMessage =
-          statusResponse.reason || statusResponse.error?.message || 'Video generation failed';
-        log('Video generation failed: %s, error: %s', inferenceId, errorMessage);
-
-        return {
-          error: new Error(errorMessage),
-          status: 'failed',
-        };
-      }
-
-      return { status: 'pending' };
-    },
-    logger: {
-      debug: (message: any, ...args: any[]) => log(message, ...args),
-      error: (message: any, ...args: any[]) => log(message, ...args),
-    },
-    pollingQuery: () => queryVideoStatus(inferenceId, { apiKey: options.apiKey, baseURL }),
-  });
-
-  log('Video generation completed, returning video URL');
-
-  return result;
+  // Return immediately with inferenceId only
+  // Frontend will poll the task status using the async task polling mechanism
+  // This avoids blocking the API response for 30+ seconds during server-side polling
+  return { inferenceId };
 }

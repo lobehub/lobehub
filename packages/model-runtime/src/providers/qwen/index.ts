@@ -85,6 +85,10 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
     chatCompletion: () => process.env.DEBUG_QWEN_CHAT_COMPLETION === '1',
   },
   createVideo: createQwenVideo,
+  pollVideoStatus: async (inferenceId, options) => {
+    const { pollQwenVideoStatus } = await import('./createVideo');
+    return pollQwenVideoStatus(inferenceId, options.apiKey || '', options.baseURL || '');
+  },
   models: async ({ client }) => {
     const modelsPage = (await client.models.list()) as any;
     const modelList: QwenModelCard[] = modelsPage.data;

@@ -2,11 +2,91 @@ import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
-import type { TaskResult } from '../../utils/asyncifyPolling';
-import { asyncifyPolling } from '../../utils/asyncifyPolling';
 import { AgentRuntimeError } from '../../utils/createError';
 
 const log = createDebug('lobe-video:qwen');
+
+interface QwenVideoTaskResponse {
+  output: {
+    error_message?: string;
+    task_id: string;
+    task_status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+    video_url?: string;
+    cover_image_url?: string;
+    // For keyframe models
+    first_frame_url?: string;
+    last_frame_url?: string;
+  };
+  request_id: string;
+  usage?: {
+    duration?: number;
+    size?: string;
+    video_count?: number;
+  };
+}
+
+/**
+ * Query the status of a video generation task
+ */
+export async function queryQwenVideoStatus(
+  taskId: string,
+  apiKey: string,
+  baseUrl: string,
+): Promise<QwenVideoTaskResponse> {
+  const endpoint = `${baseUrl}/api/v1/tasks/${taskId}`;
+
+  log('Querying task status for: %s', taskId);
+
+  const response = await fetch(endpoint, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch {
+      // Failed to parse JSON error response
+    }
+    throw new Error(
+      `Failed to query task status for ${taskId} (${response.status}): ${errorData?.message || response.statusText}`,
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Poll video status and return standardized result
+ */
+export async function pollQwenVideoStatus(
+  taskId: string,
+  apiKey: string,
+  baseUrl: string,
+): Promise<
+  | { status: 'success'; videoUrl: string }
+  | { status: 'failed'; error: string }
+  | { status: 'pending' }
+> {
+  const response = await queryQwenVideoStatus(taskId, apiKey, baseUrl);
+
+  if (response.output.task_status === 'SUCCEEDED') {
+    const videoUrl = response.output.video_url;
+    if (!videoUrl) {
+      return { error: 'Task succeeded but no video URL found', status: 'failed' };
+    }
+    return { status: 'success', videoUrl };
+  }
+
+  if (response.output.task_status === 'FAILED') {
+    return { error: response.output.error_message || 'Video generation failed', status: 'failed' };
+  }
+
+  return { status: 'pending' };
+}
 
 // Model patterns for different video generation types
 const image2VideoModels = [/^wan2\.(2|5)-i2v-/, /^wanx2\.(0|1)-i2v-/];
@@ -176,6 +256,9 @@ async function queryTaskStatus(
  * - text-to-video (wan2.2-t2v-plus, wanx2.0-t2v-*)
  * - image-to-video (wan2.2-i2v-plus, wanx2.0-i2v-*)
  * - keyframe-to-video (wan2.2-kf2v-flash)
+ *
+ * Creates a video generation task and returns immediately with inferenceId.
+ * The frontend polls the task status using async task polling mechanism.
  */
 export async function createQwenVideo(
   payload: CreateVideoPayload,
@@ -209,51 +292,12 @@ export async function createQwenVideo(
     // Create the video task
     const taskId = await createVideoTask(payload, apiKey, taskType, provider, dashscopeURL);
 
-    // Poll for completion using asyncifyPolling
-    const result = await asyncifyPolling<QwenVideoTaskResponse, CreateVideoResponse>({
-      checkStatus: (taskStatus: QwenVideoTaskResponse): TaskResult<CreateVideoResponse> => {
-        log('Task %s status: %s', taskId, taskStatus.output.task_status);
+    log('Video task created with id: %s, returning immediately for frontend polling', taskId);
 
-        if (taskStatus.output.task_status === 'SUCCEEDED') {
-          if (!taskStatus.output.video_url) {
-            return {
-              error: new Error('Task succeeded but no video URL generated'),
-              status: 'failed',
-            };
-          }
-
-          log('Video generation succeeded: %s', taskId);
-          log('Video URL: %s', taskStatus.output.video_url);
-
-          return {
-            data: { inferenceId: taskId, videoUrl: taskStatus.output.video_url },
-            status: 'success',
-          };
-        }
-
-        if (taskStatus.output.task_status === 'FAILED') {
-          const errorMessage =
-            taskStatus.output.error_message || 'Video generation failed without error message';
-          log('Video generation failed: %s, error: %s', taskId, errorMessage);
-
-          return {
-            error: new Error(`Video generation failed for model ${model}: ${errorMessage}`),
-            status: 'failed',
-          };
-        }
-
-        log('Video generation in progress: %s (status: %s)', taskId, taskStatus.output.task_status);
-        return { status: 'pending' };
-      },
-      logger: {
-        debug: (message: any, ...args: any[]) => log(message, ...args),
-        error: (message: any, ...args: any[]) => log(message, ...args),
-      },
-      pollingQuery: () => queryTaskStatus(taskId, apiKey, dashscopeURL),
-    });
-
-    log('Video generation completed, returning video URL');
-    return result;
+    // Return immediately with inferenceId only
+    // Frontend will poll the task status using the async task polling mechanism
+    // This avoids blocking the API response for 30+ seconds during server-side polling
+    return { inferenceId: taskId };
   } catch (error) {
     log('Error in createQwenVideo: %O', error);
 

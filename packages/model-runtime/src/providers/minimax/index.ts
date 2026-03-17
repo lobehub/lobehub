@@ -74,6 +74,13 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
   },
   createImage: createMiniMaxImage,
   createVideo: createMiniMaxVideo,
+  pollVideoStatus: async (inferenceId, options) => {
+    const { pollMiniMaxVideoStatus } = await import('./createVideo');
+    return pollMiniMaxVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_MINIMAX_CHAT_COMPLETION === '1',
   },

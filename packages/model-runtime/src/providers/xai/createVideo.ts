@@ -2,8 +2,6 @@ import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
-import type { TaskResult } from '../../utils/asyncifyPolling';
-import { asyncifyPolling } from '../../utils/asyncifyPolling';
 
 const log = createDebug('lobe-video:xai');
 
@@ -21,7 +19,10 @@ interface XAIVideoStatusResponse {
   };
 }
 
-async function queryVideoStatus(
+/**
+ * Query the status of a video generation task
+ */
+export async function queryXAIVideoStatus(
   requestId: string,
   options: { apiKey: string; baseURL: string },
 ): Promise<XAIVideoStatusResponse> {
@@ -48,6 +49,40 @@ async function queryVideoStatus(
   return data;
 }
 
+/**
+ * Poll video status and return standardized result
+ */
+export async function pollXAIVideoStatus(
+  requestId: string,
+  options: { apiKey: string; baseURL: string },
+): Promise<
+  | { status: 'success'; videoUrl: string }
+  | { status: 'failed'; error: string }
+  | { status: 'pending' }
+> {
+  const response = await queryXAIVideoStatus(requestId, options);
+
+  if (response.status === 'done') {
+    const videoUrl = response.video?.url;
+    if (!videoUrl) {
+      return { error: 'Task succeeded but no video URL found', status: 'failed' };
+    }
+    return { status: 'success', videoUrl };
+  }
+
+  if (response.status === 'failed') {
+    return { error: response.error?.message || 'Video generation failed', status: 'failed' };
+  }
+
+  return { status: 'pending' };
+}
+
+/**
+ * XAI video generation implementation
+ *
+ * Creates a video generation task and returns immediately with inferenceId.
+ * The frontend polls the task status using async task polling mechanism.
+ */
 export async function createXAIVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
@@ -109,54 +144,13 @@ export async function createXAIVideo(
   }
 
   const requestId = data.request_id;
-  log('Video task created with request_id: %s, starting polling...', requestId);
+  log(
+    'Video task created with request_id: %s, returning immediately for frontend polling',
+    requestId,
+  );
 
-  const result = await asyncifyPolling<XAIVideoStatusResponse, CreateVideoResponse>({
-    checkStatus: (statusResponse: XAIVideoStatusResponse): TaskResult<CreateVideoResponse> => {
-      log('Task %s status: %s', requestId, statusResponse.status);
-
-      if (statusResponse.status === 'done') {
-        const videoUrl = statusResponse.video?.url;
-        if (!videoUrl) {
-          log('Task succeeded but missing video url in response');
-          return {
-            error: new Error('Missing url in success response'),
-            status: 'failed',
-          };
-        }
-        log('Video generation succeeded: %s, videoUrl: %s', requestId, videoUrl);
-
-        return {
-          data: { inferenceId: requestId, videoUrl },
-          status: 'success',
-        };
-      }
-
-      if (statusResponse.status === 'failed') {
-        const errorMessage = statusResponse.error?.message || 'Video generation failed';
-        log('Video generation failed: %s, error: %s', requestId, errorMessage);
-
-        return {
-          error: new Error(errorMessage),
-          status: 'failed',
-        };
-      }
-
-      log('Video generation in progress: %s (status: %s)', requestId, statusResponse.status);
-
-      return { status: 'pending' };
-    },
-    initialInterval: 5000,
-    logger: {
-      debug: (message: any, ...args: any[]) => log(message, ...args),
-      error: (message: any, ...args: any[]) => log(message, ...args),
-    },
-    maxInterval: 10000,
-    maxRetries: 120,
-    pollingQuery: () => queryVideoStatus(requestId, { apiKey: options.apiKey, baseURL }),
-  });
-
-  log('Video generation completed, returning video URL');
-
-  return result;
+  // Return immediately with inferenceId only
+  // Frontend will poll the task status using the async task polling mechanism
+  // This avoids blocking the API response for 30+ seconds during server-side polling
+  return { inferenceId: requestId };
 }

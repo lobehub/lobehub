@@ -174,6 +174,14 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
+  pollVideoStatus?: (
+    inferenceId: string,
+    options: CreateVideoOptions,
+  ) => Promise<
+    | { status: 'success'; videoUrl: string }
+    | { status: 'failed'; error: string }
+    | { status: 'pending' }
+  >;
   provider: string;
   responses?: {
     handlePayload?: (
@@ -197,6 +205,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   createImage: customCreateImage,
   createVideo: customCreateVideo,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
+  pollVideoStatus: customPollVideoStatus,
   generateObject: generateObjectConfig,
 }: OpenAICompatibleFactoryOptions<T>) => {
   const ErrorType = {
@@ -588,6 +597,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         throw new Error('handleCreateVideoWebhook is not supported by this provider');
       }
       return customHandleCreateVideoWebhook(payload, {
+        ...this._options,
+        apiKey: this._options.apiKey!,
+        provider,
+      });
+    }
+
+    async pollVideoStatus(inferenceId: string) {
+      if (!customPollVideoStatus) {
+        throw new Error('pollVideoStatus is not supported by this provider');
+      }
+      return customPollVideoStatus(inferenceId, {
         ...this._options,
         apiKey: this._options.apiKey!,
         provider,

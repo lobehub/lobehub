@@ -8,7 +8,6 @@ import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAf
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
-import { GenerationModel } from '@/database/models/generation';
 import {
   asyncTasks,
   generationBatches,
@@ -21,16 +20,13 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import { VideoGenerationService } from '@/server/services/generation/video';
+import { startBackgroundVideoPolling } from '@/server/services/video/backgroundPolling';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@/types/asyncTask';
-import { FileSource } from '@/types/files';
-import type { VideoGenerationAsset } from '@/types/generation';
-import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:lambda');
 
@@ -222,68 +218,27 @@ export const videoRouter = router({
 
       log('Video task submitted successfully, inferenceId: %s', response?.inferenceId);
 
-      // Check if provider uses polling (returns videoUrl immediately) vs webhook (returns only inferenceId)
-      if (response && 'videoUrl' in response && response.videoUrl) {
-        log('Polling-based provider detected (videoUrl present), processing video immediately');
-
-        // Process video immediately (same logic as webhook success path)
-        const videoService = new VideoGenerationService(serverDB, userId);
-        const processResult = await videoService.processVideoForGeneration(response.videoUrl);
-
-        const asset: VideoGenerationAsset = {
-          coverUrl: processResult.coverKey,
-          duration: processResult.duration,
-          height: processResult.height,
-          originalUrl: response.videoUrl,
-          thumbnailUrl: processResult.thumbnailKey,
-          type: 'video',
-          url: processResult.videoKey,
-          width: processResult.width,
-        };
-
-        const generationModel = new GenerationModel(serverDB, userId);
-        await generationModel.createAssetAndFile(
-          createdGeneration.id,
-          asset,
-          {
-            fileHash: processResult.fileHash,
-            fileType: processResult.mimeType,
-            name: `${sanitizeFileName(createdBatch.prompt ?? '', createdGeneration.id)}.mp4`,
-            size: processResult.fileSize,
-            url: processResult.videoKey,
-          },
-          FileSource.VideoGeneration,
-        );
+      // Check if provider uses polling (returns only inferenceId, no videoUrl)
+      if (response && !('videoUrl' in response)) {
+        log('Polling-based provider detected (inferenceId only), starting background polling');
 
         await asyncTaskModel.update(asyncTaskId, {
-          duration: Date.now() - asyncTaskCreatedAt.getTime(),
           inferenceId: response.inferenceId,
-          status: AsyncTaskStatus.Success,
+          status: AsyncTaskStatus.Processing,
         });
 
-        // Charge after successful video generation
-        try {
-          await chargeAfterGenerate({
-            computePriceParams: {
-              generateAudio: input.params.generateAudio,
-            },
-            latency: Date.now() - asyncTaskCreatedAt.getTime(),
-            metadata: {
-              asyncTaskId,
-              generationBatchId: createdBatch.id,
-              modelId: model,
-              topicId: generationTopicId,
-            },
-            model,
-            prechargeResult: prechargeResult ?? undefined,
-            provider,
-            userId,
-          });
-        } catch (chargeError) {
-          console.error('[video] chargeAfterGenerate failed:', chargeError);
-        }
-
-        log('Polling-based video processing completed successfully');
+        // Start background polling for polling-based providers
+        startBackgroundVideoPolling(serverDB, {
+          asyncTaskCreatedAt,
+          asyncTaskId,
+          generationId: createdGeneration.id,
+          generationTopicId,
+          inferenceId: response.inferenceId,
+          model,
+          prechargeResult,
+          provider,
+          userId,
+        });
       } else {
         // Webhook-based provider: update status to Processing and wait for callback
         log('Webhook-based provider detected, waiting for callback');

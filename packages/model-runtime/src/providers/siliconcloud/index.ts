@@ -121,6 +121,13 @@ export const params = {
   },
   createImage: createSiliconCloudImage,
   createVideo: createSiliconCloudVideo,
+  pollVideoStatus: async (inferenceId, options) => {
+    const { pollSiliconCloudVideoStatus } = await import('./createVideo');
+    return pollSiliconCloudVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_SILICONCLOUD_CHAT_COMPLETION === '1',
   },

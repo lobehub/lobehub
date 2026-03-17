@@ -41,6 +41,14 @@ export interface LobeRuntimeAI {
 
   models?: () => Promise<any>;
 
+  pollVideoStatus?: (
+    inferenceId: string,
+  ) => Promise<
+    | { status: 'success'; videoUrl: string }
+    | { status: 'failed'; error: string }
+    | { status: 'pending' }
+  >;
+
   // Model management related interface
   pullModel?: (params: PullModelParams, options?: ModelRequestOptions) => Promise<Response>;
 

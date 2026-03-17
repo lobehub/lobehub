@@ -2,8 +2,6 @@ import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
-import type { TaskResult } from '../../utils/asyncifyPolling';
-import { asyncifyPolling } from '../../utils/asyncifyPolling';
 
 const log = createDebug('lobe-video:zhipu');
 
@@ -25,7 +23,7 @@ interface ZhipuVideoStatusResponse {
 /**
  * Query the status of a video generation task
  */
-async function queryVideoStatus(
+export async function queryZhipuVideoStatus(
   inferenceId: string,
   options: { apiKey: string; baseURL: string },
 ): Promise<ZhipuVideoStatusResponse> {
@@ -53,11 +51,39 @@ async function queryVideoStatus(
 }
 
 /**
- * Zhipu video generation implementation with polling
+ * Poll video status and return standardized result
+ */
+export async function pollZhipuVideoStatus(
+  inferenceId: string,
+  options: { apiKey: string; baseURL: string },
+): Promise<
+  | { status: 'success'; videoUrl: string }
+  | { status: 'failed'; error: string }
+  | { status: 'pending' }
+> {
+  const response = await queryZhipuVideoStatus(inferenceId, options);
+
+  if (response.task_status === 'SUCCESS') {
+    const videoUrl = response.video_result?.[0]?.url;
+    if (!videoUrl) {
+      return { error: 'Task succeeded but no video URL found', status: 'failed' };
+    }
+    return { status: 'success', videoUrl };
+  }
+
+  if (response.task_status === 'FAIL') {
+    return { error: response.error?.message || 'Video generation failed', status: 'failed' };
+  }
+
+  return { status: 'pending' };
+}
+
+/**
+ * Zhipu video generation implementation
  * API docs: https://docs.bigmodel.cn/cn/guide/paid-recommendation/cogvideox
  *
- * This function creates a video generation task and polls until completion,
- * similar to how createImage works (synchronous flow).
+ * Creates a video generation task and returns immediately with inferenceId.
+ * The frontend polls the task status using async task polling mechanism.
  */
 export async function createZhipuVideo(
   payload: CreateVideoPayload,
@@ -120,52 +146,10 @@ export async function createZhipuVideo(
   }
 
   const inferenceId = data.id;
-  log('Video task created with id: %s, starting polling...', inferenceId);
+  log('Video task created with id: %s, returning immediately for frontend polling', inferenceId);
 
-  // Poll until video generation completes using asyncifyPolling (same pattern as qwen createImage)
-  const result = await asyncifyPolling<ZhipuVideoStatusResponse, CreateVideoResponse>({
-    checkStatus: (statusResponse: ZhipuVideoStatusResponse): TaskResult<CreateVideoResponse> => {
-      log('Task %s status: %s', inferenceId, statusResponse.task_status);
-
-      if (statusResponse.task_status === 'SUCCESS') {
-        const videoUrl = statusResponse.video_result?.[0]?.url;
-        if (!videoUrl) {
-          return {
-            error: new Error('Missing url in success response'),
-            status: 'failed',
-          };
-        }
-        log('Video generation succeeded: %s', inferenceId);
-
-        return {
-          data: { inferenceId, videoUrl },
-          status: 'success',
-        };
-      }
-
-      if (statusResponse.task_status === 'FAIL') {
-        const errorMessage = statusResponse.error?.message || 'Video generation failed';
-        log('Video generation failed: %s, error: %s', inferenceId, errorMessage);
-
-        return {
-          error: new Error(errorMessage),
-          status: 'failed',
-        };
-      }
-
-      // Continue polling for RUNNING, QUEUED, PENDING statuses
-      log('Video generation in progress: %s (status: %s)', inferenceId, statusResponse.task_status);
-
-      return { status: 'pending' };
-    },
-    logger: {
-      debug: (message: any, ...args: any[]) => log(message, ...args),
-      error: (message: any, ...args: any[]) => log(message, ...args),
-    },
-    pollingQuery: () => queryVideoStatus(inferenceId, { apiKey: options.apiKey, baseURL }),
-  });
-
-  log('Video generation completed, returning video URL');
-
-  return result;
+  // Return immediately with inferenceId only
+  // Frontend will poll the task status using the async task polling mechanism
+  // This avoids blocking the API response for 30+ seconds during server-side polling
+  return { inferenceId };
 }

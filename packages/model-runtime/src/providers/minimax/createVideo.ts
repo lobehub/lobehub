@@ -2,8 +2,6 @@ import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
-import type { TaskResult } from '../../utils/asyncifyPolling';
-import { asyncifyPolling } from '../../utils/asyncifyPolling';
 
 const log = createDebug('lobe-video:minimax');
 
@@ -43,44 +41,36 @@ interface MiniMaxFileRetrieveResponse {
   };
 }
 
-async function queryVideoStatus(
+export async function queryMiniMaxVideoStatus(
   taskId: string,
   options: { apiKey: string; baseURL: string },
 ): Promise<MiniMaxVideoStatusResponse> {
   const statusUrl = `${options.baseURL}/query/video_generation`;
-
-  log('Querying video status for task: %s', taskId);
-
   const urlWithParams = new URL(statusUrl);
   urlWithParams.searchParams.append('task_id', taskId);
 
-  const responseWithParams = await fetch(urlWithParams.toString(), {
+  const response = await fetch(urlWithParams.toString(), {
     headers: {
       Authorization: `Bearer ${options.apiKey}`,
     },
     method: 'GET',
   });
 
-  if (!responseWithParams.ok) {
-    const errorText = await responseWithParams.text();
-    throw new Error(`MiniMax status API error: ${responseWithParams.status} ${errorText}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`MiniMax status API error: ${response.status} ${errorText}`);
   }
 
-  const data = (await responseWithParams.json()) as MiniMaxVideoStatusResponse;
-  log('Video status response: %O', data);
-
-  return data;
+  return (await response.json()) as MiniMaxVideoStatusResponse;
 }
 
-async function retrieveVideoFile(
+export async function retrieveMiniMaxVideoFile(
   fileId: string,
   options: { apiKey: string; baseURL: string },
 ): Promise<string> {
   const retrieveUrl = `${options.baseURL}/files/retrieve`;
   const urlWithParams = new URL(retrieveUrl);
   urlWithParams.searchParams.append('file_id', fileId);
-
-  log('Retrieving video file: %s', fileId);
 
   const response = await fetch(urlWithParams.toString(), {
     headers: {
@@ -95,17 +85,50 @@ async function retrieveVideoFile(
   }
 
   const data = (await response.json()) as MiniMaxFileRetrieveResponse;
-  log('File retrieve response: %O', data);
 
-  if (data.base_resp.status_code !== 0) {
-    throw new Error(`MiniMax file retrieve error: ${data.base_resp.status_msg}`);
+  if (data.base_resp?.status_code !== 0) {
+    throw new Error(`MiniMax file retrieve error: ${data.base_resp?.status_msg}`);
   }
 
   if (!data.file?.download_url) {
-    throw new Error('Missing download_url in file retrieve response');
+    throw new Error('Missing download_url in MiniMax file retrieve response');
   }
 
   return data.file.download_url;
+}
+
+export async function pollMiniMaxVideoStatus(
+  taskId: string,
+  options: { apiKey: string; baseURL: string },
+): Promise<
+  | { status: 'success'; videoUrl: string }
+  | { status: 'failed'; error: string }
+  | { status: 'pending' }
+> {
+  const response = await queryMiniMaxVideoStatus(taskId, options);
+
+  if (response.status === 'Success') {
+    const fileId = response.file_id;
+    if (!fileId) {
+      return { error: 'Task succeeded but no file_id found', status: 'failed' };
+    }
+
+    try {
+      const videoUrl = await retrieveMiniMaxVideoFile(fileId, options);
+      return { status: 'success', videoUrl };
+    } catch (error) {
+      return {
+        error: `Failed to retrieve video file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: 'failed',
+      };
+    }
+  }
+
+  if (response.status === 'Fail') {
+    return { error: response.base_resp?.status_msg || 'Video generation failed', status: 'failed' };
+  }
+
+  return { status: 'pending' };
 }
 
 export async function createMiniMaxVideo(
@@ -114,8 +137,6 @@ export async function createMiniMaxVideo(
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
   const { prompt, imageUrl, endImageUrl, duration } = params;
-
-  log('Creating video with MiniMax API - model: %s, params: %O', model, params);
 
   const baseURL = options.baseURL || 'https://api.minimaxi.com/v1';
 
@@ -133,8 +154,6 @@ export async function createMiniMaxVideo(
     body.last_frame_image = endImageUrl;
   }
 
-  log('MiniMax video API request body: %O', body);
-
   const response = await fetch(`${baseURL}/video_generation`, {
     body: JSON.stringify(body),
     headers: {
@@ -146,12 +165,10 @@ export async function createMiniMaxVideo(
 
   if (!response.ok) {
     const errorText = await response.text();
-    log('MiniMax video API error: %s %s', response.status, errorText);
     throw new Error(`MiniMax video API error: ${response.status} ${errorText}`);
   }
 
   const data = (await response.json()) as MiniMaxVideoCreateResponse;
-  log('MiniMax video API response: %O', data);
 
   if (data.base_resp.status_code !== 0) {
     throw new Error(`MiniMax video API error: ${data.base_resp.status_msg}`);
@@ -161,61 +178,5 @@ export async function createMiniMaxVideo(
     throw new Error('Invalid response: missing task_id');
   }
 
-  const taskId = data.task_id;
-  log('Video task created with id: %s, starting polling...', taskId);
-
-  const fileId = await asyncifyPolling<MiniMaxVideoStatusResponse, string>({
-    checkStatus: (statusResponse: MiniMaxVideoStatusResponse): TaskResult<string> => {
-      log('Task %s status: %s', taskId, statusResponse.status);
-
-      if (statusResponse.status === 'Success') {
-        if (!statusResponse.file_id) {
-          log('Task succeeded but missing file_id in response');
-          return {
-            error: new Error('Missing file_id in success response'),
-            status: 'failed',
-          };
-        }
-        log('Video generation succeeded, file_id: %s', statusResponse.file_id);
-
-        return {
-          data: statusResponse.file_id,
-          status: 'success',
-        };
-      }
-
-      if (statusResponse.status === 'Fail') {
-        log('Video generation failed: %s', taskId);
-        return {
-          error: new Error('Video generation failed'),
-          status: 'failed',
-        };
-      }
-
-      // Continue polling for Processing, Queued, or other statuses
-      log('Video generation in progress: %s (status: %s)', taskId, statusResponse.status);
-
-      return { status: 'pending' };
-    },
-    initialInterval: 10000, // MiniMax recommends 10s polling interval
-    logger: {
-      debug: (message: any, ...args: any[]) => log(message, ...args),
-      error: (message: any, ...args: any[]) => log(message, ...args),
-    },
-    maxInterval: 15000,
-    maxRetries: 60, // Max 15 minutes (60 * 15s = 900s)
-    pollingQuery: () => queryVideoStatus(taskId, { apiKey: options.apiKey, baseURL }),
-  });
-
-  log('Video generation completed, file_id: %s, retrieving download URL...', fileId);
-
-  // Step 3: Retrieve the download URL
-  const videoUrl = await retrieveVideoFile(fileId, { apiKey: options.apiKey, baseURL });
-
-  log('Video download URL retrieved successfully: %s', videoUrl);
-
-  return {
-    inferenceId: taskId,
-    videoUrl,
-  };
+  return { inferenceId: data.task_id };
 }

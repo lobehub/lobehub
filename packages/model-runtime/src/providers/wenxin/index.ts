@@ -37,6 +37,13 @@ export const params = {
   },
   createImage: createWenxinImage,
   createVideo: createWenxinVideo,
+  pollVideoStatus: async (inferenceId, options) => {
+    const { pollWenxinVideoStatus } = await import('./createVideo');
+    return pollWenxinVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_WENXIN_CHAT_COMPLETION === '1',
   },
