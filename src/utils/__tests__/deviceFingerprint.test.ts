@@ -50,4 +50,16 @@ describe('getDeviceFingerprint', () => {
 
     spy.mockRestore();
   });
+
+  it('should return a valid hash when window is undefined (SSR)', async () => {
+    const originalWindow = globalThis.window;
+    // @ts-ignore
+    delete globalThis.window;
+
+    const fp = await getDeviceFingerprint();
+    expect(fp).toBeTruthy();
+    expect(fp).toMatch(/^[\da-f]+$/);
+
+    globalThis.window = originalWindow;
+  });
 });
