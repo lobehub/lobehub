@@ -155,7 +155,9 @@ export abstract class BaseMemoryExtractor<
               }
 
               span.addEvent('gen_ai.request.send');
-              const result = await this.runtime.generateObject(payload);
+              const result = await this.runtime.generateObject(payload, {
+                metadata: { trigger: 'memory' },
+              });
               span.addEvent('gen_ai.response.receive');
 
               span.setAttributes({

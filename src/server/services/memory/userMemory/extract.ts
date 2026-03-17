@@ -22,6 +22,7 @@ import {
   type Embeddings,
   type GenerateObjectPayload,
   type LLMRoleType,
+  type ModelRuntimeHooks,
   type OpenAIChatMessage,
 } from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
@@ -52,6 +53,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { join } from 'pathe';
 import { z } from 'zod';
 
+import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { type ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
 import { TopicModel } from '@/database/models/topic';
@@ -309,6 +311,7 @@ export const resolveRuntimeAgentConfig = (
   agent: MemoryAgentConfig,
   keyVaults?: ProviderKeyVaultMap,
   options?: RuntimeResolveOptions,
+  hooks?: ModelRuntimeHooks,
 ) => {
   const normalizedPreferredProviders = (options?.preferred?.providerIds || [])
     .map(normalizeProvider)
@@ -329,7 +332,7 @@ export const resolveRuntimeAgentConfig = (
         source: 'user-vault' as const,
       });
 
-      return ModelRuntime.initializeWithProvider(provider, {});
+      return ModelRuntime.initializeWithProvider(provider, {}, hooks);
     }
 
     const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
@@ -1996,21 +1999,26 @@ export class MemoryExtractionExecutor {
       preferred: { providerIds: this.layerPreferredProviders },
     };
 
+    const hooks = getBusinessModelRuntimeHooks(userId, 'lobehub');
+
     const runtimes: RuntimeBundle = {
       embeddings: await resolveRuntimeAgentConfig(
         { ...this.privateConfig.embedding },
         keyVaults,
         embeddingOptions,
+        hooks,
       ),
       gatekeeper: await resolveRuntimeAgentConfig(
         { ...this.privateConfig.agentGateKeeper },
         keyVaults,
         gatekeeperOptions,
+        hooks,
       ),
       layerExtractor: await resolveRuntimeAgentConfig(
         { ...this.privateConfig.agentLayerExtractor },
         keyVaults,
         layerExtractorOptions,
+        hooks,
       ),
     };
 
