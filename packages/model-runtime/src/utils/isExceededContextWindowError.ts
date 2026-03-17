@@ -6,6 +6,7 @@ const CONTEXT_WINDOW_PATTERNS = [
   'exceeds the context window', // Aihubmix / generic
   'prompt is too long', // Anthropic
   'input is too long', // Anthropic
+  'input tokens exceed the configured limit', // OpenAI-compatible providers / wrapped upstream errors
   'too many input tokens', // Bedrock
   'exceeds the maximum number of tokens', // Google
   'maximum allowed number of input tokens',
