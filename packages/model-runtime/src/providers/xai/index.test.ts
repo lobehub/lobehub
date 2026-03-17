@@ -42,6 +42,7 @@ describe('LobeXAI - custom features', () => {
 
       expect(createCall.frequency_penalty).toBeUndefined();
       expect(createCall.presence_penalty).toBeUndefined();
+      expect(createCall.stream).toBe(true);
     });
 
     it('should preserve penalty parameters for non-reasoning models', async () => {

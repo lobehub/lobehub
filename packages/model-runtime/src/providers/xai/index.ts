@@ -36,7 +36,11 @@ const pruneUnsupportedReasoningParameters = (payload: ChatStreamPayload) => {
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
   chatCompletion: {
-    handlePayload: (payload) => pruneUnsupportedReasoningParameters(payload) as any,
+    handlePayload: (payload) =>
+      ({
+        ...pruneUnsupportedReasoningParameters(payload),
+        stream: payload.stream ?? true,
+      }) as any,
     useResponse: true,
   },
   createImage: createXAIImage,
