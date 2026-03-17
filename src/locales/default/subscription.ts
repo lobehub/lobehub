@@ -409,6 +409,7 @@ export default {
   'referral.table.columns.rewardedAt': 'Reward Time',
   'referral.table.columns.status': 'Status',
   'referral.table.columns.suspectedReason': 'Anomaly Reason',
+  'referral.table.status.pending_reward': 'Pending Reward',
   'referral.table.status.registered': 'Registered',
   'referral.table.status.revoked': 'Revoked',
   'referral.table.status.rewarded': 'Rewarded',
