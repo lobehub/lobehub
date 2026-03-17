@@ -42,6 +42,8 @@ const getWebGLInfo = (): string => {
 };
 
 const collectRawSignals = (): string => {
+  if (typeof window === 'undefined') return '';
+
   const parts: string[] = [
     getCanvasFingerprint(),
     getWebGLInfo(),
