@@ -64,7 +64,7 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onEmbeddingsFinal?: (
-    data: { usage?: ModelUsage },
+    data: { latencyMs?: number; usage?: ModelUsage },
     context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
   ) => void | Promise<void>;
 
@@ -218,13 +218,16 @@ export class ModelRuntime {
   async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
     await this._hooks?.beforeEmbeddings?.(payload, options);
 
+    const startTime = Date.now();
+
     const finalOptions = this._hooks?.onEmbeddingsFinal
       ? {
           ...options,
           onUsage: async (usage: ModelUsage) => {
             await options?.onUsage?.(usage);
             try {
-              await this._hooks!.onEmbeddingsFinal!({ usage }, { options, payload });
+              const latencyMs = Date.now() - startTime;
+              await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
             } catch (e) {
               console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
             }
