@@ -1856,6 +1856,46 @@ describe('LobeOpenAICompatibleFactory', () => {
       );
     });
 
+    it('should detect ExceededContextWindow from responses API error message text', async () => {
+      const apiError = new OpenAI.APIError(
+        400,
+        {
+          error: {
+            message:
+              '400 Input tokens exceed the configured limit of 272000 tokens. Your messages resulted in 479832 tokens. Please reduce the length of the messages.',
+          },
+          status: 400,
+        },
+        'Error message',
+        {},
+      );
+
+      vi.spyOn(instance['client'].responses, 'create').mockRejectedValue(apiError);
+
+      const payload = {
+        messages: [{ content: 'Generate data', role: 'user' as const }],
+        model: 'gpt-5-mini',
+        responseApi: true,
+        schema: {
+          name: 'test_tool',
+          schema: { properties: {}, type: 'object' as const },
+        },
+      };
+
+      await expect(instance.generateObject(payload)).rejects.toEqual({
+        endpoint: defaultBaseURL,
+        error: {
+          error: {
+            message:
+              '400 Input tokens exceed the configured limit of 272000 tokens. Your messages resulted in 479832 tokens. Please reduce the length of the messages.',
+          },
+          status: 400,
+        },
+        errorType: AgentRuntimeErrorType.ExceededContextWindow,
+        provider,
+      });
+    });
+
     describe('chat completions API path', () => {
       it('should return parsed JSON object using chat completions API', async () => {
         const mockResponse = {

@@ -653,116 +653,146 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-      const { messages, schema, model, responseApi, tools } = payload;
+      try {
+        const { messages, schema, model, responseApi, tools } = payload;
 
-      const log = debug(`${this.logPrefix}:generateObject`);
-      log(
-        'generateObject called with model: %s, hasTools: %s, hasSchema: %s',
-        model,
-        !!tools,
-        !!schema,
-      );
+        const log = debug(`${this.logPrefix}:generateObject`);
+        log(
+          'generateObject called with model: %s, hasTools: %s, hasSchema: %s',
+          model,
+          !!tools,
+          !!schema,
+        );
 
-      const pricing = await getModelPricing(model, this.id);
-      const usagePayload = { model, pricing, provider: this.id };
+        const pricing = await getModelPricing(model, this.id);
+        const usagePayload = { model, pricing, provider: this.id };
 
-      if (tools) {
-        log('using tools-based generation');
-        return this.generateObjectWithTools(payload, options, usagePayload);
-      }
+        if (tools) {
+          log('using tools-based generation');
+          return this.generateObjectWithTools(payload, options, usagePayload);
+        }
 
-      if (!schema) throw new Error('tools or schema is required');
+        if (!schema) throw new Error('tools or schema is required');
 
-      // Use tool calling fallback if configured
-      if (generateObjectConfig?.useToolsCalling) {
-        log('using tool calling fallback for structured output');
+        // Use tool calling fallback if configured
+        if (generateObjectConfig?.useToolsCalling) {
+          log('using tool calling fallback for structured output');
+
+          // Apply schema transformation if configured
+          const processedSchema = generateObjectConfig.handleSchema
+            ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
+            : schema;
+
+          const tool: ChatCompletionTool = {
+            function: {
+              description:
+                processedSchema.description ||
+                'Generate structured output according to the provided schema',
+              name: processedSchema.name || 'structured_output',
+              parameters: processedSchema.schema,
+            },
+            type: 'function',
+          };
+
+          const res = await this.client.chat.completions.create(
+            {
+              messages,
+              model,
+              tool_choice: { function: { name: tool.function.name }, type: 'function' },
+              tools: [tool],
+              user: options?.user,
+            },
+            { headers: options?.headers, signal: options?.signal },
+          );
+
+          if (res.usage) {
+            await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
+          }
+
+          const toolCalls = res.choices[0].message.tool_calls!;
+
+          try {
+            return toolCalls.map((item) => ({
+              arguments: JSON.parse(item.function.arguments),
+              name: item.function.name,
+            }));
+          } catch {
+            console.error('parse tool call arguments error:', toolCalls);
+            return undefined;
+          }
+        }
+
+        // Factory-level Responses API routing control (supports instance override)
+        const instanceGenerateObject = ((this._options as any).generateObject || {}) as {
+          useResponse?: boolean;
+          useResponseModels?: Array<string | RegExp>;
+        };
+        const flagUseResponse =
+          instanceGenerateObject.useResponse ??
+          (generateObjectConfig ? generateObjectConfig.useResponse : undefined);
+        const flagUseResponseModels =
+          instanceGenerateObject.useResponseModels ?? generateObjectConfig?.useResponseModels;
+
+        const shouldUseResponses = this.shouldUseResponsesAPI({
+          context: 'generateObject',
+          flagUseResponse,
+          flagUseResponseModels,
+          model,
+          responseApi,
+        });
 
         // Apply schema transformation if configured
-        const processedSchema = generateObjectConfig.handleSchema
+        const processedSchema = generateObjectConfig?.handleSchema
           ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
           : schema;
 
-        const tool: ChatCompletionTool = {
-          function: {
-            description:
-              processedSchema.description ||
-              'Generate structured output according to the provided schema',
-            name: processedSchema.name || 'structured_output',
-            parameters: processedSchema.schema,
-          },
-          type: 'function',
-        };
+        if (shouldUseResponses) {
+          log('calling responses.create for structured output');
+          const res = await this.client!.responses.create(
+            {
+              input: messages,
+              model,
+              text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
+              user: options?.user,
+            },
+            { headers: options?.headers, signal: options?.signal },
+          );
 
+          if (res.usage) {
+            await options?.onUsage?.(convertOpenAIResponseUsage(res.usage, usagePayload));
+          }
+
+          const text = res.output_text;
+          log('received structured output from Responses API, length: %d', text?.length || 0);
+          try {
+            const result = JSON.parse(text);
+            log('successfully parsed JSON output');
+            return result;
+          } catch (error) {
+            log('failed to parse JSON output: %O', error);
+            console.error('parse json error:', text);
+            return undefined;
+          }
+        }
+
+        log('calling chat.completions.create for structured output');
         const res = await this.client.chat.completions.create(
           {
             messages,
             model,
-            tool_choice: { function: { name: tool.function.name }, type: 'function' },
-            tools: [tool],
+            response_format: { json_schema: processedSchema, type: 'json_schema' },
             user: options?.user,
           },
           { headers: options?.headers, signal: options?.signal },
         );
-
         if (res.usage) {
           await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
         }
 
-        const toolCalls = res.choices[0].message.tool_calls!;
+        const text = res.choices[0].message.content!;
 
-        try {
-          return toolCalls.map((item) => ({
-            arguments: JSON.parse(item.function.arguments),
-            name: item.function.name,
-          }));
-        } catch {
-          console.error('parse tool call arguments error:', toolCalls);
-          return undefined;
-        }
-      }
+        log('received structured output from Chat Completions API, length: %d', text?.length || 0);
 
-      // Factory-level Responses API routing control (supports instance override)
-      const instanceGenerateObject = ((this._options as any).generateObject || {}) as {
-        useResponse?: boolean;
-        useResponseModels?: Array<string | RegExp>;
-      };
-      const flagUseResponse =
-        instanceGenerateObject.useResponse ??
-        (generateObjectConfig ? generateObjectConfig.useResponse : undefined);
-      const flagUseResponseModels =
-        instanceGenerateObject.useResponseModels ?? generateObjectConfig?.useResponseModels;
-
-      const shouldUseResponses = this.shouldUseResponsesAPI({
-        context: 'generateObject',
-        flagUseResponse,
-        flagUseResponseModels,
-        model,
-        responseApi,
-      });
-
-      // Apply schema transformation if configured
-      const processedSchema = generateObjectConfig?.handleSchema
-        ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
-        : schema;
-
-      if (shouldUseResponses) {
-        log('calling responses.create for structured output');
-        const res = await this.client!.responses.create(
-          {
-            input: messages,
-            model,
-            text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
-            user: options?.user,
-          },
-          { headers: options?.headers, signal: options?.signal },
-        );
-
-        if (res.usage) {
-          await options?.onUsage?.(convertOpenAIResponseUsage(res.usage, usagePayload));
-        }
-
-        const text = res.output_text;
-        log('received structured output from Responses API, length: %d', text?.length || 0);
         try {
           const result = JSON.parse(text);
           log('successfully parsed JSON output');
@@ -772,34 +802,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           console.error('parse json error:', text);
           return undefined;
         }
-      }
-
-      log('calling chat.completions.create for structured output');
-      const res = await this.client.chat.completions.create(
-        {
-          messages,
-          model,
-          response_format: { json_schema: processedSchema, type: 'json_schema' },
-          user: options?.user,
-        },
-        { headers: options?.headers, signal: options?.signal },
-      );
-      if (res.usage) {
-        await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
-      }
-
-      const text = res.choices[0].message.content!;
-
-      log('received structured output from Chat Completions API, length: %d', text?.length || 0);
-
-      try {
-        const result = JSON.parse(text);
-        log('successfully parsed JSON output');
-        return result;
       } catch (error) {
-        log('failed to parse JSON output: %O', error);
-        console.error('parse json error:', text);
-        return undefined;
+        const handledError = this.handleError(error);
+
+        if (
+          handledError.errorType === AgentRuntimeErrorType.AgentRuntimeError ||
+          handledError.errorType === ErrorType.bizError
+        ) {
+          throw error;
+        }
+
+        throw handledError;
       }
     }
 
