@@ -3,7 +3,7 @@ import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../const/models';
-import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
+import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
 export type ExtendedChatCompletionContentPart = {
@@ -17,6 +17,15 @@ type ConvertMessageContentOptions = {
   forceImageBase64?: boolean;
   forceVideoBase64?: boolean;
 };
+
+type OpenAICompatibleContentPart =
+  | ExtendedChatCompletionContentPart
+  | OpenAI.ChatCompletionContentPart
+  | UserMessageContentPart;
+
+const isInternalThinkingContentPart = (
+  content: OpenAICompatibleContentPart,
+): content is Extract<UserMessageContentPart, { type: 'thinking' }> => content.type === 'thinking';
 
 export const convertMessageContent = async (
   content: OpenAI.ChatCompletionContentPart | ExtendedChatCompletionContentPart,
@@ -77,9 +86,11 @@ export const convertOpenAIMessages = async (
           typeof message.content === 'string'
             ? message.content
             : await Promise.all(
-                (message.content || []).map((c) =>
-                  convertMessageContent(c as OpenAI.ChatCompletionContentPart, options),
-                ),
+                (message.content || [])
+                  .filter((c) => !isInternalThinkingContentPart(c as OpenAICompatibleContentPart))
+                  .map((c) =>
+                    convertMessageContent(c as OpenAI.ChatCompletionContentPart, options),
+                  ),
               ),
         role: msg.role,
       };
@@ -153,6 +164,10 @@ export const convertOpenAIResponseInputs = async (
           ? message.content
           : await Promise.all(
               (message.content || []).map(async (c) => {
+                if (isInternalThinkingContentPart(c as OpenAICompatibleContentPart)) {
+                  return undefined;
+                }
+
                 if (c.type === 'text') {
                   // if assistant message, set type to output_text
                   // https://platform.openai.com/docs/guides/text
