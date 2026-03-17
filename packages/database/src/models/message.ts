@@ -1841,4 +1841,20 @@ export class MessageModel {
     if (!!threadId) return eq(messages.threadId, threadId);
     return isNull(messages.threadId);
   };
+
+  /**
+   * Check which user IDs from the given list have at least one message.
+   */
+  static checkUsersHaveMessages = async (
+    db: LobeChatDatabase,
+    userIds: string[],
+  ): Promise<Set<string>> => {
+    if (userIds.length === 0) return new Set();
+    const result = await db
+      .select({ userId: messages.userId })
+      .from(messages)
+      .where(inArray(messages.userId, userIds))
+      .groupBy(messages.userId);
+    return new Set(result.map((r) => r.userId));
+  };
 }
