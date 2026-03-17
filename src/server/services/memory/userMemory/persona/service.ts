@@ -90,6 +90,7 @@ export class UserPersonaService {
           baseURL: this.agentConfig.baseURL,
         },
         preferred: { providerIds: [providerId] },
+        userId: payload.userId,
       } satisfies RuntimeResolveOptions,
       hooks,
     );

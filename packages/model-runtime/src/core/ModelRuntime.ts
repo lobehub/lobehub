@@ -280,7 +280,12 @@ export class ModelRuntime {
     params: Partial<
       ClientOptions &
         LobeBedrockAIParams &
-        LobeCloudflareParams & { apiKey?: string; apiVersion?: string; baseURL?: string }
+        LobeCloudflareParams & {
+          apiKey?: string;
+          apiVersion?: string;
+          baseURL?: string;
+          userId?: string;
+        }
     >,
     hooks?: ModelRuntimeHooks,
   ) {

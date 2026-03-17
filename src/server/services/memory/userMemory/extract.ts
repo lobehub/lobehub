@@ -306,6 +306,7 @@ export type RuntimeResolveOptions = {
   preferred?: {
     providerIds?: string[];
   };
+  userId?: string;
 };
 
 export const resolveRuntimeAgentConfig = (
@@ -333,7 +334,7 @@ export const resolveRuntimeAgentConfig = (
         source: 'user-vault' as const,
       });
 
-      return ModelRuntime.initializeWithProvider(provider, {}, hooks);
+      return ModelRuntime.initializeWithProvider(provider, { userId: options?.userId }, hooks);
     }
 
     const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
@@ -358,6 +359,7 @@ export const resolveRuntimeAgentConfig = (
     return ModelRuntime.initializeWithProvider(provider, {
       apiKey: userApiKey,
       baseURL: userBaseURL,
+      userId: options?.userId,
     });
   }
 
@@ -371,6 +373,7 @@ export const resolveRuntimeAgentConfig = (
   return ModelRuntime.initializeWithProvider(agent.provider || 'openai', {
     apiKey: agent.apiKey || options?.fallback?.apiKey,
     baseURL: agent.baseURL || options?.fallback?.baseURL,
+    userId: options?.userId,
   });
 };
 
@@ -1985,6 +1988,7 @@ export class MemoryExtractionExecutor {
         baseURL: this.privateConfig.embedding.baseURL,
       },
       preferred: { providerIds: this.embeddingPreferredProviders },
+      userId,
     };
 
     const gatekeeperOptions: RuntimeResolveOptions = {
@@ -1993,6 +1997,7 @@ export class MemoryExtractionExecutor {
         baseURL: this.privateConfig.agentGateKeeper.baseURL,
       },
       preferred: { providerIds: this.gatekeeperPreferredProviders },
+      userId,
     };
 
     const layerExtractorOptions: RuntimeResolveOptions = {
@@ -2001,6 +2006,7 @@ export class MemoryExtractionExecutor {
         baseURL: this.privateConfig.agentLayerExtractor.baseURL,
       },
       preferred: { providerIds: this.layerPreferredProviders },
+      userId,
     };
 
     const hooks = getBusinessModelRuntimeHooks(userId, 'lobehub');
