@@ -247,6 +247,29 @@ describe('AgentDocumentModel', () => {
     });
   });
 
+  describe('hasByAgent', () => {
+    it('should return whether a user has visible documents for the agent', async () => {
+      expect(await agentDocumentModel.hasByAgent(agentId)).toBe(false);
+
+      const created = await agentDocumentModel.create(agentId, 'exists.md', 'A');
+      await agentDocumentModel.create(secondAgentId, 'other-agent.md', 'B');
+
+      expect(await agentDocumentModel.hasByAgent(agentId)).toBe(true);
+      expect(await agentDocumentModel.hasByAgent(secondAgentId)).toBe(true);
+
+      await agentDocumentModel.delete(created.id);
+
+      expect(await agentDocumentModel.hasByAgent(agentId)).toBe(false);
+    });
+
+    it('should keep existence checks isolated by user', async () => {
+      await otherAgentDocumentModel.create(otherAgentId, 'other-user.md', 'A');
+
+      expect(await agentDocumentModel.hasByAgent(otherAgentId)).toBe(false);
+      expect(await otherAgentDocumentModel.hasByAgent(otherAgentId)).toBe(true);
+    });
+  });
+
   describe('updateToolLoadRule and loadable queries', () => {
     it('should apply tool load rule and exclude manual docs from loadable results', async () => {
       const alwaysDoc = await agentDocumentModel.create(

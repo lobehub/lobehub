@@ -7,6 +7,7 @@
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
 import { type ToolExecutionContext } from '../types';
+import { agentDocumentsRuntime } from './agentDocuments';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { localSystemRuntime } from './localSystem';
@@ -39,6 +40,7 @@ registerRuntimes([
   webBrowsingRuntime,
   cloudSandboxRuntime,
   calculatorRuntime,
+  agentDocumentsRuntime,
   notebookRuntime,
   skillStoreRuntime,
   skillsRuntime,

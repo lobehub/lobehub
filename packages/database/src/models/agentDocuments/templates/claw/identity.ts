@@ -1,5 +1,5 @@
 import type { DocumentTemplate } from '../../template';
-import { DocumentLoadPosition } from '../../types';
+import { DocumentLoadFormat, DocumentLoadPosition } from '../../types';
 
 /**
  * Identity Document
@@ -11,6 +11,7 @@ export const IDENTITY_DOCUMENT: DocumentTemplate = {
   title: 'Identity',
   filename: 'IDENTITY.md',
   description: 'Name, creature type, vibe, and avatar identity',
+  policyLoadFormat: DocumentLoadFormat.FILE,
   loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
   loadRules: {
     priority: 0,
@@ -34,5 +35,6 @@ This isn't just metadata. It's the start of figuring out who you are.
 
 Notes:
 
-- Save this file at the workspace root as \`IDENTITY.md\`.`,
+- This is an agent document named \`IDENTITY.md\`.
+- Update it when your self-definition becomes clearer, but keep it stable enough to be useful across sessions.`,
 };

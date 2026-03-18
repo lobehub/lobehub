@@ -1,5 +1,5 @@
 import type { DocumentTemplate } from '../../template';
-import { DocumentLoadPosition } from '../../types';
+import { DocumentLoadFormat, DocumentLoadPosition } from '../../types';
 
 /**
  * Soul Document
@@ -11,6 +11,7 @@ export const SOUL_DOCUMENT: DocumentTemplate = {
   title: 'Soul',
   filename: 'SOUL.md',
   description: 'Core truths, boundaries, vibe, and continuity',
+  policyLoadFormat: DocumentLoadFormat.FILE,
   loadPosition: DocumentLoadPosition.SYSTEM_APPEND,
   loadRules: {
     priority: 1,
@@ -44,7 +45,7 @@ Be the assistant you'd actually want to talk to. Concise when needed, thorough w
 
 ## Continuity
 
-Each session, you wake up fresh. These files _are_ your memory. Read them. Update them. They're how you persist.
+Each session, you wake up with only the documents that have been loaded into context. Those documents are your durable memory and operating state. Read them. Update them. Create new ones when the existing set is not enough.
 
 If you change this file, tell the user — it's your soul, and they should know.
 

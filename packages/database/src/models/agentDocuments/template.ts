@@ -1,4 +1,4 @@
-import type { DocumentLoadPosition, DocumentLoadRules } from './types';
+import type { DocumentLoadFormat, DocumentLoadPosition, DocumentLoadRules } from './types';
 
 /**
  * Document Template Definition
@@ -17,6 +17,8 @@ export interface DocumentTemplate {
   loadRules?: DocumentLoadRules;
   /** Additional metadata for the template */
   metadata?: Record<string, any>;
+  /** Default render format when the document is injected into context */
+  policyLoadFormat?: DocumentLoadFormat;
   /** Human-readable title for the template */
   title: string;
 }
@@ -60,6 +62,7 @@ export class DocumentTemplateManager {
     options?: {
       description?: string;
       filename?: string;
+      policyLoadFormat?: DocumentLoadFormat;
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, any>;
@@ -70,6 +73,7 @@ export class DocumentTemplateManager {
       content,
       description: options?.description || `Template for ${title}`,
       filename: options?.filename || this.generateFilename(title),
+      policyLoadFormat: options?.policyLoadFormat,
       loadPosition: options?.loadPosition,
       loadRules: options?.loadRules,
       metadata: options?.metadata,
@@ -128,6 +132,7 @@ export class DocumentTemplateManager {
     options?: {
       description?: string;
       filename?: string;
+      policyLoadFormat?: DocumentLoadFormat;
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, any>;

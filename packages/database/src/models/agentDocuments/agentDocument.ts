@@ -365,6 +365,22 @@ export class AgentDocumentModel {
     });
   }
 
+  async hasByAgent(agentId: string): Promise<boolean> {
+    const [result] = await this.db
+      .select({ id: agentDocuments.id })
+      .from(agentDocuments)
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return !!result;
+  }
+
   async findByTemplate(agentId: string, templateId: string): Promise<AgentDocumentWithRules[]> {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
