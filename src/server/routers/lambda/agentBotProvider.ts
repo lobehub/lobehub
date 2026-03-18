@@ -5,6 +5,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { platformRegistry } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 
 const agentBotProviderProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -19,6 +20,10 @@ const agentBotProviderProcedure = authedProcedure.use(serverDatabase).use(async 
 });
 
 export const agentBotProviderRouter = router({
+  listPlatforms: authedProcedure.query(() => {
+    return platformRegistry.listSerializedPlatforms();
+  }),
+
   create: agentBotProviderProcedure
     .input(
       z.object({
@@ -72,7 +77,7 @@ export const agentBotProviderRouter = router({
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const service = new GatewayService();
-      const status = await service.startBot(input.platform, input.applicationId, ctx.userId);
+      const status = await service.startClient(input.platform, input.applicationId, ctx.userId);
 
       return { status };
     }),

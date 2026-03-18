@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { CHANNEL_PROVIDERS } from '@/routes/(main)/agent/channel/const';
+import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -206,9 +206,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         title={title}
         icon={(() => {
           if (metadata?.bot?.platform) {
-            const provider = CHANNEL_PROVIDERS.find((p) => p.id === metadata.bot!.platform);
-            if (provider) {
-              const ProviderIcon = provider.icon;
+            const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
+            if (ProviderIcon) {
               return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
             }
           }

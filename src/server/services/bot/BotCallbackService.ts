@@ -6,10 +6,9 @@ import { type LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
-import { getPlatformDescriptor } from './platforms';
-import { DiscordRestApi } from './platforms/discord';
+import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
+import { platformRegistry } from './platforms';
 import { renderError, renderFinalReply, renderStepProgress, splitMessage } from './replyTemplate';
-import type { PlatformMessenger } from './types';
 
 const log = debug('lobe-server:bot:callback');
 
@@ -29,7 +28,6 @@ export interface BotCallbackBody {
   llmCalls?: number;
   platformThreadId: string;
   progressMessageId: string;
-  reactionChannelId?: string;
   reason?: string;
   reasoning?: string;
   shouldContinue?: boolean;
@@ -64,17 +62,17 @@ export class BotCallbackService {
     const { type, applicationId, platformThreadId, progressMessageId } = body;
     const platform = platformThreadId.split(':')[0];
 
-    const { botToken, messenger, charLimit } = await this.createMessenger(
+    const { client, messenger, charLimit } = await this.createMessenger(
       platform,
       applicationId,
       platformThreadId,
     );
 
     if (type === 'step') {
-      await this.handleStep(body, messenger, progressMessageId, platform);
+      await this.handleStep(body, messenger, progressMessageId, client);
     } else if (type === 'completion') {
-      await this.handleCompletion(body, messenger, progressMessageId, platform, charLimit);
-      await this.removeEyesReaction(body, messenger, botToken, platform, platformThreadId);
+      await this.handleCompletion(body, messenger, progressMessageId, client, charLimit);
+      await this.removeEyesReaction(body, messenger);
       this.summarizeTopicTitle(body, messenger);
     }
   }
@@ -83,7 +81,7 @@ export class BotCallbackService {
     platform: string,
     applicationId: string,
     platformThreadId: string,
-  ): Promise<{ botToken: string; charLimit?: number; messenger: PlatformMessenger }> {
+  ): Promise<{ charLimit?: number; messenger: PlatformMessenger; client: PlatformClient }> {
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
       this.db,
       platform,
@@ -102,38 +100,41 @@ export class BotCallbackService {
       credentials = JSON.parse(row.credentials);
     }
 
-    const descriptor = getPlatformDescriptor(platform);
-    if (!descriptor) {
+    const entry = platformRegistry.getPlatform(platform);
+    if (!entry) {
       throw new Error(`Unsupported platform: ${platform}`);
     }
 
-    const missingCreds = descriptor.requiredCredentials.filter((k) => !credentials[k]);
-    if (missingCreds.length > 0) {
-      throw new Error(`Bot credentials incomplete for ${platform} appId=${applicationId}`);
-    }
+    const settings = (row as any).settings as Record<string, unknown> | undefined;
+    const charLimit = (settings?.charLimit as number) || undefined;
 
-    return {
-      botToken: credentials.botToken || credentials.appId,
-      charLimit: descriptor.charLimit,
-      messenger: descriptor.createMessenger(credentials, platformThreadId),
+    const config: BotProviderConfig = {
+      applicationId,
+      credentials,
+      platform,
+      settings: settings || {},
     };
+
+    const client = entry.clientFactory.createClient(config, {});
+    const messenger = client.getMessenger(platformThreadId);
+
+    return { charLimit, messenger, client };
   }
 
   private async handleStep(
     body: BotCallbackBody,
     messenger: PlatformMessenger,
     progressMessageId: string,
-    platform: string,
+    client: PlatformClient,
   ): Promise<void> {
     if (!body.shouldContinue) return;
 
-    const progressText = renderStepProgress({
+    const msgBody = renderStepProgress({
       content: body.content,
       elapsedMs: body.elapsedMs,
       executionTimeMs: body.executionTimeMs ?? 0,
       lastContent: body.lastLLMContent,
       lastToolsCalling: body.lastToolsCalling,
-      platform,
       reasoning: body.reasoning,
       stepType: body.stepType ?? ('call_llm' as const),
       thinking: body.thinking ?? false,
@@ -146,6 +147,14 @@ export class BotCallbackService {
       totalTokens: body.totalTokens ?? 0,
       totalToolCalls: body.totalToolCalls,
     });
+
+    const stats: UsageStats = {
+      elapsedMs: body.elapsedMs,
+      totalCost: body.totalCost ?? 0,
+      totalTokens: body.totalTokens ?? 0,
+    };
+
+    const progressText = client.formatReply?.(msgBody, stats) ?? msgBody;
 
     const isLlmFinalResponse =
       body.stepType === 'call_llm' && !body.toolsCalling?.length && body.content;
@@ -164,7 +173,7 @@ export class BotCallbackService {
     body: BotCallbackBody,
     messenger: PlatformMessenger,
     progressMessageId: string,
-    platform: string,
+    client: PlatformClient,
     charLimit?: number,
   ): Promise<void> {
     const { reason, lastAssistantContent, errorMessage } = body;
@@ -184,15 +193,17 @@ export class BotCallbackService {
       return;
     }
 
-    const finalText = renderFinalReply(lastAssistantContent, {
+    const msgBody = renderFinalReply(lastAssistantContent);
+
+    const stats: UsageStats = {
       elapsedMs: body.duration,
       llmCalls: body.llmCalls ?? 0,
-      platform,
       toolCalls: body.toolCalls ?? 0,
       totalCost: body.cost ?? 0,
       totalTokens: body.totalTokens ?? 0,
-    });
+    };
 
+    const finalText = client.formatReply?.(msgBody, stats) ?? msgBody;
     const chunks = splitMessage(finalText, charLimit);
 
     try {
@@ -208,23 +219,12 @@ export class BotCallbackService {
   private async removeEyesReaction(
     body: BotCallbackBody,
     messenger: PlatformMessenger,
-    botToken: string,
-    platform: string,
-    platformThreadId: string,
   ): Promise<void> {
-    const { userMessageId, reactionChannelId } = body;
+    const { userMessageId } = body;
     if (!userMessageId) return;
 
     try {
-      if (platform === 'discord') {
-        // Use reactionChannelId (parent channel for mentions, thread for follow-ups)
-        const descriptor = getPlatformDescriptor(platform)!;
-        const discord = new DiscordRestApi(botToken);
-        const targetChannelId = reactionChannelId || descriptor.extractChatId(platformThreadId);
-        await discord.removeOwnReaction(targetChannelId, userMessageId, '👀');
-      } else {
-        await messenger.removeReaction(userMessageId, '👀');
-      }
+      await messenger.removeReaction(userMessageId, '👀');
     } catch (error) {
       log('removeEyesReaction: failed: %O', error);
     }

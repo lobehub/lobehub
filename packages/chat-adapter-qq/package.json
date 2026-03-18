@@ -1,7 +1,7 @@
 {
-  "name": "@lobechat/adapter-lark",
+  "name": "@lobechat/chat-adapter-qq",
   "version": "0.1.0",
-  "description": "Lark/Feishu adapter for chat SDK",
+  "description": "QQ Bot adapter for chat SDK",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

@@ -5,10 +5,28 @@ import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { useAgentStore } from '@/store/agent';
 
-import { type ChannelProvider } from '../const';
 import Body from './Body';
+
+/**
+ * Resolve applicationId from credentials by convention:
+ * 1. Explicit `applicationId` field (Discord)
+ * 2. `appId` field (Feishu, QQ)
+ * 3. Derive from `botToken` before ':' (Telegram: "123456:ABC" → "123456")
+ */
+export function resolveApplicationId(credentials: Record<string, string>): string {
+  if (credentials.applicationId) return credentials.applicationId;
+  if (credentials.appId) return credentials.appId;
+
+  if (credentials.botToken) {
+    const colonIdx = credentials.botToken.indexOf(':');
+    if (colonIdx !== -1) return credentials.botToken.slice(0, colonIdx);
+  }
+
+  return '';
+}
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   main: css`
@@ -32,29 +50,20 @@ interface CurrentConfig {
   platform: string;
 }
 
-export interface ChannelFormValues {
-  applicationId: string;
-  appSecret?: string;
-  botToken: string;
-  encryptKey?: string;
-  publicKey: string;
-  secretToken?: string;
-  verificationToken?: string;
-  webhookProxyUrl?: string;
-}
+export type ChannelFormValues = Record<string, string>;
 
 export interface TestResult {
   errorDetail?: string;
-  type: 'success' | 'error';
+  type: 'error' | 'success';
 }
 
 interface PlatformDetailProps {
   agentId: string;
   currentConfig?: CurrentConfig;
-  provider: ChannelProvider;
+  platformDef: SerializedPlatformDefinition;
 }
 
-const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentConfig }) => {
+const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, currentConfig }) => {
   const { t } = useTranslation('agent');
   const { message: msg, modal } = App.useApp();
   const [form] = Form.useForm<ChannelFormValues>();
@@ -71,23 +80,20 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
   // Reset form when switching platforms
   useEffect(() => {
     form.resetFields();
-  }, [provider.id, form]);
+  }, [platformDef.id, form]);
 
   // Sync form with saved config
   useEffect(() => {
     if (currentConfig) {
-      form.setFieldsValue({
+      const values: Record<string, string> = {
         applicationId: currentConfig.applicationId || '',
-        appSecret: currentConfig.credentials?.appSecret || '',
-        botToken: currentConfig.credentials?.botToken || '',
-        encryptKey: currentConfig.credentials?.encryptKey || '',
-        publicKey: currentConfig.credentials?.publicKey || '',
-        secretToken: currentConfig.credentials?.secretToken || '',
-        verificationToken: currentConfig.credentials?.verificationToken || '',
-        webhookProxyUrl: currentConfig.credentials?.webhookProxyUrl || '',
-      });
+      };
+      for (const field of platformDef.credentials) {
+        values[field.key] = currentConfig.credentials?.[field.key] || '';
+      }
+      form.setFieldsValue(values);
     }
-  }, [currentConfig, form]);
+  }, [currentConfig, form, platformDef.credentials]);
 
   const handleSave = useCallback(async () => {
     try {
@@ -96,37 +102,14 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
       setSaving(true);
       setSaveResult(undefined);
 
-      // Auto-derive applicationId from bot token for Telegram
-      let applicationId = values.applicationId;
-      if (provider.autoAppId && values.botToken) {
-        const colonIdx = values.botToken.indexOf(':');
-        if (colonIdx !== -1) {
-          applicationId = values.botToken.slice(0, colonIdx);
-          form.setFieldValue('applicationId', applicationId);
-        }
+      // Build credentials from platform definition
+      const credentials: Record<string, string> = {};
+      for (const field of platformDef.credentials) {
+        const value = values[field.key];
+        if (value) credentials[field.key] = value;
       }
 
-      // Build platform-specific credentials
-      const credentials: Record<string, string> =
-        provider.authMode === 'app-secret'
-          ? { appId: applicationId, appSecret: values.appSecret || '' }
-          : { botToken: values.botToken };
-
-      if (provider.fieldTags.publicKey) {
-        credentials.publicKey = values.publicKey || 'default';
-      }
-      if (provider.fieldTags.secretToken && values.secretToken) {
-        credentials.secretToken = values.secretToken;
-      }
-      if (provider.fieldTags.verificationToken && values.verificationToken) {
-        credentials.verificationToken = values.verificationToken;
-      }
-      if (provider.fieldTags.encryptKey && values.encryptKey) {
-        credentials.encryptKey = values.encryptKey;
-      }
-      if (provider.webhookMode === 'auto' && values.webhookProxyUrl) {
-        credentials.webhookProxyUrl = values.webhookProxyUrl;
-      }
+      const applicationId = resolveApplicationId(credentials);
 
       if (currentConfig) {
         await updateBotProvider(currentConfig.id, agentId, {
@@ -138,7 +121,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
           agentId,
           applicationId,
           credentials,
-          platform: provider.id,
+          platform: platformDef.id,
         });
       }
 
@@ -150,18 +133,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
     } finally {
       setSaving(false);
     }
-  }, [
-    agentId,
-    provider.id,
-    provider.autoAppId,
-    provider.authMode,
-    provider.fieldTags,
-    provider.webhookMode,
-    form,
-    currentConfig,
-    createBotProvider,
-    updateBotProvider,
-  ]);
+  }, [agentId, platformDef, form, currentConfig, createBotProvider, updateBotProvider]);
 
   const handleDelete = useCallback(async () => {
     if (!currentConfig) return;
@@ -204,7 +176,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
     try {
       await connectBot({
         applicationId: currentConfig.applicationId,
-        platform: provider.id,
+        platform: platformDef.id,
       });
       setTestResult({ type: 'success' });
     } catch (e: any) {
@@ -215,7 +187,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
     } finally {
       setTesting(false);
     }
-  }, [currentConfig, provider.id, connectBot, msg, t]);
+  }, [currentConfig, platformDef.id, connectBot, msg, t]);
 
   return (
     <main className={styles.main}>
@@ -223,7 +195,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ provider, agentId, currentCo
         currentConfig={currentConfig}
         form={form}
         hasConfig={!!currentConfig}
-        provider={provider}
+        platformDef={platformDef}
         saveResult={saveResult}
         saving={saving}
         testResult={testResult}

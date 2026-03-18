@@ -315,65 +315,12 @@ describe('replyTemplate', () => {
   // ==================== renderFinalReply ====================
 
   describe('renderFinalReply', () => {
-    it('should append usage footer with tokens, cost, and call counts', () => {
-      expect(
-        renderFinalReply('Here is the answer.', {
-          llmCalls: 5,
-          toolCalls: 4,
-          totalCost: 0.0312,
-          totalTokens: 1234,
-        }),
-      ).toBe('Here is the answer.\n\n-# 1.2k tokens · $0.0312 | llm×5 | tools×4');
+    it('should return content body only (no stats)', () => {
+      expect(renderFinalReply('Here is the answer.')).toBe('Here is the answer.');
     });
 
-    it('should hide call counts when llmCalls=1 and toolCalls=0', () => {
-      expect(
-        renderFinalReply('Simple answer.', {
-          llmCalls: 1,
-          toolCalls: 0,
-          totalCost: 0.001,
-          totalTokens: 500,
-        }),
-      ).toBe('Simple answer.\n\n-# 500 tokens · $0.0010');
-    });
-
-    it('should show call counts when toolCalls > 0 even if llmCalls=1', () => {
-      expect(
-        renderFinalReply('Answer.', {
-          llmCalls: 1,
-          toolCalls: 2,
-          totalCost: 0.005,
-          totalTokens: 800,
-        }),
-      ).toBe('Answer.\n\n-# 800 tokens · $0.0050 | llm×1 | tools×2');
-    });
-
-    it('should show call counts when llmCalls > 1 even if toolCalls=0', () => {
-      expect(
-        renderFinalReply('Answer.', {
-          llmCalls: 3,
-          toolCalls: 0,
-          totalCost: 0.01,
-          totalTokens: 2000,
-        }),
-      ).toBe('Answer.\n\n-# 2.0k tokens · $0.0100 | llm×3 | tools×0');
-    });
-
-    it('should hide call counts for zero usage', () => {
-      expect(
-        renderFinalReply('Done.', { llmCalls: 0, toolCalls: 0, totalCost: 0, totalTokens: 0 }),
-      ).toBe('Done.\n\n-# 0 tokens · $0.0000');
-    });
-
-    it('should format large token counts', () => {
-      expect(
-        renderFinalReply('Result', {
-          llmCalls: 10,
-          toolCalls: 20,
-          totalCost: 1.5,
-          totalTokens: 1_234_567,
-        }),
-      ).toBe('Result\n\n-# 1.2m tokens · $1.5000 | llm×10 | tools×20');
+    it('should trim trailing whitespace', () => {
+      expect(renderFinalReply('Answer.  \n\n')).toBe('Answer.');
     });
   });
 

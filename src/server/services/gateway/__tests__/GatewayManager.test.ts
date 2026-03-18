@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PlatformBot, PlatformBotClass } from '../../bot/types';
+import type { PlatformDefinition } from '@/server/services/bot/platforms';
+
 import { GatewayManager } from '../GatewayManager';
 
 const mockFindEnabledByPlatform = vi.hoisted(() => vi.fn());
@@ -26,28 +27,31 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   },
 }));
 
-// Fake platform bot for testing
-class FakeBot implements PlatformBot {
-  static persistent = false;
-
-  readonly platform: string;
-  readonly applicationId: string;
-  started = false;
-  stopped = false;
-
-  constructor(config: any) {
-    this.platform = config.platform;
-    this.applicationId = config.applicationId;
-  }
-
-  async start(): Promise<void> {
-    this.started = true;
-  }
-
-  async stop(): Promise<void> {
-    this.stopped = true;
-  }
-}
+// Fake platform definition for testing
+const fakeDefinition: PlatformDefinition = {
+  clientFactory: {
+    createClient: (config: any) => ({
+      applicationId: config.applicationId,
+      createAdapter: () => ({}),
+      extractChatId: (id: string) => id,
+      getMessenger: () => ({
+        createMessage: async () => {},
+        editMessage: async () => {},
+        removeReaction: async () => {},
+        triggerTyping: async () => {},
+      }),
+      parseMessageId: (id: string) => id,
+      id: config.platform,
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    }),
+    validateCredentials: async () => ({ valid: true }),
+    validateSettings: async () => ({ valid: true }),
+  },
+  credentials: [],
+  name: 'Fake Platform',
+  id: 'fakeplatform',
+} as any;
 
 const FAKE_DB = {} as any;
 const FAKE_GATEKEEPER = { decrypt: vi.fn() };
@@ -62,9 +66,7 @@ describe('GatewayManager', () => {
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockFindEnabledByApplicationId.mockResolvedValue(null);
 
-    manager = new GatewayManager({
-      registry: { fakeplatform: FakeBot as unknown as PlatformBotClass },
-    });
+    manager = new GatewayManager({ definitions: [fakeDefinition] });
   });
 
   describe('lifecycle', () => {
@@ -118,8 +120,6 @@ describe('GatewayManager', () => {
 
       await manager.start();
 
-      // Call start again (sync would be called again if manager was restarted)
-      // But since isRunning is true, it skips
       expect(manager.isRunning).toBe(true);
     });
 
@@ -132,17 +132,15 @@ describe('GatewayManager', () => {
     });
   });
 
-  describe('startBot', () => {
+  describe('startClient', () => {
     it('should handle missing provider gracefully', async () => {
       await manager.start();
 
-      // startBot loads from DB - mock returns no provider
-      // This tests the "no enabled provider found" path
-      await expect(manager.startBot('fakeplatform', 'app-1', 'user-1')).resolves.toBeUndefined();
+      await expect(manager.startClient('fakeplatform', 'app-1', 'user-1')).resolves.toBeUndefined();
     });
   });
 
-  describe('stopBot', () => {
+  describe('stopClient', () => {
     it('should stop a specific bot', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         {
@@ -152,21 +150,20 @@ describe('GatewayManager', () => {
       ]);
 
       await manager.start();
-      await manager.stopBot('fakeplatform', 'app-1');
+      await manager.stopClient('fakeplatform', 'app-1');
 
-      // No error should occur
       expect(manager.isRunning).toBe(true);
     });
 
     it('should handle stopping non-existent bot gracefully', async () => {
       await manager.start();
-      await expect(manager.stopBot('fakeplatform', 'non-existent')).resolves.toBeUndefined();
+      await expect(manager.stopClient('fakeplatform', 'non-existent')).resolves.toBeUndefined();
     });
   });
 
-  describe('createBot', () => {
+  describe('createConnector', () => {
     it('should return null for unknown platform', async () => {
-      const managerWithEmpty = new GatewayManager({ registry: {} });
+      const managerWithEmpty = new GatewayManager({ definitions: [] });
 
       mockFindEnabledByPlatform.mockResolvedValue([
         {
@@ -175,7 +172,7 @@ describe('GatewayManager', () => {
         },
       ]);
 
-      // With empty registry, no bots should be created
+      // With no definitions, no bots should be created
       await managerWithEmpty.start();
       expect(managerWithEmpty.isRunning).toBe(true);
     });
@@ -183,7 +180,6 @@ describe('GatewayManager', () => {
 
   describe('sync removes stale bots', () => {
     it('should stop bots no longer in DB on subsequent syncs', async () => {
-      // First sync: one bot exists
       mockFindEnabledByPlatform.mockResolvedValueOnce([
         {
           applicationId: 'app-1',
@@ -193,7 +189,6 @@ describe('GatewayManager', () => {
 
       await manager.start();
 
-      // Verify bot was started
       expect(manager.isRunning).toBe(true);
     });
   });

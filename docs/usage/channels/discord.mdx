@@ -1,9 +1,9 @@
 ---
 title: Connect LobeHub to Discord
 description: >-
-  Learn how to create a Discord bot and connect it to your LobeHub agent as a
-  message channel, allowing your AI assistant to interact with users directly in
-  Discord servers and direct messages.
+  Learn how to create a Discord bot and connect it to your LobeHub agent as a message channel, allowing your AI assistant to interact with users directly in Discord servers and direct messages.
+
+
 tags:
   - Discord
   - Message Channels
@@ -14,7 +14,8 @@ tags:
 # Connect LobeHub to Discord
 
 <Callout type={'info'}>
-  This feature is currently in development and may not be fully stable. You can enable it by turning on **Developer Mode** in **Settings** → **Advanced Settings** → **Developer Mode**.
+  This feature is currently in development and may not be fully stable. You can enable it by turning
+  on **Developer Mode** in **Settings** → **Advanced Settings** → **Developer Mode**.
 </Callout>
 
 By connecting a Discord channel to your LobeHub agent, users can interact with the AI assistant directly through Discord server channels and direct messages.
@@ -29,6 +30,8 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
 <Steps>
   ### Go to the Discord Developer Portal
 
+  ![](https://hub-apac-1.lobeobjects.space/docs/83f435317ea2c9c4a2adcbfd74301536.png)
+
   Visit the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Give your application a name (e.g., "LobeHub Assistant") and click **Create**.
 
   ### Create a Bot
@@ -36,6 +39,8 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
   In the left sidebar, click **Bot**. Customize the bot's username and avatar as needed.
 
   ### Enable Privileged Gateway Intents
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/6126baa4154be45eefdad73c576723d0.png)
 
   On the Bot settings page, scroll down to **Privileged Gateway Intents** and enable:
 
@@ -47,11 +52,15 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
 
   ### Copy the Bot Token
 
+  ![](https://hub-apac-1.lobeobjects.space/docs/e76272de65ad8db8746b1dcafeafdce8.png)
+
   On the **Bot** page, click **Reset Token** to generate your bot token. Copy and save it securely.
 
   > **Important:** Treat your bot token like a password. Never share it publicly or commit it to version control.
 
   ### Copy the Application ID and Public Key
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/d42901c6eb84e3e335d9a8535f317a35.png)
 
   Go to **General Information** in the left sidebar. Copy and save:
 
@@ -69,6 +78,8 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
   In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **Discord** from the platform list.
 
   ### Fill in the Credentials
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/c5ced26ea287ee215a9dc385367c1083.png)
 
   Enter the following fields:
 
@@ -88,6 +99,8 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
 <Steps>
   ### Generate an Invite URL
 
+  ![](https://hub-apac-1.lobeobjects.space/docs/5e8a93f33e085a187deddb87704f0bd3.png)
+
   In the Discord Developer Portal, go to **OAuth2** → **URL Generator**. Select the following scopes:
 
   - `bot`
@@ -103,6 +116,8 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
   - Add Reactions (optional)
 
   ### Authorize the Bot
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/2e47836fe4ac988e76460534ee57efa4.png)
 
   Copy the generated URL, open it in your browser, select the server you want to add the bot to, and click **Authorize**.
 </Steps>

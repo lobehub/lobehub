@@ -42,6 +42,7 @@
   "channel.secretToken": "Webhook 密钥",
   "channel.secretTokenHint": "可选。用于验证来自 Telegram 的 Webhook 请求。",
   "channel.secretTokenPlaceholder": "可选的 Webhook 验证密钥",
+  "channel.setupGuide": "配置教程",
   "channel.telegram.description": "将助手连接到 Telegram，支持私聊和群聊。",
   "channel.testConnection": "测试连接",
   "channel.testFailed": "连接测试失败",

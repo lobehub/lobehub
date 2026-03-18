@@ -39,6 +39,7 @@ const mockOnSubscribedMessage = vi.hoisted(() => vi.fn());
 const mockOnNewMessage = vi.hoisted(() => vi.fn());
 
 vi.mock('chat', () => ({
+  BaseFormatConverter: class {},
   Chat: vi.fn().mockImplementation(() => ({
     initialize: mockInitialize,
     onNewMention: mockOnNewMention,
@@ -56,37 +57,64 @@ vi.mock('../AgentBridgeService', () => ({
   })),
 }));
 
-// Mock platform descriptors
+// Mock platform entries
 const mockCreateAdapter = vi.hoisted(() =>
   vi.fn().mockReturnValue({ testplatform: { type: 'mock-adapter' } }),
 );
-const mockOnBotRegistered = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
-vi.mock('../platforms', () => ({
-  getPlatformDescriptor: vi.fn().mockImplementation((platform: string) => {
+const mockGetPlatform = vi.hoisted(() =>
+  vi.fn().mockImplementation((platform: string) => {
     if (platform === 'unknown') return undefined;
     return {
-      charLimit: platform === 'telegram' ? 4000 : undefined,
-      createAdapter: mockCreateAdapter,
-      handleDirectMessages: platform === 'telegram' || platform === 'lark',
-      onBotRegistered: mockOnBotRegistered,
-      persistent: platform === 'discord',
-      platform,
+      clientFactory: {
+        createClient: vi.fn().mockReturnValue({
+          applicationId: 'mock-app',
+          createAdapter: mockCreateAdapter,
+          extractChatId: (id: string) => id.split(':')[1],
+          getMessenger: () => ({
+            createMessage: vi.fn(),
+            editMessage: vi.fn(),
+            removeReaction: vi.fn(),
+            triggerTyping: vi.fn(),
+          }),
+          id: platform,
+          parseMessageId: (id: string) => id,
+          start: vi.fn(),
+          stop: vi.fn(),
+        }),
+      },
+      credentials: [],
+      id: platform,
+      name: platform,
     };
   }),
-  platformDescriptors: {
-    discord: { platform: 'discord' },
-    lark: { platform: 'lark' },
-    telegram: { platform: 'telegram' },
+);
+
+vi.mock('../platforms', () => ({
+  buildRuntimeKey: (platform: string, appId: string) => `${platform}:${appId}`,
+  platformRegistry: {
+    getPlatform: mockGetPlatform,
   },
 }));
+
+// ==================== Helpers ====================
+
+const FAKE_DB = {} as any;
+const FAKE_GATEKEEPER = { decrypt: vi.fn() };
+
+function makeProvider(overrides: Record<string, any> = {}) {
+  return {
+    agentId: 'agent-1',
+    applicationId: 'app-123',
+    credentials: { botToken: 'token' },
+    userId: 'user-1',
+    ...overrides,
+  };
+}
 
 // ==================== Tests ====================
 
 describe('BotMessageRouter', () => {
-  const FAKE_DB = {} as any;
-  const FAKE_GATEKEEPER = { decrypt: vi.fn() };
-
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerDB.mockResolvedValue(FAKE_DB);
@@ -114,142 +142,119 @@ describe('BotMessageRouter', () => {
     });
   });
 
-  describe('initialize', () => {
-    it('should load agent bots on initialization', async () => {
-      const router = new BotMessageRouter();
-      await router.initialize();
-
-      // Should query each platform in the descriptor registry
-      expect(mockFindEnabledByPlatform).toHaveBeenCalledTimes(3); // discord, lark, telegram
-    });
-
-    it('should create bots for enabled providers', async () => {
-      mockFindEnabledByPlatform.mockImplementation((_db: any, platform: string) => {
-        if (platform === 'telegram') {
-          return [
-            {
-              agentId: 'agent-1',
-              applicationId: 'tg-bot-123',
-              credentials: { botToken: 'tg-token' },
-              userId: 'user-1',
-            },
-          ];
-        }
-        return [];
-      });
+  describe('on-demand loading', () => {
+    it('should load bot on first webhook request', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'tg-bot-123' })]);
 
       const router = new BotMessageRouter();
-      await router.initialize();
+      const handler = router.getWebhookHandler('telegram', 'tg-bot-123');
+
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await handler(req);
+
+      // Should only query the specific platform, not all platforms
+      expect(mockFindEnabledByPlatform).toHaveBeenCalledTimes(1);
+      expect(mockFindEnabledByPlatform).toHaveBeenCalledWith(FAKE_DB, 'telegram', FAKE_GATEKEEPER);
 
       // Chat SDK should be initialized
       expect(mockInitialize).toHaveBeenCalled();
-      // Adapter should be created via descriptor
-      expect(mockCreateAdapter).toHaveBeenCalledWith({ botToken: 'tg-token' }, 'tg-bot-123');
-      // Post-registration hook should be called
-      expect(mockOnBotRegistered).toHaveBeenCalledWith(
-        expect.objectContaining({
-          applicationId: 'tg-bot-123',
-          credentials: { botToken: 'tg-token' },
-        }),
-      );
+      expect(mockCreateAdapter).toHaveBeenCalled();
     });
 
-    it('should register onNewMessage for platforms with handleDirectMessages', async () => {
-      mockFindEnabledByPlatform.mockImplementation((_db: any, platform: string) => {
-        if (platform === 'telegram') {
-          return [
-            {
-              agentId: 'agent-1',
-              applicationId: 'tg-bot-123',
-              credentials: { botToken: 'tg-token' },
-              userId: 'user-1',
-            },
-          ];
-        }
-        return [];
-      });
+    it('should return cached bot on subsequent requests', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'tg-bot-123' })]);
 
       const router = new BotMessageRouter();
-      await router.initialize();
+      const handler = router.getWebhookHandler('telegram', 'tg-bot-123');
 
-      // Telegram should have onNewMessage registered
-      expect(mockOnNewMessage).toHaveBeenCalled();
+      const req1 = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await handler(req1);
+
+      const req2 = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await handler(req2);
+
+      // DB should only be queried once — second call uses cache
+      expect(mockFindEnabledByPlatform).toHaveBeenCalledTimes(1);
+      expect(mockInitialize).toHaveBeenCalledTimes(1);
     });
 
-    it('should NOT register onNewMessage for Discord', async () => {
-      mockFindEnabledByPlatform.mockImplementation((_db: any, platform: string) => {
-        if (platform === 'discord') {
-          return [
-            {
-              agentId: 'agent-1',
-              applicationId: 'discord-app-123',
-              credentials: { botToken: 'dc-token', publicKey: 'key' },
-              userId: 'user-1',
-            },
-          ];
-        }
-        return [];
-      });
+    it('should return 404 when no provider found in DB', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([]);
 
       const router = new BotMessageRouter();
-      await router.initialize();
+      const handler = router.getWebhookHandler('telegram', 'non-existent');
 
-      // Discord should NOT have onNewMessage registered (handleDirectMessages = false)
-      expect(mockOnNewMessage).not.toHaveBeenCalled();
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      const resp = await handler(req);
+
+      expect(resp.status).toBe(404);
     });
 
-    it('should skip already registered bots on refresh', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          agentId: 'agent-1',
-          applicationId: 'app-1',
-          credentials: { botToken: 'token' },
-          userId: 'user-1',
-        },
-      ]);
-
+    it('should return 400 when appId is missing for generic platform', async () => {
       const router = new BotMessageRouter();
-      await router.initialize();
+      const handler = router.getWebhookHandler('telegram');
 
-      const firstCallCount = mockInitialize.mock.calls.length;
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      const resp = await handler(req);
 
-      // Force a second load
-      await (router as any).loadAgentBots();
-
-      // Should not create duplicate bots
-      expect(mockInitialize.mock.calls.length).toBe(firstCallCount);
+      expect(resp.status).toBe(400);
     });
 
-    it('should handle DB errors gracefully during initialization', async () => {
+    it('should handle DB errors gracefully', async () => {
       mockFindEnabledByPlatform.mockRejectedValue(new Error('DB connection failed'));
 
       const router = new BotMessageRouter();
-      // Should not throw
-      await expect(router.initialize()).resolves.toBeUndefined();
+      const handler = router.getWebhookHandler('telegram', 'app-123');
+
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      const resp = await handler(req);
+
+      // Should return 404, not throw
+      expect(resp.status).toBe(404);
     });
   });
 
   describe('handler registration', () => {
     it('should always register onNewMention and onSubscribedMessage', async () => {
-      mockFindEnabledByPlatform.mockImplementation((_db: any, platform: string) => {
-        if (platform === 'telegram') {
-          return [
-            {
-              agentId: 'agent-1',
-              applicationId: 'tg-123',
-              credentials: { botToken: 'token' },
-              userId: 'user-1',
-            },
-          ];
-        }
-        return [];
-      });
+      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'tg-123' })]);
 
       const router = new BotMessageRouter();
-      await router.initialize();
+      const handler = router.getWebhookHandler('telegram', 'tg-123');
+
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await handler(req);
 
       expect(mockOnNewMention).toHaveBeenCalled();
       expect(mockOnSubscribedMessage).toHaveBeenCalled();
+    });
+
+    it('should register onNewMessage when dm.enabled is true', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({
+          applicationId: 'tg-123',
+          settings: { dm: { enabled: true } },
+        }),
+      ]);
+
+      const router = new BotMessageRouter();
+      const handler = router.getWebhookHandler('telegram', 'tg-123');
+
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await handler(req);
+
+      expect(mockOnNewMessage).toHaveBeenCalled();
+    });
+
+    it('should NOT register onNewMessage when dm is not enabled', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-123' })]);
+
+      const router = new BotMessageRouter();
+      const handler = router.getWebhookHandler('telegram', 'app-123');
+
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await handler(req);
+
+      expect(mockOnNewMessage).not.toHaveBeenCalled();
     });
   });
 });

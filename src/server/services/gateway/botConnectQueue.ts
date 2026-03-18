@@ -2,6 +2,7 @@ import debug from 'debug';
 import type Redis from 'ioredis';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+import { buildRuntimeKey, parseRuntimeKey } from '@/server/services/bot/platforms';
 
 const log = debug('lobe-server:bot:connect-queue');
 
@@ -29,7 +30,7 @@ export class BotConnectQueue {
       throw new Error('Redis is not available, cannot enqueue bot connect request');
     }
 
-    const field = `${platform}:${applicationId}`;
+    const field = buildRuntimeKey(platform, applicationId);
     const value: ConnectEntry = { timestamp: Date.now(), userId };
 
     await this.redis.hset(QUEUE_KEY, field, JSON.stringify(value));
@@ -55,12 +56,12 @@ export class BotConnectQueue {
           continue;
         }
 
-        const separatorIdx = field.indexOf(':');
-        if (separatorIdx === -1) continue;
+        const parsed = parseRuntimeKey(field);
+        if (!parsed.platform || !parsed.applicationId) continue;
 
         items.push({
-          applicationId: field.slice(separatorIdx + 1),
-          platform: field.slice(0, separatorIdx),
+          applicationId: parsed.applicationId,
+          platform: parsed.platform,
           userId: entry.userId,
         });
       } catch {
@@ -80,7 +81,7 @@ export class BotConnectQueue {
   async remove(platform: string, applicationId: string): Promise<void> {
     if (!this.redis) return;
 
-    const field = `${platform}:${applicationId}`;
+    const field = buildRuntimeKey(platform, applicationId);
     await this.redis.hdel(QUEUE_KEY, field);
     log('Removed connect request: %s', field);
   }

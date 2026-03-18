@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { Discord, type DiscordBotConfig } from '@/server/services/bot/platforms/discord';
+import { type BotProviderConfig, discord } from '@/server/services/bot/platforms';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
 const log = debug('lobe-server:bot:gateway:cron:discord');
@@ -14,6 +14,16 @@ const GATEWAY_DURATION_MS = 600_000; // 10 minutes
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function createDiscordBot(applicationId: string, credentials: Record<string, string>) {
+  const config: BotProviderConfig = {
+    applicationId,
+    credentials,
+    platform: 'discord',
+    settings: {},
+  };
+  return discord.clientFactory.createClient(config, {});
+}
 
 async function processConnectQueue(remainingMs: number): Promise<number> {
   const queue = new BotConnectQueue();
@@ -39,14 +49,11 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
         continue;
       }
 
-      const bot = new Discord({
-        ...provider.credentials,
-        applicationId: provider.applicationId,
-      } as DiscordBotConfig);
+      const bot = createDiscordBot(provider.applicationId, provider.credentials);
 
       await bot.start({
         durationMs: remainingMs,
-        waitUntil: (task) => {
+        waitUntil: (task: Promise<any>) => {
           after(() => task);
         },
       });
@@ -85,11 +92,11 @@ export async function GET(request: NextRequest) {
     const { applicationId, credentials } = provider;
 
     try {
-      const bot = new Discord({ ...credentials, applicationId } as DiscordBotConfig);
+      const bot = createDiscordBot(applicationId, credentials);
 
       await bot.start({
         durationMs: GATEWAY_DURATION_MS,
-        waitUntil: (task) => {
+        waitUntil: (task: Promise<any>) => {
           after(() => task);
         },
       });

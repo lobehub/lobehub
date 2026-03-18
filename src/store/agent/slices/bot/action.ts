@@ -1,12 +1,14 @@
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 import { type StoreSetter } from '@/store/types';
 
 import { type AgentStore } from '../../store';
 
 const FETCH_BOT_PROVIDERS_KEY = 'agentBotProviders';
+const FETCH_PLATFORM_DEFINITIONS_KEY = 'platformDefinitions';
 
 export interface BotProviderItem {
   applicationId: string;
@@ -74,6 +76,14 @@ export class BotSliceActionImpl {
       agentId ? [FETCH_BOT_PROVIDERS_KEY, agentId] : null,
       async ([, id]: [string, string]) => agentBotProviderService.getByAgentId(id),
       { fallbackData: [], revalidateOnFocus: false },
+    );
+  };
+
+  useFetchPlatformDefinitions = (): SWRResponse<SerializedPlatformDefinition[]> => {
+    return useClientDataSWR<SerializedPlatformDefinition[]>(
+      FETCH_PLATFORM_DEFINITIONS_KEY,
+      () => agentBotProviderService.listPlatforms(),
+      { dedupingInterval: 300_000, fallbackData: [], revalidateOnFocus: false },
     );
   };
 }

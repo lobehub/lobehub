@@ -42,6 +42,7 @@
   "channel.secretToken": "Webhook Secret Token",
   "channel.secretTokenHint": "Optional. Used to verify webhook requests from Telegram.",
   "channel.secretTokenPlaceholder": "Optional secret for webhook verification",
+  "channel.setupGuide": "Setup Guide",
   "channel.telegram.description": "Connect this assistant to Telegram for private and group chats.",
   "channel.testConnection": "Test Connection",
   "channel.testFailed": "Connection test failed",

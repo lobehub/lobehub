@@ -77,6 +77,8 @@ describe('formatPrompt', () => {
     text: 'hello world',
   };
 
+  const discordSanitize = (text: string) => text.replaceAll(/<@!?bot123>\s*/g, '').trim();
+
   it('should format basic message with speaker tag', () => {
     const result = formatPrompt(baseMessage);
 
@@ -88,7 +90,7 @@ describe('formatPrompt', () => {
 
   it('should strip bot @mention from text', () => {
     const msg = { ...baseMessage, text: '<@bot123> hello world' };
-    const result = formatPrompt(msg, { applicationId: 'bot123' });
+    const result = formatPrompt(msg, { sanitizeUserInput: discordSanitize });
 
     expect(result).toContain('hello world');
     expect(result).not.toContain('<@bot123>');
@@ -96,10 +98,17 @@ describe('formatPrompt', () => {
 
   it('should strip bot @mention with ! format', () => {
     const msg = { ...baseMessage, text: '<@!bot123> hello world' };
-    const result = formatPrompt(msg, { applicationId: 'bot123' });
+    const result = formatPrompt(msg, { sanitizeUserInput: discordSanitize });
 
     expect(result).toContain('hello world');
     expect(result).not.toContain('<@!bot123>');
+  });
+
+  it('should not strip mentions when no sanitizeUserInput provided', () => {
+    const msg = { ...baseMessage, text: '<@bot123> hello world' };
+    const result = formatPrompt(msg);
+
+    expect(result).toContain('<@bot123>');
   });
 
   it('should prepend referenced message before user text', () => {
@@ -146,6 +155,8 @@ describe('formatPrompt', () => {
   });
 
   it('should handle both @mention stripping and referenced message together', () => {
+    const sanitize = (text: string) => text.replaceAll(/<@!?bot999>\s*/g, '').trim();
+
     const msg = {
       ...baseMessage,
       raw: {
@@ -156,7 +167,7 @@ describe('formatPrompt', () => {
       },
       text: '<@bot999> yes we can',
     };
-    const result = formatPrompt(msg, { applicationId: 'bot999' });
+    const result = formatPrompt(msg, { sanitizeUserInput: sanitize });
 
     expect(result).not.toContain('<@bot999>');
     expect(result).toContain('yes we can');

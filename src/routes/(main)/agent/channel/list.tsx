@@ -6,17 +6,11 @@ import { Info } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { ChannelProvider } from './const';
+import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+
+import { getPlatformIcon } from './const';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    width: 260px;
-    border-inline-end: 1px solid ${cssVar.colorBorder};
-  `,
   item: css`
     cursor: pointer;
 
@@ -58,6 +52,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding: 12px;
     padding-block-start: 16px;
   `,
+  root: css`
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+
+    width: 260px;
+    border-inline-end: 1px solid ${cssVar.colorBorder};
+  `,
   statusDot: css`
     width: 8px;
     height: 8px;
@@ -78,11 +80,11 @@ interface PlatformListProps {
   activeId: string;
   connectedPlatforms: Set<string>;
   onSelect: (id: string) => void;
-  providers: ChannelProvider[];
+  platforms: SerializedPlatformDefinition[];
 }
 
 const PlatformList = memo<PlatformListProps>(
-  ({ providers, activeId, connectedPlatforms, onSelect }) => {
+  ({ platforms, activeId, connectedPlatforms, onSelect }) => {
     const { t } = useTranslation('agent');
     const theme = useTheme();
 
@@ -90,18 +92,19 @@ const PlatformList = memo<PlatformListProps>(
       <aside className={styles.root}>
         <div className={styles.list}>
           <div className={styles.title}>{t('channel.platforms')}</div>
-          {providers.map((provider) => {
-            const ProviderIcon = provider.icon;
-            const ColorIcon = 'Color' in ProviderIcon ? (ProviderIcon as any).Color : ProviderIcon;
+          {platforms.map((platform) => {
+            const PlatformIcon = getPlatformIcon(platform.name);
+            const ColorIcon =
+              PlatformIcon && 'Color' in PlatformIcon ? (PlatformIcon as any).Color : PlatformIcon;
             return (
               <button
-                className={cx(styles.item, activeId === provider.id && 'active')}
-                key={provider.id}
-                onClick={() => onSelect(provider.id)}
+                className={cx(styles.item, activeId === platform.id && 'active')}
+                key={platform.id}
+                onClick={() => onSelect(platform.id)}
               >
-                <ColorIcon size={20} />
-                <span style={{ flex: 1 }}>{provider.name}</span>
-                {connectedPlatforms.has(provider.id) && <div className={styles.statusDot} />}
+                {ColorIcon && <ColorIcon size={20} />}
+                <span style={{ flex: 1 }}>{platform.name}</span>
+                {connectedPlatforms.has(platform.id) && <div className={styles.statusDot} />}
               </button>
             );
           })}

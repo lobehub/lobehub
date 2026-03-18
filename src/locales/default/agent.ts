@@ -39,6 +39,7 @@ export default {
   'channel.removed': 'Channel removed',
   'channel.removeFailed': 'Failed to remove channel',
   'channel.save': 'Save Configuration',
+  'channel.setupGuide': 'Setup Guide',
   'channel.saveFailed': 'Failed to save configuration',
   'channel.saveFirstWarning': 'Please save configuration first',
   'channel.saved': 'Configuration saved successfully',

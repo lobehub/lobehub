@@ -9,7 +9,6 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import { useAgentStore } from '@/store/agent';
 
-import { CHANNEL_PROVIDERS } from './const';
 import PlatformDetail from './detail';
 import PlatformList from './list';
 
@@ -26,23 +25,33 @@ const styles = createStaticStyles(({ css }) => ({
 
 const ChannelPage = memo(() => {
   const { aid } = useParams<{ aid?: string }>();
-  const [activeProviderId, setActiveProviderId] = useState(CHANNEL_PROVIDERS[0].id);
+  const [activeProviderId, setActiveProviderId] = useState<string>('');
 
-  const { data: providers, isLoading } = useAgentStore((s) => s.useFetchBotProviders(aid));
+  const { data: platforms, isLoading: platformsLoading } = useAgentStore((s) =>
+    s.useFetchPlatformDefinitions(),
+  );
+  const { data: providers, isLoading: providersLoading } = useAgentStore((s) =>
+    s.useFetchBotProviders(aid),
+  );
+
+  const isLoading = platformsLoading || providersLoading;
+
+  // Default to first platform once loaded
+  const effectiveActiveId = activeProviderId || platforms?.[0]?.id || '';
 
   const connectedPlatforms = useMemo(
     () => new Set(providers?.map((p) => p.platform) ?? []),
     [providers],
   );
 
-  const activeProvider = useMemo(
-    () => CHANNEL_PROVIDERS.find((p) => p.id === activeProviderId) || CHANNEL_PROVIDERS[0],
-    [activeProviderId],
+  const activePlatformDef = useMemo(
+    () => platforms?.find((p) => p.id === effectiveActiveId) || platforms?.[0],
+    [platforms, effectiveActiveId],
   );
 
   const currentConfig = useMemo(
-    () => providers?.find((p) => p.platform === activeProviderId),
-    [providers, activeProviderId],
+    () => providers?.find((p) => p.platform === effectiveActiveId),
+    [providers, effectiveActiveId],
   );
 
   if (!aid) return null;
@@ -53,15 +62,19 @@ const ChannelPage = memo(() => {
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         {isLoading && <Loading debugId="ChannelPage" />}
 
-        {!isLoading && (
+        {!isLoading && platforms && platforms.length > 0 && activePlatformDef && (
           <div className={styles.container}>
             <PlatformList
-              activeId={activeProviderId}
+              activeId={effectiveActiveId}
               connectedPlatforms={connectedPlatforms}
-              providers={CHANNEL_PROVIDERS}
+              platforms={platforms}
               onSelect={setActiveProviderId}
             />
-            <PlatformDetail agentId={aid} currentConfig={currentConfig} provider={activeProvider} />
+            <PlatformDetail
+              agentId={aid}
+              currentConfig={currentConfig}
+              platformDef={activePlatformDef}
+            />
           </div>
         )}
       </Flexbox>

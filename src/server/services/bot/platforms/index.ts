@@ -1,25 +1,47 @@
-import type { PlatformBotClass, PlatformDescriptor } from '../types';
-import { Discord, discordDescriptor } from './discord';
-import { feishuDescriptor, Lark, larkDescriptor } from './lark';
-import { QQ, qqDescriptor } from './qq';
-import { Telegram, telegramDescriptor } from './telegram';
+// --------------- Core types & utilities ---------------
+// --------------- Registry singleton ---------------
+import { discord } from './discord/definition';
+import { feishu } from './feishu/definitions/feishu';
+import { lark } from './feishu/definitions/lark';
+import { qq } from './qq/definition';
+import { PlatformRegistry } from './registry';
+import { telegram } from './telegram/definition';
 
-export const platformBotRegistry: Record<string, PlatformBotClass> = {
-  discord: Discord,
-  feishu: Lark,
-  lark: Lark,
-  qq: QQ,
-  telegram: Telegram,
-};
+export { PlatformRegistry } from './registry';
+export type {
+  BotPlatformRedisClient,
+  BotPlatformRuntimeContext,
+  BotProviderConfig,
+  FieldSchema,
+  PlatformClient,
+  PlatformDefinition,
+  PlatformDocumentation,
+  PlatformMessenger,
+  SerializedPlatformDefinition,
+  UsageStats,
+  ValidationResult,
+} from './types';
+export { ClientFactory } from './types';
+export {
+  buildRuntimeKey,
+  extractDefaults,
+  formatDuration,
+  formatTokens,
+  formatUsageStats,
+  parseRuntimeKey,
+} from './utils';
 
-export const platformDescriptors: Record<string, PlatformDescriptor> = {
-  discord: discordDescriptor,
-  feishu: feishuDescriptor,
-  lark: larkDescriptor,
-  qq: qqDescriptor,
-  telegram: telegramDescriptor,
-};
+// --------------- Platform definitions ---------------
+export { discord } from './discord/definition';
+export { feishu } from './feishu/definitions/feishu';
+export { lark } from './feishu/definitions/lark';
+export { qq } from './qq/definition';
+export { telegram } from './telegram/definition';
 
-export function getPlatformDescriptor(platform: string): PlatformDescriptor | undefined {
-  return platformDescriptors[platform];
-}
+export const platformRegistry = new PlatformRegistry();
+
+platformRegistry.register(discord);
+platformRegistry.register(telegram);
+platformRegistry.register(feishu);
+platformRegistry.register(lark);
+platformRegistry.register(qq);

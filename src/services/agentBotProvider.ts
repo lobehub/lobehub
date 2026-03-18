@@ -1,6 +1,10 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
 class AgentBotProviderService {
+  listPlatforms = async () => {
+    return lambdaClient.agentBotProvider.listPlatforms.query();
+  };
+
   getByAgentId = async (agentId: string) => {
     return lambdaClient.agentBotProvider.getByAgentId.query({ agentId });
   };

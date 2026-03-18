@@ -1,15 +1,14 @@
 import debug from 'debug';
 
-const log = debug('lobe-server:bot:telegram-rest');
+const log = debug('bot-platform:telegram:client');
 
 export const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
 /**
- * Lightweight wrapper around the Telegram Bot API.
- * Used by bot-callback webhooks to update messages directly
- * (bypassing the Chat SDK adapter).
+ * Lightweight platform client for Telegram Bot API operations used by
+ * callback and extension flows outside the Chat SDK adapter surface.
  */
-export class TelegramRestApi {
+export class TelegramApi {
   private readonly botToken: string;
 
   constructor(botToken: string) {
