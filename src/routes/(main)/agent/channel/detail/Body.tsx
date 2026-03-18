@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Flexbox,
-  Form,
-  FormGroup,
-  type FormGroupItemType,
-  FormItem,
-  type FormItemProps,
-  Tag,
-} from '@lobehub/ui';
+import { Flexbox, Form, FormGroup, FormItem, Tag } from '@lobehub/ui';
 import { type FormInstance, InputNumber, Select, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
@@ -32,52 +24,18 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-// --------------- Field → FormItem renderer ---------------
+// --------------- Single field component (memo'd) ---------------
 
-function renderFieldComponent(field: FieldSchema, t: (key: string) => string): React.ReactNode {
-  switch (field.type) {
-    case 'password': {
-      return <FormPassword autoComplete="new-password" placeholder={field.placeholder} />;
-    }
-    case 'boolean': {
-      return <Switch />;
-    }
-    case 'number':
-    case 'integer': {
-      return (
-        <InputNumber
-          max={field.maximum}
-          min={field.minimum}
-          placeholder={field.placeholder}
-          style={{ width: '100%' }}
-        />
-      );
-    }
-    case 'string': {
-      if (field.enum) {
-        return (
-          <Select
-            placeholder={field.placeholder}
-            options={field.enum.map((value, i) => ({
-              label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
-              value,
-            }))}
-          />
-        );
-      }
-      return <FormInput placeholder={field.placeholder || t(field.label)} />;
-    }
-    default: {
-      return <FormInput placeholder={field.placeholder || t(field.label)} />;
-    }
-  }
+interface SchemaFieldProps {
+  divider?: boolean;
+  field: FieldSchema;
+  parentKey: string;
 }
 
-function fieldToFormItem(
-  field: FieldSchema,
-  t: (key: string) => string,
-  parentKey?: string,
-): FormItemProps {
+const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
+  const { t: _t } = useTranslation('agent');
+  const t = _t as (key: string) => string;
+
   const label = field.devOnly ? (
     <Flexbox horizontal align="center" gap={8}>
       {t(field.label)}
@@ -87,55 +45,93 @@ function fieldToFormItem(
     t(field.label)
   );
 
-  return {
-    children: renderFieldComponent(field, t),
-    desc: field.description ? t(field.description) : undefined,
-    initialValue: field.default,
-    label,
-    name: parentKey ? [parentKey, field.key] : field.key,
-    rules: field.required ? [{ required: true }] : undefined,
-    tag: field.key,
-    valuePropName: field.type === 'boolean' ? 'checked' : undefined,
-  };
-}
+  let children: React.ReactNode;
+  switch (field.type) {
+    case 'password': {
+      children = <FormPassword autoComplete="new-password" placeholder={field.placeholder} />;
+      break;
+    }
+    case 'boolean': {
+      children = <Switch />;
+      break;
+    }
+    case 'number':
+    case 'integer': {
+      children = (
+        <InputNumber
+          max={field.maximum}
+          min={field.minimum}
+          placeholder={field.placeholder}
+          style={{ width: '100%' }}
+        />
+      );
+      break;
+    }
+    case 'string': {
+      if (field.enum) {
+        children = (
+          <Select
+            placeholder={field.placeholder}
+            options={field.enum.map((value, i) => ({
+              label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
+              value,
+            }))}
+          />
+        );
+      } else {
+        children = <FormInput placeholder={field.placeholder || t(field.label)} />;
+      }
+      break;
+    }
+    default: {
+      children = <FormInput placeholder={field.placeholder || t(field.label)} />;
+    }
+  }
 
-// --------------- Build settings groups ---------------
+  return (
+    <FormItem
+      desc={field.description ? t(field.description) : undefined}
+      divider={divider}
+      initialValue={field.default}
+      label={label}
+      minWidth={'max(50%, 400px)'}
+      name={[parentKey, field.key]}
+      rules={field.required ? [{ required: true }] : undefined}
+      tag={field.key}
+      valuePropName={field.type === 'boolean' ? 'checked' : undefined}
+      variant="borderless"
+    >
+      {children}
+    </FormItem>
+  );
+});
 
-function buildSettingsGroups(
-  schema: FieldSchema[],
-  t: (key: string) => string,
-): FormGroupItemType[] {
-  const settingsSchema = schema.find((f) => f.key === 'settings');
-  if (!settingsSchema?.properties) return [];
+// --------------- Helper: flatten fields from schema ---------------
 
-  const items = settingsSchema.properties
+function getFields(schema: FieldSchema[], sectionKey: string): FieldSchema[] {
+  const section = schema.find((f) => f.key === sectionKey);
+  if (!section?.properties) return [];
+
+  return section.properties
     .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
     .flatMap((f) => {
       if (f.type === 'object' && f.properties) {
-        return f.properties.map((child) => fieldToFormItem(child, t, 'settings'));
+        return f.properties.filter(
+          (child) => !child.devOnly || process.env.NODE_ENV === 'development',
+        );
       }
-      return fieldToFormItem(f, t, 'settings');
+      return f;
     });
-
-  return [
-    {
-      children: items,
-      collapsible: true,
-      defaultActive: false,
-      key: 'settings',
-      title: t(settingsSchema.label),
-    },
-  ];
 }
 
-function buildCredentialItems(schema: FieldSchema[], t: (key: string) => string): FormItemProps[] {
-  const credentialsSchema = schema.find((f) => f.key === 'credentials');
-  if (!credentialsSchema?.properties) return [];
+// --------------- Settings group title (memo'd) ---------------
 
-  return credentialsSchema.properties
-    .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
-    .map((f) => fieldToFormItem(f, t, 'credentials'));
-}
+const SettingsTitle = memo<{ schema: FieldSchema[] }>(({ schema }) => {
+  const { t: _t } = useTranslation('agent');
+  const t = _t as (key: string) => string;
+  const settingsSchema = schema.find((f) => f.key === 'settings');
+  return <>{settingsSchema ? t(settingsSchema.label) : null}</>;
+});
 
 // --------------- Body component ---------------
 
@@ -145,17 +141,14 @@ interface BodyProps {
 }
 
 const Body = memo<BodyProps>(({ platformDef, form }) => {
-  const { t } = useTranslation('agent');
-  const tStr = t as (key: string) => string;
-
-  const credentialItems = useMemo(
-    () => buildCredentialItems(platformDef.schema, tStr),
-    [platformDef, tStr],
+  const credentialFields = useMemo(
+    () => getFields(platformDef.schema, 'credentials'),
+    [platformDef.schema],
   );
 
-  const settingsGroups = useMemo(
-    () => buildSettingsGroups(platformDef.schema, tStr),
-    [platformDef, tStr],
+  const settingsFields = useMemo(
+    () => getFields(platformDef.schema, 'settings'),
+    [platformDef.schema],
   );
 
   return (
@@ -168,37 +161,23 @@ const Body = memo<BodyProps>(({ platformDef, form }) => {
       style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
       variant={'borderless'}
     >
-      {credentialItems.map((item, i) => (
-        <FormItem
-          divider={i !== 0}
-          key={item.tag || i}
-          minWidth={'max(50%, 400px)'}
-          variant="borderless"
-          {...item}
-        />
+      {credentialFields.map((field, i) => (
+        <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="credentials" />
       ))}
-      {settingsGroups.map((group) => (
+      {settingsFields.length > 0 && (
         <FormGroup
-          collapsible={group.collapsible}
-          defaultActive={group.defaultActive}
-          key={group.key}
-          keyValue={group.key}
+          collapsible
+          defaultActive={false}
+          keyValue="settings"
           style={{ marginBlockStart: 16 }}
-          title={group.title}
+          title={<SettingsTitle schema={platformDef.schema} />}
           variant="borderless"
         >
-          {Array.isArray(group.children) &&
-            group.children.map((item, i) => (
-              <FormItem
-                divider={i !== 0}
-                key={(item as FormItemProps).tag || i}
-                minWidth={'max(50%, 400px)'}
-                variant="borderless"
-                {...(item as FormItemProps)}
-              />
-            ))}
+          {settingsFields.map((field, i) => (
+            <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
+          ))}
         </FormGroup>
-      ))}
+      )}
     </Form>
   );
 });
