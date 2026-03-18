@@ -128,16 +128,14 @@ describe('ssrfSafeFetch', () => {
   });
 
   describe('SSRF protection for malicious URLs', () => {
-    const maliciousUrls = [
+    const privateHttpUrls = [
       'http://169.254.169.254/latest/meta-data/', // AWS metadata service
       'http://169.254.169.254:80/computeMetadata/v1/', // GCP metadata
       'http://metadata.google.internal/computeMetadata/v1/',
-      'file:///etc/passwd', // File protocol
-      'ftp://internal.company.com/secrets', // FTP protocol
     ];
 
-    maliciousUrls.forEach((url) => {
-      it(`should block malicious URL: ${url}`, async () => {
+    privateHttpUrls.forEach((url) => {
+      it(`should SSRF-block private HTTP URL: ${url}`, async () => {
         mockFetch.mockImplementation(() => {
           throw new Error(
             'DNS lookup 169.254.169.254 is not allowed. Because, It is private IP address.',
@@ -145,6 +143,21 @@ describe('ssrfSafeFetch', () => {
         });
 
         await expect(ssrfSafeFetch(url)).rejects.toThrow(/SSRF blocked/);
+      });
+    });
+
+    const unsupportedSchemeUrls = [
+      'file:///etc/passwd', // File protocol
+      'ftp://internal.company.com/secrets', // FTP protocol
+    ];
+
+    unsupportedSchemeUrls.forEach((url) => {
+      it(`should reject unsupported scheme: ${url}`, async () => {
+        mockFetch.mockImplementation(() => {
+          throw new TypeError('Only HTTP(S) protocols are supported');
+        });
+
+        await expect(ssrfSafeFetch(url)).rejects.toThrow(/Fetch failed/);
       });
     });
   });
