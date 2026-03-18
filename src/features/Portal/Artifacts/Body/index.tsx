@@ -1,5 +1,5 @@
 import { Flexbox, Highlighter } from '@lobehub/ui';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, messageStateSelectors } from '@/store/chat/selectors';
@@ -9,9 +9,6 @@ import { ArtifactType } from '@/types/artifact';
 import Renderer from './Renderer';
 
 const ArtifactsUI = memo(() => {
-  const codeScrollRef = useRef<HTMLDivElement | null>(null);
-  const codeScrollTopRef = useRef(0);
-
   const [
     messageId,
     displayMode,
@@ -69,19 +66,6 @@ const ArtifactsUI = memo(() => {
     artifactType === ArtifactType.Code;
   const isStreamingCode = isMessageGenerating && !isArtifactTagClosed;
 
-  useEffect(() => {
-    codeScrollTopRef.current = 0;
-  }, [messageId]);
-
-  useEffect(() => {
-    const container = codeScrollRef.current;
-    if (!showCode || !container) return;
-
-    if (container.scrollTop !== codeScrollTopRef.current) {
-      container.scrollTop = codeScrollTopRef.current;
-    }
-  }, [artifactContent, showCode]);
-
   // make sure the message and id is valid
   if (!messageId) return;
 
@@ -95,17 +79,7 @@ const ArtifactsUI = memo(() => {
       style={{ overflow: 'hidden' }}
     >
       {showCode ? (
-        <Flexbox
-          flex={1}
-          ref={codeScrollRef}
-          style={{ minHeight: 0, overflow: 'auto' }}
-          onScroll={() => {
-            const container = codeScrollRef.current;
-            if (!container) return;
-
-            codeScrollTopRef.current = container.scrollTop;
-          }}
-        >
+        <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }}>
           <Highlighter
             animated={isStreamingCode}
             language={language || 'txt'}
