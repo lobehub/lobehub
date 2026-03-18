@@ -9,6 +9,8 @@ import type { SerializedPlatformDefinition } from '@/server/services/bot/platfor
 import { useAgentStore } from '@/store/agent';
 
 import Body from './Body';
+import Footer from './Footer';
+import Header from './Header';
 
 /**
  * Resolve applicationId from credentials by convention:
@@ -37,6 +39,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     flex-direction: column;
     align-items: center;
+
+    padding: 24px;
 
     background: ${cssVar.colorBgContainer};
   `,
@@ -186,8 +190,13 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
 
   return (
     <main className={styles.main}>
-      <Body
+      <Header
         currentConfig={currentConfig}
+        platformDef={platformDef}
+        onToggleEnable={handleToggleEnable}
+      />
+      <Body form={form} hasConfig={!!currentConfig} platformDef={platformDef} />
+      <Footer
         form={form}
         hasConfig={!!currentConfig}
         platformDef={platformDef}
@@ -199,7 +208,6 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
         onDelete={handleDelete}
         onSave={handleSave}
         onTestConnection={handleTestConnection}
-        onToggleEnable={handleToggleEnable}
       />
     </main>
   );
