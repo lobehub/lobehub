@@ -52,7 +52,9 @@ describe('AgentDocumentInjector', () => {
     expect(result.messages[3].content).toContain('Session summary memo');
     expect(result.metadata.agentDocumentsInjected).toBe(true);
     expect(result.metadata.agentDocumentsCount).toBe(2);
-    expect(result.metadata.agentDocuments.policyIds).toEqual(['claw', 'custom']);
+    expect(result.metadata.agentDocuments).toMatchObject({
+      policyIds: ['claw', 'custom'],
+    });
   });
 
   it('should not inject document when by-keywords rule does not match', async () => {
