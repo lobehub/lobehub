@@ -1100,6 +1100,61 @@ describe('RuntimeExecutors', () => {
           name: 'Enabled KB',
         });
       });
+
+      it('should skip topic reference resolution when messages already contain topic_reference_context', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [
+              {
+                content:
+                  '<refer_topic name="Old topic" id="topic-abc" />\nHello\n<system_context>\n<context type="topic_reference_context">\n<referred_topics>...</referred_topics>\n</context>\n</system_context>',
+                role: 'user',
+              },
+            ],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+        const callArgs = engineSpy.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('topicReferences');
+      });
+
+      it('should resolve topic references when messages do not contain topic_reference_context', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Just a normal message without any topic refs', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+        // resolveTopicReferences ran but found no <refer_topic> tags → topicReferences is undefined
+        const callArgs = engineSpy.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('topicReferences');
+      });
     });
   });
 

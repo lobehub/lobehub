@@ -180,9 +180,17 @@ export const createRuntimeExecutors = (
       if (agentConfig) {
         const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
-        // Extract <refer_topic> tags from messages and fetch summaries
+        // Extract <refer_topic> tags from messages and fetch summaries.
+        // Skip if messages already contain injected topic_reference_context
+        // (e.g., from client-side contextEngineering preprocessing) to avoid double injection.
         let topicReferences;
-        if (ctx.serverDB && ctx.userId) {
+        const alreadyHasTopicRefs = (
+          llmPayload.messages as Array<{ content: string | unknown }>
+        ).some(
+          (m) => typeof m.content === 'string' && m.content.includes('topic_reference_context'),
+        );
+
+        if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
           const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
           const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId);
           topicReferences = await resolveTopicReferences(
