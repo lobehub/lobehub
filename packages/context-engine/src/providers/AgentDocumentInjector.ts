@@ -6,6 +6,19 @@ import { matchesLoadRules } from '../../../database/src/models/agentDocuments';
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    agentDocuments?: {
+      byPosition: Partial<Record<AgentDocumentInjectionPosition, number>>;
+      injectedCount: number;
+      policyIds: string[];
+      providedCount: number;
+    };
+    agentDocumentsCount?: number;
+    agentDocumentsInjected?: boolean;
+  }
+}
+
 export type { AgentDocumentLoadRule, AgentDocumentLoadRules };
 
 export const AGENT_DOCUMENT_INJECTION_POSITIONS = [
@@ -104,7 +117,11 @@ export class AgentDocumentInjector extends BaseProvider {
 
     if (injectedCount === 0) return this.markAsExecuted(clonedContext);
 
-    const policyIds = Array.from(new Set(documents.map((doc) => doc.policyId).filter(Boolean)));
+    const policyIds = Array.from(
+      new Set(
+        documents.map((doc) => doc.policyId).filter((policyId): policyId is string => !!policyId),
+      ),
+    );
 
     clonedContext.metadata.agentDocumentsInjected = true;
     clonedContext.metadata.agentDocumentsCount = injectedCount;
