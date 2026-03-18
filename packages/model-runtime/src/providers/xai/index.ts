@@ -1,4 +1,4 @@
-import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
@@ -9,19 +9,16 @@ export interface XAIModelCard {
   id: string;
 }
 
-const xaiReasoningModels = new Set(
-  LOBE_DEFAULT_MODEL_LIST.filter(
-    (model) =>
-      model.providerId === ModelProvider.XAI &&
-      model.type === 'chat' &&
-      !!model.abilities?.reasoning,
-  ).map((model) => model.id),
-);
-
-const isXAIReasoningModel = (model: string) => xaiReasoningModels.has(model);
+// Only these legacy non-reasoning models support presencePenalty/frequencyPenalty/stop.
+// All newer models reject these params, so default to stripping.
+const xaiPenaltySupportedModels = new Set([
+  'grok-3',
+  'grok-4-fast-non-reasoning',
+  'grok-4-1-fast-non-reasoning',
+]);
 
 const pruneUnsupportedReasoningParameters = (payload: ChatStreamPayload) => {
-  if (!isXAIReasoningModel(payload.model)) return payload;
+  if (xaiPenaltySupportedModels.has(payload.model)) return payload;
 
   return {
     ...payload,
