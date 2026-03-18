@@ -525,7 +525,7 @@ export const contextEngineering = async ({
     },
     async (topicId: string) => {
       const { messageService } = await import('@/services/message');
-      const msgs = await messageService.getMessages({ topicId });
+      const msgs = await messageService.getMessages({ agentId, groupId, topicId });
       return msgs.map((m) => ({
         content: typeof m.content === 'string' ? m.content : '',
         role: m.role,
