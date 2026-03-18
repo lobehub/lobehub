@@ -71,11 +71,10 @@ export default {
   'credits.autoTopUp.saveError': 'Failed to save auto top-up settings',
   'credits.autoTopUp.saveSuccess': 'Auto top-up settings saved',
   'credits.autoTopUp.targetBalance': 'Target Balance',
-  'credits.autoTopUp.targetBalanceDesc':
-    'The balance amount to restore to when auto top-up triggers',
+  'credits.autoTopUp.targetBalanceDesc': 'The credit level to restore to when auto top-up triggers',
   'credits.autoTopUp.threshold': 'Threshold',
   'credits.autoTopUp.thresholdDesc':
-    'Auto top-up triggers when your balance falls to or below this amount',
+    'Auto top-up triggers when your credits fall to or below this level',
   'credits.autoTopUp.title': 'Auto Top-Up',
   'credits.autoTopUp.toggle': 'Enable Auto Top-Up',
   'credits.autoTopUp.upgradeHint': 'Subscribe to a paid plan to enable auto top-up',
