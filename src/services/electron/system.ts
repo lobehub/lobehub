@@ -24,10 +24,6 @@ class ElectronSystemService {
     return this.ipc.system.getAppState();
   }
 
-  async getAppVersion(): Promise<string> {
-    return this.ipc.system.getAppVersion();
-  }
-
   async closeWindow(): Promise<void> {
     return this.ipc.windows.closeWindow();
   }
