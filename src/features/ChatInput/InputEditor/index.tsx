@@ -1,11 +1,12 @@
 import { isDesktop } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/types';
 import { isCommandPressed } from '@lobechat/utils';
-import { INSERT_MENTION_COMMAND, ReactMathPlugin, type SlashOptions } from '@lobehub/editor';
+import { INSERT_MENTION_COMMAND, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import Fuse from 'fuse.js';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
@@ -18,11 +19,12 @@ import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/st
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore, useStoreApi } from '../store';
 import { useSlashActionItems } from './ActionTag';
+import { createMentionMenu } from './MentionMenu';
+import type { MentionMenuState } from './MentionMenu/types';
 import Placeholder from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
-import { useAgentMentionItems } from './useAgentMentionItems';
-import { useTopicMentionItems } from './useTopicMentionItems';
+import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(css`
   p {
@@ -31,14 +33,13 @@ const className = cx(css`
 `);
 
 const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
-  const [editor, slashMenuRef, send, updateMarkdownContent, expand, mentionItems, slashPlacement] =
+  const [editor, slashMenuRef, send, updateMarkdownContent, expand, slashPlacement] =
     useChatInputStore((s) => [
       s.editor,
       s.slashMenuRef,
       s.handleSendButton,
       s.updateMarkdownContent,
       s.expand,
-      s.mentionItems,
       s.slashPlacement ?? 'top',
     ]);
 
@@ -51,32 +52,40 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
 
   const useCmdEnterToSend = useUserStore(preferenceSelectors.useCmdEnterToSend);
 
-  const topicMentionItems = useTopicMentionItems();
-  const agentMentionItems = useAgentMentionItems();
+  // --- Category-based mention system ---
+  const categories = useMentionCategories();
+  const stateRef = useRef<MentionMenuState>({ isSearch: false, matchingString: '' });
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
 
-  const mergedMentionItems = useMemo<SlashOptions['items'] | undefined>(() => {
-    const topicItems = topicMentionItems || [];
-    // In non-group context, use agent items from hook; in group context, use injected mentionItems
-    const fallbackAgentItems = !mentionItems ? agentMentionItems : [];
+  const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
 
-    if (!mentionItems && fallbackAgentItems.length === 0 && topicItems.length === 0)
-      return undefined;
+  const fuse = useMemo(
+    () =>
+      new Fuse(allMentionItems, {
+        keys: ['key', 'label', 'metadata.topicTitle'],
+        threshold: 0.3,
+      }),
+    [allMentionItems],
+  );
 
-    if (typeof mentionItems === 'function') {
-      const fn = mentionItems;
-      return async (search: Parameters<typeof fn>[0]) => {
-        const groupItems = await fn(search);
-        return [...groupItems, ...topicItems];
-      };
-    }
+  const mentionItemsFn = useCallback(
+    async (
+      search: { leadOffset: number; matchingString: string; replaceableString: string } | null,
+    ) => {
+      if (search?.matchingString) {
+        stateRef.current = { isSearch: true, matchingString: search.matchingString };
+        return fuse.search(search.matchingString).map((r) => r.item);
+      }
+      stateRef.current = { isSearch: false, matchingString: '' };
+      return [...allMentionItems];
+    },
+    [allMentionItems, fuse],
+  );
 
-    const externalItems = Array.isArray(mentionItems) ? mentionItems : [];
-    return [...externalItems, ...fallbackAgentItems, ...topicItems];
-  }, [mentionItems, topicMentionItems, agentMentionItems]);
+  const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
 
-  const enableMention =
-    !!mergedMentionItems &&
-    (typeof mergedMentionItems === 'function' || mergedMentionItems.length > 0);
+  const enableMention = allMentionItems.length > 0;
 
   // Get agent's model info for vision support check and handle paste upload
   const agentId = useAgentId();
@@ -156,14 +165,14 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       mentionOption={
         enableMention
           ? {
-              fuseOptions: { keys: ['key', 'label', 'metadata.topicTitle'], threshold: 0.3 },
-              items: mergedMentionItems,
+              items: mentionItemsFn,
               markdownWriter: (mention) => {
                 if (mention.metadata?.type === 'topic') {
                   return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
                 }
                 return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
               },
+              maxLength: 50,
               onSelect: (editor, option) => {
                 if (option.metadata?.type === 'topic') {
                   editor.dispatchCommand(INSERT_REFER_TOPIC_COMMAND, {
@@ -177,6 +186,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
                   });
                 }
               },
+              renderComp: MentionMenuComp,
             }
           : undefined
       }
