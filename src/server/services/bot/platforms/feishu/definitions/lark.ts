@@ -11,5 +11,6 @@ export const lark: PlatformDefinition = {
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/lark',
   },
   schema: sharedSchema,
+  showWebhookUrl: true,
   clientFactory: sharedClientFactory,
 };

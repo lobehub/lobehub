@@ -229,6 +229,9 @@ export interface PlatformDefinition {
 
   /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
   schema: FieldSchema[];
+
+  /** Whether to show webhook URL for manual configuration. When true, the UI displays the webhook endpoint for the user to copy. */
+  showWebhookUrl?: boolean;
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */

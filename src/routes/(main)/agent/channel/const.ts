@@ -1,11 +1,6 @@
 import * as Icons from '@lobehub/ui/icons';
 import type { FC } from 'react';
 
-export interface PlatformUI {
-  /** 'auto' = webhook set via API (no URL to copy), 'manual' = user must copy endpoint URL */
-  webhookMode?: 'auto' | 'manual';
-}
-
 /** Known icon names from @lobehub/ui/icons that correspond to chat platforms. */
 const ICON_NAMES = [
   'Discord',
@@ -37,11 +32,3 @@ export function getPlatformIcon(nameOrId: string): FC<any> | undefined {
   );
   return name ? (Icons as Record<string, any>)[name] : undefined;
 }
-
-export const PLATFORM_UI: Record<string, PlatformUI> = {
-  discord: { webhookMode: 'auto' },
-  feishu: { webhookMode: 'manual' },
-  lark: { webhookMode: 'manual' },
-  qq: { webhookMode: 'manual' },
-  telegram: { webhookMode: 'auto' },
-};

@@ -11,5 +11,6 @@ export const feishu: PlatformDefinition = {
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/feishu',
   },
   schema: sharedSchema,
+  showWebhookUrl: true,
   clientFactory: sharedClientFactory,
 };

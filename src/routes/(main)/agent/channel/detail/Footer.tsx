@@ -10,7 +10,6 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
-import { PLATFORM_UI } from '../const';
 import type { ChannelFormValues, TestResult } from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -85,8 +84,6 @@ const Footer = memo<FooterProps>(
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
       : `${origin}/api/agent/webhooks/${platformId}`;
 
-    const ui = PLATFORM_UI[platformId];
-
     return (
       <div className={styles.bottom}>
         <div className={styles.actionBar}>
@@ -131,7 +128,7 @@ const Footer = memo<FooterProps>(
           />
         )}
 
-        {hasConfig && ui?.webhookMode !== 'auto' && (
+        {hasConfig && platformDef.showWebhookUrl && (
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" gap={8}>
               <span style={{ fontWeight: 600 }}>{t('channel.endpointUrl')}</span>

@@ -11,5 +11,6 @@ export const qq: PlatformDefinition = {
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/qq',
   },
   schema,
+  showWebhookUrl: true,
   clientFactory: new QQClientFactory(),
 };
