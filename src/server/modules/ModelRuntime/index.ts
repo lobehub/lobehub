@@ -425,5 +425,5 @@ export const initModelRuntimeFromDB = async (
   const hooks = getBusinessModelRuntimeHooks(userId, provider);
 
   // 5. Initialize ModelRuntime with the payload and hooks
-  return initModelRuntimeWithUserPayload(provider, payload, {}, hooks);
+  return initModelRuntimeWithUserPayload(provider, payload, { userId }, hooks);
 };
