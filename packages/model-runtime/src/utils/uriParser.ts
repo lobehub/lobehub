@@ -55,6 +55,14 @@ const GOOGLE_EXTERNAL_URL_SUPPORTED_TYPES = new Set([
   'image/webp',
 ]);
 
+const normalizeExternalContentType = (contentType: string): string => {
+  // Some servers return non-standard alias `image/jpg` for JPEG files.
+  // Normalize it to the standard type to avoid unnecessary fallback to inline base64.
+  if (contentType === 'image/jpg') return 'image/jpeg';
+
+  return contentType;
+};
+
 /**
  * Maximum file size limits for Google Gemini file input
  * @see https://ai.google.dev/gemini-api/docs/file-input-methods#method-comparison
@@ -134,7 +142,9 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
     }
 
     const contentLength = Number.parseInt(res.headers.get('content-length') || '0', 10);
-    const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const contentType = normalizeExternalContentType(
+      (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase(),
+    );
 
     // Check MIME type support
     if (!GOOGLE_EXTERNAL_URL_SUPPORTED_TYPES.has(contentType)) {

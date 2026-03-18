@@ -152,24 +152,9 @@ export const buildGooglePart = async (
       if (type === 'url') {
         const url = content.video_url.url;
 
-        // Try to use External URL feature for public URLs
-        // Note: External URL currently doesn't support video types per Google docs,
-        // but we check anyway in case Google adds support in the future
-        if (supportsExternalUrlFileData(options?.model) && isPublicExternalUrl(url)) {
-          const validation = await validateExternalUrl(url);
-          if (validation.isValid) {
-            return {
-              fileData: {
-                fileUri: url,
-                mimeType: validation.contentType,
-              },
-              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
-            };
-          }
-          if (validation.isTooLarge) {
-            throw new RangeError(validation.reason || 'External URL file too large');
-          }
-        }
+        // External URL validation currently only supports text/application/image MIME types.
+        // For video URLs this path would always fail and then fall back to base64,
+        // so we skip the extra HEAD round-trip here.
 
         // Fallback: convert URL to base64
         // Use imageUrlToBase64 for SSRF protection (works for any binary data including videos)
