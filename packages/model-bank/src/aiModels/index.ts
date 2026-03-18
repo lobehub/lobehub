@@ -45,6 +45,7 @@ import { default as nvidia } from './nvidia';
 import { default as ollama } from './ollama';
 import { default as ollamacloud } from './ollamacloud';
 import { default as openai } from './openai';
+import { default as opencodezen } from './opencodezen';
 import { default as openrouter } from './openrouter';
 import { default as perplexity } from './perplexity';
 import { default as ppio } from './ppio';
@@ -136,6 +137,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   newapi,
   novita,
   nvidia,
+  opencodezen,
   ollama,
   ollamacloud,
   openai,
@@ -214,6 +216,7 @@ export { default as nvidia } from './nvidia';
 export { default as ollama } from './ollama';
 export { default as ollamacloud } from './ollamacloud';
 export { gptImage1ParamsSchema, default as openai, openaiChatModels } from './openai';
+export { default as opencodezen } from './opencodezen';
 export { default as openrouter } from './openrouter';
 export { default as perplexity } from './perplexity';
 export { default as ppio } from './ppio';

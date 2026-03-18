@@ -42,6 +42,7 @@ import { LobeNvidiaAI } from './providers/nvidia';
 import { LobeOllamaAI } from './providers/ollama';
 import { LobeOllamaCloudAI } from './providers/ollamacloud';
 import { LobeOpenAI } from './providers/openai';
+import { LobeOpenCodeZenAI } from './providers/opencodezen';
 import { LobeOpenRouterAI } from './providers/openrouter';
 import { LobePerplexityAI } from './providers/perplexity';
 import { LobePPIOAI } from './providers/ppio';
@@ -113,6 +114,7 @@ export const providerRuntimeMap = {
   newapi: LobeNewAPIAI,
   novita: LobeNovitaAI,
   nvidia: LobeNvidiaAI,
+  opencodezen: LobeOpenCodeZenAI,
   ollama: LobeOllamaAI,
   ollamacloud: LobeOllamaCloudAI,
   openai: LobeOpenAI,
