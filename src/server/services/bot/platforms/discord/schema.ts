@@ -16,15 +16,6 @@ export const schema: FieldSchema[] = [
     label: 'Settings',
     properties: [
       {
-        key: 'connectionMode',
-        default: 'websocket',
-        description: 'How the bot connects to Discord',
-        enum: ['websocket', 'webhook'],
-        enumLabels: ['WebSocket (Gateway)', 'Webhook'],
-        label: 'Connection Mode',
-        type: 'string',
-      },
-      {
         key: 'charLimit',
         default: 2000,
         label: 'Character Limit',

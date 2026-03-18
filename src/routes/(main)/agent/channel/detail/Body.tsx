@@ -135,7 +135,12 @@ function fieldToFormItem(
  * - `credentials` properties → first form group (expanded, title set by caller)
  * - `settings` properties → single collapsed group
  */
-function buildFormGroups(schema: FieldSchema[], hasConfig: boolean): FormGroupItemType[] {
+function buildFormGroups(
+  schema: FieldSchema[],
+  hasConfig: boolean,
+  headerTitle: React.ReactNode,
+  headerExtra?: React.ReactNode,
+): FormGroupItemType[] {
   const groups: FormGroupItemType[] = [];
 
   const credentialsSchema = schema.find((f) => f.key === 'credentials');
@@ -147,13 +152,19 @@ function buildFormGroups(schema: FieldSchema[], hasConfig: boolean): FormGroupIt
       .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
       .map((f) => fieldToFormItem(f, hasConfig, 'credentials'));
 
-    groups.push({ children: items, defaultActive: true, key: 'credentials' });
+    groups.push({
+      children: items,
+      defaultActive: true,
+      extra: headerExtra,
+      key: 'credentials',
+      title: headerTitle,
+    });
   }
 
   // Settings — single collapsed group
   if (settingsSchema?.properties) {
     const items = settingsSchema.properties
-      .filter((f) => !f.devOnly || process.env.NODE_ENV !== 'development')
+      .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
       .flatMap((f) => {
         if (f.type === 'object' && f.properties) {
           return f.properties.map((child) => fieldToFormItem(child, hasConfig, 'settings'));
@@ -163,6 +174,7 @@ function buildFormGroups(schema: FieldSchema[], hasConfig: boolean): FormGroupIt
 
     groups.push({
       children: items,
+      collapsible: true,
       defaultActive: false,
       key: 'settings',
       title: settingsSchema.label,
@@ -221,38 +233,30 @@ const Body = memo<BodyProps>(
     const ColorIcon =
       PlatformIcon && 'Color' in PlatformIcon ? (PlatformIcon as any).Color : PlatformIcon;
 
-    const headerTitle = (
-      <Flexbox horizontal align="center" gap={8}>
-        {ColorIcon && <ColorIcon size={32} />}
-        {platformName}
-        {platformDef.documentation?.setupGuideUrl && (
-          <a
-            href={platformDef.documentation.setupGuideUrl}
-            rel="noopener noreferrer"
-            target="_blank"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <InfoTooltip title={t('channel.setupGuide')} />
-          </a>
-        )}
-      </Flexbox>
-    );
-
-    const headerExtra = currentConfig ? (
-      <Switch checked={currentConfig.enabled} onChange={onToggleEnable} />
-    ) : undefined;
-
     const formGroups = useMemo<FormGroupItemType[]>(() => {
-      const groups = buildFormGroups(platformDef.schema, hasConfig);
+      const title = (
+        <Flexbox horizontal align="center" gap={8}>
+          {ColorIcon && <ColorIcon size={32} />}
+          {platformName}
+          {platformDef.documentation?.setupGuideUrl && (
+            <a
+              href={platformDef.documentation.setupGuideUrl}
+              rel="noopener noreferrer"
+              target="_blank"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <InfoTooltip title={t('channel.setupGuide')} />
+            </a>
+          )}
+        </Flexbox>
+      );
 
-      // Inject header title/extra into first group
-      if (groups.length > 0) {
-        groups[0].title = headerTitle;
-        groups[0].extra = headerExtra;
-      }
+      const extra = currentConfig ? (
+        <Switch checked={currentConfig.enabled} onChange={onToggleEnable} />
+      ) : undefined;
 
-      return groups;
-    }, [platformDef, hasConfig, headerTitle, headerExtra]);
+      return buildFormGroups(platformDef.schema, hasConfig, title, extra);
+    }, [platformDef, hasConfig, currentConfig, onToggleEnable, ColorIcon, platformName, t]);
 
     return (
       <>

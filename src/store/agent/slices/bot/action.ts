@@ -37,6 +37,7 @@ export class BotSliceActionImpl {
     applicationId: string;
     credentials: Record<string, string>;
     platform: string;
+    settings?: Record<string, unknown>;
   }) => {
     const result = await agentBotProviderService.create(params);
     await this.internal_refreshBotProviders(params.agentId);
@@ -65,6 +66,7 @@ export class BotSliceActionImpl {
       applicationId?: string;
       credentials?: Record<string, string>;
       enabled?: boolean;
+      settings?: Record<string, unknown>;
     },
   ) => {
     await agentBotProviderService.update(id, params);
