@@ -120,10 +120,20 @@ function fieldToFormItem(
   t: (key: string) => string,
   parentKey?: string,
 ): FormItemProps {
+  const label = field.devOnly ? (
+    <Flexbox horizontal align="center" gap={8}>
+      {t(field.label)}
+      <Tag color="gold">Dev Only</Tag>
+    </Flexbox>
+  ) : (
+    t(field.label)
+  );
+
   return {
     children: renderFieldComponent(field, hasConfig, t),
     desc: field.description ? t(field.description) : undefined,
-    label: t(field.label),
+    initialValue: field.default,
+    label,
     name: parentKey ? [parentKey, field.key] : field.key,
     rules: field.required ? [{ required: true }] : undefined,
     tag: field.key,
@@ -269,6 +279,7 @@ const Body = memo<BodyProps>(
         <Form
           className={styles.form}
           form={form}
+          gap={16}
           itemMinWidth={'max(50%, 400px)'}
           items={formGroups}
           requiredMark={false}
