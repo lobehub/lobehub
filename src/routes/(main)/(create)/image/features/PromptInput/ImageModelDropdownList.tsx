@@ -17,6 +17,7 @@ const ImageModelDropdownList = memo(() => {
     <GenerationModelDropdownList
       ModelItemComponent={ImageModelItem}
       enabledModelList={enabledImageModelList}
+      pricingMode="image"
       useStore={useImageStore}
       configSelectors={{
         model: imageGenerationConfigSelectors.model,

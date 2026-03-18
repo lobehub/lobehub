@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ProviderItemRender } from '@/components/ModelSelect';
+import type { PricingMode } from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import ModelDetailPanel from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import { styles as modelSwitchPanelStyles } from '@/features/ModelSwitchPanel/styles';
 import type { ListItem } from '@/features/ModelSwitchPanel/types';
@@ -35,10 +36,11 @@ interface ListItemRendererProps {
   ModelItemComponent: ComponentType<any>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
+  pricingMode?: PricingMode;
 }
 
 const ListItemRenderer = memo<ListItemRendererProps>(
-  ({ item, activeKey, onClose, onModelChange, enabledList, ModelItemComponent }) => {
+  ({ item, activeKey, onClose, onModelChange, enabledList, ModelItemComponent, pricingMode }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [detailOpen, setDetailOpen] = useState(false);
@@ -147,6 +149,7 @@ const ListItemRenderer = memo<ListItemRendererProps>(
                     <ModelDetailPanel
                       enabledList={enabledList}
                       model={item.model.id}
+                      pricingMode={pricingMode}
                       provider={item.provider.id}
                     />
                   </DropdownMenuPopup>
@@ -189,6 +192,7 @@ const ListItemRenderer = memo<ListItemRendererProps>(
                     <ModelDetailPanel
                       enabledList={enabledList}
                       model={item.data.model.id}
+                      pricingMode={pricingMode}
                       provider={singleProvider.id}
                     />
                   </DropdownMenuPopup>
@@ -206,6 +210,7 @@ const ListItemRenderer = memo<ListItemRendererProps>(
             activeKey={activeKey}
             enabledList={enabledList}
             item={item}
+            pricingMode={pricingMode}
             onClose={onClose}
             onModelChange={onModelChange}
           />

@@ -8,6 +8,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import type { PricingMode } from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import { Toolbar } from '@/features/ModelSwitchPanel/components/Toolbar';
 import { useBuildListItems } from '@/features/ModelSwitchPanel/hooks/useBuildListItems';
 import { usePanelState } from '@/features/ModelSwitchPanel/hooks/usePanelState';
@@ -30,11 +31,12 @@ interface GenerationModelDropdownListProps {
   configSelectors: GenerationModelDropdownListConfigSelectors;
   enabledModelList: EnabledProviderWithModels[];
   ModelItemComponent: ComponentType<any>;
+  pricingMode?: PricingMode;
   useStore: (selector: (s: any) => any) => any;
 }
 
 const GenerationModelDropdownList = memo<GenerationModelDropdownListProps>(
-  ({ useStore, configSelectors, enabledModelList, ModelItemComponent }) => {
+  ({ useStore, configSelectors, enabledModelList, ModelItemComponent, pricingMode }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const ctx = useModelSwitchButtonContext();
@@ -98,6 +100,7 @@ const GenerationModelDropdownList = memo<GenerationModelDropdownListProps>(
               enabledList={enabledModelList}
               item={item}
               key={getListItemKey(item)}
+              pricingMode={pricingMode}
               onClose={handleClose}
               onModelChange={handleModelChange}
             />

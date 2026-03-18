@@ -17,6 +17,7 @@ const VideoModelDropdownList = memo(() => {
     <GenerationModelDropdownList
       ModelItemComponent={VideoModelItem}
       enabledModelList={enabledVideoModelList}
+      pricingMode="video"
       useStore={useVideoStore}
       configSelectors={{
         model: videoGenerationConfigSelectors.model,

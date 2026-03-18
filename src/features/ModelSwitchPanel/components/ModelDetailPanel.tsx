@@ -217,14 +217,17 @@ const ABILITY_CONFIG: AbilityItem[] = [
   { color: 'cyan', icon: GlobeIcon, key: 'search' },
 ];
 
+export type PricingMode = 'image' | 'video';
+
 interface ModelDetailPanelProps {
   enabledList?: EnabledProviderWithModels[];
   model?: string;
+  pricingMode?: PricingMode;
   provider?: string;
 }
 
 const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
-  ({ model: modelId, provider, enabledList: enabledListProp }) => {
+  ({ model: modelId, provider, enabledList: enabledListProp, pricingMode }) => {
     const { t } = useTranslation('components');
 
     const enabledListFromHook = useEnabledChatModels();
@@ -240,7 +243,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
     );
 
     const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
-      const keys: string[] = [];
+      const keys: string[] = ['pricing'];
       if (hasExtendParams) keys.push('config');
       return keys;
     });
@@ -251,6 +254,27 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       () => (hasPricing ? groupPricingUnits(model!.pricing!.units) : []),
       [hasPricing, model?.pricing],
     );
+
+    const approximatePriceLabel = useMemo(() => {
+      if (!hasPricing || !model?.pricing || !pricingMode) return null;
+      const pricing = model.pricing;
+      const currency = pricing.currency as ModelPriceCurrency | undefined;
+      if (pricingMode === 'image' && typeof pricing.approximatePricePerImage === 'number') {
+        const amount = formatPriceByCurrency(pricing.approximatePricePerImage, currency);
+        return t('ModelSwitchPanel.detail.pricing.perImage', {
+          amount,
+          defaultValue: '~ {{amount}} / image',
+        });
+      }
+      if (pricingMode === 'video' && typeof pricing.approximatePricePerVideo === 'number') {
+        const amount = formatPriceByCurrency(pricing.approximatePricePerVideo, currency);
+        return t('ModelSwitchPanel.detail.pricing.perVideo', {
+          amount,
+          defaultValue: '~ {{amount}} / video',
+        });
+      }
+      return null;
+    }, [hasPricing, model?.pricing, pricingMode, t]);
 
     if (!model) return null;
 
@@ -366,49 +390,52 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
             )}
 
             {/* Pricing */}
-            {hasPricing && formatPrice && (
+            {hasPricing && (formatPrice || approximatePriceLabel) && (
               <AccordionItem
                 alwaysShowAction
                 itemKey="pricing"
                 paddingBlock={6}
                 paddingInline={8}
                 action={
-                  !expandedKeys.includes('pricing') && (
+                  !expandedKeys.includes('pricing') &&
+                  (approximatePriceLabel ? (
+                    <span className={styles.actionText}>{approximatePriceLabel}</span>
+                  ) : (
                     <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
                       {getCachedTextInputUnitRate(model.pricing!) && (
                         <Tooltip
                           title={t('ModelSwitchPanel.detail.pricing.cachedInput', {
-                            amount: formatPrice.cachedInput,
+                            amount: formatPrice!.cachedInput,
                           })}
                         >
                           <Flexbox horizontal align={'center'} gap={2}>
                             <Icon icon={CircleFadingArrowUp} size={'small'} />
-                            {formatPrice.cachedInput}
+                            {formatPrice!.cachedInput}
                           </Flexbox>
                         </Tooltip>
                       )}
                       <Tooltip
                         title={t('ModelSwitchPanel.detail.pricing.input', {
-                          amount: formatPrice.input,
+                          amount: formatPrice!.input,
                         })}
                       >
                         <Flexbox horizontal align={'center'} gap={2}>
                           <Icon icon={ArrowUpFromDot} size={'small'} />
-                          {formatPrice.input}
+                          {formatPrice!.input}
                         </Flexbox>
                       </Tooltip>
                       <Tooltip
                         title={t('ModelSwitchPanel.detail.pricing.output', {
-                          amount: formatPrice.output,
+                          amount: formatPrice!.output,
                         })}
                       >
                         <Flexbox horizontal align={'center'} gap={2}>
                           <Icon icon={ArrowDownToDot} size={'small'} />
-                          {formatPrice.output}
+                          {formatPrice!.output}
                         </Flexbox>
                       </Tooltip>
                     </Flexbox>
-                  )
+                  ))
                 }
                 title={
                   <Flexbox horizontal align={'center'} gap={8}>
@@ -426,6 +453,11 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 }
               >
                 <Flexbox gap={8}>
+                  {approximatePriceLabel && (
+                    <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
+                      {approximatePriceLabel}
+                    </Flexbox>
+                  )}
                   {pricingGroups.map(({ group, units }) => (
                     <Flexbox gap={4} key={group}>
                       {pricingGroups.length > 1 && (

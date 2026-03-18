@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "文本",
   "ModelSwitchPanel.detail.pricing.input": "输入 ${{amount}}/百万",
   "ModelSwitchPanel.detail.pricing.output": "输出 ${{amount}}/百万",
+  "ModelSwitchPanel.detail.pricing.perImage": "约 {{amount}} / 张",
+  "ModelSwitchPanel.detail.pricing.perVideo": "约 {{amount}} / 条",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "音频输入",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "音频输入（缓存读取）",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "音频输出",

@@ -16,6 +16,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProviderItemRender } from '@/components/ModelSelect';
+import type { PricingMode } from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import ModelDetailPanel from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import { styles as modelSwitchPanelStyles } from '@/features/ModelSwitchPanel/styles';
 import type { ListItem } from '@/features/ModelSwitchPanel/types';
@@ -29,10 +30,11 @@ interface MultipleProvidersItemProps {
   ModelItemComponent: ComponentType<any>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
+  pricingMode?: PricingMode;
 }
 
 const MultipleProvidersItem = memo<MultipleProvidersItemProps>(
-  ({ item, activeKey, onClose, onModelChange, enabledList, ModelItemComponent }) => {
+  ({ item, activeKey, onClose, onModelChange, enabledList, ModelItemComponent, pricingMode }) => {
     const { t } = useTranslation('components');
     const [subOpen, setSubOpen] = useState(false);
     const activeProvider = item.data.providers.find(
@@ -65,6 +67,7 @@ const MultipleProvidersItem = memo<MultipleProvidersItemProps>(
                 <ModelDetailPanel
                   enabledList={enabledList}
                   model={item.data.model.id}
+                  pricingMode={pricingMode}
                   provider={(activeProvider ?? item.data.providers[0]).id}
                 />
                 <Flexbox gap={4} paddingBlock={8} paddingInline={8}>
