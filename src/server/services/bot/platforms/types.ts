@@ -232,7 +232,4 @@ export interface PlatformDefinition {
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */
-export type SerializedPlatformDefinition = Omit<
-  PlatformDefinition,
-  'clientFactory' | 'sanitizeUserInput'
->;
+export type SerializedPlatformDefinition = Omit<PlatformDefinition, 'clientFactory'>;

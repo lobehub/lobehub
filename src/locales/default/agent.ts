@@ -29,6 +29,7 @@ export default {
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
   'channel.feishu.description': 'Connect this assistant to Feishu for private and group chats.',
   'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
+  'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',
   'channel.publicKeyHint': 'Optional. Used to verify interaction requests from Discord.',

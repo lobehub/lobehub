@@ -195,7 +195,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
         platformDef={platformDef}
         onToggleEnable={handleToggleEnable}
       />
-      <Body form={form} hasConfig={!!currentConfig} platformDef={platformDef} />
+      <Body form={form} platformDef={platformDef} />
       <Footer
         form={form}
         hasConfig={!!currentConfig}

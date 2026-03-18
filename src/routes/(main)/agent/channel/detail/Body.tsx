@@ -34,19 +34,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 // --------------- Field → FormItem renderer ---------------
 
-function renderFieldComponent(
-  field: FieldSchema,
-  hasConfig: boolean,
-  t: (key: string) => string,
-): React.ReactNode {
+function renderFieldComponent(field: FieldSchema, t: (key: string) => string): React.ReactNode {
   switch (field.type) {
     case 'password': {
-      return (
-        <FormPassword
-          autoComplete="new-password"
-          placeholder={field.placeholder || (hasConfig ? '••••••••' : undefined)}
-        />
-      );
+      return <FormPassword autoComplete="new-password" placeholder={field.placeholder} />;
     }
     case 'boolean': {
       return <Switch />;
@@ -84,7 +75,6 @@ function renderFieldComponent(
 
 function fieldToFormItem(
   field: FieldSchema,
-  hasConfig: boolean,
   t: (key: string) => string,
   parentKey?: string,
 ): FormItemProps {
@@ -98,7 +88,7 @@ function fieldToFormItem(
   );
 
   return {
-    children: renderFieldComponent(field, hasConfig, t),
+    children: renderFieldComponent(field, t),
     desc: field.description ? t(field.description) : undefined,
     initialValue: field.default,
     label,
@@ -113,7 +103,6 @@ function fieldToFormItem(
 
 function buildSettingsGroups(
   schema: FieldSchema[],
-  hasConfig: boolean,
   t: (key: string) => string,
 ): FormGroupItemType[] {
   const settingsSchema = schema.find((f) => f.key === 'settings');
@@ -123,9 +112,9 @@ function buildSettingsGroups(
     .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
     .flatMap((f) => {
       if (f.type === 'object' && f.properties) {
-        return f.properties.map((child) => fieldToFormItem(child, hasConfig, t, 'settings'));
+        return f.properties.map((child) => fieldToFormItem(child, t, 'settings'));
       }
-      return fieldToFormItem(f, hasConfig, t, 'settings');
+      return fieldToFormItem(f, t, 'settings');
     });
 
   return [
@@ -139,39 +128,34 @@ function buildSettingsGroups(
   ];
 }
 
-function buildCredentialItems(
-  schema: FieldSchema[],
-  hasConfig: boolean,
-  t: (key: string) => string,
-): FormItemProps[] {
+function buildCredentialItems(schema: FieldSchema[], t: (key: string) => string): FormItemProps[] {
   const credentialsSchema = schema.find((f) => f.key === 'credentials');
   if (!credentialsSchema?.properties) return [];
 
   return credentialsSchema.properties
     .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
-    .map((f) => fieldToFormItem(f, hasConfig, t, 'credentials'));
+    .map((f) => fieldToFormItem(f, t, 'credentials'));
 }
 
 // --------------- Body component ---------------
 
 interface BodyProps {
   form: FormInstance<ChannelFormValues>;
-  hasConfig: boolean;
   platformDef: SerializedPlatformDefinition;
 }
 
-const Body = memo<BodyProps>(({ platformDef, form, hasConfig }) => {
+const Body = memo<BodyProps>(({ platformDef, form }) => {
   const { t } = useTranslation('agent');
   const tStr = t as (key: string) => string;
 
   const credentialItems = useMemo(
-    () => buildCredentialItems(platformDef.schema, hasConfig, tStr),
-    [platformDef, hasConfig, tStr],
+    () => buildCredentialItems(platformDef.schema, tStr),
+    [platformDef, tStr],
   );
 
   const settingsGroups = useMemo(
-    () => buildSettingsGroups(platformDef.schema, hasConfig, tStr),
-    [platformDef, hasConfig, tStr],
+    () => buildSettingsGroups(platformDef.schema, tStr),
+    [platformDef, tStr],
   );
 
   return (
@@ -181,7 +165,7 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig }) => {
       gap={0}
       itemMinWidth={'max(50%, 400px)'}
       requiredMark={false}
-      style={{ maxWidth: 1024, width: '100%', padding: '16px 0' }}
+      style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
       variant={'borderless'}
     >
       {credentialItems.map((item, i) => (

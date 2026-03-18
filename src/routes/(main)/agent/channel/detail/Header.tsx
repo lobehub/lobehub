@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Button, Switch } from 'antd';
+import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,7 +48,16 @@ const Header = memo<HeaderProps>(({ platformDef, currentConfig, onToggleEnable }
           </a>
         )}
       </Flexbox>
-      {currentConfig && <Switch checked={currentConfig.enabled} onChange={onToggleEnable} />}
+      <Flexbox horizontal align="center" gap={8}>
+        {platformDef.documentation?.portalUrl && (
+          <a href={platformDef.documentation.portalUrl} rel="noopener noreferrer" target="_blank">
+            <Button icon={<ExternalLink size={14} />} size="small">
+              {t('channel.openPlatform')}
+            </Button>
+          </a>
+        )}
+        {currentConfig && <Switch checked={currentConfig.enabled} onChange={onToggleEnable} />}
+      </Flexbox>
     </Flexbox>
   );
 });

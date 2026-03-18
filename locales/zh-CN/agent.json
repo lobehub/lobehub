@@ -42,6 +42,7 @@
   "channel.endpointUrlHint": "请复制此 URL 并粘贴到 {{name}} 开发者门户的 <bold>{{fieldName}}</bold> 字段中。",
   "channel.feishu.description": "将助手连接到飞书，支持私聊和群聊。",
   "channel.lark.description": "将助手连接到 Lark，支持私聊和群聊。",
+  "channel.openPlatform": "开放平台",
   "channel.platforms": "平台",
   "channel.publicKey": "公钥",
   "channel.publicKeyHint": "可选。用于验证来自 Discord 的交互请求。",
