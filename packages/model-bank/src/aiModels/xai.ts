@@ -103,7 +103,6 @@ const xaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
       reasoning: true,
       search: true,
       structuredOutput: true,
