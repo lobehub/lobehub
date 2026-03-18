@@ -1,5 +1,6 @@
 import type { PlatformDefinition } from '../../types';
-import { sharedClientFactory, sharedCredentials, sharedSettings } from './shared';
+import { sharedSchema } from './schema';
+import { sharedClientFactory } from './shared';
 
 export const lark: PlatformDefinition = {
   id: 'lark',
@@ -9,7 +10,6 @@ export const lark: PlatformDefinition = {
     portalUrl: 'https://open.larksuite.com/app',
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/lark',
   },
-  credentials: sharedCredentials,
-  settings: sharedSettings,
+  schema: sharedSchema,
   clientFactory: sharedClientFactory,
 };

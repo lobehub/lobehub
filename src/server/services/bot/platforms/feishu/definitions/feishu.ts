@@ -1,5 +1,6 @@
 import type { PlatformDefinition } from '../../types';
-import { sharedClientFactory, sharedCredentials, sharedSettings } from './shared';
+import { sharedSchema } from './schema';
+import { sharedClientFactory } from './shared';
 
 export const feishu: PlatformDefinition = {
   id: 'feishu',
@@ -9,7 +10,6 @@ export const feishu: PlatformDefinition = {
     portalUrl: 'https://open.feishu.cn/app',
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/feishu',
   },
-  credentials: sharedCredentials,
-  settings: sharedSettings,
+  schema: sharedSchema,
   clientFactory: sharedClientFactory,
 };

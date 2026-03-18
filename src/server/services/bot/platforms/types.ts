@@ -12,7 +12,7 @@
  * - Frontend: auto-generated form (type → component mapping)
  */
 export interface FieldSchema {
-  /** Default value (settings only) */
+  /** Default value */
   default?: unknown;
   description?: string;
   /** Only show in development environment */
@@ -21,8 +21,6 @@ export interface FieldSchema {
   enum?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
-  /** Group key — fields with the same group render together */
-  group?: string;
   /** Array item schema */
   items?: FieldSchema;
   /** Unique field identifier */
@@ -217,9 +215,6 @@ export interface PlatformDefinition {
   /** Factory for creating PlatformClient instances and validating credentials/settings. */
   clientFactory: ClientFactory;
 
-  /** The credentials required for the platform. */
-  credentials: FieldSchema[];
-
   /** The description of the platform. */
   description?: string;
 
@@ -232,8 +227,8 @@ export interface PlatformDefinition {
   /** The name of the platform. */
   name: string;
 
-  /** Platform settings schema, drives form generation + default extraction. */
-  settings?: FieldSchema[];
+  /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
+  schema: FieldSchema[];
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */

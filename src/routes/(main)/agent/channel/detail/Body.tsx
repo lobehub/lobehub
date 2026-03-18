@@ -110,12 +110,16 @@ function renderFieldComponent(field: FieldSchema, hasConfig: boolean): React.Rea
   }
 }
 
-function fieldToFormItem(field: FieldSchema, hasConfig: boolean): FormItemProps {
+function fieldToFormItem(
+  field: FieldSchema,
+  hasConfig: boolean,
+  parentKey?: string,
+): FormItemProps {
   return {
     children: renderFieldComponent(field, hasConfig),
     desc: field.description,
     label: field.label,
-    name: field.key,
+    name: parentKey ? [parentKey, field.key] : field.key,
     rules: field.required ? [{ required: true }] : undefined,
     tag: field.label,
     valuePropName: field.type === 'boolean' ? 'checked' : undefined,
@@ -124,35 +128,48 @@ function fieldToFormItem(field: FieldSchema, hasConfig: boolean): FormItemProps 
 
 // --------------- Build form groups ---------------
 
-function buildCredentialItems(fields: FieldSchema[], hasConfig: boolean): FormItemProps[] {
-  return fields
-    .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
-    .map((f) => fieldToFormItem(f, hasConfig));
-}
+/**
+ * Build form groups from schema.
+ *
+ * Schema has two top-level objects: `credentials` and `settings`.
+ * - `credentials` properties → first form group (expanded, title set by caller)
+ * - `settings` properties → single collapsed group
+ */
+function buildFormGroups(schema: FieldSchema[], hasConfig: boolean): FormGroupItemType[] {
+  const groups: FormGroupItemType[] = [];
 
-function buildSettingsGroups(fields: FieldSchema[], hasConfig: boolean): FormGroupItemType[] {
-  const grouped = new Map<string, FieldSchema[]>();
+  const credentialsSchema = schema.find((f) => f.key === 'credentials');
+  const settingsSchema = schema.find((f) => f.key === 'settings');
 
-  for (const field of fields) {
-    if (field.devOnly && process.env.NODE_ENV !== 'development') continue;
-    const groupKey = field.group || 'general';
-    const list = grouped.get(groupKey) || [];
-    list.push(field);
-    grouped.set(groupKey, list);
+  // Credentials group
+  if (credentialsSchema?.properties) {
+    const items = credentialsSchema.properties
+      .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
+      .map((f) => fieldToFormItem(f, hasConfig, 'credentials'));
+
+    groups.push({ children: items, defaultActive: true, key: 'credentials' });
   }
 
-  return [...grouped.entries()].map(([key, groupFields]) => ({
-    children: groupFields.flatMap((f) => {
-      if (f.type === 'object' && f.properties) {
-        // Flatten nested object fields with dot-path names
-        return f.properties.map((child) => fieldToFormItem(child, hasConfig));
-      }
-      return fieldToFormItem(f, hasConfig);
-    }),
-    defaultActive: true,
-    key,
-    title: key.charAt(0).toUpperCase() + key.slice(1),
-  }));
+  // Settings — single collapsed group
+  if (settingsSchema?.properties) {
+    const items = settingsSchema.properties
+      .filter((f) => !f.devOnly || process.env.NODE_ENV !== 'development')
+      .flatMap((f) => {
+        if (f.type === 'object' && f.properties) {
+          return f.properties.map((child) => fieldToFormItem(child, hasConfig, 'settings'));
+        }
+        return fieldToFormItem(f, hasConfig, 'settings');
+      });
+
+    groups.push({
+      children: items,
+      defaultActive: false,
+      key: 'settings',
+      title: settingsSchema.label,
+    });
+  }
+
+  return groups;
 }
 
 // --------------- Body component ---------------
@@ -193,7 +210,7 @@ const Body = memo<BodyProps>(
     const origin = useAppOrigin();
     const platformId = platformDef.id;
     const platformName = platformDef.name;
-    const applicationId = AntdForm.useWatch('applicationId', form);
+    const applicationId = AntdForm.useWatch(['credentials', 'applicationId'], form);
 
     const webhookUrl = applicationId
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
@@ -226,20 +243,15 @@ const Body = memo<BodyProps>(
     ) : undefined;
 
     const formGroups = useMemo<FormGroupItemType[]>(() => {
-      // Credentials group
-      const credentialGroup: FormGroupItemType = {
-        children: buildCredentialItems(platformDef.credentials, hasConfig),
-        defaultActive: true,
-        extra: headerExtra,
-        title: headerTitle,
-      };
+      const groups = buildFormGroups(platformDef.schema, hasConfig);
 
-      // Settings groups
-      const settingsGroups = platformDef.settings
-        ? buildSettingsGroups(platformDef.settings, hasConfig)
-        : [];
+      // Inject header title/extra into first group
+      if (groups.length > 0) {
+        groups[0].title = headerTitle;
+        groups[0].extra = headerExtra;
+      }
 
-      return [credentialGroup, ...settingsGroups];
+      return groups;
     }, [platformDef, hasConfig, headerTitle, headerExtra]);
 
     return (

@@ -50,7 +50,10 @@ interface CurrentConfig {
   platform: string;
 }
 
-export type ChannelFormValues = Record<string, string>;
+export interface ChannelFormValues {
+  credentials: Record<string, string>;
+  settings: Record<string, unknown>;
+}
 
 export interface TestResult {
   errorDetail?: string;
@@ -85,15 +88,11 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
   // Sync form with saved config
   useEffect(() => {
     if (currentConfig) {
-      const values: Record<string, string> = {
-        applicationId: currentConfig.applicationId || '',
-      };
-      for (const field of platformDef.credentials) {
-        values[field.key] = currentConfig.credentials?.[field.key] || '';
-      }
-      form.setFieldsValue(values);
+      form.setFieldsValue({
+        credentials: currentConfig.credentials || {},
+      } as any);
     }
-  }, [currentConfig, form, platformDef.credentials]);
+  }, [currentConfig, form]);
 
   const handleSave = useCallback(async () => {
     try {
@@ -102,19 +101,14 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       setSaving(true);
       setSaveResult(undefined);
 
-      // Build credentials from platform definition
-      const credentials: Record<string, string> = {};
-      for (const field of platformDef.credentials) {
-        const value = values[field.key];
-        if (value) credentials[field.key] = value;
-      }
-
-      const applicationId = resolveApplicationId(credentials);
+      const { credentials = {}, settings = {} } = values as ChannelFormValues;
+      const applicationId = resolveApplicationId(credentials as Record<string, string>);
 
       if (currentConfig) {
         await updateBotProvider(currentConfig.id, agentId, {
           applicationId,
           credentials,
+          settings,
         });
       } else {
         await createBotProvider({
@@ -122,6 +116,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
           applicationId,
           credentials,
           platform: platformDef.id,
+          settings,
         });
       }
 
