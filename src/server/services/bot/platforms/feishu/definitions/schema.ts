@@ -3,21 +3,21 @@ import type { FieldSchema } from '../../types';
 export const sharedSchema: FieldSchema[] = [
   {
     key: 'credentials',
-    label: 'Credentials',
+    label: 'channel.credentials',
     properties: [
-      { key: 'appId', label: 'App ID', required: true, type: 'string' },
-      { key: 'appSecret', label: 'App Secret', required: true, type: 'password' },
+      { key: 'appId', label: 'channel.appId', required: true, type: 'string' },
+      { key: 'appSecret', label: 'channel.appSecret', required: true, type: 'password' },
       {
         key: 'verificationToken',
-        description: 'Token for webhook event validation (optional)',
-        label: 'Verification Token',
+        description: 'channel.verificationTokenHint',
+        label: 'channel.verificationToken',
         required: false,
         type: 'password',
       },
       {
         key: 'encryptKey',
-        description: 'AES decrypt key for encrypted events (optional)',
-        label: 'Encrypt Key',
+        description: 'channel.encryptKeyHint',
+        label: 'channel.encryptKey',
         required: false,
         type: 'password',
       },
@@ -26,35 +26,38 @@ export const sharedSchema: FieldSchema[] = [
   },
   {
     key: 'settings',
-    label: 'Settings',
+    label: 'channel.settings',
     properties: [
       {
         key: 'charLimit',
         default: 4000,
-        label: 'Character Limit',
+        label: 'channel.charLimit',
         minimum: 100,
         type: 'number',
       },
       {
         key: 'debounceMs',
         default: 2000,
-        description:
-          'How long to wait for additional messages before dispatching to the agent (ms)',
-        label: 'Message Merge Window (ms)',
+        description: 'channel.debounceMsDesc',
+        label: 'channel.debounceMs',
         minimum: 0,
         type: 'number',
       },
       {
         key: 'dm',
-        label: 'Direct Messages',
+        label: 'channel.dm',
         properties: [
-          { key: 'enabled', default: true, label: 'Enable DMs', type: 'boolean' },
+          { key: 'enabled', default: true, label: 'channel.dmEnabled', type: 'boolean' },
           {
             key: 'policy',
             default: 'open',
             enum: ['open', 'allowlist', 'disabled'],
-            enumLabels: ['Open', 'Allowlist', 'Disabled'],
-            label: 'DM Policy',
+            enumLabels: [
+              'channel.dmPolicyOpen',
+              'channel.dmPolicyAllowlist',
+              'channel.dmPolicyDisabled',
+            ],
+            label: 'channel.dmPolicy',
             type: 'string',
             visibleWhen: { field: 'enabled', value: true },
           },

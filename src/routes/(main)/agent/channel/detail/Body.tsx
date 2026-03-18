@@ -66,7 +66,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 // --------------- Field → FormItem renderer ---------------
 
-function renderFieldComponent(field: FieldSchema, hasConfig: boolean): React.ReactNode {
+function renderFieldComponent(
+  field: FieldSchema,
+  hasConfig: boolean,
+  t: (key: string) => string,
+): React.ReactNode {
   switch (field.type) {
     case 'password': {
       return (
@@ -96,16 +100,16 @@ function renderFieldComponent(field: FieldSchema, hasConfig: boolean): React.Rea
           <Select
             placeholder={field.placeholder}
             options={field.enum.map((value, i) => ({
-              label: field.enumLabels?.[i] || value,
+              label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
               value,
             }))}
           />
         );
       }
-      return <FormInput placeholder={field.placeholder || field.label} />;
+      return <FormInput placeholder={field.placeholder || t(field.label)} />;
     }
     default: {
-      return <FormInput placeholder={field.placeholder || field.label} />;
+      return <FormInput placeholder={field.placeholder || t(field.label)} />;
     }
   }
 }
@@ -113,15 +117,16 @@ function renderFieldComponent(field: FieldSchema, hasConfig: boolean): React.Rea
 function fieldToFormItem(
   field: FieldSchema,
   hasConfig: boolean,
+  t: (key: string) => string,
   parentKey?: string,
 ): FormItemProps {
   return {
-    children: renderFieldComponent(field, hasConfig),
-    desc: field.description,
-    label: field.label,
+    children: renderFieldComponent(field, hasConfig, t),
+    desc: field.description ? t(field.description) : undefined,
+    label: t(field.label),
     name: parentKey ? [parentKey, field.key] : field.key,
     rules: field.required ? [{ required: true }] : undefined,
-    tag: field.label,
+    tag: t(field.label),
     valuePropName: field.type === 'boolean' ? 'checked' : undefined,
   };
 }
@@ -138,6 +143,7 @@ function fieldToFormItem(
 function buildFormGroups(
   schema: FieldSchema[],
   hasConfig: boolean,
+  t: (key: string) => string,
   headerTitle: React.ReactNode,
   headerExtra?: React.ReactNode,
 ): FormGroupItemType[] {
@@ -150,7 +156,7 @@ function buildFormGroups(
   if (credentialsSchema?.properties) {
     const items = credentialsSchema.properties
       .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
-      .map((f) => fieldToFormItem(f, hasConfig, 'credentials'));
+      .map((f) => fieldToFormItem(f, hasConfig, t, 'credentials'));
 
     groups.push({
       children: items,
@@ -167,9 +173,9 @@ function buildFormGroups(
       .filter((f) => !f.devOnly || process.env.NODE_ENV === 'development')
       .flatMap((f) => {
         if (f.type === 'object' && f.properties) {
-          return f.properties.map((child) => fieldToFormItem(child, hasConfig, 'settings'));
+          return f.properties.map((child) => fieldToFormItem(child, hasConfig, t, 'settings'));
         }
-        return fieldToFormItem(f, hasConfig, 'settings');
+        return fieldToFormItem(f, hasConfig, t, 'settings');
       });
 
     groups.push({
@@ -177,7 +183,7 @@ function buildFormGroups(
       collapsible: true,
       defaultActive: false,
       key: 'settings',
-      title: settingsSchema.label,
+      title: t(settingsSchema.label),
     });
   }
 
@@ -255,7 +261,7 @@ const Body = memo<BodyProps>(
         <Switch checked={currentConfig.enabled} onChange={onToggleEnable} />
       ) : undefined;
 
-      return buildFormGroups(platformDef.schema, hasConfig, title, extra);
+      return buildFormGroups(platformDef.schema, hasConfig, t, title, extra);
     }, [platformDef, hasConfig, currentConfig, onToggleEnable, ColorIcon, platformName, t]);
 
     return (
