@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import ChangelogModal from '@/components/ChangelogModal';
 import HighlightNotification from '@/components/HighlightNotification';
@@ -27,6 +27,8 @@ import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 const PRODUCT_HUNT_NOTIFICATION = {
   actionHref: 'https://www.producthunt.com/products/lobehub?launch=lobehub',
@@ -40,6 +42,9 @@ const Footer = memo(() => {
   const { t } = useTranslation('common');
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const location = useLocation();
+  const isSettingsPage = location.pathname.startsWith('/settings');
   const [shouldLoadChangelog, setShouldLoadChangelog] = useState(false);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
   const [isProductHuntCardOpen, setIsProductHuntCardOpen] = useState(false);
@@ -119,7 +124,7 @@ const Footer = memo(() => {
 
   const helpMenuItems: MenuProps['items'] = useMemo(
     () => [
-      ...(footer.showSettingsEntry
+      ...(footer.showSettingsEntry && !isDevMode
         ? [
             {
               icon: <Icon icon={Settings2} />,
@@ -202,6 +207,7 @@ const Footer = memo(() => {
       footer.layout,
       footer.hideGitHub,
       footer.showEvalEntry,
+      isDevMode,
       t,
       handleOpenFeedbackModal,
       isWithinTimeWindow,
@@ -233,6 +239,11 @@ const Footer = memo(() => {
           <DropdownMenu items={helpMenuItems} placement="topLeft">
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
+          {isDevMode && !isSettingsPage && (
+            <Link to="/settings">
+              <ActionIcon aria-label={t('userPanel.setting')} icon={Settings2} size={16} />
+            </Link>
+          )}
         </Flexbox>
       )}
       <ChangelogModal

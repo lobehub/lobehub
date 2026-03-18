@@ -5,19 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
-import {
-  featureFlagsSelectors,
-  serverConfigSelectors,
-  useServerConfigStore,
-} from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 export interface NavItem {
-  /**
-   * true = dev mode only, false = simplified mode only, undefined = always
-   */
-  devOnly?: boolean;
   hidden?: boolean;
   icon: any;
   isNew?: boolean;
@@ -42,121 +32,72 @@ export interface NavLayout {
   };
 }
 
-const filterByMode = (items: NavItem[], isDevMode: boolean): NavItem[] =>
-  items.filter((item) => item.devOnly === undefined || item.devOnly === isDevMode);
-
 export const useNavLayout = (): NavLayout => {
   const { t } = useTranslation('common');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const { showMarket, showAiImage, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const { showMarket, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
 
   const topNavItems = useMemo(
     () =>
-      filterByMode(
-        [
-          {
-            icon: SearchIcon,
-            key: 'search',
-            onClick: () => toggleCommandMenu(true),
-            title: t('tab.search'),
-          },
-          {
-            icon: HomeIcon,
-            key: SidebarTabKey.Home,
-            title: t('tab.home'),
-            url: '/',
-          },
-          {
-            devOnly: true,
-            icon: getRouteById('page')!.icon,
-            key: SidebarTabKey.Pages,
-            title: t('tab.pages'),
-            url: '/page',
-          },
-          {
-            devOnly: true,
-            hidden: !enableBusinessFeatures,
-            icon: getRouteById('video')!.icon,
-            key: SidebarTabKey.Video,
-            title: t('tab.video'),
-            url: '/video',
-          },
-          {
-            devOnly: true,
-            hidden: !showAiImage,
-            icon: getRouteById('image')!.icon,
-            key: SidebarTabKey.Image,
-            title: t('tab.aiImage'),
-            url: '/image',
-          },
-          {
-            hidden: !showMarket,
-            icon: getRouteById('community')!.icon,
-            key: SidebarTabKey.Community,
-            title: t('tab.marketplace'),
-            url: '/community',
-          },
-        ],
-        isDevMode,
-      ),
-    [t, toggleCommandMenu, showMarket, isDevMode, enableBusinessFeatures, showAiImage],
+      [
+        {
+          icon: SearchIcon,
+          key: 'search',
+          onClick: () => toggleCommandMenu(true),
+          title: t('tab.search'),
+        },
+        {
+          icon: HomeIcon,
+          key: SidebarTabKey.Home,
+          title: t('tab.home'),
+          url: '/',
+        },
+        {
+          icon: getRouteById('page')!.icon,
+          key: SidebarTabKey.Pages,
+          title: t('tab.pages'),
+          url: '/page',
+        },
+        {
+          hidden: !showMarket,
+          icon: getRouteById('community')!.icon,
+          key: SidebarTabKey.Community,
+          title: t('tab.marketplace'),
+          url: '/community',
+        },
+      ] as NavItem[],
+    [t, toggleCommandMenu, showMarket],
   );
 
   const bottomMenuItems = useMemo(
     () =>
-      filterByMode(
-        [
-          {
-            devOnly: true,
-            icon: getRouteById('settings')!.icon,
-            key: SidebarTabKey.Setting,
-            title: t('tab.setting'),
-            url: '/settings',
-          },
-          {
-            icon: getRouteById('resource')!.icon,
-            key: SidebarTabKey.Resource,
-            title: t('tab.resource'),
-            url: '/resource',
-          },
-          {
-            devOnly: true,
-            icon: getRouteById('memory')!.icon,
-            key: SidebarTabKey.Memory,
-            title: t('tab.memory'),
-            url: '/memory',
-          },
-          {
-            devOnly: false,
-            icon: getRouteById('page')!.icon,
-            key: SidebarTabKey.Pages,
-            title: t('tab.pages'),
-            url: '/page',
-          },
-        ],
-        isDevMode,
-      ),
-    [t, isDevMode],
+      [
+        {
+          icon: getRouteById('resource')!.icon,
+          key: SidebarTabKey.Resource,
+          title: t('tab.resource'),
+          url: '/resource',
+        },
+      ] as NavItem[],
+    [t],
   );
 
   const footer = useMemo(
     () => ({
       hideGitHub: !!hideGitHub,
-      layout: (isDevMode ? 'expanded' : 'compact') as 'expanded' | 'compact',
-      showEvalEntry: isDevMode,
-      showSettingsEntry: !isDevMode,
+      layout: 'compact' as const,
+      showEvalEntry: false,
+      showSettingsEntry: true,
     }),
-    [isDevMode, hideGitHub],
+    [hideGitHub],
   );
 
   const userPanel = useMemo(
     () => ({
-      showDataImporter: isDevMode,
-      showMemory: !isDevMode,
+      showDataImporter: false,
+      showMemory: true,
     }),
-    [isDevMode],
+    [],
   );
 
   return { bottomMenuItems, footer, topNavItems, userPanel };
