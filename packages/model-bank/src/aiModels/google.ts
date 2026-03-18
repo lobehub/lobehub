@@ -1018,6 +1018,7 @@ const googleVideoModels: AIVideoModelCard[] = [
         default: '720p',
         enum: ['720p', '1080p', '4k'],
       },
+      seed: { default: null },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
@@ -1048,6 +1049,7 @@ const googleVideoModels: AIVideoModelCard[] = [
         default: '720p',
         enum: ['720p', '1080p', '4k'],
       },
+      seed: { default: null },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],
@@ -1075,6 +1077,7 @@ const googleVideoModels: AIVideoModelCard[] = [
         default: '720p',
         enum: ['720p', '1080p'],
       },
+      seed: { default: null },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'second' }],
@@ -1102,6 +1105,7 @@ const googleVideoModels: AIVideoModelCard[] = [
         default: '720p',
         enum: ['720p', '1080p'],
       },
+      seed: { default: null },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
@@ -1129,6 +1133,7 @@ const googleVideoModels: AIVideoModelCard[] = [
         default: '720p',
         enum: ['720p', '1080p'],
       },
+      seed: { default: null },
     },
     pricing: {
       units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],

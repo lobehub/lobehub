@@ -1,12 +1,43 @@
-import type { GenerateVideosConfig, GoogleGenAI } from '@google/genai';
+import type { GenerateVideosConfig, GoogleGenAI, Image } from '@google/genai';
 import { GenerateVideosOperation } from '@google/genai';
+import { imageUrlToBase64 } from '@lobechat/utils';
 import debug from 'debug';
 
 import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
+import { parseDataUri } from '../../utils/uriParser';
 
-const log = debug('model-runtime:google:video');
+const log = debug('lobe-video:google');
+
+/**
+ * Convert image URL to Google Image format
+ * Supports: data URI, HTTP URL, and file paths
+ */
+async function imageToGoogleImageFormat(imageUrl: string): Promise<Image> {
+  const { mimeType, base64, type } = parseDataUri(imageUrl);
+
+  if (type === 'base64') {
+    if (!base64) {
+      throw new TypeError("Image URL doesn't contain base64 data");
+    }
+
+    return {
+      imageBytes: base64,
+      mimeType: mimeType || 'image/png',
+    };
+  } else if (type === 'url') {
+    // Handle both HTTP URLs and file paths (files/...)
+    const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(imageUrl);
+
+    return {
+      imageBytes: urlBase64,
+      mimeType: urlMimeType,
+    };
+  } else {
+    throw new TypeError(`currently we don't support image url: ${imageUrl}`);
+  }
+}
 
 export async function createGoogleVideo(
   client: GoogleGenAI,
@@ -15,22 +46,34 @@ export async function createGoogleVideo(
 ): Promise<CreateVideoResponse> {
   try {
     const { model, params } = payload;
-    const { prompt, imageUrl, endImageUrl, aspectRatio, duration, resolution } = params;
+    const {
+      prompt,
+      imageUrl,
+      endImageUrl,
+      aspectRatio,
+      duration,
+      resolution,
+      seed,
+      generateAudio, // generateAudio parameter is not supported in Gemini API.
+    } = params;
 
     log('Creating video with Google AI - model: %s, params: %O', model, params);
 
+    // https://github.com/googleapis/js-genai/blob/main/src/types.ts
     const config: GenerateVideosConfig = {
-      ...(aspectRatio && { aspect_ratio: aspectRatio }),
-      ...(duration && { duration_seconds: duration }),
-      ...(endImageUrl && { last_frame: endImageUrl }),
+      ...(aspectRatio && { aspectRatio }),
+      ...(duration && { durationSeconds: duration }),
+      ...(endImageUrl && { lastFrame: await imageToGoogleImageFormat(endImageUrl) }),
+      ...(generateAudio && { generateAudio }),
       ...(resolution && { resolution }),
+      ...(seed && { seed }),
     };
 
     const requestParams: any = {
-      config,
       model,
       prompt,
-      ...(imageUrl && { image: imageUrl }),
+      ...(imageUrl && { image: await imageToGoogleImageFormat(imageUrl) }),
+      ...(config && { config }),
     };
 
     log('Google video generation request params: %O', requestParams);

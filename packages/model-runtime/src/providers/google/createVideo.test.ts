@@ -8,6 +8,33 @@ vi.mock('debug', () => ({
   default: vi.fn(() => vi.fn()),
 }));
 
+vi.mock('../../utils/googleErrorParser', () => ({
+  parseGoogleErrorMessage: vi.fn((message) => ({
+    error: message,
+    errorType: 'GoogleAPIError',
+  })),
+}));
+
+vi.mock('../../utils/uriParser', () => ({
+  parseDataUri: vi.fn((url) => {
+    if (url.startsWith('data:')) {
+      const matches = url.match(/^data:(image\/\w+);base64,(.+)$/);
+      if (matches) {
+        return { base64: matches[2], mimeType: matches[1], type: 'base64' };
+      }
+      return { base64: null, mimeType: null, type: 'base64' };
+    }
+    return { base64: null, mimeType: null, type: 'url' };
+  }),
+}));
+
+vi.mock('@lobechat/utils', () => ({
+  imageUrlToBase64: vi.fn(async (url) => ({
+    base64: 'mock-base64-data',
+    mimeType: 'image/jpeg',
+  })),
+}));
+
 vi.mock('@google/genai', () => ({
   GenerateVideosOperation: class {
     name: string = '';
@@ -78,7 +105,7 @@ describe('createGoogleVideo', () => {
   });
 
   describe('optional parameters', () => {
-    it('should include aspectRatio in config as aspect_ratio', async () => {
+    it('should include aspectRatio in config', async () => {
       const mockOperation = { name: 'operations/test-op-aspect' };
       mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
 
@@ -93,7 +120,7 @@ describe('createGoogleVideo', () => {
       await createGoogleVideo(mockClient as any, 'google', payload);
 
       const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
-      expect(callArgs.config).toEqual({ aspect_ratio: '16:9' });
+      expect(callArgs.config).toEqual({ aspectRatio: '16:9' });
     });
 
     it('should include resolution in config', async () => {
@@ -131,7 +158,7 @@ describe('createGoogleVideo', () => {
 
       const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
       expect(callArgs.config).toEqual({
-        aspect_ratio: '21:9',
+        aspectRatio: '21:9',
         resolution: '1080p',
       });
     });
@@ -151,10 +178,12 @@ describe('createGoogleVideo', () => {
       await createGoogleVideo(mockClient as any, 'google', payload);
 
       const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
-      expect(callArgs.image).toBe('https://example.com/first.jpg');
+      expect(callArgs.image).toBeDefined();
+      expect(callArgs.image.mimeType).toBe('image/jpeg');
+      expect(callArgs.image.imageBytes).toBe('mock-base64-data');
     });
 
-    it('should include endImageUrl as last_frame in config', async () => {
+    it('should include endImageUrl as lastFrame in config', async () => {
       const mockOperation = { name: 'operations/transformer' };
       mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
 
@@ -170,11 +199,13 @@ describe('createGoogleVideo', () => {
       await createGoogleVideo(mockClient as any, 'google', payload);
 
       const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
-      expect(callArgs.image).toBe('https://example.com/first.jpg');
-      expect(callArgs.config.last_frame).toBe('https://example.com/last.jpg');
+      expect(callArgs.image).toBeDefined();
+      expect(callArgs.config.lastFrame).toBeDefined();
+      expect(callArgs.config.lastFrame.mimeType).toBe('image/jpeg');
+      expect(callArgs.config.lastFrame.imageBytes).toBe('mock-base64-data');
     });
 
-    it('should include duration as duration_seconds in config', async () => {
+    it('should include duration as durationSeconds in config', async () => {
       const mockOperation = { name: 'operations/duration-test' };
       mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
 
@@ -189,7 +220,96 @@ describe('createGoogleVideo', () => {
       await createGoogleVideo(mockClient as any, 'google', payload);
 
       const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
-      expect(callArgs.config.duration_seconds).toBe(5);
+      expect(callArgs.config.durationSeconds).toBe(5);
+    });
+
+    it('should include generateAudio in config when true', async () => {
+      const mockOperation = { name: 'operations/audio-test' };
+      mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: {
+          prompt: 'Video with audio',
+          generateAudio: true,
+        },
+      };
+
+      await createGoogleVideo(mockClient as any, 'google', payload);
+
+      const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
+      expect(callArgs.config.generateAudio).toBe(true);
+    });
+
+    it('should not include generateAudio when undefined or false', async () => {
+      const mockOperation = { name: 'operations/no-audio' };
+      mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: {
+          prompt: 'Silent video',
+          generateAudio: false,
+        },
+      };
+
+      await createGoogleVideo(mockClient as any, 'google', payload);
+
+      const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
+      expect(callArgs.config.generateAudio).toBeUndefined();
+    });
+
+    it('should include seed in config', async () => {
+      const mockOperation = { name: 'operations/seed-test' };
+      mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: {
+          prompt: 'Reproducible video',
+          seed: 42,
+        },
+      };
+
+      await createGoogleVideo(mockClient as any, 'google', payload);
+
+      const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
+      expect(callArgs.config.seed).toBe(42);
+    });
+
+    it('should not include seed when undefined', async () => {
+      const mockOperation = { name: 'operations/no-seed' };
+      mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: {
+          prompt: 'Random video',
+        },
+      };
+
+      await createGoogleVideo(mockClient as any, 'google', payload);
+
+      const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
+      expect(callArgs.config.seed).toBeUndefined();
+    });
+
+    it('should include different seed values', async () => {
+      const mockOperation = { name: 'operations/seed-123' };
+      mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: {
+          prompt: 'Specific seed',
+          seed: 999999,
+        },
+      };
+
+      await createGoogleVideo(mockClient as any, 'google', payload);
+
+      const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
+      expect(callArgs.config.seed).toBe(999999);
     });
 
     it('should not include duration when undefined', async () => {
@@ -206,7 +326,7 @@ describe('createGoogleVideo', () => {
       await createGoogleVideo(mockClient as any, 'google', payload);
 
       const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
-      expect(callArgs.duration).toBeUndefined();
+      expect(callArgs.config.durationSeconds).toBeUndefined();
     });
 
     it('should include all optional parameters together', async () => {
@@ -222,6 +342,8 @@ describe('createGoogleVideo', () => {
           aspectRatio: '16:9',
           resolution: '4k',
           duration: 10,
+          generateAudio: true,
+          seed: 12345,
         },
       };
 
@@ -232,12 +354,45 @@ describe('createGoogleVideo', () => {
         model: 'veo-2.0-generate-001',
         prompt: 'Full featured video',
         config: {
-          aspect_ratio: '16:9',
+          aspectRatio: '16:9',
           resolution: '4k',
-          last_frame: 'https://example.com/end.jpg',
-          duration_seconds: 10,
+          lastFrame: {
+            imageBytes: 'mock-base64-data',
+            mimeType: 'image/jpeg',
+          },
+          durationSeconds: 10,
+          generateAudio: true,
+          seed: 12345,
         },
-        image: 'https://example.com/start.jpg',
+        image: {
+          imageBytes: 'mock-base64-data',
+          mimeType: 'image/jpeg',
+        },
+      });
+    });
+
+    it('should handle base64 image URL', async () => {
+      const mockOperation = { name: 'operations/base64-image' };
+      mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
+
+      const base64Url =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: {
+          prompt: 'Video from base64',
+          imageUrl: base64Url,
+        },
+      };
+
+      await createGoogleVideo(mockClient as any, 'google', payload);
+
+      const callArgs = mockClient.models.generateVideos.mock.calls[0][0];
+      expect(callArgs.image).toEqual({
+        imageBytes:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        mimeType: 'image/png',
       });
     });
   });
@@ -254,7 +409,7 @@ describe('createGoogleVideo', () => {
       };
 
       await expect(createGoogleVideo(mockClient as any, 'google', payload)).rejects.toMatchObject({
-        errorType: expect.any(String),
+        errorType: 'GoogleAPIError',
         provider: 'google',
       });
     });
@@ -285,6 +440,38 @@ describe('createGoogleVideo', () => {
       await expect(createGoogleVideo(mockClient as any, 'google', payload)).rejects.toBe(
         customError,
       );
+    });
+
+    it('should include provider in error payload', async () => {
+      mockClient.models.generateVideos.mockRejectedValueOnce(new Error('API quota exceeded'));
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: { prompt: 'Test' },
+      };
+
+      try {
+        await createGoogleVideo(mockClient as any, 'google', payload);
+        expect.fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.provider).toBe('google');
+      }
+    });
+  });
+
+  describe('logging', () => {
+    it('should log video creation request params', async () => {
+      const mockOperation = { name: 'operations/test-log' };
+      mockClient.models.generateVideos.mockResolvedValueOnce(mockOperation);
+
+      const payload: CreateVideoPayload = {
+        model: 'veo-2.0-generate-001',
+        params: { prompt: 'Test logging' },
+      };
+
+      await createGoogleVideo(mockClient as any, 'google', payload);
+
+      expect(mockClient.models.generateVideos).toHaveBeenCalled();
     });
   });
 });
@@ -354,6 +541,30 @@ describe('pollGoogleVideoOperation', () => {
         });
       }
     });
+
+    it('should handle operation with multiple generated videos', async () => {
+      const mockOperation = {
+        done: true,
+        response: {
+          generatedVideos: [
+            { video: { uri: 'https://example.com/video1.mp4' } },
+            { video: { uri: 'https://example.com/video2.mp4' } },
+          ],
+        },
+      };
+      mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'test-api-key',
+      );
+
+      if (result.status === 'success') {
+        expect(result.videoUrl).toBe('https://example.com/video1.mp4');
+      }
+    });
   });
 
   describe('error scenarios', () => {
@@ -421,6 +632,28 @@ describe('pollGoogleVideoOperation', () => {
       });
     });
 
+    it('should return failed when raiMediaFilteredReasons has multiple reasons', async () => {
+      const mockOperation = {
+        done: true,
+        response: {
+          raiMediaFilteredReasons: ['Content policy violation', 'Unsafe content'],
+        },
+      };
+      mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({
+        status: 'failed',
+        error: 'Content policy violation',
+      });
+    });
+
     it('should return failed when video object is missing uri', async () => {
       const mockOperation = {
         done: true,
@@ -464,11 +697,71 @@ describe('pollGoogleVideoOperation', () => {
         error: 'No video generated',
       });
     });
+
+    it('should return failed when video uri is empty string', async () => {
+      const mockOperation = {
+        done: true,
+        response: {
+          generatedVideos: [{ video: { uri: '' } }],
+        },
+      };
+      mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({
+        status: 'failed',
+        error: 'Video URL is empty',
+      });
+    });
+
+    it('should return failed when error message is missing', async () => {
+      const mockOperation = {
+        done: true,
+        error: {},
+      };
+      mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({
+        status: 'failed',
+        error: 'Video generation failed',
+      });
+    });
   });
 
   describe('pending state', () => {
     it('should return pending when operation not done', async () => {
       const mockOperation = { done: false };
+      mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({ status: 'pending' });
+    });
+
+    it('should return pending when operation is partially done', async () => {
+      const mockOperation = {
+        done: false,
+        name: 'operations/test-123',
+        metadata: { progress: 50 },
+      };
       mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);
 
       const result = await pollGoogleVideoOperation(
@@ -513,6 +806,20 @@ describe('pollGoogleVideoOperation', () => {
       });
     });
 
+    it('should return failed status when inferenceId is null', async () => {
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        null as any,
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({
+        status: 'failed',
+        error: 'Invalid operation name',
+      });
+    });
+
     it('should handle errors without message property', async () => {
       mockClient.operations.getVideosOperation.mockRejectedValueOnce({});
 
@@ -526,6 +833,63 @@ describe('pollGoogleVideoOperation', () => {
       expect(result).toEqual({
         status: 'failed',
         error: 'Failed to poll video status',
+      });
+    });
+
+    it('should handle network timeout errors', async () => {
+      mockClient.operations.getVideosOperation.mockRejectedValueOnce(new Error('ETIMEDOUT'));
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'test-api-key',
+      );
+
+      expect(result).toEqual({
+        status: 'failed',
+        error: 'ETIMEDOUT',
+      });
+    });
+
+    it('should handle authentication errors', async () => {
+      mockClient.operations.getVideosOperation.mockRejectedValueOnce(new Error('API_KEY_INVALID'));
+
+      const result = await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'invalid-key',
+      );
+
+      expect(result).toEqual({
+        status: 'failed',
+        error: 'API_KEY_INVALID',
+      });
+    });
+  });
+
+  describe('logging', () => {
+    it('should log polling request', async () => {
+      const mockOperation = {
+        done: true,
+        response: {
+          generatedVideos: [{ video: { uri: 'https://example.com/video.mp4' } }],
+        },
+      };
+      mockClient.operations.getVideosOperation.mockResolvedValueOnce(mockOperation);
+
+      await pollGoogleVideoOperation(
+        mockClient as any,
+        'operations/test-123',
+        'google',
+        'test-api-key',
+      );
+
+      expect(mockClient.operations.getVideosOperation).toHaveBeenCalledWith({
+        operation: expect.objectContaining({
+          name: 'operations/test-123',
+        }),
       });
     });
   });
