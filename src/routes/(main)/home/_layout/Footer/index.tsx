@@ -13,6 +13,7 @@ import {
   FlaskConical,
   Github,
   Rocket,
+  Settings,
   Settings2,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -241,7 +242,7 @@ const Footer = memo(() => {
           </DropdownMenu>
           {isDevMode && !isSettingsPage && (
             <Link to="/settings">
-              <ActionIcon aria-label={t('userPanel.setting')} icon={Settings2} size={16} />
+              <ActionIcon aria-label={t('userPanel.setting')} icon={Settings} size={16} />
             </Link>
           )}
         </Flexbox>
