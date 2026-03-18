@@ -1,5 +1,5 @@
 import { Flexbox, Highlighter } from '@lobehub/ui';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, messageStateSelectors } from '@/store/chat/selectors';
@@ -9,6 +9,9 @@ import { ArtifactType } from '@/types/artifact';
 import Renderer from './Renderer';
 
 const ArtifactsUI = memo(() => {
+  const codeScrollRef = useRef<HTMLDivElement | null>(null);
+  const codeScrollTopRef = useRef(0);
+
   const [
     messageId,
     displayMode,
@@ -59,14 +62,28 @@ const ArtifactsUI = memo(() => {
     }
   }, [artifactType, artifactCodeLanguage]);
 
-  // make sure the message and id is valid
-  if (!messageId) return;
-
   // show code when the artifact is not closed or the display mode is code or the artifact type is code
   const showCode =
     !isArtifactTagClosed ||
     displayMode === ArtifactDisplayMode.Code ||
     artifactType === ArtifactType.Code;
+  const isStreamingCode = isMessageGenerating && !isArtifactTagClosed;
+
+  useEffect(() => {
+    codeScrollTopRef.current = 0;
+  }, [messageId]);
+
+  useEffect(() => {
+    const container = codeScrollRef.current;
+    if (!showCode || !container) return;
+
+    if (container.scrollTop !== codeScrollTopRef.current) {
+      container.scrollTop = codeScrollTopRef.current;
+    }
+  }, [artifactContent, showCode]);
+
+  // make sure the message and id is valid
+  if (!messageId) return;
 
   return (
     <Flexbox
@@ -78,12 +95,25 @@ const ArtifactsUI = memo(() => {
       style={{ overflow: 'hidden' }}
     >
       {showCode ? (
-        <Highlighter
-          language={language || 'txt'}
-          style={{ fontSize: 12, height: '100%', overflow: 'auto' }}
+        <Flexbox
+          flex={1}
+          ref={codeScrollRef}
+          style={{ minHeight: 0, overflow: 'auto' }}
+          onScroll={() => {
+            const container = codeScrollRef.current;
+            if (!container) return;
+
+            codeScrollTopRef.current = container.scrollTop;
+          }}
         >
-          {artifactContent}
-        </Highlighter>
+          <Highlighter
+            animated={isStreamingCode}
+            language={language || 'txt'}
+            style={{ fontSize: 12, minHeight: '100%', overflow: 'visible' }}
+          >
+            {artifactContent}
+          </Highlighter>
+        </Flexbox>
       ) : (
         <Renderer content={artifactContent} type={artifactType} />
       )}
