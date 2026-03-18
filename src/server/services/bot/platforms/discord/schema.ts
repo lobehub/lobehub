@@ -5,9 +5,9 @@ export const schema: FieldSchema[] = [
     key: 'credentials',
     label: 'Credentials',
     properties: [
-      { key: 'botToken', label: 'Bot Token', required: true, type: 'password' },
-      { key: 'publicKey', label: 'Public Key', required: true, type: 'string' },
       { key: 'applicationId', label: 'Application ID', required: true, type: 'string' },
+      { key: 'publicKey', label: 'Public Key', required: true, type: 'string' },
+      { key: 'botToken', label: 'Bot Token', required: true, type: 'password' },
     ],
     type: 'object',
   },
