@@ -14,7 +14,10 @@ import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { electronSystemService } from '@/services/electron/system';
 import { useGlobalStore } from '@/store/global';
+
+import { getDisplayVersion } from './versionDisplay';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   logo: css`
@@ -38,6 +41,8 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   const [updaterState, setUpdaterState] = useState<UpdaterState>({ stage: 'idle' });
   const [buildChannel, setBuildChannel] = useState<string | null>(null);
+  const [desktopAppVersion, setDesktopAppVersion] = useState<string | null>(null);
+  const displayVersion = getDisplayVersion({ desktopAppVersion, webVersion: CURRENT_VERSION });
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -47,6 +52,11 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   useEffect(() => {
     if (!isDesktop) return;
     autoUpdateService.getBuildChannel().then(setBuildChannel);
+  }, [isDesktop]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    electronSystemService.getAppVersion().then(setDesktopAppVersion);
   }, [isDesktop]);
 
   useWatchBroadcast('updaterStateChanged', (state: UpdaterState) => {
@@ -133,7 +143,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Flexbox align={'flex-start'} gap={6}>
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
-            <Tag>v{CURRENT_VERSION}</Tag>
+            <Tag>v{displayVersion}</Tag>
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>

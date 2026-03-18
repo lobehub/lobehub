@@ -191,6 +191,11 @@ export default class SystemController extends ControllerModule {
   }
 
   @IpcMethod()
+  getAppVersion(): string {
+    return app.getVersion();
+  }
+
+  @IpcMethod()
   async updateLocale(locale: string) {
     this.app.storeManager.set('locale', locale);
 
