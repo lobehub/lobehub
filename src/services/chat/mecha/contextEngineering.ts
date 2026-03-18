@@ -16,7 +16,7 @@ import type {
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
-import { MessagesEngine } from '@lobechat/context-engine';
+import { MessagesEngine, resolveTopicReferences } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import type {
   OpenAIChatMessage,
@@ -35,6 +35,7 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
@@ -515,6 +516,23 @@ export const contextEngineering = async ({
     log('mentionedAgents injected: %d agents', initialContext!.mentionedAgents!.length);
   }
 
+  // Resolve topic references from messages containing <refer_topic> tags
+  const topicReferences = await resolveTopicReferences(
+    messages,
+    async (topicId: string) => {
+      const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+      return topic ?? null;
+    },
+    async (topicId: string) => {
+      const { messageService } = await import('@/services/message');
+      const msgs = await messageService.getMessages({ topicId });
+      return msgs.map((m) => ({
+        content: typeof m.content === 'string' ? m.content : '',
+        role: m.role,
+      }));
+    },
+  );
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -582,6 +600,7 @@ export const contextEngineering = async ({
     ...((isAgentManagementEnabled || hasMentionedAgents) && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
     ...(gtdConfig && { gtd: gtdConfig }),
+    ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
   });
 
   log('Input messages count: %d', messages.length);

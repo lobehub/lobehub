@@ -41,6 +41,7 @@ import {
   SystemRoleInjector,
   ToolDiscoveryProvider,
   ToolSystemRoleProvider,
+  TopicReferenceContextInjector,
   UserMemoryInjector,
 } from '../../providers';
 import type { ContextProcessor } from '../../types';
@@ -147,6 +148,7 @@ export class MessagesEngine {
       initialContext,
       stepContext,
       pageContentContext,
+      topicReferences,
       enableSystemDate,
       timezone,
     } = this.params;
@@ -315,6 +317,16 @@ export class MessagesEngine {
 
       // 17. GTD Todo injection (conditionally added, at end of last user message)
       ...(isGTDTodoEnabled ? [new GTDTodoInjector({ enabled: true, todos: gtd.todos })] : []),
+
+      // 18. Topic Reference context injection (inject referenced topic summaries to last user message)
+      ...(topicReferences && topicReferences.length > 0
+        ? [
+            new TopicReferenceContextInjector({
+              enabled: true,
+              topicReferences,
+            }),
+          ]
+        : []),
 
       // =============================================
       // Phase 4: Message Transformation

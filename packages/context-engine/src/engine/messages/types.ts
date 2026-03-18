@@ -19,6 +19,7 @@ import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
+import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
 import type { PipelineContextMetadata } from '../../types';
 import type { LobeToolManifest } from '../tools/types';
 
@@ -281,6 +282,10 @@ export interface MessagesEngineParams {
   /** User memory configuration */
   userMemory?: UserMemoryConfig;
 
+  // ========== Topic References ==========
+  /** Topic reference summaries to inject into last user message */
+  topicReferences?: TopicReferenceItem[];
+
   // ========== Page Editor context ==========
   /**
    * Initial context captured at operation start (frontend runtime usage)
@@ -330,5 +335,6 @@ export { type GTDPlan } from '../../providers/GTDPlanInjector';
 export { type GTDTodoItem, type GTDTodoList } from '../../providers/GTDTodoInjector';
 export { type SkillMeta } from '../../providers/SkillContextProvider';
 export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
+export { type TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
 export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';
