@@ -126,7 +126,7 @@ function fieldToFormItem(
     label: t(field.label),
     name: parentKey ? [parentKey, field.key] : field.key,
     rules: field.required ? [{ required: true }] : undefined,
-    tag: t(field.label),
+    tag: field.key,
     valuePropName: field.type === 'boolean' ? 'checked' : undefined,
   };
 }
