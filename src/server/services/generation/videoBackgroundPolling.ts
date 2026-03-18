@@ -33,7 +33,7 @@ export function startBackgroundVideoPolling(
   });
 }
 
-async function processBackgroundPolling(
+export async function processBackgroundPolling(
   db: LobeChatDatabase,
   params: BackgroundPollingParams,
 ): Promise<void> {

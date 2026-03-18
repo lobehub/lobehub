@@ -20,7 +20,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import { startBackgroundVideoPolling } from '@/server/services/video/backgroundPolling';
+import { startBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,

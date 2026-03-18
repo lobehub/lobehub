@@ -15,31 +15,23 @@ export async function createGoogleVideo(
 ): Promise<CreateVideoResponse> {
   try {
     const { model, params } = payload;
-    const { prompt, imageUrl, endImageUrl, aspectRatio, duration } = params;
+    const { prompt, imageUrl, endImageUrl, aspectRatio, duration, resolution } = params;
 
     log('Creating video with Google AI - model: %s, params: %O', model, params);
 
     const config: GenerateVideosConfig = {
-      ...(aspectRatio && { aspectRatio }),
+      ...(aspectRatio && { aspect_ratio: aspectRatio }),
+      ...(duration && { duration_seconds: duration }),
+      ...(endImageUrl && { last_frame: endImageUrl }),
+      ...(resolution && { resolution }),
     };
 
     const requestParams: any = {
       config,
       model,
       prompt,
+      ...(imageUrl && { image: imageUrl }),
     };
-
-    if (imageUrl) {
-      requestParams.image = imageUrl;
-    }
-
-    if (endImageUrl) {
-      requestParams.last_frame = endImageUrl;
-    }
-
-    if (duration) {
-      requestParams.duration = `${duration}s`;
-    }
 
     log('Google video generation request params: %O', requestParams);
 
