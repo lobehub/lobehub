@@ -3,7 +3,7 @@ import type { ModelProviderCard } from '@/types/llm';
 const OpenCodeZen: ModelProviderCard = {
   apiKeyUrl: 'https://opencode.ai/auth',
   chatModels: [],
-  checkModel: 'gpt-5.4-mini',
+  checkModel: 'big-pickle',
   description:
     'OpenCode Zen is a curated list of models tested and verified for coding agents, provided by the OpenCode team.',
   id: 'opencodezen',

@@ -113,42 +113,9 @@ const opencodezenChatModels: AIChatModelCard[] = [
     maxOutput: 128_000,
     pricing: {
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 2.5,
-              '[0.272, infinity]': 5,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 0.25,
-              '[0.272, infinity]': 0.5,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 15,
-              '[0.272, infinity]': 22.5,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -167,30 +134,9 @@ const opencodezenChatModels: AIChatModelCard[] = [
     maxOutput: 128_000,
     pricing: {
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 30,
-              '[0.272, infinity]': 60,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 180,
-              '[0.272, infinity]': 270,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 180, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -650,7 +596,18 @@ const opencodezenChatModels: AIChatModelCard[] = [
           strategy: 'lookup',
           unit: 'millionTokens',
         },
-        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.2]': 0.2,
+              '[0.2, infinity]': 0.4,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     type: 'chat',
