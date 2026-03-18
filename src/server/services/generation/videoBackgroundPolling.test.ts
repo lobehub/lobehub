@@ -5,10 +5,7 @@ import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
-import {
-  processBackgroundPolling,
-  startBackgroundVideoPolling,
-} from '@/server/services/generation/videoBackgroundPolling';
+import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
 import { AsyncTaskError, AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 
@@ -28,19 +25,6 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 }));
 
 describe('videoBackgroundPolling', () => {
-  const mockDb = {} as LobeChatDatabase;
-  const mockParams = {
-    asyncTaskCreatedAt: new Date('2024-01-01T00:00:00Z'),
-    asyncTaskId: 'task-123',
-    generationId: 'gen-456',
-    generationTopicId: 'topic-789',
-    inferenceId: 'inference-abc',
-    model: 'test-model',
-    prechargeResult: { credits: 10 },
-    provider: 'test-provider',
-    userId: 'user-xyz',
-  };
-
   const mockAsyncTaskModel = {
     update: vi.fn(),
   };
@@ -57,6 +41,30 @@ describe('videoBackgroundPolling', () => {
     handlePollVideoStatus: vi.fn(),
   };
 
+  const mockDb = {
+    query: {
+      generationBatches: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'batch-123',
+          prompt: 'test-prompt',
+        }),
+      },
+    },
+  } as any as LobeChatDatabase;
+
+  const mockParams = {
+    asyncTaskCreatedAt: new Date('2024-01-01T00:00:00Z'),
+    asyncTaskId: 'task-123',
+    generationBatchId: 'batch-123',
+    generationId: 'gen-456',
+    generationTopicId: 'topic-789',
+    inferenceId: 'inference-abc',
+    model: 'test-model',
+    prechargeResult: { credits: 10 },
+    provider: 'test-provider',
+    userId: 'user-xyz',
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
@@ -71,31 +79,7 @@ describe('videoBackgroundPolling', () => {
     vi.useRealTimers();
   });
 
-  describe('startBackgroundVideoPolling', () => {
-    it('should start background polling without throwing', () => {
-      const originalRejectionHandler = process.listeners('unhandledRejection');
-      process.removeAllListeners('unhandledRejection');
-
-      expect(() => {
-        startBackgroundVideoPolling(mockDb, mockParams);
-      }).not.toThrow();
-
-      originalRejectionHandler.forEach((handler) => {
-        process.on('unhandledRejection', handler);
-      });
-    });
-
-    it('should catch and log unhandled errors', async () => {
-      const mockError = new Error('Test error');
-      vi.mocked(initModelRuntimeFromDB).mockRejectedValue(mockError);
-
-      startBackgroundVideoPolling(mockDb, mockParams);
-
-      await vi.advanceTimersByTimeAsync(100);
-    });
-  });
-
-  describe('processBackgroundPolling - success path', () => {
+  describe('processBackgroundVideoPolling - success path', () => {
     it('should complete video generation successfully', async () => {
       mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
         status: 'success',
@@ -115,7 +99,7 @@ describe('videoBackgroundPolling', () => {
         width: 1920,
       });
 
-      await processBackgroundPolling(mockDb, mockParams);
+      await processBackgroundVideoPolling(mockDb, mockParams);
 
       expect(mockModelRuntime.handlePollVideoStatus).toHaveBeenCalledWith('inference-abc');
 
@@ -127,16 +111,20 @@ describe('videoBackgroundPolling', () => {
       expect(mockGenerationModel.createAssetAndFile).toHaveBeenCalledWith(
         'gen-456',
         expect.objectContaining({
+          coverUrl: 'cover-key-123',
+          duration: 10,
+          height: 1080,
+          originalUrl: 'https://example.com/video.mp4',
+          thumbnailUrl: 'thumb-key-456',
           type: 'video',
           url: 'video-key-789',
-          coverUrl: 'cover-key-123',
-          thumbnailUrl: 'thumb-key-456',
-          duration: 10,
           width: 1920,
-          height: 1080,
         }),
         expect.objectContaining({
-          name: expect.stringContaining('topic-789'),
+          fileHash: 'hash-abc',
+          fileType: 'video/mp4',
+          name: 'test-prompt-gen-456.mp4',
+          size: 1024,
           url: 'video-key-789',
         }),
         FileSource.VideoGeneration,
@@ -149,7 +137,7 @@ describe('videoBackgroundPolling', () => {
     });
   });
 
-  describe('processBackgroundPolling - polling behavior', () => {
+  describe('processBackgroundVideoPolling - polling behavior', () => {
     it('should retry polling multiple times until success', async () => {
       mockModelRuntime.handlePollVideoStatus
         .mockResolvedValueOnce({ status: 'processing' })
@@ -171,7 +159,7 @@ describe('videoBackgroundPolling', () => {
         width: 1920,
       });
 
-      const pollPromise = processBackgroundPolling(mockDb, mockParams);
+      const pollPromise = processBackgroundVideoPolling(mockDb, mockParams);
 
       await vi.advanceTimersByTimeAsync(10000);
 
@@ -181,14 +169,14 @@ describe('videoBackgroundPolling', () => {
     });
   });
 
-  describe('processBackgroundPolling - error handling', () => {
+  describe('processBackgroundVideoPolling - error handling', () => {
     it('should handle polling failure with error message', async () => {
       mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
         status: 'failed',
         error: 'Model API error',
       });
 
-      await processBackgroundPolling(mockDb, mockParams);
+      await processBackgroundVideoPolling(mockDb, mockParams);
 
       expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
         error: expect.any(AsyncTaskError),
@@ -203,7 +191,7 @@ describe('videoBackgroundPolling', () => {
     it('should handle model runtime initialization error', async () => {
       vi.mocked(initModelRuntimeFromDB).mockRejectedValue(new Error('Runtime init failed'));
 
-      await processBackgroundPolling(mockDb, mockParams);
+      await processBackgroundVideoPolling(mockDb, mockParams);
 
       expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
         error: expect.any(AsyncTaskError),
@@ -221,7 +209,7 @@ describe('videoBackgroundPolling', () => {
         new Error('Video processing failed'),
       );
 
-      await processBackgroundPolling(mockDb, mockParams);
+      await processBackgroundVideoPolling(mockDb, mockParams);
 
       expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
         error: expect.any(AsyncTaskError),
@@ -249,7 +237,7 @@ describe('videoBackgroundPolling', () => {
 
       mockGenerationModel.createAssetAndFile.mockRejectedValue(new Error('DB error'));
 
-      await processBackgroundPolling(mockDb, mockParams);
+      await processBackgroundVideoPolling(mockDb, mockParams);
 
       expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
         error: expect.any(AsyncTaskError),
@@ -282,7 +270,7 @@ describe('videoBackgroundPolling', () => {
 
       mockGenerationModel.createAssetAndFile.mockResolvedValue(undefined);
 
-      const pollPromise = processBackgroundPolling(mockDb, mockParams);
+      const pollPromise = processBackgroundVideoPolling(mockDb, mockParams);
       await vi.advanceTimersByTimeAsync(10000);
       await pollPromise;
 
@@ -320,7 +308,7 @@ describe('videoBackgroundPolling', () => {
 
       vi.setSystemTime(endTime);
 
-      await processBackgroundPolling(mockDb, { ...mockParams, asyncTaskCreatedAt: startTime });
+      await processBackgroundVideoPolling(mockDb, { ...mockParams, asyncTaskCreatedAt: startTime });
 
       expect(mockAsyncTaskModel.update).toHaveBeenCalledWith(
         'task-123',

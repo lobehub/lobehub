@@ -1203,7 +1203,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Vidu 2 is a video generation foundation model designed to balance speed and quality. It focuses on image-to-video generation and start–end frame control, supporting 4-second videos at 720P resolution. The generation speed is significantly improved while costs are substantially reduced. Image-to-video generation fixes previous color shift issues, delivering stable and controllable visuals suitable for e-commerce and similar applications. In addition, semantic understanding of start and end frames and consistency across multiple reference images have been enhanced, making it an efficient tool for large-scale content production in general entertainment, internet media, animated short dramas, and advertising.',
-    displayName: 'Vidu2-Reference',
+    displayName: 'Vidu 2 Reference',
     enabled: true,
     id: 'vidu2-reference',
     parameters: {
@@ -1235,7 +1235,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Vidu 2 is a video generation foundation model designed to balance speed and quality. It focuses on image-to-video generation and start–end frame control, supporting 4-second videos at 720P resolution. The generation speed is significantly improved while costs are substantially reduced. Image-to-video generation fixes previous color shift issues, delivering stable and controllable visuals suitable for e-commerce and similar applications. In addition, semantic understanding of start and end frames and consistency across multiple reference images have been enhanced, making it an efficient tool for large-scale content production in general entertainment, internet media, animated short dramas, and advertising.',
-    displayName: 'Vidu2-Start-End',
+    displayName: 'Vidu 2 Start End',
     enabled: true,
     id: 'vidu2-start-end',
     parameters: {
@@ -1263,7 +1263,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Vidu Q1 is Vidu’s next-generation video generation foundation model, focused on high-quality video creation. It produces content with fixed specifications of 5 seconds, 24 FPS, and 1080P resolution. Through deep optimization of visual clarity, the overall image quality and texture are significantly improved, while issues such as hand deformation and frame jitter are greatly reduced. The realistic style closely approaches real-world scenes, and 2D animation styles are preserved with high fidelity. Transitions between start and end frames are smoother, making it well suited for high-demand creative scenarios such as film production, advertising, and animated short dramas.',
-    displayName: 'ViduQ1-Start-End',
+    displayName: 'Vidu Q1 Start End',
     id: 'viduq1-start-end',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -1290,7 +1290,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Vidu 2 is a video generation foundation model designed to balance speed and quality. It focuses on image-to-video generation and start–end frame control, supporting 4-second videos at 720P resolution. The generation speed is significantly improved while costs are substantially reduced. Image-to-video generation fixes previous color shift issues, delivering stable and controllable visuals suitable for e-commerce and similar applications. In addition, semantic understanding of start and end frames and consistency across multiple reference images have been enhanced, making it an efficient tool for large-scale content production in general entertainment, internet media, animated short dramas, and advertising.',
-    displayName: 'Vidu2-Image',
+    displayName: 'Vidu 2 Image',
     enabled: true,
     id: 'vidu2-image',
     parameters: {
@@ -1319,7 +1319,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Vidu Q1 is Vidu’s next-generation video generation foundation model, focused on high-quality video creation. It produces content with fixed specifications of 5 seconds, 24 FPS, and 1080P resolution. Through deep optimization of visual clarity, the overall image quality and texture are significantly improved, while issues such as hand deformation and frame jitter are greatly reduced. The realistic style closely approaches real-world scenes, and 2D animation styles are preserved with high fidelity. Transitions between start and end frames are smoother, making it well suited for high-demand creative scenarios such as film production, advertising, and animated short dramas.',
-    displayName: 'ViduQ1-Image',
+    displayName: 'Vidu Q1 Image',
     id: 'viduq1-image',
     parameters: {
       aspectRatio: {
@@ -1347,7 +1347,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Vidu Q1 is Vidu’s next-generation video generation foundation model, focused on high-quality video creation. It produces content with fixed specifications of 5 seconds, 24 FPS, and 1080P resolution. Through deep optimization of visual clarity, the overall image quality and texture are significantly improved, while issues such as hand deformation and frame jitter are greatly reduced. The realistic style closely approaches real-world scenes, and 2D animation styles are preserved with high fidelity. Transitions between start and end frames are smoother, making it well suited for high-demand creative scenarios such as film production, advertising, and animated short dramas.',
-    displayName: 'ViduQ1-Text',
+    displayName: 'Vidu Q1 Text',
     enabled: true,
     id: 'viduq1-text',
     parameters: {
@@ -1373,7 +1373,6 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     description:
       'CogVideoX-3 adds a start-and-end frame generation feature, significantly improving visual stability and clarity. It enables smooth and natural large-scale subject motion, offers better instruction adherence and more realistic physical simulation, and further enhances performance in high-definition realistic and 3D-style scenes.',
     displayName: 'CogVideoX-3',
-    enabled: true,
     id: 'cogvideox-3',
     parameters: {
       duration: { default: 5, enum: [5, 10] },

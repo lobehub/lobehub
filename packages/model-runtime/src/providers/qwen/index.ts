@@ -87,7 +87,12 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
   createVideo: createQwenVideo,
   handlePollVideoStatus: async (inferenceId, options) => {
     const { pollQwenVideoStatus } = await import('./createVideo');
-    return pollQwenVideoStatus(inferenceId, options.apiKey || '', options.baseURL || '');
+    const baseURL = options.baseURL || '';
+
+    const suffixIndex = baseURL.indexOf('/compatible-mode/v1');
+    const dashscopeURL = suffixIndex > -1 ? baseURL.slice(0, suffixIndex) : baseURL;
+
+    return pollQwenVideoStatus(inferenceId, options.apiKey || '', dashscopeURL);
   },
   models: async ({ client }) => {
     const modelsPage = (await client.models.list()) as any;

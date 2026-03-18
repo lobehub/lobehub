@@ -15,6 +15,7 @@ const log = debug('lobe-video:background-polling');
 interface BackgroundPollingParams {
   asyncTaskCreatedAt: Date;
   asyncTaskId: string;
+  generationBatchId: string;
   generationId: string;
   generationTopicId: string;
   inferenceId: string;
@@ -24,22 +25,14 @@ interface BackgroundPollingParams {
   userId: string;
 }
 
-export function startBackgroundVideoPolling(
-  db: LobeChatDatabase,
-  params: BackgroundPollingParams,
-): void {
-  processBackgroundPolling(db, params).catch((error) => {
-    log('Unhandled error in background video polling: %O', error);
-  });
-}
-
-export async function processBackgroundPolling(
+export async function processBackgroundVideoPolling(
   db: LobeChatDatabase,
   params: BackgroundPollingParams,
 ): Promise<void> {
   const {
     asyncTaskCreatedAt,
     asyncTaskId,
+    generationBatchId,
     generationId,
     generationTopicId,
     inferenceId,
@@ -85,21 +78,27 @@ export async function processBackgroundPolling(
       width: processResult.width,
     };
 
+    const batch = await db.query.generationBatches.findFirst({
+      where: (batches, { eq }) => eq(batches.id, generationBatchId),
+    });
+
     await generationModel.createAssetAndFile(
       generationId,
       asset,
       {
         fileHash: processResult.fileHash,
         fileType: processResult.mimeType,
-        name: `${sanitizeFileName(generationTopicId, generationId)}.mp4`,
+        name: `${sanitizeFileName(batch?.prompt ?? '', generationId)}.mp4`,
         size: processResult.fileSize,
         url: processResult.videoKey,
       },
       FileSource.VideoGeneration,
     );
 
+    const duration = Date.now() - asyncTaskCreatedAt.getTime();
+
     await asyncTaskModel.update(asyncTaskId, {
-      duration: Date.now() - asyncTaskCreatedAt.getTime(),
+      duration,
       status: AsyncTaskStatus.Success,
     });
 

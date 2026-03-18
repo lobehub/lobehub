@@ -3630,7 +3630,6 @@ const qwenVideoModels: AIVideoModelCard[] = [
   {
     description: 'Wanxiang 2.2 Speed Edition',
     displayName: 'Wan2.2 KF2V Flash',
-    enabled: true,
     id: 'wan2.2-kf2v-flash',
     parameters: {
       duration: { default: 5, enum: [5] },
@@ -3656,7 +3655,6 @@ const qwenVideoModels: AIVideoModelCard[] = [
   {
     description: 'Wanxiang 2.2 Plus Edition',
     displayName: 'Wan2.2 KF2V Plus',
-    enabled: true,
     id: 'wan2.2-kf2v-plus',
     parameters: {
       duration: { default: 5, enum: [5] },

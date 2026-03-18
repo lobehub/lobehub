@@ -1117,7 +1117,6 @@ const googleVideoModels: AIVideoModelCard[] = [
     description:
       'Our state-of-the-art video generation model, available to developers on the paid tier of the Gemini API.',
     displayName: 'Veo 2.0 Generate 001',
-    enabled: true,
     id: 'veo-2.0-generate-001',
     parameters: {
       aspectRatio: {

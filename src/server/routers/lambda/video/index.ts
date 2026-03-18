@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import { after } from 'next/server';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
@@ -15,12 +16,13 @@ import {
   type NewGeneration,
   type NewGenerationBatch,
 } from '@/database/schemas';
+import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import { startBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
+import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -220,25 +222,41 @@ export const videoRouter = router({
 
       // Check if provider uses polling (returns only inferenceId, no videoUrl)
       if (response && !('videoUrl' in response)) {
-        log('Polling-based provider detected (inferenceId only), starting background polling');
+        log(
+          'Polling-based provider detected (inferenceId only), using after() for background polling',
+        );
 
         await asyncTaskModel.update(asyncTaskId, {
           inferenceId: response.inferenceId,
           status: AsyncTaskStatus.Processing,
         });
 
-        // Start background polling for polling-based providers
-        startBackgroundVideoPolling(serverDB, {
-          asyncTaskCreatedAt,
-          asyncTaskId,
-          generationId: createdGeneration.id,
-          generationTopicId,
-          inferenceId: response.inferenceId,
-          model,
-          prechargeResult,
-          provider,
-          userId,
+        after(async () => {
+          log('After() hook executing background video polling for task: %s', asyncTaskId);
+
+          try {
+            const db = await getServerDB();
+
+            await processBackgroundVideoPolling(db, {
+              asyncTaskCreatedAt,
+              asyncTaskId,
+              generationBatchId: createdBatch.id,
+              generationId: createdGeneration.id,
+              generationTopicId,
+              inferenceId: response.inferenceId,
+              model,
+              prechargeResult,
+              provider,
+              userId,
+            });
+
+            log('Background video polling completed for task: %s', asyncTaskId);
+          } catch (error) {
+            console.error('[video] Background polling failed:', error);
+          }
         });
+
+        log('After() hook registered for background video polling: %s', asyncTaskId);
       } else {
         // Webhook-based provider: update status to Processing and wait for callback
         log('Webhook-based provider detected, waiting for callback');

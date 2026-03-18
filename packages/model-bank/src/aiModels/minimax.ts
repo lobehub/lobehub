@@ -279,7 +279,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Brand-new video generation model with comprehensive upgrades in body motion, physical realism, and instruction following.',
-    displayName: 'MiniMax-Hailuo-2.3-Fast',
+    displayName: 'MiniMax Hailuo 2.3 Fast',
     enabled: true,
     id: 'MiniMax-Hailuo-2.3-Fast',
     parameters: {
@@ -303,7 +303,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Brand-new video generation model with comprehensive upgrades in body motion, physical realism, and instruction following.',
-    displayName: 'MiniMax-Hailuo-2.3',
+    displayName: 'MiniMax Hailuo 2.3',
     enabled: true,
     id: 'MiniMax-Hailuo-2.3',
     parameters: {
@@ -327,7 +327,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   {
     description:
       'The next-generation video generation model, MiniMax Hailuo 02, has been officially released, supporting 1080P resolution and 10-second video generation.',
-    displayName: 'MiniMax-Hailuo-02',
+    displayName: 'MiniMax Hailuo 02',
     enabled: true,
     id: 'MiniMax-Hailuo-02',
     parameters: {
@@ -354,7 +354,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   {
     description:
       'A director-level video generation model has been officially released, offering improved adherence to camera movement instructions and cinematic shot storytelling language.',
-    displayName: 'I2V-01-Director',
+    displayName: 'I2V 01 Director',
     id: 'I2V-01-Director',
     parameters: {
       duration: { default: 6, enum: [6] },
@@ -373,7 +373,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   {
     description:
       'A director-level video generation model has been officially released, offering improved adherence to camera movement instructions and cinematic shot storytelling language.',
-    displayName: 'T2V-01-Director',
+    displayName: 'T2V 01 Director',
     id: 'T2V-01-Director',
     parameters: {
       duration: { default: 6, enum: [6] },
@@ -388,7 +388,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   },
   {
     description: 'Enhanced character performance: more stable, smoother, and more vivid.',
-    displayName: 'I2V-01-live',
+    displayName: 'I2V 01 Live',
     id: 'I2V-01-live',
     parameters: {
       duration: { default: 6, enum: [6] },
@@ -406,7 +406,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   },
   {
     description: 'The foundational image-to-video model of the 01 series.',
-    displayName: 'I2V-01',
+    displayName: 'I2V 01',
     id: 'I2V-01',
     parameters: {
       duration: { default: 6, enum: [6] },
@@ -424,7 +424,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   },
   {
     description: 'The foundational text-to-video model of the 01 series.',
-    displayName: 'T2V-01',
+    displayName: 'T2V 01',
     id: 'T2V-01',
     parameters: {
       duration: { default: 6, enum: [6] },
