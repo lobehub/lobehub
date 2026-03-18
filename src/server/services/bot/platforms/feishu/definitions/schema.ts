@@ -5,8 +5,20 @@ export const sharedSchema: FieldSchema[] = [
     key: 'credentials',
     label: 'channel.credentials',
     properties: [
-      { key: 'appId', label: 'channel.appId', required: true, type: 'string' },
-      { key: 'appSecret', label: 'channel.appSecret', required: true, type: 'password' },
+      {
+        key: 'appId',
+        description: 'channel.appIdHint',
+        label: 'channel.appId',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'appSecret',
+        description: 'channel.appSecretHint',
+        label: 'channel.appSecret',
+        required: true,
+        type: 'password',
+      },
       {
         key: 'verificationToken',
         description: 'channel.verificationTokenHint',
@@ -31,6 +43,7 @@ export const sharedSchema: FieldSchema[] = [
       {
         key: 'charLimit',
         default: 4000,
+        description: 'channel.charLimitHint',
         label: 'channel.charLimit',
         minimum: 100,
         type: 'number',
@@ -38,7 +51,7 @@ export const sharedSchema: FieldSchema[] = [
       {
         key: 'debounceMs',
         default: 2000,
-        description: 'channel.debounceMsDesc',
+        description: 'channel.debounceMsHint',
         label: 'channel.debounceMs',
         minimum: 0,
         type: 'number',
@@ -47,7 +60,13 @@ export const sharedSchema: FieldSchema[] = [
         key: 'dm',
         label: 'channel.dm',
         properties: [
-          { key: 'enabled', default: true, label: 'channel.dmEnabled', type: 'boolean' },
+          {
+            key: 'enabled',
+            default: true,
+            description: 'channel.dmEnabledHint',
+            label: 'channel.dmEnabled',
+            type: 'boolean',
+          },
           {
             key: 'policy',
             default: 'open',
@@ -57,6 +76,7 @@ export const sharedSchema: FieldSchema[] = [
               'channel.dmPolicyAllowlist',
               'channel.dmPolicyDisabled',
             ],
+            description: 'channel.dmPolicyHint',
             label: 'channel.dmPolicy',
             type: 'string',
             visibleWhen: { field: 'enabled', value: true },

@@ -5,9 +5,27 @@ export const schema: FieldSchema[] = [
     key: 'credentials',
     label: 'channel.credentials',
     properties: [
-      { key: 'applicationId', label: 'channel.applicationId', required: true, type: 'string' },
-      { key: 'publicKey', label: 'channel.publicKey', required: true, type: 'string' },
-      { key: 'botToken', label: 'channel.botToken', required: true, type: 'password' },
+      {
+        key: 'applicationId',
+        description: 'channel.applicationIdHint',
+        label: 'channel.applicationId',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'publicKey',
+        description: 'channel.publicKeyHint',
+        label: 'channel.publicKey',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'botToken',
+        description: 'channel.botTokenEncryptedHint',
+        label: 'channel.botToken',
+        required: true,
+        type: 'password',
+      },
     ],
     type: 'object',
   },
@@ -18,6 +36,7 @@ export const schema: FieldSchema[] = [
       {
         key: 'charLimit',
         default: 2000,
+        description: 'channel.charLimitHint',
         label: 'channel.charLimit',
         minimum: 100,
         type: 'number',
@@ -25,7 +44,7 @@ export const schema: FieldSchema[] = [
       {
         key: 'debounceMs',
         default: 2000,
-        description: 'channel.debounceMsDesc',
+        description: 'channel.debounceMsHint',
         label: 'channel.debounceMs',
         minimum: 0,
         type: 'number',
@@ -33,7 +52,7 @@ export const schema: FieldSchema[] = [
       {
         key: 'showUsageStats',
         default: false,
-        description: 'channel.showUsageStatsDesc',
+        description: 'channel.showUsageStatsHint',
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
@@ -41,7 +60,13 @@ export const schema: FieldSchema[] = [
         key: 'dm',
         label: 'channel.dm',
         properties: [
-          { key: 'enabled', default: false, label: 'channel.dmEnabled', type: 'boolean' },
+          {
+            key: 'enabled',
+            default: false,
+            description: 'channel.dmEnabledHint',
+            label: 'channel.dmEnabled',
+            type: 'boolean',
+          },
           {
             key: 'policy',
             default: 'disabled',
@@ -51,6 +76,7 @@ export const schema: FieldSchema[] = [
               'channel.dmPolicyAllowlist',
               'channel.dmPolicyDisabled',
             ],
+            description: 'channel.dmPolicyHint',
             label: 'channel.dmPolicy',
             type: 'string',
             visibleWhen: { field: 'enabled', value: true },
