@@ -1,49 +1,26 @@
-import { ReactMentionPlugin, ReactTablePlugin } from '@lobehub/editor';
-import { Editor, useEditor } from '@lobehub/editor/react';
-import { memo, useEffect, useMemo } from 'react';
+import { LexicalRenderer } from '@lobehub/editor/renderer';
+import type { SerializedEditorState } from 'lexical';
+import { memo, useMemo } from 'react';
 
-import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
+import { ActionTagNode } from '@/features/ChatInput/InputEditor/ActionTag/ActionTagNode';
+import { ReferTopicNode } from '@/features/ChatInput/InputEditor/ReferTopic/ReferTopicNode';
 
 interface RichTextMessageProps {
   editorState: unknown;
 }
 
-const EDITOR_PLUGINS = [...createChatInputRichPlugins(), ReactTablePlugin, ReactMentionPlugin];
+const EXTRA_NODES = [ActionTagNode, ReferTopicNode];
 
 const RichTextMessage = memo<RichTextMessageProps>(({ editorState }) => {
-  const editor = useEditor();
-
-  const content = useMemo(() => {
+  const value = useMemo(() => {
     if (!editorState || typeof editorState !== 'object') return null;
     if (Object.keys(editorState as Record<string, unknown>).length === 0) return null;
-
-    try {
-      return JSON.stringify(editorState);
-    } catch {
-      return null;
-    }
+    return editorState as SerializedEditorState;
   }, [editorState]);
 
-  useEffect(() => {
-    if (editor && content) {
-      editor.setDocument('json', content);
-    }
-  }, [editor, content]);
+  if (!value) return null;
 
-  if (!content) return null;
-
-  return (
-    <Editor
-      content={content}
-      editable={false}
-      editor={editor}
-      enablePasteMarkdown={false}
-      markdownOption={false}
-      plugins={EDITOR_PLUGINS}
-      type={'json'}
-      variant={'chat'}
-    />
-  );
+  return <LexicalRenderer extraNodes={EXTRA_NODES} value={value} variant="chat" />;
 });
 
 RichTextMessage.displayName = 'RichTextMessage';
