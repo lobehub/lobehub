@@ -6,10 +6,8 @@ import { memo, useState } from 'react';
 
 import UploadCard, { UPLOAD_CARD_SIZE, type UploadData } from './UploadCard';
 
-const STACK_OFFSET = -(UPLOAD_CARD_SIZE - 14);
+const STACK_OFFSET = -(UPLOAD_CARD_SIZE - 8);
 const EXPAND_OFFSET = 4;
-
-const ROTATIONS = [-7, 4, -3, 6, -5];
 
 const styles = createStaticStyles(({ css }) => ({
   addCirclePos: css`
@@ -23,8 +21,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 4px;
     padding-inline: 0;
 
-    &:hover .inline-ref-close {
-      opacity: 1;
+    &:hover {
+      .inline-ref-close {
+        opacity: 1;
+      }
     }
   `,
 }));
@@ -62,9 +62,6 @@ const InlineImageReference = memo<InlineImageReferenceProps>(
             maxFileSize={maxFileSize}
             style={{
               marginInlineStart: index > 0 ? (shouldCollapse ? STACK_OFFSET : EXPAND_OFFSET) : 0,
-              transform: shouldCollapse
-                ? `rotate(${ROTATIONS[index % ROTATIONS.length]}deg)`
-                : undefined,
               zIndex: index + 1,
             }}
             onRemove={() => onRemove(url)}

@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Block } from '@lobehub/ui';
 import { Spin } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Plus, X } from 'lucide-react';
 import type { ChangeEvent, CSSProperties } from 'react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -45,31 +45,12 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
     }
   `,
   closeButton: css`
-    cursor: pointer;
-
     position: absolute;
     z-index: 10;
     inset-block-start: -6px;
     inset-inline-end: -6px;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-
-    color: ${cssVar.colorTextLightSolid};
-
-    opacity: 0;
-    background: ${cssVar.colorBgMask};
-
-    transition: opacity ${cssVar.motionDurationMid} ease;
-
-    &:hover {
-      background: ${cssVar.colorError};
-    }
+    border-radius: 50% !important;
   `,
   filledCard: css`
     cursor: pointer;
@@ -80,20 +61,21 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
 
     width: ${UPLOAD_CARD_SIZE}px;
     height: ${UPLOAD_CARD_SIZE}px;
-    border: 3px solid ${cssVar.colorBgElevated};
+    padding: 2px;
     border-radius: 6px;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
 
     transition: all ${cssVar.motionDurationMid} ease;
 
-    &:hover {
-      z-index: 99 !important;
+    .upload-card-close {
+      opacity: 0 !important;
     }
 
-    &:hover .upload-card-close {
-      opacity: 1;
+    &:hover {
+      z-index: 99 !important;
+
+      .upload-card-close {
+        opacity: 1 !important;
+      }
     }
   `,
   filledCardInner: css`
@@ -117,21 +99,9 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
 
     width: ${UPLOAD_CARD_SIZE}px;
     height: ${UPLOAD_CARD_SIZE}px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: 6px;
 
     color: ${cssVar.colorTextQuaternary};
-
-    background: ${cssVar.colorFillQuaternary};
-    box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
-
-    transition: all ${cssVar.motionDurationMid} ease;
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-      color: ${cssVar.colorPrimary};
-      background: ${cssVar.colorPrimaryBg};
-    }
   `,
   uploadOverlay: css`
     position: absolute;
@@ -248,9 +218,11 @@ const UploadCard = memo<UploadCardProps>(
       return (
         <>
           {fileInput}
-          <div
-            className={`${uploadCardStyles.filledCard} ${className || ''}`}
+          <Block
+            clickable
+            className={cx(uploadCardStyles.filledCard, className)}
             style={style}
+            variant={'outlined'}
             onClick={handleFileSelect}
           >
             <div className={uploadCardStyles.filledCardInner}>
@@ -263,22 +235,24 @@ const UploadCard = memo<UploadCardProps>(
               />
               {isUploading && (
                 <div className={uploadCardStyles.uploadOverlay}>
-                  <Spin size="small" />
+                  <Spin percent={'auto'} size="small" />
                 </div>
               )}
             </div>
             {!isUploading && (
-              <div
-                className={`${uploadCardStyles.closeButton} ${closeClassName || ''} upload-card-close`}
+              <ActionIcon
+                glass
+                className={cx(uploadCardStyles.closeButton, closeClassName, 'upload-card-close')}
+                icon={X}
+                size={12}
+                variant="outlined"
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove();
                 }}
-              >
-                <X size={12} />
-              </div>
+              />
             )}
-          </div>
+          </Block>
         </>
       );
     }
@@ -286,16 +260,19 @@ const UploadCard = memo<UploadCardProps>(
     return (
       <>
         {fileInput}
-        <Flexbox
+        <Block
+          clickable
           align={'center'}
-          className={`${uploadCardStyles.placeholderCard} ${className || ''}`}
+          className={cx(uploadCardStyles.placeholderCard, className)}
+          gap={4}
           justify={'center'}
           style={style}
+          variant={'filled'}
           onClick={handleFileSelect}
         >
           <Plus size={20} />
           {label && <span className={uploadCardStyles.label}>{label}</span>}
-        </Flexbox>
+        </Block>
       </>
     );
   },

@@ -32,7 +32,7 @@ const CreateGenerationPage = memo<CreateGenerationPageProps>(({ path, Workspace,
             <Workspace embedInput={false} />
           </WideScreenContainer>
         </Flexbox>
-        <WideScreenContainer style={{ paddingBlockEnd: 12 }}>
+        <WideScreenContainer style={{ paddingBlockEnd: 12, marginTop: -8 }}>
           <PromptInput disableAnimation showTitle={false} />
         </WideScreenContainer>
       </Flexbox>

@@ -140,7 +140,6 @@ const ImageNum = memo<ImageNumSelectorProps>(
             }}
           />
           <ActionIcon
-            color="success"
             disabled={!isValidInput}
             icon={Check}
             size="small"

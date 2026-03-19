@@ -1,9 +1,8 @@
 'use client';
 
-import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Button, Flexbox, TextArea } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { Sparkles } from 'lucide-react';
+import { ChatInput, ChatInputActionBar, SendButton } from '@lobehub/editor/react';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -27,18 +26,6 @@ interface GenerationPromptInputProps {
 }
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    box-shadow:
-      ${cssVar.boxShadowTertiary},
-      0 0 0 ${cssVar.colorBgContainer},
-      0 32px 0 ${cssVar.colorBgContainer};
-  `,
-  container_dark: css`
-    box-shadow:
-      ${cssVar.boxShadowTertiary},
-      0 0 48px 32px ${cssVar.colorBgContainer},
-      0 32px 0 ${cssVar.colorBgContainer};
-  `,
   textarea: css`
     padding: 0;
     border-radius: 0;
@@ -87,7 +74,7 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
 
     return (
       <ChatInput
-        className={cx(styles.container, isDarkMode && styles.container_dark, className)}
+        className={className}
         header={header}
         styles={{ body: { padding: 8 } }}
         footer={
@@ -96,19 +83,10 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
             right={
               <Flexbox horizontal align={'center'} gap={8}>
                 {rightActions}
-                <Button
+                <SendButton
                   disabled={disableGenerate || !value}
-                  icon={Sparkles}
                   loading={isCreating}
-                  size={'large'}
                   title={isCreating ? generatingLabel : generateLabel}
-                  type={'primary'}
-                  style={{
-                    fontWeight: 500,
-                    height: 48,
-                    minWidth: 48,
-                    width: 48,
-                  }}
                   onClick={onGenerate}
                 />
               </Flexbox>

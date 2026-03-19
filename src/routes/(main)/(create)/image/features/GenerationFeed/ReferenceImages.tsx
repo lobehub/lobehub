@@ -1,71 +1,45 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Image } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import { QuoteIcon } from 'lucide-react';
 import { memo } from 'react';
-
-import ImageItem from '@/components/ImageItem';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    gap: 8px;
-    margin-block-end: 12px;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    margin-inline-start: -16px;
   `,
   image: css`
-    overflow: hidden;
-    flex-shrink: 0;
+    padding: 2px;
+    box-shadow: ${cssVar.boxShadowTertiary};
 
-    width: 60px;
-    height: 60px;
-    border-radius: ${cssVar.borderRadius}px;
-  `,
-  imageSingle: css`
-    position: relative;
-    transform: rotate(-3deg);
-
-    flex-shrink: 0;
-
-    width: 64px;
-    height: 64px;
-
-    transition: transform 0.2s ease;
-
-    &::before {
-      content: '';
-
-      position: absolute;
-      z-index: -1;
-      inset: -4px;
-
-      border: 1px solid ${cssVar.colorBorder};
-      border-radius: ${cssVar.borderRadius}px;
-
-      background: ${cssVar.colorBgContainer};
-      box-shadow: 0 2px 8px ${cssVar.colorBgMask};
-    }
-
-    &:hover {
-      transform: rotate(-1deg) scale(1.05);
+    img {
+      border-radius: 6px;
     }
   `,
-  imageSingleInner: css`
-    overflow: hidden;
+  icon: css`
+    pointer-events: none;
 
-    width: 100%;
-    height: 100%;
-    border-radius: ${cssVar.borderRadiusSM}px;
+    z-index: 10;
 
-    background: ${cssVar.colorBgLayout};
+    border-radius: 50% !important;
+
+    color: ${cssVar.colorBgLayout};
+
+    background: ${cssVar.colorFill};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
 interface ReferenceImagesProps {
   imageUrl?: string | null;
   imageUrls?: string[];
-  layout?: 'single' | 'multiple';
 }
 
-export const ReferenceImages = memo<ReferenceImagesProps>(({ imageUrl, imageUrls, layout }) => {
+export const ReferenceImages = memo<ReferenceImagesProps>(({ imageUrl, imageUrls }) => {
   // Collect all images
   const allImages: string[] = [];
   if (imageUrl) {
@@ -80,40 +54,31 @@ export const ReferenceImages = memo<ReferenceImagesProps>(({ imageUrl, imageUrls
     return null;
   }
 
-  // Single image layout (no label, with frame effect)
-  if (layout === 'single' && allImages.length === 1) {
-    return (
-      <div className={styles.imageSingle}>
-        <div className={styles.imageSingleInner}>
-          <ImageItem
-            alt="Reference image"
-            style={{ height: '100%', width: '100%' }}
-            url={allImages[0]}
-            preview={{
-              src: allImages[0],
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // Multiple images layout
   return (
-    <Flexbox horizontal className={styles.container} wrap="wrap">
-      {allImages.map((url, index) => (
-        <div className={styles.image} key={`${url}-${index}`}>
-          <ImageItem
-            alt={`Reference image ${index + 1}`}
-            style={{ height: '100%', width: '100%' }}
-            url={url}
-            preview={{
-              src: url,
-            }}
-          />
-        </div>
-      ))}
-    </Flexbox>
+    <Image.PreviewGroup>
+      <Flexbox horizontal align={'flex-end'} flex={'none'} wrap="wrap">
+        <ActionIcon
+          glass
+          className={styles.icon}
+          icon={QuoteIcon}
+          size={'small'}
+          variant={'filled'}
+        />
+        {allImages.map((url, index) => (
+          <div className={styles.container} key={`${url}-${index}`}>
+            <Image
+              alt={`Reference image ${index + 1}`}
+              className={styles.image}
+              height={'100%'}
+              src={url}
+              style={{ height: '100%', width: '100%' }}
+              variant={'outlined'}
+              width={'100%'}
+            />
+          </div>
+        ))}
+      </Flexbox>
+    </Image.PreviewGroup>
   );
 });
 

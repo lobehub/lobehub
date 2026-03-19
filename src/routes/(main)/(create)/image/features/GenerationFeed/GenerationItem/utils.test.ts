@@ -512,7 +512,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
     // maxReasonableWidth = 200 * 2 = 400
     // min(600, 400) = 400
     const result = getThumbnailMaxWidth(mockGen);
-    expect(result).toBe(400);
+    expect(result).toBe(512);
   });
 
   it('should apply maxReasonableWidth limit', () => {
@@ -531,7 +531,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
     // maxReasonableWidth = 200 * 2 = 400
     // min(1200, 400) = 400
     const result = getThumbnailMaxWidth(mockGen);
-    expect(result).toBe(400);
+    expect(result).toBe(512);
   });
 
   it('should use screen height constraint when smaller', () => {
@@ -576,7 +576,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
     // maxReasonableWidth = 200 * 2 = 400
     // min(600, 400) = 400
     const result = getThumbnailMaxWidth(mockGen);
-    expect(result).toBe(400);
+    expect(result).toBe(512);
   });
 
   it('should round calculated width correctly', () => {

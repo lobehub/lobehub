@@ -73,7 +73,7 @@ export const ErrorState = memo<ErrorStateProps>(
       >
         <Center gap={8}>
           <Icon color={cssVar.colorTextDescription} icon={ImageOffIcon} size={24} />
-          <Text strong type={'secondary'}>
+          <Text strong align={'center'} type={'secondary'}>
             {t('generation.status.failed')}
           </Text>
           {generation.task.error && (

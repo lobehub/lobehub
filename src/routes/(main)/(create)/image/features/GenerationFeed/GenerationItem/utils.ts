@@ -1,7 +1,7 @@
 import { type Generation, type GenerationBatch } from '@/types/generation';
 
 // Default maximum width for image items
-export const DEFAULT_MAX_ITEM_WIDTH = 200;
+export const DEFAULT_MAX_ITEM_WIDTH = 256;
 
 /**
  * Get image dimensions from various sources

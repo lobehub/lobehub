@@ -2,7 +2,7 @@
 
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { ModelTag } from '@lobehub/icons';
-import { ActionIconGroup, Block, Flexbox, Grid, Markdown, Tag, Text } from '@lobehub/ui';
+import { ActionIconGroup, Block, Flexbox, Grid, Image, Markdown, Tag, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
@@ -139,74 +139,45 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   const referenceImageCount =
     (batch.config?.imageUrl ? 1 : 0) + (batch.config?.imageUrls?.length || 0);
 
-  const isSingleImageLayout = referenceImageCount === 1;
-
-  // Content for prompt and metadata
-  const promptAndMetadata = (
-    <>
-      <Markdown variant={'chat'}>{batch.prompt}</Markdown>
-      <Flexbox horizontal gap={4} justify="space-between" style={{ marginBottom: 10 }}>
-        <Flexbox horizontal gap={4}>
-          <ModelTag model={batch.model} />
-          {batch.width && batch.height && (
-            <Tag>
-              {batch.width} × {batch.height}
-            </Tag>
-          )}
-          <Tag>{t('generation.metadata.count', { count: batch.generations.length })}</Tag>
-        </Flexbox>
-      </Flexbox>
-    </>
-  );
-
   return (
     <Block className={styles.container} gap={8} variant="borderless">
-      {isSingleImageLayout ? (
-        // Single image layout: horizontal arrangement with vertical centering
-        <Flexbox horizontal align="center" gap={16}>
-          <ReferenceImages
-            imageUrl={batch.config?.imageUrl}
-            imageUrls={batch.config?.imageUrls}
-            layout="single"
-          />
-          <Flexbox flex={1} gap={8}>
-            {promptAndMetadata}
-          </Flexbox>
-        </Flexbox>
-      ) : (
-        // Multiple images or no images: vertical arrangement
-        <>
-          <ReferenceImages
-            imageUrl={batch.config?.imageUrl}
-            imageUrls={batch.config?.imageUrls}
-            layout="multiple"
-          />
-          {promptAndMetadata}
-        </>
-      )}
-      <Grid
-        maxItemWidth={DEFAULT_MAX_ITEM_WIDTH}
-        ref={imageGridRef}
-        rows={batch.generations.length}
-      >
-        {batch.generations.map((generation) => (
-          <GenerationItem
-            generation={generation}
-            generationBatch={batch}
-            key={generation.id}
-            prompt={batch.prompt}
-          />
-        ))}
-      </Grid>
+      <Flexbox horizontal gap={16}>
+        <ReferenceImages imageUrl={batch.config?.imageUrl} imageUrls={batch.config?.imageUrls} />
+        <Markdown variant={'chat'}>{batch.prompt}</Markdown>
+      </Flexbox>
+      <Image.PreviewGroup>
+        <Grid
+          maxItemWidth={DEFAULT_MAX_ITEM_WIDTH}
+          ref={imageGridRef}
+          rows={batch.generations.length}
+        >
+          {batch.generations.map((generation) => (
+            <GenerationItem
+              generation={generation}
+              generationBatch={batch}
+              key={generation.id}
+              prompt={batch.prompt}
+            />
+          ))}
+        </Grid>
+      </Image.PreviewGroup>
+      <Flexbox horizontal gap={4} style={{ opacity: 0.66 }}>
+        <ModelTag model={batch.model} variant={'borderless'} />
+        {batch.width && batch.height && (
+          <Tag variant={'borderless'}>
+            {batch.width} × {batch.height}
+          </Tag>
+        )}
+        <Tag variant={'borderless'}>
+          {t('generation.metadata.count', { count: batch.generations.length })}
+        </Tag>
+      </Flexbox>
       <Flexbox
         horizontal
         align={'center'}
         className={styles.batchActions}
         justify={'space-between'}
       >
-        <Text as={'time'} fontSize={12} type={'secondary'}>
-          {time}
-        </Text>
         <ActionIconGroup
           items={[
             {
@@ -230,6 +201,9 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
             },
           ]}
         />
+        <Text as={'time'} fontSize={12} type={'secondary'}>
+          {time}
+        </Text>
       </Flexbox>
     </Block>
   );

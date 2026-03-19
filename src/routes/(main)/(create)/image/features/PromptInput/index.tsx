@@ -246,12 +246,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               title={t('config.imageNum.label')}
               trigger={'click'}
               popover={{
-                content: (
-                  <Flexbox gap={6}>
-                    <Text fontSize={12}>{t('config.imageNum.label')}</Text>
-                    <ImageNum />
-                  </Flexbox>
-                ),
+                content: <ImageNum />,
                 minWidth: 220,
                 title: t('config.imageNum.label'),
               }}
