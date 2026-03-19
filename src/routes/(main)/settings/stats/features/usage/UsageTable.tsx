@@ -6,19 +6,27 @@ import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { getPrice } from '@/features/Conversation/Messages/components/Extras/Usage/UsageDetail/pricing';
 import { parseAsInteger, useQueryParam } from '@/hooks/useQueryParam';
 import { useClientDataSWR } from '@/libs/swr';
 import { usageService } from '@/services/usage';
+import { useAiInfraStore } from '@/store/aiInfra';
 import { formatDate, formatNumber } from '@/utils/format';
 
 import { type UsageChartProps } from '../../types';
 
-const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
+const UsageTable = memo<UsageChartProps>(({ dateStrings, isAdminView }) => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading, mutate } = useClientDataSWR('usage-logs', async () =>
-    usageService.findByMonth(dateStrings),
+  const { data, isLoading, mutate } = useClientDataSWR(
+    isAdminView ? 'usage-logs-admin' : 'usage-logs',
+    async () =>
+      isAdminView
+        ? usageService.adminFindByMonth(dateStrings)
+        : usageService.findByMonth(dateStrings),
   );
+
+  const builtinModels = useAiInfraStore((s) => s.builtinAiModelList);
 
   const [currentPage, setCurrentPage] = useQueryParam('current', parseAsInteger.withDefault(1), {
     clearOnDefault: true,
@@ -104,6 +112,22 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
         return `$${formatNumber(value, 6)}`;
       },
       title: t('usage.table.spend'),
+    },
+    {
+      key: 'pricing',
+      render: (_, record) => {
+        const modelCard = builtinModels.find(
+          (m) => m.id === record.model && m.providerId === record.provider,
+        );
+        if (!modelCard?.pricing) return '-';
+        const price = getPrice(modelCard.pricing);
+        return (
+          <Tooltip title={`Output: $${price.output} / 1M`}>
+            <span style={{ cursor: 'default' }}>{`$${price.input} / $${price.output}`}</span>
+          </Tooltip>
+        );
+      },
+      title: t('usage.table.pricing'),
     },
     {
       dataIndex: 'createdAt',

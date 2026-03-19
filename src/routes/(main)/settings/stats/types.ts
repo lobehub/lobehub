@@ -5,6 +5,7 @@ export interface UsageChartProps {
   dateStrings?: string;
   groupBy?: GroupBy;
   inShare?: boolean;
+  isAdminView?: boolean;
   isLoading?: boolean;
   mobile?: boolean;
 }

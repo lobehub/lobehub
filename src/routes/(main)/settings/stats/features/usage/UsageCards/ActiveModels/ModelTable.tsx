@@ -1,11 +1,13 @@
 import { CategoryBar, useThemeColorRange } from '@lobehub/charts';
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { Collapse, Flexbox, Skeleton, Tag } from '@lobehub/ui';
+import { Collapse, Flexbox, Skeleton, Tag, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { getPrice } from '@/features/Conversation/Messages/components/Extras/Usage/UsageDetail/pricing';
+import { useAiInfraStore } from '@/store/aiInfra';
 import { type UsageLog } from '@/types/usage/usageRecord';
 import { formatPrice } from '@/utils/format';
 
@@ -72,6 +74,7 @@ const formatData = (
 const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
   const { t } = useTranslation('auth');
   const themeColorRange = useThemeColorRange();
+  const builtinModels = useAiInfraStore((s) => s.builtinAiModelList);
 
   const formattedData = useMemo(
     () => formatData(data || [], groupBy || GroupBy.Model),
@@ -157,6 +160,21 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
                 <ProviderIcon provider={key} size={24} />
               )}
               {key}
+              {groupBy === GroupBy.Model &&
+                (() => {
+                  const modelCard = builtinModels.find((m) => m.id === key);
+                  if (!modelCard?.pricing) return null;
+                  const price = getPrice(modelCard.pricing);
+                  return (
+                    <Tooltip
+                      title={`Input $${price.input} / Output $${price.output} per 1M tokens`}
+                    >
+                      <Tag style={{ cursor: 'default', fontSize: 11 }}>
+                        {`↑$${price.input} ↓$${price.output}`}
+                      </Tag>
+                    </Tooltip>
+                  );
+                })()}
             </Flexbox>
           ),
         };

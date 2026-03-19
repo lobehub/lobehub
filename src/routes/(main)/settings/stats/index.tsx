@@ -5,7 +5,7 @@ import { ProviderIcon } from '@lobehub/ui/icons';
 import { type DatePickerProps } from 'antd';
 import { DatePicker, Divider } from 'antd';
 import dayjs from 'dayjs';
-import { Brain } from 'lucide-react';
+import { Brain, Building2, Users } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +23,8 @@ import {
 } from './features/overview';
 import { AssistantsRank, ModelsRank, TopicsRank } from './features/rankings';
 import { UsageCards, UsageTable, UsageTrends } from './features/usage';
+import AdminDepartmentQuotaTable from './features/usage/AdminDepartmentQuotaTable';
+import AdminUserQuotaTable from './features/usage/AdminUserQuotaTable';
 import { AiHeatmaps } from './features/visualization';
 import { GroupBy } from './types';
 
@@ -33,19 +35,24 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
   const [groupBy, setGroupBy] = useState<GroupBy>(GroupBy.Model);
   const [dateRange, setDateRange] = useState<dayjs.Dayjs>(dayjs(new Date()));
   const [dateStrings, setDateStrings] = useState<string>();
+  const [adminView, setAdminView] = useState<'mine' | 'byUser' | 'byDepartment'>('mine');
+  const isAdminView = adminView !== 'mine';
 
-  const { data, isLoading, mutate } = useClientDataSWR('usage-stat', async () =>
-    usageService.findAndGroupByDay(dateStrings),
+  const { data: isAdmin } = useClientDataSWR('usage-is-admin', () => usageService.isAdmin());
+
+  const { data, isLoading, mutate } = useClientDataSWR(
+    isAdminView ? 'usage-stat-admin' : 'usage-stat',
+    async () =>
+      isAdminView
+        ? usageService.adminFindAndGroupByDay(dateStrings)
+        : usageService.findAndGroupByDay(dateStrings),
   );
 
   useEffect(() => {
-    if (dateStrings) {
-      mutate();
-    }
-  }, [dateStrings]);
+    mutate();
+  }, [dateStrings, adminView]);
 
   const handleDateChange: DatePickerProps['onChange'] = (dates, dateStrings) => {
-    // Handle both single date and array
     const actualDate = Array.isArray(dates) ? dates[0] : dates;
     if (actualDate) {
       setDateRange(actualDate);
@@ -58,29 +65,47 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
   return (
     <>
       <SettingHeader title={t('tab.stats')} />
+      {isAdmin && (
+        <Segmented
+          style={{ marginBottom: 16 }}
+          value={adminView}
+          options={[
+            { icon: <Icon icon={Brain} />, label: t('usage.view.mine'), value: 'mine' },
+            { icon: <Icon icon={Users} />, label: t('usage.view.byUser'), value: 'byUser' },
+            {
+              icon: <Icon icon={Building2} />,
+              label: t('usage.view.byDepartment'),
+              value: 'byDepartment',
+            },
+          ]}
+          onChange={(v) => setAdminView(v as 'mine' | 'byUser' | 'byDepartment')}
+        />
+      )}
       {/* ========== Header Section ========== */}
-      <FormGroup
-        collapsible={false}
-        extra={<ShareButton />}
-        gap={16}
-        title={<Welcome mobile={mobile} />}
-        variant={'filled'}
-      >
-        <Grid gap={8} maxItemWidth={150} rows={4}>
-          <TotalAssistants mobile={mobile} />
-          <TotalTopics mobile={mobile} />
-          <TotalMessages mobile={mobile} />
-          <TotalWords />
-        </Grid>
-        <Divider dashed />
-        <AiHeatmaps mobile={mobile} />
-        <Divider dashed />
-        <Grid gap={16} rows={3} style={{ paddingBottom: 12 }}>
-          <ModelsRank />
-          <AssistantsRank mobile={mobile} />
-          <TopicsRank mobile={mobile} />
-        </Grid>
-      </FormGroup>
+      {!isAdminView && (
+        <FormGroup
+          collapsible={false}
+          extra={<ShareButton />}
+          gap={16}
+          title={<Welcome mobile={mobile} />}
+          variant={'filled'}
+        >
+          <Grid gap={8} maxItemWidth={150} rows={4}>
+            <TotalAssistants mobile={mobile} />
+            <TotalTopics mobile={mobile} />
+            <TotalMessages mobile={mobile} />
+            <TotalWords />
+          </Grid>
+          <Divider dashed />
+          <AiHeatmaps mobile={mobile} />
+          <Divider dashed />
+          <Grid gap={16} rows={3} style={{ paddingBottom: 12 }}>
+            <ModelsRank />
+            <AssistantsRank mobile={mobile} />
+            <TopicsRank mobile={mobile} />
+          </Grid>
+        </FormGroup>
+      )}
       <FormGroup
         collapsible={false}
         gap={16}
@@ -117,8 +142,10 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Divider />
         <UsageTrends data={data} groupBy={groupBy} isLoading={isLoading} />
         <div style={{ height: 24 }} />
-        <UsageTable dateStrings={dateStrings} />
+        <UsageTable dateStrings={dateStrings} isAdminView={isAdminView} />
       </FormGroup>
+      {adminView === 'byUser' && <AdminUserQuotaTable />}
+      {adminView === 'byDepartment' && <AdminDepartmentQuotaTable />}
     </>
   );
 });
