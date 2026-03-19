@@ -15,6 +15,7 @@ import type { MentionCategory } from './MentionMenu/types';
 
 const MAX_AGENT_ITEMS = 20;
 const MAX_TOPIC_LABEL = 50;
+type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> };
 
 export const useMentionCategories = (): MentionCategory[] => {
   const currentAgentId = useAgentId();
@@ -68,7 +69,6 @@ export const useMentionCategories = (): MentionCategory[] => {
 
     // --- Members (group chat only) ---
     if (isGroupChat && Array.isArray(externalMentionItems)) {
-      type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> };
       const items = externalMentionItems
         .filter((item): item is MenuOptionWithMetadata => 'key' in item && !!item.key)
         .map((item) => ({
