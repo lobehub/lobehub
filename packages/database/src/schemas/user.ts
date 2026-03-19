@@ -2,7 +2,17 @@ import { DEFAULT_PREFERENCE } from '@lobechat/const';
 import type { CustomPluginParams, UserOnboarding } from '@lobechat/types';
 import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  primaryKey,
+  text,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz, varchar255 } from './_helpers';
 
@@ -20,6 +30,11 @@ export const users = pgTable(
     lastName: text('last_name'),
     fullName: text('full_name'),
     interests: varchar('interests', { length: 64 }).array(),
+
+    dailyCostLimit: numeric('daily_cost_limit', { precision: 10, scale: 6 }),
+    monthlyCostLimit: numeric('monthly_cost_limit', { precision: 10, scale: 6 }),
+    dailyTokenLimit: integer('daily_token_limit'),
+    monthlyTokenLimit: integer('monthly_token_limit'),
 
     isOnboarded: boolean('is_onboarded').default(false),
     onboarding: jsonb('onboarding').$type<UserOnboarding>(),
