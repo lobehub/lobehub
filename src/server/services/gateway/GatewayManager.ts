@@ -2,8 +2,10 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
+  type BotPlatformRuntimeContext,
   type BotProviderConfig,
   buildRuntimeKey,
   type PlatformClient,
@@ -201,7 +203,12 @@ export class GatewayManager {
       settings: {},
     };
 
-    return def.clientFactory.createClient(config, {});
+    const context: BotPlatformRuntimeContext = {
+      appUrl: process.env.APP_URL,
+      redisClient: getAgentRuntimeRedisClient() as any,
+    };
+
+    return def.clientFactory.createClient(config, context);
   }
 }
 
