@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "Текст",
   "ModelSwitchPanel.detail.pricing.input": "Ввод ${{amount}}/М",
   "ModelSwitchPanel.detail.pricing.output": "Вывод ${{amount}}/М",
+  "ModelSwitchPanel.detail.pricing.perImage": "~ {{amount}} / изображение",
+  "ModelSwitchPanel.detail.pricing.perVideo": "~ {{amount}} / видео",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "Аудио-ввод",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "Аудио-ввод (из кэша)",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "Аудио-вывод",

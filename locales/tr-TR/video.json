@@ -7,6 +7,7 @@
   "config.header.title": "Video",
   "config.imageUrl.label": "Başlangıç Kare Görseli",
   "config.prompt.placeholder": "Oluşturmak istediğiniz videoyu tanımlayın",
+  "config.prompt.placeholderWithRef": "Oluşturmak istediğiniz sahneyi görüntü ile tanımlayın",
   "config.referenceImage.label": "Referans Görsel",
   "config.resolution.label": "Çözünürlük",
   "config.seed.label": "Tohum",

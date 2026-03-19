@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "Tekst",
   "ModelSwitchPanel.detail.pricing.input": "Invoer ${{amount}}/M",
   "ModelSwitchPanel.detail.pricing.output": "Uitvoer ${{amount}}/M",
+  "ModelSwitchPanel.detail.pricing.perImage": "~ {{amount}} / afbeelding",
+  "ModelSwitchPanel.detail.pricing.perVideo": "~ {{amount}} / video",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "Audio-invoer",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "Audio-invoer (cache)",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "Audio-uitvoer",

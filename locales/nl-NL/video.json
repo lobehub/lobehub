@@ -7,6 +7,7 @@
   "config.header.title": "Video",
   "config.imageUrl.label": "Startframe",
   "config.prompt.placeholder": "Beschrijf de video die je wilt genereren",
+  "config.prompt.placeholderWithRef": "Beschrijf de scène die je wilt genereren met de afbeelding",
   "config.referenceImage.label": "Referentieafbeelding",
   "config.resolution.label": "Resolutie",
   "config.seed.label": "Zaadwaarde",

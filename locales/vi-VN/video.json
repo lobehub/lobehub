@@ -7,6 +7,7 @@
   "config.header.title": "Video",
   "config.imageUrl.label": "Khung hình bắt đầu",
   "config.prompt.placeholder": "Mô tả video bạn muốn tạo",
+  "config.prompt.placeholderWithRef": "Mô tả cảnh bạn muốn tạo với hình ảnh",
   "config.referenceImage.label": "Hình ảnh tham chiếu",
   "config.resolution.label": "Độ phân giải",
   "config.seed.label": "Hạt giống",

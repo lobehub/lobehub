@@ -23,7 +23,7 @@
   "config.seed.random": "随机种子",
   "config.size.label": "尺寸",
   "config.steps.label": "步数",
-  "config.title": "AI 图像",
+  "config.title": "配置",
   "config.width.label": "宽度",
   "generation.actions.applySeed": "应用种子",
   "generation.actions.copyError": "复制错误信息",

@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "Văn bản",
   "ModelSwitchPanel.detail.pricing.input": "Đầu vào ${{amount}}/M",
   "ModelSwitchPanel.detail.pricing.output": "Đầu ra ${{amount}}/M",
+  "ModelSwitchPanel.detail.pricing.perImage": "~ {{amount}} / hình ảnh",
+  "ModelSwitchPanel.detail.pricing.perVideo": "~ {{amount}} / video",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "Đầu vào âm thanh",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "Đầu vào âm thanh (đã lưu)",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "Đầu ra âm thanh",

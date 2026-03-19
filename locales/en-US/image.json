@@ -23,7 +23,7 @@
   "config.seed.random": "Random Seed",
   "config.size.label": "Size",
   "config.steps.label": "Steps",
-  "config.title": "AI Image",
+  "config.title": "Configuration",
   "config.width.label": "Width",
   "generation.actions.applySeed": "Apply Seed",
   "generation.actions.copyError": "Copy Error Message",

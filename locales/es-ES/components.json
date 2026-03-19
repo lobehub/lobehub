@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "Texto",
   "ModelSwitchPanel.detail.pricing.input": "Entrada ${{amount}}/M",
   "ModelSwitchPanel.detail.pricing.output": "Salida ${{amount}}/M",
+  "ModelSwitchPanel.detail.pricing.perImage": "~ {{amount}} / imagen",
+  "ModelSwitchPanel.detail.pricing.perVideo": "~ {{amount}} / video",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "Entrada de audio",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "Entrada de audio (en caché)",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "Salida de audio",

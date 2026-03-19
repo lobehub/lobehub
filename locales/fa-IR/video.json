@@ -7,6 +7,7 @@
   "config.header.title": "ویدیو",
   "config.imageUrl.label": "فریم آغازین",
   "config.prompt.placeholder": "ویدیویی که می‌خواهید تولید شود را توصیف کنید",
+  "config.prompt.placeholderWithRef": "صحنه‌ای که می‌خواهید با تصویر ایجاد کنید را توصیف کنید",
   "config.referenceImage.label": "تصویر مرجع",
   "config.resolution.label": "وضوح تصویر",
   "config.seed.label": "بذر (Seed)",

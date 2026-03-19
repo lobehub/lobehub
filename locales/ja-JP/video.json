@@ -7,6 +7,7 @@
   "config.header.title": "ビデオ",
   "config.imageUrl.label": "開始フレーム",
   "config.prompt.placeholder": "生成したいビデオの内容を説明してください",
+  "config.prompt.placeholderWithRef": "生成したい画像のシーンを説明してください",
   "config.referenceImage.label": "参照画像",
   "config.resolution.label": "解像度",
   "config.seed.label": "シード値",

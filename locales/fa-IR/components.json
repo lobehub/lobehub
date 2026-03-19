@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "متن",
   "ModelSwitchPanel.detail.pricing.input": "ورودی ${{amount}}/میلیون",
   "ModelSwitchPanel.detail.pricing.output": "خروجی ${{amount}}/میلیون",
+  "ModelSwitchPanel.detail.pricing.perImage": "~ {{amount}} / تصویر",
+  "ModelSwitchPanel.detail.pricing.perVideo": "~ {{amount}} / ویدیو",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "ورودی صوتی",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "ورودی صوتی (کش‌شده)",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "خروجی صوتی",

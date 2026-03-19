@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "文字",
   "ModelSwitchPanel.detail.pricing.input": "輸入 ${{amount}}/百萬",
   "ModelSwitchPanel.detail.pricing.output": "輸出 ${{amount}}/百萬",
+  "ModelSwitchPanel.detail.pricing.perImage": "約 {{amount}} / 圖片",
+  "ModelSwitchPanel.detail.pricing.perVideo": "約 {{amount}} / 影片",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "音訊輸入",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "音訊輸入（快取）",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "音訊輸出",

@@ -7,6 +7,7 @@
   "config.header.title": "Vidéo",
   "config.imageUrl.label": "Image de début",
   "config.prompt.placeholder": "Décrivez la vidéo que vous souhaitez générer",
+  "config.prompt.placeholderWithRef": "Décrivez la scène que vous souhaitez générer avec l'image",
   "config.referenceImage.label": "Image de référence",
   "config.resolution.label": "Résolution",
   "config.seed.label": "Graine",

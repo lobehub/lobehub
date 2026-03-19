@@ -7,6 +7,7 @@
   "config.header.title": "Видео",
   "config.imageUrl.label": "Начална рамка",
   "config.prompt.placeholder": "Опишете видеото, което искате да генерирате",
+  "config.prompt.placeholderWithRef": "Опишете сцената, която искате да създадете с изображението",
   "config.referenceImage.label": "Референтно изображение",
   "config.resolution.label": "Резолюция",
   "config.seed.label": "Сийд",

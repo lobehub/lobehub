@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "텍스트",
   "ModelSwitchPanel.detail.pricing.input": "입력 ${{amount}}/백만자",
   "ModelSwitchPanel.detail.pricing.output": "출력 ${{amount}}/백만자",
+  "ModelSwitchPanel.detail.pricing.perImage": "~ {{amount}} / 이미지",
+  "ModelSwitchPanel.detail.pricing.perVideo": "~ {{amount}} / 비디오",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "오디오 입력",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "오디오 입력 (캐시 읽기)",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "오디오 출력",

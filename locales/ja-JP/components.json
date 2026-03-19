@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "テキスト",
   "ModelSwitchPanel.detail.pricing.input": "入力 ${{amount}}/M",
   "ModelSwitchPanel.detail.pricing.output": "出力 ${{amount}}/M",
+  "ModelSwitchPanel.detail.pricing.perImage": "〜 {{amount}} / 画像",
+  "ModelSwitchPanel.detail.pricing.perVideo": "〜 {{amount}} / 動画",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "音声入力",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "音声入力（キャッシュ読み取り）",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "音声出力",

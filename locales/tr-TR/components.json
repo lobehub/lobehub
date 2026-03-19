@@ -116,6 +116,8 @@
   "ModelSwitchPanel.detail.pricing.group.text": "Metin",
   "ModelSwitchPanel.detail.pricing.input": "Girdi ${{amount}}/M",
   "ModelSwitchPanel.detail.pricing.output": "Çıktı ${{amount}}/M",
+  "ModelSwitchPanel.detail.pricing.perImage": "~ {{amount}} / resim",
+  "ModelSwitchPanel.detail.pricing.perVideo": "~ {{amount}} / video",
   "ModelSwitchPanel.detail.pricing.unit.audioInput": "Ses Girdisi",
   "ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead": "Ses Girdisi (Önbellekten)",
   "ModelSwitchPanel.detail.pricing.unit.audioOutput": "Ses Çıktısı",
