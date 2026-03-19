@@ -14,13 +14,23 @@ export const params = {
   baseURL: 'https://api.xiaomimimo.com/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { thinking, temperature, top_p, max_tokens, stream, ...rest } = payload as any;
+      const { enabledSearch, thinking, temperature, tools, top_p, max_tokens, stream, ...rest } = payload as any;
       const thinkingType = thinking?.type;
+
+      const xiaomiTools = enabledSearch
+        ? [
+            ...(tools || []),
+            {
+              type: 'web_search',
+            },
+          ]
+        : tools;
 
       return {
         ...rest,
         max_completion_tokens: max_tokens,
         stream: stream ?? true,
+        tools: xiaomiTools,
         ...(typeof temperature === 'number'
           ? { temperature: clamp(temperature, 0, 1.5) }
           : undefined),
