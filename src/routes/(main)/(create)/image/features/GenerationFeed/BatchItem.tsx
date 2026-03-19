@@ -19,7 +19,6 @@ import { AsyncTaskErrorType } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
 
 import { GenerationItem } from './GenerationItem';
-import { DEFAULT_MAX_ITEM_WIDTH } from './GenerationItem/utils';
 import { ReferenceImages } from './ReferenceImages';
 
 const styles = createStaticStyles(({ css, cssVar, cx }) => ({
@@ -135,22 +134,14 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
     return businessBatchItem;
   }
 
-  // Calculate total number of reference images
-  const referenceImageCount =
-    (batch.config?.imageUrl ? 1 : 0) + (batch.config?.imageUrls?.length || 0);
-
   return (
     <Block className={styles.container} gap={8} variant="borderless">
-      <Flexbox horizontal gap={16}>
+      <Flexbox horizontal align={'flex-start'} gap={16}>
         <ReferenceImages imageUrl={batch.config?.imageUrl} imageUrls={batch.config?.imageUrls} />
         <Markdown variant={'chat'}>{batch.prompt}</Markdown>
       </Flexbox>
       <Image.PreviewGroup>
-        <Grid
-          maxItemWidth={DEFAULT_MAX_ITEM_WIDTH}
-          ref={imageGridRef}
-          rows={batch.generations.length}
-        >
+        <Grid maxItemWidth={200} ref={imageGridRef} rows={batch.generations.length}>
           {batch.generations.map((generation) => (
             <GenerationItem
               generation={generation}

@@ -200,27 +200,17 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
 
   const hasReferenceFrames = batch.config?.imageUrl || batch.config?.endImageUrl;
 
-  const promptAndMetadata = (
-    <>
-      <Markdown variant={'chat'}>{batch.prompt}</Markdown>
-    </>
-  );
-
   return (
     <Block className={styles.container} gap={8} variant={'borderless'}>
-      {hasReferenceFrames ? (
-        <Flexbox horizontal gap={16}>
+      <Flexbox horizontal align={'flex-start'} gap={16}>
+        {hasReferenceFrames && (
           <VideoReferenceFrames
             endImageUrl={batch.config?.endImageUrl}
             imageUrl={batch.config?.imageUrl}
           />
-          <Flexbox flex={1} gap={8}>
-            {promptAndMetadata}
-          </Flexbox>
-        </Flexbox>
-      ) : (
-        promptAndMetadata
-      )}
+        )}
+        <Markdown variant={'chat'}>{batch.prompt}</Markdown>
+      </Flexbox>
       {renderContent()}
       <Flexbox horizontal gap={4} style={{ opacity: 0.66 }}>
         <ModelTag model={batch.model} variant={'borderless'} />
