@@ -345,6 +345,8 @@ class ChatService {
     const chatConfig = agentChatConfigSelectors.currentChatConfig(getAgentStoreState());
 
     delete (res as any).scope;
+    // Fork flow stores market metadata in agent.params; must not reach OpenAI-compatible / Responses API
+    delete (res as any).forkedFromIdentifier;
 
     const payload = merge(
       {
