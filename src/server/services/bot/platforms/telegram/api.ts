@@ -26,11 +26,17 @@ export class TelegramApi {
 
   async editMessageText(chatId: string | number, messageId: number, text: string): Promise<void> {
     log('editMessageText: chatId=%s, messageId=%s', chatId, messageId);
-    await this.call('editMessageText', {
-      chat_id: chatId,
-      message_id: messageId,
-      text: this.truncateText(text),
-    });
+    try {
+      await this.call('editMessageText', {
+        chat_id: chatId,
+        message_id: messageId,
+        text: this.truncateText(text),
+      });
+    } catch (error: any) {
+      // Telegram returns 400 when the new content is identical to the current message — safe to ignore
+      if (error?.message?.includes('message is not modified')) return;
+      throw error;
+    }
   }
 
   async sendChatAction(chatId: string | number, action = 'typing'): Promise<void> {

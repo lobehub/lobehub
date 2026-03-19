@@ -68,10 +68,16 @@ export class BotCallbackService {
       platformThreadId,
     );
 
+    const entry = platformRegistry.getPlatform(platform);
+    const canEdit = entry?.supportsMessageEdit !== false;
+
     if (type === 'step') {
-      await this.handleStep(body, messenger, progressMessageId, client);
+      // Skip step progress updates for platforms that can't edit messages
+      if (canEdit) {
+        await this.handleStep(body, messenger, progressMessageId, client);
+      }
     } else if (type === 'completion') {
-      await this.handleCompletion(body, messenger, progressMessageId, client, charLimit);
+      await this.handleCompletion(body, messenger, progressMessageId, client, charLimit, canEdit);
       await this.removeEyesReaction(body, messenger);
       this.summarizeTopicTitle(body, messenger);
     }
@@ -175,15 +181,20 @@ export class BotCallbackService {
     progressMessageId: string,
     client: PlatformClient,
     charLimit?: number,
+    canEdit = true,
   ): Promise<void> {
     const { reason, lastAssistantContent, errorMessage } = body;
 
     if (reason === 'error') {
       const errorText = renderError(errorMessage || 'Agent execution failed');
       try {
-        await messenger.editMessage(progressMessageId, errorText);
+        if (canEdit) {
+          await messenger.editMessage(progressMessageId, errorText);
+        } else {
+          await messenger.createMessage(errorText);
+        }
       } catch (error) {
-        log('handleCompletion: failed to edit error message: %O', error);
+        log('handleCompletion: failed to send error message: %O', error);
       }
       return;
     }
@@ -207,12 +218,19 @@ export class BotCallbackService {
     const chunks = splitMessage(finalText, charLimit);
 
     try {
-      await messenger.editMessage(progressMessageId, chunks[0]);
-      for (let i = 1; i < chunks.length; i++) {
-        await messenger.createMessage(chunks[i]);
+      if (canEdit) {
+        await messenger.editMessage(progressMessageId, chunks[0]);
+        for (let i = 1; i < chunks.length; i++) {
+          await messenger.createMessage(chunks[i]);
+        }
+      } else {
+        // Platform doesn't support edit — send all chunks as new messages
+        for (const chunk of chunks) {
+          await messenger.createMessage(chunk);
+        }
       }
     } catch (error) {
-      log('handleCompletion: failed to edit/post final message: %O', error);
+      log('handleCompletion: failed to send final message: %O', error);
     }
   }
 

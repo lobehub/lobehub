@@ -233,6 +233,13 @@ export interface PlatformDefinition {
 
   /** Whether to show webhook URL for manual configuration. When true, the UI displays the webhook endpoint for the user to copy. */
   showWebhookUrl?: boolean;
+
+  /**
+   * Whether the platform supports editing sent messages.
+   * When false, step progress updates are skipped and only the final reply is sent.
+   * Defaults to true.
+   */
+  supportsMessageEdit?: boolean;
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */
