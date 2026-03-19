@@ -121,9 +121,10 @@ export const MODEL_LIST_CONFIGS = {
     visionKeywords: ['vision', 'grok-4'],
   },
   xiaomimimo: {
+    excludeKeywords: ['tts'],
     functionCallKeywords: ['mimo'],
     reasoningKeywords: ['mimo'],
-    visionKeywords: [],
+    visionKeywords: ['omni'],
   },
   zeroone: {
     functionCallKeywords: ['fc'],
