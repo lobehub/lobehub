@@ -216,6 +216,14 @@ export interface PlatformDefinition {
   /** Factory for creating PlatformClient instances and validating credentials/settings. */
   clientFactory: ClientFactory;
 
+  /**
+   * Connection mode: how the platform communicates with the server.
+   * - 'webhook': stateless HTTP callbacks (can run in serverless)
+   * - 'websocket': persistent connection (requires long-running process)
+   * Defaults to 'webhook'.
+   */
+  connectionMode?: 'webhook' | 'websocket';
+
   /** The description of the platform. */
   description?: string;
 

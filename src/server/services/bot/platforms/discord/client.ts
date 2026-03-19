@@ -173,7 +173,6 @@ class DiscordGatewayClient implements PlatformClient {
 
 export class DiscordClientFactory extends ClientFactory {
   createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
-    // TODO: use config.settings.connectionMode to choose between gateway and webhook client
     return new DiscordGatewayClient(config, context);
   }
 

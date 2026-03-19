@@ -1,9 +1,5 @@
 import debug from 'debug';
 
-import { getServerDB } from '@/database/core/db-adaptor';
-import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
-import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-
 import { platformRegistry } from '../bot/platforms';
 import { BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
@@ -40,8 +36,8 @@ export class GatewayService {
     userId: string,
   ): Promise<'started' | 'queued'> {
     if (isVercel) {
-      // Query DB to determine connection mode from user settings
-      const connectionMode = await this.getConnectionMode(platform, applicationId, userId);
+      const definition = platformRegistry.getPlatform(platform);
+      const connectionMode = definition?.connectionMode || 'webhook';
 
       if (connectionMode === 'websocket') {
         // Persistent platforms (e.g. Discord WebSocket) cannot run in a
@@ -78,26 +74,5 @@ export class GatewayService {
 
     await manager.stopClient(platform, applicationId);
     log('Stopped client %s:%s', platform, applicationId);
-  }
-
-  /**
-   * Read the connectionMode from the bot provider's settings.
-   * Defaults to 'webhook' if not configured.
-   */
-  private async getConnectionMode(
-    platform: string,
-    applicationId: string,
-    userId: string,
-  ): Promise<string> {
-    try {
-      const serverDB = await getServerDB();
-      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-      const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
-      const provider = await model.findEnabledByApplicationId(platform, applicationId);
-      return (provider?.settings as any)?.connectionMode || 'webhook';
-    } catch (err) {
-      log('Failed to read connectionMode for %s:%s: %O', platform, applicationId, err);
-      return 'webhook';
-    }
   }
 }
