@@ -12,7 +12,7 @@ import { styles } from './styles';
 import { type ErrorStateProps } from './types';
 import { getThumbnailMaxWidth } from './utils';
 
-// 错误状态组件
+// Error state component
 export const ErrorState = memo<ErrorStateProps>(
   ({ generation, generationBatch, aspectRatio, onDelete, onCopyError }) => {
     const { t } = useTranslation('image');

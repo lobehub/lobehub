@@ -79,6 +79,7 @@ table agent_bot_providers {
   platform varchar(50) [not null]
   application_id varchar(255) [not null]
   credentials text
+  settings jsonb [default: `{}`]
   enabled boolean [not null, default: true]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -120,6 +121,46 @@ table agent_cron_jobs {
     enabled [name: 'agent_cron_jobs_enabled_idx']
     remaining_executions [name: 'agent_cron_jobs_remaining_executions_idx']
     last_executed_at [name: 'agent_cron_jobs_last_executed_at_idx']
+  }
+}
+
+table agent_documents {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  agent_id text [not null]
+  document_id varchar(255) [not null]
+  template_id varchar(100)
+  access_self integer [not null, default: 31]
+  access_shared integer [not null, default: 0]
+  access_public integer [not null, default: 0]
+  policy_load varchar(30) [not null, default: 'always']
+  policy jsonb
+  policy_load_position varchar(50) [not null, default: 'before-first-user']
+  policy_load_format varchar(20) [not null, default: 'raw']
+  policy_load_rule varchar(50) [not null, default: 'always']
+  deleted_at "timestamp with time zone"
+  deleted_by_user_id text
+  deleted_by_agent_id text
+  delete_reason text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_documents_user_id_idx']
+    agent_id [name: 'agent_documents_agent_id_idx']
+    access_self [name: 'agent_documents_access_self_idx']
+    access_shared [name: 'agent_documents_access_shared_idx']
+    access_public [name: 'agent_documents_access_public_idx']
+    policy_load [name: 'agent_documents_policy_load_idx']
+    template_id [name: 'agent_documents_template_id_idx']
+    policy_load_position [name: 'agent_documents_policy_load_position_idx']
+    policy_load_format [name: 'agent_documents_policy_load_format_idx']
+    policy_load_rule [name: 'agent_documents_policy_load_rule_idx']
+    (agent_id, policy_load_position) [name: 'agent_documents_agent_load_position_idx']
+    deleted_at [name: 'agent_documents_deleted_at_idx']
+    (agent_id, deleted_at, policy_load) [name: 'agent_documents_agent_autoload_deleted_idx']
+    document_id [name: 'agent_documents_document_id_idx']
+    (agent_id, document_id, user_id) [name: 'agent_documents_agent_document_user_unique', unique]
   }
 }
 

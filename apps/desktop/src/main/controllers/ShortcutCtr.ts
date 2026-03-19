@@ -1,4 +1,4 @@
-import { ShortcutUpdateResult } from '@/core/ui/ShortcutManager';
+import type { ShortcutUpdateResult } from '@/core/ui/ShortcutManager';
 
 import { ControllerModule, IpcMethod } from '.';
 

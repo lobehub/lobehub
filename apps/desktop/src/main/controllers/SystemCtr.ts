@@ -123,8 +123,8 @@ export default class SystemController extends ControllerModule {
       buttons: [openSettingsButtonText, skipButtonText],
       cancelId: 1,
       defaultId: 0,
-      message: message,
-      title: title,
+      message,
+      title,
       type: 'info',
     });
 

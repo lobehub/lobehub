@@ -6,6 +6,8 @@ export default {
   'actions.confirmRemoveUnstarred':
     'You are about to delete unstarred topics. This action cannot be undone.',
   'actions.duplicate': 'Duplicate',
+  'actions.favorite': 'Favorite',
+  'actions.unfavorite': 'Unfavorite',
   'actions.export': 'Export Topics',
   'actions.import': 'Import Conversation',
   'actions.openInNewTab': 'Open in New Tab',
@@ -18,7 +20,8 @@ export default {
   'duplicateSuccess': 'Topic Copied Successfully',
   'favorite': 'Favorite',
   'groupMode.ascMessages': 'Sort by Total Messages Ascending',
-  'groupMode.byTime': 'Group by Time',
+  'groupMode.byTime': 'Group by Created Time',
+  'groupMode.byUpdatedTime': 'Group by Updated Time',
   'groupMode.descMessages': 'Sort by Total Messages Descending',
   'groupMode.flat': 'No Grouping',
   'groupTitle.byTime.month': 'This Month',

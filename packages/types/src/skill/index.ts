@@ -46,6 +46,12 @@ export interface BuiltinSkill {
   description: string;
   identifier: string;
   name: string;
+  /**
+   * Inline resources for builtin skills.
+   * Key is the file path (e.g. "kb/README.md").
+   * Use `content` field in SkillResourceMeta to inline text content.
+   */
+  resources?: Record<string, SkillResourceMeta>;
   source: 'builtin';
 }
 
@@ -76,6 +82,11 @@ export interface ParsedZipSkill {
 // ===== Resource Types =====
 
 export interface SkillResourceMeta {
+  /**
+   * Inline text content for builtin skill resources.
+   * When set, the resource is served directly from memory instead of S3.
+   */
+  content?: string;
   documentId?: string;
   fileHash: string;
   size: number;
@@ -94,6 +105,7 @@ export interface SkillResourceContent {
   encoding: 'utf8' | 'base64';
   fileHash: string;
   fileType: string;
+  fullPath?: string;
   path: string;
   size: number;
 }

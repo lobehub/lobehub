@@ -1,7 +1,7 @@
 import { createStaticStyles, cx } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // 图片操作按钮的公共样式
+  // Common styles for image action buttons
   generationActionButton: cx(
     'generation-actions',
     css`

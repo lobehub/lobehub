@@ -165,7 +165,7 @@ const handleProxy = async (req: NextRequest, context: RouteContext) => {
       try {
         const { token } = (await req.json()) as { token?: string };
 
-        // 如果没有 token，尝试使用 trustedClientToken
+        // If no token is provided, attempt to use trustedClientToken
         if (!token) {
           const trustedClientToken = await getTrustedClientTokenForSession();
 
@@ -180,7 +180,7 @@ const handleProxy = async (req: NextRequest, context: RouteContext) => {
             );
           }
 
-          // 使用 trustedClientToken 直接调用 Market userinfo 端点
+          // Use trustedClientToken to directly call the Market userinfo endpoint
           const userInfoUrl = `${MARKET_BASE_URL}/lobehub-oidc/userinfo`;
           const response = await fetch(userInfoUrl, {
             headers: {

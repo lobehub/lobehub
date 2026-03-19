@@ -8,12 +8,13 @@ import {
 } from '@lobechat/types';
 
 import {
+  type ActivateSkillParams,
   type CommandResult,
   type ExecScriptParams,
   type ExportFileParams,
   type ReadReferenceParams,
   type RunCommandOptions,
-  type RunSkillParams,
+  type RunCommandParams,
 } from '../types';
 
 /**
@@ -39,9 +40,8 @@ export interface SkillRuntimeService {
   execScript?: (
     command: string,
     options: {
-      config?: { description?: string; id?: string; name?: string };
+      activatedSkills?: Array<{ description?: string; id: string; name: string }>;
       description: string;
-      runInClient?: boolean;
     },
   ) => Promise<CommandResult>;
   exportFile?: (path: string, filename: string) => Promise<ExportFileResult>;
@@ -67,15 +67,14 @@ export class SkillsExecutionRuntime {
   }
 
   async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
-    const { command, runInClient, description, config } = args;
+    const { activatedSkills, command, description } = args;
 
     // Try new execScript method first (with cloud sandbox support)
     if (this.service.execScript) {
       try {
         const result = await this.service.execScript(command, {
-          config,
+          activatedSkills,
           description,
-          runInClient,
         });
 
         const output = [result.output, result.stderr].filter(Boolean).join('\n');
@@ -106,8 +105,39 @@ export class SkillsExecutionRuntime {
     }
 
     try {
-      const result = await this.service.runCommand({ command, runInClient });
+      const result = await this.service.runCommand({ command });
 
+      const output = [result.output, result.stderr].filter(Boolean).join('\n');
+
+      return {
+        content: output || '(no output)',
+        state: {
+          command,
+          exitCode: result.exitCode,
+          success: result.success,
+        },
+        success: result.success,
+      };
+    } catch (e) {
+      return {
+        content: `Failed to execute command: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async runCommand(args: RunCommandParams): Promise<BuiltinServerRuntimeOutput> {
+    const { command } = args;
+
+    if (!this.service.runCommand) {
+      return {
+        content: 'Command execution is not available in this environment.',
+        success: false,
+      };
+    }
+
+    try {
+      const result = await this.service.runCommand({ command });
       const output = [result.output, result.stderr].filter(Boolean).join('\n');
 
       return {
@@ -178,7 +208,29 @@ export class SkillsExecutionRuntime {
     }
 
     try {
-      // Resolve id: try findById first, fallback to findByName
+      // Check builtin skills first
+      const builtinSkill = this.builtinSkills.find((s) => s.name === id);
+      if (builtinSkill?.resources) {
+        const meta = builtinSkill.resources[path];
+        if (meta?.content !== undefined) {
+          return {
+            content: meta.content,
+            state: {
+              encoding: 'utf8',
+              fileType: 'text/plain',
+              path,
+              size: meta.size,
+            },
+            success: true,
+          };
+        }
+        return {
+          content: `Resource not found: "${path}" in builtin skill "${id}"`,
+          success: false,
+        };
+      }
+
+      // Resolve id: try findByName for DB skills
       const skill = await this.service.findByName(id);
       if (!skill) {
         return {
@@ -193,6 +245,7 @@ export class SkillsExecutionRuntime {
         state: {
           encoding: resource.encoding,
           fileType: resource.fileType,
+          fullPath: resource.fullPath,
           path: resource.path,
           size: resource.size,
         },
@@ -206,17 +259,26 @@ export class SkillsExecutionRuntime {
     }
   }
 
-  async runSkill(args: RunSkillParams): Promise<BuiltinServerRuntimeOutput> {
+  async activateSkill(args: ActivateSkillParams): Promise<BuiltinServerRuntimeOutput> {
     const { name } = args;
 
     // Check builtin skills first — no DB query needed
     const builtinSkill = this.builtinSkills.find((s) => s.name === name);
     if (builtinSkill) {
+      let content = builtinSkill.content;
+      const hasResources = !!(
+        builtinSkill.resources && Object.keys(builtinSkill.resources).length > 0
+      );
+
+      if (hasResources && builtinSkill.resources) {
+        content += '\n\n' + resourcesTreePrompt(builtinSkill.name, builtinSkill.resources);
+      }
+
       return {
-        content: builtinSkill.content,
+        content,
         state: {
           description: builtinSkill.description,
-          hasResources: false,
+          hasResources,
           identifier: builtinSkill.identifier,
           name: builtinSkill.name,
         },

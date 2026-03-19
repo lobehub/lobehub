@@ -11,7 +11,9 @@ import {
   DropdownMenuPositioner,
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
+  Flexbox,
   menuSharedStyles,
+  Tag,
 } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { Check, LucideBolt } from 'lucide-react';
@@ -30,13 +32,25 @@ import ModelDetailPanel from '../ModelDetailPanel';
 interface MultipleProvidersModelItemProps {
   activeKey: string;
   data: ModelWithProviders;
+  isModelRestricted?: (modelId: string, providerId: string) => boolean;
   newLabel: string;
   onClose: () => void;
-  onModelChange: (modelId: string, providerId: string) => Promise<void>;
+  onModelChange: (modelId: string, providerId: string) => void;
+  onRestrictedModelClick?: () => void;
+  proLabel?: string;
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
-  ({ activeKey, data, newLabel, onModelChange, onClose }) => {
+  ({
+    activeKey,
+    data,
+    isModelRestricted,
+    newLabel,
+    onModelChange,
+    onClose,
+    onRestrictedModelClick,
+    proLabel,
+  }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
     const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -44,16 +58,34 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     const activeProvider = data.providers.find((p) => menuKey(p.id, data.model.id) === activeKey);
     const isActive = !!activeProvider;
 
+    const allRestricted =
+      isModelRestricted &&
+      data.providers.length > 0 &&
+      data.providers.every((p) => isModelRestricted(data.model.id, p.id));
+
     return (
-      <DropdownMenuSubmenuRoot open={submenuOpen} onOpenChange={setSubmenuOpen}>
+      <DropdownMenuSubmenuRoot
+        open={submenuOpen}
+        onOpenChange={(open) => {
+          if (allRestricted && open) return;
+          setSubmenuOpen(open);
+        }}
+      >
         <DropdownMenuSubmenuTrigger
           className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
           style={{ paddingBlock: 8, paddingInline: 8 }}
+          onClick={() => {
+            if (allRestricted) {
+              onRestrictedModelClick?.();
+              onClose();
+            }
+          }}
         >
           <ModelItemRender
             {...data.model}
             {...data.model.abilities}
             newBadgeLabel={newLabel}
+            proBadgeLabel={allRestricted ? proLabel : undefined}
             showInfoTag={true}
           />
         </DropdownMenuSubmenuTrigger>
@@ -71,27 +103,43 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                 {data.providers.map((p) => {
                   const key = menuKey(p.id, data.model.id);
                   const isProviderActive = activeKey === key;
+                  const providerRestricted = isModelRestricted?.(data.model.id, p.id);
 
                   return (
                     <DropdownMenuItem
                       key={key}
-                      onClick={async () => {
-                        await onModelChange(data.model.id, p.id);
+                      onClick={() => {
+                        if (providerRestricted) {
+                          onRestrictedModelClick?.();
+                          onClose();
+                          return;
+                        }
+                        setSubmenuOpen(false);
                         onClose();
+                        onModelChange(data.model.id, p.id);
                       }}
                     >
                       <DropdownMenuItemIcon>
                         {isProviderActive ? <Check size={16} /> : null}
                       </DropdownMenuItemIcon>
                       <DropdownMenuItemLabel>
-                        <ProviderItemRender
-                          logo={p.logo}
-                          name={p.name}
-                          provider={p.id}
-                          size={20}
-                          source={p.source}
-                          type={'avatar'}
-                        />
+                        <Flexbox horizontal align="center" gap={8}>
+                          <Flexbox horizontal align="center" style={{ flex: 'none' }}>
+                            <ProviderItemRender
+                              logo={p.logo}
+                              name={p.name}
+                              provider={p.id}
+                              size={20}
+                              source={p.source}
+                              type={'avatar'}
+                            />
+                          </Flexbox>
+                          {providerRestricted && proLabel && (
+                            <Tag color="gold" size="small">
+                              {proLabel}
+                            </Tag>
+                          )}
+                        </Flexbox>
                       </DropdownMenuItemLabel>
                       <DropdownMenuItemExtra>
                         <ActionIcon

@@ -1,22 +1,69 @@
-#!/usr/bin/env bun
+import { createRequire } from 'node:module';
 
 import { Command } from 'commander';
 
+import { registerAgentCommand } from './commands/agent';
+import { registerAgentGroupCommand } from './commands/agent-group';
+import { registerBotCommand } from './commands/bot';
+import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
+import { registerCronCommand } from './commands/cron';
+import { registerDeviceCommand } from './commands/device';
+import { registerDocCommand } from './commands/doc';
+import { registerEvalCommand } from './commands/eval';
+import { registerFileCommand } from './commands/file';
+import { registerGenerateCommand } from './commands/generate';
+import { registerKbCommand } from './commands/kb';
 import { registerLoginCommand } from './commands/login';
 import { registerLogoutCommand } from './commands/logout';
+import { registerMemoryCommand } from './commands/memory';
+import { registerMessageCommand } from './commands/message';
+import { registerModelCommand } from './commands/model';
+import { registerPluginCommand } from './commands/plugin';
+import { registerProviderCommand } from './commands/provider';
+import { registerSearchCommand } from './commands/search';
+import { registerSessionGroupCommand } from './commands/session-group';
+import { registerSkillCommand } from './commands/skill';
 import { registerStatusCommand } from './commands/status';
+import { registerThreadCommand } from './commands/thread';
+import { registerTopicCommand } from './commands/topic';
+import { registerUserCommand } from './commands/user';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 
 const program = new Command();
 
 program
   .name('lh')
   .description('LobeHub CLI - manage and connect to LobeHub services')
-  .version('0.1.0');
+  .version(version);
 
 registerLoginCommand(program);
 registerLogoutCommand(program);
 registerConnectCommand(program);
+registerDeviceCommand(program);
 registerStatusCommand(program);
+registerDocCommand(program);
+registerSearchCommand(program);
+registerKbCommand(program);
+registerMemoryCommand(program);
+registerAgentCommand(program);
+registerAgentGroupCommand(program);
+registerBotCommand(program);
+registerCronCommand(program);
+registerGenerateCommand(program);
+registerFileCommand(program);
+registerSkillCommand(program);
+registerSessionGroupCommand(program);
+registerThreadCommand(program);
+registerTopicCommand(program);
+registerMessageCommand(program);
+registerModelCommand(program);
+registerProviderCommand(program);
+registerPluginCommand(program);
+registerUserCommand(program);
+registerConfigCommand(program);
+registerEvalCommand(program);
 
 program.parse();

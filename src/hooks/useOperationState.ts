@@ -39,6 +39,11 @@ export const useOperationState = (context: ConversationContext): OperationState 
     operationSelectors.isAgentRuntimeRunningByContext(context)(s),
   );
 
+  // Check if input should show loading (sendMessage + AI runtime)
+  const isInputLoading = useChatStore((s) =>
+    operationSelectors.isInputLoadingByContext(context)(s),
+  );
+
   // Get send message error for this context
   const sendMessageError = useMemo(() => {
     const operationIds = operationsByContext[contextKey] || [];
@@ -101,9 +106,17 @@ export const useOperationState = (context: ConversationContext): OperationState 
         };
       },
       isAIGenerating,
+      isInputLoading,
       sendMessageError,
     };
-  }, [operations, operationsByMessage, toolCallingStreamIds, isAIGenerating, sendMessageError]);
+  }, [
+    operations,
+    operationsByMessage,
+    toolCallingStreamIds,
+    isAIGenerating,
+    isInputLoading,
+    sendMessageError,
+  ]);
 
   return operationState;
 };

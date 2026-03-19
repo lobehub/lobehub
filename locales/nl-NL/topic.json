@@ -18,6 +18,7 @@
   "favorite": "Favoriet",
   "groupMode.ascMessages": "Sorteren op aantal berichten oplopend",
   "groupMode.byTime": "Groeperen op tijd",
+  "groupMode.byUpdatedTime": "Groeperen op bijgewerkte tijd",
   "groupMode.descMessages": "Sorteren op aantal berichten aflopend",
   "groupMode.flat": "Geen groepering",
   "groupTitle.byTime.month": "Deze maand",

@@ -50,6 +50,8 @@ export class AgentEvalDatasetModel {
         benchmarkId: agentEvalDatasets.benchmarkId,
         createdAt: agentEvalDatasets.createdAt,
         description: agentEvalDatasets.description,
+        evalConfig: agentEvalDatasets.evalConfig,
+        evalMode: agentEvalDatasets.evalMode,
         id: agentEvalDatasets.id,
         identifier: agentEvalDatasets.identifier,
         metadata: agentEvalDatasets.metadata,

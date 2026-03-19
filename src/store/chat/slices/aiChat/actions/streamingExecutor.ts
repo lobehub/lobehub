@@ -36,6 +36,7 @@ import { topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { topicMapKey } from '../../../utils/topicMapKey';
 import {
+  selectActivatedSkillsFromMessages,
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 } from '../../message/selectors/dbMessage';
@@ -127,7 +128,9 @@ export class StreamingExecutorActionImpl {
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
 
     if (!agentConfigData || !agentConfigData.model) {
-      throw new Error(`[internal_createAgentState] Agent config not found or incomplete for agentId: ${effectiveAgentId}, scope: ${scope}`);
+      throw new Error(
+        `[internal_createAgentState] Agent config not found or incomplete for agentId: ${effectiveAgentId}, scope: ${scope}`,
+      );
     }
 
     log(
@@ -139,10 +142,10 @@ export class StreamingExecutorActionImpl {
 
     // Generate tools using ToolsEngine (centralized here, passed to chatService via agentConfig)
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
-    const toolsEngine = createAgentToolsEngine({
-      model: agentConfigData.model,
-      provider: agentConfigData.provider!,
-    });
+    const toolsEngine = createAgentToolsEngine(
+      { model: agentConfigData.model, provider: agentConfigData.provider! },
+      pluginIds,
+    );
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
@@ -206,6 +209,12 @@ export class StreamingExecutorActionImpl {
         },
         modelRuntimeConfig,
         operationId: operationId ?? agentId,
+        operationToolSet: {
+          enabledToolIds,
+          manifestMap: toolManifestMap,
+          sourceMap: {},
+          tools: toolsDetailed.tools ?? [],
+        },
         toolManifestMap,
         userInterventionConfig,
       });
@@ -440,7 +449,9 @@ export class StreamingExecutorActionImpl {
       const todos = selectTodosFromMessages(currentDBMessages);
       // Accumulate activated tool IDs from lobe-tools messages
       const activatedToolIds = selectActivatedToolIdsFromMessages(currentDBMessages);
-      const stepContext = computeStepContext({ activatedToolIds, todos });
+      // Accumulate activated skills from activateSkill messages
+      const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
+      const stepContext = computeStepContext({ activatedSkills, activatedToolIds, todos });
 
       // If page agent is enabled, get the latest XML for stepPageEditor
       if (nextContext.initialContext?.pageEditor) {

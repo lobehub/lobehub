@@ -7,6 +7,7 @@ export const moonshotChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
       structuredOutput: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 262_144,

@@ -18,6 +18,7 @@
   "favorite": "Favori",
   "groupMode.ascMessages": "Mesaj Sayısına Göre Artan Sırala",
   "groupMode.byTime": "Zamana Göre Grupla",
+  "groupMode.byUpdatedTime": "Güncellenme Zamanına Göre Grupla",
   "groupMode.descMessages": "Mesaj Sayısına Göre Azalan Sırala",
   "groupMode.flat": "Gruplama Yok",
   "groupTitle.byTime.month": "Bu Ay",

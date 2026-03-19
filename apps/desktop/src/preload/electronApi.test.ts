@@ -51,7 +51,7 @@ describe('setupElectronApi', () => {
     });
   });
 
-  it('should expose lobeEnv with darwinMajorVersion and isMacTahoe', () => {
+  it('should expose lobeEnv with darwinMajorVersion, isMacTahoe and platform', () => {
     setupElectronApi();
 
     const call = mockContextBridgeExposeInMainWorld.mock.calls.find((i) => i[0] === 'lobeEnv');
@@ -66,6 +66,9 @@ describe('setupElectronApi', () => {
 
     expect(Object.prototype.hasOwnProperty.call(exposedEnv, 'isMacTahoe')).toBe(true);
     expect(typeof exposedEnv.isMacTahoe).toBe('boolean');
+
+    expect(Object.prototype.hasOwnProperty.call(exposedEnv, 'platform')).toBe(true);
+    expect(['darwin', 'linux', 'win32'].includes(exposedEnv.platform)).toBe(true);
   });
 
   it('should expose both APIs in correct order', () => {

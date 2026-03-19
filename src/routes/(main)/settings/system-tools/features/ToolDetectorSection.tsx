@@ -15,6 +15,16 @@ import { toolDetectorService } from '@/services/electron/toolDetector';
  * This allows us to always show all tools even if not detected
  */
 const TOOL_CATEGORIES = {
+  'runtime-environment': {
+    descKey: 'settingSystemTools.category.runtimeEnvironment.desc',
+    titleKey: 'settingSystemTools.category.runtimeEnvironment',
+    tools: [
+      { descKey: 'settingSystemTools.tools.node.desc', name: 'node' },
+      { descKey: 'settingSystemTools.tools.python.desc', name: 'python' },
+      { descKey: 'settingSystemTools.tools.npm.desc', name: 'npm' },
+    ],
+  },
+
   'content-search': {
     descKey: 'settingSystemTools.category.contentSearch.desc',
     titleKey: 'settingSystemTools.category.contentSearch',
@@ -32,6 +42,11 @@ const TOOL_CATEGORIES = {
       { descKey: 'settingSystemTools.tools.fd.desc', name: 'fd' },
       { descKey: 'settingSystemTools.tools.find.desc', name: 'find' },
     ],
+  },
+  'browser-automation': {
+    descKey: 'settingSystemTools.category.browserAutomation.desc',
+    titleKey: 'settingSystemTools.category.browserAutomation',
+    tools: [{ descKey: 'settingSystemTools.tools.agentBrowser.desc', name: 'agent-browser' }],
   },
 } as const;
 
@@ -61,40 +76,30 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
     );
   }
 
+  if (!status.available) {
+    return (
+      <Flexbox horizontal align="center" gap={8} justify="center">
+        <Icon color="var(--ant-color-error)" icon={XCircle} size={16} />
+        <Text type="secondary">{t('settingSystemTools.status.unavailable')}</Text>
+      </Flexbox>
+    );
+  }
+
   return (
-    <Flexbox horizontal align="center" gap={8} wrap="wrap">
-      {status.available ? (
-        <>
-          <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={16} />
-          <Text type="success">{t('settingSystemTools.status.available')}</Text>
-          {status.version && (
-            <Tag color="processing" style={{ marginInlineStart: 4 }}>
-              {status.version}
-            </Tag>
-          )}
-          {status.path && (
-            <Tooltip title={status.path}>
-              <Flexbox horizontal align="center" gap={4} style={{ maxWidth: 200 }}>
-                <Text ellipsis style={{ fontSize: 12 }} type="secondary">
-                  {status.path}
-                </Text>
-                <CopyButton content={status.path} size="small" />
-              </Flexbox>
-            </Tooltip>
-          )}
-        </>
-      ) : (
-        <>
-          <Icon color="var(--ant-color-error)" icon={XCircle} size={16} />
-          <Text type="secondary">{t('settingSystemTools.status.unavailable')}</Text>
-          {status.error && (
-            <Tooltip title={status.error}>
-              <Text ellipsis style={{ fontSize: 12, maxWidth: 200 }} type="secondary">
-                ({status.error})
-              </Text>
-            </Tooltip>
-          )}
-        </>
+    <Flexbox align="flex-end" gap={4}>
+      <Flexbox horizontal align="center" gap={8} justify="flex-end">
+        <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={16} />
+        <Text type="success">{t('settingSystemTools.status.available')}</Text>
+      </Flexbox>
+      {status.path && (
+        <Tooltip title={status.path}>
+          <Flexbox horizontal align="center" gap={4} justify="flex-end" style={{ maxWidth: 280 }}>
+            <Text ellipsis style={{ fontSize: 12 }} type="secondary">
+              {status.path}
+            </Text>
+            <CopyButton content={status.path} size="small" />
+          </Flexbox>
+        </Tooltip>
       )}
     </Flexbox>
   );
@@ -136,12 +141,25 @@ const ToolDetectorSection = memo(() => {
 
   const formItems: FormGroupItemType[] = Object.entries(TOOL_CATEGORIES).map(
     ([, categoryConfig]) => ({
-      children: categoryConfig.tools.map((tool) => ({
-        children: <ToolStatusDisplay isDetecting={detecting} status={toolStatuses[tool.name]} />,
-        desc: t(tool.descKey),
-        label: tool.name,
-        minWidth: undefined,
-      })),
+      children: categoryConfig.tools.map((tool) => {
+        const status = toolStatuses[tool.name];
+        const label = (
+          <Flexbox horizontal align="center" gap={8}>
+            <Text>{tool.name}</Text>
+            {status?.version && (
+              <Tag color="processing" style={{ marginInlineStart: 0 }}>
+                {status.version}
+              </Tag>
+            )}
+          </Flexbox>
+        );
+        return {
+          children: <ToolStatusDisplay isDetecting={detecting} status={status} />,
+          desc: t(tool.descKey),
+          label,
+          minWidth: undefined,
+        };
+      }),
       desc: t(categoryConfig.descKey),
       title: t(categoryConfig.titleKey),
     }),

@@ -413,12 +413,7 @@ export class MarketService {
 
     log('searchSkill response: %O', result);
 
-    return {
-      items: result.items,
-      page: result.currentPage,
-      pageSize: result.pageSize,
-      total: result.totalCount,
-    };
+    return result;
   }
 
   /**

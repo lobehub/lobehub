@@ -13,10 +13,12 @@ import { sha256 } from 'js-sha256';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
+import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { SkillResourceService } from '@/server/services/skill/resource';
+import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -66,6 +68,55 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     if (!skill) throw new Error(`Skill not found: ${id}`);
     if (!skill.resources) throw new Error(`Skill has no resources: ${id}`);
     return this.resourceService.readResource(skill.resources, path);
+  };
+
+  runCommand = async (options: { command: string }): Promise<CommandResult> => {
+    if (!this.topicId) {
+      throw new Error('topicId is required for runCommand');
+    }
+
+    // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
+    const lhResult = await preprocessLhCommand(options.command, this.userId);
+    if (lhResult.error) {
+      return { exitCode: 1, output: '', stderr: lhResult.error, success: false };
+    }
+
+    try {
+      const market = this.marketService.market;
+      const response = await market.plugins.runBuildInTool(
+        'runCommand' as any,
+        { command: lhResult.command },
+        { topicId: this.topicId, userId: this.userId },
+      );
+
+      log('runCommand response: %O', response);
+
+      if (!response.success) {
+        return {
+          exitCode: 1,
+          output: '',
+          stderr: response.error?.message || 'Command execution failed',
+          success: false,
+        };
+      }
+
+      const result = response.data?.result || {};
+
+      return {
+        exitCode: result.exitCode ?? (response.success ? 0 : 1),
+        output: result.stdout || result.output || '',
+        stderr: result.stderr || '',
+        success: response.success && (result.exitCode === 0 || result.exitCode === undefined),
+      };
+    } catch (error) {
+      log('Error running command: %O', error);
+      return {
+        exitCode: 1,
+        output: '',
+        stderr: (error as Error).message || 'Command execution failed',
+        success: false,
+      };
+    }
   };
 
   execScript = async (
@@ -291,7 +342,10 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       userId: context.userId,
     });
 
-    return new SkillsExecutionRuntime({ builtinSkills, service });
+    return new SkillsExecutionRuntime({
+      builtinSkills: filterBuiltinSkills(builtinSkills),
+      service,
+    });
   },
   identifier: SkillsIdentifier,
 };

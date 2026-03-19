@@ -16,11 +16,6 @@ export const shouldEnableTool = (toolId: string): boolean => {
     return isDesktop;
   }
 
-  // Add more platform-specific filters here as needed
-  // if (toolId === SomeOtherPlatformSpecificTool.identifier) {
-  //   return someCondition;
-  // }
-
   return true;
 };
 

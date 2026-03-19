@@ -419,6 +419,7 @@ export default {
   'navPanel.searchAgent': 'Search Agent...',
   'navPanel.searchResultEmpty': 'No search results found',
   'new': 'New',
+  'pro': 'Pro',
   'noContent': 'No content',
   'oauth': 'SSO Login',
   'officialSite': 'Official Website',

@@ -45,7 +45,7 @@ export const AddIdentityMemoryInspector = memo<
       <span>{t('builtins.lobe-user-memory.apiName.addIdentityMemory')}</span>
       {title && (
         <>
-          : <span className={highlightTextStyles.primary}>{title}</span>
+          :<span className={highlightTextStyles.primary}>{title}</span>
         </>
       )}
       {!isLoading && isSuccess && (

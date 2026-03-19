@@ -66,9 +66,18 @@ export const { POST } = serve<FinalizeRunPayload>(
 
     log('Metrics: %O', metrics);
 
-    // Step 4: Update run status (failed if all cases errored/timed out)
+    // Step 4: Update run status
+    // external: any topic awaits external scoring → whole run waits too
+    // failed: all cases are non-success (error/timeout)
+    // completed: everything else
     const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
-    const runStatus = nonSuccessCases >= metrics.totalCases ? 'failed' : 'completed';
+    const externalCount = metrics.externalCases || 0;
+    const runStatus =
+      externalCount > 0
+        ? 'external'
+        : nonSuccessCases >= metrics.totalCases
+          ? 'failed'
+          : 'completed';
 
     await context.run('agent-eval-run:update-run', async () => {
       const runModel = new AgentEvalRunModel(db, userId);

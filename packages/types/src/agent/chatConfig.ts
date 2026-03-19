@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { type SearchMode } from '../search';
 import { type UserMemoryEffort } from '../user/settings/memory';
-import { type LocalSystemConfig } from './agentConfig';
+import { type RuntimeEnvConfig } from './agentConfig';
 
 export interface WorkingModel {
   model: string;
@@ -19,10 +19,12 @@ export interface AgentMemoryChatConfig {
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   autoCreateTopicThreshold: number;
+  codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
+
   /**
    * Disable context caching
    */
@@ -34,7 +36,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
   enableAdaptiveThinking?: boolean;
-
   enableAutoCreateTopic?: boolean;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -72,6 +73,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
    */
@@ -93,12 +95,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    */
   imageResolution2?: '512px' | '1K' | '2K' | '4K';
   inputTemplate?: string;
-  /**
-   * Local System configuration (desktop only)
-   */
-  localSystem?: LocalSystemConfig;
   reasoningBudgetToken?: number;
   reasoningEffort?: 'low' | 'medium' | 'high';
+  /**
+   * Runtime environment configuration (desktop only)
+   */
+  runtimeEnv?: RuntimeEnvConfig;
 
   searchFCModel?: WorkingModel;
   searchMode?: SearchMode;
@@ -128,9 +130,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
 }
 
 /**
- * Zod schema for LocalSystemConfig
+ * Zod schema for RuntimeEnvConfig
  */
-export const LocalSystemConfigSchema = z.object({
+const runtimeEnvModeEnum = z.enum(['local', 'cloud', 'none']);
+
+export const RuntimeEnvConfigSchema = z.object({
+  runtimeMode: z.record(z.string(), runtimeEnvModeEnum).optional(),
   workingDirectory: z.string().optional(),
 });
 
@@ -147,6 +152,7 @@ export const MemoryChatConfigSchema = z.object({
 export const AgentChatConfigSchema = z
   .object({
     autoCreateTopicThreshold: z.number().default(2),
+    codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -164,12 +170,13 @@ export const AgentChatConfigSchema = z
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
+    grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),
     imageResolution: z.enum(['1K', '2K', '4K']).optional(),
     imageResolution2: z.enum(['512px', '1K', '2K', '4K']).optional(),
-    localSystem: LocalSystemConfigSchema.optional(),
+    runtimeEnv: RuntimeEnvConfigSchema.optional(),
     reasoningBudgetToken: z.number().optional(),
     reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     searchFCModel: z

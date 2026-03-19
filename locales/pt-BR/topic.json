@@ -18,6 +18,7 @@
   "favorite": "Favorito",
   "groupMode.ascMessages": "Ordenar por Total de Mensagens Crescente",
   "groupMode.byTime": "Agrupar por Tempo",
+  "groupMode.byUpdatedTime": "Agrupar por Hora de Atualização",
   "groupMode.descMessages": "Ordenar por Total de Mensagens Decrescente",
   "groupMode.flat": "Sem Agrupamento",
   "groupTitle.byTime.month": "Este Mês",

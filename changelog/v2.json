@@ -2,6 +2,21 @@
   {
     "children": {
       "improvements": [
+        "add BM25 indexes with ICU tokenizer for search optimization.",
+        "add agent_documents table."
+      ]
+    },
+    "date": "2026-03-16",
+    "version": "2.1.43"
+  },
+  {
+    "children": {},
+    "date": "2026-03-14",
+    "version": "2.1.42"
+  },
+  {
+    "children": {
+      "improvements": [
         "add description column to topics table.",
         "add migration to enable pg_search extension."
       ]

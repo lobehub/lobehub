@@ -106,8 +106,14 @@ export default {
     'Sorry, the message could not be sent successfully. Please copy the content and try sending it again. This message will not be retained after refreshing the page.',
   'response.ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  'response.ExceededContextWindowCloud':
+    'The conversation is too long to process. Please edit your last message to reduce input or delete some messages and try again.',
+  'response.QuotaLimitReachedCloud':
+    'The model service is currently under heavy load. Please try again later.',
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+  'response.InsufficientBudgetForModel':
+    'Your remaining credits are insufficient for this model. Please top up credits, upgrade your plan, or try a less expensive model.',
   'response.GoogleAIBlockReason.BLOCKLIST':
     'Your content contains prohibited terms. Please review and modify your input, then try again.',
   'response.GoogleAIBlockReason.IMAGE_SAFETY':

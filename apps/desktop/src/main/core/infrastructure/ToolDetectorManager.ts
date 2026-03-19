@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { App } from '@/core/App';
+import type { App } from '@/core/App';
 import { createLogger } from '@/utils/logger';
 
 const execPromise = promisify(exec);
@@ -25,7 +25,7 @@ export interface IToolDetector {
   /** Description */
   description?: string;
   /** Detection method */
-  detect(): Promise<ToolStatus>;
+  detect: () => Promise<ToolStatus>;
   /** Tool name, e.g., 'rg', 'mdfind' */
   name: string;
   /** Priority within category, lower number = higher priority */
@@ -35,7 +35,14 @@ export interface IToolDetector {
 /**
  * Tool categories
  */
-export type ToolCategory = 'content-search' | 'ast-search' | 'file-search' | 'system' | 'custom';
+export type ToolCategory =
+  | 'content-search'
+  | 'ast-search'
+  | 'file-search'
+  | 'browser-automation'
+  | 'runtime-environment'
+  | 'system'
+  | 'custom';
 
 /**
  * Tool Detector Manager

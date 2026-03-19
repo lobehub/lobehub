@@ -1,10 +1,11 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import {
+import type {
   IToolDetector,
-  ToolStatus,
-  createCommandDetector,
+  ToolStatus} from '@/core/infrastructure/ToolDetectorManager';
+import {
+  createCommandDetector
 } from '@/core/infrastructure/ToolDetectorManager';
 
 const execPromise = promisify(exec);

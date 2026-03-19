@@ -31,6 +31,15 @@ export interface StepContextTodos {
 }
 
 /**
+ * Activated skill info from activateSkill messages
+ */
+export interface StepActivatedSkill {
+  description?: string;
+  id: string;
+  name: string;
+}
+
+/**
  * Page Editor context for each step
  * Contains the latest XML structure fetched at each step
  */
@@ -81,6 +90,11 @@ export interface InitialPageEditorContext {
  * ```
  */
 export interface RuntimeStepContext {
+  /**
+   * Activated skills accumulated from activateSkill messages
+   * Skills once activated remain active for the rest of the conversation
+   */
+  activatedSkills?: StepActivatedSkill[];
   /**
    * Activated tool identifiers accumulated from lobe-tools messages
    * Tools once activated remain active for the rest of the conversation

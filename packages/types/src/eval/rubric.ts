@@ -22,6 +22,8 @@ export type RubricType =
   // Similarity
   | 'similar'
   | 'levenshtein'
+  // External evaluation
+  | 'external'
   // Composite
   | 'rubric';
 

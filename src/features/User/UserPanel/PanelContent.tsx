@@ -8,7 +8,6 @@ import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
-import { clearDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
 import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -39,7 +38,6 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       } catch (error) {
         console.error(error);
       } finally {
-        clearDesktopOnboardingCompleted();
         signOut();
         navigateToDesktopOnboarding(DesktopOnboardingScreen.Login);
       }

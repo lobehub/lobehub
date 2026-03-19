@@ -18,6 +18,7 @@
   "favorite": "즐겨찾기",
   "groupMode.ascMessages": "메시지 총 수 오름차순",
   "groupMode.byTime": "시간별 그룹화",
+  "groupMode.byUpdatedTime": "업데이트 시간별 그룹화",
   "groupMode.descMessages": "메시지 총 수 내림차순",
   "groupMode.flat": "그룹화하지 않음",
   "groupTitle.byTime.month": "이번 달",

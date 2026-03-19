@@ -4,46 +4,38 @@ export const SkillsApiName = {
   execScript: 'execScript',
   exportFile: 'exportFile',
   readReference: 'readReference',
-  runSkill: 'runSkill',
+  runCommand: 'runCommand',
+  activateSkill: 'activateSkill',
 };
 
-export interface RunSkillParams {
+export interface ActivateSkillParams {
   name: string;
 }
 
-export interface RunSkillState {
+export interface ActivateSkillState {
   description?: string;
   hasResources: boolean;
   id: string;
   name: string;
 }
 
+/**
+ * Activated skill info passed to execScript
+ */
+export interface ExecScriptActivatedSkill {
+  description?: string;
+  id: string;
+  name: string;
+}
+
 export interface ExecScriptParams {
+  /**
+   * All activated skills from stepContext
+   * Server will resolve zipUrls for all skills
+   */
+  activatedSkills?: ExecScriptActivatedSkill[];
   command: string;
-  /**
-   * Skill configuration context
-   * Used by server to locate skill resources (zipUrl will be resolved server-side)
-   */
-  config?: {
-    /**
-     * Current skill's description
-     */
-    description?: string;
-    /**
-     * Current skill's ID
-     */
-    id?: string;
-    /**
-     * Current skill's name
-     */
-    name?: string;
-  };
   description: string;
-  /**
-   * Whether to run on the desktop client (for local shell access).
-   * Only available on desktop. When false or omitted, runs in cloud sandbox.
-   */
-  runInClient?: boolean;
 }
 
 export interface ExecScriptState {
@@ -54,7 +46,6 @@ export interface ExecScriptState {
 
 export interface RunCommandOptions {
   command: string;
-  runInClient?: boolean;
   timeout?: number;
 }
 
@@ -65,6 +56,11 @@ export interface CommandResult {
   success: boolean;
 }
 
+export interface RunCommandParams {
+  command: string;
+  description?: string;
+}
+
 export interface ReadReferenceParams {
   id: string;
   path: string;
@@ -73,6 +69,7 @@ export interface ReadReferenceParams {
 export interface ReadReferenceState {
   encoding: 'base64' | 'utf8';
   fileType: string;
+  fullPath?: string;
   path: string;
   size: number;
 }

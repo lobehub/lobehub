@@ -151,3 +151,55 @@ export interface UniformTool {
    */
   type: 'function';
 }
+
+// ---- Tool Lifecycle Types ----
+
+export type ToolSource = 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill';
+
+/**
+ * How a tool was activated at step level
+ */
+export type ActivationSource = 'active_tools' | 'mention' | 'device' | 'discovery';
+
+/**
+ * Operation-level tool set: determined at createOperation time, immutable during execution.
+ */
+export interface OperationToolSet {
+  enabledToolIds: string[];
+  manifestMap: Record<string, LobeToolManifest>;
+  sourceMap: Record<string, ToolSource>;
+  tools: UniformTool[];
+}
+
+/**
+ * Record of a tool activated at step level.
+ */
+export interface ActivatedStepTool {
+  activatedAtStep: number;
+  id: string;
+  manifest?: LobeToolManifest;
+  source: ActivationSource;
+}
+
+/**
+ * Declarative delta describing tool changes for a single step.
+ * Built by `buildStepToolDelta`, consumed by `ToolResolver.resolve`.
+ */
+export interface StepToolDelta {
+  activatedTools: Array<{
+    id: string;
+    manifest?: LobeToolManifest;
+    source: ActivationSource;
+  }>;
+  deactivatedToolIds?: string[];
+}
+
+/**
+ * Final resolved tool set ready for LLM call.
+ */
+export interface ResolvedToolSet {
+  enabledToolIds: string[];
+  manifestMap: Record<string, LobeToolManifest>;
+  sourceMap: Record<string, ToolSource>;
+  tools: UniformTool[];
+}

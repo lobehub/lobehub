@@ -83,6 +83,24 @@ vi.mock('../isCanUseFC', () => ({
   isCanUseFC: () => true,
 }));
 
+let mockCurrentAgentPlugins: string[] = [];
+
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({}),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentSelectors: {
+    currentAgentPlugins: () => mockCurrentAgentPlugins,
+    hasEnabledKnowledgeBases: () => false,
+  },
+  agentChatConfigSelectors: {
+    isCloudSandboxEnabled: () => false,
+    isLocalSystemEnabled: () => false,
+    isMemoryToolEnabled: () => false,
+  },
+}));
+
 let mockUseApplicationBuiltinSearchTool = true;
 
 vi.mock('@/helpers/getSearchConfig', () => ({
@@ -98,6 +116,7 @@ describe('toolEngineering', () => {
     mockGetInstalledPluginById = () => () => undefined;
     mockInstalledPluginManifestList = () => [];
     mockUseApplicationBuiltinSearchTool = true;
+    mockCurrentAgentPlugins = [];
   });
 
   describe('createToolsEngine', () => {
@@ -172,6 +191,8 @@ describe('toolEngineering', () => {
     });
 
     it('should include web browsing tool alongside user-provided tools', () => {
+      mockCurrentAgentPlugins = ['search'];
+
       const toolsEngine = createAgentToolsEngine({
         model: 'gpt-4',
         provider: 'openai',
@@ -244,6 +265,7 @@ describe('toolEngineering', () => {
         id === 'stdio-mcp-plugin'
           ? { customParams: { mcp: { type: 'stdio' } }, identifier: id }
           : undefined;
+      mockCurrentAgentPlugins = ['stdio-mcp-plugin'];
 
       const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
       const result = toolsEngine.generateToolsDetailed({
@@ -293,6 +315,7 @@ describe('toolEngineering', () => {
         id === 'stdio-mcp-plugin'
           ? { customParams: { mcp: { type: 'stdio' } }, identifier: id }
           : undefined;
+      mockCurrentAgentPlugins = ['stdio-mcp-plugin'];
 
       const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
       const result = toolsEngine.generateToolsDetailed({
@@ -310,6 +333,7 @@ describe('toolEngineering', () => {
         id === 'http-mcp-plugin'
           ? { customParams: { mcp: { type: 'http' } }, identifier: id }
           : undefined;
+      mockCurrentAgentPlugins = ['http-mcp-plugin'];
 
       const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
       const result = toolsEngine.generateToolsDetailed({

@@ -4,7 +4,6 @@ import { CURRENT_VERSION } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 
-import { hasTemperatureTopPConflict } from '../../const/models';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -19,6 +18,8 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
+import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
+import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -27,7 +28,7 @@ import {
   buildAnthropicTools,
   buildSearchTool,
 } from '../contextBuilders/anthropic';
-import { resolveParameters } from '../parameterResolver';
+import { resolveModelSamplingParameters } from '../parameterResolver';
 import { AnthropicStream } from '../streams';
 import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 import { createAnthropicGenerateObject } from './generateObject';
@@ -135,14 +136,19 @@ export const buildDefaultAnthropicPayload = async (
     thinking,
   });
 
+  // Filter out empty/whitespace-only system prompts — Anthropic API rejects them
   const systemMessage = messages.find((message) => message.role === 'system');
   const userMessages = messages.filter((message) => message.role !== 'system');
+  const systemPromptText =
+    typeof systemMessage?.content === 'string' && systemMessage.content.trim()
+      ? systemMessage.content
+      : undefined;
 
-  const systemPrompts = systemMessage?.content
+  const systemPrompts = systemPromptText
     ? ([
         {
           cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
-          text: systemMessage.content as string,
+          text: systemPromptText,
           type: 'text',
         },
       ] as Anthropic.TextBlockParam[])
@@ -184,10 +190,12 @@ export const buildDefaultAnthropicPayload = async (
     } as Anthropic.MessageCreateParams;
   }
 
-  const hasConflict = hasTemperatureTopPConflict(model);
-  const resolvedParams = resolveParameters(
+  // Resolve temperature/top_p: Claude 4+ doesn't allow both simultaneously.
+  // normalizeTemperature divides by 2 to map LobeChat's 0-2 range to Anthropic's 0-1 range.
+  const resolvedSamplingParams = resolveModelSamplingParameters(
+    model,
     { temperature, top_p },
-    { hasConflict, normalizeTemperature: true, preferTemperature: true },
+    { normalizeTemperature: true, preferTemperature: true },
   );
 
   // Support effort parameter even without thinking (per Claude 4.6 guidance)
@@ -196,9 +204,9 @@ export const buildDefaultAnthropicPayload = async (
     messages: postMessages,
     model,
     system: systemPrompts,
-    temperature: resolvedParams.temperature,
+    temperature: resolvedSamplingParams.temperature,
     tools: postTools as Anthropic.MessageCreateParams['tools'],
-    top_p: resolvedParams.top_p,
+    top_p: resolvedSamplingParams.top_p,
   };
 
   // If effort is specified without thinking mode, add output_config
@@ -282,6 +290,23 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
   }
 
   const { errorResult } = handleAnthropicError(error);
+
+  const errorMsg = errorResult.message || errorResult.error?.message;
+  if (isExceededContextWindowError(errorMsg)) {
+    return {
+      endpoint: desensitizedEndpoint,
+      error: errorResult,
+      errorType: AgentRuntimeErrorType.ExceededContextWindow,
+    };
+  }
+
+  if (isQuotaLimitError(errorMsg)) {
+    return {
+      endpoint: desensitizedEndpoint,
+      error: errorResult,
+      errorType: AgentRuntimeErrorType.QuotaLimitReached,
+    };
+  }
 
   return {
     endpoint: desensitizedEndpoint,
@@ -659,6 +684,25 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
         return { headers: error?.headers, stack: error?.stack, status: error?.status };
       })();
+
+      const errorMsg = errorResult.message || errorResult.error?.message;
+      if (isExceededContextWindowError(errorMsg)) {
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          provider: this.id,
+        });
+      }
+
+      if (isQuotaLimitError(errorMsg)) {
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          provider: this.id,
+        });
+      }
 
       return AgentRuntimeError.chat({
         endpoint: desensitizedEndpoint,

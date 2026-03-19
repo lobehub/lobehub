@@ -1,9 +1,10 @@
 import { type UserMemoryEffort } from '@lobechat/types';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { BrainOffIcon } from '@lobehub/ui/icons';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
-import { BrainCircuit, CircleOff } from 'lucide-react';
+import { Brain } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -99,13 +100,13 @@ const Controls = memo(() => {
   const toggleOptions: ToggleOption[] = [
     {
       description: t('memory.off.desc'),
-      icon: CircleOff,
+      icon: BrainOffIcon,
       label: t('memory.off.title'),
       value: 'off',
     },
     {
       description: t('memory.on.desc'),
-      icon: BrainCircuit,
+      icon: Brain,
       label: t('memory.on.title'),
       value: 'on',
     },

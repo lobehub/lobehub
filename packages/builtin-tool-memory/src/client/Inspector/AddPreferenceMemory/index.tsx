@@ -45,7 +45,7 @@ export const AddPreferenceMemoryInspector = memo<
       <span>{t('builtins.lobe-user-memory.apiName.addPreferenceMemory')}</span>
       {title && (
         <>
-          : <span className={highlightTextStyles.primary}>{title}</span>
+          :<span className={highlightTextStyles.primary}>{title}</span>
         </>
       )}
       {!isLoading && isSuccess && (

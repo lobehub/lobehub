@@ -1,7 +1,8 @@
-import { app, protocol } from 'electron';
-import { pathExistsSync } from 'fs-extra';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
+
+import { app, protocol } from 'electron';
+import { pathExistsSync } from 'fs-extra';
 
 import { createLogger } from '@/utils/logger';
 

@@ -2,7 +2,7 @@ import { type ChatStoreState } from '@/store/chat/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type Operation, type OperationType } from './types';
-import { AI_RUNTIME_OPERATION_TYPES } from './types';
+import { AI_RUNTIME_OPERATION_TYPES, INPUT_LOADING_OPERATION_TYPES } from './types';
 
 // === Basic Queries ===
 /**
@@ -229,6 +229,45 @@ const isAgentRuntimeRunningByContext =
     return operations.some(
       (op) =>
         AI_RUNTIME_OPERATION_TYPES.includes(op.type) &&
+        op.status === 'running' &&
+        !op.metadata.isAborting,
+    );
+  };
+
+/**
+ * Check if input should show loading state in a specific context
+ * Includes sendMessage in addition to AI runtime operations,
+ * so the input stays in loading state from the moment user sends until AI finishes
+ */
+const isInputLoadingByContext =
+  (context: {
+    agentId?: string;
+    groupId?: string;
+    threadId?: string | null;
+    topicId?: string | null;
+  }) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const contextKey = messageMapKey({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      topicId: context.topicId,
+    });
+
+    const operationIds = s.operationsByContext[contextKey] || [];
+    const operations = operationIds
+      .map((id) => s.operations[id])
+      .filter((op): op is Operation => {
+        if (!op) return false;
+        const opThreadId = op.context.threadId ?? null;
+        const contextThreadId = context.threadId ?? null;
+        return opThreadId === contextThreadId;
+      });
+
+    return operations.some(
+      (op) =>
+        INPUT_LOADING_OPERATION_TYPES.includes(op.type) &&
         op.status === 'running' &&
         !op.metadata.isAborting,
     );
@@ -523,6 +562,7 @@ export const operationSelectors = {
   isAgentRuntimeRunning,
   isAgentUnreadCompleted,
   isAgentRuntimeRunningByContext,
+  isInputLoadingByContext,
   isAnyMessageLoading,
   isContinuing,
   isInSearchWorkflow,

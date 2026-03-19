@@ -9,6 +9,7 @@ import {
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
+  HistoryTruncateProcessor,
   InputTemplateProcessor,
   MessageCleanupProcessor,
   MessageContentProcessor,
@@ -121,6 +122,8 @@ export class MessagesEngine {
       provider,
       systemRole,
       inputTemplate,
+      enableHistoryCount,
+      historyCount,
       forceFinish,
       historySummary,
       formatHistorySummary,
@@ -143,6 +146,7 @@ export class MessagesEngine {
       stepContext,
       pageContentContext,
       enableSystemDate,
+      timezone,
     } = this.params;
 
     const isAgentBuilderEnabled = !!agentBuilderContext;
@@ -168,6 +172,17 @@ export class MessagesEngine {
 
     return [
       // =============================================
+      // Phase 0: History Truncation (FIRST - truncate before any processing)
+      // =============================================
+
+      // 0. History truncate (limit message count based on configuration)
+      // This MUST be first to ensure subsequent processors only work with truncated messages
+      new HistoryTruncateProcessor({
+        enableHistoryCount,
+        historyCount,
+      }),
+
+      // =============================================
       // Phase 1: System Role Injection
       // =============================================
 
@@ -178,7 +193,7 @@ export class MessagesEngine {
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
 
       // 3. System date injection (appends current date to system message)
-      new SystemDateProvider({ enabled: isSystemDateEnabled }),
+      new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
 
       // =============================================
       // Phase 2: First User Message Context Injection
