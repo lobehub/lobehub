@@ -1,5 +1,6 @@
 'use client';
 
+import { Progress } from 'antd';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,28 +30,45 @@ const computeSpend = (
   };
 };
 
-const TodaySpend = memo<UsageChartProps>(({ data, isLoading }) => {
+const TodaySpend = memo<UsageChartProps>(({ data, isLoading, quota }) => {
   const { t } = useTranslation('auth');
 
   const { today, yesterday } = computeSpend(data || []);
 
+  const todayNum = typeof today === 'number' ? today : parseFloat(today as string) || 0;
+  const pct =
+    quota?.effectiveDailyCostLimit != null && quota.effectiveDailyCostLimit > 0
+      ? Math.min(100, (todayNum / quota.effectiveDailyCostLimit) * 100)
+      : null;
+
   return (
-    <StatisticCard
-      loading={isLoading}
-      statistic={{
-        description: <Statistic title={t('usage.cards.today.yesterday')} value={yesterday} />,
-        precision: 2,
-        prefix: '$',
-        value: today,
-      }}
-      title={
-        <TitleWithPercentage
-          count={typeof today === 'number' ? today : 0}
-          prvCount={typeof yesterday === 'number' ? yesterday : 0}
-          title={t('usage.cards.today.title')}
+    <>
+      <StatisticCard
+        loading={isLoading}
+        statistic={{
+          description: <Statistic title={t('usage.cards.today.yesterday')} value={yesterday} />,
+          precision: 2,
+          prefix: '$',
+          value: today,
+        }}
+        title={
+          <TitleWithPercentage
+            count={typeof today === 'number' ? today : 0}
+            prvCount={typeof yesterday === 'number' ? yesterday : 0}
+            title={t('usage.cards.today.title')}
+          />
+        }
+      />
+      {pct !== null && (
+        <Progress
+          percent={Math.round(pct)}
+          size="small"
+          status={pct >= 100 ? 'exception' : 'normal'}
+          strokeColor={pct >= 80 && pct < 100 ? '#faad14' : undefined}
+          style={{ marginTop: 8 }}
         />
-      }
-    />
+      )}
+    </>
   );
 });
 

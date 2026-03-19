@@ -1,3 +1,4 @@
+import { type QuotaCheckResult } from '@/server/services/usage';
 import { type UsageLog } from '@/types/usage/usageRecord';
 
 export interface UsageChartProps {
@@ -8,6 +9,7 @@ export interface UsageChartProps {
   isAdminView?: boolean;
   isLoading?: boolean;
   mobile?: boolean;
+  quota?: QuotaCheckResult;
 }
 
 export enum GroupBy {
