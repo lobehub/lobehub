@@ -1,9 +1,12 @@
 'use client';
 
 import { ModelTag } from '@lobehub/icons';
-import { Block, Flexbox, Markdown, Tag, Text } from '@lobehub/ui';
+import { ActionIconGroup, Block, Flexbox, Markdown, Tag, Text } from '@lobehub/ui';
 import { App } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
+import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
+import { type RuntimeVideoGenParamsKeys, type RuntimeVideoGenParamsValue } from 'model-bank';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,15 +21,35 @@ import VideoLoadingItem from './VideoLoadingItem';
 import VideoReferenceFrames from './VideoReferenceFrames';
 import VideoSuccessItem from './VideoSuccessItem';
 
+const styles = createStaticStyles(({ css, cssVar, cx }) => ({
+  batchActions: cx(
+    'batch-actions',
+    css`
+      opacity: 0;
+      transition: opacity 0.1s ${cssVar.motionEaseInOut};
+    `,
+  ),
+  container: css`
+    &:hover {
+      .batch-actions {
+        opacity: 1;
+      }
+    }
+  `,
+}));
+
 interface VideoGenerationBatchItemProps {
   batch: GenerationBatch;
 }
 
 export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ batch }) => {
   const { message } = App.useApp();
-  const { t } = useTranslation('video');
+  const { t } = useTranslation(['video', 'image']);
   const useCheckGenerationStatus = useVideoStore((s) => s.useCheckGenerationStatus);
   const removeGeneration = useVideoStore((s) => s.removeGeneration);
+  const removeGenerationBatch = useVideoStore((s) => s.removeGenerationBatch);
+  const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
+  const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
   const activeTopicId = useVideoStore((s) => s.activeGenerationTopicId);
   const { shouldRenderBusinessBatchItem, businessBatchItem } =
     useRenderBusinessVideoBatchItem(batch);
@@ -56,6 +79,38 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
       console.error('Failed to delete generation:', error);
     }
   }, [removeGeneration, generation?.id]);
+
+  const handleCopyPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(batch.prompt);
+      message.success(t('generation.actions.promptCopied', { ns: 'image' }));
+    } catch (error) {
+      console.error('Failed to copy prompt:', error);
+      message.error(t('generation.actions.promptCopyFailed', { ns: 'image' }));
+    }
+  }, [batch.prompt, message, t]);
+
+  const handleReuseSettings = useCallback(() => {
+    setModelAndProviderOnSelect(batch.model, batch.provider);
+
+    if (!batch.config) return;
+
+    for (const [paramName, value] of Object.entries(batch.config)) {
+      if (value === undefined) continue;
+
+      setParamOnInput(paramName as RuntimeVideoGenParamsKeys, value as RuntimeVideoGenParamsValue);
+    }
+  }, [batch.config, batch.model, batch.provider, setModelAndProviderOnSelect, setParamOnInput]);
+
+  const handleDeleteBatch = useCallback(async () => {
+    if (!activeTopicId) return;
+
+    try {
+      await removeGenerationBatch(batch.id, activeTopicId);
+    } catch (error) {
+      console.error('Failed to delete batch:', error);
+    }
+  }, [activeTopicId, batch.id, removeGenerationBatch]);
 
   const handleDownload = useCallback(async () => {
     if (!generation?.asset?.url) return;
@@ -148,18 +203,13 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   const promptAndMetadata = (
     <>
       <Markdown variant={'chat'}>{batch.prompt}</Markdown>
-      <Flexbox horizontal gap={4} style={{ marginBottom: 10 }}>
-        <ModelTag model={batch.model} />
-        {batch.config?.resolution && <Tag>{batch.config.resolution}</Tag>}
-        {displayAspectRatio && <Tag>{displayAspectRatio}</Tag>}
-      </Flexbox>
     </>
   );
 
   return (
-    <Block gap={8} variant={'borderless'}>
+    <Block className={styles.container} gap={8} variant={'borderless'}>
       {hasReferenceFrames ? (
-        <Flexbox horizontal align={'center'} gap={16}>
+        <Flexbox horizontal gap={16}>
           <VideoReferenceFrames
             endImageUrl={batch.config?.endImageUrl}
             imageUrl={batch.config?.imageUrl}
@@ -172,9 +222,43 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
         promptAndMetadata
       )}
       {renderContent()}
-      <Text as={'time'} fontSize={12} type={'secondary'}>
-        {time}
-      </Text>
+      <Flexbox horizontal gap={4} style={{ opacity: 0.66 }}>
+        <ModelTag model={batch.model} variant={'borderless'} />
+        {batch.config?.resolution && <Tag variant={'borderless'}>{batch.config.resolution}</Tag>}
+      </Flexbox>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.batchActions}
+        justify={'space-between'}
+      >
+        <ActionIconGroup
+          items={[
+            {
+              icon: RotateCcwSquareIcon,
+              key: 'reuseSettings',
+              label: t('generation.actions.reuseSettings', { ns: 'image' }),
+              onClick: handleReuseSettings,
+            },
+            {
+              icon: CopyIcon,
+              key: 'copyPrompt',
+              label: t('generation.actions.copyPrompt', { ns: 'image' }),
+              onClick: handleCopyPrompt,
+            },
+            {
+              danger: true,
+              icon: Trash2,
+              key: 'deleteBatch',
+              label: t('generation.actions.deleteBatch', { ns: 'image' }),
+              onClick: handleDeleteBatch,
+            },
+          ]}
+        />
+        <Text as={'time'} fontSize={12} type={'secondary'}>
+          {time}
+        </Text>
+      </Flexbox>
     </Block>
   );
 });

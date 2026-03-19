@@ -270,12 +270,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                   title={t('config.duration.label')}
                   trigger={'click'}
                   popover={{
-                    content: (
-                      <Flexbox gap={6}>
-                        <Text fontSize={12}>{t('config.duration.label')}</Text>
-                        <DurationItem />
-                      </Flexbox>
-                    ),
+                    content: <DurationItem />,
                     minWidth: 220,
                     title: t('config.duration.label'),
                   }}

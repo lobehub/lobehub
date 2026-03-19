@@ -1,78 +1,36 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Image } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import { QuoteIcon } from 'lucide-react';
 import { memo } from 'react';
 
-import ImageItem from '@/components/ImageItem';
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  frameEnd: css`
-    position: relative;
-    transform: rotate(3deg);
-
+  container: css`
     flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    margin-inline-start: -16px;
+  `,
+  image: css`
+    padding: 2px;
+    box-shadow: ${cssVar.boxShadowTertiary};
 
-    width: 64px;
-    height: 64px;
-
-    transition: transform 0.2s ease;
-
-    &::before {
-      content: '';
-
-      position: absolute;
-      z-index: -1;
-      inset: -4px;
-
-      border: 1px solid ${cssVar.colorBorder};
-      border-radius: ${cssVar.borderRadius}px;
-
-      background: ${cssVar.colorBgContainer};
-      box-shadow: 0 2px 8px ${cssVar.colorBgMask};
-    }
-
-    &:hover {
-      transform: rotate(1deg) scale(1.05);
+    img {
+      border-radius: 6px;
     }
   `,
-  frameInner: css`
-    overflow: hidden;
+  icon: css`
+    pointer-events: none;
 
-    width: 100%;
-    height: 100%;
-    border-radius: ${cssVar.borderRadiusSM}px;
+    z-index: 10;
 
-    background: ${cssVar.colorBgLayout};
-  `,
-  frameStart: css`
-    position: relative;
-    transform: rotate(-3deg);
+    border-radius: 50% !important;
 
-    flex-shrink: 0;
+    color: ${cssVar.colorBgLayout};
 
-    width: 64px;
-    height: 64px;
-
-    transition: transform 0.2s ease;
-
-    &::before {
-      content: '';
-
-      position: absolute;
-      z-index: -1;
-      inset: -4px;
-
-      border: 1px solid ${cssVar.colorBorder};
-      border-radius: ${cssVar.borderRadius}px;
-
-      background: ${cssVar.colorBgContainer};
-      box-shadow: 0 2px 8px ${cssVar.colorBgMask};
-    }
-
-    &:hover {
-      transform: rotate(-1deg) scale(1.05);
-    }
+    background: ${cssVar.colorFill};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
@@ -82,35 +40,37 @@ interface VideoReferenceFramesProps {
 }
 
 const VideoReferenceFrames = memo<VideoReferenceFramesProps>(({ imageUrl, endImageUrl }) => {
-  if (!imageUrl && !endImageUrl) return null;
+  const allImages: string[] = [];
+  if (imageUrl) allImages.push(imageUrl);
+  if (endImageUrl) allImages.push(endImageUrl);
+
+  if (allImages.length === 0) return null;
 
   return (
-    <Flexbox horizontal align={'center'} gap={12}>
-      {imageUrl && (
-        <div className={styles.frameStart}>
-          <div className={styles.frameInner}>
-            <ImageItem
-              alt="Start frame"
-              preview={{ src: imageUrl }}
+    <Image.PreviewGroup>
+      <Flexbox horizontal align={'flex-end'} flex={'none'} wrap="wrap">
+        <ActionIcon
+          glass
+          className={styles.icon}
+          icon={QuoteIcon}
+          size={'small'}
+          variant={'filled'}
+        />
+        {allImages.map((url, index) => (
+          <div className={styles.container} key={`${url}-${index}`}>
+            <Image
+              alt={index === 0 ? 'Start frame' : 'End frame'}
+              className={styles.image}
+              height={'100%'}
+              src={url}
               style={{ height: '100%', width: '100%' }}
-              url={imageUrl}
+              variant={'outlined'}
+              width={'100%'}
             />
           </div>
-        </div>
-      )}
-      {endImageUrl && (
-        <div className={styles.frameEnd}>
-          <div className={styles.frameInner}>
-            <ImageItem
-              alt="End frame"
-              preview={{ src: endImageUrl }}
-              style={{ height: '100%', width: '100%' }}
-              url={endImageUrl}
-            />
-          </div>
-        </div>
-      )}
-    </Flexbox>
+        ))}
+      </Flexbox>
+    </Image.PreviewGroup>
   );
 });
 
