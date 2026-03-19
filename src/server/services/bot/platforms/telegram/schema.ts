@@ -51,6 +51,13 @@ export const schema: FieldSchema[] = [
         type: 'number',
       },
       {
+        key: 'showUsageStats',
+        default: false,
+        description: 'channel.showUsageStatsHint',
+        label: 'channel.showUsageStats',
+        type: 'boolean',
+      },
+      {
         key: 'dm',
         label: 'channel.dm',
         properties: [

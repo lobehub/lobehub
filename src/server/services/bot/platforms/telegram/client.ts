@@ -7,8 +7,10 @@ import {
   ClientFactory,
   type PlatformClient,
   type PlatformMessenger,
+  type UsageStats,
   type ValidationResult,
 } from '../types';
+import { formatUsageStats } from '../utils';
 import { TELEGRAM_API_BASE, TelegramApi } from './api';
 import { extractBotId, setTelegramWebhook } from './helpers';
 
@@ -97,6 +99,11 @@ class TelegramWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
+  }
+
+  formatReply(body: string, stats?: UsageStats): string {
+    if (!stats || !this.config.settings?.showUsageStats) return body;
+    return `${body}\n\n${formatUsageStats(stats)}`;
   }
 
   parseMessageId(compositeId: string): number {

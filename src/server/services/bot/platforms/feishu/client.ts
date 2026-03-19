@@ -7,8 +7,10 @@ import {
   ClientFactory,
   type PlatformClient,
   type PlatformMessenger,
+  type UsageStats,
   type ValidationResult,
 } from '../types';
+import { formatUsageStats } from '../utils';
 
 const log = debug('bot-platform:feishu:client');
 
@@ -85,6 +87,11 @@ class FeishuWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
+  }
+
+  formatReply(body: string, stats?: UsageStats): string {
+    if (!stats || !this.config.settings?.showUsageStats) return body;
+    return `${body}\n\n${formatUsageStats(stats)}`;
   }
 
   parseMessageId(compositeId: string): string {

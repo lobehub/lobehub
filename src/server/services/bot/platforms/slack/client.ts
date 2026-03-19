@@ -7,8 +7,10 @@ import {
   ClientFactory,
   type PlatformClient,
   type PlatformMessenger,
+  type UsageStats,
   type ValidationResult,
 } from '../types';
+import { formatUsageStats } from '../utils';
 import { SLACK_API_BASE, SlackApi } from './api';
 
 const log = debug('bot-platform:slack:bot');
@@ -78,6 +80,11 @@ class SlackWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
+  }
+
+  formatReply(body: string, stats?: UsageStats): string {
+    if (!stats || !this.config.settings?.showUsageStats) return body;
+    return `${body}\n\n${formatUsageStats(stats)}`;
   }
 
   parseMessageId(compositeId: string): string {

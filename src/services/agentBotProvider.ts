@@ -15,6 +15,7 @@ class AgentBotProviderService {
     credentials: Record<string, string>;
     enabled?: boolean;
     platform: string;
+    settings?: Record<string, unknown>;
   }) => {
     return lambdaClient.agentBotProvider.create.mutate(params);
   };
@@ -26,6 +27,7 @@ class AgentBotProviderService {
       credentials?: Record<string, string>;
       enabled?: boolean;
       platform?: string;
+      settings?: Record<string, unknown>;
     },
   ) => {
     return lambdaClient.agentBotProvider.update.mutate({ id, ...params });

@@ -32,6 +32,7 @@ export const agentBotProviderRouter = router({
         credentials: z.record(z.string()),
         enabled: z.boolean().optional(),
         platform: z.string(),
+        settings: z.record(z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -90,6 +91,7 @@ export const agentBotProviderRouter = router({
         enabled: z.boolean().optional(),
         id: z.string(),
         platform: z.string().optional(),
+        settings: z.record(z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
