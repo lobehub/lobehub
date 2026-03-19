@@ -26,9 +26,38 @@ export const params = {
           ]
         : tools;
 
+      const messages = payload.messages.map((message: any) => {
+        const { reasoning, ...rest } = message;
+
+        const reasoningContent =
+          typeof rest.reasoning_content === 'string'
+            ? rest.reasoning_content
+            : typeof reasoning?.content === 'string'
+              ? reasoning.content
+              : undefined;
+
+        // Thinking Mode with tool calls requires assistant history messages to carry reasoning_content
+        if (message.role === 'assistant' && thinkingType === 'enabled') {
+          return {
+            ...rest,
+            reasoning_content: reasoningContent ?? '',
+          };
+        }
+
+        if (reasoningContent !== undefined) {
+          return {
+            ...rest,
+            reasoning_content: reasoningContent,
+          };
+        }
+
+        return rest;
+      });
+
       return {
         ...rest,
         max_completion_tokens: max_tokens,
+        messages,
         stream: stream ?? true,
         tools: xiaomiTools,
         ...(typeof temperature === 'number'
