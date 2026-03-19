@@ -271,10 +271,22 @@ export const createRuntimeExecutors = (
 
         processedMessages = await serverMessagesEngine(contextEngineInput);
 
-        // Emit context engine event for tracing (captures input params and final LLM messages)
+        // Emit context engine event for tracing
+        // Omit large/redundant fields to reduce snapshot size:
+        // - messages: reconstructible from step's messagesBaseline + messagesDelta
+        // - toolsConfig: static per operation, ~47KB of manifests repeated every call_llm step
+        const {
+          messages: _inputMsgs,
+          toolsConfig: _toolsConfig,
+          ...contextEngineInputLite
+        } = contextEngineInput;
         events.push({
-          input: contextEngineInput,
-          output: processedMessages,
+          input: {
+            ...contextEngineInputLite,
+            // Keep lightweight tool summary for inspection
+            toolCount: _toolsConfig?.tools?.length ?? 0,
+          },
+          outputMessageCount: processedMessages.length,
           type: 'context_engine_result',
         } as any);
       } else {

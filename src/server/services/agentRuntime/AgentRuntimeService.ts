@@ -767,19 +767,56 @@ export class AgentRuntimeService {
           }
 
           if (!partial.steps) partial.steps = [];
+
+          // Incremental diff: only store message delta + baseline at reset points
+          const prevMessages = agentState?.messages ?? [];
+          const afterMessages = stepResult.newState.messages;
+          const isCompression = stepResult.events?.some(
+            (e: any) => e.type === 'compression_complete',
+          );
+          const isBaseline = stepIndex === 0 || isCompression;
+          const messagesDelta = isBaseline
+            ? afterMessages
+            : afterMessages.slice(prevMessages.length);
+
+          // Strip heavy/redundant data from events before persisting to snapshot
+          const snapshotEvents = (stepResult.events as any[])
+            ?.filter((e) => e.type !== 'llm_stream')
+            .map((e) => {
+              if (e.type === 'done' && e.finalState) {
+                // Remove messages from finalState (reconstructible from baseline + delta chain)
+                // Keep operationToolSet/toolManifestMap/tools — may change per step
+                const { messages: _msgs, ...restState } = e.finalState;
+                return { ...e, finalState: restState };
+              }
+              return e;
+            });
+
+          // Strip toolResults from payload (already in step.toolsResult)
+          let snapshotPayload: unknown = currentContext?.payload;
+          if (
+            snapshotPayload &&
+            typeof snapshotPayload === 'object' &&
+            'toolResults' in snapshotPayload
+          ) {
+            const { toolResults: _tr, ...restPayload } = snapshotPayload as Record<string, unknown>;
+            snapshotPayload = restPayload;
+          }
+
           partial.steps.push({
             completedAt: Date.now(),
             content: stepPresentationData.content,
             context: {
-              payload: currentContext?.payload,
+              payload: snapshotPayload,
               phase: currentContext?.phase ?? 'unknown',
               stepContext: currentContext?.stepContext,
             },
-            events: stepResult.events as any,
+            events: snapshotEvents,
             executionTimeMs: stepPresentationData.executionTimeMs,
             inputTokens: stepPresentationData.stepInputTokens,
-            messages: agentState?.messages,
-            messagesAfter: stepResult.newState.messages,
+            isCompressionReset: isCompression || undefined,
+            messagesBaseline: isBaseline ? prevMessages : undefined,
+            messagesDelta,
             outputTokens: stepPresentationData.stepOutputTokens,
             reasoning: stepPresentationData.reasoning,
             startedAt: startAt,

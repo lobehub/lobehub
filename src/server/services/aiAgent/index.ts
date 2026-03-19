@@ -41,6 +41,7 @@ import {
 } from '@/server/modules/Mecha';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
+import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 import { FileService } from '@/server/services/file';
@@ -161,7 +162,11 @@ export class AiAgentService {
   private readonly marketService: MarketService;
   private readonly klavisService: KlavisService;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    options?: { runtimeOptions?: AgentRuntimeServiceOptions },
+  ) {
     this.userId = userId;
     this.db = db;
     this.agentModel = new AgentModel(db, userId);
@@ -170,7 +175,7 @@ export class AiAgentService {
     this.pluginModel = new PluginModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
-    this.agentRuntimeService = new AgentRuntimeService(db, userId);
+    this.agentRuntimeService = new AgentRuntimeService(db, userId, options?.runtimeOptions);
     this.marketService = new MarketService({ userInfo: { userId } });
     this.klavisService = new KlavisService({ db, userId });
   }

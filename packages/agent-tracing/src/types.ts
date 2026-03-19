@@ -35,9 +35,38 @@ export interface StepSnapshot {
   executionTimeMs: number;
 
   inputTokens?: number;
-  // Detailed data (for inspect --step N)
+
+  /**
+   * Whether this step triggered context compression.
+   * When true, `messagesBaseline` contains the compressed messages as a new baseline.
+   */
+  isCompressionReset?: boolean;
+
+  /**
+   * @deprecated Use `messagesBaseline` + `messagesDelta` for incremental format.
+   * Kept for backward compatibility with old snapshots.
+   */
   messages?: any[];
+  /**
+   * @deprecated Use `messagesBaseline` + `messagesDelta` for incremental format.
+   * Kept for backward compatibility with old snapshots.
+   */
   messagesAfter?: any[];
+
+  /**
+   * Full messages baseline snapshot. Only present when:
+   * 1. `stepIndex === 0` (initial baseline)
+   * 2. Context compression occurred (`isCompressionReset === true`)
+   */
+  messagesBaseline?: any[];
+
+  /**
+   * Incremental messages added by this step relative to the previous step's state.
+   * For `call_llm`: typically `[assistant message]`
+   * For `call_tool`: typically `[tool_result message(s)]`
+   */
+  messagesDelta?: any[];
+
   outputTokens?: number;
 
   reasoning?: string;

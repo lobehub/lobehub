@@ -237,12 +237,13 @@ export function registerInspectCommand(program: Command) {
           const step = findStep(snapshot, stepIndex);
 
           if (msgIndex !== undefined) {
-            console.log(renderMessageDetail(step, msgIndex, msgSource));
+            console.log(renderMessageDetail(step, msgIndex, msgSource, snapshot.steps));
             return;
           }
 
           console.log(
             renderStepDetail(step, {
+              allSteps: snapshot.steps,
               context: opts.context,
               events: opts.events,
               messages: opts.messages,
