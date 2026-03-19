@@ -3345,6 +3345,30 @@ describe('OpenAIStream', () => {
             {
               index: 0,
               delta: {
+                role: 'assistant',
+                content: 'Some response text with annotations, should has no annotations',
+                annotations: [
+                  {
+                    type: 'url_citation',
+                    url: 'https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH',
+                    title: '南方航空相关新闻_美股 - 新浪财经',
+                    site_name: 'biz.finance.sina.com.cn',
+                    summary:
+                      '(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费',
+                  },
+                ],
+              },
+            },
+          ],
+        });
+
+        // Third chunk with finish_reason
+        controller.enqueue({
+          id: 'mimo-v2-omni',
+          choices: [
+            {
+              index: 0,
+              delta: {
                 content: 'Some response text',
               },
               finish_reason: 'stop',
@@ -3373,7 +3397,10 @@ describe('OpenAIStream', () => {
       `data: {"citations":[{"title":"南方航空相关新闻_美股 - 新浪财经","url":"https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH"}]}\n\n`,
       'id: mimo-v2-omni\n',
       'event: text\n',
-      `data: Some response text\n\n`,
+      `data: "Some response text with annotations, should has no annotations"\n\n`,
+      'id: mimo-v2-omni\n',
+      'event: text\n',
+      `data: "Some response text"\n\n`,
     ]);
   });
 

@@ -66,6 +66,12 @@ const transformOpenAIStream = (
   streamContext: StreamContext,
   payload?: ChatPayloadForTransformStream,
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
+  if (streamContext.chunkIndex === undefined) {
+    streamContext.chunkIndex = 0;
+  } else {
+    streamContext.chunkIndex++;
+  }
+
   // handle the first chunk error
   if (FIRST_CHUNK_ERROR_KEY in chunk) {
     delete chunk[FIRST_CHUNK_ERROR_KEY];
@@ -258,32 +264,6 @@ const transformOpenAIStream = (
         .filter(Boolean) as StreamProtocolChunk[];
     }
 
-    // XiaomiMiMo annotations will return in the first chunk
-    // {"id":"65b10aeecba14877b4cd282d4e32f203","object":"chat.completion.chunk","created":1773907177,"model":"mimo-v2-omni","choices":[{"index":0,"delta":{"annotations":[{"site_name":"biz.finance.sina.com.cn","summary":"(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费 · 每日经济新闻 | 2026 年 03 月 19 日 09:55 港股航空股再度走低南方 ...","title":"南方航空相关新闻_美股 - 新浪财经","type":"url_citation","url":"https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH"}],"role":"assistant","content":""}}],"usage":{"web_search_usage":{"tool_usage":5,"page_usage":20}}}
-    if (
-      (item as any).delta &&
-      Array.isArray((item as any).delta.annotations) &&
-      (item as any).delta.annotations.length > 0
-    ) {
-      const citations = (item as any).delta.annotations;
-
-      return [
-        {
-          data: {
-            citations: citations.map(
-              (item: any) =>
-                ({
-                  title: item.title,
-                  url: item.url,
-                }) as ChatCitationItem,
-            ),
-          },
-          id: chunk.id,
-          type: 'grounding',
-        },
-      ];
-    }
-
     // Handle finish reason
     if (item.finish_reason) {
       // one-api's streaming interface can have both finish_reason and content
@@ -385,6 +365,33 @@ const transformOpenAIStream = (
       }
 
       return { data: item.finish_reason, id: chunk.id, type: 'stop' };
+    }
+
+    // XiaomiMiMo will return full annotations in the first chunk
+    // {"id":"65b10aeecba14877b4cd282d4e32f203","object":"chat.completion.chunk","created":1773907177,"model":"mimo-v2-omni","choices":[{"index":0,"delta":{"annotations":[{"site_name":"biz.finance.sina.com.cn","summary":"(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费 · 每日经济新闻 | 2026 年 03 月 19 日 09:55 港股航空股再度走低南方 ...","title":"南方航空相关新闻_美股 - 新浪财经","type":"url_citation","url":"https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH"}],"role":"assistant","content":""}}],"usage":{"web_search_usage":{"tool_usage":5,"page_usage":20}}}
+    if (
+      streamContext.chunkIndex === 0 &&
+      (item as any).delta &&
+      Array.isArray((item as any).delta.annotations) &&
+      (item as any).delta.annotations.length > 0
+    ) {
+      const citations = (item as any).delta.annotations;
+
+      return [
+        {
+          data: {
+            citations: citations.map(
+              (item: any) =>
+                ({
+                  title: item.title,
+                  url: item.url,
+                }) as ChatCitationItem,
+            ),
+          },
+          id: chunk.id,
+          type: 'grounding',
+        },
+      ];
     }
 
     if (item.delta) {
