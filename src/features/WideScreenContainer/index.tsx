@@ -13,6 +13,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
+    flex-grow: 1;
     align-self: center;
     transition: width 0.25s ${cssVar.motionEaseInOut};
   `,

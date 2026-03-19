@@ -5,32 +5,24 @@
  */
 export const EMPTY_EDITOR_STATE = {
   root: {
+    id: 'root',
+    type: 'root',
+    format: '',
+    indent: 0,
+    version: 1,
     children: [
       {
-        children: [
-          {
-            detail: 0,
-            format: 0,
-            mode: 'normal',
-            style: '',
-            text: '',
-            type: 'text',
-            version: 1,
-          },
-        ],
-        direction: null,
+        id: '42',
+        type: 'paragraph',
         format: '',
         indent: 0,
-        textFormat: 0,
-        textStyle: '',
-        type: 'paragraph',
         version: 1,
+        children: [],
+        direction: null,
+        textStyle: '',
+        textFormat: 0,
       },
     ],
     direction: null,
-    format: '',
-    indent: 0,
-    type: 'root',
-    version: 1,
   },
 };
