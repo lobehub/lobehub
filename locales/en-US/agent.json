@@ -19,6 +19,7 @@
   "channel.debounceMs": "Message Merge Window (ms)",
   "channel.debounceMsHint": "How long to wait for additional messages before dispatching to the agent (ms)",
   "channel.deleteConfirm": "Are you sure you want to remove this channel?",
+  "channel.deleteConfirmDesc": "This action will permanently remove this message channel and its configuration. This cannot be undone.",
   "channel.devWebhookProxyUrl": "HTTPS Tunnel URL",
   "channel.devWebhookProxyUrlHint": "Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.",
   "channel.disabled": "Disabled",

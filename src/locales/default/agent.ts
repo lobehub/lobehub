@@ -13,6 +13,8 @@ export default {
   'channel.copied': 'Copied to clipboard',
   'channel.copy': 'Copy',
   'channel.deleteConfirm': 'Are you sure you want to remove this channel?',
+  'channel.deleteConfirmDesc':
+    'This action will permanently remove this message channel and its configuration. This cannot be undone.',
   'channel.devWebhookProxyUrl': 'HTTPS Tunnel URL',
   'channel.devWebhookProxyUrlHint':
     'Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.',

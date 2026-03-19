@@ -133,6 +133,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     if (!currentConfig) return;
 
     modal.confirm({
+      content: t('channel.deleteConfirmDesc'),
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
