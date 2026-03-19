@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Divider, Switch } from 'antd';
 import { Clock3, Dices } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -142,7 +142,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportGenerateAudio = useVideoStore(isSupportedParamSelector('generateAudio'));
   const isSupportCameraFixed = useVideoStore(isSupportedParamSelector('cameraFixed'));
   const isLogin = useUserStore(authSelectors.isLogin);
-
+  const { value: duration } = useVideoGenerationConfigParam('duration');
   useFetchAiVideoConfig();
 
   // Read prompt from query parameter
@@ -252,6 +252,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                         <SeedItem />
                       </Flexbox>
                     )}
+                    {(isSupportGenerateAudio || isSupportCameraFixed) && (
+                      <Divider style={{ marginBlock: 4 }} />
+                    )}
                     {isSupportGenerateAudio && (
                       <SwitchItem
                         label={t('config.generateAudio.label')}
@@ -267,13 +270,15 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               {isSupportDuration && (
                 <Action
                   icon={Clock3}
-                  title={t('config.duration.label')}
                   trigger={'click'}
                   popover={{
                     content: <DurationItem />,
                     minWidth: 220,
                     title: t('config.duration.label'),
                   }}
+                  title={[t('config.duration.label'), duration ? `${duration}s` : '']
+                    .filter(Boolean)
+                    .join(' ')}
                 />
               )}
             </Flexbox>
