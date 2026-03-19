@@ -245,7 +245,9 @@ export default {
   'plans.current': 'Current Plan',
   'plans.downgradePlan': 'Target Downgrade Plan',
   'plans.downgradeTip':
-    'You have already switched subscription. You cannot perform other operations until the switch is complete',
+    'Your subscription has been canceled. You cannot perform other operations until the cancellation is complete',
+  'plans.downgradeWillCancel': 'This action will cancel your scheduled plan downgrade',
+  'plans.pendingDowngrade': 'Pending Downgrade',
   'plans.embeddingStorage.embeddings': 'entries',
   'plans.embeddingStorage.title': 'Vector Storage',
   'plans.embeddingStorage.tooltip':
