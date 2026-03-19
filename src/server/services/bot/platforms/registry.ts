@@ -67,6 +67,7 @@ export class PlatformRegistry {
     platform: string,
     credentials: Record<string, string>,
     settings?: Record<string, unknown>,
+    applicationId?: string,
   ): Promise<ValidationResult> {
     const definition = this.platforms.get(platform);
     if (!definition) {
@@ -75,6 +76,6 @@ export class PlatformRegistry {
         valid: false,
       };
     }
-    return definition.clientFactory.validateCredentials(credentials, settings);
+    return definition.clientFactory.validateCredentials(credentials, settings, applicationId);
   }
 }

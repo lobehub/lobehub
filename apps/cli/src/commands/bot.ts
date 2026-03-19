@@ -9,8 +9,8 @@ const SUPPORTED_PLATFORMS = ['discord', 'slack', 'telegram', 'lark', 'feishu'];
 
 const PLATFORM_CREDENTIAL_FIELDS: Record<string, string[]> = {
   discord: ['botToken', 'publicKey'],
-  feishu: ['appId', 'appSecret'],
-  lark: ['appId', 'appSecret'],
+  feishu: ['appSecret'],
+  lark: ['appSecret'],
   slack: ['botToken', 'signingSecret'],
   telegram: ['botToken'],
 };
@@ -25,11 +25,6 @@ function parseCredentials(
   if (options.publicKey) creds.publicKey = options.publicKey;
   if (options.signingSecret) creds.signingSecret = options.signingSecret;
   if (options.appSecret) creds.appSecret = options.appSecret;
-
-  // For lark/feishu, --app-id maps to credentials.appId (distinct from --app-id as applicationId)
-  if ((platform === 'lark' || platform === 'feishu') && options.appId) {
-    creds.appId = options.appId;
-  }
 
   return creds;
 }

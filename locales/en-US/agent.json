@@ -1,6 +1,4 @@
 {
-  "channel.appId": "App ID",
-  "channel.appIdHint": "The App ID of your bot application",
   "channel.appSecret": "App Secret",
   "channel.appSecretHint": "The App Secret of your bot application. It will be encrypted and stored securely.",
   "channel.appSecretPlaceholder": "Paste your app secret here",

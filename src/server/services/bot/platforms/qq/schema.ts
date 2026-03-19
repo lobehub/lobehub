@@ -2,16 +2,16 @@ import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
   {
+    key: 'applicationId',
+    description: 'channel.applicationIdHint',
+    label: 'channel.applicationId',
+    required: true,
+    type: 'string',
+  },
+  {
     key: 'credentials',
     label: 'channel.credentials',
     properties: [
-      {
-        key: 'appId',
-        description: 'channel.qq.appIdHint',
-        label: 'channel.appId',
-        required: true,
-        type: 'string',
-      },
       {
         key: 'appSecret',
         description: 'channel.appSecretHint',

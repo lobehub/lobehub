@@ -78,7 +78,7 @@ const Footer = memo<FooterProps>(
     const { t } = useTranslation('agent');
     const origin = useAppOrigin();
     const platformId = platformDef.id;
-    const applicationId = AntdForm.useWatch(['credentials', 'applicationId'], form);
+    const applicationId = AntdForm.useWatch('applicationId', form);
 
     const webhookUrl = applicationId
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`

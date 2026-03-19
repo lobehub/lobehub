@@ -191,6 +191,7 @@ export abstract class ClientFactory {
   async validateCredentials(
     _credentials: Record<string, string>,
     _settings?: Record<string, unknown>,
+    _applicationId?: string,
   ): Promise<ValidationResult> {
     return { valid: true };
   }

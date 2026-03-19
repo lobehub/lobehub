@@ -106,6 +106,28 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
   );
 });
 
+// --------------- ApplicationId field (standalone, not nested) ---------------
+
+const ApplicationIdField = memo<{ field: FieldSchema }>(({ field }) => {
+  const { t: _t } = useTranslation('agent');
+  const t = _t as (key: string) => string;
+
+  return (
+    <FormItem
+      desc={field.description ? t(field.description) : undefined}
+      initialValue={field.default}
+      label={t(field.label)}
+      minWidth={'max(50%, 400px)'}
+      name="applicationId"
+      rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
+      tag="applicationId"
+      variant="borderless"
+    >
+      <FormInput placeholder={field.placeholder || t(field.label)} />
+    </FormItem>
+  );
+});
+
 // --------------- Helper: flatten fields from schema ---------------
 
 function getFields(schema: FieldSchema[], sectionKey: string): FieldSchema[] {
@@ -141,6 +163,11 @@ interface BodyProps {
 }
 
 const Body = memo<BodyProps>(({ platformDef, form }) => {
+  const applicationIdField = useMemo(
+    () => platformDef.schema.find((f) => f.key === 'applicationId'),
+    [platformDef.schema],
+  );
+
   const credentialFields = useMemo(
     () => getFields(platformDef.schema, 'credentials'),
     [platformDef.schema],
@@ -161,8 +188,14 @@ const Body = memo<BodyProps>(({ platformDef, form }) => {
       style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
       variant={'borderless'}
     >
+      {applicationIdField && <ApplicationIdField field={applicationIdField} />}
       {credentialFields.map((field, i) => (
-        <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="credentials" />
+        <SchemaField
+          divider={applicationIdField ? true : i !== 0}
+          field={field}
+          key={field.key}
+          parentKey="credentials"
+        />
       ))}
       {settingsFields.length > 0 && (
         <FormGroup

@@ -12,24 +12,6 @@ import Body from './Body';
 import Footer from './Footer';
 import Header from './Header';
 
-/**
- * Resolve applicationId from credentials by convention:
- * 1. Explicit `applicationId` field (Discord)
- * 2. `appId` field (Feishu, QQ)
- * 3. Derive from `botToken` before ':' (Telegram: "123456:ABC" → "123456")
- */
-export function resolveApplicationId(credentials: Record<string, string>): string {
-  if (credentials.applicationId) return credentials.applicationId;
-  if (credentials.appId) return credentials.appId;
-
-  if (credentials.botToken) {
-    const colonIdx = credentials.botToken.indexOf(':');
-    if (colonIdx !== -1) return credentials.botToken.slice(0, colonIdx);
-  }
-
-  return '';
-}
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   main: css`
     position: relative;
@@ -55,6 +37,7 @@ interface CurrentConfig {
 }
 
 export interface ChannelFormValues {
+  applicationId?: string;
   credentials: Record<string, string>;
   settings: Record<string, unknown>;
 }
@@ -93,6 +76,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
   useEffect(() => {
     if (currentConfig) {
       form.setFieldsValue({
+        applicationId: currentConfig.applicationId || '',
         credentials: currentConfig.credentials || {},
       } as any);
     }
@@ -105,8 +89,19 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       setSaving(true);
       setSaveResult(undefined);
 
-      const { credentials = {}, settings = {} } = values as ChannelFormValues;
-      const applicationId = resolveApplicationId(credentials as Record<string, string>);
+      const {
+        applicationId: formAppId,
+        credentials = {},
+        settings = {},
+      } = values as ChannelFormValues;
+
+      // Use explicit applicationId from form; fall back to deriving from botToken (Telegram)
+      let applicationId = formAppId || '';
+      if (!applicationId && (credentials as Record<string, string>).botToken) {
+        const colonIdx = (credentials as Record<string, string>).botToken.indexOf(':');
+        if (colonIdx !== -1)
+          applicationId = (credentials as Record<string, string>).botToken.slice(0, colonIdx);
+      }
 
       if (currentConfig) {
         await updateBotProvider(currentConfig.id, agentId, {

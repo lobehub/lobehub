@@ -66,7 +66,7 @@ class QQWebhookClient implements PlatformClient {
     log('Starting QQBot appId=%s', this.applicationId);
 
     // Verify credentials by fetching an access token
-    const api = new QQApiClient(this.config.credentials.appId, this.config.credentials.appSecret);
+    const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
     await api.getAccessToken();
 
     log('QQBot appId=%s credentials verified', this.applicationId);
@@ -82,14 +82,14 @@ class QQWebhookClient implements PlatformClient {
   createAdapter(): Record<string, any> {
     return {
       qq: createQQAdapter({
-        appId: this.config.credentials.appId,
+        appId: this.config.applicationId,
         clientSecret: this.config.credentials.appSecret,
       }),
     };
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
-    const api = new QQApiClient(this.config.credentials.appId, this.config.credentials.appSecret);
+    const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
@@ -117,17 +117,21 @@ export class QQClientFactory extends ClientFactory {
     return new QQWebhookClient(config, context);
   }
 
-  async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
+  async validateCredentials(
+    credentials: Record<string, string>,
+    _settings?: Record<string, unknown>,
+    applicationId?: string,
+  ): Promise<ValidationResult> {
     const errors: Array<{ field: string; message: string }> = [];
 
-    if (!credentials.appId) errors.push({ field: 'appId', message: 'App ID is required' });
+    if (!applicationId) errors.push({ field: 'applicationId', message: 'App ID is required' });
     if (!credentials.appSecret)
       errors.push({ field: 'appSecret', message: 'App Secret is required' });
 
     if (errors.length > 0) return { errors, valid: false };
 
     try {
-      const api = new QQApiClient(credentials.appId, credentials.appSecret);
+      const api = new QQApiClient(applicationId!, credentials.appSecret);
       await api.getAccessToken();
       return { valid: true };
     } catch {

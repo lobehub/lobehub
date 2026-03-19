@@ -41,7 +41,7 @@ class FeishuWebhookClient implements PlatformClient {
     log('Starting FeishuClient appId=%s domain=%s', this.applicationId, this.domain);
 
     const api = new LarkApiClient(
-      this.config.credentials.appId,
+      this.config.applicationId,
       this.config.credentials.appSecret,
       this.domain,
     );
@@ -59,7 +59,7 @@ class FeishuWebhookClient implements PlatformClient {
   createAdapter(): Record<string, any> {
     return {
       feishu: createLarkAdapter({
-        appId: this.config.credentials.appId,
+        appId: this.config.applicationId,
         appSecret: this.config.credentials.appSecret,
         encryptKey: this.config.credentials.encryptKey,
         platform: this.domain,
@@ -70,7 +70,7 @@ class FeishuWebhookClient implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const api = new LarkApiClient(
-      this.config.credentials.appId,
+      this.config.applicationId,
       this.config.credentials.appSecret,
       this.domain,
     );
@@ -97,10 +97,14 @@ export class FeishuClientFactory extends ClientFactory {
     return new FeishuWebhookClient(config, context);
   }
 
-  async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
+  async validateCredentials(
+    credentials: Record<string, string>,
+    _settings?: Record<string, unknown>,
+    applicationId?: string,
+  ): Promise<ValidationResult> {
     const errors: Array<{ field: string; message: string }> = [];
 
-    if (!credentials.appId) errors.push({ field: 'appId', message: 'App ID is required' });
+    if (!applicationId) errors.push({ field: 'applicationId', message: 'App ID is required' });
     if (!credentials.appSecret)
       errors.push({ field: 'appSecret', message: 'App Secret is required' });
 
@@ -108,7 +112,7 @@ export class FeishuClientFactory extends ClientFactory {
 
     try {
       const domain = 'feishu'; // default domain for validation
-      const api = new LarkApiClient(credentials.appId, credentials.appSecret, domain);
+      const api = new LarkApiClient(applicationId!, credentials.appSecret, domain);
       await api.getTenantAccessToken();
       return { valid: true };
     } catch {

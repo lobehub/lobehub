@@ -2,16 +2,16 @@ import type { FieldSchema } from '../../types';
 
 export const sharedSchema: FieldSchema[] = [
   {
+    key: 'applicationId',
+    description: 'channel.applicationIdHint',
+    label: 'channel.applicationId',
+    required: true,
+    type: 'string',
+  },
+  {
     key: 'credentials',
     label: 'channel.credentials',
     properties: [
-      {
-        key: 'appId',
-        description: 'channel.appIdHint',
-        label: 'channel.appId',
-        required: true,
-        type: 'string',
-      },
       {
         key: 'appSecret',
         description: 'channel.appSecretHint',

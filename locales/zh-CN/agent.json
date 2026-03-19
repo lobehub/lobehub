@@ -1,6 +1,4 @@
 {
-  "channel.appId": "App ID",
-  "channel.appIdHint": "你的机器人应用的 App ID",
   "channel.appSecret": "App Secret",
   "channel.appSecretHint": "你的机器人应用的 App Secret，将被加密存储。",
   "channel.appSecretPlaceholder": "在此粘贴你的 App Secret",

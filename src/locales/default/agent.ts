@@ -60,8 +60,6 @@ export default {
   'channel.verificationTokenHint': 'Optional. Used to verify webhook event source.',
   'channel.verificationTokenPlaceholder': 'Paste your verification token here',
 
-  'channel.appId': 'App ID',
-  'channel.appIdHint': 'The App ID of your bot application',
   'channel.appSecretHint':
     'The App Secret of your bot application. It will be encrypted and stored securely.',
   'channel.charLimit': 'Character Limit',
