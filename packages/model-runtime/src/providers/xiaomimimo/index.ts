@@ -14,7 +14,8 @@ export const params = {
   baseURL: 'https://api.xiaomimimo.com/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { enabledSearch, thinking, temperature, tools, top_p, max_tokens, stream, ...rest } = payload as any;
+      const { enabledSearch, thinking, temperature, tools, top_p, max_tokens, stream, ...rest } =
+        payload as any;
       const thinkingType = thinking?.type;
 
       const xiaomiTools = enabledSearch
@@ -26,7 +27,7 @@ export const params = {
           ]
         : tools;
 
-      const messages = payload.messages.map((message: any) => {
+      const messages = payload.messages?.map((message: any) => {
         const { reasoning, ...rest } = message;
 
         const reasoningContent =

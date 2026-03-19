@@ -46,7 +46,6 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
 
   const urls: string[] = [];
   const mdRegex = /!\[[^\]]*\]\(\s*(data:image\/[\d+.A-Za-z-]+;base64,[^\s)]+)\s*\)/g;
-  let cleanedText = text;
   let m: RegExpExecArray | null;
 
   // Reset regex lastIndex to ensure we start from the beginning
@@ -57,7 +56,7 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
   }
 
   // Remove all markdown base64 image segments
-  cleanedText = text.replaceAll(mdRegex, '').trim();
+  const cleanedText = text.replaceAll(mdRegex, '').trim();
 
   return { cleanedText, urls };
 };
@@ -257,6 +256,32 @@ const transformOpenAIStream = (
           } as StreamProtocolChunk;
         })
         .filter(Boolean) as StreamProtocolChunk[];
+    }
+
+    // XiaomiMiMo annotations will return in the first chunk
+    // {"id":"65b10aeecba14877b4cd282d4e32f203","object":"chat.completion.chunk","created":1773907177,"model":"mimo-v2-omni","choices":[{"index":0,"delta":{"annotations":[{"site_name":"biz.finance.sina.com.cn","summary":"(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费 · 每日经济新闻 | 2026 年 03 月 19 日 09:55 港股航空股再度走低南方 ...","title":"南方航空相关新闻_美股 - 新浪财经","type":"url_citation","url":"https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH"}],"role":"assistant","content":""}}],"usage":{"web_search_usage":{"tool_usage":5,"page_usage":20}}}
+    if (
+      (item as any).delta &&
+      Array.isArray((item as any).delta.annotations) &&
+      (item as any).delta.annotations.length > 0
+    ) {
+      const citations = (item as any).delta.annotations;
+
+      return [
+        {
+          data: {
+            citations: citations.map(
+              (item: any) =>
+                ({
+                  title: item.title,
+                  url: item.url,
+                }) as ChatCitationItem,
+            ),
+          },
+          id: chunk.id,
+          type: 'grounding',
+        },
+      ];
     }
 
     // Handle finish reason
