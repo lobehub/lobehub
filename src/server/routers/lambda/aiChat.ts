@@ -1,5 +1,6 @@
 import { type CreateMessageParams, type SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -13,6 +14,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
 import { FileService } from '@/server/services/file';
+import { UsageRecordService } from '@/server/services/usage';
 
 const log = debug('lobe-lambda-router:ai-chat');
 
@@ -67,6 +69,21 @@ export const aiChatRouter = router({
         input.newThread,
       );
       let sessionId = input.sessionId;
+
+      // Check quota before dispatching AI request
+      const usageService = new UsageRecordService(ctx.serverDB, ctx.userId);
+      const quota = await usageService.checkQuota();
+      if (quota.status === 'exceeded') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: JSON.stringify({
+            effectiveDailyCostLimit: quota.effectiveDailyCostLimit,
+            reason: 'quota_exceeded',
+            todayCost: quota.todayCost,
+          }),
+        });
+      }
+
       if (!sessionId) {
         const context = await resolveContext(input, ctx.serverDB, ctx.userId);
         if (!!context.sessionId) sessionId = context.sessionId;
