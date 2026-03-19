@@ -1,4 +1,5 @@
 import debug from 'debug';
+import urlJoin from 'url-join';
 
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
@@ -21,10 +22,10 @@ async function deliverWebhook(
 ): Promise<void> {
   const { url, delivery = 'fetch' } = webhook;
 
-  // Resolve URL: relative paths use INTERNAL_APP_URL
+  // Resolve URL: relative paths joined with INTERNAL_APP_URL or APP_URL
   const resolvedUrl = url.startsWith('http')
     ? url
-    : `${process.env.INTERNAL_APP_URL || process.env.APP_URL || 'http://localhost:3010'}${url}`;
+    : urlJoin(process.env.INTERNAL_APP_URL || process.env.APP_URL || '', url);
 
   if (delivery === 'qstash') {
     try {
