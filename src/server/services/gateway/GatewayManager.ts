@@ -188,7 +188,11 @@ export class GatewayManager {
 
   private createClient(
     platform: string,
-    provider: { applicationId: string; credentials: Record<string, string> },
+    provider: {
+      applicationId: string;
+      credentials: Record<string, string>;
+      settings?: Record<string, unknown> | null;
+    },
   ): PlatformClient | null {
     const def = this.definitionByPlatform.get(platform);
     if (!def) {
@@ -200,7 +204,7 @@ export class GatewayManager {
       applicationId: provider.applicationId,
       credentials: provider.credentials,
       platform,
-      settings: {},
+      settings: (provider.settings as Record<string, unknown>) || {},
     };
 
     const context: BotPlatformRuntimeContext = {

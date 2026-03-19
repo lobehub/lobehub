@@ -72,6 +72,19 @@ export class BotMessageRouter {
     };
   }
 
+  /**
+   * Invalidate a cached bot so it gets reloaded with fresh config on next webhook.
+   * Call this after settings or credentials are updated.
+   */
+  async invalidateBot(platform: string, appId: string): Promise<void> {
+    const key = buildRuntimeKey(platform, appId);
+    const existing = this.bots.get(key);
+    if (!existing) return;
+
+    log('invalidateBot: removing cached bot %s', key);
+    this.bots.delete(key);
+  }
+
   // ------------------------------------------------------------------
   // Webhook handling
   // ------------------------------------------------------------------

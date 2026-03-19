@@ -5,6 +5,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
 import { platformRegistry } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 
@@ -96,6 +97,17 @@ export const agentBotProviderRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...value } = input;
-      return ctx.agentBotProviderModel.update(id, value);
+
+      // Load existing record to get platform + applicationId for cache invalidation
+      const existing = await ctx.agentBotProviderModel.findById(id);
+
+      const result = await ctx.agentBotProviderModel.update(id, value);
+
+      // Invalidate cached bot so it reloads with fresh config on next webhook
+      if (existing) {
+        await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
+      }
+
+      return result;
     }),
 });
