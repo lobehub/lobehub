@@ -1,7 +1,8 @@
-import { ModelProvider } from 'model-bank';
+import { ModelProvider, xiaomimimo as xiaomimimoChatModels } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -57,7 +58,10 @@ export const params = {
 
       return {
         ...rest,
-        max_completion_tokens: max_tokens,
+        max_completion_tokens:
+          max_tokens !== undefined
+            ? max_tokens
+            : getModelMaxOutputs(payload.model, xiaomimimoChatModels),
         messages,
         stream: stream ?? true,
         tools: xiaomiTools,
