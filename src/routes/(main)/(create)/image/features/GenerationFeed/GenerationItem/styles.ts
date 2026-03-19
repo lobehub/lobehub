@@ -1,4 +1,16 @@
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, keyframes } from 'antd-style';
+
+const shimmer = keyframes`
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+`;
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   // Common styles for image action buttons
@@ -25,20 +37,23 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 1;
     }
   `,
-  loadingContent: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
-    justify-content: center;
 
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
   placeholderContainer: css`
     position: relative;
     overflow: hidden;
     width: 100%;
+
+    &::before {
+      content: '';
+
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+
+      background: ${cssVar.colorFillSecondary};
+
+      animation: ${shimmer} 2s linear infinite;
+    }
 
     &:hover .generation-actions {
       opacity: 1;

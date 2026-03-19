@@ -30,8 +30,9 @@ export const LoadingState = memo<LoadingStateProps>(
           maxWidth: getThumbnailMaxWidth(generation, generationBatch),
         }}
       >
-        <Center gap={8}>
-          <NeuralNetworkLoading size={24} />
+        <div className={styles.placeholderContainer} />
+        <Center gap={8} style={{ zIndex: 2 }}>
+          <NeuralNetworkLoading size={48} />
           <ElapsedTime generationId={generation.id} isActive={isGenerating} />
         </Center>
         <ActionButtons onDelete={onDelete} />
