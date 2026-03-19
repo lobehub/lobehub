@@ -17,7 +17,7 @@ You are developing an open-source, modern-design AI Agent Workspace: LobeHub (pr
 
 ## Directory Structure
 
-```
+```plaintext
 lobehub/
 ├── apps/desktop/           # Electron desktop app
 ├── packages/               # Shared packages (@lobechat/*)
@@ -111,4 +111,7 @@ All AI development skills are available in `.agents/skills/` directory:
 | Workflow     | `linear`, `debug`                          |
 | Architecture | `spa-routes`                               |
 | Performance  | `vercel-react-best-practices`              |
+| Review       | `code-review`                              |
 | Overview     | `project-overview`                         |
+
+**IMPORTANT**: When reviewing PRs or code diffs, ALWAYS read `.agents/skills/code-review/SKILL.md` first.
