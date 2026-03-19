@@ -201,7 +201,7 @@ const Body = memo<BodyProps>(({ platformDef, form }) => {
         <FormGroup
           collapsible
           defaultActive={false}
-          keyValue="settings"
+          keyValue={`settings-${platformDef.id}`}
           style={{ marginBlockStart: 16 }}
           title={<SettingsTitle schema={platformDef.schema} />}
           variant="borderless"

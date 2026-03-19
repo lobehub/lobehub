@@ -74,9 +74,12 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult>();
 
-  // Reset form when switching platforms
+  // Reset form and status when switching platforms
   useEffect(() => {
     form.resetFields();
+    setSaveResult(undefined);
+    setConnectResult(undefined);
+    setTestResult(undefined);
   }, [platformDef.id, form]);
 
   // Sync form with saved config
