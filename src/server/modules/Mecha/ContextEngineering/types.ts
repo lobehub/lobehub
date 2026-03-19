@@ -8,6 +8,7 @@ import type {
   KnowledgeBaseInfo,
   LobeToolManifest,
   SkillMeta,
+  TopicReferenceItem,
   UserMemoryData,
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
@@ -120,6 +121,9 @@ export interface ServerMessagesEngineParams {
   // ========== Tools ==========
   /** Tools configuration */
   toolsConfig?: ServerToolsConfig;
+  // ========== Topic References ==========
+  /** Topic reference summaries to inject into last user message */
+  topicReferences?: TopicReferenceItem[];
   // ========== User memory ==========
   /** User memory configuration */
   userMemory?: ServerUserMemoryConfig;
@@ -134,6 +138,7 @@ export {
   type EvalContext,
   type FileContent,
   type KnowledgeBaseInfo,
+  type TopicReferenceItem,
   type UserMemoryData,
 } from '@lobechat/context-engine';
 export type { PageContentContext } from '@lobechat/prompts';

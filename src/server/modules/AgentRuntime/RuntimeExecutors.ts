@@ -14,6 +14,7 @@ import {
   type LobeToolManifest,
   type OperationToolSet,
   type ResolvedToolSet,
+  resolveTopicReferences,
   ToolNameResolver,
   ToolResolver,
 } from '@lobechat/context-engine';
@@ -24,7 +25,8 @@ import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '
 import { serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
-import { type MessageModel } from '@/database/models/message';
+import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -178,6 +180,33 @@ export const createRuntimeExecutors = (
       if (agentConfig) {
         const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
+        // Extract <refer_topic> tags from messages and fetch summaries.
+        // Skip if messages already contain injected topic_reference_context
+        // (e.g., from client-side contextEngineering preprocessing) to avoid double injection.
+        let topicReferences;
+        const alreadyHasTopicRefs = (
+          llmPayload.messages as Array<{ content: string | unknown }>
+        ).some(
+          (m) => typeof m.content === 'string' && m.content.includes('topic_reference_context'),
+        );
+
+        if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
+          const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+          const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId);
+          topicReferences = await resolveTopicReferences(
+            llmPayload.messages as Array<{ content: string | unknown }>,
+            async (topicId) => topicModel.findById(topicId),
+            async (topicId) => {
+              const topic = await topicModel.findById(topicId);
+              return messageModel.query({
+                agentId: topic?.agentId ?? undefined,
+                groupId: topic?.groupId ?? undefined,
+                topicId,
+              });
+            },
+          );
+        }
+
         const contextEngineInput = {
           additionalVariables: state.metadata?.deviceSystemInfo,
           userTimezone: ctx.userTimezone,
@@ -235,6 +264,9 @@ export const createRuntimeExecutors = (
           ...(state.metadata?.skillMetas?.length && {
             skillsConfig: { enabledSkills: state.metadata.skillMetas },
           }),
+
+          // Topic reference summaries
+          ...(topicReferences && { topicReferences }),
         };
 
         processedMessages = await serverMessagesEngine(contextEngineInput);

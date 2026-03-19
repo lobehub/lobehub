@@ -4,3 +4,5 @@ export * from './skills';
 export * from './tools';
 // Messages Engine
 export * from './messages';
+// Topic Reference
+export * from './topicReference';

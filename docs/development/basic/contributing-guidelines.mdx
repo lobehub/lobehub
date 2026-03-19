@@ -1,8 +1,8 @@
 ---
 title: Code Style and Contribution Guidelines
 description: >-
-  Learn about LobeHub's code style and contribution process for consistent
-  coding.
+  Learn about LobeHub's code style and contribution process for consistent coding.
+
 tags:
   - Code Style
   - Contribution Guidelines
@@ -95,12 +95,12 @@ Use the following emojis to prefix your commit messages:
 
 | Emoji | Code                     | Type     | Description              | Triggers Release? |
 | ----- | ------------------------ | -------- | ------------------------ | ----------------- |
-| ✨     | `:sparkles:`             | feat     | New feature              | Yes               |
+| ✨    | `:sparkles:`             | feat     | New feature              | Yes               |
 | 🐛    | `:bug:`                  | fix      | Bug fix                  | Yes               |
 | 📝    | `:memo:`                 | docs     | Documentation            | No                |
 | 💄    | `:lipstick:`             | style    | UI/styling changes       | No                |
 | ♻️    | `:recycle:`              | refactor | Code refactoring         | No                |
-| ✅     | `:white_check_mark:`     | test     | Tests                    | No                |
+| ✅    | `:white_check_mark:`     | test     | Tests                    | No                |
 | 🔨    | `:hammer:`               | chore    | Maintenance tasks        | No                |
 | 🚀    | `:rocket:`               | perf     | Performance improvements | No                |
 | 🌐    | `:globe_with_meridians:` | i18n     | Internationalization     | No                |
@@ -116,9 +116,9 @@ Fork [lobehub/lobehub](https://github.com/lobehub/lobehub) on GitHub, then clone
 Use the branch naming format: `username/type/description`
 
 ```bash
-git checkout -b yourname/feat/add-voice-input
-git checkout -b yourname/fix/message-duplication
-git checkout -b yourname/docs/update-api-guide
+git checkout -b feat/add-voice-input
+git checkout -b fix/message-duplication
+git checkout -b docs/update-api-guide
 ```
 
 **3. Make changes**
@@ -142,29 +142,33 @@ git commit -m "📝 docs: update installation guide"
 **5. Open a Pull Request**
 
 <Callout type={'warning'}>
-  Always target the **`canary`** branch — not `main`. `canary` is the active development branch.
-  PRs to `main` will be redirected.
+  Always target the **`canary`** branch — not `main`. `canary` is the active development branch. PRs
+  to `main` will be redirected.
 </Callout>
 
 Fill out the PR template in `.github/PULL_REQUEST_TEMPLATE.md`:
 
 ```markdown
 ## Description
+
 Clear description of what this PR does.
 
 ## Type of Change
+
 - [ ] ✨ New feature
 - [ ] 🐛 Bug fix
 - [ ] 📝 Documentation
 - [ ] ♻️ Refactoring
 
 ## Checklist
+
 - [ ] Code follows project style guidelines
 - [ ] Tests added/updated
 - [ ] Documentation updated
 - [ ] All tests pass
 
 ## Related Issues
+
 Fixes #123
 ```
 

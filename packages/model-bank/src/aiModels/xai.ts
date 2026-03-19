@@ -11,11 +11,10 @@ const xaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description:
-      'A team of 4 or 16 agents, Excels at research use cases, Does not currently support client-side tools. Only supports xAI server side tools (eg X Search, Web Search tools) and remote MCP tools.',
-    displayName: 'Grok 4.20 Multi-Agent Experimental Beta',
+    description: 'Intelligent, blazing-fast model that reasons before responding',
+    displayName: 'Grok 4.20 Beta',
     enabled: true,
-    id: 'grok-4.20-multi-agent-experimental-beta-0304',
+    id: 'grok-4.20-beta-0309-reasoning',
     pricing: {
       units: [
         {
@@ -47,9 +46,8 @@ const xaiChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    releasedAt: '2026-03-04',
+    releasedAt: '2026-03-09',
     settings: {
-      extendParams: ['grok4_20ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -63,9 +61,9 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_000_000,
     description: 'A non-reasoning variant for simple use cases',
-    displayName: 'Grok 4.20 Experimental Beta (Non-Reasoning)',
+    displayName: 'Grok 4.20 Beta (Non-Reasoning)',
     enabled: true,
-    id: 'grok-4.20-experimental-beta-0304-non-reasoning',
+    id: 'grok-4.20-beta-0309-non-reasoning',
     pricing: {
       units: [
         {
@@ -97,7 +95,7 @@ const xaiChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    releasedAt: '2026-03-04',
+    releasedAt: '2026-03-09',
     settings: {
       searchImpl: 'params',
     },
@@ -105,17 +103,17 @@ const xaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
       reasoning: true,
       search: true,
       structuredOutput: true,
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description: 'Intelligent, blazing-fast model that reasons before responding',
-    displayName: 'Grok 4.20 Experimental Beta',
+    description:
+      'A team of 4 or 16 agents, Excels at research use cases, Does not currently support client-side tools. Only supports xAI server side tools (eg X Search, Web Search tools) and remote MCP tools.',
+    displayName: 'Grok 4.20 Multi-Agent Beta',
     enabled: true,
-    id: 'grok-4.20-experimental-beta-0304-reasoning',
+    id: 'grok-4.20-multi-agent-beta-0309',
     pricing: {
       units: [
         {
@@ -147,8 +145,9 @@ const xaiChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    releasedAt: '2026-03-04',
+    releasedAt: '2026-03-09',
     settings: {
+      extendParams: ['grok4_20ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
