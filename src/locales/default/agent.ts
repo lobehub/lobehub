@@ -45,6 +45,9 @@ export default {
   'channel.saveFirstWarning': 'Please save configuration first',
   'channel.saved': 'Configuration saved successfully',
   'channel.secretToken': 'Webhook Secret Token',
+  'channel.slack.appIdHint': 'Your Slack App ID from the Slack API dashboard (starts with A).',
+  'channel.slack.description':
+    'Connect this assistant to Slack for channel conversations and direct messages.',
   'channel.secretTokenHint': 'Optional. Used to verify webhook requests from Telegram.',
   'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
   'channel.telegram.description': 'Connect this assistant to Telegram for private and group chats.',
@@ -76,6 +79,8 @@ export default {
   'channel.dmPolicyDisabled': 'Disabled',
   'channel.dmPolicyOpen': 'Open',
   'channel.settings': 'Advanced Settings',
+  'channel.signingSecret': 'Signing Secret',
+  'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',
   'channel.showUsageStatsHint': 'Show token usage, cost, and duration stats in bot replies',
 } as const;

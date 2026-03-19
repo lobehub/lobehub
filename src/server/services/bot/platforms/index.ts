@@ -5,6 +5,7 @@ import { feishu } from './feishu/definitions/feishu';
 import { lark } from './feishu/definitions/lark';
 import { qq } from './qq/definition';
 import { PlatformRegistry } from './registry';
+import { slack } from './slack/definition';
 import { telegram } from './telegram/definition';
 
 export { PlatformRegistry } from './registry';
@@ -36,12 +37,14 @@ export { discord } from './discord/definition';
 export { feishu } from './feishu/definitions/feishu';
 export { lark } from './feishu/definitions/lark';
 export { qq } from './qq/definition';
+export { slack } from './slack/definition';
 export { telegram } from './telegram/definition';
 
 export const platformRegistry = new PlatformRegistry();
 
 platformRegistry.register(discord);
 platformRegistry.register(telegram);
+platformRegistry.register(slack);
 platformRegistry.register(feishu);
 platformRegistry.register(lark);
 platformRegistry.register(qq);

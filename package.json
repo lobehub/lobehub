@@ -178,6 +178,7 @@
     "@better-auth/passkey": "1.4.6",
     "@cfworker/json-schema": "^4.1.1",
     "@chat-adapter/discord": "^4.20.0",
+    "@chat-adapter/slack": "^4.20.2",
     "@chat-adapter/state-ioredis": "^4.20.0",
     "@chat-adapter/telegram": "^4.20.0",
     "@codesandbox/sandpack-react": "^2.20.0",

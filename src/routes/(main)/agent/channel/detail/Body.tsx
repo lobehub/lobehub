@@ -96,7 +96,7 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
       label={label}
       minWidth={'max(50%, 400px)'}
       name={[parentKey, field.key]}
-      rules={field.required ? [{ required: true }] : undefined}
+      rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
       tag={field.key}
       valuePropName={field.type === 'boolean' ? 'checked' : undefined}
       variant="borderless"
