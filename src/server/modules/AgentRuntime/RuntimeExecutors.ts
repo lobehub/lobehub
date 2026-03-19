@@ -273,8 +273,9 @@ export const createRuntimeExecutors = (
 
         // Emit context engine event for tracing
         // Omit large/redundant fields to reduce snapshot size:
-        // - messages: reconstructible from step's messagesBaseline + messagesDelta
-        // - toolsConfig: static per operation, ~47KB of manifests repeated every call_llm step
+        // - input.messages: reconstructible from step's messagesBaseline + messagesDelta
+        // - input.toolsConfig: static per operation, ~47KB of manifests repeated every call_llm step
+        // Keep output (processedMessages) — needed by inspect CLI for --env, --system-role, -m
         const {
           messages: _inputMsgs,
           toolsConfig: _toolsConfig,
@@ -283,10 +284,9 @@ export const createRuntimeExecutors = (
         events.push({
           input: {
             ...contextEngineInputLite,
-            // Keep lightweight tool summary for inspection
             toolCount: _toolsConfig?.tools?.length ?? 0,
           },
-          outputMessageCount: processedMessages.length,
+          output: processedMessages,
           type: 'context_engine_result',
         } as any);
       } else {

@@ -775,9 +775,8 @@ export class AgentRuntimeService {
             (e: any) => e.type === 'compression_complete',
           );
           const isBaseline = stepIndex === 0 || isCompression;
-          const messagesDelta = isBaseline
-            ? afterMessages
-            : afterMessages.slice(prevMessages.length);
+          // Always store only the newly added messages, even for baseline steps
+          const messagesDelta = afterMessages.slice(prevMessages.length);
 
           // Strip heavy/redundant data from events before persisting to snapshot
           const snapshotEvents = (stepResult.events as any[])

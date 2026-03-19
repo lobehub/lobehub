@@ -146,6 +146,39 @@ describe('reconstructMessages', () => {
     ]);
   });
 
+  it('should not duplicate baseline messages in delta (P1 regression)', () => {
+    // Simulates what AgentRuntimeService records:
+    // prevMessages = [user], afterMessages = [user, assistant]
+    // delta should be [assistant] only, NOT [user, assistant]
+    const steps: StepSnapshot[] = [
+      makeStep({
+        messagesBaseline: [{ content: 'hello', role: 'user' }],
+        messagesDelta: [{ content: 'hi', role: 'assistant' }], // correct: only new msg
+        stepIndex: 0,
+      }),
+      makeStep({
+        messagesDelta: [{ content: 'tool result', role: 'tool' }],
+        stepIndex: 1,
+        stepType: 'call_tool',
+      }),
+      makeStep({
+        messagesDelta: [{ content: 'final answer', role: 'assistant' }],
+        stepIndex: 2,
+      }),
+    ];
+
+    // Verify the chain reconstructs correctly without duplication
+    const step2 = reconstructMessages(steps, 2);
+    expect(step2.messagesAfter).toEqual([
+      { content: 'hello', role: 'user' },
+      { content: 'hi', role: 'assistant' },
+      { content: 'tool result', role: 'tool' },
+      { content: 'final answer', role: 'assistant' },
+    ]);
+    // Each message appears exactly once
+    expect(step2.messagesAfter).toHaveLength(4);
+  });
+
   it('should handle empty delta', () => {
     const steps: StepSnapshot[] = [
       makeStep({
