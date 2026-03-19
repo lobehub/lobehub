@@ -92,7 +92,13 @@ const Footer = memo<FooterProps>(
       <div className={styles.bottom}>
         <div className={styles.actionBar}>
           {hasConfig ? (
-            <Button danger icon={<Trash2 size={16} />} type="primary" onClick={onDelete}>
+            <Button
+              danger
+              disabled={saving || connecting}
+              icon={<Trash2 size={16} />}
+              type="primary"
+              onClick={onDelete}
+            >
               {t('channel.removeChannel')}
             </Button>
           ) : (
@@ -100,7 +106,12 @@ const Footer = memo<FooterProps>(
           )}
           <Flexbox horizontal gap={12}>
             {hasConfig && (
-              <Button icon={<RefreshCw size={16} />} loading={testing} onClick={onTestConnection}>
+              <Button
+                disabled={saving || connecting}
+                icon={<RefreshCw size={16} />}
+                loading={testing}
+                onClick={onTestConnection}
+              >
                 {t('channel.testConnection')}
               </Button>
             )}

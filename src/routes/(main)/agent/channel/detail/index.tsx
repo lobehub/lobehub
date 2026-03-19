@@ -180,11 +180,17 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       if (!currentConfig) return;
       try {
         await updateBotProvider(currentConfig.id, agentId, { enabled });
+        if (enabled) {
+          await connectBot({
+            applicationId: currentConfig.applicationId,
+            platform: currentConfig.platform,
+          });
+        }
       } catch {
         msg.error(t('channel.updateFailed'));
       }
     },
-    [currentConfig, agentId, updateBotProvider, msg, t],
+    [currentConfig, agentId, updateBotProvider, connectBot, msg, t],
   );
 
   const handleTestConnection = useCallback(async () => {

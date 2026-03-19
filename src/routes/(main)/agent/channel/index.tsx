@@ -40,7 +40,7 @@ const ChannelPage = memo(() => {
   const effectiveActiveId = activeProviderId || platforms?.[0]?.id || '';
 
   const connectedPlatforms = useMemo(
-    () => new Set(providers?.map((p) => p.platform) ?? []),
+    () => new Set(providers?.filter((p) => p.enabled).map((p) => p.platform) ?? []),
     [providers],
   );
 
