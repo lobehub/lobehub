@@ -58,12 +58,19 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
   const { message: msg, modal } = App.useApp();
   const [form] = Form.useForm<ChannelFormValues>();
 
-  const [createBotProvider, deleteBotProvider, updateBotProvider, connectBot] = useAgentStore(
-    (s) => [s.createBotProvider, s.deleteBotProvider, s.updateBotProvider, s.connectBot],
-  );
+  const [createBotProvider, deleteBotProvider, updateBotProvider, connectBot, testConnection] =
+    useAgentStore((s) => [
+      s.createBotProvider,
+      s.deleteBotProvider,
+      s.updateBotProvider,
+      s.connectBot,
+      s.testConnection,
+    ]);
 
   const [saving, setSaving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [saveResult, setSaveResult] = useState<TestResult>();
+  const [connectResult, setConnectResult] = useState<TestResult>();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult>();
 
@@ -88,12 +95,18 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
 
       setSaving(true);
       setSaveResult(undefined);
+      setConnectResult(undefined);
 
       const {
         applicationId: formAppId,
-        credentials = {},
+        credentials: rawCredentials = {},
         settings = {},
       } = values as ChannelFormValues;
+
+      // Strip undefined values from credentials (optional fields left empty by antd form)
+      const credentials = Object.fromEntries(
+        Object.entries(rawCredentials).filter(([, v]) => v !== undefined && v !== ''),
+      );
 
       // Use explicit applicationId from form; fall back to deriving from botToken (Telegram)
       let applicationId = formAppId || '';
@@ -120,14 +133,25 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       }
 
       setSaveResult({ type: 'success' });
+      setSaving(false);
+
+      // Auto-connect bot after save
+      setConnecting(true);
+      try {
+        await connectBot({ applicationId, platform: platformDef.id });
+        setConnectResult({ type: 'success' });
+      } catch (e: any) {
+        setConnectResult({ errorDetail: e?.message || String(e), type: 'error' });
+      } finally {
+        setConnecting(false);
+      }
     } catch (e: any) {
       if (e?.errorFields) return;
       console.error(e);
       setSaveResult({ errorDetail: e?.message || String(e), type: 'error' });
-    } finally {
       setSaving(false);
     }
-  }, [agentId, platformDef, form, currentConfig, createBotProvider, updateBotProvider]);
+  }, [agentId, platformDef, form, currentConfig, createBotProvider, updateBotProvider, connectBot]);
 
   const handleDelete = useCallback(async () => {
     if (!currentConfig) return;
@@ -169,7 +193,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     setTesting(true);
     setTestResult(undefined);
     try {
-      await connectBot({
+      await testConnection({
         applicationId: currentConfig.applicationId,
         platform: platformDef.id,
       });
@@ -182,7 +206,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     } finally {
       setTesting(false);
     }
-  }, [currentConfig, platformDef.id, connectBot, msg, t]);
+  }, [currentConfig, platformDef.id, testConnection, msg, t]);
 
   return (
     <main className={styles.main}>
@@ -193,6 +217,8 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       />
       <Body form={form} platformDef={platformDef} />
       <Footer
+        connectResult={connectResult}
+        connecting={connecting}
         form={form}
         hasConfig={!!currentConfig}
         platformDef={platformDef}

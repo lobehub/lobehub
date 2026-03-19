@@ -48,6 +48,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface FooterProps {
+  connecting: boolean;
+  connectResult?: TestResult;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
   onCopied: () => void;
@@ -66,6 +68,8 @@ const Footer = memo<FooterProps>(
     platformDef,
     form,
     hasConfig,
+    connectResult,
+    connecting,
     saveResult,
     saving,
     testing,
@@ -100,8 +104,13 @@ const Footer = memo<FooterProps>(
                 {t('channel.testConnection')}
               </Button>
             )}
-            <Button icon={<Save size={16} />} loading={saving} type="primary" onClick={onSave}>
-              {t('channel.save')}
+            <Button
+              icon={<Save size={16} />}
+              loading={saving || connecting}
+              type="primary"
+              onClick={onSave}
+            >
+              {connecting ? t('channel.connecting') : t('channel.save')}
             </Button>
           </Flexbox>
         </div>
@@ -113,6 +122,20 @@ const Footer = memo<FooterProps>(
             description={saveResult.type === 'error' ? saveResult.errorDetail : undefined}
             title={saveResult.type === 'success' ? t('channel.saved') : t('channel.saveFailed')}
             type={saveResult.type}
+          />
+        )}
+
+        {connectResult && (
+          <Alert
+            closable
+            showIcon
+            description={connectResult.type === 'error' ? connectResult.errorDetail : undefined}
+            type={connectResult.type}
+            title={
+              connectResult.type === 'success'
+                ? t('channel.connectSuccess')
+                : t('channel.connectFailed')
+            }
           />
         )}
 

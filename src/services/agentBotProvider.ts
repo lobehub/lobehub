@@ -40,6 +40,10 @@ class AgentBotProviderService {
   connectBot = async (params: { applicationId: string; platform: string }) => {
     return lambdaClient.agentBotProvider.connectBot.mutate(params);
   };
+
+  testConnection = async (params: { applicationId: string; platform: string }) => {
+    return lambdaClient.agentBotProvider.testConnection.mutate(params);
+  };
 }
 
 export const agentBotProviderService = new AgentBotProviderService();

@@ -48,6 +48,10 @@ export class BotSliceActionImpl {
     return agentBotProviderService.connectBot(params);
   };
 
+  testConnection = async (params: { applicationId: string; platform: string }) => {
+    return agentBotProviderService.testConnection(params);
+  };
+
   deleteBotProvider = async (id: string, agentId: string) => {
     await agentBotProviderService.delete(id);
     await this.internal_refreshBotProviders(agentId);

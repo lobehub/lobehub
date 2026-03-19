@@ -50,7 +50,7 @@ class TelegramWebhookClient implements PlatformClient {
     await setTelegramWebhook(
       this.config.credentials.botToken,
       webhookUrl,
-      this.config.credentials.secretToken,
+      this.config.credentials.secretToken || undefined,
     );
 
     log('TelegramBot appId=%s started, webhook=%s', this.applicationId, webhookUrl);
@@ -79,7 +79,7 @@ class TelegramWebhookClient implements PlatformClient {
     return {
       telegram: createTelegramAdapter({
         botToken: this.config.credentials.botToken,
-        secretToken: this.config.credentials.secretToken,
+        secretToken: this.config.credentials.secretToken || undefined,
       }),
     };
   }

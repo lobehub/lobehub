@@ -53,7 +53,19 @@ export const agentBotProviderRouter = router({
   delete: agentBotProviderProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.agentBotProviderModel.delete(input.id);
+      // Load record before delete to get platform + applicationId
+      const existing = await ctx.agentBotProviderModel.findById(input.id);
+
+      const result = await ctx.agentBotProviderModel.delete(input.id);
+
+      // Stop running client and invalidate cached bot
+      if (existing) {
+        const service = new GatewayService();
+        await service.stopClient(existing.platform, existing.applicationId);
+        await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
+      }
+
+      return result;
     }),
 
   getByAgentId: agentBotProviderProcedure
@@ -82,6 +94,46 @@ export const agentBotProviderRouter = router({
       const status = await service.startClient(input.platform, input.applicationId, ctx.userId);
 
       return { status };
+    }),
+
+  testConnection: agentBotProviderProcedure
+    .input(z.object({ applicationId: z.string(), platform: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const { platform, applicationId } = input;
+
+      // Load provider from DB
+      const provider = await ctx.agentBotProviderModel.findEnabledByApplicationId(
+        platform,
+        applicationId,
+      );
+      if (!provider) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No enabled bot found for ${platform}/${applicationId}`,
+        });
+      }
+
+      // Validate credentials against the platform API
+      const entry = platformRegistry.getPlatform(platform);
+      if (!entry) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Unsupported platform: ${platform}` });
+      }
+
+      const result = await entry.clientFactory.validateCredentials(
+        provider.credentials,
+        (provider.settings as Record<string, unknown>) || {},
+        applicationId,
+      );
+
+      if (!result.valid) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            result.errors?.map((e) => `${e.field}: ${e.message}`).join('; ') || 'Validation failed',
+        });
+      }
+
+      return { valid: true };
     }),
 
   update: agentBotProviderProcedure

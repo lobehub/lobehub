@@ -26,6 +26,9 @@ export default {
   'channel.encryptKey': 'Encrypt Key',
   'channel.encryptKeyHint': 'Optional. Used to decrypt encrypted event payloads.',
   'channel.encryptKeyPlaceholder': 'Optional encryption key',
+  'channel.connectFailed': 'Bot connection failed',
+  'channel.connectSuccess': 'Bot connected successfully',
+  'channel.connecting': 'Connecting...',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
