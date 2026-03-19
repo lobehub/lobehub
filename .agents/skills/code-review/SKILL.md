@@ -23,7 +23,6 @@ description: 'Code review checklist for LobeHub. Use when reviewing PRs, diffs, 
 - No sensitive data (API keys, tokens, credentials) in `console.*` or `debug()` output
 - No base64 output to terminal — extremely long, freezes output
 - No hardcoded secrets — use environment variables
-- `src/business/` and `packages/business/` must not expose LobeHub Cloud commercial logic
 
 ### Testing
 
@@ -48,6 +47,16 @@ description: 'Code review checklist for LobeHub. Use when reviewing PRs, diffs, 
 ### Database
 
 - Migration scripts must be idempotent (`IF NOT EXISTS`, `IF EXISTS` guards)
+
+### Cloud Impact
+
+A downstream cloud deployment depends on this repo. Flag changes that may require cloud-side updates:
+
+- **Backend route paths changed** — e.g., renaming `src/app/(backend)/webapi/chat/route.ts` or changing its exports
+- **SSR page paths changed** — e.g., moving/renaming files under `src/app/[variants]/(auth)/`
+- **Dependency versions bumped** — e.g., upgrading `next` or `drizzle-orm` in `package.json`
+- **`@lobechat/business-*` exports changed** — e.g., renaming a function in `src/business/` or changing type signatures in `packages/business/`
+- `src/business/` and `packages/business/` must not expose cloud commercial logic in comments or code
 
 ## Output Format
 
