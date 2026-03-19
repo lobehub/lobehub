@@ -16,6 +16,7 @@ import {
 } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
+import { formatNumber } from '@/utils/format';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import { messageStateSelectors, useConversationStore } from '../store';
@@ -104,6 +105,7 @@ const ChatInput = memo<ChatInputProps>(
     skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
+    const { t: tAuth } = useTranslation('auth');
 
     // ConversationStore state
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
@@ -121,6 +123,20 @@ const ChatInput = memo<ChatInputProps>(
     // Send message error from ConversationStore
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
+
+    const quotaError = (() => {
+      try {
+        const parsed = JSON.parse(sendMessageErrorMsg || '');
+        if (parsed?.reason === 'quota_exceeded') return parsed;
+      } catch {
+        // not JSON, use as-is
+      }
+      return null;
+    })();
+
+    const errorDisplay = quotaError
+      ? tAuth('usage.quota.exceeded', { cost: formatNumber(quotaError.todayCost, 6) })
+      : sendMessageErrorMsg;
 
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
@@ -182,7 +198,7 @@ const ChatInput = memo<ChatInputProps>(
           <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
             <Alert
               closable
-              title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
+              title={t('input.errorMsg', { errorMsg: errorDisplay })}
               type={'secondary'}
               onClose={clearSendMessageError}
             />
