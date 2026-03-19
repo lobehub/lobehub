@@ -1,6 +1,6 @@
 import type { ISlashMenuOption } from '@lobehub/editor';
 import { cx } from 'antd-style';
-import type { MouseEvent, ReactNode } from 'react';
+import { createElement, isValidElement, type MouseEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
 import { useStyles } from './style';
@@ -28,7 +28,15 @@ const MenuItem = memo<MenuItemProps>(({ item, active, extra, onClick }) => {
       onClick={() => onClick(item)}
       onMouseDown={handleMouseDown}
     >
-      {item.icon && <span className={styles.itemIcon}>{item.icon}</span>}
+      {item.icon && (
+        <span className={styles.itemIcon}>
+          {isValidElement(item.icon)
+            ? item.icon
+            : typeof item.icon === 'function'
+              ? createElement(item.icon)
+              : item.icon}
+        </span>
+      )}
       <span className={styles.itemLabel}>{item.label}</span>
       {extra}
     </div>
