@@ -352,6 +352,7 @@
   "referral.table.columns.rewardedAt": "وقت المكافأة",
   "referral.table.columns.status": "الحالة",
   "referral.table.columns.suspectedReason": "سبب الشك",
+  "referral.table.status.pending_reward": "المكافأة المعلقة",
   "referral.table.status.registered": "مسجل",
   "referral.table.status.revoked": "تم الإلغاء",
   "referral.table.status.rewarded": "تمت المكافأة",

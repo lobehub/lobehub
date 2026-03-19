@@ -352,6 +352,7 @@
   "referral.table.columns.rewardedAt": "Beloningstijd",
   "referral.table.columns.status": "Status",
   "referral.table.columns.suspectedReason": "Reden Afwijking",
+  "referral.table.status.pending_reward": "In afwachting van beloning",
   "referral.table.status.registered": "Geregistreerd",
   "referral.table.status.revoked": "Ingetrokken",
   "referral.table.status.rewarded": "Beloond",

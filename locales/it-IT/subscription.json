@@ -352,6 +352,7 @@
   "referral.table.columns.rewardedAt": "Data Ricompensa",
   "referral.table.columns.status": "Stato",
   "referral.table.columns.suspectedReason": "Motivo Anomalia",
+  "referral.table.status.pending_reward": "Ricompensa in sospeso",
   "referral.table.status.registered": "Registrato",
   "referral.table.status.revoked": "Revocato",
   "referral.table.status.rewarded": "Ricompensato",

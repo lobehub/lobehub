@@ -352,6 +352,7 @@
   "referral.table.columns.rewardedAt": "Thời gian nhận thưởng",
   "referral.table.columns.status": "Trạng thái",
   "referral.table.columns.suspectedReason": "Lý do nghi ngờ",
+  "referral.table.status.pending_reward": "Phần thưởng đang chờ",
   "referral.table.status.registered": "Đã đăng ký",
   "referral.table.status.revoked": "Đã thu hồi",
   "referral.table.status.rewarded": "Đã nhận thưởng",

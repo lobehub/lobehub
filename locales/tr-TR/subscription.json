@@ -352,6 +352,7 @@
   "referral.table.columns.rewardedAt": "Ödül Zamanı",
   "referral.table.columns.status": "Durum",
   "referral.table.columns.suspectedReason": "Anomali Nedeni",
+  "referral.table.status.pending_reward": "Bekleyen Ödül",
   "referral.table.status.registered": "Kayıtlı",
   "referral.table.status.revoked": "İptal Edildi",
   "referral.table.status.rewarded": "Ödüllendirildi",

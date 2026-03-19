@@ -352,6 +352,7 @@
   "referral.table.columns.rewardedAt": "獎勵時間",
   "referral.table.columns.status": "狀態",
   "referral.table.columns.suspectedReason": "異常原因",
+  "referral.table.status.pending_reward": "待處理獎勵",
   "referral.table.status.registered": "已註冊",
   "referral.table.status.revoked": "已撤銷",
   "referral.table.status.rewarded": "已獎勵",
