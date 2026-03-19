@@ -80,10 +80,10 @@ export const usageRouter = router({
   adminSetDepartmentQuota: adminUsageProcedure
     .input(
       z.object({
-        dailyCostLimit: z.string().nullable(),
+        dailyCostLimit: z.number().nullable(),
         dailyTokenLimit: z.number().int().nullable(),
         department: z.string(),
-        monthlyCostLimit: z.string().nullable(),
+        monthlyCostLimit: z.number().nullable(),
         monthlyTokenLimit: z.number().int().nullable(),
       }),
     )
@@ -98,9 +98,9 @@ export const usageRouter = router({
   adminSetUserQuota: adminUsageProcedure
     .input(
       z.object({
-        dailyCostLimit: z.string().nullable(),
+        dailyCostLimit: z.number().nullable(),
         dailyTokenLimit: z.number().int().nullable(),
-        monthlyCostLimit: z.string().nullable(),
+        monthlyCostLimit: z.number().nullable(),
         monthlyTokenLimit: z.number().int().nullable(),
         userId: z.string(),
       }),

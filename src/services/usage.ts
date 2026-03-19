@@ -30,8 +30,8 @@ class UsageService {
   adminSetUserQuota = (
     userId: string,
     limits: {
-      dailyCostLimit: string | null;
-      monthlyCostLimit: string | null;
+      dailyCostLimit: number | null;
+      monthlyCostLimit: number | null;
       dailyTokenLimit: number | null;
       monthlyTokenLimit: number | null;
     },
@@ -40,8 +40,8 @@ class UsageService {
   adminSetDepartmentQuota = (
     department: string,
     limits: {
-      dailyCostLimit: string | null;
-      monthlyCostLimit: string | null;
+      dailyCostLimit: number | null;
+      monthlyCostLimit: number | null;
       dailyTokenLimit: number | null;
       monthlyTokenLimit: number | null;
     },

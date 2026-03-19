@@ -24,9 +24,9 @@ const AdminDepartmentQuotaTable = memo(() => {
     setSaving(true);
     try {
       await usageService.adminSetDepartmentQuota(editingDept.department, {
-        dailyCostLimit: values.dailyCostLimit != null ? String(values.dailyCostLimit) : null,
+        dailyCostLimit: values.dailyCostLimit ?? null,
         dailyTokenLimit: values.dailyTokenLimit ?? null,
-        monthlyCostLimit: values.monthlyCostLimit != null ? String(values.monthlyCostLimit) : null,
+        monthlyCostLimit: values.monthlyCostLimit ?? null,
         monthlyTokenLimit: values.monthlyTokenLimit ?? null,
       });
       setEditingDept(null);
