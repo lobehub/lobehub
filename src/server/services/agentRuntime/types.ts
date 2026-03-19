@@ -4,6 +4,8 @@ import { type UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 
+import { type AgentHook } from './hooks/types';
+
 // ==================== Operation Tool Set ====================
 
 export interface OperationToolSet {
@@ -152,6 +154,11 @@ export interface OperationCreationParams {
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
   evalContext?: any;
+  /**
+   * External lifecycle hooks
+   * Registered once, auto-adapt to local (in-memory) or production (webhook) mode
+   */
+  hooks?: AgentHook[];
   initialContext: AgentRuntimeContext;
   initialMessages?: any[];
   maxSteps?: number;

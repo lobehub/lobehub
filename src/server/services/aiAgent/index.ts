@@ -43,6 +43,7 @@ import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngin
 import { AgentService } from '@/server/services/agent';
 import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
@@ -103,6 +104,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
     size?: number;
     url: string;
   }>;
+  /** External lifecycle hooks (auto-adapt to local/production mode) */
+  hooks?: AgentHook[];
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
@@ -204,6 +207,7 @@ export class AiAgentService {
       discordContext,
       existingMessageIds = [],
       files,
+      hooks,
       instructions,
       stepCallbacks,
       stream,
@@ -793,6 +797,7 @@ export class AiAgentService {
         initialMessages: allMessages,
         maxSteps,
         modelRuntimeConfig: { model, provider },
+        hooks,
         operationId,
         stepCallbacks,
         stepWebhook,

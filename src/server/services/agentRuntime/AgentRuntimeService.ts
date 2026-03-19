@@ -21,6 +21,7 @@ import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
+import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -267,6 +268,7 @@ export class AgentRuntimeService {
       appContext,
       toolSet,
       stepCallbacks,
+      hooks,
       userInterventionConfig,
       completionWebhook,
       stepWebhook,
@@ -353,6 +355,26 @@ export class AgentRuntimeService {
       // Register step lifecycle callbacks
       if (stepCallbacks) {
         this.registerStepCallbacks(operationId, stepCallbacks);
+      }
+
+      // Register external hooks
+      if (hooks && hooks.length > 0) {
+        hookDispatcher.register(operationId, hooks);
+
+        // Persist webhook configs to state metadata for production mode
+        const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
+        if (serializedHooks && serializedHooks.length > 0) {
+          const currentState = await this.coordinator.loadAgentState(operationId);
+          if (currentState) {
+            await this.coordinator.saveAgentState(operationId, {
+              ...currentState,
+              metadata: {
+                ...currentState.metadata,
+                _hooks: serializedHooks,
+              },
+            });
+          }
+        }
       }
 
       let messageId: string | undefined;
@@ -909,7 +931,10 @@ export class AgentRuntimeService {
         // Trigger completion webhook (fire-and-forget)
         await this.triggerCompletionWebhook(stepResult.newState, operationId, reason);
 
-        // Call onComplete callback
+        // Dispatch onComplete hooks
+        await this.dispatchCompletionHooks(operationId, stepResult.newState, reason);
+
+        // Call onComplete callback (legacy)
         if (callbacks?.onComplete) {
           try {
             await callbacks.onComplete({
@@ -1025,7 +1050,10 @@ export class AgentRuntimeService {
         log('[%s] Failed to trigger completion webhook: %O', operationId, webhookError);
       }
 
-      // Also call onComplete callback when execution fails
+      // Dispatch onComplete + onError hooks
+      await this.dispatchCompletionHooks(operationId, finalStateWithError, 'error');
+
+      // Also call onComplete callback when execution fails (legacy)
       if (callbacks?.onComplete) {
         try {
           await callbacks.onComplete({
@@ -1536,6 +1564,50 @@ export class AgentRuntimeService {
       }
     } catch (error) {
       console.error('[%s] Webhook delivery failed (%s → %s):', operationId, delivery, url, error);
+    }
+  }
+
+  /**
+   * Dispatch onComplete (and onError) hooks via HookDispatcher.
+   * Fire-and-forget: errors are logged but never thrown.
+   */
+  private async dispatchCompletionHooks(
+    operationId: string,
+    state: any,
+    reason: string,
+  ): Promise<void> {
+    try {
+      const metadata = state?.metadata || {};
+      const event = {
+        agentId: metadata?.agentId || '',
+        cost: state?.session?.totalCost || 0,
+        duration: state?.session?.duration || 0,
+        errorDetail: state?.error?.detail,
+        errorMessage: state?.error?.message,
+        lastAssistantContent: state?.session?.lastAssistantContent,
+        llmCalls: state?.session?.llmCalls || 0,
+        operationId,
+        reason,
+        status: state?.status || reason,
+        steps: state?.stepCount || 0,
+        toolCalls: state?.session?.toolCalls || 0,
+        topicId: metadata?.topicId,
+        totalTokens: state?.session?.totalTokens || 0,
+        userId: metadata?.userId || this.userId,
+      };
+
+      // Dispatch onComplete hooks
+      await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+
+      // Also dispatch onError hooks if reason is error
+      if (reason === 'error') {
+        await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);
+      }
+
+      // Cleanup hooks after completion
+      hookDispatcher.unregister(operationId);
+    } catch (error) {
+      log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     }
   }
 
