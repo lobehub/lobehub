@@ -665,6 +665,20 @@
       "when": 1773764776073,
       "tag": "0094_agent_bot_providers_add_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1773820592946,
+      "tag": "0095_add_user_department",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1773906390289,
+      "tag": "0096_add_usage_quota_fields_and_department_quotas",
+      "breakpoints": true
     }
   ],
   "version": "6"
