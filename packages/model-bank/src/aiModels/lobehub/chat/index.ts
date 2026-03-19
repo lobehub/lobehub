@@ -6,6 +6,7 @@ import { minimaxChatModels } from './minimax';
 import { moonshotChatModels } from './moonshot';
 import { openaiChatModels } from './openai';
 import { xaiChatModels } from './xai';
+import { xiaomimimoChatModels } from './xiaomimimo';
 
 export const lobehubChatModels: AIChatModelCard[] = [
   ...anthropicChatModels,
@@ -15,6 +16,7 @@ export const lobehubChatModels: AIChatModelCard[] = [
   ...xaiChatModels,
   ...minimaxChatModels,
   ...moonshotChatModels,
+  ...xiaomimimoChatModels,
 ];
 
 export { anthropicChatModels } from './anthropic';
@@ -24,3 +26,4 @@ export { minimaxChatModels } from './minimax';
 export { moonshotChatModels } from './moonshot';
 export { openaiChatModels } from './openai';
 export { xaiChatModels } from './xai';
+export { xiaomimimoChatModels } from './xiaomimimo';
