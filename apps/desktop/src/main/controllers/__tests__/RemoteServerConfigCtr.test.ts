@@ -747,6 +747,16 @@ describe('RemoteServerConfigCtr', () => {
   });
 
   describe('isRemoteServerConfigured', () => {
+    it('should return false when active is undefined', async () => {
+      mockStoreManager.get.mockReturnValue({
+        storageMode: 'cloud',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
     it('should return true for active cloud mode (no remoteServerUrl needed)', async () => {
       mockStoreManager.get.mockReturnValue({
         active: true,
@@ -787,6 +797,30 @@ describe('RemoteServerConfigCtr', () => {
         active: true,
         storageMode: 'selfHost',
         // remoteServerUrl is undefined
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for selfHost mode with blank remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: '   ',
+        storageMode: 'selfHost',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for selfHost mode with invalid remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: 'foo',
+        storageMode: 'selfHost',
       });
 
       const result = await controller.isRemoteServerConfigured();
