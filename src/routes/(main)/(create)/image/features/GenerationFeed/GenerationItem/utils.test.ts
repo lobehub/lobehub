@@ -475,7 +475,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
 
   it('should return DEFAULT_MAX_ITEM_WIDTH when no dimensions available', () => {
     const result = getThumbnailMaxWidth(mockGeneration, mockGenerationBatch);
-    expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH);
+    expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH * 2);
   });
 
   it('should return DEFAULT_MAX_ITEM_WIDTH when width is missing', () => {
@@ -484,7 +484,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
       // No asset with width/height, should fall back to default
     };
     const result = getThumbnailMaxWidth(mockGen);
-    expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH);
+    expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH * 2);
   });
 
   it('should return DEFAULT_MAX_ITEM_WIDTH when height is missing', () => {
@@ -493,7 +493,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
       // No asset with valid dimensions
     };
     const result = getThumbnailMaxWidth(mockGen);
-    expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH);
+    expect(result).toBe(DEFAULT_MAX_ITEM_WIDTH * 2);
   });
 
   it('should calculate width based on screen height constraint', () => {

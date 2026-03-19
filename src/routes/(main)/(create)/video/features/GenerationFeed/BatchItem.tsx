@@ -72,7 +72,8 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
   );
 
   const handleDelete = useCallback(async () => {
-    if (!generation) return;
+    if (!generation?.id) return;
+
     try {
       await removeGeneration(generation.id);
     } catch (error) {
@@ -181,7 +182,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
     if (generation.task.status === AsyncTaskStatus.Error) {
       return (
         <VideoErrorItem
-          aspectRatio={batch.config?.aspectRatio}
+          aspectRatio={displayAspectRatio}
           generation={generation}
           onCopyError={handleCopyError}
           onDelete={handleDelete}
@@ -191,7 +192,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
 
     return (
       <VideoLoadingItem
-        aspectRatio={batch.config?.aspectRatio}
+        aspectRatio={displayAspectRatio}
         avgLatencyMs={batch.avgLatencyMs}
         generation={generation}
       />

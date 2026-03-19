@@ -113,7 +113,7 @@ export const getThumbnailMaxWidth = (
 
   // Return default width if no dimension information is available
   if (!dimensions.aspectRatio) {
-    return DEFAULT_MAX_ITEM_WIDTH;
+    return DEFAULT_MAX_ITEM_WIDTH * 2;
   }
 
   // Parse aspect ratio string (format: "16 / 9")

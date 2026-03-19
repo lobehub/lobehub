@@ -1,10 +1,9 @@
 'use client';
 
-import { LoadingOutlined } from '@ant-design/icons';
 import { Block, Center } from '@lobehub/ui';
-import { Spin } from 'antd';
-import { memo } from 'react';
+import React, { memo } from 'react';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 
 import { ActionButtons } from './ActionButtons';
@@ -32,7 +31,7 @@ export const LoadingState = memo<LoadingStateProps>(
         }}
       >
         <Center gap={8}>
-          <Spin indicator={<LoadingOutlined spin />} />
+          <NeuralNetworkLoading size={24} />
           <ElapsedTime generationId={generation.id} isActive={isGenerating} />
         </Center>
         <ActionButtons onDelete={onDelete} />
