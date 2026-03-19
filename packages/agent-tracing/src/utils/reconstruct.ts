@@ -41,6 +41,35 @@ export function reconstructMessages(
 }
 
 /**
+ * Reconstruct the operation-level toolset baseline from snapshot steps.
+ * Returns the `operationToolSet` stored at step 0.
+ */
+export function reconstructToolsetBaseline(steps: StepSnapshot[]): any | undefined {
+  return steps.find((s) => s.toolsetBaseline)?.toolsetBaseline;
+}
+
+/**
+ * Reconstruct cumulative `activatedStepTools` up to a given step
+ * from per-step deltas.
+ */
+export function reconstructActivatedStepTools(
+  steps: StepSnapshot[],
+  targetStepIndex: number,
+): any[] {
+  const accumulated: any[] = [];
+
+  for (const step of steps) {
+    if (step.stepIndex > targetStepIndex) break;
+
+    if (step.activatedStepToolsDelta) {
+      accumulated.push(...step.activatedStepToolsDelta);
+    }
+  }
+
+  return accumulated;
+}
+
+/**
  * Expand an incremental snapshot into legacy full-messages format.
  * Useful for backward-compatible tooling.
  */

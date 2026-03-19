@@ -23,6 +23,11 @@ export interface ExecutionSnapshot {
 }
 
 export interface StepSnapshot {
+  /**
+   * Tools newly activated during this step via tool discovery.
+   * Append-only delta — accumulate across steps to reconstruct full `activatedStepTools`.
+   */
+  activatedStepToolsDelta?: any[];
   completedAt: number;
   // LLM data
   content?: string;
@@ -32,6 +37,7 @@ export interface StepSnapshot {
     stepContext?: unknown;
   };
   events?: Array<{ type: string; [key: string]: unknown }>;
+
   executionTimeMs: number;
 
   inputTokens?: number;
@@ -41,12 +47,12 @@ export interface StepSnapshot {
    * When true, `messagesBaseline` contains the compressed messages as a new baseline.
    */
   isCompressionReset?: boolean;
-
   /**
    * @deprecated Use `messagesBaseline` + `messagesDelta` for incremental format.
    * Kept for backward compatibility with old snapshots.
    */
   messages?: any[];
+
   /**
    * @deprecated Use `messagesBaseline` + `messagesDelta` for incremental format.
    * Kept for backward compatibility with old snapshots.
@@ -81,6 +87,11 @@ export interface StepSnapshot {
     identifier: string;
     arguments?: string;
   }>;
+  /**
+   * Operation-level tool set baseline. Only present at `stepIndex === 0`.
+   * Immutable after operation creation — stored once to avoid per-step duplication.
+   */
+  toolsetBaseline?: any;
   toolsResult?: Array<{
     apiName: string;
     identifier: string;
@@ -88,6 +99,7 @@ export interface StepSnapshot {
     output?: string;
   }>;
   totalCost: number;
+
   // Cumulative
   totalTokens: number;
 }

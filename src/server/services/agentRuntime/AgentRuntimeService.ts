@@ -182,7 +182,7 @@ export class AgentRuntimeService {
     if (impl instanceof LocalQueueServiceImpl) {
       log('Setting up local execution callback');
       impl.setExecutionCallback(async (operationId, stepIndex, context) => {
-        log('[%s][%d] Local callback executing...', operationId, stepIndex);
+        log('[%s][%d] Local step executing...', operationId, stepIndex);
         await this.executeStep({
           context,
           operationId,
@@ -784,9 +784,19 @@ export class AgentRuntimeService {
             ?.filter((e) => e.type !== 'llm_stream')
             .map((e) => {
               if (e.type === 'done' && e.finalState) {
-                // Remove messages from finalState (reconstructible from baseline + delta chain)
-                // Keep operationToolSet/toolManifestMap/tools — may change per step
-                const { messages: _msgs, ...restState } = e.finalState;
+                // Remove reconstructible fields from finalState:
+                // - messages: from messagesBaseline + messagesDelta chain
+                // - operationToolSet: from toolsetBaseline (step 0)
+                // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
+                const {
+                  messages: _msgs,
+                  operationToolSet: _ots,
+                  toolManifestMap: _tmm,
+                  toolSourceMap: _tsm,
+                  tools: _tools,
+                  // activatedStepTools is kept since it's the cumulative record
+                  ...restState
+                } = e.finalState;
                 return { ...e, finalState: restState };
               }
               return e;
@@ -803,7 +813,16 @@ export class AgentRuntimeService {
             snapshotPayload = restPayload;
           }
 
+          // Compute activatedStepTools delta (newly discovered tools in this step)
+          const prevActivated = agentState?.activatedStepTools ?? [];
+          const afterActivated = stepResult.newState.activatedStepTools ?? [];
+          const activatedStepToolsDelta =
+            afterActivated.length > prevActivated.length
+              ? afterActivated.slice(prevActivated.length)
+              : undefined;
+
           partial.steps.push({
+            activatedStepToolsDelta,
             completedAt: Date.now(),
             content: stepPresentationData.content,
             context: {
@@ -822,6 +841,8 @@ export class AgentRuntimeService {
             startedAt: startAt,
             stepIndex,
             stepType: stepPresentationData.stepType,
+            // Store operation-level toolset once at step 0
+            toolsetBaseline: stepIndex === 0 ? agentState?.operationToolSet : undefined,
             toolsCalling: stepPresentationData.toolsCalling,
             toolsResult: stepPresentationData.toolsResult,
             totalCost: stepPresentationData.totalCost,

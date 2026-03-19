@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ExecutionSnapshot, StepSnapshot } from '../types';
-import { expandSnapshot, isIncrementalFormat, reconstructMessages } from './reconstruct';
+import {
+  expandSnapshot,
+  isIncrementalFormat,
+  reconstructActivatedStepTools,
+  reconstructMessages,
+  reconstructToolsetBaseline,
+} from './reconstruct';
 
 function makeStep(overrides: Partial<StepSnapshot>): StepSnapshot {
   return {
@@ -224,5 +230,57 @@ describe('expandSnapshot', () => {
 
     const result = expandSnapshot(snapshot);
     expect(result).toBe(snapshot); // Same reference — no expansion needed
+  });
+});
+
+describe('reconstructToolsetBaseline', () => {
+  it('should return toolset from step 0', () => {
+    const toolset = { enabledToolIds: ['search'], manifestMap: { search: {} } };
+    const steps: StepSnapshot[] = [
+      makeStep({ stepIndex: 0, toolsetBaseline: toolset }),
+      makeStep({ stepIndex: 1, stepType: 'call_tool' }),
+    ];
+
+    expect(reconstructToolsetBaseline(steps)).toEqual(toolset);
+  });
+
+  it('should return undefined when no toolset baseline exists', () => {
+    const steps: StepSnapshot[] = [makeStep({ stepIndex: 0 })];
+
+    expect(reconstructToolsetBaseline(steps)).toBeUndefined();
+  });
+});
+
+describe('reconstructActivatedStepTools', () => {
+  it('should accumulate deltas across steps', () => {
+    const steps: StepSnapshot[] = [
+      makeStep({ stepIndex: 0 }),
+      makeStep({
+        activatedStepToolsDelta: [{ activatedAtStep: 1, id: 'local-system', source: 'device' }],
+        stepIndex: 1,
+        stepType: 'call_tool',
+      }),
+      makeStep({ stepIndex: 2 }),
+      makeStep({
+        activatedStepToolsDelta: [{ activatedAtStep: 3, id: 'mcp-tool', source: 'discovery' }],
+        stepIndex: 3,
+        stepType: 'call_tool',
+      }),
+    ];
+
+    expect(reconstructActivatedStepTools(steps, 1)).toEqual([
+      { activatedAtStep: 1, id: 'local-system', source: 'device' },
+    ]);
+
+    expect(reconstructActivatedStepTools(steps, 3)).toEqual([
+      { activatedAtStep: 1, id: 'local-system', source: 'device' },
+      { activatedAtStep: 3, id: 'mcp-tool', source: 'discovery' },
+    ]);
+  });
+
+  it('should return empty array when no tools activated', () => {
+    const steps: StepSnapshot[] = [makeStep({ stepIndex: 0 }), makeStep({ stepIndex: 1 })];
+
+    expect(reconstructActivatedStepTools(steps, 1)).toEqual([]);
   });
 });
