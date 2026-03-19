@@ -20,9 +20,9 @@ export const useAgentEnableSearch = () => {
 
   const searchImpl = useAiInfraStore(aiModelSelectors.modelBuiltinSearchImpl(model, provider));
 
-  // 只要是内置的搜索实现，一定可以联网搜索
+  // If using a built-in search implementation, web search is always available
   if (searchImpl === 'internal') return true;
 
-  // 如果是关闭状态，一定不能联网搜索
+  // If the search mode is off, web search is never available
   return agentSearchMode !== 'off';
 };

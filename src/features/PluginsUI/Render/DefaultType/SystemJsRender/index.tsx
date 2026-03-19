@@ -21,7 +21,7 @@ const SystemJsRender = memo<SystemJsRenderProps>(({ url, ...props }) => {
       .then((module1) => {
         setComp(module1.default);
         RenderCache[url] = module1.default;
-        // 使用module1模块
+        // Use the module1 module
       })
       .catch((error) => {
         setComp(undefined);

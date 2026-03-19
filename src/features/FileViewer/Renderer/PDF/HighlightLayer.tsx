@@ -12,10 +12,10 @@ interface HighlightRectProps {
 const HighlightRect: FC<HighlightRectProps> = ({ coordinates, highlight }) => {
   const { points } = coordinates;
 
-  // 假设points数组包含矩形的四个顶点坐标
+  // Assume the points array contains the four vertex coordinates of the rectangle
   const [topLeft, topRight, bottomRight, bottomLeft] = points;
 
-  // 计算矩形的属性
+  // Calculate rectangle properties
   const minX = Math.min(topLeft[0], topRight[0], bottomRight[0], bottomLeft[0]);
   const minY = Math.min(topLeft[1], topRight[1], bottomRight[1], bottomLeft[1]);
   const width = Math.max(topLeft[0], topRight[0], bottomRight[0], bottomLeft[0]) - minX;
