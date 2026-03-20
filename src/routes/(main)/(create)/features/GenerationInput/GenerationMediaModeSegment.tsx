@@ -21,6 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   heroSelect: css`
     width: auto;
     font-size: inherit;
+    line-height: 1.2;
   `,
   heroText: css`
     font-size: 24px;
