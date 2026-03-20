@@ -81,7 +81,6 @@ const StarterList = memo(() => {
         titleKey: 'starter.imageGeneration',
       },
       {
-        hot: true,
         icon: VideoIcon,
         key: 'video',
         titleKey: 'starter.videoGeneration',
