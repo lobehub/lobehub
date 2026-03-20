@@ -42,13 +42,22 @@ tags:
   在左侧菜单中，进入 **OAuth & Permissions**。向下滚动到 **Scopes** → **Bot Token Scopes**，添加以下权限：
 
   - `app_mentions:read` — 检测机器人被提及
-  - `chat:write` — 发送消息
   - `channels:history` — 读取公共频道中的消息
+  - `channels:read` — 读取频道信息
+  - `chat:write` — 发送消息
   - `groups:history` — 读取私有频道中的消息
+  - `groups:read` — 读取私有频道信息
   - `im:history` — 读取私信
-  - `im:write` — 发起私信对话
-  - `reactions:read` — 读取表情回应（可选）
-  - `reactions:write` — 添加表情回应（可选）
+  - `im:read` — 读取私信频道信息
+  - `mpim:history` — 读取群组私信消息
+  - `mpim:read` — 读取群组私信信息
+  - `reactions:read` — 读取表情回应
+  - `reactions:write` — 添加表情回应
+  - `users:read` — 查询用户信息
+
+  **可选权限**（用于 Slack Assistants API）：
+
+  - `assistant:write` — 启用 Slack Assistants API 功能
 
   ### 安装应用到工作区
 
@@ -102,6 +111,13 @@ tags:
   - `message.channels` — 公共频道中的消息
   - `message.groups` — 私有频道中的消息
   - `message.im` — 发送给机器人的私信
+  - `message.mpim` — 群组私信中的消息
+  - `member_joined_channel` — 当用户加入频道时触发
+
+  **可选事件**（用于 Slack Assistants API）：
+
+  - `assistant_thread_started` — 当用户打开新的助手会话时触发
+  - `assistant_thread_context_changed` — 当用户在助手面板打开时切换到不同频道时触发
 
   ### 保存更改
 

@@ -44,13 +44,22 @@ By connecting a Slack channel to your LobeHub agent, users can interact with the
   In the left sidebar, go to **OAuth & Permissions**. Scroll down to **Scopes** → **Bot Token Scopes** and add the following:
 
   - `app_mentions:read` — Detect when the bot is mentioned
-  - `chat:write` — Send messages
   - `channels:history` — Read messages in public channels
+  - `channels:read` — Read channel info
+  - `chat:write` — Send messages
   - `groups:history` — Read messages in private channels
+  - `groups:read` — Read private channel info
   - `im:history` — Read direct messages
-  - `im:write` — Start direct message conversations
-  - `reactions:read` — Read reactions (optional)
-  - `reactions:write` — Add reactions (optional)
+  - `im:read` — Read DM channel info
+  - `mpim:history` — Read group DM messages
+  - `mpim:read` — Read group DM channel info
+  - `reactions:read` — Read reactions
+  - `reactions:write` — Add reactions
+  - `users:read` — Look up user info
+
+  **Optional scopes** (for Slack Assistants API support):
+
+  - `assistant:write` — Enable the Slack Assistants API features
 
   ### Install the App to Your Workspace
 
@@ -104,6 +113,13 @@ By connecting a Slack channel to your LobeHub agent, users can interact with the
   - `message.channels` — Messages in public channels
   - `message.groups` — Messages in private channels
   - `message.im` — Direct messages to the bot
+  - `message.mpim` — Messages in group DMs
+  - `member_joined_channel` — When a user joins a channel
+
+  **Optional events** (for Slack Assistants API support):
+
+  - `assistant_thread_started` — When a user opens a new assistant thread
+  - `assistant_thread_context_changed` — When a user navigates to a different channel with the assistant panel open
 
   ### Save Changes
 
