@@ -32,7 +32,9 @@
   "peerDependencies": {
     "dayjs": "*",
     "drizzle-orm": "*",
+    "drizzle-zod": "*",
     "nanoid": "*",
-    "pg": "*"
+    "pg": "*",
+    "zod": "*"
   }
 }
