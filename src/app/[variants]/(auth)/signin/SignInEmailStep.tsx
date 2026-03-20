@@ -138,7 +138,11 @@ export const SignInEmailStep = ({
                 {getProviderLabel(provider)}
               </Button>
             );
-            return provider === lastAuthProvider ? (
+            const showLastUsed =
+              provider === lastAuthProvider &&
+              (oAuthSSOProviders.length > 1 ||
+                (oAuthSSOProviders.length === 1 && !disableEmailPassword));
+            return showLastUsed ? (
               <Badge.Ribbon
                 color="var(--ant-color-info-fill-tertiary)"
                 key={provider}
