@@ -15,6 +15,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import type { PlatformClient } from './platforms';
+import { DEFAULT_DEBOUNCE_MS } from './platforms/const';
 import {
   renderError,
   renderFinalReply,
@@ -123,9 +124,6 @@ export class AgentBridgeService {
     }
   >();
 
-  /** Default debounce window (ms). Platforms can override via settings.debounceMs. */
-  private static readonly DEFAULT_DEBOUNCE_MS = 2000;
-
   /**
    * Buffer a message and return a promise that resolves when the debounce window closes.
    * Returns the collected messages if this call "wins" the debounce (is the first),
@@ -231,7 +229,7 @@ export class AgentBridgeService {
     const batch = await AgentBridgeService.bufferMessage(
       thread.id,
       message,
-      debounceMs ?? AgentBridgeService.DEFAULT_DEBOUNCE_MS,
+      debounceMs ?? DEFAULT_DEBOUNCE_MS,
     );
     if (!batch) {
       log('handleMention: message buffered for thread=%s, waiting for debounce', thread.id);
@@ -336,7 +334,7 @@ export class AgentBridgeService {
     const batch = await AgentBridgeService.bufferMessage(
       thread.id,
       message,
-      debounceMs ?? AgentBridgeService.DEFAULT_DEBOUNCE_MS,
+      debounceMs ?? DEFAULT_DEBOUNCE_MS,
     );
     if (!batch) {
       log('handleSubscribedMessage: message buffered for thread=%s', thread.id);

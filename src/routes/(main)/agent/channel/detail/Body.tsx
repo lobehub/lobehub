@@ -24,6 +24,35 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+// --------------- Validation rules builder ---------------
+
+function buildRules(field: FieldSchema, t: (key: string) => string) {
+  const rules: any[] = [];
+
+  if (field.required) {
+    rules.push({ message: t(field.label), required: true });
+  }
+
+  if (field.type === 'number' || field.type === 'integer') {
+    if (typeof field.minimum === 'number') {
+      rules.push({
+        message: `${t(field.label)} ≥ ${field.minimum}`,
+        min: field.minimum,
+        type: 'number' as const,
+      });
+    }
+    if (typeof field.maximum === 'number') {
+      rules.push({
+        message: `${t(field.label)} ≤ ${field.maximum}`,
+        max: field.maximum,
+        type: 'number' as const,
+      });
+    }
+  }
+
+  return rules.length > 0 ? rules : undefined;
+}
+
 // --------------- Single field component (memo'd) ---------------
 
 interface SchemaFieldProps {
@@ -96,7 +125,7 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
       label={label}
       minWidth={'max(50%, 400px)'}
       name={[parentKey, field.key]}
-      rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
+      rules={buildRules(field, t)}
       tag={field.key}
       valuePropName={field.type === 'boolean' ? 'checked' : undefined}
       variant="borderless"

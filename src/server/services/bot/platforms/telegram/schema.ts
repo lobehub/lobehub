@@ -1,4 +1,4 @@
-import { MAX_DEBOUNCE_MS } from '../const';
+import { DEFAULT_DEBOUNCE_MS, MAX_DEBOUNCE_MS } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -46,7 +46,7 @@ export const schema: FieldSchema[] = [
       },
       {
         key: 'debounceMs',
-        default: 2000,
+        default: DEFAULT_DEBOUNCE_MS,
         description: 'channel.debounceMsHint',
         label: 'channel.debounceMs',
         maximum: MAX_DEBOUNCE_MS,
