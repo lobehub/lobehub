@@ -5,7 +5,6 @@ export default defineConfig({
   clean: true,
   deps: {
     neverBundle: ['@napi-rs/canvas'],
-    onlyBundle: false,
   },
   entry: ['src/index.ts'],
   fixedExtension: false,
