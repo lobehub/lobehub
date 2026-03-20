@@ -1,3 +1,4 @@
+import { MAX_DEBOUNCE_MS } from '../../const';
 import type { FieldSchema } from '../../types';
 
 export const sharedSchema: FieldSchema[] = [
@@ -45,6 +46,7 @@ export const sharedSchema: FieldSchema[] = [
         default: 4000,
         description: 'channel.charLimitHint',
         label: 'channel.charLimit',
+        maximum: 30_000,
         minimum: 100,
         type: 'number',
       },
@@ -53,6 +55,7 @@ export const sharedSchema: FieldSchema[] = [
         default: 2000,
         description: 'channel.debounceMsHint',
         label: 'channel.debounceMs',
+        maximum: MAX_DEBOUNCE_MS,
         minimum: 0,
         type: 'number',
       },
