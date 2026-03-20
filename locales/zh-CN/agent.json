@@ -62,6 +62,8 @@
   "channel.secretTokenHint": "可选。用于验证来自 Telegram 的 Webhook 请求。",
   "channel.secretTokenPlaceholder": "可选的 Webhook 验证密钥",
   "channel.settings": "高级设置",
+  "channel.settingsResetConfirm": "确定要将高级设置恢复为默认配置吗？",
+  "channel.settingsResetDefault": "恢复默认配置",
   "channel.setupGuide": "配置教程",
   "channel.showUsageStats": "显示用量统计",
   "channel.showUsageStatsHint": "在机器人回复中显示 Token 用量、费用和耗时统计",

@@ -62,6 +62,8 @@
   "channel.secretTokenHint": "Optional. Used to verify webhook requests from Telegram.",
   "channel.secretTokenPlaceholder": "Optional secret for webhook verification",
   "channel.settings": "Advanced Settings",
+  "channel.settingsResetConfirm": "Are you sure you want to reset advanced settings to default?",
+  "channel.settingsResetDefault": "Reset to Default",
   "channel.setupGuide": "Setup Guide",
   "channel.showUsageStats": "Show Usage Stats",
   "channel.showUsageStatsHint": "Show token usage, cost, and duration stats in bot replies",

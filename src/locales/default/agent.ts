@@ -82,6 +82,8 @@ export default {
   'channel.dmPolicyDisabled': 'Disabled',
   'channel.dmPolicyOpen': 'Open',
   'channel.settings': 'Advanced Settings',
+  'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
+  'channel.settingsResetDefault': 'Reset to Default',
   'channel.signingSecret': 'Signing Secret',
   'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',

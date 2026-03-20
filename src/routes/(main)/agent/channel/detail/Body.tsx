@@ -1,9 +1,10 @@
 'use client';
 
 import { Flexbox, Form, FormGroup, FormItem, Tag } from '@lobehub/ui';
-import { type FormInstance, InputNumber, Select, Switch } from 'antd';
+import { Button, type FormInstance, InputNumber, Popconfirm, Select, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { memo, useMemo } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
@@ -192,6 +193,9 @@ interface BodyProps {
 }
 
 const Body = memo<BodyProps>(({ platformDef, form }) => {
+  const { t: _t } = useTranslation('agent');
+  const t = _t as (key: string) => string;
+
   const applicationIdField = useMemo(
     () => platformDef.schema.find((f) => f.key === 'applicationId'),
     [platformDef.schema],
@@ -206,6 +210,16 @@ const Body = memo<BodyProps>(({ platformDef, form }) => {
     () => getFields(platformDef.schema, 'settings'),
     [platformDef.schema],
   );
+
+  const handleResetSettings = useCallback(() => {
+    const defaults: Record<string, any> = {};
+    for (const field of settingsFields) {
+      if (field.default !== undefined) {
+        defaults[field.key] = field.default;
+      }
+    }
+    form.setFieldsValue({ settings: defaults });
+  }, [form, settingsFields]);
 
   return (
     <Form
@@ -234,6 +248,13 @@ const Body = memo<BodyProps>(({ platformDef, form }) => {
           style={{ marginBlockStart: 16 }}
           title={<SettingsTitle schema={platformDef.schema} />}
           variant="borderless"
+          extra={
+            <Popconfirm title={t('channel.settingsResetConfirm')} onConfirm={handleResetSettings}>
+              <Button icon={<RotateCcw size={14} />} size="small" type="text">
+                {t('channel.settingsResetDefault')}
+              </Button>
+            </Popconfirm>
+          }
         >
           {settingsFields.map((field, i) => (
             <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
