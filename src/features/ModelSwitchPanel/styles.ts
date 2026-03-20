@@ -59,5 +59,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
     display: inline-flex;
     outline: none;
+
+    svg:focus {
+      outline: none;
+    }
   `,
 }));
