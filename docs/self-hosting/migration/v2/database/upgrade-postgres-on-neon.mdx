@@ -40,18 +40,21 @@ In LobeHub v2, the `pg_search` extension is required for database migrations. Up
 
 2. **Copy the connection string.**
 Copy the unpooled connection string to improve the import success rate.
-[connection-string](https://github.com/user-attachments/assets/9126999a-a6f2-4d4b-ae68-70631e1657cc)
+
+![connection-string](https://github.com/user-attachments/assets/9126999a-a6f2-4d4b-ae68-70631e1657cc)
 
 3. **Use Neon's built-in Import Data feature.**
 Open the Import Data entry in the Neon console:
-[import-data](https://github.com/user-attachments/assets/3b48b842-afb1-4e7c-afdf-b1dc4e4c603e)
+
+![import-data](https://github.com/user-attachments/assets/3b48b842-afb1-4e7c-afdf-b1dc4e4c603e)
 
 4. **Paste the connection string and follow the Neon instructions:**
  <Callout type={'warning'}>
   **Region requirement**:
   Select an AWS region that supports `pg_search`. See the [Neon pg_search documentation](https://neon.com/docs/extensions/pg_search).
  </Callout>
-[import-instructions](https://github.com/user-attachments/assets/806c285b-ce8a-4a68-8405-553f7fae8499)
+
+![import-instructions](https://github.com/user-attachments/assets/806c285b-ce8a-4a68-8405-553f7fae8499)
 
 5. **Replace your original `DATABASE_URL`.**
 Open the connection settings, select the `import` branch, copy its connection string, replace your original `DATABASE_URL` environment variable, and rebuild or restart LobeHub.
