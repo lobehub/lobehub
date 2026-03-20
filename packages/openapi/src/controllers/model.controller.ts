@@ -6,7 +6,7 @@ import type { CreateModelRequest, ModelsListQuery, UpdateModelRequest } from '..
 
 export class ModelController extends BaseController {
   /**
-   * 获取模型列表接口
+   * Retrieves the model list endpoint
    * GET /api/v1/models
    * Query: { page?, pageSize?, keyword? }
    */
@@ -26,7 +26,7 @@ export class ModelController extends BaseController {
   }
 
   /**
-   * 获取模型详情
+   * Retrieves model details
    * GET /api/v1/models/:providerId/:modelId
    */
   async handleGetModel(c: Context) {
@@ -44,7 +44,7 @@ export class ModelController extends BaseController {
   }
 
   /**
-   * 创建模型
+   * Creates a model
    * POST /api/v1/models
    */
   async handleCreateModel(c: Context) {
@@ -66,7 +66,7 @@ export class ModelController extends BaseController {
   }
 
   /**
-   * 更新模型
+   * Updates a model
    * PATCH /api/v1/models/:providerId/:modelId
    */
   async handleUpdateModel(c: Context) {

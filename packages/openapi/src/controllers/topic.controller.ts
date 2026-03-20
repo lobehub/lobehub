@@ -6,7 +6,7 @@ import type { TopicCreateRequest, TopicListQuery, TopicUpdateRequest } from '../
 
 export class TopicController extends BaseController {
   /**
-   * 统一获取话题列表
+   * Retrieves the topic list
    * GET /api/v1/topics?keyword=xxx
    * Query: { keyword?: string, agentId?: string, groupId?: string, isInbox?: boolean }
    */
@@ -27,7 +27,7 @@ export class TopicController extends BaseController {
   }
 
   /**
-   * 获取指定话题
+   * Retrieves a specific topic
    * GET /api/v1/topics/:id
    * Params: { id: string }
    */
@@ -47,7 +47,7 @@ export class TopicController extends BaseController {
   }
 
   /**
-   * 创建新的话题
+   * Creates a new topic
    * POST /api/v1/topics
    * Body: { agentId?: string, groupId?: string, title: string, favorite?: boolean, clientId?: string }
    */
@@ -67,7 +67,7 @@ export class TopicController extends BaseController {
   }
 
   /**
-   * 更新话题
+   * Updates a topic
    * PATCH /api/v1/topics/:id
    * Body: { title?: string, favorite?: boolean, historySummary?: string, metadata?: object }
    */
@@ -88,7 +88,7 @@ export class TopicController extends BaseController {
   }
 
   /**
-   * 删除话题
+   * Deletes a topic
    * DELETE /api/v1/topics/:id
    * Params: { id: string }
    */

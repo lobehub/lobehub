@@ -10,15 +10,15 @@ import type {
 } from '../types/agent.type';
 
 /**
- * Agent 控制器类
- * 处理 Agent 相关的 HTTP 请求和响应
+ * Agent controller class
+ * Handles Agent-related HTTP requests and responses
  */
 export class AgentController extends BaseController {
   /**
-   * 获取系统中所有的 Agent 列表
+   * Retrieves a list of all Agents in the system
    * GET /api/v1/agents/list
    * @param c Hono Context
-   * @returns Agent 列表响应
+   * @returns Agent list response
    */
   async queryAgents(c: Context): Promise<Response> {
     try {
@@ -35,10 +35,10 @@ export class AgentController extends BaseController {
   }
 
   /**
-   * 创建智能体
+   * Creates an agent
    * POST /api/v1/agents/create
    * @param c Hono Context
-   * @returns 创建完成的 Agent 信息响应
+   * @returns Created Agent information response
    */
   async createAgent(c: Context): Promise<Response> {
     try {
@@ -55,10 +55,10 @@ export class AgentController extends BaseController {
   }
 
   /**
-   * 更新智能体
+   * Updates an agent
    * PUT /api/v1/agents/:id
    * @param c Hono Context
-   * @returns 更新后的 Agent 信息响应
+   * @returns Updated Agent information response
    */
   async updateAgent(c: Context): Promise<Response> {
     try {
@@ -81,10 +81,10 @@ export class AgentController extends BaseController {
   }
 
   /**
-   * 删除智能体
+   * Deletes an agent
    * DELETE /api/v1/agents/delete
    * @param c Hono Context
-   * @returns 删除结果响应
+   * @returns Deletion result response
    */
   async deleteAgent(c: Context): Promise<Response> {
     try {
@@ -102,10 +102,10 @@ export class AgentController extends BaseController {
   }
 
   /**
-   * 根据 ID 获取 Agent 详情
+   * Retrieves Agent details by ID
    * GET /api/v1/agents/:id
    * @param c Hono Context
-   * @returns Agent 详情响应
+   * @returns Agent detail response
    */
   async getAgentById(c: Context): Promise<Response> {
     try {

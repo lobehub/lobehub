@@ -11,7 +11,7 @@ import type {
 
 export class MessageController extends BaseController {
   /**
-   * 统一的消息数量统计接口 (RESTful API 优化后)
+   * Unified message count endpoint (RESTful API optimized)
    * GET /api/v1/messages/count
    * Query: { topicIds?: string, userId?: string }
    */
@@ -20,7 +20,7 @@ export class MessageController extends BaseController {
       const userId = this.getUserId(c)!;
       const rawQuery = this.getQuery(c);
 
-      // 处理 topicIds 参数 (comma-separated string -> array)
+      // Process topicIds parameter (comma-separated string -> array)
       const processedQuery: MessagesCountQuery = {
         ...rawQuery,
         topicIds: rawQuery.topicIds ? (rawQuery.topicIds as string).split(',') : undefined,
@@ -37,7 +37,7 @@ export class MessageController extends BaseController {
   }
 
   /**
-   * 统一的消息列表查询接口 (RESTful API 优化后)
+   * Unified message list query endpoint (RESTful API optimized)
    * GET /api/v1/messages
    * Query: { page?, limit?, topicId?, userId?, role?, query?, sort?, order? }
    */
@@ -57,7 +57,7 @@ export class MessageController extends BaseController {
   }
 
   /**
-   * 根据消息ID获取消息详情
+   * Retrieves message details by message ID
    * GET /api/v1/messages/:id
    * Params: { id: string }
    */
@@ -81,7 +81,7 @@ export class MessageController extends BaseController {
   }
 
   /**
-   * 创建新消息
+   * Creates a new message
    * POST /api/v1/messages
    * Body: { content: string, role: 'user'|'assistant'|'system'|'tool', topicId?: string, model?: string, provider?: string, files?: string[] }
    */
@@ -101,7 +101,7 @@ export class MessageController extends BaseController {
   }
 
   /**
-   * 创建用户消息并生成AI回复
+   * Creates a user message and generates an AI reply
    * POST /api/v1/messages/replies
    * Body: { content: string, role: 'user', topicId?: string, model?: string, provider?: string, files?: string[] }
    */
@@ -121,7 +121,7 @@ export class MessageController extends BaseController {
   }
 
   /**
-   * 删除单个消息
+   * Deletes a single message
    * DELETE /api/v1/messages/:id
    * Params: { id: string }
    */
@@ -141,7 +141,7 @@ export class MessageController extends BaseController {
   }
 
   /**
-   * 批量删除消息
+   * Batch deletes messages
    * DELETE /api/v1/messages
    * Body: { messageIds: string[] }
    */
