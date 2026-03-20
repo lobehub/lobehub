@@ -2,8 +2,7 @@
 
 import { LOADING_FLAT } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler } from 'react';
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -15,10 +14,7 @@ import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
 import MessageBranch from '../components/MessageBranch';
-import {
-  useSetMessageItemActionElementPortialContext,
-  useSetMessageItemActionTypeContext,
-} from '../Contexts/message-action-context';
+import { useActivateMessageActionsBar } from '../Contexts/useActivateMessageActionsBar';
 import MessageContent from './components/MessageContent';
 import { AssistantMessageExtra } from './Extra';
 
@@ -65,18 +61,9 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
   const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
 
   const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
-  const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
-  const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
+  const activateActionsBar = useActivateMessageActionsBar({ id, index, type: 'assistant' });
 
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-
-  const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
-    (e) => {
-      setMessageItemActionElementPortialContext(e.currentTarget);
-      setMessageItemActionTypeContext({ id, index, type: 'assistant' });
-    },
-    [id, index, setMessageItemActionElementPortialContext, setMessageItemActionTypeContext],
-  );
 
   return (
     <ChatItem
@@ -118,7 +105,8 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
         />
       }
       onDoubleClick={onDoubleClick}
-      onMouseEnter={onMouseEnter}
+      onClick={activateActionsBar}
+      onMouseEnter={activateActionsBar}
     >
       <MessageContent {...item} />
     </ChatItem>

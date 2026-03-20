@@ -1,7 +1,6 @@
 import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -13,10 +12,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useDoubleClickEdit } from '../../hooks/useDoubleClickEdit';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
-import {
-  useSetMessageItemActionElementPortialContext,
-  useSetMessageItemActionTypeContext,
-} from '../Contexts/message-action-context';
+import { useActivateMessageActionsBar } from '../Contexts/useActivateMessageActionsBar';
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
 import { UserMessageExtra } from './Extra';
@@ -55,24 +51,12 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   }, [targetId, userName, agents, t]);
 
   const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
-
-  const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
-  const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
-
-  const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
-    (e) => {
-      if (disableEditing) return;
-      setMessageItemActionElementPortialContext(e.currentTarget);
-      setMessageItemActionTypeContext({ id, index, type: 'user' });
-    },
-    [
-      disableEditing,
-      id,
-      index,
-      setMessageItemActionElementPortialContext,
-      setMessageItemActionTypeContext,
-    ],
-  );
+  const activateActionsBar = useActivateMessageActionsBar({
+    disabled: disableEditing,
+    id,
+    index,
+    type: 'user',
+  });
 
   return (
     <ChatItem
@@ -96,7 +80,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
         />
       }
       onDoubleClick={onDoubleClick}
-      onMouseEnter={onMouseEnter}
+      onClick={activateActionsBar}
+      onMouseEnter={activateActionsBar}
     >
       <UserMessageContent {...item} />
     </ChatItem>

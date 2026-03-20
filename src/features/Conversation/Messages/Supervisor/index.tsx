@@ -3,7 +3,6 @@
 import type { EmojiReaction } from '@lobechat/types';
 import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,10 +19,7 @@ import { useAgentMeta } from '../../hooks';
 import { dataSelectors, useConversationStore } from '../../store';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
-import {
-  useSetMessageItemActionElementPortialContext,
-  useSetMessageItemActionTypeContext,
-} from '../Contexts/message-action-context';
+import { useActivateMessageActionsBar } from '../Contexts/useActivateMessageActionsBar';
 import Group from './components/Group';
 
 const actionBarHolder = (
@@ -85,23 +81,12 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
     [reactions],
   );
 
-  const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
-  const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
-
-  const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
-    (e) => {
-      if (disableEditing) return;
-      setMessageItemActionElementPortialContext(e.currentTarget);
-      setMessageItemActionTypeContext({ id, index, type: 'assistantGroup' });
-    },
-    [
-      disableEditing,
-      id,
-      index,
-      setMessageItemActionElementPortialContext,
-      setMessageItemActionTypeContext,
-    ],
-  );
+  const activateActionsBar = useActivateMessageActionsBar({
+    disabled: disableEditing,
+    id,
+    index,
+    type: 'assistantGroup',
+  });
 
   return (
     <ChatItem
@@ -129,7 +114,8 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
           memberAvatars={memberAvatars}
         />
       )}
-      onMouseEnter={onMouseEnter}
+      onClick={activateActionsBar}
+      onMouseEnter={activateActionsBar}
     >
       {children && children.length > 0 && (
         <Group
