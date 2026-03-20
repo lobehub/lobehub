@@ -9,7 +9,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
-import type { GenerationLayoutCommonProps } from '../types';
+import type { GenerationLayoutCommonProps } from '../../types';
 import { GenerationTopicStoreProvider } from './StoreContext';
 import TopicList from './TopicList';
 import TopicUrlSync from './TopicUrlSync';
