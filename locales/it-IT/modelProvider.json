@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Descrizione del provider (opzionale)",
   "createNewAiProvider.description.title": "Descrizione del provider",
   "createNewAiProvider.id.desc": "Identificatore univoco per il provider di servizi, non modificabile dopo la creazione",
+  "createNewAiProvider.id.duplicate": "L'ID del provider esiste già",
   "createNewAiProvider.id.format": "Può contenere solo numeri, lettere minuscole, trattini (-) e underscore (_)",
   "createNewAiProvider.id.placeholder": "Consigliato tutto minuscolo, es. openai, non modificabile dopo la creazione",
   "createNewAiProvider.id.required": "Inserisci l'ID del provider",

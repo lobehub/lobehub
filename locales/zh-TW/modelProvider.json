@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "服務商簡介（選填）",
   "createNewAiProvider.description.title": "服務商簡介",
   "createNewAiProvider.id.desc": "作為服務商唯一標識，創建後將不可修改",
+  "createNewAiProvider.id.duplicate": "提供者 ID 已經存在",
   "createNewAiProvider.id.format": "只能包含數字、小寫字母、連字符（-）和底線（_）",
   "createNewAiProvider.id.placeholder": "建議全小寫，例如 openai，創建後將不可修改",
   "createNewAiProvider.id.required": "請填寫服務商 ID",

@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Описание на доставчика (по избор)",
   "createNewAiProvider.description.title": "Описание на доставчика",
   "createNewAiProvider.id.desc": "Уникален идентификатор за доставчика на услуги, който не може да бъде променян след създаване",
+  "createNewAiProvider.id.duplicate": "Идентификаторът на доставчика вече съществува",
   "createNewAiProvider.id.format": "Може да съдържа само цифри, малки букви, тирета (-) и долни черти (_)",
   "createNewAiProvider.id.placeholder": "Препоръчително е да е с малки букви, напр. openai, не може да се променя след създаване",
   "createNewAiProvider.id.required": "Моля, въведете ID на доставчика",

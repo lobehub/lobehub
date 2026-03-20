@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Описание провайдера (необязательно)",
   "createNewAiProvider.description.title": "Описание провайдера",
   "createNewAiProvider.id.desc": "Уникальный идентификатор провайдера, не может быть изменен после создания",
+  "createNewAiProvider.id.duplicate": "ID провайдера уже существует",
   "createNewAiProvider.id.format": "Может содержать только цифры, строчные буквы, дефисы (-) и подчеркивания (_)",
   "createNewAiProvider.id.placeholder": "Рекомендуется использовать строчные буквы, например openai. Не может быть изменен после создания",
   "createNewAiProvider.id.required": "Пожалуйста, введите ID провайдера",

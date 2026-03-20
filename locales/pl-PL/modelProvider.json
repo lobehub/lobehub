@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Opis dostawcy (opcjonalnie)",
   "createNewAiProvider.description.title": "Opis dostawcy",
   "createNewAiProvider.id.desc": "Unikalny identyfikator dostawcy usług, nie można go zmienić po utworzeniu",
+  "createNewAiProvider.id.duplicate": "Identyfikator dostawcy już istnieje",
   "createNewAiProvider.id.format": "Może zawierać tylko cyfry, małe litery, myślniki (-) i podkreślenia (_)",
   "createNewAiProvider.id.placeholder": "Zalecane małe litery, np. openai, nie można zmienić po utworzeniu",
   "createNewAiProvider.id.required": "Wprowadź identyfikator dostawcy",

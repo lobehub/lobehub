@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Mô tả nhà cung cấp (tùy chọn)",
   "createNewAiProvider.description.title": "Mô tả nhà cung cấp",
   "createNewAiProvider.id.desc": "Định danh duy nhất cho nhà cung cấp dịch vụ, không thể thay đổi sau khi tạo",
+  "createNewAiProvider.id.duplicate": "ID nhà cung cấp đã tồn tại",
   "createNewAiProvider.id.format": "Chỉ được chứa số, chữ thường, dấu gạch ngang (-) và dấu gạch dưới (_)",
   "createNewAiProvider.id.placeholder": "Nên viết thường, ví dụ: openai, không thể thay đổi sau khi tạo",
   "createNewAiProvider.id.required": "Vui lòng nhập ID nhà cung cấp",

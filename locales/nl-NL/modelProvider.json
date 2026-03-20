@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Beschrijving van provider (optioneel)",
   "createNewAiProvider.description.title": "Providerbeschrijving",
   "createNewAiProvider.id.desc": "Unieke identificatie voor de serviceprovider, kan niet worden gewijzigd na aanmaak",
+  "createNewAiProvider.id.duplicate": "Provider-ID bestaat al",
   "createNewAiProvider.id.format": "Mag alleen cijfers, kleine letters, koppeltekens (-) en underscores (_) bevatten",
   "createNewAiProvider.id.placeholder": "Bij voorkeur kleine letters, bijv. openai, niet wijzigbaar na aanmaak",
   "createNewAiProvider.id.required": "Voer de provider-ID in",

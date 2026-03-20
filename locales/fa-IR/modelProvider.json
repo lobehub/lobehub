@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "توضیحات ارائه‌دهنده (اختیاری)",
   "createNewAiProvider.description.title": "توضیحات ارائه‌دهنده",
   "createNewAiProvider.id.desc": "شناسه یکتا برای ارائه‌دهنده سرویس که پس از ایجاد قابل تغییر نیست",
+  "createNewAiProvider.id.duplicate": "شناسه ارائه‌دهنده قبلاً وجود دارد",
   "createNewAiProvider.id.format": "فقط شامل اعداد، حروف کوچک، خط تیره (-) و زیرخط (_) مجاز است",
   "createNewAiProvider.id.placeholder": "ترجیحاً با حروف کوچک، مانند openai. پس از ایجاد قابل تغییر نیست",
   "createNewAiProvider.id.required": "لطفاً شناسه ارائه‌دهنده را وارد کنید",

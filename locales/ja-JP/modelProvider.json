@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "サービスプロバイダーの紹介（任意）",
   "createNewAiProvider.description.title": "サービスプロバイダーの紹介",
   "createNewAiProvider.id.desc": "サービスプロバイダーの一意の識別子であり、作成後は変更できません",
+  "createNewAiProvider.id.duplicate": "プロバイダーIDは既に存在しています",
   "createNewAiProvider.id.format": "数字、小文字のアルファベット、ハイフン（-）、およびアンダースコア（_）のみを含むことができます",
   "createNewAiProvider.id.placeholder": "小文字で入力してください（例: openai）。作成後は変更できません",
   "createNewAiProvider.id.required": "サービスプロバイダー ID を入力してください",

@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "وصف المزود (اختياري)",
   "createNewAiProvider.description.title": "وصف المزود",
   "createNewAiProvider.id.desc": "معرف فريد لمزود الخدمة، لا يمكن تعديله بعد الإنشاء",
+  "createNewAiProvider.id.duplicate": "معرف المزود موجود بالفعل",
   "createNewAiProvider.id.format": "يمكن أن يحتوي فقط على أرقام، حروف صغيرة، شرطات (-)، وشرطات سفلية (_)",
   "createNewAiProvider.id.placeholder": "يفضل أن يكون بحروف صغيرة، مثل openai، لا يمكن تعديله بعد الإنشاء",
   "createNewAiProvider.id.required": "يرجى إدخال معرف المزود",

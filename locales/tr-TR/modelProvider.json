@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Sağlayıcı açıklaması (isteğe bağlı)",
   "createNewAiProvider.description.title": "Sağlayıcı Açıklaması",
   "createNewAiProvider.id.desc": "Hizmet sağlayıcısı için benzersiz tanımlayıcı, oluşturulduktan sonra değiştirilemez",
+  "createNewAiProvider.id.duplicate": "Sağlayıcı Kimliği zaten mevcut",
   "createNewAiProvider.id.format": "Sadece rakamlar, küçük harfler, tire (-) ve alt çizgi (_) içerebilir",
   "createNewAiProvider.id.placeholder": "Tümü küçük harf önerilir, örn. openai, oluşturulduktan sonra değiştirilemez",
   "createNewAiProvider.id.required": "Lütfen sağlayıcı kimliğini girin",

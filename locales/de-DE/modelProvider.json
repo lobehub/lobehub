@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Anbieterbeschreibung (optional)",
   "createNewAiProvider.description.title": "Anbieterbeschreibung",
   "createNewAiProvider.id.desc": "Eindeutige Kennung für den Dienstanbieter, nach Erstellung nicht mehr änderbar",
+  "createNewAiProvider.id.duplicate": "Anbieter-ID existiert bereits",
   "createNewAiProvider.id.format": "Darf nur Zahlen, Kleinbuchstaben, Bindestriche (-) und Unterstriche (_) enthalten",
   "createNewAiProvider.id.placeholder": "Vorschlag: alles klein, z. B. openai; nach Erstellung nicht mehr änderbar",
   "createNewAiProvider.id.required": "Bitte geben Sie die Anbieter-ID ein",

@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Descripción del proveedor (opcional)",
   "createNewAiProvider.description.title": "Descripción del proveedor",
   "createNewAiProvider.id.desc": "Identificador único del proveedor de servicio, no se puede modificar después de la creación",
+  "createNewAiProvider.id.duplicate": "El ID del proveedor ya existe",
   "createNewAiProvider.id.format": "Solo puede contener números, letras minúsculas, guiones (-) y guiones bajos (_)",
   "createNewAiProvider.id.placeholder": "Sugerido en minúsculas, por ejemplo: openai. No se puede modificar después de la creación",
   "createNewAiProvider.id.required": "Por favor, introduce el ID del proveedor",
