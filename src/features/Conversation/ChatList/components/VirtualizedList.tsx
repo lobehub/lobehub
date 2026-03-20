@@ -201,11 +201,13 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         }}
       </VList>
       {/* BackBottom is placed outside VList so it remains visible regardless of scroll position */}
-      <BackBottom
-        atBottom={atBottom}
-        visible={!atBottom}
-        onScrollToBottom={() => scrollToBottom(true)}
-      />
+      <WideScreenContainer style={{ position: 'relative' }}>
+        <BackBottom
+          atBottom={atBottom}
+          visible={!atBottom}
+          onScrollToBottom={() => scrollToBottom(true)}
+        />
+      </WideScreenContainer>
     </div>
   );
 }, isEqual);
