@@ -503,7 +503,7 @@ export class AgentRuntimeService {
         };
       }
 
-      // Call onBeforeStep callback
+      // Call onBeforeStep callback (legacy)
       if (callbacks?.onBeforeStep) {
         try {
           await callbacks.onBeforeStep({
@@ -515,6 +515,26 @@ export class AgentRuntimeService {
         } catch (callbackError) {
           log('[%s] onBeforeStep callback error: %O', operationId, callbackError);
         }
+      }
+
+      // Dispatch beforeStep hooks
+      try {
+        const beforeStepMetadata = agentState?.metadata || {};
+        await hookDispatcher.dispatch(
+          operationId,
+          'beforeStep',
+          {
+            agentId: beforeStepMetadata?.agentId || '',
+            finalState: agentState,
+            operationId,
+            stepIndex,
+            steps: agentState?.stepCount || 0,
+            userId: beforeStepMetadata?.userId || this.userId,
+          },
+          beforeStepMetadata._hooks,
+        );
+      } catch (hookError) {
+        log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
       }
 
       // Create Agent and Runtime instances
@@ -1600,23 +1620,36 @@ export class AgentRuntimeService {
   ): Promise<void> {
     try {
       const metadata = state?.metadata || {};
+
+      // Extract last assistant content (same as triggerCompletionWebhook)
+      const lastAssistantContent = state?.messages
+        ?.slice()
+        .reverse()
+        .find(
+          (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
+        )?.content;
+
+      const duration = state?.createdAt
+        ? Date.now() - new Date(state.createdAt).getTime()
+        : undefined;
+
       const event = {
         agentId: metadata?.agentId || '',
-        cost: state?.session?.totalCost || 0,
-        duration: state?.session?.duration || 0,
-        errorDetail: state?.error?.detail,
-        errorMessage: state?.error?.message,
+        cost: state?.cost?.total,
+        duration,
+        errorDetail: state?.error,
+        errorMessage: this.extractErrorMessage?.(state?.error) || String(state?.error || ''),
         // Full state available in local mode only (not serialized to webhooks)
         finalState: state,
-        lastAssistantContent: state?.session?.lastAssistantContent,
-        llmCalls: state?.session?.llmCalls || 0,
+        lastAssistantContent,
+        llmCalls: state?.usage?.llm?.apiCalls,
         operationId,
         reason,
         status: state?.status || reason,
         steps: state?.stepCount || 0,
-        toolCalls: state?.session?.toolCalls || 0,
+        toolCalls: state?.usage?.tools?.totalCalls,
         topicId: metadata?.topicId,
-        totalTokens: state?.session?.totalTokens || 0,
+        totalTokens: state?.usage?.llm?.tokens?.total,
         userId: metadata?.userId || this.userId,
       };
 
