@@ -56,34 +56,35 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
-      {
-        key: 'dm',
-        label: 'channel.dm',
-        properties: [
-          {
-            key: 'enabled',
-            default: true,
-            description: 'channel.dmEnabledHint',
-            label: 'channel.dmEnabled',
-            type: 'boolean',
-          },
-          {
-            key: 'policy',
-            default: 'open',
-            enum: ['open', 'allowlist', 'disabled'],
-            enumLabels: [
-              'channel.dmPolicyOpen',
-              'channel.dmPolicyAllowlist',
-              'channel.dmPolicyDisabled',
-            ],
-            description: 'channel.dmPolicyHint',
-            label: 'channel.dmPolicy',
-            type: 'string',
-            visibleWhen: { field: 'enabled', value: true },
-          },
-        ],
-        type: 'object',
-      },
+      // TODO: DM schema - not implemented yet
+      // {
+      //   key: 'dm',
+      //   label: 'channel.dm',
+      //   properties: [
+      //     {
+      //       key: 'enabled',
+      //       default: true,
+      //       description: 'channel.dmEnabledHint',
+      //       label: 'channel.dmEnabled',
+      //       type: 'boolean',
+      //     },
+      //     {
+      //       key: 'policy',
+      //       default: 'open',
+      //       enum: ['open', 'allowlist', 'disabled'],
+      //       enumLabels: [
+      //         'channel.dmPolicyOpen',
+      //         'channel.dmPolicyAllowlist',
+      //         'channel.dmPolicyDisabled',
+      //       ],
+      //       description: 'channel.dmPolicyHint',
+      //       label: 'channel.dmPolicy',
+      //       type: 'string',
+      //       visibleWhen: { field: 'enabled', value: true },
+      //     },
+      //   ],
+      //   type: 'object',
+      // },
     ],
     type: 'object',
   },

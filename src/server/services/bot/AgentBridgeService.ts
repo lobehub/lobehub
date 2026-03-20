@@ -81,7 +81,9 @@ interface ThreadState {
 interface BridgeHandlerOpts {
   agentId: string;
   botContext?: ChatTopicBotContext;
+  charLimit?: number;
   client?: PlatformClient;
+  debounceMs?: number;
 }
 
 /**
@@ -208,7 +210,7 @@ export class AgentBridgeService {
     message: Message,
     opts: BridgeHandlerOpts,
   ): Promise<void> {
-    const { agentId, botContext } = opts;
+    const { agentId, botContext, charLimit, debounceMs } = opts;
 
     log(
       'handleMention: agentId=%s, user=%s, text=%s',
@@ -226,11 +228,10 @@ export class AgentBridgeService {
     // Debounce: buffer rapid-fire messages and merge them into one prompt.
     // The first caller wins and drives the execution; subsequent callers
     // append their message to the buffer and return immediately.
-    // TODO: resolve debounceMs from settings when entry-based registry is wired
     const batch = await AgentBridgeService.bufferMessage(
       thread.id,
       message,
-      AgentBridgeService.DEFAULT_DEBOUNCE_MS,
+      debounceMs ?? AgentBridgeService.DEFAULT_DEBOUNCE_MS,
     );
     if (!batch) {
       log('handleMention: message buffered for thread=%s, waiting for debounce', thread.id);
@@ -278,6 +279,7 @@ export class AgentBridgeService {
         agentId,
         botContext,
         channelContext,
+        charLimit,
         client,
         trigger: RequestTrigger.Bot,
       });
@@ -310,7 +312,7 @@ export class AgentBridgeService {
     message: Message,
     opts: BridgeHandlerOpts,
   ): Promise<void> {
-    const { agentId, botContext } = opts;
+    const { agentId, botContext, charLimit, debounceMs } = opts;
     const threadState = await thread.state;
     const topicId = threadState?.topicId;
 
@@ -318,7 +320,7 @@ export class AgentBridgeService {
 
     if (!topicId) {
       log('handleSubscribedMessage: no topicId in thread state, treating as new mention');
-      return this.handleMention(thread, message, { agentId, botContext });
+      return this.handleMention(thread, message, opts);
     }
 
     // Skip if there's already an active execution for this thread
@@ -331,11 +333,10 @@ export class AgentBridgeService {
     }
 
     // Debounce: same as handleMention — merge rapid-fire messages
-    // TODO: resolve debounceMs from settings when entry-based registry is wired
     const batch = await AgentBridgeService.bufferMessage(
       thread.id,
       message,
-      AgentBridgeService.DEFAULT_DEBOUNCE_MS,
+      debounceMs ?? AgentBridgeService.DEFAULT_DEBOUNCE_MS,
     );
     if (!batch) {
       log('handleSubscribedMessage: message buffered for thread=%s', thread.id);
@@ -375,6 +376,7 @@ export class AgentBridgeService {
         agentId,
         botContext,
         channelContext,
+        charLimit,
         client: opts.client,
         topicId,
         trigger: RequestTrigger.Bot,
@@ -389,7 +391,7 @@ export class AgentBridgeService {
           topicId,
         );
         await thread.setState({ ...threadState, topicId: undefined });
-        return this.handleMention(thread, message, { agentId, botContext });
+        return this.handleMention(thread, message, opts);
       }
 
       log('handleSubscribedMessage error: %O', error);
@@ -414,6 +416,7 @@ export class AgentBridgeService {
       agentId: string;
       botContext?: ChatTopicBotContext;
       channelContext?: DiscordChannelContext;
+      charLimit?: number;
       client?: PlatformClient;
       topicId?: string;
       trigger?: string;
@@ -529,12 +532,13 @@ export class AgentBridgeService {
       agentId: string;
       botContext?: ChatTopicBotContext;
       channelContext?: DiscordChannelContext;
+      charLimit?: number;
       client?: PlatformClient;
       topicId?: string;
       trigger?: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    const { agentId, botContext, channelContext, client, topicId, trigger } = opts;
+    const { agentId, botContext, channelContext, charLimit, client, topicId, trigger } = opts;
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
@@ -657,8 +661,7 @@ export class AgentBridgeService {
                   };
                   const finalText = client?.formatReply?.(replyBody, replyStats) ?? replyBody;
 
-                  // TODO: resolve charLimit from settings when entry-based registry is wired
-                  const chunks = splitMessage(finalText);
+                  const chunks = splitMessage(finalText, charLimit);
 
                   if (progressMessage) {
                     try {

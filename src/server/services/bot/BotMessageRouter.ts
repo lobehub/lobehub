@@ -284,6 +284,8 @@ export class BotMessageRouter {
   ): void {
     const { agentId, applicationId, platform, userId } = info;
     const bridge = new AgentBridgeService(serverDB, userId);
+    const charLimit = (info.settings?.charLimit as number) || undefined;
+    const debounceMs = (info.settings?.debounceMs as number) || undefined;
 
     bot.onNewMention(async (thread, message) => {
       log(
@@ -296,7 +298,9 @@ export class BotMessageRouter {
       await bridge.handleMention(thread, message, {
         agentId,
         botContext: { applicationId, platform, platformThreadId: thread.id },
+        charLimit,
         client,
+        debounceMs,
       });
     });
 
@@ -314,7 +318,9 @@ export class BotMessageRouter {
       await bridge.handleSubscribedMessage(thread, message, {
         agentId,
         botContext: { applicationId, platform, platformThreadId: thread.id },
+        charLimit,
         client,
+        debounceMs,
       });
     });
 
@@ -336,7 +342,9 @@ export class BotMessageRouter {
         await bridge.handleMention(thread, message, {
           agentId,
           botContext: { applicationId, platform, platformThreadId: thread.id },
+          charLimit,
           client,
+          debounceMs,
         });
       });
     }
