@@ -221,7 +221,10 @@ export class AiProviderModel {
     if (!result) {
       // if the provider is builtin but not init, we will insert it to the db
       if (this.isBuiltInProvider(id)) {
-        await this.db.insert(aiProviders).values({ id, source: 'builtin', userId: this.userId });
+        await this.db
+          .insert(aiProviders)
+          .values({ id, source: 'builtin', userId: this.userId })
+          .onConflictDoNothing();
 
         const resultAgain = await query;
 
