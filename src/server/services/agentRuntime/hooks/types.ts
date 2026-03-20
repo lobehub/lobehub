@@ -63,6 +63,13 @@ export interface AgentHookEvent {
   errorDetail?: string;
 
   errorMessage?: string;
+
+  /**
+   * Full AgentState — only available in local mode.
+   * Not serialized to webhook payloads.
+   * Use for consumers that need deep state access (e.g., SubAgent Thread updates).
+   */
+  finalState?: any;
   lastAssistantContent?: string;
 
   llmCalls?: number;

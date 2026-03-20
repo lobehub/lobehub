@@ -119,8 +119,10 @@ export class HookDispatcher {
             hook.id,
             hook.webhook.url,
           );
+          // Strip finalState from webhook payload (too large, local-only)
+          const { finalState: _, ...webhookEvent } = event;
           await deliverWebhook(hook.webhook, {
-            ...event,
+            ...webhookEvent,
             hookId: hook.id,
             hookType: type,
             ...hook.webhook.body,

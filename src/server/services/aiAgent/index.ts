@@ -984,18 +984,18 @@ export class AiAgentService {
       status: ThreadStatus.Processing,
     });
 
-    // 3. Create step lifecycle callbacks for updating Thread metadata and task message
-    const stepCallbacks = this.createThreadMetadataCallbacks(thread.id, startedAt, parentMessageId);
+    // 3. Create hooks for updating Thread metadata and task message
+    const threadHooks = this.createThreadHooks(thread.id, startedAt, parentMessageId);
 
-    // 4. Delegate to execAgent with threadId in appContext and callbacks
+    // 4. Delegate to execAgent with threadId in appContext and hooks
     // The instruction will be created as user message in the Thread
     // Use headless mode to skip human approval in async task execution
     const result = await this.execAgent({
       agentId,
       appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
+      hooks: threadHooks,
       prompt: instruction,
-      stepCallbacks,
       userInterventionConfig: { approvalMode: 'headless' },
     });
 
@@ -1158,6 +1158,132 @@ export class AiAgentService {
         }
       },
     };
+  }
+
+  /**
+   * Create hooks for tracking Thread metadata updates during SubAgent execution.
+   * Replaces the legacy createThreadMetadataCallbacks with the hooks system.
+   */
+  private createThreadHooks(
+    threadId: string,
+    startedAt: string,
+    sourceMessageId: string,
+  ): AgentHook[] {
+    let accumulatedToolCalls = 0;
+
+    return [
+      {
+        handler: async (event) => {
+          const state = event.finalState;
+          if (!state) return;
+
+          // Count tool calls from step result
+          const stepToolCalls = state.session?.toolCalls || 0;
+          if (stepToolCalls > accumulatedToolCalls) {
+            accumulatedToolCalls = stepToolCalls;
+          }
+
+          try {
+            await this.threadModel.update(threadId, {
+              metadata: {
+                operationId: event.operationId,
+                startedAt,
+                totalMessages: state.messages?.length ?? 0,
+                totalTokens: this.calculateTotalTokens(state.usage),
+                totalToolCalls: accumulatedToolCalls,
+              },
+            });
+          } catch (error) {
+            log('Thread hook afterStep: failed to update metadata: %O', error);
+          }
+        },
+        id: 'thread-metadata-update',
+        type: 'afterStep' as const,
+      },
+      {
+        handler: async (event) => {
+          const finalState = event.finalState;
+          if (!finalState) return;
+
+          const completedAt = new Date().toISOString();
+          const duration = Date.now() - new Date(startedAt).getTime();
+
+          // Map completion reason to ThreadStatus
+          let status: ThreadStatus;
+          switch (event.reason) {
+            case 'done': {
+              status = ThreadStatus.Completed;
+              break;
+            }
+            case 'error': {
+              status = ThreadStatus.Failed;
+              break;
+            }
+            case 'interrupted': {
+              status = ThreadStatus.Cancel;
+              break;
+            }
+            case 'waiting_for_human': {
+              status = ThreadStatus.InReview;
+              break;
+            }
+            default: {
+              status = ThreadStatus.Completed;
+            }
+          }
+
+          if (event.reason === 'error' && finalState.error) {
+            console.error(
+              'Thread hook onComplete: task failed for thread %s:',
+              threadId,
+              finalState.error,
+            );
+          }
+
+          try {
+            // Update task message with summary
+            const lastAssistantMessage = finalState.messages
+              ?.slice()
+              .reverse()
+              .find((m: { role: string }) => m.role === 'assistant');
+
+            if (lastAssistantMessage?.content) {
+              await this.messageModel.update(sourceMessageId, {
+                content: lastAssistantMessage.content,
+              });
+            }
+
+            const formattedError = formatErrorForMetadata(finalState.error);
+
+            await this.threadModel.update(threadId, {
+              metadata: {
+                completedAt,
+                duration,
+                error: formattedError,
+                operationId: finalState.operationId,
+                startedAt,
+                totalCost: finalState.cost?.total,
+                totalMessages: finalState.messages?.length ?? 0,
+                totalTokens: this.calculateTotalTokens(finalState.usage),
+                totalToolCalls: accumulatedToolCalls,
+              },
+              status,
+            });
+
+            log(
+              'Thread hook onComplete: thread %s status=%s reason=%s',
+              threadId,
+              status,
+              event.reason,
+            );
+          } catch (error) {
+            console.error('Thread hook onComplete: failed to update: %O', error);
+          }
+        },
+        id: 'thread-completion',
+        type: 'onComplete' as const,
+      },
+    ];
   }
 
   /**

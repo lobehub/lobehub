@@ -757,7 +757,7 @@ export class AgentRuntimeService {
         totalTokens: totalTokensNum,
       };
 
-      // Call onAfterStep callback with presentation data
+      // Call onAfterStep callback with presentation data (legacy)
       if (callbacks?.onAfterStep) {
         try {
           await callbacks.onAfterStep({
@@ -771,6 +771,28 @@ export class AgentRuntimeService {
         } catch (callbackError) {
           log('[%s] onAfterStep callback error: %O', operationId, callbackError);
         }
+      }
+
+      // Dispatch afterStep hooks
+      try {
+        const metadata = stepResult.newState?.metadata || {};
+        await hookDispatcher.dispatch(
+          operationId,
+          'afterStep',
+          {
+            agentId: metadata?.agentId || '',
+            finalState: stepResult.newState,
+            operationId,
+            shouldContinue,
+            status: stepResult.newState?.status,
+            stepIndex,
+            steps: stepResult.newState?.stepCount || 0,
+            userId: metadata?.userId || this.userId,
+          },
+          metadata._hooks,
+        );
+      } catch (hookError) {
+        log('[%s] afterStep hook dispatch error: %O', operationId, hookError);
       }
 
       // Record step snapshot via injected snapshot store
@@ -1584,6 +1606,8 @@ export class AgentRuntimeService {
         duration: state?.session?.duration || 0,
         errorDetail: state?.error?.detail,
         errorMessage: state?.error?.message,
+        // Full state available in local mode only (not serialized to webhooks)
+        finalState: state,
         lastAssistantContent: state?.session?.lastAssistantContent,
         llmCalls: state?.session?.llmCalls || 0,
         operationId,
