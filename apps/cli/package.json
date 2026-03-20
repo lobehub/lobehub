@@ -11,7 +11,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "npx tsup",
+    "build": "tsdown",
     "cli:link": "bun link",
     "cli:unlink": "bun unlink",
     "dev": "LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts",
@@ -35,7 +35,7 @@
     "@lobechat/local-file-shell": "workspace:*",
     "@types/node": "^22.13.5",
     "@types/ws": "^8.18.1",
-    "tsup": "^8.4.0",
+    "tsdown": "^0.21.4",
     "typescript": "^5.9.3"
   },
   "publishConfig": {
