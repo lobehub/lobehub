@@ -51,7 +51,7 @@ const Header = memo<HeaderProps>(({ platformDef, currentConfig, onToggleEnable }
       <Flexbox horizontal align="center" gap={8}>
         {platformDef.documentation?.portalUrl && (
           <a href={platformDef.documentation.portalUrl} rel="noopener noreferrer" target="_blank">
-            <Button icon={<ExternalLink size={14} />} size="small">
+            <Button icon={<ExternalLink size={14} />} size="small" type="link">
               {t('channel.openPlatform')}
             </Button>
           </a>

@@ -4,7 +4,7 @@ import { Flexbox, Form, FormGroup, FormItem, Tag } from '@lobehub/ui';
 import { Button, type FormInstance, InputNumber, Popconfirm, Select, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { RotateCcw } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
@@ -211,6 +211,8 @@ const Body = memo<BodyProps>(({ platformDef, form }) => {
     [platformDef.schema],
   );
 
+  const [settingsActive, setSettingsActive] = useState(false);
+
   const handleResetSettings = useCallback(() => {
     const defaults: Record<string, any> = {};
     for (const field of settingsFields) {
@@ -249,12 +251,15 @@ const Body = memo<BodyProps>(({ platformDef, form }) => {
           title={<SettingsTitle schema={platformDef.schema} />}
           variant="borderless"
           extra={
-            <Popconfirm title={t('channel.settingsResetConfirm')} onConfirm={handleResetSettings}>
-              <Button icon={<RotateCcw size={14} />} size="small" type="text">
-                {t('channel.settingsResetDefault')}
-              </Button>
-            </Popconfirm>
+            settingsActive ? (
+              <Popconfirm title={t('channel.settingsResetConfirm')} onConfirm={handleResetSettings}>
+                <Button icon={<RotateCcw size={14} />} size="small" type="default">
+                  {t('channel.settingsResetDefault')}
+                </Button>
+              </Popconfirm>
+            ) : undefined
           }
+          onCollapse={setSettingsActive}
         >
           {settingsFields.map((field, i) => (
             <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
