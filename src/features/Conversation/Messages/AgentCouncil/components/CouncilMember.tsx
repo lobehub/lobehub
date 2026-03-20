@@ -1,8 +1,7 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler } from 'react';
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -15,10 +14,7 @@ import { type UIChatMessage } from '@/types/index';
 import { useAgentMeta } from '../../../hooks';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import MessageContent from '../../Assistant/components/MessageContent';
-import {
-  useSetMessageItemActionElementPortialContext,
-  useSetMessageItemActionTypeContext,
-} from '../../Contexts/message-action-context';
+import { useActivateMessageActionsBar } from '../../Contexts/useActivateMessageActionsBar';
 import AutoScrollShadow from './AutoScrollShadow';
 
 const actionBarHolder = (
@@ -52,16 +48,7 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
   const errorContent = useErrorContent(error);
   const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
 
-  const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
-  const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
-
-  const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
-    (e) => {
-      setMessageItemActionElementPortialContext(e.currentTarget);
-      setMessageItemActionTypeContext({ id, index, type: 'assistant' });
-    },
-    [id, index, setMessageItemActionElementPortialContext, setMessageItemActionTypeContext],
-  );
+  const activateActionsBar = useActivateMessageActionsBar({ id, index, type: 'assistant' });
 
   return (
     <ChatItem
@@ -91,7 +78,8 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
           usage={usage! || metadata}
         />
       }
-      onMouseEnter={onMouseEnter}
+      onClick={activateActionsBar}
+      onMouseEnter={activateActionsBar}
     >
       <AutoScrollShadow content={content} streaming={generating}>
         <MessageContent {...item} />
