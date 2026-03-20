@@ -7,6 +7,7 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { memo } from 'react';
 
 interface GenerationPromptInputProps {
+  centerActions?: ReactNode;
   className?: string;
   disableGenerate?: boolean;
   generateLabel: string;
@@ -34,6 +35,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const GenerationPromptInput = memo<GenerationPromptInputProps>(
   ({
+    centerActions,
     className,
     header,
     inlineContent,
@@ -78,10 +80,27 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
         header={header}
         styles={{ body: { padding: 8 } }}
         footer={
-          <ChatInputActionBar
-            left={leftActions}
-            right={
-              <Flexbox horizontal align={'center'} gap={8}>
+          centerActions ? (
+            <Flexbox horizontal align={'center'} gap={4} padding={4} width={'100%'}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                flex={1}
+                gap={4}
+                style={{ justifyContent: 'flex-start', minWidth: 0 }}
+              >
+                {leftActions}
+              </Flexbox>
+              <Flexbox align={'center'} flex={1} justify={'center'} style={{ minWidth: 0 }}>
+                {centerActions}
+              </Flexbox>
+              <Flexbox
+                horizontal
+                align={'center'}
+                flex={1}
+                gap={8}
+                style={{ justifyContent: 'flex-end', minWidth: 0 }}
+              >
                 {rightActions}
                 <SendButton
                   disabled={disableGenerate || !value}
@@ -90,8 +109,23 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
                   onClick={onGenerate}
                 />
               </Flexbox>
-            }
-          />
+            </Flexbox>
+          ) : (
+            <ChatInputActionBar
+              left={leftActions}
+              right={
+                <Flexbox horizontal align={'center'} gap={8}>
+                  {rightActions}
+                  <SendButton
+                    disabled={disableGenerate || !value}
+                    loading={isCreating}
+                    title={isCreating ? generatingLabel : generateLabel}
+                    onClick={onGenerate}
+                  />
+                </Flexbox>
+              }
+            />
+          )
         }
       >
         {inlineContent ? (

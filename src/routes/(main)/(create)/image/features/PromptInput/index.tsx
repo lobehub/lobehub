@@ -1,8 +1,7 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { Center, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { Images } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +14,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
+  GenerationMediaModeSegment,
   GenerationPromptInput,
   InlineImageReference,
 } from '@/routes/(main)/(create)/features/GenerationInput';
@@ -41,29 +41,6 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import PromptTitle from './Title';
-
-const triggerStyles = createStaticStyles(({ css, cssVar }) => ({
-  icon: cx(
-    'model-switch',
-    css`
-      transition: scale 400ms cubic-bezier(0.215, 0.61, 0.355, 1);
-    `,
-  ),
-  model: css`
-    cursor: pointer;
-    border-radius: 24px;
-
-    :hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    :active {
-      .model-switch {
-        scale: 0.8;
-      }
-    }
-  `,
-}));
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -227,6 +204,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         }
         leftActions={
           <Flexbox horizontal align={'center'} gap={4}>
+            <GenerationMediaModeSegment mode={'image'} />
             <ModelSwitchPanel
               ModelItemComponent={ImageModelItem}
               enabledList={enabledImageModelList}
@@ -239,11 +217,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 setModelAndProviderOnSelect(model, provider);
               }}
             >
-              <Center className={triggerStyles.model} height={36} width={36}>
-                <div className={triggerStyles.icon}>
-                  <ModelIcon model={currentModel ?? ''} size={22} />
-                </div>
-              </Center>
+              <ActionIcon
+                icon={<ModelIcon model={currentModel ?? ''} size={22} />}
+                size={{
+                  blockSize: 36,
+                  size: 20,
+                }}
+              />
             </ModelSwitchPanel>
             <ConfigAction
               title={t('config.title', { defaultValue: 'Config' })}

@@ -26,7 +26,19 @@ const CreateGenerationPage = memo<CreateGenerationPageProps>(({ path, Workspace,
 
   return (
     <>
-      <NavHeader right={<WideScreenButton />} />
+      <NavHeader
+        right={<WideScreenButton />}
+        styles={{
+          center: {
+            alignItems: 'center',
+            display: 'flex',
+            justifyContent: 'center',
+            minWidth: 0,
+          },
+          left: { flex: 1, minWidth: 0 },
+          right: { flex: 1, minWidth: 0 },
+        }}
+      />
       <Flexbox
         height={'100%'}
         style={{ flexDirection: 'column', overflow: 'hidden', position: 'relative' }}

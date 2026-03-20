@@ -1,9 +1,7 @@
 'use client';
 
-import { Video } from 'lucide-react';
-
 import PromptTitle from '@/routes/(main)/(create)/components/PromptTitle';
 
-const VideoPromptTitle = () => <PromptTitle icon={Video} namespace="video" />;
+const VideoPromptTitle = () => <PromptTitle mode={'video'} />;
 
 export default VideoPromptTitle;

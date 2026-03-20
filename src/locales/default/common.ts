@@ -337,6 +337,7 @@ export default {
   'footer.star.title': 'Star us on GitHub',
   'footer.title': 'Like Our Product?',
   'fullscreen': 'Full Screen Mode',
+  'generation.hero.taglinePrefix': 'Start Creating with',
   'historyRange': 'History Range',
   'home.suggestQuestions': 'Try these examples',
   'import': 'Import',

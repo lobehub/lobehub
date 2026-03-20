@@ -1,9 +1,8 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { Center, Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
 import { Divider, Switch } from 'antd';
-import { createStaticStyles, cx } from 'antd-style';
 import { Clock3, Dices } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +16,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
+  GenerationMediaModeSegment,
   GenerationPromptInput,
   InlineVideoFrames,
 } from '@/routes/(main)/(create)/features/GenerationInput';
@@ -31,29 +31,6 @@ import { useVideoGenerationConfigParam } from '@/store/video/slices/generationCo
 import { generateUniqueSeeds } from '@/utils/number';
 
 import PromptTitle from './Title';
-
-const triggerStyles = createStaticStyles(({ css, cssVar }) => ({
-  icon: cx(
-    'model-switch',
-    css`
-      transition: scale 400ms cubic-bezier(0.215, 0.61, 0.355, 1);
-    `,
-  ),
-  model: css`
-    cursor: pointer;
-    border-radius: 24px;
-
-    :hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    :active {
-      .model-switch {
-        scale: 0.8;
-      }
-    }
-  `,
-}));
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -255,6 +232,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
           }
           leftActions={
             <Flexbox horizontal align={'center'} gap={4}>
+              <GenerationMediaModeSegment mode={'video'} />
               <ModelSwitchPanel
                 ModelItemComponent={VideoModelItem}
                 enabledList={enabledVideoModelList}
@@ -267,11 +245,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                   setModelAndProviderOnSelect(model, provider);
                 }}
               >
-                <Center className={triggerStyles.model} height={36} width={36}>
-                  <div className={triggerStyles.icon}>
-                    <ModelIcon model={currentModel ?? ''} size={22} />
-                  </div>
-                </Center>
+                <ActionIcon
+                  icon={<ModelIcon model={currentModel ?? ''} size={22} />}
+                  size={{
+                    blockSize: 36,
+                    size: 20,
+                  }}
+                />
               </ModelSwitchPanel>
               <ConfigAction
                 title={t('config.title', { defaultValue: 'Config' })}

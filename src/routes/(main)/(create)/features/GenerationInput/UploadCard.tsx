@@ -88,9 +88,12 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
     border-radius: 3px;
   `,
   label: css`
+    padding-inline: 4px;
+
     font-size: 10px;
     line-height: 1;
     color: ${cssVar.colorTextQuaternary};
+    text-align: center;
   `,
   placeholderCard: css`
     cursor: pointer;
