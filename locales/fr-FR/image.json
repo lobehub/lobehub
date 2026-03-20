@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "Prend en charge plusieurs fournisseurs de génération d'images IA, y compris OpenAI gpt-image-1, Google Imagen, FAL.ai, et d'autres, offrant un large choix de modèles.",
   "notSupportGuide.features.multiProviders.title": "Prise en charge multi-fournisseurs",
   "notSupportGuide.title": "Le mode de déploiement actuel ne prend pas en charge la génération d'images IA",
-  "topic.createNew": "Nouveau sujet",
+  "topic.createNew": "Créer un nouveau sujet",
   "topic.deleteConfirm": "Supprimer le sujet de génération",
   "topic.deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet de génération. Cette action est irréversible, veuillez procéder avec prudence.",
   "topic.empty": "Aucun sujet de génération",

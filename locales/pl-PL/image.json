@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "Obsługuje wielu dostawców generowania obrazów AI, w tym OpenAI gpt-image-1, Google Imagen, FAL.ai i innych, oferując szeroki wybór modeli.",
   "notSupportGuide.features.multiProviders.title": "Wsparcie wielu dostawców",
   "notSupportGuide.title": "Obecny tryb wdrożenia nie obsługuje generowania obrazów AI",
-  "topic.createNew": "Nowy temat",
+  "topic.createNew": "Utwórz nowy temat",
   "topic.deleteConfirm": "Usuń temat generowania",
   "topic.deleteConfirmDesc": "Zamierzasz usunąć ten temat generowania. Tej operacji nie można cofnąć, proszę zachować ostrożność.",
   "topic.empty": "Brak tematów generowania",

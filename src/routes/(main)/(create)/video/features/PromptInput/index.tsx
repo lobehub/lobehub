@@ -1,7 +1,9 @@
 'use client';
 
-import { Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
+import { ModelIcon } from '@lobehub/icons';
+import { Center, Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
 import { Divider, Switch } from 'antd';
+import { createStaticStyles, cx } from 'antd-style';
 import { Clock3, Dices } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
+import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useFetchAiVideoConfig } from '@/hooks/useFetchAiVideoConfig';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -16,9 +19,10 @@ import {
   ConfigAction,
   GenerationPromptInput,
   InlineVideoFrames,
-  ModelSwitchButton,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
+import VideoModelItem from '@/routes/(main)/(create)/video/features/ConfigPanel/components/ModelSelect/VideoModelItem';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
@@ -27,7 +31,29 @@ import { useVideoGenerationConfigParam } from '@/store/video/slices/generationCo
 import { generateUniqueSeeds } from '@/utils/number';
 
 import PromptTitle from './Title';
-import VideoModelDropdownList from './VideoModelDropdownList';
+
+const triggerStyles = createStaticStyles(({ css, cssVar }) => ({
+  icon: cx(
+    'model-switch',
+    css`
+      transition: scale 400ms cubic-bezier(0.215, 0.61, 0.355, 1);
+    `,
+  ),
+  model: css`
+    cursor: pointer;
+    border-radius: 24px;
+
+    :hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+
+    :active {
+      .model-switch {
+        scale: 0.8;
+      }
+    }
+  `,
+}));
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -131,7 +157,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     useVideoGenerationConfigParam('endImageUrl');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
+  const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
+  const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
+  const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
   const isInit = useVideoStore((s) => s.isInit);
   const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
   const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
@@ -226,10 +255,24 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
           }
           leftActions={
             <Flexbox horizontal align={'center'} gap={4}>
-              <ModelSwitchButton
-                content={<VideoModelDropdownList />}
+              <ModelSwitchPanel
+                ModelItemComponent={VideoModelItem}
+                enabledList={enabledVideoModelList}
                 model={currentModel ?? undefined}
-              />
+                openOnHover={false}
+                placement="topLeft"
+                pricingMode="video"
+                provider={currentProvider ?? undefined}
+                onModelChange={async ({ model, provider }) => {
+                  setModelAndProviderOnSelect(model, provider);
+                }}
+              >
+                <Center className={triggerStyles.model} height={36} width={36}>
+                  <div className={triggerStyles.icon}>
+                    <ModelIcon model={currentModel ?? ''} size={22} />
+                  </div>
+                </Center>
+              </ModelSwitchPanel>
               <ConfigAction
                 title={t('config.title', { defaultValue: 'Config' })}
                 content={

@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "Supports multiple AI image generation providers, including OpenAI gpt-image-1, Google Imagen, FAL.ai, and more, offering a wide selection of models.",
   "notSupportGuide.features.multiProviders.title": "Multi-Provider Support",
   "notSupportGuide.title": "Current Deployment Mode Does Not Support AI Image Generation",
-  "topic.createNew": "New Topic",
+  "topic.createNew": "Create New Topic",
   "topic.deleteConfirm": "Delete Generation Topic",
   "topic.deleteConfirmDesc": "You are about to delete this generation topic. This action cannot be undone, please proceed with caution.",
   "topic.empty": "No generation topics",

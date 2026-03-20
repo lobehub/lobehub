@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { AnimatePresence, m as motion } from 'motion/react';
 import type { ComponentType } from 'react';
 import { memo } from 'react';
 import { useMatch } from 'react-router-dom';
@@ -19,9 +20,9 @@ interface CreateGenerationPageProps {
 const CreateGenerationPage = memo<CreateGenerationPageProps>(({ path, Workspace, PromptInput }) => {
   const isCurrent = useMatch({ path, end: true });
   const [topic] = useQueryState('topic');
+  const isHome = !topic;
 
   if (!isCurrent) return null;
-  const isHome = !topic;
 
   return (
     <>
@@ -33,25 +34,53 @@ const CreateGenerationPage = memo<CreateGenerationPageProps>(({ path, Workspace,
       >
         <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }} width={'100%'}>
           <WideScreenContainer wrapperStyle={{ minHeight: '100%' }}>
-            {isHome ? (
-              <Flexbox
-                align={'center'}
-                justify={'center'}
-                style={{ minHeight: 'calc(100vh - 180px)' }}
-                width={'100%'}
-              >
-                <PromptInput disableAnimation showTitle />
-              </Flexbox>
-            ) : (
-              <Workspace embedInput={false} />
-            )}
+            <AnimatePresence initial={false} mode="wait">
+              {isHome ? (
+                <motion.div
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0, y: 8 }}
+                  key="home-input"
+                  transition={{ duration: 0.24, ease: 'easeOut' }}
+                >
+                  <Flexbox
+                    align={'center'}
+                    justify={'center'}
+                    style={{ minHeight: 'calc(100vh - 180px)' }}
+                    width={'100%'}
+                  >
+                    <PromptInput disableAnimation showTitle />
+                  </Flexbox>
+                </motion.div>
+              ) : (
+                <motion.div
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  key="topic-workspace"
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
+                >
+                  <Workspace embedInput={false} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </WideScreenContainer>
         </Flexbox>
-        {!isHome && (
-          <WideScreenContainer style={{ marginTop: -8, paddingBlockEnd: 12 }}>
-            <PromptInput disableAnimation showTitle={false} />
-          </WideScreenContainer>
-        )}
+        <AnimatePresence initial={false}>
+          {!isHome && (
+            <motion.div
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 8 }}
+              key="bottom-input"
+              transition={{ delay: 0.04, duration: 0.2, ease: 'easeOut' }}
+            >
+              <WideScreenContainer style={{ marginTop: -8, paddingBlockEnd: 12 }}>
+                <PromptInput disableAnimation showTitle={false} />
+              </WideScreenContainer>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Flexbox>
     </>
   );

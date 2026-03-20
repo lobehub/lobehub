@@ -21,7 +21,7 @@
   "generation.status.failed": "生成失败",
   "generation.status.generating": "生成中...",
   "generation.validation.endFrameRequiresStartFrame": "使用结束画面前需先设置起始画面。请先设置起始画面。",
-  "topic.createNew": "新建主题",
+  "topic.createNew": "创作新主题",
   "topic.deleteConfirm": "删除视频主题",
   "topic.deleteConfirmDesc": "你即将删除该视频主题，此操作无法撤销。",
   "topic.title": "视频主题",

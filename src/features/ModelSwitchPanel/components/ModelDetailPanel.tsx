@@ -263,14 +263,14 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
         const amount = formatPriceByCurrency(pricing.approximatePricePerImage, currency);
         return t('ModelSwitchPanel.detail.pricing.perImage', {
           amount,
-          defaultValue: '~ {{amount}} / image',
+          defaultValue: '~ ${{amount}} / image',
         });
       }
       if (pricingMode === 'video' && typeof pricing.approximatePricePerVideo === 'number') {
         const amount = formatPriceByCurrency(pricing.approximatePricePerVideo, currency);
         return t('ModelSwitchPanel.detail.pricing.perVideo', {
           amount,
-          defaultValue: '~ {{amount}} / video',
+          defaultValue: '~ ${{amount}} / video',
         });
       }
       return null;

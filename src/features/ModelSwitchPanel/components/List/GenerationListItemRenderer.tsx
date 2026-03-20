@@ -27,9 +27,9 @@ import type { ListItem } from '@/features/ModelSwitchPanel/types';
 import { menuKey } from '@/features/ModelSwitchPanel/utils';
 import type { EnabledProviderWithModels } from '@/types/index';
 
-import MultipleProvidersItem from './MultipleProvidersItem';
+import GenerationMultipleProvidersItem from './GenerationMultipleProvidersItem';
 
-interface ListItemRendererProps {
+export interface GenerationListItemRendererProps {
   activeKey: string;
   enabledList: EnabledProviderWithModels[];
   item: ListItem;
@@ -39,7 +39,7 @@ interface ListItemRendererProps {
   pricingMode?: PricingMode;
 }
 
-const ListItemRenderer = memo<ListItemRendererProps>(
+const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
   ({ item, activeKey, onClose, onModelChange, enabledList, ModelItemComponent, pricingMode }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
@@ -205,7 +205,7 @@ const ListItemRenderer = memo<ListItemRendererProps>(
 
       case 'model-item-multiple': {
         return (
-          <MultipleProvidersItem
+          <GenerationMultipleProvidersItem
             ModelItemComponent={ModelItemComponent}
             activeKey={activeKey}
             enabledList={enabledList}
@@ -224,6 +224,6 @@ const ListItemRenderer = memo<ListItemRendererProps>(
   },
 );
 
-ListItemRenderer.displayName = 'ListItemRenderer';
+GenerationListItemRenderer.displayName = 'GenerationListItemRenderer';
 
-export default ListItemRenderer;
+export default GenerationListItemRenderer;

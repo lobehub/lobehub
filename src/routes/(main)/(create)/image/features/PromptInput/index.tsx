@@ -1,12 +1,15 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { ModelIcon } from '@lobehub/icons';
+import { Center, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, cx } from 'antd-style';
 import { Images } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
+import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -14,7 +17,6 @@ import {
   ConfigAction,
   GenerationPromptInput,
   InlineImageReference,
-  ModelSwitchButton,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import {
   CfgSliderInput,
@@ -26,6 +28,7 @@ import {
   StepsSliderInput,
   useAutoDimensions,
 } from '@/routes/(main)/(create)/image/features/ConfigPanel';
+import ImageModelItem from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ModelSelect/ImageModelItem';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';
 import { createImageSelectors, imageGenerationConfigSelectors } from '@/store/image/selectors';
@@ -36,8 +39,30 @@ import {
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
-import ImageModelDropdownList from './ImageModelDropdownList';
 import PromptTitle from './Title';
+
+const triggerStyles = createStaticStyles(({ css, cssVar }) => ({
+  icon: cx(
+    'model-switch',
+    css`
+      transition: scale 400ms cubic-bezier(0.215, 0.61, 0.355, 1);
+    `,
+  ),
+  model: css`
+    cursor: pointer;
+    border-radius: 24px;
+
+    :hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+
+    :active {
+      .model-switch {
+        scale: 0.8;
+      }
+    }
+  `,
+}));
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -62,6 +87,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const createImage = useImageStore((s) => s.createImage);
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
+  const currentProvider = useImageStore(imageGenerationConfigSelectors.provider);
   const isInit = useImageStore((s) => s.isInit);
   const isSupportImageUrl = useImageStore(isSupportedParamSelector('imageUrl'));
   const isSupportImageUrls = useImageStore(isSupportedParamSelector('imageUrls'));
@@ -199,10 +225,24 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         }
         leftActions={
           <Flexbox horizontal align={'center'} gap={4}>
-            <ModelSwitchButton
-              content={<ImageModelDropdownList />}
+            <ModelSwitchPanel
+              ModelItemComponent={ImageModelItem}
+              enabledList={enabledImageModelList}
               model={currentModel ?? undefined}
-            />
+              openOnHover={false}
+              placement="topLeft"
+              pricingMode="image"
+              provider={currentProvider ?? undefined}
+              onModelChange={async ({ model, provider }) => {
+                setModelAndProviderOnSelect(model, provider);
+              }}
+            >
+              <Center className={triggerStyles.model} height={36} width={36}>
+                <div className={triggerStyles.icon}>
+                  <ModelIcon model={currentModel ?? ''} size={22} />
+                </div>
+              </Center>
+            </ModelSwitchPanel>
             <ConfigAction
               title={t('config.title', { defaultValue: 'Config' })}
               content={

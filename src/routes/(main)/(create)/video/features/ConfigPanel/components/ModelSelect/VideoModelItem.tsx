@@ -9,7 +9,7 @@ type VideoModelItemProps = AiModelForSelect & {
 };
 
 const VideoModelItem = (props: VideoModelItemProps) => (
-  <GenerationModelItem {...props} showPrice={false} />
+  <GenerationModelItem {...props} priceKind="video" showPrice={true} />
 );
 
 export default VideoModelItem;

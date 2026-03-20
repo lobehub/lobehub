@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "Ondersteunt meerdere AI-afbeeldingsgeneratoren, waaronder OpenAI gpt-image-1, Google Imagen, FAL.ai en meer, met een ruime keuze aan modellen.",
   "notSupportGuide.features.multiProviders.title": "Ondersteuning voor meerdere providers",
   "notSupportGuide.title": "Huidige implementatiemodus ondersteunt geen AI-afbeeldingsgeneratie",
-  "topic.createNew": "Nieuw onderwerp",
+  "topic.createNew": "Nieuw Onderwerp Maken",
   "topic.deleteConfirm": "Generatieonderwerp verwijderen",
   "topic.deleteConfirmDesc": "Je staat op het punt dit generatieonderwerp te verwijderen. Deze actie kan niet ongedaan worden gemaakt, wees voorzichtig.",
   "topic.empty": "Geen generatieonderwerpen",

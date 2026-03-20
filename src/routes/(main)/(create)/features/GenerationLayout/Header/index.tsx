@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { SearchIcon } from 'lucide-react';
+import { MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,17 +10,24 @@ import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import { useGlobalStore } from '@/store/global';
 
 import type { GenerationLayoutCommonProps } from '../types';
-import AddButton from './AddButton';
 
 const Header = memo<GenerationLayoutCommonProps>((props) => {
-  const { t } = useTranslation(['common']);
-  const { breadcrumb } = props;
+  const { t } = useTranslation('common');
+  const { t: tGeneration } = useTranslation(props.namespace);
+  const { breadcrumb, useStore } = props;
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const openNewGenerationTopic = useStore((s: any) => s.openNewGenerationTopic);
 
   return (
     <>
-      <SideBarHeaderLayout breadcrumb={breadcrumb} right={<AddButton {...props} />} />
+      <SideBarHeaderLayout breadcrumb={breadcrumb} />
       <Flexbox paddingInline={4}>
+        <NavItem
+          icon={MessageSquarePlusIcon}
+          key={'new-topic'}
+          title={tGeneration('topic.createNew')}
+          onClick={openNewGenerationTopic}
+        />
         <NavItem
           icon={SearchIcon}
           key={'search'}

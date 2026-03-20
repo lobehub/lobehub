@@ -23,7 +23,7 @@ import type { ListItem } from '@/features/ModelSwitchPanel/types';
 import { menuKey } from '@/features/ModelSwitchPanel/utils';
 import type { EnabledProviderWithModels } from '@/types/index';
 
-interface MultipleProvidersItemProps {
+interface GenerationMultipleProvidersItemProps {
   activeKey: string;
   enabledList: EnabledProviderWithModels[];
   item: Extract<ListItem, { type: 'model-item-multiple' }>;
@@ -33,7 +33,7 @@ interface MultipleProvidersItemProps {
   pricingMode?: PricingMode;
 }
 
-const MultipleProvidersItem = memo<MultipleProvidersItemProps>(
+const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProps>(
   ({ item, activeKey, onClose, onModelChange, enabledList, ModelItemComponent, pricingMode }) => {
     const { t } = useTranslation('components');
     const [subOpen, setSubOpen] = useState(false);
@@ -107,6 +107,6 @@ const MultipleProvidersItem = memo<MultipleProvidersItemProps>(
   },
 );
 
-MultipleProvidersItem.displayName = 'MultipleProvidersItem';
+GenerationMultipleProvidersItem.displayName = 'GenerationMultipleProvidersItem';
 
-export default MultipleProvidersItem;
+export default GenerationMultipleProvidersItem;

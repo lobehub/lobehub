@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "Поддержка нескольких провайдеров генерации AI-изображений, включая OpenAI gpt-image-1, Google Imagen, FAL.ai и других, предлагая широкий выбор моделей.",
   "notSupportGuide.features.multiProviders.title": "Поддержка нескольких провайдеров",
   "notSupportGuide.title": "Текущий режим развертывания не поддерживает генерацию AI-изображений",
-  "topic.createNew": "Новая тема",
+  "topic.createNew": "Создать новую тему",
   "topic.deleteConfirm": "Удалить тему генерации",
   "topic.deleteConfirmDesc": "Вы собираетесь удалить эту тему генерации. Это действие необратимо, пожалуйста, будьте осторожны.",
   "topic.empty": "Нет тем генерации",

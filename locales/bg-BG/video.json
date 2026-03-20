@@ -21,7 +21,7 @@
   "generation.status.failed": "Генерирането неуспешно",
   "generation.status.generating": "Генериране...",
   "generation.validation.endFrameRequiresStartFrame": "Крайната рамка не може да се използва без начална рамка. Моля, задайте първо начална рамка.",
-  "topic.createNew": "Нова тема",
+  "topic.createNew": "Създаване на нова тема",
   "topic.deleteConfirm": "Изтриване на видео тема",
   "topic.deleteConfirmDesc": "Ще изтриете тази видео тема. Това действие не може да бъде отменено.",
   "topic.title": "Видео теми",

@@ -21,7 +21,7 @@
   "generation.status.failed": "Generowanie nie powiodło się",
   "generation.status.generating": "Generowanie...",
   "generation.validation.endFrameRequiresStartFrame": "Klatka końcowa wymaga ustawienia klatki początkowej. Najpierw ustaw klatkę początkową.",
-  "topic.createNew": "Nowy temat",
+  "topic.createNew": "Utwórz nowy temat",
   "topic.deleteConfirm": "Usuń temat wideo",
   "topic.deleteConfirmDesc": "Zamierzasz usunąć ten temat wideo. Tej operacji nie można cofnąć.",
   "topic.title": "Tematy wideo",

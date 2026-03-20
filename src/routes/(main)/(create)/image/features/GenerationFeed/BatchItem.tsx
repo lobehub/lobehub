@@ -13,7 +13,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import useRenderBusinessBatchItem from '@/business/client/hooks/useRenderBusinessBatchItem';
-import APIKeyForm from '@/components/InvalidAPIKey';
+import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { useImageStore } from '@/store/image';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
@@ -58,14 +58,13 @@ interface GenerationBatchItemProps {
 }
 
 export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) => {
-  const { t } = useTranslation(['image', 'modelProvider', 'error']);
+  const { t } = useTranslation('image');
   const { message } = App.useApp();
 
   const [imageGridRef] = useAutoAnimate();
 
   const activeTopicId = useImageStore((s) => s.activeGenerationTopicId);
   const removeGenerationBatch = useImageStore((s) => s.removeGenerationBatch);
-  const recreateImage = useImageStore((s) => s.recreateImage);
   const reuseSettings = useImageStore((s) => s.reuseSettings);
   const { shouldRenderBusinessBatchItem, businessBatchItem } = useRenderBusinessBatchItem(batch);
 
@@ -110,21 +109,12 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   );
 
   if (isInvalidApiKey) {
-    // Use unified InvalidAPIKey component for all providers (including ComfyUI)
     return (
-      <APIKeyForm
-        bedrockDescription={t('bedrock.unlock.imageGenerationDescription', { ns: 'modelProvider' })}
-        id={batch.id}
+      <GenerationInvalidAPIKey
         provider={batch.provider}
-        description={t('unlock.apiKey.imageGenerationDescription', {
-          name: batch.provider,
-          ns: 'error',
-        })}
-        onClose={() => {
-          removeGenerationBatch(batch.id, activeTopicId!);
-        }}
-        onRecreate={() => {
-          recreateImage(batch.id);
+        onNavigate={() => {
+          if (!activeTopicId) return;
+          removeGenerationBatch(batch.id, activeTopicId);
         }}
       />
     );

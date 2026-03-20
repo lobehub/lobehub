@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "Поддържа множество доставчици на AI генериране на изображения, включително OpenAI gpt-image-1, Google Imagen, FAL.ai и други, предлагащи богат избор от модели.",
   "notSupportGuide.features.multiProviders.title": "Поддръжка на множество доставчици",
   "notSupportGuide.title": "Текущият режим на внедряване не поддържа AI генериране на изображения",
-  "topic.createNew": "Нова тема",
+  "topic.createNew": "Създаване на нова тема",
   "topic.deleteConfirm": "Изтриване на тема за генериране",
   "topic.deleteConfirmDesc": "Ще изтриете тази тема за генериране. Това действие не може да бъде отменено, моля, бъдете внимателни.",
   "topic.empty": "Няма теми за генериране",

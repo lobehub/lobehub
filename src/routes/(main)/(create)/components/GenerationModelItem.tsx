@@ -8,6 +8,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import type { AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsDark } from '@/hooks/useIsDark';
@@ -36,6 +37,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   priceText: css`
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
+    word-break: keep-all;
+    white-space: nowrap;
   `,
   priceText_dark: css`
     font-weight: 500;
@@ -44,6 +47,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export interface GenerationModelItemProps extends AiModelForSelect {
+  /**
+   * Which USD price fields to use: image uses approximatePricePerImage / pricePerImage; video uses approximatePricePerVideo / pricePerVideo.
+   * @default 'image'
+   */
+  priceKind?: 'image' | 'video';
   /**
    * Provider ID for determining price display format (when showPrice is true)
    */
@@ -68,40 +76,69 @@ export interface GenerationModelItemProps extends AiModelForSelect {
 const GenerationModelItem = memo<GenerationModelItemProps>(
   ({
     approximatePricePerImage,
+    approximatePricePerVideo,
     description,
     pricePerImage,
+    pricePerVideo,
     providerId,
     showPopover = true,
     showBadge = true,
     showPrice = false,
+    priceKind = 'image',
     ...model
   }) => {
     const isDarkMode = useIsDark();
+    const { t } = useTranslation('components');
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
     );
 
     const priceLabel = useMemo(() => {
       if (!showPrice) return undefined;
+
+      const isVideo = priceKind === 'video';
+      const exactUsd = isVideo ? pricePerVideo : pricePerImage;
+      const approxUsd = isVideo ? approximatePricePerVideo : approximatePricePerImage;
+
       if (enableBusinessFeatures && providerId === BRANDING_PROVIDER) {
-        if (typeof pricePerImage === 'number') {
-          const credits = pricePerImage * CREDITS_PER_DOLLAR;
-          return `${numeral(credits).format('0,0')} credits/张`;
+        if (typeof exactUsd === 'number') {
+          const credits = exactUsd * CREDITS_PER_DOLLAR;
+          return t(
+            isVideo
+              ? 'GenerationModelItem.creditsPerVideoExact'
+              : 'GenerationModelItem.creditsPerImageExact',
+            { amount: numeral(credits).format('0,0') },
+          );
         }
-        if (typeof approximatePricePerImage === 'number') {
-          const credits = approximatePricePerImage * CREDITS_PER_DOLLAR;
-          return `~ ${numeral(credits).format('0,0')} credits/张`;
+        if (typeof approxUsd === 'number') {
+          const credits = approxUsd * CREDITS_PER_DOLLAR;
+          return t(
+            isVideo
+              ? 'GenerationModelItem.creditsPerVideoApproximate'
+              : 'GenerationModelItem.creditsPerImageApproximate',
+            { amount: numeral(credits).format('0,0') },
+          );
         }
       } else {
-        if (typeof pricePerImage === 'number') {
-          return `${numeral(pricePerImage).format('$0,0.00[000]')} / image`;
+        if (typeof exactUsd === 'number') {
+          return `${numeral(exactUsd).format('$0,0.00[000]')} / ${isVideo ? 'video' : 'image'}`;
         }
-        if (typeof approximatePricePerImage === 'number') {
-          return `~ ${numeral(approximatePricePerImage).format('$0,0.00[000]')} / image`;
+        if (typeof approxUsd === 'number') {
+          return `~ ${numeral(approxUsd).format('$0,0.00[000]')} / ${isVideo ? 'video' : 'image'}`;
         }
       }
       return undefined;
-    }, [showPrice, approximatePricePerImage, enableBusinessFeatures, pricePerImage, providerId]);
+    }, [
+      showPrice,
+      approximatePricePerImage,
+      approximatePricePerVideo,
+      enableBusinessFeatures,
+      pricePerImage,
+      pricePerVideo,
+      priceKind,
+      providerId,
+      t,
+    ]);
 
     const popoverContent = useMemo(() => {
       if (!description && !priceLabel) return null;

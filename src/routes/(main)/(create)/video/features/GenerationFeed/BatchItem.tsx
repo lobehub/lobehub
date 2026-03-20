@@ -11,8 +11,9 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import useRenderBusinessVideoBatchItem from '@/business/client/hooks/useRenderBusinessVideoBatchItem';
+import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { useVideoStore } from '@/store/video';
-import { AsyncTaskStatus } from '@/types/asyncTask';
+import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GenerationBatch } from '@/types/generation';
 import { downloadFile } from '@/utils/client/downloadFile';
 
@@ -166,6 +167,20 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
 
   if (shouldRenderBusinessBatchItem) {
     return businessBatchItem;
+  }
+
+  const isInvalidApiKey = generation.task.error?.name === AsyncTaskErrorType.InvalidProviderAPIKey;
+
+  if (isInvalidApiKey) {
+    return (
+      <GenerationInvalidAPIKey
+        provider={batch.provider}
+        onNavigate={() => {
+          if (!activeTopicId) return;
+          removeGenerationBatch(batch.id, activeTopicId);
+        }}
+      />
+    );
   }
 
   const renderContent = () => {

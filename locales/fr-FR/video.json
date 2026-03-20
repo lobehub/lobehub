@@ -21,7 +21,7 @@
   "generation.status.failed": "Échec de la génération",
   "generation.status.generating": "Génération en cours...",
   "generation.validation.endFrameRequiresStartFrame": "L'image de fin ne peut pas être utilisée sans image de début. Veuillez d'abord définir une image de début.",
-  "topic.createNew": "Nouveau sujet",
+  "topic.createNew": "Créer un nouveau sujet",
   "topic.deleteConfirm": "Supprimer le sujet vidéo",
   "topic.deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet vidéo. Cette action est irréversible.",
   "topic.title": "Sujets vidéo",

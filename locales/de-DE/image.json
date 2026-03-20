@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "Unterstützt mehrere Anbieter für KI-Bilderzeugung, darunter OpenAI gpt-image-1, Google Imagen, FAL.ai und weitere – für eine große Modellauswahl.",
   "notSupportGuide.features.multiProviders.title": "Unterstützung mehrerer Anbieter",
   "notSupportGuide.title": "Aktueller Bereitstellungsmodus unterstützt keine KI-Bilderzeugung",
-  "topic.createNew": "Neues Thema",
+  "topic.createNew": "Neues Thema erstellen",
   "topic.deleteConfirm": "Generierungsthema löschen",
   "topic.deleteConfirmDesc": "Sie sind dabei, dieses Generierungsthema zu löschen. Diese Aktion kann nicht rückgängig gemacht werden. Bitte seien Sie vorsichtig.",
   "topic.empty": "Keine Generierungsthemen",

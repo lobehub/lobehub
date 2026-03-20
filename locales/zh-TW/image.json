@@ -54,7 +54,7 @@
   "notSupportGuide.features.multiProviders.desc": "支援多種 AI 繪畫服務商，包括 OpenAI gpt-image-1、Google Imagen、FAL.ai 等，提供豐富的模型選擇",
   "notSupportGuide.features.multiProviders.title": "多 Providers 支援",
   "notSupportGuide.title": "當前部署模式不支援 AI 繪畫",
-  "topic.createNew": "新建主題",
+  "topic.createNew": "建立新主題",
   "topic.deleteConfirm": "刪除生成主題",
   "topic.deleteConfirmDesc": "即將刪除該生成主題，刪除後將無法復原，請謹慎操作。",
   "topic.empty": "暫無生成主題",
