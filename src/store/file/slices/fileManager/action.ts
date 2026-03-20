@@ -321,7 +321,6 @@ export class FileManageActionImpl {
     );
 
     // Perform the actual update
-    const { documentService } = await import('@/services/document');
     await documentService.updateDocument({ id: folderId, title: newName });
 
     // Revalidate to get fresh data from server
