@@ -244,7 +244,8 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
 
     const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
       const keys: string[] = ['pricing'];
-      if (hasExtendParams) keys.push('config');
+      // ControlsForm uses ChatInput store + useAgentId; not available on create/image|video routes.
+      if (hasExtendParams && !pricingMode) keys.push('config');
       return keys;
     });
 
@@ -287,7 +288,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
     return (
       <Flexbox className={styles.container}>
         {/* Sections */}
-        {(hasPricing || hasContext || hasAbilities || hasExtendParams) && (
+        {(hasPricing || hasContext || hasAbilities || (hasExtendParams && !pricingMode)) && (
           <Accordion
             expandedKeys={expandedKeys}
             gap={8}
@@ -491,8 +492,8 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 </Flexbox>
               </AccordionItem>
             )}
-            {/* Model Config */}
-            {hasExtendParams && provider && (
+            {/* Model Config (agent chat only; requires ChatInput zustand provider) */}
+            {hasExtendParams && provider && !pricingMode && (
               <AccordionItem
                 itemKey="config"
                 paddingBlock={6}

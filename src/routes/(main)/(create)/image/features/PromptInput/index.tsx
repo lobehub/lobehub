@@ -25,6 +25,7 @@ import {
   QualitySelect,
   ResolutionSelect,
   SeedNumberInput,
+  SizeSelect,
   StepsSliderInput,
   useAutoDimensions,
 } from '@/routes/(main)/(create)/image/features/ConfigPanel';
@@ -93,6 +94,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportImageUrls = useImageStore(isSupportedParamSelector('imageUrls'));
   const isSupportQuality = useImageStore(isSupportedParamSelector('quality'));
   const isSupportResolution = useImageStore(isSupportedParamSelector('resolution'));
+  const isSupportSize = useImageStore(isSupportedParamSelector('size'));
   const isSupportSeed = useImageStore(isSupportedParamSelector('seed'));
   const isSupportSteps = useImageStore(isSupportedParamSelector('steps'));
   const isSupportCfg = useImageStore(isSupportedParamSelector('cfg'));
@@ -257,6 +259,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                     <Flexbox gap={6}>
                       <Text fontSize={12}>{t('config.resolution.label')}</Text>
                       <ResolutionSelect />
+                    </Flexbox>
+                  )}
+                  {isSupportSize && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.size.label')}</Text>
+                      <SizeSelect />
                     </Flexbox>
                   )}
                   {showDimensionControl && <DimensionControlGroup />}

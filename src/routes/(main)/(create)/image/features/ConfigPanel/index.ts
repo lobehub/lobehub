@@ -7,5 +7,6 @@ export { default as ImageModelItem } from '@/routes/(main)/(create)/image/featur
 export { default as QualitySelect } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/QualitySelect';
 export { default as ResolutionSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ResolutionSelect';
 export { default as SeedNumberInput } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/SeedNumberInput';
+export { default as SizeSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/SizeSelect';
 export { default as StepsSliderInput } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/StepsSliderInput';
 export { useAutoDimensions } from '@/routes/(main)/(create)/image/features/ConfigPanel/hooks/useAutoDimensions';
