@@ -40,18 +40,21 @@ tags:
 
 2. **复制连接字符串。**
 复制非连接池（unpooled）连接字符串，以提高导入成功率。
-[connection-string](https://github.com/user-attachments/assets/9126999a-a6f2-4d4b-ae68-70631e1657cc)
+
+![connection-string](https://github.com/user-attachments/assets/9126999a-a6f2-4d4b-ae68-70631e1657cc)
 
 3. **使用 Neon 内置的 Import Data 功能。**
 在 Neon 控制台中打开 Import Data 入口：
-[import-data](https://github.com/user-attachments/assets/3b48b842-afb1-4e7c-afdf-b1dc4e4c603e)
+
+![import-data](https://github.com/user-attachments/assets/3b48b842-afb1-4e7c-afdf-b1dc4e4c603e)
 
 4. **粘贴连接字符串并按照 Neon 指引继续操作：**
 <Callout type={'warning'}>
   **区域要求**：
   请选择支持 `pg_search` 的 AWS 区域。详见 [Neon pg_search 文档](https://neon.com/docs/extensions/pg_search)。
 </Callout>
-[import-instructions](https://github.com/user-attachments/assets/806c285b-ce8a-4a68-8405-553f7fae8499)
+
+![import-instructions](https://github.com/user-attachments/assets/806c285b-ce8a-4a68-8405-553f7fae8499)
 
 5. **替换原有 `DATABASE_URL`。**
 打开连接设置，选择 `import` 分支，复制其连接字符串，替换原有 `DATABASE_URL` 环境变量，然后重新构建或重启 LobeHub。
