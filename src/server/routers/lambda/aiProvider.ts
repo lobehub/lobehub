@@ -92,8 +92,8 @@ export const aiProviderRouter = router({
         const data = await ctx.aiProviderModel.create(input, ctx.gateKeeper.encrypt);
         return data?.id;
       } catch (error: any) {
-        const pgError = error?.cause || error;
-        if (pgError?.code === '23505') {
+        const pgErrorCode = error?.cause?.cause?.code || error?.cause?.code || error?.code;
+        if (pgErrorCode === '23505') {
           throw new TRPCError({
             code: 'CONFLICT',
             message: `Provider "${input.id}" already exists`,
