@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import { registerAgentCommand } from './commands/agent';
 import { registerAgentGroupCommand } from './commands/agent-group';
 import { registerBotCommand } from './commands/bot';
+import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
 import { registerCronCommand } from './commands/cron';
@@ -41,6 +42,7 @@ program
 
 registerLoginCommand(program);
 registerLogoutCommand(program);
+registerCompletionCommand(program);
 registerConnectCommand(program);
 registerDeviceCommand(program);
 registerStatusCommand(program);
