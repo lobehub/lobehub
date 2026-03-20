@@ -37,7 +37,15 @@ async function deliverWebhook(
         return;
       }
       const client = new Client({ token: qstashToken });
-      await client.publishJSON({ body: payload, url: resolvedUrl });
+      await client.publishJSON({
+        body: payload,
+        headers: {
+          ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
+            'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+          }),
+        },
+        url: resolvedUrl,
+      });
       log('Webhook delivered via QStash: %s', url);
     } catch (error) {
       log('QStash delivery failed, falling back to fetch: %O', error);
