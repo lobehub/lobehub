@@ -7,6 +7,59 @@ import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const hasMessageContent = (content: unknown) => {
+  if (typeof content === 'string') return content.trim().length > 0;
+  if (Array.isArray(content)) return content.length > 0;
+
+  return content !== null && content !== undefined;
+};
+
+const transformXiaomiMessage = (message: any, thinkingType?: string) => {
+  const { reasoning, ...rest } = message;
+
+  const reasoningContent =
+    typeof rest.reasoning_content === 'string'
+      ? rest.reasoning_content
+      : typeof reasoning?.content === 'string'
+        ? reasoning.content
+        : undefined;
+
+  if (message.role === 'assistant' && thinkingType === 'enabled') {
+    return {
+      ...rest,
+      reasoning_content: reasoningContent ?? '',
+    };
+  }
+
+  if (reasoningContent !== undefined) {
+    return {
+      ...rest,
+      reasoning_content: reasoningContent,
+    };
+  }
+
+  return rest;
+};
+
+const sanitizeXiaomiMessages = (messages: any[] | undefined, thinkingType?: string) => {
+  if (!messages) return messages;
+
+  const sanitizedMessages = messages
+    .map((message) => transformXiaomiMessage(message, thinkingType))
+    .filter((message) => {
+      if (message.role !== 'user') return true;
+
+      return hasMessageContent(message.content);
+    });
+
+  // Xiaomi rejects requests whose final message is assistant, so drop unsupported prefill tails.
+  while (sanitizedMessages.at(-1)?.role === 'assistant') {
+    sanitizedMessages.pop();
+  }
+
+  return sanitizedMessages;
+};
+
 export interface XiaomiMiMoModelCard {
   id: string;
 }
@@ -28,33 +81,7 @@ export const params = {
           ]
         : tools;
 
-      const messages = payload.messages?.map((message: any) => {
-        const { reasoning, ...rest } = message;
-
-        const reasoningContent =
-          typeof rest.reasoning_content === 'string'
-            ? rest.reasoning_content
-            : typeof reasoning?.content === 'string'
-              ? reasoning.content
-              : undefined;
-
-        // Thinking Mode with tool calls requires assistant history messages to carry reasoning_content
-        if (message.role === 'assistant' && thinkingType === 'enabled') {
-          return {
-            ...rest,
-            reasoning_content: reasoningContent ?? '',
-          };
-        }
-
-        if (reasoningContent !== undefined) {
-          return {
-            ...rest,
-            reasoning_content: reasoningContent,
-          };
-        }
-
-        return rest;
-      });
+      const messages = sanitizeXiaomiMessages(payload.messages, thinkingType);
 
       return {
         ...rest,
@@ -65,6 +92,7 @@ export const params = {
         messages,
         stream: stream ?? true,
         tools: xiaomiTools,
+        ...(enabledSearch ? { webSearchEnabled: true } : undefined),
         ...(typeof temperature === 'number'
           ? { temperature: clamp(temperature, 0, 1.5) }
           : undefined),

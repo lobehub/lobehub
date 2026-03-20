@@ -123,6 +123,34 @@ describe('LobeXiaomiMiMoAI - custom features', () => {
       expect(resultOther.thinking).toBeUndefined();
     });
 
+    it('should enable Xiaomi web search flag when enabledSearch is true', () => {
+      const payload = {
+        enabledSearch: true,
+        model: 'mimo-v2-flash',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.webSearchEnabled).toBe(true);
+      expect(result.tools).toEqual([{ type: 'web_search' }]);
+    });
+
+    it('should merge Xiaomi web search tool with existing tools', () => {
+      const payload = {
+        enabledSearch: true,
+        model: 'mimo-v2-flash',
+        tools: [{ function: { name: 'get_weather' }, type: 'function' }],
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.tools).toEqual([
+        { function: { name: 'get_weather' }, type: 'function' },
+        { type: 'web_search' },
+      ]);
+      expect(result.webSearchEnabled).toBe(true);
+    });
+
     it('should transform reasoning object to reasoning_content string', () => {
       const payload = {
         messages: [
@@ -156,6 +184,7 @@ describe('LobeXiaomiMiMoAI - custom features', () => {
         messages: [
           { role: 'user', content: 'Hello' },
           { role: 'assistant', content: 'Hi there' },
+          { role: 'user', content: 'How are you?' },
         ],
         model: 'mimo-v2-flash',
       };
@@ -168,11 +197,13 @@ describe('LobeXiaomiMiMoAI - custom features', () => {
     it('should handle empty reasoning content', () => {
       const payload = {
         messages: [
+          { role: 'user', content: 'Hello' },
           {
             role: 'assistant',
             content: 'Response',
             reasoning: { duration: 1000 },
           },
+          { role: 'user', content: 'Continue' },
         ],
         model: 'mimo-v2-flash',
         thinking: { type: 'enabled' },
@@ -180,11 +211,64 @@ describe('LobeXiaomiMiMoAI - custom features', () => {
 
       const result = params.chatCompletion!.handlePayload!(payload as any);
 
-      expect(result.messages[0]).toEqual({
+      expect(result.messages[1]).toEqual({
         role: 'assistant',
         content: 'Response',
         reasoning_content: '',
       });
+    });
+
+    it('should filter out empty user messages', () => {
+      const payload = {
+        messages: [
+          { role: 'system', content: 'You are helpful' },
+          { role: 'user', content: '   ' },
+          { role: 'user', content: [] },
+          { role: 'user', content: 'Hello' },
+        ],
+        model: 'mimo-v2-flash',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { role: 'system', content: 'You are helpful' },
+        { role: 'user', content: 'Hello' },
+      ]);
+    });
+
+    it('should drop trailing assistant messages Xiaomi does not accept', () => {
+      const payload = {
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Partial answer' },
+        ],
+        model: 'mimo-v2-flash',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([{ role: 'user', content: 'Hello' }]);
+    });
+
+    it('should preserve non-trailing assistant history while dropping only the tail assistant', () => {
+      const payload = {
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Earlier answer' },
+          { role: 'user', content: 'Follow-up question' },
+          { role: 'assistant', content: 'Pending continuation' },
+        ],
+        model: 'mimo-v2-flash',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Earlier answer' },
+        { role: 'user', content: 'Follow-up question' },
+      ]);
     });
   });
 
