@@ -302,7 +302,7 @@ describe('modelParse', () => {
       });
     });
 
-    it('xiaomimimo: should infer multimodal abilities for omni without search flag', async () => {
+    it('xiaomimimo: should infer multimodal abilities for omni', async () => {
       const out = await processModelList(
         [{ id: 'mimo-v2-flash' }, { id: 'mimo-v2-pro' }, { id: 'mimo-v2-omni' }],
         MODEL_LIST_CONFIGS.xiaomimimo,
@@ -317,17 +317,14 @@ describe('modelParse', () => {
 
       expect(flash.functionCall).toBe(true);
       expect(flash.reasoning).toBe(true);
-      expect(flash.search).toBe(false);
       expect(flash.vision).toBe(false);
 
       expect(pro.functionCall).toBe(true);
       expect(pro.reasoning).toBe(true);
-      expect(pro.search).toBe(false);
       expect(pro.vision).toBe(false);
 
       expect(omni.functionCall).toBe(true);
       expect(omni.reasoning).toBe(true);
-      expect(omni.search).toBe(false);
       expect(omni.vision).toBe(true);
 
       const tts = await processModelList(

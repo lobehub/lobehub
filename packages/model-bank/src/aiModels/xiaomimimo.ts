@@ -10,7 +10,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'MiMo-V2-Pro: A flagship agent model with long context, deep reasoning, coding, and tool use.',
+      'MiMo-V2-Pro is specifically designed for high-intensity agent workflows in real-world scenarios. It features over 1 trillion total parameters (42B activated parameters), adopts an innovative hybrid attention architecture, and supports an ultra-long context length of up to 1 million tokens. Built on a powerful foundational model, we continuously scale computational resources across a broader range of agent scenarios, further expanding the action space of intelligence and achieving significant generalization—from coding to real-world task execution (“claw”).',
     displayName: 'MiMo-V2 Pro',
     enabled: true,
     id: 'mimo-v2-pro',
@@ -47,8 +47,10 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    releasedAt: '2026-03-18',
     settings: {
       extendParams: ['enableReasoning'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -56,6 +58,9 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
