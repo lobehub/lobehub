@@ -2,7 +2,6 @@ export default {
   'config.aspectRatio.label': 'Aspect Ratio',
   'config.cameraFixed.label': 'Fixed Camera',
   'config.duration.label': 'Duration',
-  'config.duration.seconds': 's',
   'config.endImageUrl.label': 'End Frame',
   'config.generateAudio.label': 'Generate Audio',
   'config.header.title': 'Video',

@@ -1373,6 +1373,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     description:
       'CogVideoX-3 adds a start-and-end frame generation feature, significantly improving visual stability and clarity. It enables smooth and natural large-scale subject motion, offers better instruction adherence and more realistic physical simulation, and further enhances performance in high-definition realistic and 3D-style scenes.',
     displayName: 'CogVideoX-3',
+    enabled: true,
     id: 'cogvideox-3',
     parameters: {
       duration: { default: 5, enum: [5, 10] },
