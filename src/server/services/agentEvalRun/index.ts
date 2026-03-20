@@ -21,7 +21,6 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { appEnv } from '@/envs/app';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -264,20 +263,45 @@ export class AgentEvalRunService {
     await this.runTopicModel.updateByRunAndTopic(runId, topicId, { status: 'running' });
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
-    const webhookUrl = new URL(
-      '/api/workflows/agent-eval-run/on-trajectory-complete',
-      appEnv.APP_URL,
-    ).toString();
+    const webhookUrl = '/api/workflows/agent-eval-run/on-trajectory-complete';
+    const userId = this.userId;
+    const db = this.db;
 
     try {
       const execResult = await aiAgentService.execAgent({
         agentId: run.targetAgentId ?? undefined,
         appContext: { topicId },
         autoStart: true,
-        completionWebhook: {
-          body: { runId, testCaseId, userId: this.userId },
-          url: webhookUrl,
-        },
+        hooks: [
+          {
+            handler: async (event) => {
+              // Local mode: directly record completion
+              const service = new AgentEvalRunService(db, userId);
+              await service.recordTrajectoryCompletion({
+                runId,
+                status: event.status,
+                telemetry: {
+                  completionReason: event.reason,
+                  cost: event.cost,
+                  duration: event.duration,
+                  errorDetail: event.errorDetail,
+                  errorMessage: event.errorMessage,
+                  llmCalls: event.llmCalls,
+                  steps: event.steps,
+                  toolCalls: event.toolCalls,
+                  totalTokens: event.totalTokens,
+                },
+                testCaseId,
+              });
+            },
+            id: 'eval-trajectory-complete',
+            type: 'onComplete' as const,
+            webhook: {
+              body: { runId, testCaseId, userId },
+              url: webhookUrl,
+            },
+          },
+        ],
         ...(envPrompt && { evalContext: { envPrompt } }),
         maxSteps: run.config?.maxSteps,
         prompt: params.testCase.content.input || '',
@@ -381,20 +405,46 @@ export class AgentEvalRunService {
     const { envPrompt, run, runId, testCaseId, threadId, topicId } = params;
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
-    const webhookUrl = new URL(
-      '/api/workflows/agent-eval-run/on-thread-complete',
-      appEnv.APP_URL,
-    ).toString();
+    const webhookUrl = '/api/workflows/agent-eval-run/on-thread-complete';
+    const userId = this.userId;
+    const db = this.db;
 
     try {
       const execResult = await aiAgentService.execAgent({
         agentId: run.targetAgentId ?? undefined,
         appContext: { threadId, topicId },
         autoStart: true,
-        completionWebhook: {
-          body: { runId, testCaseId, threadId, topicId, userId: this.userId },
-          url: webhookUrl,
-        },
+        hooks: [
+          {
+            handler: async (event) => {
+              // Local mode: directly record thread completion
+              const service = new AgentEvalRunService(db, userId);
+              await service.recordThreadCompletion({
+                runId,
+                status: event.status,
+                telemetry: {
+                  completionReason: event.reason,
+                  cost: event.cost,
+                  duration: event.duration,
+                  errorMessage: event.errorMessage,
+                  llmCalls: event.llmCalls,
+                  steps: event.steps,
+                  toolCalls: event.toolCalls,
+                  totalTokens: event.totalTokens,
+                },
+                testCaseId,
+                threadId,
+                topicId,
+              });
+            },
+            id: 'eval-thread-complete',
+            type: 'onComplete' as const,
+            webhook: {
+              body: { runId, testCaseId, threadId, topicId, userId },
+              url: webhookUrl,
+            },
+          },
+        ],
         ...(envPrompt && { evalContext: { envPrompt } }),
         maxSteps: run.config?.maxSteps,
         prompt: params.testCase.content.input || '',
