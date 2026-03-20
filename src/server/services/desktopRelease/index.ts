@@ -175,10 +175,12 @@ export const getStableDesktopReleaseInfoFromUpdateServer = async (options?: {
     options?.baseUrl || process.env.DESKTOP_UPDATE_SERVER_URL || process.env.UPDATE_SERVER_URL;
   if (!baseUrl) return null;
 
+  const timestamp = Date.now();
+
   const [mac, win, linux] = await Promise.all([
-    fetchUpdateServerManifest(baseUrl, 'stable-mac.yml').catch(() => null),
-    fetchUpdateServerManifest(baseUrl, 'stable.yml').catch(() => null),
-    fetchUpdateServerManifest(baseUrl, 'stable-linux.yml').catch(() => null),
+    fetchUpdateServerManifest(baseUrl, 'stable-mac.yml?t=' + timestamp).catch(() => null),
+    fetchUpdateServerManifest(baseUrl, 'stable.yml?t=' + timestamp).catch(() => null),
+    fetchUpdateServerManifest(baseUrl, 'stable-linux.yml?t=' + timestamp).catch(() => null),
   ]);
 
   const manifests = [mac, win, linux].filter(Boolean) as UpdateServerManifest[];
