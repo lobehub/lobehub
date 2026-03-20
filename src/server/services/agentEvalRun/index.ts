@@ -279,7 +279,7 @@ export class AgentEvalRunService {
               const service = new AgentEvalRunService(db, userId);
               await service.recordTrajectoryCompletion({
                 runId,
-                status: event.status,
+                status: event.status || event.reason || 'done',
                 telemetry: {
                   completionReason: event.reason,
                   cost: event.cost,
@@ -421,7 +421,7 @@ export class AgentEvalRunService {
               const service = new AgentEvalRunService(db, userId);
               await service.recordThreadCompletion({
                 runId,
-                status: event.status,
+                status: event.status || event.reason || 'done',
                 telemetry: {
                   completionReason: event.reason,
                   cost: event.cost,

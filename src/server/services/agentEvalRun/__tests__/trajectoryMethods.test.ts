@@ -191,10 +191,16 @@ describe('AgentEvalRunService', () => {
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           autoStart: true,
-          completionWebhook: {
-            body: { runId: run.id, testCaseId: testCase.id, userId },
-            url: 'https://test.example.com/api/workflows/agent-eval-run/on-trajectory-complete',
-          },
+          hooks: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'eval-trajectory-complete',
+              type: 'onComplete',
+              webhook: {
+                body: { runId: run.id, testCaseId: testCase.id, userId },
+                url: '/api/workflows/agent-eval-run/on-trajectory-complete',
+              },
+            }),
+          ]),
           prompt: 'Hello world',
           userInterventionConfig: { approvalMode: 'headless' },
         }),
