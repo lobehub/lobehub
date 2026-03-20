@@ -1,13 +1,14 @@
 import { ActionIcon, Center, Flexbox, Text, TooltipGroup } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon, ToggleLeft } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { use, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 
 import ModelItem from '../ModelItem';
+import { ProviderSettingsContext } from '../ProviderSettingsContext';
 import SortModelModal from '../SortModelModal';
 
 interface EnabledModelListProps {
@@ -16,6 +17,7 @@ interface EnabledModelListProps {
 
 const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
   const { t } = useTranslation('modelProvider');
+  const { modelEditable } = use(ProviderSettingsContext);
 
   const enabledModels = useAiInfraStore(aiModelSelectors.enabledAiProviderModelList, isEqual);
   const batchToggleAiModels = useAiInfraStore((s) => s.batchToggleAiModels);
@@ -30,6 +32,13 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
     return enabledModels.filter((model) => model.type === activeTab);
   }, [enabledModels, activeTab]);
 
+  // Models that can be toggled (exclude embedding models when not editable)
+  const togglableModels = useMemo(
+    () =>
+      modelEditable ? filteredModels : filteredModels.filter((model) => model.type !== 'embedding'),
+    [filteredModels, modelEditable],
+  );
+
   const isCurrentTabEmpty = filteredModels.length === 0;
   return (
     <>
@@ -40,20 +49,22 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
         {!isEmpty && (
           <TooltipGroup>
             <Flexbox horizontal>
-              <ActionIcon
-                icon={ToggleLeft}
-                loading={batchLoading}
-                size={'small'}
-                title={t('providerModels.list.enabledActions.disableAll')}
-                onClick={async () => {
-                  setBatchLoading(true);
-                  await batchToggleAiModels(
-                    enabledModels.map((i) => i.id),
-                    false,
-                  );
-                  setBatchLoading(false);
-                }}
-              />
+              {togglableModels.length > 0 && (
+                <ActionIcon
+                  icon={ToggleLeft}
+                  loading={batchLoading}
+                  size={'small'}
+                  title={t('providerModels.list.enabledActions.disableAll')}
+                  onClick={async () => {
+                    setBatchLoading(true);
+                    await batchToggleAiModels(
+                      togglableModels.map((i) => i.id),
+                      false,
+                    );
+                    setBatchLoading(false);
+                  }}
+                />
+              )}
 
               <ActionIcon
                 icon={ArrowDownUpIcon}

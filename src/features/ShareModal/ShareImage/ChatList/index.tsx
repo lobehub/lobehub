@@ -1,32 +1,49 @@
+import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { ConversationProvider, MessageItem } from '@/features/Conversation';
-import { useChatStore } from '@/store/chat';
-import { chatSelectors } from '@/store/chat/selectors';
+import { ConversationProvider, MessageItem, useConversationStore } from '@/features/Conversation';
 
-const ChatList = memo(() => {
-  const ids = useChatStore(chatSelectors.mainDisplayChatIDs);
-  const messages = useChatStore(chatSelectors.activeBaseChats);
-  const agentId = useChatStore((s) => s.activeAgentId);
-  const topicId = useChatStore((s) => s.activeTopicId);
+interface ChatListContentProps {
+  ids: string[];
+}
+
+const ChatListContent = memo<ChatListContentProps>(({ ids }) => {
+  const displayMessageIds = useConversationStore((s) => s.displayMessages.map((m) => m.id));
+  const renderedIds = ids.length > 0 ? ids : displayMessageIds;
+
+  return (
+    <Flexbox
+      height={'100%'}
+      style={{ padding: 24, pointerEvents: 'none', position: 'relative' }}
+      width={'100%'}
+    >
+      {renderedIds.map((id, index) => (
+        <MessageItem id={id} index={index} key={id} />
+      ))}
+    </Flexbox>
+  );
+});
+
+ChatListContent.displayName = 'ShareImageChatListContent';
+
+interface ChatListProps {
+  context: ConversationContext;
+  ids: string[];
+  messages: UIChatMessage[];
+}
+
+const ChatList = memo<ChatListProps>(({ context, ids, messages }) => {
+  const hasInitMessages = messages.length > 0;
 
   return (
     <ConversationProvider
-      context={{ agentId, topicId }}
-      hasInitMessages={true}
+      context={context}
+      hasInitMessages={hasInitMessages}
       messages={messages}
       skipFetch={true}
     >
-      <Flexbox
-        height={'100%'}
-        style={{ padding: 24, pointerEvents: 'none', position: 'relative' }}
-        width={'100%'}
-      >
-        {ids.map((id, index) => (
-          <MessageItem id={id} index={index} key={id} />
-        ))}
-      </Flexbox>
+      <ChatListContent ids={ids} />
     </ConversationProvider>
   );
 });

@@ -47,11 +47,11 @@ Upgrading the Docker deployment version is very simple, you just need to redeplo
 <Steps>
   ### Stop and Remove the Current Running LobeHub Container
 
-  Assuming the LobeHub container is named `lobe-chat`, use the following commands to stop and remove the currently running LobeHub container:
+  Assuming the LobeHub container is named `lobehub`, use the following commands to stop and remove the currently running LobeHub container:
 
   ```fish
-  docker stop lobe-chat
-  docker rm lobe-chat
+  docker stop lobehub
+  docker rm lobehub
   ```
 
   ### Pull the Latest LobeHub Image
@@ -59,7 +59,7 @@ Upgrading the Docker deployment version is very simple, you just need to redeplo
   Use the following command to pull the latest Docker image for LobeHub:
 
   ```fish
-  docker pull lobehub/lobe-chat
+  docker pull lobehub/lobehub
   ```
 
   ### Restart the Docker Container
@@ -70,8 +70,8 @@ Upgrading the Docker deployment version is very simple, you just need to redeplo
   docker run -d -p 3210:3210 \
     -e OPENAI_API_KEY=sk-xxxx \
     -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
-    --name lobe-chat \
-    lobehub/lobe-chat
+    --name lobehub \
+    lobehub/lobehub
   ```
 </Steps>
 
@@ -100,7 +100,7 @@ If you wish to automate the above steps, you can follow the method below and use
 
   ```bash
   #!/bin/bash
-  # auto-update-lobe-chat.sh
+  # auto-update-lobehub.sh
 
   # Set up proxy (optional)
   export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
@@ -121,13 +121,13 @@ If you wish to automate the above steps, you can follow the method below and use
     exit 0
   fi
 
-  echo "Detected lobe-chat update"
+  echo "Detected lobehub update"
 
   # Remove the old container
-  echo "Removed: $(docker rm -f lobe-chat)"
+  echo "Removed: $(docker rm -f lobehub)"
 
   # Run the new container(Please change the path to the env file)
-  echo "Started: $(docker run -d --network=host --env-file /path/to/lobe.env --name=lobe-chat --restart=always lobehub/lobehub)"
+  echo "Started: $(docker run -d --network=host --env-file /path/to/lobe.env --name=lobehub --restart=always lobehub/lobehub)"
 
   # Print the update time and version
   echo "Update time: $(date)"
@@ -150,6 +150,6 @@ If you wish to automate the above steps, you can follow the method below and use
   The following command configures Crontab to execute scripts every 5 minutes, or as often as you like:
 
   ```bash
-  */5 * * * * /path/to/auto-update-lobe-chat.sh >> /path/to/auto-update-lobe-chat.log 2>&1
+  */5 * * * * /path/to/auto-update-lobehub.sh >> /path/to/auto-update-lobehub.log 2>&1
   ```
 </Steps>

@@ -2,9 +2,12 @@
  * Scroll methods exposed by VList, stored as callable functions
  */
 export interface VirtuaScrollMethods {
+  getItemOffset: (index: number) => number;
+  getItemSize: (index: number) => number;
   getScrollOffset: () => number;
   getScrollSize: () => number;
   getViewportSize: () => number;
+  scrollTo: (offset: number) => void;
   scrollToIndex: (
     index: number,
     options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },

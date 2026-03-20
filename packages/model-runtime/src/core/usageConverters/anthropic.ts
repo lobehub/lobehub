@@ -4,7 +4,7 @@ import type { ModelUsage } from '@lobechat/types';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { withUsageCost } from './utils/withUsageCost';
 
-const buildInitialUsage = (
+export const buildAnthropicInitialUsage = (
   usage: Anthropic.Messages.Usage | null | undefined,
 ): ModelUsage | undefined => {
   if (!usage) return undefined;
@@ -18,12 +18,15 @@ const buildInitialUsage = (
       (usage.cache_read_input_tokens || 0);
   }
 
+  const totalOutputTokens = usage.output_tokens;
+
   return {
     inputCacheMissTokens: usage.input_tokens,
     inputCachedTokens: usage.cache_read_input_tokens || undefined,
     inputWriteCacheTokens: usage.cache_creation_input_tokens || undefined,
     totalInputTokens,
-    totalOutputTokens: usage.output_tokens,
+    totalOutputTokens,
+    totalTokens: totalInputTokens + totalOutputTokens,
   } satisfies ModelUsage;
 };
 
@@ -59,7 +62,7 @@ export const convertAnthropicUsage = (
 ): ModelUsage | undefined => {
   switch (messageEvent.type) {
     case 'message_start': {
-      return buildInitialUsage(messageEvent.message.usage);
+      return buildAnthropicInitialUsage(messageEvent.message.usage);
     }
     case 'message_delta': {
       const usage = mergeDeltaUsage(streamContextUsage, messageEvent.usage);

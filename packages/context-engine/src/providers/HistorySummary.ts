@@ -3,6 +3,16 @@ import debug from 'debug';
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    historySummary?: {
+      formattedLength: number;
+      injected: boolean;
+      originalLength: number;
+    };
+  }
+}
+
 const log = debug('context-engine:provider:HistorySummaryProvider');
 
 /**

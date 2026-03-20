@@ -3,14 +3,9 @@
 import { isDesktop } from '@lobechat/const';
 import { type IEditor } from '@lobehub/editor';
 import {
-  ReactCodemirrorPlugin,
-  ReactCodePlugin,
-  ReactHRPlugin,
   ReactImagePlugin,
   ReactLinkPlugin,
-  ReactListPlugin,
   ReactLiteXmlPlugin,
-  ReactMathPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
 } from '@lobehub/editor';
@@ -18,6 +13,8 @@ import { Editor, useEditorState } from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
 import { memo, type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 
 import { type EditorCanvasProps } from './EditorCanvas';
 import InlineToolbar from './InlineToolbar';
@@ -32,13 +29,8 @@ const IMAGE_FILTERS = [
  */
 const STATIC_PLUGINS = [
   ReactLiteXmlPlugin,
-  ReactListPlugin,
-  ReactCodePlugin,
-  ReactCodemirrorPlugin,
-  ReactHRPlugin,
-  ReactLinkPlugin,
+  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
   ReactTablePlugin,
-  ReactMathPlugin,
 ];
 
 export interface InternalEditorProps extends EditorCanvasProps {

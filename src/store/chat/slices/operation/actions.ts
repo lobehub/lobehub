@@ -22,6 +22,9 @@ import {
 const n = setNamespace('operation');
 const log = debug('lobe-store:operation');
 
+const isSameNullableContextValue = (left?: string | null, right?: string | null): boolean =>
+  (left ?? null) === (right ?? null);
+
 /**
  * Operation Actions
  */
@@ -494,13 +497,13 @@ export class OperationActionsImpl {
         matches = matches && op.context.agentId === filter.agentId;
       }
       if (filter.topicId !== undefined) {
-        matches = matches && op.context.topicId === filter.topicId;
+        matches = matches && isSameNullableContextValue(op.context.topicId, filter.topicId);
       }
       if (filter.messageId !== undefined) {
         matches = matches && op.context.messageId === filter.messageId;
       }
       if (filter.threadId !== undefined) {
-        matches = matches && op.context.threadId === filter.threadId;
+        matches = matches && isSameNullableContextValue(op.context.threadId, filter.threadId);
       }
       if (filter.groupId !== undefined) {
         matches = matches && op.context.groupId === filter.groupId;

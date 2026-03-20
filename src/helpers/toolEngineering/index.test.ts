@@ -95,9 +95,20 @@ vi.mock('@/store/agent/selectors', () => ({
     hasEnabledKnowledgeBases: () => false,
   },
   agentChatConfigSelectors: {
+    currentChatConfig: () => ({}),
     isCloudSandboxEnabled: () => false,
     isLocalSystemEnabled: () => false,
     isMemoryToolEnabled: () => false,
+  },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: { getState: () => ({}) },
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  settingsSelectors: {
+    memoryEnabled: () => false,
   },
 }));
 

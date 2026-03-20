@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "İçeriğiniz güvenlik politikaları nedeniyle engellendi. Lütfen potansiyel olarak zararlı veya uygunsuz içerikten kaçının.",
   "response.GoogleAIBlockReason.SPII": "İçeriğiniz hassas kişisel bilgiler içerebilir. Gizliliği korumak için bu bilgileri kaldırıp tekrar deneyin.",
   "response.GoogleAIBlockReason.default": "İçerik engellendi: {{blockReason}}. Lütfen isteğinizi düzenleyip tekrar deneyin.",
+  "response.InsufficientBudgetForModel": "Bu model için kalan kredileriniz yetersiz. Lütfen kredilerinizi doldurun, planınızı yükseltin veya daha uygun fiyatlı bir modeli deneyin.",
   "response.InsufficientQuota": "Üzgünüz, bu anahtar için kota sınırına ulaşıldı. Lütfen hesabınızın bakiyesini kontrol edin veya kotayı artırdıktan sonra tekrar deneyin.",
   "response.InvalidAccessCode": "Geçersiz veya boş erişim kodu. Lütfen doğru erişim kodunu girin veya özel bir API Anahtarı ekleyin.",
   "response.InvalidBedrockCredentials": "Bedrock kimlik doğrulaması başarısız oldu. Lütfen AccessKeyId/SecretAccessKey bilgilerinizi kontrol edip tekrar deneyin.",

@@ -3,10 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockMessageCreate, mockCreateOperation } = vi.hoisted(() => ({
-  mockCreateOperation: vi.fn(),
-  mockMessageCreate: vi.fn(),
-}));
+const { mockCreateOperation, mockCreateServerAgentToolsEngine, mockMessageCreate } = vi.hoisted(
+  () => ({
+    mockCreateOperation: vi.fn(),
+    mockCreateServerAgentToolsEngine: vi.fn().mockReturnValue({
+      generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
+      getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
+    }),
+    mockMessageCreate: vi.fn(),
+  }),
+);
 
 const { mockDeviceProxy } = vi.hoisted(() => ({
   mockDeviceProxy: {
@@ -104,10 +110,7 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
-  createServerAgentToolsEngine: vi.fn().mockReturnValue({
-    generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
-    getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
-  }),
+  createServerAgentToolsEngine: mockCreateServerAgentToolsEngine,
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
 }));
 
@@ -335,6 +338,102 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBeUndefined();
       expect(mockDeviceProxy.queryDeviceList).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Remote Device tool injection when device is auto-activated', () => {
+    it('should mark autoActivated when single device is auto-activated (IM/Bot)', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        botContext: { platform: 'discord' } as any,
+        prompt: 'List my files',
+      });
+
+      const toolsEngineArgs = mockCreateServerAgentToolsEngine.mock.calls[0][1];
+      // Device auto-activated → Remote Device tool should be suppressed
+      expect(toolsEngineArgs.deviceContext.autoActivated).toBe(true);
+    });
+
+    it('should mark autoActivated when boundDeviceId matches an online device', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+
+      const { AgentService } = await import('@/server/services/agent');
+      vi.mocked(AgentService).mockImplementation(
+        () =>
+          ({
+            getAgentConfig: vi.fn().mockResolvedValue({
+              agencyConfig: { boundDeviceId: 'device-001' },
+              chatConfig: {},
+              files: [],
+              id: 'agent-1',
+              knowledgeBases: [],
+              model: 'gpt-4',
+              plugins: [],
+              provider: 'openai',
+              systemRole: 'You are a helpful assistant',
+            }),
+          }) as any,
+      );
+
+      service = new AiAgentService(mockDb, userId);
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Run a command',
+      });
+
+      const toolsEngineArgs = mockCreateServerAgentToolsEngine.mock.calls[0][1];
+      expect(toolsEngineArgs.deviceContext.autoActivated).toBe(true);
+    });
+
+    it('should NOT mark autoActivated when multiple devices are online', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+
+      // Restore default AgentService mock (previous test overrides with boundDeviceId)
+      const { AgentService } = await import('@/server/services/agent');
+      vi.mocked(AgentService).mockImplementation(
+        () =>
+          ({
+            getAgentConfig: vi.fn().mockResolvedValue({
+              chatConfig: {},
+              files: [],
+              id: 'agent-1',
+              knowledgeBases: [],
+              model: 'gpt-4',
+              plugins: [],
+              provider: 'openai',
+              systemRole: 'You are a helpful assistant',
+            }),
+          }) as any,
+      );
+      service = new AiAgentService(mockDb, userId);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        botContext: { platform: 'discord' } as any,
+        prompt: 'List my files',
+      });
+
+      const toolsEngineArgs = mockCreateServerAgentToolsEngine.mock.calls[0][1];
+      expect(toolsEngineArgs.deviceContext.autoActivated).toBeUndefined();
+    });
+
+    it('should NOT mark autoActivated when no devices are online', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        botContext: { platform: 'discord' } as any,
+        prompt: 'List my files',
+      });
+
+      const toolsEngineArgs = mockCreateServerAgentToolsEngine.mock.calls[0][1];
+      expect(toolsEngineArgs.deviceContext.autoActivated).toBeUndefined();
     });
   });
 });

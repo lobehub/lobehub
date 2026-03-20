@@ -14,6 +14,7 @@ export type ApiType =
   | 'qwen'
   | 'vertexai'
   | 'volcengine'
-  | 'xai';
+  | 'xai'
+  | 'xiaomimimo';
 
 export type RuntimeClass = new (options?: any) => LobeRuntimeAI;

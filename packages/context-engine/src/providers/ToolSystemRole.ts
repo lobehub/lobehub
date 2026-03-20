@@ -7,6 +7,17 @@ import { ToolNameResolver } from '../engine/tools';
 import type { LobeToolManifest } from '../engine/tools/types';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    toolSystemRole?: {
+      contentLength: number;
+      injected: boolean;
+      supportsFunctionCall: boolean;
+      toolsCount: number;
+    };
+  }
+}
+
 const log = debug('context-engine:provider:ToolSystemRoleProvider');
 
 /**
@@ -58,7 +69,7 @@ export class ToolSystemRoleProvider extends BaseProvider {
     clonedContext.metadata.toolSystemRole = {
       contentLength: toolSystemRole.length,
       injected: true,
-      supportsFunctionCall: this.config.isCanUseFC(this.config.model, this.config.provider),
+      supportsFunctionCall: !!this.config.isCanUseFC(this.config.model, this.config.provider),
       toolsCount: this.config.manifests.length,
     };
 
@@ -96,6 +107,7 @@ export class ToolSystemRoleProvider extends BaseProvider {
             name: this.toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
           }),
         ),
+        description: manifest.meta?.description,
         identifier: manifest.identifier,
         name: manifest.meta?.title || manifest.identifier,
         systemRole: manifest.systemRole,

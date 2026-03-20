@@ -67,8 +67,14 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     params: CallAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const { agentId, instruction, runAsTask, taskTitle, timeout, skipCallSupervisor = false } =
-      params;
+    const {
+      agentId,
+      instruction,
+      runAsTask,
+      taskTitle,
+      timeout,
+      skipCallSupervisor = false,
+    } = params;
 
     if (runAsTask) {
       // Execute as async task using GTD exec_task pattern
@@ -184,17 +190,27 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
           return;
         }
 
+        // If instruction is provided, inject it as a virtual User Message
+        // Same pattern as group orchestration's call_agent executor:
+        // virtual message with <speaker> tag gives the called agent clear direction
+        const now = Date.now();
+        const messagesWithInstruction = instruction
+          ? [
+              ...messages,
+              {
+                content: `<speaker name="Supervisor" />\n${instruction}`,
+                createdAt: now,
+                id: `virtual_speak_instruction_${now}`,
+                role: 'user' as const,
+                updatedAt: now,
+              },
+            ]
+          : messages;
+
         try {
-          // Execute with subAgentId + scope: 'sub_agent'
-          // - context.agentId = current agent (for message storage and message.agentId)
-          // - context.topicId = current topic
-          // - context.subAgentId = target agent (for agent config - model, prompt, etc.)
-          // - context.scope = 'sub_agent' (indicates this is agent-to-agent call, not group)
-          // This will create messages in current agent's conversation but use target agent's config
-          // The message.agentId will still be current agent, but metadata stores subAgentId + scope
           await get().internal_execAgentRuntime({
             context: { ...conversationContext, subAgentId: agentId, scope: 'sub_agent' },
-            messages,
+            messages: messagesWithInstruction,
             parentMessageId: ctx.messageId,
             parentMessageType: 'tool',
           });

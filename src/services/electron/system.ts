@@ -32,6 +32,10 @@ class ElectronSystemService {
     return this.ipc.windows.maximizeWindow();
   }
 
+  async isWindowMaximized(): Promise<boolean> {
+    return this.ipc.windows.isWindowMaximized();
+  }
+
   async minimizeWindow(): Promise<void> {
     return this.ipc.windows.minimizeWindow();
   }

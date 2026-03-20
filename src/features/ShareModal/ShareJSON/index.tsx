@@ -4,17 +4,13 @@ import { exportFile } from '@lobechat/utils/client';
 import { type FormItemProps } from '@lobehub/ui';
 import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
 import { App, Segmented, Switch } from 'antd';
-import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 
+import { useShareData } from '../ShareDataProvider';
 import { styles } from '../style';
 import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
@@ -65,25 +61,26 @@ const ShareJSON = memo(() => {
     },
   ];
 
-  const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
-  const messages = useChatStore(dbMessageSelectors.activeDbMessages, isEqual);
-  const topic = useChatStore(topicSelectors.currentActiveTopic, isEqual);
+  const { dbMessages, systemRole, title, topic } = useShareData();
 
   // Always include tool messages (includeTool: true)
   const data =
     fieldValue.exportMode === 'simple'
-      ? generateMessages({ ...fieldValue, includeTool: true, messages, systemRole })
+      ? generateMessages({
+          ...fieldValue,
+          includeTool: true,
+          messages: dbMessages,
+          systemRole: systemRole ?? '',
+        })
       : generateFullExport({
           ...fieldValue,
           includeTool: true,
-          messages,
-          systemRole,
+          messages: dbMessages,
+          systemRole: systemRole ?? '',
           topic: topic ?? undefined,
         });
 
   const content = JSON.stringify(data, null, 2);
-
-  const title = topic?.title || t('shareModal.exportTitle');
 
   const isMobile = useIsMobile();
 

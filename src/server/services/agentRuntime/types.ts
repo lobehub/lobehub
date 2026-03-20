@@ -4,6 +4,8 @@ import { type UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 
+import { type AgentHook } from './hooks/types';
+
 // ==================== Operation Tool Set ====================
 
 export interface OperationToolSet {
@@ -135,6 +137,7 @@ export interface OperationCreationParams {
     groupId?: string | null;
     threadId?: string | null;
     topicId?: string | null;
+    trigger?: string;
   };
   autoStart?: boolean;
   /**
@@ -151,11 +154,18 @@ export interface OperationCreationParams {
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
   evalContext?: any;
+  /**
+   * External lifecycle hooks
+   * Registered once, auto-adapt to local (in-memory) or production (webhook) mode
+   */
+  hooks?: AgentHook[];
   initialContext: AgentRuntimeContext;
   initialMessages?: any[];
   maxSteps?: number;
   modelRuntimeConfig?: any;
   operationId: string;
+  /** Skill metas for <available_skills> prompt injection */
+  skillMetas?: Array<{ description: string; identifier: string; name: string }>;
   /**
    * Step lifecycle callbacks
    * Used to inject custom logic at different stages of step execution

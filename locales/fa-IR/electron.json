@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "اتصال احراز هویت ناموفق بود",
   "waitingOAuth.helpText": "اگر مرورگر به‌طور خودکار باز نشد، لطفاً لغو را بزنید و دوباره تلاش کنید",
   "waitingOAuth.retry": "تلاش مجدد",
-  "waitingOAuth.title": "در انتظار اتصال احراز هویت"
+  "waitingOAuth.title": "در انتظار اتصال احراز هویت",
+  "window.close": "بستن پنجره",
+  "window.maximize": "حداکثر کردن پنجره",
+  "window.minimize": "حداقل کردن پنجره",
+  "window.restore": "بازیابی پنجره"
 }

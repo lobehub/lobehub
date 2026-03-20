@@ -91,32 +91,32 @@ bunx vitest run --silent='passed-only' '[file-path]'
 
 提交信息请使用以下 emoji 作为前缀：
 
-| Emoji | 代码                       | 类型       | 说明        | 触发发布？ |
-| ----- | ------------------------ | -------- | --------- | ----- |
-| ✨     | `:sparkles:`             | feat     | 新功能       | 是     |
-| 🐛    | `:bug:`                  | fix      | Bug 修复    | 是     |
-| 📝    | `:memo:`                 | docs     | 文档更新      | 否     |
-| 💄    | `:lipstick:`             | style    | UI / 样式更改 | 否     |
-| ♻️    | `:recycle:`              | refactor | 代码重构      | 否     |
-| ✅     | `:white_check_mark:`     | test     | 测试相关      | 否     |
-| 🔨    | `:hammer:`               | chore    | 维护任务      | 否     |
-| 🚀    | `:rocket:`               | perf     | 性能优化      | 否     |
-| 🌐    | `:globe_with_meridians:` | i18n     | 国际化       | 否     |
+| Emoji | 代码                     | 类型     | 说明          | 触发发布？ |
+| ----- | ------------------------ | -------- | ------------- | ---------- |
+| ✨    | `:sparkles:`             | feat     | 新功能        | 是         |
+| 🐛    | `:bug:`                  | fix      | Bug 修复      | 是         |
+| 📝    | `:memo:`                 | docs     | 文档更新      | 否         |
+| 💄    | `:lipstick:`             | style    | UI / 样式更改 | 否         |
+| ♻️    | `:recycle:`              | refactor | 代码重构      | 否         |
+| ✅    | `:white_check_mark:`     | test     | 测试相关      | 否         |
+| 🔨    | `:hammer:`               | chore    | 维护任务      | 否         |
+| 🚀    | `:rocket:`               | perf     | 性能优化      | 否         |
+| 🌐    | `:globe_with_meridians:` | i18n     | 国际化        | 否         |
 
 ### 如何贡献
 
 **1. Fork 并克隆仓库**
 
-在 GitHub 上 Fork [lobehub/lobe-chat](https://github.com/lobehub/lobe-chat)，然后克隆你的 Fork 到本地。
+在 GitHub 上 Fork [lobehub/lobehub](https://github.com/lobehub/lobehub)，然后克隆你的 Fork 到本地。
 
 **2. 创建分支**
 
 使用分支命名格式：`用户名/类型/描述`
 
 ```bash
-git checkout -b yourname/feat/add-voice-input
-git checkout -b yourname/fix/message-duplication
-git checkout -b yourname/docs/update-api-guide
+git checkout -b feat/add-voice-input
+git checkout -b fix/message-duplication
+git checkout -b docs/update-api-guide
 ```
 
 **3. 进行更改**
@@ -140,28 +140,33 @@ git commit -m "📝 docs: 更新安装指南"
 **5. 创建 Pull Request**
 
 <Callout type={'warning'}>
-  PR 的目标分支必须是 **`canary`**，而非 `main`。`canary` 是当前活跃的开发分支，向 `main` 发起的 PR 会被重定向。
+  PR 的目标分支必须是 **`canary`**，而非 `main`。`canary` 是当前活跃的开发分支，向 `main` 发起的 PR
+  会被重定向。
 </Callout>
 
 请使用 `.github/PULL_REQUEST_TEMPLATE.md` 中的 PR 模板：
 
 ```markdown
 ## Description
+
 清晰描述此 PR 的改动内容。
 
 ## Type of Change
+
 - [ ] ✨ 新功能
 - [ ] 🐛 Bug 修复
 - [ ] 📝 文档
 - [ ] ♻️ 重构
 
 ## Checklist
+
 - [ ] 代码符合项目风格指南
 - [ ] 已添加/更新测试
 - [ ] 已更新文档
 - [ ] 所有测试通过
 
 ## Related Issues
+
 Fixes #123
 ```
 
@@ -174,14 +179,14 @@ Fixes #123
 ### 同步 Fork 与上游代码
 
 ```bash
-git remote add upstream https://github.com/lobehub/lobe-chat.git
+git remote add upstream https://github.com/lobehub/lobehub.git
 git fetch upstream
 git rebase upstream/canary
 ```
 
 ### 贡献方向
 
-- **功能开发** — 查看 [标注为 `good first issue` 的 Issue](https://github.com/lobehub/lobe-chat/issues?q=is%3Aissue+label%3A%22good+first+issue%22)，找到适合新手的任务
+- **功能开发** — 查看 [标注为 `good first issue` 的 Issue](https://github.com/lobehub/lobehub/issues?q=is%3Aissue+label%3A%22good+first+issue%22)，找到适合新手的任务
 - **Bug 修复** — 搜索标注为 `bug` 的开放 Issue
 - **文档改善** — 完善文档、修正错别字、添加示例
 - **测试补充** — 为缺少覆盖的代码路径添加测试

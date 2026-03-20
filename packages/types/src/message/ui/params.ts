@@ -108,6 +108,8 @@ export interface SendMessageParams {
    * @deprecated Use ConversationContext.newThread instead
    */
   createThread?: boolean;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
   files?: UploadFileItem[];
   /**
    *

@@ -1,16 +1,18 @@
+import { onlineDevicesPrompt } from '@lobechat/prompts';
+
 import { type DeviceAttachment } from './ExecutionRuntime/types';
 
 export const generateSystemPrompt = (devices?: DeviceAttachment[]): string => {
   const onlineDevices = devices?.filter((d) => d.online) ?? [];
 
-  const deviceSection =
-    onlineDevices.length > 0
-      ? `<online-devices>
-${onlineDevices.map((d) => `- **${d.hostname}** (${d.platform}) — ID: \`${d.deviceId}\``).join('\n')}
-</online-devices>`
-      : `<online-devices>
-No devices are currently online.
-</online-devices>`;
+  const deviceSection = onlineDevicesPrompt(
+    onlineDevices.map((d) => ({
+      id: d.deviceId,
+      lastSeen: d.lastSeen,
+      name: d.hostname,
+      os: d.platform,
+    })),
+  );
 
   return `You have a Remote Device Management tool that allows you to discover and connect to the user's desktop devices.
 

@@ -47,7 +47,7 @@ const evalModes = [
 ] as const;
 
 // ============================================
-// 1. agent_eval_benchmarks（评测基准）
+// 1. agent_eval_benchmarks (Evaluation Benchmarks)
 // ============================================
 export const agentEvalBenchmarks = pgTable(
   'agent_eval_benchmarks',
@@ -83,7 +83,7 @@ export type NewAgentEvalBenchmark = typeof agentEvalBenchmarks.$inferInsert;
 export type AgentEvalBenchmarkItem = typeof agentEvalBenchmarks.$inferSelect;
 
 // ============================================
-// 2. agent_eval_datasets（评测题集）
+// 2. agent_eval_datasets (Evaluation Datasets)
 // ============================================
 export const agentEvalDatasets = pgTable(
   'agent_eval_datasets',
@@ -121,7 +121,7 @@ export type NewAgentEvalDataset = typeof agentEvalDatasets.$inferInsert;
 export type AgentEvalDatasetItem = typeof agentEvalDatasets.$inferSelect;
 
 // ============================================
-// 3. agent_eval_test_cases（评测题目）
+// 3. agent_eval_test_cases (Evaluation Test Cases)
 // ============================================
 export const agentEvalTestCases = pgTable(
   'agent_eval_test_cases',
@@ -160,7 +160,7 @@ export type NewAgentEvalTestCase = typeof agentEvalTestCases.$inferInsert;
 export type AgentEvalTestCaseItem = typeof agentEvalTestCases.$inferSelect;
 
 // ============================================
-// 4. agent_eval_runs（评测运行）
+// 4. agent_eval_runs (Evaluation Runs)
 // ============================================
 export const agentEvalRuns = pgTable(
   'agent_eval_runs',
@@ -207,7 +207,7 @@ export type NewAgentEvalRun = typeof agentEvalRuns.$inferInsert;
 export type AgentEvalRunItem = typeof agentEvalRuns.$inferSelect;
 
 // ============================================
-// 5. agent_eval_run_topics（评测运行与 Topic 关联表）
+// 5. agent_eval_run_topics (Evaluation Run and Topic Association Table)
 // ============================================
 export const agentEvalRunTopics = pgTable(
   'agent_eval_run_topics',

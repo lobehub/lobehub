@@ -11,7 +11,7 @@ const mockStreamEventManager = {
 };
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
-  StreamEventManager: vi.fn(() => mockStreamEventManager),
+  createStreamEventManager: vi.fn(() => mockStreamEventManager),
 }));
 
 describe('/api/agent/stream route', () => {

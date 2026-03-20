@@ -267,4 +267,45 @@ describe('useOperationState', () => {
       });
     });
   });
+
+  describe('isInputLoading', () => {
+    it('should clear loading after cancelling an operation in a null-topic context', () => {
+      const context = {
+        agentId: 'test-agent-id',
+        topicId: null,
+        threadId: null,
+      } as const;
+
+      const { result } = renderHook(() => useOperationState(context));
+
+      expect(result.current.isInputLoading).toBe(false);
+
+      let operationId: string;
+      act(() => {
+        operationId = useChatStore.getState().startOperation({
+          type: 'execAgentRuntime',
+          context: {
+            agentId: context.agentId,
+            topicId: undefined,
+            threadId: undefined,
+          },
+        }).operationId;
+      });
+
+      expect(result.current.isInputLoading).toBe(true);
+
+      act(() => {
+        useChatStore.getState().cancelOperations({
+          agentId: context.agentId,
+          status: 'running',
+          threadId: context.threadId ?? undefined,
+          topicId: context.topicId ?? undefined,
+          type: ['sendMessage', 'execAgentRuntime', 'execServerAgentRuntime'],
+        });
+      });
+
+      expect(useChatStore.getState().operations[operationId!].status).toBe('cancelled');
+      expect(result.current.isInputLoading).toBe(false);
+    });
+  });
 });

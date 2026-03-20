@@ -1,6 +1,8 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
+import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
+import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatImageItem,
   type ChatThreadType,
@@ -15,10 +17,18 @@ import { t } from 'i18next';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { aiChatService } from '@/services/aiChat';
+import { chatService } from '@/services/chat';
+import { prepareSelectedSkillPreload } from '@/services/chat/mecha/skillPreload';
+import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import { type ChatStore } from '@/store/chat/store';
+import {
+  createPendingCompressedGroup,
+  getCompressionCandidateMessageIds,
+  hasRunningCompressionOperation,
+} from '@/store/chat/utils/compression';
 import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -27,6 +37,15 @@ import { useUserMemoryStore } from '@/store/userMemory';
 
 import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
+import {
+  type CommandSendOverrides,
+  hasNonActionContent,
+  injectReferTopicNode,
+  parseMentionedAgentsFromEditorData,
+  parseSelectedSkillsFromEditorData,
+  parseSelectedToolsFromEditorData,
+  processCommands,
+} from './commandBus';
 
 /**
  * Extended params for sendMessage with context
@@ -60,6 +79,16 @@ type Setter = StoreSetter<ChatStore>;
 export const conversationLifecycle = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ConversationLifecycleActionImpl(set, get, _api);
 
+const isAbortError = (error: unknown, abortController?: AbortController) =>
+  !!abortController?.signal.aborted ||
+  (error instanceof Error &&
+    (error.name === 'AbortError' ||
+      error.message.includes('aborted') ||
+      error.message.includes('cancelled')));
+
+const createAbortError = () =>
+  Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
+
 export class ConversationLifecycleActionImpl {
   readonly #get: () => ChatStore;
 
@@ -71,6 +100,7 @@ export class ConversationLifecycleActionImpl {
 
   sendMessage = async ({
     message,
+    editorData: inputEditorData,
     files,
     onlyAddUserMessage,
     context,
@@ -78,7 +108,11 @@ export class ConversationLifecycleActionImpl {
     parentId: inputParentId,
     pageSelections,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
+    let editorData = inputEditorData;
     const { internal_execAgentRuntime, mainInputEditor } = this.#get();
+    const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
+    const selectedTools = parseSelectedToolsFromEditorData(editorData);
+    const mentionedAgents = parseMentionedAgentsFromEditorData(editorData);
 
     // Use context from params (required)
     const { agentId } = context;
@@ -96,6 +130,53 @@ export class ConversationLifecycleActionImpl {
 
     if (!agentId) return;
 
+    // ── Command Bus: extract and process built-in commands from editorData ──
+    const commandOverrides: CommandSendOverrides = processCommands({
+      message,
+      editorData,
+      files,
+      onlyAddUserMessage,
+      context,
+      messages: inputMessages,
+      parentId: inputParentId,
+      pageSelections,
+    });
+
+    // /compact — directly compress context without sending any message
+    if (commandOverrides.triggerCompression) {
+      const compressContext = { ...context };
+      if (
+        compressContext.topicId &&
+        !hasRunningCompressionOperation(Object.values(this.#get().operations), compressContext)
+      ) {
+        await this.#executeCompression(compressContext, '');
+      }
+      return;
+    }
+
+    // /newTopic — force a fresh topic regardless of current context
+    let forceNewTopicFromExisting = false;
+    if (commandOverrides.forceNewTopic) {
+      const hasFile = files && files.length > 0;
+      // If no message content besides the action tag and no files, just navigate to a new topic without sending
+      if (!hasNonActionContent(editorData) && !hasFile) {
+        await this.#get().switchTopic(null);
+        return;
+      }
+
+      if (context.topicId) {
+        const originalTopic = topicSelectors.getTopicById(context.topicId)(this.#get());
+        const topicTitle = originalTopic?.title || '';
+        // Inject referTopic into content for LLM context
+        const referTag = `<refer_topic name="${topicTitle}" id="${context.topicId}" />`;
+        message = `${referTag}\n${message}`;
+        // Inject refer-topic node into editorData for rich text display
+        editorData = injectReferTopicNode(editorData, context.topicId, topicTitle);
+        forceNewTopicFromExisting = true;
+      }
+      context = { ...context, topicId: undefined };
+    }
+
     // When creating new thread, override threadId to undefined (server will create it)
     // Check if current agentId is the supervisor agent of the group
     let isGroupSupervisor = false;
@@ -103,13 +184,22 @@ export class ConversationLifecycleActionImpl {
       const group = agentGroupByIdSelectors.groupById(context.groupId)(getChatGroupStoreState());
       isGroupSupervisor = group?.supervisorAgentId === agentId;
     }
+    // In non-group context, @agent mentions make the current agent act as supervisor
+    const hasMentionedAgents = !context.groupId && mentionedAgents.length > 0;
+
     const operationContext = {
       ...context,
       ...(isCreatingNewThread && { threadId: undefined }),
+      // Only set isSupervisor for actual group supervisors — NOT for @agent mentions.
+      // isSupervisor triggers group-specific UI rendering (SupervisorMessage with group avatars).
       ...(isGroupSupervisor && { isSupervisor: true }),
     };
 
     const fileIdList = files?.map((f) => f.id);
+    const preloadMessages = await prepareSelectedSkillPreload({
+      message,
+      selectedSkills,
+    });
 
     const hasFile = !!fileIdList && fileIdList.length > 0;
 
@@ -123,9 +213,11 @@ export class ConversationLifecycleActionImpl {
     }
 
     // Use provided messages or query from store
+    // For /newTopic from existing topic, start with empty message list (fresh topic)
     const contextKey = messageMapKey(context);
-    const messages =
-      inputMessages ?? displayMessageSelectors.getDisplayMessagesByKey(contextKey)(this.#get());
+    const messages = forceNewTopicFromExisting
+      ? []
+      : (inputMessages ?? displayMessageSelectors.getDisplayMessagesByKey(contextKey)(this.#get()));
     const lastMessage = messages.at(-1);
 
     useUserMemoryStore.getState().setActiveMemoryContext({
@@ -136,7 +228,7 @@ export class ConversationLifecycleActionImpl {
     });
 
     // Use provided parentId or calculate from messages
-    let parentId: string | undefined = inputParentId;
+    let parentId: string | undefined = forceNewTopicFromExisting ? undefined : inputParentId;
     if (!parentId && lastMessage) {
       parentId = displayMessageSelectors.findLastMessageId(lastMessage.id)(this.#get());
     }
@@ -175,6 +267,7 @@ export class ConversationLifecycleActionImpl {
     this.#get().optimisticCreateTmpMessage(
       {
         content: message,
+        editorData: editorData ?? undefined,
         // if message has attached with files, then add files to message and the agent
         files: fileIdList,
         role: 'user',
@@ -209,7 +302,7 @@ export class ConversationLifecycleActionImpl {
     this.#get().associateMessageWithOperation(tempAssistantId, operationId);
 
     // Store editor state in operation metadata for cancel restoration
-    const jsonState = mainInputEditor?.getJSONState();
+    const jsonState = inputEditorData ?? mainInputEditor?.getJSONState();
     this.#get().updateOperationMetadata(operationId, {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,
@@ -222,7 +315,14 @@ export class ConversationLifecycleActionImpl {
       const topicId = operationContext.topicId;
       data = await aiChatService.sendMessageInServer(
         {
-          newUserMessage: { content: message, files: fileIdList, pageSelections, parentId },
+          newUserMessage: {
+            content: message,
+            editorData,
+            files: fileIdList,
+            pageSelections,
+            parentId,
+          },
+          preloadMessages: preloadMessages.length > 0 ? preloadMessages : undefined,
           // if there is topicId，then add topicId to message
           topicId: topicId ?? undefined,
           threadId: operationContext.threadId ?? undefined,
@@ -235,7 +335,7 @@ export class ConversationLifecycleActionImpl {
             : undefined,
           newTopic: !topicId
             ? {
-                topicMessageIds: messages.map((m) => m.id),
+                topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
               }
             : undefined,
@@ -316,7 +416,12 @@ export class ConversationLifecycleActionImpl {
         // Check if error is due to cancellation
         if (!isAbort) {
           this.#get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
-          this.#get().mainInputEditor?.setDocument('markdown', message);
+          const op = this.#get().operations[operationId];
+          if (op?.metadata.inputEditorTempState) {
+            this.#get().mainInputEditor?.setJSONState(op.metadata.inputEditorTempState);
+          } else {
+            this.#get().mainInputEditor?.setDocument('markdown', message);
+          }
         }
       }
     } finally {
@@ -370,42 +475,72 @@ export class ConversationLifecycleActionImpl {
     // execAgentRuntime is a separate operation (child) that handles AI response generation
     this.#get().completeOperation(operationId);
 
-    // Create final context for AI execution (with updated topicId/threadId from server)
-    const execContext = {
-      ...operationContext,
-      topicId: data.topicId ?? operationContext.topicId,
-      threadId: data.createdThreadId ?? operationContext.threadId,
-    };
+    // ── AI execution ──
+    {
+      const execContext = {
+        ...operationContext,
+        topicId: data.topicId ?? operationContext.topicId,
+        threadId: data.createdThreadId ?? operationContext.threadId,
+      };
 
-    // Get the current messages to generate AI response
-    const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
-      messageMapKey(execContext),
-    )(this.#get());
+      const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
+        messageMapKey(execContext),
+      )(this.#get());
 
-    try {
-      await internal_execAgentRuntime({
-        context: execContext,
-        messages: displayMessages,
-        parentMessageId: data.assistantMessageId,
-        parentMessageType: 'assistant',
-        parentOperationId: operationId, // Pass as parent operation
-        // If a new thread was created, mark as inPortalThread for consistent behavior
-        inPortalThread: !!data.createdThreadId,
-        skipCreateFirstMessage: true,
-      });
+      try {
+        // When agents are @mentioned in non-group context, auto-enable agent-management tool
+        // so the supervisor can delegate via callAgent
+        const effectiveSelectedTools =
+          hasMentionedAgents &&
+          !selectedTools.some((t) => t.identifier === AgentManagementIdentifier)
+            ? [
+                ...selectedTools,
+                { identifier: AgentManagementIdentifier, name: 'Agent Management' },
+              ]
+            : selectedTools;
 
-      const userFiles = dbMessageSelectors
-        .dbUserFiles(this.#get())
-        .map((f) => f?.id)
-        .filter(Boolean) as string[];
+        const hasInitialContext =
+          effectiveSelectedTools.length > 0 || selectedSkills.length > 0 || hasMentionedAgents;
 
-      if (userFiles.length > 0) {
-        await getAgentStoreState().addFilesToAgent(userFiles, false);
+        const agentRuntimeInitialContext = hasInitialContext
+          ? {
+              initialContext: {
+                ...(selectedSkills.length > 0 ? { selectedSkills } : undefined),
+                ...(effectiveSelectedTools.length > 0
+                  ? { selectedTools: effectiveSelectedTools }
+                  : undefined),
+                // Only inject mentionedAgents in non-group context to avoid
+                // group @member mentions (including ALL_MEMBERS) leaking into agent-management
+                ...(hasMentionedAgents ? { mentionedAgents } : undefined),
+              },
+              phase: 'init' as const,
+            }
+          : undefined;
+
+        await internal_execAgentRuntime({
+          context: execContext,
+          initialContext: agentRuntimeInitialContext,
+          messages: displayMessages,
+          parentMessageId: data.assistantMessageId,
+          parentMessageType: 'assistant',
+          parentOperationId: operationId,
+          inPortalThread: !!data.createdThreadId,
+          skipCreateFirstMessage: true,
+        });
+
+        const userFiles = dbMessageSelectors
+          .dbUserFiles(this.#get())
+          .map((f) => f?.id)
+          .filter(Boolean) as string[];
+
+        if (userFiles.length > 0) {
+          await getAgentStoreState().addFilesToAgent(userFiles, false);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
     }
 
     // Return result for callers who need message IDs
@@ -454,6 +589,114 @@ export class ConversationLifecycleActionImpl {
         message: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    }
+  };
+
+  /**
+   * Execute context compression for /compact command.
+   * Reuses the same service methods as the agent runtime's compress_context executor.
+   */
+  #executeCompression = async (
+    context: Record<string, any>,
+    parentOperationId: string,
+  ): Promise<void> => {
+    const { agentId, topicId } = context;
+    if (!topicId) return;
+
+    const contextKey = messageMapKey(context as any);
+    const dbMessages = dbMessageSelectors.getDbMessagesByKey(contextKey)(this.#get()) || [];
+    const messageIds = getCompressionCandidateMessageIds(dbMessages);
+
+    if (messageIds.length === 0) return;
+
+    const tempId = 'tmp_compress_' + nanoid();
+    const { abortController, operationId } = this.#get().startOperation({
+      context: { ...context, messageId: tempId },
+      parentOperationId,
+      type: 'contextCompression',
+    });
+
+    // Immediate UI feedback: render a pending compressed group from the first frame
+    this.#get().internal_dispatchMessage(
+      {
+        id: tempId,
+        type: 'createMessage',
+        value: createPendingCompressedGroup({
+          agentId,
+          groupId: context.groupId,
+          id: tempId,
+          threadId: context.threadId,
+          topicId,
+        }) as any,
+      },
+      { operationId },
+    );
+
+    try {
+      // 1. Create compression group on server
+      const result = await messageService.createCompressionGroup({
+        agentId,
+        messageIds,
+        topicId,
+      });
+      const { messageGroupId, messages: serverMessages, messagesToSummarize } = result;
+
+      // Replace local pending group with server compression group
+      this.#get().replaceMessages(serverMessages, { context: context as any });
+      this.#get().associateMessageWithOperation(messageGroupId, operationId);
+
+      // 2. Generate summary via LLM
+      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const compressionPayload = chainCompressContext(messagesToSummarize);
+      let summaryContent = '';
+
+      await chatService.fetchPresetTaskResult({
+        abortController,
+        onMessageHandle: (chunk) => {
+          if (chunk.type === 'text') {
+            summaryContent += chunk.text || '';
+            this.#get().internal_dispatchMessage(
+              { id: messageGroupId, type: 'updateMessage', value: { content: summaryContent } },
+              { operationId },
+            );
+          }
+        },
+        params: { ...compressionPayload, model, provider },
+      });
+
+      if (abortController.signal.aborted) throw createAbortError();
+
+      // 3. Finalize compression
+      const finalResult = await messageService.finalizeCompression({
+        agentId,
+        content: summaryContent,
+        messageGroupId,
+        topicId,
+      });
+
+      if (finalResult.messages) {
+        this.#get().replaceMessages(finalResult.messages, { context: context as any });
+      }
+
+      this.#get().completeOperation(operationId);
+    } catch (error) {
+      if (isAbortError(error, abortController)) {
+        this.#get().internal_dispatchMessage(
+          { type: 'deleteMessages', ids: [tempId] },
+          { operationId },
+        );
+        return;
+      }
+
+      console.error('[/compact] Compression failed:', error);
+      this.#get().internal_dispatchMessage(
+        { type: 'deleteMessages', ids: [tempId] },
+        { operationId },
+      );
+      this.#get().failOperation(operationId, {
+        message: error instanceof Error ? error.message : String(error),
+        type: 'compression_failed',
+      });
     }
   };
 }

@@ -3,9 +3,8 @@ import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo, useMemo } from 'react';
 
-import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
-import { isMacOS } from '@/utils/platform';
+import { getPlatform, isMacOS } from '@/utils/platform';
 
 import Connection from '../connection/Connection';
 import { useTabNavigation } from '../navigation/useTabNavigation';
@@ -16,18 +15,13 @@ import TabBar from './TabBar';
 import WinControl from './WinControl';
 
 const isMac = isMacOS();
+const isLinux = getPlatform() === 'Linux';
 
 const TitleBar = memo(() => {
-  const [isAppStateInit, initElectronAppState] = useElectronStore((s) => [
-    s.isAppStateInit,
-    s.useInitElectronAppState,
-  ]);
-
-  initElectronAppState();
   useWatchThemeUpdate();
   useTabNavigation();
 
-  const showWinControl = isAppStateInit && !isMac;
+  const showWinControl = isLinux && !isMac;
 
   const padding = useMemo(() => {
     if (showWinControl) {
@@ -35,7 +29,7 @@ const TitleBar = memo(() => {
     }
 
     return '0 12px';
-  }, [showWinControl, isMac]);
+  }, [showWinControl]);
 
   return (
     <Flexbox

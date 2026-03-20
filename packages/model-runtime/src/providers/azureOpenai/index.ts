@@ -120,6 +120,19 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
         { headers: options?.headers, signal: options?.signal },
       );
 
+      if (res.usage && options?.onUsage) {
+        const { convertOpenAIUsage } = await import('../../core/usageConverters/openai');
+        const { getModelPricing } = await import('../../utils/getModelPricing');
+        const pricing = await getModelPricing(payload.model, ModelProvider.Azure);
+        await options.onUsage(
+          convertOpenAIUsage(res.usage as any, {
+            model: payload.model,
+            pricing,
+            provider: ModelProvider.Azure,
+          }),
+        );
+      }
+
       return res.data.map((item) => item.embedding);
     } catch (error) {
       return this.handleError(error, payload.model);

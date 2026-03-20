@@ -3,6 +3,14 @@ import debug from 'debug';
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    taskMessagesCreated?: number;
+    tasksFlattenProcessed?: number;
+    tasksMessagesFlattened?: number;
+  }
+}
+
 const log = debug('context-engine:processor:TasksFlattenProcessor');
 
 /**

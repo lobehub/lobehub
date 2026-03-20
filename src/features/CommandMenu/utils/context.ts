@@ -30,6 +30,11 @@ const CONTEXT_CONFIGS: ContextConfig[] = [
     type: 'painting',
   },
   {
+    matcher: /^\/video$/,
+    name: 'Video',
+    type: 'video',
+  },
+  {
     captureSubPath: true,
     matcher: /^\/settings(?:\/([^/]+))?/,
     name: 'Settings',

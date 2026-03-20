@@ -127,4 +127,8 @@ export default {
     'If the browser did not open automatically, please click cancel and try again',
   'waitingOAuth.retry': 'Retry',
   'waitingOAuth.title': 'Waiting for Authorization Connection',
+  'window.close': 'Close window',
+  'window.maximize': 'Maximize window',
+  'window.minimize': 'Minimize window',
+  'window.restore': 'Restore window',
 };

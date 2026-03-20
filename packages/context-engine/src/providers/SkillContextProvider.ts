@@ -4,6 +4,15 @@ import debug from 'debug';
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    skillContext?: {
+      injected: boolean;
+      skillsCount: number;
+    };
+  }
+}
+
 const log = debug('context-engine:provider:SkillContextProvider');
 
 /**

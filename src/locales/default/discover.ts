@@ -101,6 +101,7 @@ export default {
   'category.assistant.life': 'Life',
   'category.assistant.marketing': 'Marketing',
   'category.assistant.office': 'Office',
+  'category.assistant.productivity': 'Productivity',
   'category.assistant.programming': 'Programming',
   'category.assistant.translation': 'Translation',
   'category.plugin.all': 'All',

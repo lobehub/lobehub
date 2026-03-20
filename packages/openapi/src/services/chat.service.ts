@@ -1,7 +1,9 @@
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
+import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
 import { UserModel } from '@/database/models/user';
 import { agents, agentsToSessions, aiModels } from '@/database/schemas';
@@ -317,10 +319,13 @@ export class ChatService extends BaseService {
       const { apiKey } = JSON.parse(await this.getApiKey(provider));
 
       // 创建 AgentRuntime 实例
-      const modelRuntime = await initModelRuntimeWithUserPayload(provider, {
-        apiKey,
-        userId: this.userId!,
-      });
+      const hooks = getBusinessModelRuntimeHooks(this.userId!, provider);
+      const modelRuntime = await initModelRuntimeWithUserPayload(
+        provider,
+        { apiKey, userId: this.userId! },
+        {},
+        hooks,
+      );
 
       // 构建 ChatStreamPayload
       const chatPayload: ChatStreamPayload = {
@@ -337,6 +342,7 @@ export class ChatService extends BaseService {
 
       // 调用聊天 API
       const response = await modelRuntime.chat(chatPayload, {
+        metadata: { trigger: RequestTrigger.Api },
         user: this.userId!,
       });
 

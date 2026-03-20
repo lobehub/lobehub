@@ -7,6 +7,7 @@ export default {
   'config.header.title': 'Video',
   'config.imageUrl.label': 'Start Frame',
   'config.prompt.placeholder': 'Describe the video you want to generate',
+  'config.prompt.placeholderWithRef': 'Describe the scene you want to generate with the image',
   'config.referenceImage.label': 'Reference Image',
   'config.resolution.label': 'Resolution',
   'config.seed.label': 'Seed',
@@ -21,7 +22,7 @@ export default {
     'End frame cannot be used without a start frame. Please set a start frame first.',
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating...',
-  'topic.createNew': 'New Topic',
+  'topic.createNew': 'Create New Topic',
   'topic.deleteConfirm': 'Delete Video Topic',
   'topic.deleteConfirmDesc':
     'You are about to delete this video topic. This action cannot be undone.',

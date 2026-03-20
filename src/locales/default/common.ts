@@ -222,6 +222,10 @@ export default {
 
   'cmdk.search.assistants': 'Agents',
 
+  'cmdk.search.chatGroup': 'Agent Team',
+
+  'cmdk.search.chatGroups': 'Agent Teams',
+
   'cmdk.search.communityAgent': 'Community Agent',
 
   'cmdk.search.file': 'File',
@@ -333,6 +337,7 @@ export default {
   'footer.star.title': 'Star us on GitHub',
   'footer.title': 'Like Our Product?',
   'fullscreen': 'Full Screen Mode',
+  'generation.hero.taglinePrefix': 'Start Creating with',
   'historyRange': 'History Range',
   'home.suggestQuestions': 'Try these examples',
   'import': 'Import',
@@ -480,6 +485,7 @@ export default {
   'tab.files': 'Files',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
+  'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.pages': 'Pages',

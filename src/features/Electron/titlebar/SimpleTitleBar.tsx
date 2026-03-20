@@ -6,8 +6,13 @@ import { type FC } from 'react';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { electronStylish } from '@/styles/electron';
+import { getPlatform, isMacOS } from '@/utils/platform';
 
 import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
+import WinControl, { WINDOW_CONTROL_WIDTH } from './WinControl';
+
+const isMac = isMacOS();
+const isLinux = getPlatform() === 'Linux';
 
 /**
  * A simple, minimal TitleBar for Electron windows.
@@ -16,16 +21,22 @@ import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
  */
 const SimpleTitleBar: FC = () => {
   useWatchThemeUpdate();
+
+  const showWinControl = isLinux && !isMac;
+
   return (
     <Flexbox
       horizontal
       align={'center'}
       className={electronStylish.draggable}
       height={TITLE_BAR_HEIGHT}
-      justify={'center'}
+      justify={showWinControl ? 'space-between' : 'center'}
+      style={{ minHeight: TITLE_BAR_HEIGHT, padding: '0 12px' }}
       width={'100%'}
     >
+      {showWinControl && <div style={{ width: WINDOW_CONTROL_WIDTH }} />}
       <ProductLogo size={16} type={'text'} />
+      {showWinControl && <WinControl />}
     </Flexbox>
   );
 };

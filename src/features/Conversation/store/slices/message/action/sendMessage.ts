@@ -31,6 +31,11 @@ export const sendMessage = (
       }
     }
 
+    // Keep ConversationStore in sync with the editor, which is cleared immediately on send.
+    // Do this before awaiting the full streaming lifecycle so drafts typed during generation
+    // are not overwritten when the request completes.
+    set({ inputMessage: '' });
+
     // Get global chat store
     const chatStore = useChatStore.getState();
 
@@ -56,8 +61,5 @@ export const sendMessage = (
     if (hooks.onAfterSendMessage) {
       await hooks.onAfterSendMessage();
     }
-
-    // Clear input message
-    set({ inputMessage: '' });
   };
 };

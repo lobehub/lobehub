@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "권한 연결 실패",
   "waitingOAuth.helpText": "브라우저가 자동으로 열리지 않으면, 취소를 클릭한 후 다시 시도하세요.",
   "waitingOAuth.retry": "다시 시도",
-  "waitingOAuth.title": "인증 연결 대기 중"
+  "waitingOAuth.title": "인증 연결 대기 중",
+  "window.close": "창 닫기",
+  "window.maximize": "창 최대화",
+  "window.minimize": "창 최소화",
+  "window.restore": "창 복원"
 }

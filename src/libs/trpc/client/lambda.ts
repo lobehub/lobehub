@@ -14,6 +14,7 @@ const log = debug('lobe-image:lambda-client');
 
 // 401 error debouncing: prevent showing multiple login notifications in short time
 let last401Time = 0;
+let lastMarket401Time = 0;
 const MIN_401_INTERVAL = 5000; // 5 seconds
 
 // handle error
@@ -33,27 +34,46 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
           const showError = (op.context?.showNotification as boolean) ?? true;
           const status = err.data?.httpStatus as number;
 
+          // Check if this is a market API call
+          const isMarketApi = op.path.startsWith('market.');
+
           // Don't show notifications for abort errors
           if (showError && !isAbortError) {
             switch (status) {
               case 401: {
-                // Debounce: only show login notification once every 5 seconds
-                const now = Date.now();
-                if (now - last401Time > MIN_401_INTERVAL) {
-                  last401Time = now;
-                  // Desktop app doesn't have the web auth routes like `/signin`,
-                  // so skip the login redirect/notification there.
-                  if (!isDesktop) {
-                    const { getUserStoreState } = await import('@/store/user/store');
-                    const { isSignedIn, logout } = getUserStoreState();
-                    // If user is still marked as signed in but got 401,
-                    // session is invalid - clear client state first
-                    if (isSignedIn) {
-                      await logout();
+                if (isMarketApi) {
+                  // Market API 401: emit event for MarketAuthProvider to handle
+                  // Don't trigger LobeChat logout for market auth issues
+                  const now = Date.now();
+                  if (now - lastMarket401Time > MIN_401_INTERVAL) {
+                    lastMarket401Time = now;
+                    // Dynamically import to avoid circular dependencies
+                    const { marketAuthEvents } =
+                      await import('@/layout/AuthProvider/MarketAuth/events');
+                    marketAuthEvents.emit('market-unauthorized', {
+                      path: op.path,
+                      timestamp: now,
+                    });
+                  }
+                } else {
+                  // Non-market 401: handle as before (LobeChat session expired)
+                  const now = Date.now();
+                  if (now - last401Time > MIN_401_INTERVAL) {
+                    last401Time = now;
+                    // Desktop app doesn't have the web auth routes like `/signin`,
+                    // so skip the login redirect/notification there.
+                    if (!isDesktop) {
+                      const { getUserStoreState } = await import('@/store/user/store');
+                      const { isSignedIn, logout } = getUserStoreState();
+                      // If user is still marked as signed in but got 401,
+                      // session is invalid - clear client state first
+                      if (isSignedIn) {
+                        await logout();
+                      }
+                      const { loginRequired } =
+                        await import('@/components/Error/loginRequiredNotification');
+                      loginRequired.redirect();
                     }
-                    const { loginRequired } =
-                      await import('@/components/Error/loginRequiredNotification');
-                    loginRequired.redirect();
                   }
                 }
                 // Mark error as non-retryable to prevent SWR infinite retry loop

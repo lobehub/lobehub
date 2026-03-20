@@ -433,28 +433,30 @@ describe('UserMemoryExperienceModel', () => {
       expect(result.pageSize).toBe(100);
     });
 
-    it('should search by query in title', async () => {
+    // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+    const isServerDB = process.env.TEST_SERVER_DB === '1';
+    it.skipIf(!isServerDB)('should search by query in title', async () => {
       const result = await experienceModel.queryList({ q: 'Searchable Title' });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('list-exp-3');
     });
 
-    it('should search by query in situation', async () => {
+    it.skipIf(!isServerDB)('should search by query in situation', async () => {
       const result = await experienceModel.queryList({ q: 'Searchable situation' });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('list-exp-3');
     });
 
-    it('should search by query in keyLearning', async () => {
+    it.skipIf(!isServerDB)('should search by query in keyLearning', async () => {
       const result = await experienceModel.queryList({ q: 'Searchable learning' });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('list-exp-3');
     });
 
-    it('should search by query in action', async () => {
+    it.skipIf(!isServerDB)('should search by query in action', async () => {
       const result = await experienceModel.queryList({ q: 'Searchable action' });
 
       expect(result.items).toHaveLength(1);

@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Yetkilendirme Bağlantısı Başarısız",
   "waitingOAuth.helpText": "Tarayıcı otomatik olarak açılmadıysa, lütfen iptal edip tekrar deneyin",
   "waitingOAuth.retry": "Tekrar Dene",
-  "waitingOAuth.title": "Yetkilendirme Bağlantısı Bekleniyor"
+  "waitingOAuth.title": "Yetkilendirme Bağlantısı Bekleniyor",
+  "window.close": "Pencereyi kapat",
+  "window.maximize": "Pencereyi büyüt",
+  "window.minimize": "Pencereyi küçült",
+  "window.restore": "Pencereyi geri yükle"
 }

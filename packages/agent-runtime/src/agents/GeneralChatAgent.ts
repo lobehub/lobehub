@@ -311,6 +311,36 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Proceed to the next LLM call, inserting compression first when needed.
+   */
+  private toLLMCall(payload: GeneralAgentCallLLMInstructionPayload): AgentInstruction {
+    const compressionEnabled = this.config.compressionConfig?.enabled ?? true;
+
+    if (compressionEnabled) {
+      const messages = payload.messages;
+      const compressionCheck = shouldCompress(messages, {
+        maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+      });
+
+      if (compressionCheck.needsCompression) {
+        return {
+          payload: {
+            currentTokenCount: compressionCheck.currentTokenCount,
+            existingSummary: this.findExistingSummary(messages),
+            messages,
+          },
+          type: 'compress_context',
+        };
+      }
+    }
+
+    return {
+      payload,
+      type: 'call_llm',
+    };
+  }
+
+  /**
    * Handle abort scenario - unified abort handling logic
    */
   private handleAbort(
@@ -517,16 +547,13 @@ export class GeneralChatAgent implements Agent {
         }
 
         // No pending tools, continue to call LLM with tool results
-        return {
-          payload: {
-            messages: state.messages,
-            model: this.config.modelRuntimeConfig?.model,
-            parentMessageId,
-            provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
-          } as GeneralAgentCallLLMInstructionPayload,
-          type: 'call_llm',
-        };
+        return this.toLLMCall({
+          messages: state.messages,
+          model: this.config.modelRuntimeConfig?.model,
+          parentMessageId,
+          provider: this.config.modelRuntimeConfig?.provider,
+          tools: state.tools,
+        } as GeneralAgentCallLLMInstructionPayload);
       }
 
       case 'tools_batch_result': {
@@ -550,16 +577,13 @@ export class GeneralChatAgent implements Agent {
         }
 
         // No pending tools, continue to call LLM with tool results
-        return {
-          payload: {
-            messages: state.messages,
-            model: this.config.modelRuntimeConfig?.model,
-            parentMessageId,
-            provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
-          } as GeneralAgentCallLLMInstructionPayload,
-          type: 'call_llm',
-        };
+        return this.toLLMCall({
+          messages: state.messages,
+          model: this.config.modelRuntimeConfig?.model,
+          parentMessageId,
+          provider: this.config.modelRuntimeConfig?.provider,
+          tools: state.tools,
+        } as GeneralAgentCallLLMInstructionPayload);
       }
 
       case 'task_result': {
@@ -567,16 +591,13 @@ export class GeneralChatAgent implements Agent {
         const { parentMessageId } = context.payload as TaskResultPayload;
 
         // Continue to call LLM with updated messages (task message is already in state)
-        return {
-          payload: {
-            messages: state.messages,
-            model: this.config.modelRuntimeConfig?.model,
-            parentMessageId,
-            provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
-          } as GeneralAgentCallLLMInstructionPayload,
-          type: 'call_llm',
-        };
+        return this.toLLMCall({
+          messages: state.messages,
+          model: this.config.modelRuntimeConfig?.model,
+          parentMessageId,
+          provider: this.config.modelRuntimeConfig?.provider,
+          tools: state.tools,
+        } as GeneralAgentCallLLMInstructionPayload);
       }
 
       case 'tasks_batch_result': {
@@ -596,16 +617,13 @@ export class GeneralChatAgent implements Agent {
         ];
 
         // Continue to call LLM with updated messages (task messages are already in state)
-        return {
-          payload: {
-            messages: messagesWithPrompt,
-            model: this.config.modelRuntimeConfig?.model,
-            parentMessageId,
-            provider: this.config.modelRuntimeConfig?.provider,
-            tools: state.tools,
-          } as GeneralAgentCallLLMInstructionPayload,
-          type: 'call_llm',
-        };
+        return this.toLLMCall({
+          messages: messagesWithPrompt,
+          model: this.config.modelRuntimeConfig?.model,
+          parentMessageId,
+          provider: this.config.modelRuntimeConfig?.provider,
+          tools: state.tools,
+        } as GeneralAgentCallLLMInstructionPayload);
       }
 
       case 'compression_result': {

@@ -419,6 +419,7 @@ describe('AgentRuntimeService', () => {
           stepIndex: 1,
           phase: 'step_execution',
           error: 'Runtime error',
+          errorType: '500',
         },
       });
     });

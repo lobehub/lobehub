@@ -19,7 +19,7 @@ import type {
 } from '../types/agent.type';
 
 /**
- * Agent 服务实现类
+ * Agent service implementation class
  */
 export class AgentService extends BaseService {
   constructor(db: LobeChatDatabase, userId: string | null) {
@@ -27,10 +27,10 @@ export class AgentService extends BaseService {
   }
 
   /**
-   * 获取用户的 Agent 列表
-   * @param page 页码，从1开始
-   * @param pageSize 每页数量，最大100
-   * @returns 用户的 Agent 列表
+   * Get the user's Agent list
+   * @param page Page number, starting from 1
+   * @param pageSize Items per page, maximum 100
+   * @returns The user's Agent list
    */
   async queryAgents(request: GetAgentsRequest): ServiceResult<AgentListResponse> {
     this.log('info', '获取 Agent 列表', { request });
@@ -38,7 +38,7 @@ export class AgentService extends BaseService {
     const { keyword } = request;
 
     try {
-      // 基础过滤条件：当前用户 + 排除虚拟 agent（inbox、supervisor 等）
+      // Base filter: current user + exclude virtual agents (inbox, supervisor, etc.)
       const baseConditions = and(
         eq(agents.userId, this.userId),
         or(eq(agents.virtual, false), isNull(agents.virtual)),
@@ -70,16 +70,16 @@ export class AgentService extends BaseService {
   }
 
   /**
-   * 创建智能体
-   * @param request 创建请求参数
-   * @returns 创建完成的 Agent 信息
+   * Create an agent
+   * @param request Create request parameters
+   * @returns Created Agent info
    */
   async createAgent(request: CreateAgentRequest): ServiceResult<AgentDetailResponse> {
     this.log('info', '创建智能体', { title: request.title });
 
     try {
       return await this.db.transaction(async (tx) => {
-        // 准备创建数据
+        // Prepare creation data
         const newAgentData: NewAgent = {
           accessedAt: new Date(),
           avatar: request.avatar || null,
@@ -90,14 +90,14 @@ export class AgentService extends BaseService {
           model: request.model || null,
           params: request.params ?? {},
           provider: request.provider || null,
-          slug: randomSlug(4), // 系统自动生成 slug
+          slug: randomSlug(4), // Auto-generated slug
           systemRole: request.systemRole || null,
           title: request.title,
           updatedAt: new Date(),
           userId: this.userId,
         };
 
-        // 插入数据库
+        // Insert into database
         const [createdAgent] = await tx.insert(agents).values(newAgentData).returning();
         this.log('info', 'Agent 创建成功', { id: createdAgent.id, slug: createdAgent.slug });
 
@@ -109,15 +109,15 @@ export class AgentService extends BaseService {
   }
 
   /**
-   * 更新智能体
-   * @param request 更新请求参数
-   * @returns 更新后的 Agent 信息
+   * Update an agent
+   * @param request Update request parameters
+   * @returns Updated Agent info
    */
   async updateAgent(request: UpdateAgentRequest): ServiceResult<AgentDetailResponse> {
     this.log('info', '更新智能体', { id: request.id, title: request.title });
 
     try {
-      // 权限校验
+      // Permission validation
       const permissionResult = await this.resolveOperationPermission('AGENT_UPDATE', {
         targetAgentId: request.id,
       });
@@ -127,13 +127,13 @@ export class AgentService extends BaseService {
       }
 
       return await this.db.transaction(async (tx) => {
-        // 构建查询条件
+        // Build query conditions
         const whereConditions = [eq(agents.id, request.id)];
         if (permissionResult.condition?.userId) {
           whereConditions.push(eq(agents.userId, permissionResult.condition.userId));
         }
 
-        // 检查 Agent 是否存在
+        // Check if the Agent exists
         const existingAgent = await tx.query.agents.findFirst({
           where: and(...whereConditions),
         });
@@ -142,7 +142,7 @@ export class AgentService extends BaseService {
           throw this.createBusinessError(`Agent ID "${request.id}" 不存在`);
         }
 
-        // 只更新请求中实际传入的字段，避免用 undefined 覆盖已有值
+        // Only update fields actually provided in the request to avoid overwriting existing values with undefined
         const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
@@ -153,7 +153,7 @@ export class AgentService extends BaseService {
         if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;
         if (request.title !== undefined) updateData.title = request.title;
 
-        // params 采用合并更新，而非全量覆盖
+        // Merge params instead of fully overwriting
         if (request.params !== undefined) {
           const existingParams = (existingAgent.params as Record<string, unknown>) ?? {};
           const incomingParams = request.params ?? {};
@@ -170,7 +170,7 @@ export class AgentService extends BaseService {
           updateData.params = mergedParams;
         }
 
-        // 更新数据库
+        // Update database
         const [updatedAgent] = await tx
           .update(agents)
           .set(updateData)
@@ -186,8 +186,8 @@ export class AgentService extends BaseService {
   }
 
   /**
-   * 删除智能体
-   * @param request 删除请求参数
+   * Delete an agent
+   * @param request Delete request parameters
    */
   async deleteAgent(request: AgentDeleteRequest): ServiceResult<void> {
     this.log('info', '删除智能体', {
@@ -196,7 +196,7 @@ export class AgentService extends BaseService {
     });
 
     try {
-      // 权限校验
+      // Permission validation
       const permissionResult = await this.resolveOperationPermission('AGENT_DELETE', {
         targetAgentId: request.agentId,
       });
@@ -205,7 +205,7 @@ export class AgentService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权删除此 Agent');
       }
 
-      // 检查要删除的 Agent 是否存在
+      // Check if the Agent to be deleted exists
       const targetAgent = await this.db.query.agents.findFirst({
         where: eq(agents.id, request.agentId),
       });
@@ -215,7 +215,7 @@ export class AgentService extends BaseService {
       }
 
       if (request.migrateSessionTo) {
-        // 验证迁移目标 Agent 存在且属于当前用户
+        // Validate that the migration target Agent exists and belongs to the current user
         const migrateTarget = await this.db.query.agents.findFirst({
           where: and(eq(agents.id, request.migrateSessionTo), eq(agents.userId, this.userId)),
         });
@@ -224,7 +224,7 @@ export class AgentService extends BaseService {
           throw this.createBusinessError(`迁移目标 Agent ID ${request.migrateSessionTo} 不存在`);
         }
 
-        // 迁移会话关联关系到目标 Agent
+        // Migrate session associations to the target Agent
         await this.migrateAgentSessions(request.agentId, request.migrateSessionTo);
 
         this.log('info', '会话迁移完成', {
@@ -232,12 +232,12 @@ export class AgentService extends BaseService {
           to: request.migrateSessionTo,
         });
 
-        // 迁移完成后直接删除 agent 本身，sessions 已转移不需要级联删除
+        // After migration, delete the agent itself directly; sessions have been transferred so cascade delete is not needed
         await this.db
           .delete(agents)
           .where(and(eq(agents.id, request.agentId), eq(agents.userId, this.userId)));
       } else {
-        // 无迁移：复用 AgentModel.delete，会级联删除关联的 sessions、messages、topics 等
+        // No migration: reuse AgentModel.delete, which cascades deletion of associated sessions, messages, topics, etc.
         const agentModel = new AgentModel(this.db, this.userId);
         await agentModel.delete(request.agentId);
       }
@@ -249,15 +249,15 @@ export class AgentService extends BaseService {
   }
 
   /**
-   * 根据 ID 获取 Agent 详情
+   * Get Agent details by ID
    * @param agentId Agent ID
-   * @returns Agent 详情
+   * @returns Agent details
    */
   async getAgentById(agentId: string): ServiceResult<AgentDetailResponse | null> {
     this.log('info', '根据 ID 获取 Agent 详情', { agentId });
 
     try {
-      // 权限校验
+      // Permission validation
       const permissionResult = await this.resolveOperationPermission('AGENT_READ', {
         targetAgentId: agentId,
       });
@@ -270,7 +270,7 @@ export class AgentService extends BaseService {
         throw this.createAuthError('未登录，无法获取 Agent 详情');
       }
 
-      // 复用 AgentModel 的方法获取完整的 Agent 配置
+      // Reuse AgentModel methods to get the full Agent configuration
       const agentModel = new AgentModel(this.db, this.userId);
       const agent = await agentModel.getAgentConfigById(agentId);
 
@@ -286,9 +286,9 @@ export class AgentService extends BaseService {
   }
 
   /**
-   * 迁移 Agent 的会话到另一个 Agent
-   * @param fromAgentId 源 Agent ID
-   * @param toAgentId 目标 Agent ID
+   * Migrate an Agent's sessions to another Agent
+   * @param fromAgentId Source Agent ID
+   * @param toAgentId Target Agent ID
    * @private
    */
   private async migrateAgentSessions(fromAgentId: string, toAgentId: string): Promise<void> {
@@ -296,7 +296,7 @@ export class AgentService extends BaseService {
 
     try {
       await this.db.transaction(async (tx) => {
-        // 获取源 Agent 关联的所有 sessionId
+        // Get all sessionIds associated with the source Agent
         const links = await tx
           .select({ sessionId: agentsToSessions.sessionId })
           .from(agentsToSessions)
@@ -311,8 +311,8 @@ export class AgentService extends BaseService {
 
         const sessionIds = links.map((l) => l.sessionId);
 
-        // 删除源 agent 的关联记录，再插入指向目标 agent 的关联记录
-        // 直接 update agentId 可能违反 unique 约束，所以用 delete + insert
+        // Delete source agent's association records, then insert new records pointing to the target agent
+        // Directly updating agentId may violate the unique constraint, so use delete + insert instead
         await tx
           .delete(agentsToSessions)
           .where(
@@ -322,7 +322,7 @@ export class AgentService extends BaseService {
             ),
           );
 
-        // 检查目标 agent 是否已与这些 session 关联，避免重复插入
+        // Check if the target agent is already associated with these sessions to avoid duplicate inserts
         const existingLinks = await tx
           .select({ sessionId: agentsToSessions.sessionId })
           .from(agentsToSessions)

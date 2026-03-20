@@ -185,14 +185,14 @@ describe('BaseProcessor', () => {
     it('should preserve all context properties', async () => {
       const processor = new TestProcessor();
       const context = createContext([{ content: 'test', role: 'user' }]);
-      context.metadata.customField = 'customValue';
+      (context.metadata as any).customField = 'customValue';
 
       const result = await processor.process(context);
 
       expect(result.isAborted).toBe(context.isAborted);
       expect(result.metadata.model).toBe(context.metadata.model);
       expect(result.metadata.maxTokens).toBe(context.metadata.maxTokens);
-      expect(result.metadata.customField).toBe('customValue');
+      expect((result.metadata as any).customField).toBe('customValue');
     });
   });
 

@@ -8,7 +8,7 @@ export const anthropicChatModels: AIChatModelCard[] = [
       search: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
+    contextWindowTokens: 1_000_000,
     description: "Claude Sonnet 4.6 is Anthropic's best combination of speed and intelligence.",
     displayName: 'Claude Sonnet 4.6',
     enabled: true,
@@ -93,7 +93,7 @@ export const anthropicChatModels: AIChatModelCard[] = [
       search: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
+    contextWindowTokens: 1_000_000,
     description:
       "Claude Opus 4.6 is Anthropic's most intelligent model for building agents and coding.",
     displayName: 'Claude Opus 4.6',

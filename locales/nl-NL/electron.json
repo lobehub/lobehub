@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Autorisatieverbinding mislukt",
   "waitingOAuth.helpText": "Als de browser niet automatisch is geopend, klik dan op annuleren en probeer het opnieuw",
   "waitingOAuth.retry": "Opnieuw proberen",
-  "waitingOAuth.title": "Wachten op autorisatieverbinding"
+  "waitingOAuth.title": "Wachten op autorisatieverbinding",
+  "window.close": "Venster sluiten",
+  "window.maximize": "Venster maximaliseren",
+  "window.minimize": "Venster minimaliseren",
+  "window.restore": "Venster herstellen"
 }

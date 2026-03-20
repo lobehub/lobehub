@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/lobehub",
-  "version": "2.1.43",
+  "version": "2.1.44",
   "description": "LobeHub - an open-source,comprehensive AI Agent framework that supports speech synthesis, multimodal, and extensible Function Call plugin system. Supports one-click free deployment of your private ChatGPT/LLM web application.",
   "keywords": [
     "framework",
@@ -14,13 +14,13 @@
     "tts",
     "stt"
   ],
-  "homepage": "https://github.com/lobehub/lobe-chat",
+  "homepage": "https://github.com/lobehub/lobehub",
   "bugs": {
-    "url": "https://github.com/lobehub/lobe-chat/issues/new/choose"
+    "url": "https://github.com/lobehub/lobehub/issues/new/choose"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lobehub/lobe-chat.git"
+    "url": "https://github.com/lobehub/lobehub.git"
   },
   "license": "MIT",
   "author": "LobeHub <i@lobehub.com>",
@@ -188,6 +188,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@emotion/react": "^11.14.0",
     "@fal-ai/client": "^1.8.4",
+    "@floating-ui/react": "^0.27.19",
     "@formkit/auto-animate": "^0.9.0",
     "@google/genai": "^1.38.0",
     "@henrygd/queue": "^1.2.0",
@@ -195,12 +196,14 @@
     "@icons-pack/react-simple-icons": "^13.8.0",
     "@khmyznikov/pwa-install": "0.3.9",
     "@langchain/community": "^0.3.59",
+    "@lexical/utils": "^0.39.0",
     "@lobechat/adapter-lark": "workspace:*",
     "@lobechat/adapter-qq": "workspace:*",
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/builtin-agents": "workspace:*",
     "@lobechat/builtin-skills": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-agent-documents": "workspace:*",
     "@lobechat/builtin-tool-agent-management": "workspace:*",
     "@lobechat/builtin-tool-calculator": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
@@ -216,6 +219,7 @@
     "@lobechat/builtin-tool-skill-store": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-tools": "workspace:*",
+    "@lobechat/builtin-tool-topic-reference": "workspace:*",
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tools": "workspace:*",
     "@lobechat/business-config": "workspace:*",
@@ -250,11 +254,11 @@
     "@lobehub/chat-plugin-sdk": "^1.32.4",
     "@lobehub/chat-plugins-gateway": "^1.9.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
-    "@lobehub/editor": "^4.0.0",
+    "@lobehub/editor": "^4.3.1",
     "@lobehub/icons": "^5.0.0",
     "@lobehub/market-sdk": "^0.31.3",
     "@lobehub/tts": "^5.1.2",
-    "@lobehub/ui": "^5.4.0",
+    "@lobehub/ui": "^5.5.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@napi-rs/canvas": "^0.1.88",
     "@neondatabase/serverless": "^1.0.2",
@@ -312,6 +316,7 @@
     "fflate": "^0.8.2",
     "ffmpeg-static": "^5.3.0",
     "file-type": "^21.3.0",
+    "fuse.js": "^7.0.0",
     "gray-matter": "^4.0.3",
     "html-to-text": "^9.0.5",
     "i18next": "^25.8.0",
@@ -326,6 +331,7 @@
     "langchain": "^0.3.37",
     "langfuse": "^3.38.6",
     "langfuse-core": "^3.38.6",
+    "lexical": "^0.39.0",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.11.0",
     "marked": "^17.0.1",

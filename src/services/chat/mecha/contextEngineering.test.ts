@@ -92,7 +92,7 @@ describe('contextEngineering', () => {
       });
 
       expect(output).toEqual([
-        { content: getCurrentDateContent(), role: 'system' },
+        { content: expect.stringContaining(getCurrentDateContent()), role: 'system' },
         {
           content: [
             {
@@ -160,7 +160,7 @@ describe('contextEngineering', () => {
       });
 
       expect(output).toEqual([
-        { content: getCurrentDateContent(), role: 'system' },
+        { content: expect.stringContaining(getCurrentDateContent()), role: 'system' },
         {
           content: [
             {
@@ -215,7 +215,9 @@ describe('contextEngineering', () => {
 
     expect(result).toEqual([
       {
-        content: '## Tools\n\nYou can use these tools\n\n' + getCurrentDateContent(),
+        content: expect.stringContaining(
+          '## Tools\n\nYou can use these tools\n\n' + getCurrentDateContent(),
+        ),
         role: 'system',
       },
       {
@@ -244,7 +246,7 @@ describe('contextEngineering', () => {
     });
 
     expect(result).toEqual([
-      { content: getCurrentDateContent(), role: 'system' },
+      { content: expect.stringContaining(getCurrentDateContent()), role: 'system' },
       {
         content: [
           {
@@ -292,6 +294,37 @@ describe('contextEngineering', () => {
     expect(systemMessage!.content).toContain(historySummary);
     expect(Object.keys(systemMessage!).length).toEqual(2);
   });
+
+  it('should strip raw action tags from user messages before sending to model', async () => {
+    vi.spyOn(isCanUseFCModule, 'isCanUseFC').mockReturnValue(true);
+
+    const messages: UIChatMessage[] = [
+      {
+        role: 'user',
+        content:
+          '<action type="grep" category="skill" /> <action type="lobe-notebook" category="tool" /> hi',
+        createdAt: Date.now(),
+        id: 'selected-skill-user',
+        updatedAt: Date.now(),
+      },
+    ];
+
+    const result = await contextEngineering({
+      messages,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(result[0]).toEqual({
+      content: expect.stringContaining(getCurrentDateContent()),
+      role: 'system',
+    });
+    expect(result[1].role).toBe('user');
+    expect(result[1].content).toContain('hi');
+    expect(result[1].content).not.toContain('<action type="grep" category="skill" />');
+    expect(result[1].content).not.toContain('<action type="lobe-notebook" category="tool" />');
+  });
+
   describe('getAssistantContent', () => {
     it('should handle assistant message with imageList and content', async () => {
       // Mock isCanUseVision to return true for vision models
@@ -313,7 +346,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[0]).toEqual({
+        content: expect.stringContaining(getCurrentDateContent()),
+        role: 'system',
+      });
       expect(result[1].content).toEqual([
         { text: 'Here is an image.', type: 'text' },
         { image_url: { detail: 'auto', url: 'http://example.com/image.png' }, type: 'image_url' },
@@ -340,7 +376,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[0]).toEqual({
+        content: expect.stringContaining(getCurrentDateContent()),
+        role: 'system',
+      });
       expect(result[1].content).toEqual([
         { image_url: { detail: 'auto', url: 'http://example.com/image.png' }, type: 'image_url' },
       ]);
@@ -376,7 +415,10 @@ describe('contextEngineering', () => {
       provider: 'openai',
     });
 
-    expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+    expect(result[0]).toEqual({
+      content: expect.stringContaining(getCurrentDateContent()),
+      role: 'system',
+    });
     expect(result[1].tool_calls).toBeUndefined();
     expect(result[1].content).toBe('I have a tool call.');
   });
@@ -406,7 +448,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[0]).toEqual({
+        content: expect.stringContaining(getCurrentDateContent()),
+        role: 'system',
+      });
       expect(result[1].content).toBe(
         'Hello TestUser, today is 2023-12-25 and the time is 14:30:45',
       );
@@ -439,7 +484,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[0]).toEqual({
+        content: expect.stringContaining(getCurrentDateContent()),
+        role: 'system',
+      });
       expect(Array.isArray(result[1].content)).toBe(true);
       const content = result[1].content as any[];
       expect(content[0].text).toBe('Hello TestUser, today is 2023-12-25');
@@ -501,7 +549,7 @@ describe('contextEngineering', () => {
 
       // Keep the original system message as-is (with date appended by SystemDateProvider)
       expect(result[0].role).toBe('system');
-      expect(result[0].content).toBe(
+      expect(result[0].content).toContain(
         'Memory load: available={{memory_available}}, total contexts={{memory_contexts_count}}\n{{memory_summary}}\n\n' +
           getCurrentDateContent(),
       );
@@ -535,7 +583,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[0]).toEqual({
+        content: expect.stringContaining(getCurrentDateContent()),
+        role: 'system',
+      });
       expect(result[1].content).toBe('Hello TestUser, missing: {{missing_var}}');
     });
 
@@ -556,7 +607,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[0]).toEqual({
+        content: expect.stringContaining(getCurrentDateContent()),
+        role: 'system',
+      });
       expect(result[1].content).toBe('Hello there, no variables here');
     });
 
@@ -587,7 +641,10 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
-      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      expect(result[0]).toEqual({
+        content: expect.stringContaining(getCurrentDateContent()),
+        role: 'system',
+      });
       expect(Array.isArray(result[1].content)).toBe(true);
       const content = result[1].content as any[];
 
@@ -654,7 +711,7 @@ describe('contextEngineering', () => {
       // Should keep all messages (plus system date)
       expect(result).toHaveLength(6);
       expect(result).toEqual([
-        { content: getCurrentDateContent(), role: 'system' },
+        { content: expect.stringContaining(getCurrentDateContent()), role: 'system' },
         { content: 'Message 1', role: 'user' },
         { content: 'Response 1', role: 'assistant' },
         { content: 'Message 2', role: 'user' },
@@ -690,7 +747,7 @@ describe('contextEngineering', () => {
 
       // Should apply template to user message only
       expect(result).toEqual([
-        { content: getCurrentDateContent(), role: 'system' },
+        { content: expect.stringContaining(getCurrentDateContent()), role: 'system' },
         {
           content: 'Template: Original user input - End',
           role: 'user',
@@ -723,7 +780,12 @@ describe('contextEngineering', () => {
 
       // Should have system role at the beginning (with date appended)
       expect(result).toEqual([
-        { content: 'You are a helpful assistant.\n\n' + getCurrentDateContent(), role: 'system' },
+        {
+          content: expect.stringContaining(
+            'You are a helpful assistant.\n\n' + getCurrentDateContent(),
+          ),
+          role: 'system',
+        },
         { content: 'User message', role: 'user' },
       ]);
     });
@@ -764,7 +826,7 @@ describe('contextEngineering', () => {
       // System role should be first (with date appended), followed by all messages with input template applied to user messages
       expect(result).toEqual([
         {
-          content: 'System instructions.\n\n' + getCurrentDateContent(),
+          content: expect.stringContaining('System instructions.\n\n' + getCurrentDateContent()),
           role: 'system',
         },
         {
@@ -801,7 +863,7 @@ describe('contextEngineering', () => {
 
       // Should pass message unchanged (with system date prepended)
       expect(result).toEqual([
-        { content: getCurrentDateContent(), role: 'system' },
+        { content: expect.stringContaining(getCurrentDateContent()), role: 'system' },
         {
           content: 'Simple message',
           role: 'user',
@@ -844,7 +906,7 @@ describe('contextEngineering', () => {
       // Should have system role (with date) + all messages
       expect(result).toEqual([
         {
-          content: 'System role here.\n\n' + getCurrentDateContent(),
+          content: expect.stringContaining('System role here.\n\n' + getCurrentDateContent()),
           role: 'system',
         },
         {
@@ -883,7 +945,7 @@ describe('contextEngineering', () => {
 
       // Should keep original message when template fails (with system date prepended)
       expect(result).toEqual([
-        { content: getCurrentDateContent(), role: 'system' },
+        { content: expect.stringContaining(getCurrentDateContent()), role: 'system' },
         {
           content: 'User message',
           role: 'user',

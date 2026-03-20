@@ -1,7 +1,12 @@
-import { getModelPropertyWithFallback, resolveImageSinglePrice } from '@lobechat/model-runtime';
+import {
+  getModelPropertyWithFallback,
+  resolveImageSinglePrice,
+  resolveVideoSinglePrice,
+} from '@lobechat/model-runtime';
 import { uniqBy } from 'es-toolkit/compat';
 import {
   type AIImageModelCard,
+  type AIVideoModelCard,
   type EnabledAiModel,
   type LobeDefaultAiModelListItem,
   type ModelAbilities,
@@ -32,12 +37,14 @@ import { AiProviderSourceEnum } from '@/types/aiProvider';
 export type ProviderModelListItem = {
   abilities: ModelAbilities;
   approximatePricePerImage?: number;
+  approximatePricePerVideo?: number;
   contextWindowTokens?: number;
   description?: string;
   displayName: string;
   id: string;
   parameters?: ModelParamsSchema;
   pricePerImage?: number;
+  pricePerVideo?: number;
   pricing?: Pricing;
   releasedAt?: string;
 };
@@ -137,19 +144,27 @@ export const normalizeVideoModel = async (
         model.providerId,
       );
 
+  const modelWithPricing = model as AIVideoModelCard;
+  const fallbackPricingPromise = modelWithPricing.pricing
+    ? Promise.resolve<Pricing | undefined>(modelWithPricing.pricing)
+    : getModelPropertyWithFallback<Pricing | undefined>(model.id, 'pricing', model.providerId);
+
   const fallbackDescriptionPromise = getModelPropertyWithFallback<string | undefined>(
     model.id,
     'description',
     model.providerId,
   );
 
-  const [fallbackParameters, fallbackDescription] = await Promise.all([
+  const [fallbackParameters, fallbackPricing, fallbackDescription] = await Promise.all([
     fallbackParametersPromise,
+    fallbackPricingPromise,
     fallbackDescriptionPromise,
   ]);
 
   const parameters = model.parameters ?? fallbackParameters;
+  const pricing = fallbackPricing;
   const description = fallbackDescription;
+  const { approximatePrice } = resolveVideoSinglePrice(pricing);
 
   return {
     abilities: (model.abilities || {}) as ModelAbilities,
@@ -159,6 +174,8 @@ export const normalizeVideoModel = async (
     releasedAt: model.releasedAt,
     ...(parameters && { parameters }),
     ...(description && { description }),
+    ...(pricing && { pricing }),
+    ...(typeof approximatePrice === 'number' && { approximatePricePerVideo: approximatePrice }),
   };
 };
 

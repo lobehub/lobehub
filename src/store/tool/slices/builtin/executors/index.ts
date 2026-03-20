@@ -14,8 +14,10 @@ import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/executor';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
+import { topicReferenceExecutor } from '@lobechat/builtin-tool-topic-reference/executor';
 
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
+import { agentDocumentsExecutor } from './lobe-agent-documents';
 import { notebookExecutor } from './lobe-notebook';
 import { pageAgentExecutor } from './lobe-page-agent';
 import { skillStoreExecutor } from './lobe-skill-store';
@@ -126,6 +128,7 @@ const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
 // Register all executor instances
 registerExecutors([
   agentBuilderExecutor,
+  agentDocumentsExecutor,
   agentManagementExecutor,
   calculatorExecutor,
   cloudSandboxExecutor,
@@ -140,5 +143,6 @@ registerExecutors([
   skillStoreExecutor,
   skillsExecutor,
   toolsActivatorExecutor,
+  topicReferenceExecutor,
   webBrowsing,
 ]);

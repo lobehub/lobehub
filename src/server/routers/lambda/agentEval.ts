@@ -40,9 +40,13 @@ const evalConfigSchema = z.object({ judgePrompt: z.string().optional() }).passth
 
 const evalRunInputConfigSchema = z.object({
   k: z.number().min(1).max(10).optional(),
-  maxConcurrency: z.number().min(1).max(10).optional(),
+  maxConcurrency: z.number().min(1).max(20).optional(),
   maxSteps: z.number().min(1).max(1000).optional(),
-  timeout: z.number().min(60_000).max(3_600_000).optional(),
+  timeout: z
+    .number()
+    .min(60_000)
+    .max(6 * 3_600_000)
+    .optional(),
 });
 
 const agentEvalProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {

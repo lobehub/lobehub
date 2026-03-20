@@ -1,6 +1,5 @@
 'use client';
 
-import { type MenuProps } from '@lobehub/ui';
 import { Center, DropdownMenu, Icon, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { LucideToyBrick } from 'lucide-react';
@@ -30,33 +29,35 @@ const PluginTag = memo<PluginTagProps>(({ plugins }) => {
 
   if (visiblePlugins.length === 0) return null;
 
-  const items: MenuProps['items'] = visiblePlugins.map((id) => {
-    const item = list.find((i) => i.identifier === id);
-
-    const isDeprecated = !item;
-    const avatar = isDeprecated ? '♻️' : pluginHelpers.getPluginAvatar(item.meta || item);
-
-    return {
-      icon: (
-        <Center style={{ minWidth: 24 }}>
-          <Avatar avatar={avatar} size={24} />
-        </Center>
-      ),
-      key: id,
-      label: (
-        <PluginStatus
-          deprecated={isDeprecated}
-          id={id}
-          title={pluginHelpers.getPluginTitle(item?.meta || item)}
-        />
-      ),
-    };
-  });
-
   const count = visiblePlugins.length;
 
   return (
-    <DropdownMenu items={items}>
+    <DropdownMenu
+      items={() =>
+        visiblePlugins.map((id) => {
+          const item = list.find((i) => i.identifier === id);
+
+          const isDeprecated = !item;
+          const avatar = isDeprecated ? '♻️' : pluginHelpers.getPluginAvatar(item.meta || item);
+
+          return {
+            icon: (
+              <Center style={{ minWidth: 24 }}>
+                <Avatar avatar={avatar} size={24} />
+              </Center>
+            ),
+            key: id,
+            label: (
+              <PluginStatus
+                deprecated={isDeprecated}
+                id={id}
+                title={pluginHelpers.getPluginTitle(item?.meta || item)}
+              />
+            ),
+          };
+        })
+      }
+    >
       <Tag style={{ cursor: 'pointer' }}>
         {<Icon icon={LucideToyBrick} />}
         {pluginHelpers.getPluginTitle(displayPlugin) || visiblePlugins[0]}

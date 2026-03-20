@@ -14,6 +14,7 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors/settings';
 
 import { MarketAuthError } from './errors';
+import { marketAuthEvents } from './events';
 import MarketAuthConfirmModal from './MarketAuthConfirmModal';
 import { MarketOIDC } from './oidc';
 import ProfileSetupModal from './ProfileSetupModal';
@@ -112,13 +113,6 @@ const getRefreshToken = (): string | null => {
 };
 
 /**
- * Refresh token (simplified for now; refresh token logic can be implemented later)
- */
-const refreshToken = async (): Promise<boolean> => {
-  return false;
-};
-
-/**
  * Check if the user needs to set up a username (first-time login)
  */
 const checkNeedsProfileSetup = async (username: string): Promise<boolean> => {
@@ -185,6 +179,50 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   }, [isDesktop]);
 
   /**
+   * Try to refresh the access token using a refresh token
+   * This is used during initialization when the access token is expired or invalid
+   */
+  const tryRefreshToken = async (refreshTokenValue: string): Promise<boolean> => {
+    try {
+      const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
+
+      const response = await lambdaClient.market.oidc.refreshToken.mutate({
+        clientId,
+        refreshToken: refreshTokenValue,
+      });
+
+      // Calculate new expiration time (default to 1 hour if not provided)
+      const expiresIn = response.expiresIn ?? 3600;
+      const expiresAt = Date.now() + expiresIn * 1000;
+
+      // Save new tokens to DB
+      await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
+
+      // Fetch user info with new token
+      const userInfo = await fetchUserInfo(response.accessToken);
+
+      // Update session state
+      const newSession: MarketAuthSession = {
+        accessToken: response.accessToken,
+        expiresAt,
+        expiresIn,
+        scope: response.scope || 'openid profile email',
+        tokenType: 'Bearer',
+        userInfo: userInfo || undefined,
+      };
+
+      setSession(newSession);
+      setStatus('authenticated');
+
+      console.info('[MarketAuth] Token refreshed successfully during initialization');
+      return true;
+    } catch (error) {
+      console.error('[MarketAuth] Failed to refresh token during initialization:', error);
+      return false;
+    }
+  };
+
+  /**
    * Initialize: check and restore session, fetch user info
    */
   const initializeSession = async () => {
@@ -226,7 +264,16 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 
     // Check if token is expired
     if (!dbTokens.expiresAt || dbTokens.expiresAt <= Date.now()) {
-      // Clear expired DB tokens
+      // Try to refresh the token if refresh token is available
+      if (dbTokens.refreshToken) {
+        console.info('[MarketAuth] Access token expired, attempting refresh...');
+        const refreshed = await tryRefreshToken(dbTokens.refreshToken);
+        if (refreshed) {
+          return; // Session already updated in tryRefreshToken
+        }
+      }
+
+      // Clear expired DB tokens if refresh failed or no refresh token
       await clearMarketTokensFromDB();
       setStatus('unauthenticated');
       return;
@@ -236,7 +283,16 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     const userInfo = await fetchUserInfo(dbTokens.accessToken);
 
     if (!userInfo) {
-      // Clear invalid token
+      // Token might be invalid, try to refresh
+      if (dbTokens.refreshToken) {
+        console.info('[MarketAuth] Access token invalid, attempting refresh...');
+        const refreshed = await tryRefreshToken(dbTokens.refreshToken);
+        if (refreshed) {
+          return; // Session already updated in tryRefreshToken
+        }
+      }
+
+      // Clear invalid token if refresh failed
       await clearMarketTokensFromDB();
       setStatus('unauthenticated');
       return;
@@ -327,13 +383,13 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   /**
    * Sign-in method (shows confirmation dialog first)
    */
-  const signIn = async (): Promise<number | null> => {
+  const signIn = useCallback(async (): Promise<number | null> => {
     return new Promise<number | null>((resolve, reject) => {
       setPendingSignInResolve(() => resolve);
       setPendingSignInReject(() => reject);
       setShowConfirmModal(true);
     });
-  };
+  }, []);
 
   /**
    * Handle authorization confirmation
@@ -438,6 +494,92 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   }, []);
 
   /**
+   * Refresh access token using refresh token
+   * Returns true if refresh was successful, false otherwise
+   */
+  const refreshToken = useCallback(async (): Promise<boolean> => {
+    const dbTokens = getMarketTokensFromDB();
+
+    // No refresh token available
+    if (!dbTokens?.refreshToken) {
+      console.warn('[MarketAuth] No refresh token available');
+      return false;
+    }
+
+    try {
+      const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
+
+      const response = await lambdaClient.market.oidc.refreshToken.mutate({
+        clientId,
+        refreshToken: dbTokens.refreshToken,
+      });
+
+      // Calculate new expiration time (default to 1 hour if not provided)
+      const expiresIn = response.expiresIn ?? 3600;
+      const expiresAt = Date.now() + expiresIn * 1000;
+
+      // Save new tokens to DB
+      await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
+
+      // Fetch user info with new token
+      const userInfo = await fetchUserInfo(response.accessToken);
+
+      // Update session state
+      const newSession: MarketAuthSession = {
+        accessToken: response.accessToken,
+        expiresAt,
+        expiresIn,
+        scope: response.scope || 'openid profile email',
+        tokenType: 'Bearer',
+        userInfo: userInfo || undefined,
+      };
+
+      setSession(newSession);
+      setStatus('authenticated');
+
+      console.info('[MarketAuth] Token refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('[MarketAuth] Failed to refresh token:', error);
+      // Clear invalid tokens
+      await clearMarketTokensFromDB();
+      setSession(null);
+      setStatus('unauthenticated');
+      return false;
+    }
+  }, [isDesktop]);
+
+  /**
+   * Handle unauthorized (401) error from Market API
+   * Attempts to refresh token first, then triggers signIn if refresh fails
+   * @returns true if successfully re-authenticated, false if user cancelled or failed
+   */
+  const handleUnauthorized = useCallback(async (): Promise<boolean> => {
+    console.info('[MarketAuth] Handling unauthorized error, attempting recovery...');
+
+    // First try to refresh the token
+    const refreshed = await refreshToken();
+    if (refreshed) {
+      console.info('[MarketAuth] Token refresh successful, recovered from 401');
+      return true;
+    }
+
+    // Refresh failed, need to re-authenticate
+    console.info('[MarketAuth] Token refresh failed, triggering signIn...');
+    try {
+      const accountId = await signIn();
+      if (accountId !== null) {
+        console.info('[MarketAuth] Re-authentication successful');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('[MarketAuth] Re-authentication failed:', error);
+      return false;
+    }
+  }, [refreshToken, signIn]);
+
+  /**
    * Restore session and fetch user info on initialization
    * Wait for isUserStateInit to be true, at which point the SWR request from useInitUserState is complete and settings data is loaded
    */
@@ -445,12 +587,60 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     if (isUserStateInit) {
       initializeSession();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserStateInit, enableMarketTrustedClient]);
+
+  /**
+   * Auto-refresh token before expiration
+   * Refreshes the token 5 minutes before it expires to ensure continuous access
+   */
+  useEffect(() => {
+    // Skip if using trusted client (no token expiration)
+    if (enableMarketTrustedClient) return;
+
+    // Skip if not authenticated or no session
+    if (status !== 'authenticated' || !session?.expiresAt) return;
+
+    const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes before expiration
+    const timeUntilExpiry = session.expiresAt - Date.now();
+    const timeUntilRefresh = timeUntilExpiry - REFRESH_BUFFER_MS;
+
+    // If token is already expired or will expire very soon, refresh immediately
+    if (timeUntilRefresh <= 0) {
+      refreshToken();
+      return;
+    }
+
+    // Set a timer to refresh the token before it expires
+    const refreshTimer = setTimeout(() => {
+      console.info('[MarketAuth] Auto-refreshing token before expiration...');
+      refreshToken();
+    }, timeUntilRefresh);
+
+    return () => {
+      clearTimeout(refreshTimer);
+    };
+  }, [status, session?.expiresAt, enableMarketTrustedClient, refreshToken]);
+
+  /**
+   * Listen for market-unauthorized events from tRPC error handler
+   * Automatically attempt to recover from 401 errors
+   */
+  useEffect(() => {
+    const unsubscribe = marketAuthEvents.on('market-unauthorized', async (event) => {
+      console.info('[MarketAuth] Received unauthorized event for path:', event.path);
+      // Attempt to recover (refresh token or re-authenticate)
+      await handleUnauthorized();
+    });
+
+    return unsubscribe;
+  }, [handleUnauthorized]);
 
   const contextValue: MarketAuthContextType = {
     getAccessToken,
     getCurrentUserInfo,
     getRefreshToken,
+    handleUnauthorized,
     // When Trusted Client authentication is enabled, automatically treat as authenticated (backend uses trustedClientToken)
     isAuthenticated: enableMarketTrustedClient || status === 'authenticated',
     isLoading: status === 'loading',

@@ -22,6 +22,7 @@ export enum SidebarTabKey {
 
 export enum ChatSettingsTabs {
   Chat = 'chat',
+  Documents = 'documents',
   Meta = 'meta',
   Modal = 'modal',
   Opening = 'opening',
@@ -39,14 +40,18 @@ export enum GroupSettingsTabs {
 export enum SettingsTabs {
   About = 'about',
   Advanced = 'advanced',
+  /** @deprecated Use ServiceModel instead */
   Agent = 'agent',
   APIKey = 'apikey',
-  Beta = 'beta',
+  Appearance = 'appearance',
   Billing = 'billing',
+  /** @deprecated Use Appearance instead */
   ChatAppearance = 'chat-appearance',
+  /** @deprecated Use Appearance instead */
   Common = 'common',
-  Funds = 'funds',
+  Credits = 'credits',
   Hotkey = 'hotkey',
+  /** @deprecated Use ServiceModel instead */
   Image = 'image',
   LLM = 'llm',
   Memory = 'memory',
@@ -57,11 +62,13 @@ export enum SettingsTabs {
   Proxy = 'proxy',
   Referral = 'referral',
   Security = 'security',
+  ServiceModel = 'service-model',
   Skill = 'skill',
 
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
+  /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
 }
@@ -106,6 +113,7 @@ export interface SystemStatus {
   hideTopicSharePrivacyWarning?: boolean;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
+  imageTopicViewMode?: 'grid' | 'list';
   /**
    * Do not enable PGLite on app initialization, only enable when user manually turns it on
    */
@@ -172,6 +180,7 @@ export interface SystemStatus {
   topicPageSize?: number;
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
+  videoTopicViewMode?: 'grid' | 'list';
   zenMode?: boolean;
 }
 
@@ -222,12 +231,13 @@ export const INITIAL_STATUS = {
   hideThreadLimitAlert: false,
   hideTopicSharePrivacyWarning: false,
   imagePanelWidth: 320,
+  imageTopicViewMode: 'grid' as const,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 320,
   mobileShowTopic: false,
   modelSwitchPanelGroupMode: 'byProvider',
-  modelSwitchPanelWidth: 430,
+  modelSwitchPanelWidth: 460,
   noWideScreen: true,
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
@@ -252,6 +262,7 @@ export const INITIAL_STATUS = {
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   videoPanelWidth: 320,
+  videoTopicViewMode: 'grid' as const,
   videoTopicPanelWidth: 80,
   zenMode: false,
 } satisfies SystemStatus;

@@ -3,6 +3,13 @@ import debug from 'debug';
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    finalMessageCount?: number;
+    historyTruncated?: number;
+  }
+}
+
 const log = debug('context-engine:processor:HistoryTruncateProcessor');
 
 export interface HistoryTruncateConfig {
@@ -261,7 +268,11 @@ export const getSlicedMessages = (
 
   // Step 2: Walk backwards through messages to select last N groups
   const selectedGroupIndices = new Set<number>();
-  for (let i = messages.length - 1; i >= 0 && selectedGroupIndices.size < options.historyCount; i--) {
+  for (
+    let i = messages.length - 1;
+    i >= 0 && selectedGroupIndices.size < options.historyCount;
+    i--
+  ) {
     const msg = messages[i] as MinimalMessage;
     const groupIdx = messageToGroup.get(msg.id);
     if (groupIdx !== undefined) {

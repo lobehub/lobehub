@@ -406,12 +406,15 @@ export const desktopRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/video'), 'Desktop > Video'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/(create)/video'),
+              'Desktop > Video',
+            ),
             index: true,
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/video/_layout'),
+          () => import('@/routes/(main)/(create)/video/_layout'),
           'Desktop > Video > Layout',
         ),
         errorElement: <ErrorBoundary resetPath="/video" />,
@@ -422,12 +425,15 @@ export const desktopRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/image'), 'Desktop > Image'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/(create)/image'),
+              'Desktop > Image',
+            ),
             index: true,
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/image/_layout'),
+          () => import('@/routes/(main)/(create)/image/_layout'),
           'Desktop > Image > Layout',
         ),
         errorElement: <ErrorBoundary resetPath="/image" />,

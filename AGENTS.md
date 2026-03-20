@@ -17,8 +17,8 @@ You are developing an open-source, modern-design AI Agent Workspace: LobeHub (pr
 
 ## Directory Structure
 
-```
-lobe-chat/
+```plaintext
+lobehub/
 ├── apps/desktop/           # Electron desktop app
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories
@@ -45,9 +45,8 @@ lobe-chat/
 - New branches should be created from `canary`; PRs should target `canary`
 - Use rebase for git pull
 - Git commit messages should prefix with gitmoji
-- Git branch name format: `username/feat/feature-name`
+- Git branch name format: `feat/feature-name`
 - Use `.github/PULL_REQUEST_TEMPLATE.md` for PR descriptions
-- PR titles with `✨ feat/` or `🐛 fix` trigger releases
 
 ### Package Management
 
@@ -86,30 +85,14 @@ cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path
 - **Dev**: Translate `locales/zh-CN/namespace.json` locale file only for preview
 - DON'T run `pnpm i18n`, let CI auto handle it
 
-## Linear Issue Management
-
-Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-not-installed-linear-mcp) when working with Linear issues.
-
 ## SPA Routes and Features
 
-- **`src/routes/`** holds only page segments (layout + page entry files). Keep route files thin; they should import from `@/features/*` and compose.
-- **`src/features/`** holds business components by domain. Put layout pieces, hooks, and domain UI here.
-- See [CLAUDE.md – SPA Routes and Features](CLAUDE.md#spa-routes-and-features) and the **spa-routes** skill for how to add new routes and how to split files.
+- **`src/routes/`** holds only page segments (`_layout/index.tsx`, `index.tsx`, `[id]/index.tsx`). Keep route files **thin** — import from `@/features/*` and compose, no business logic.
+- **`src/features/`** holds business components by **domain** (e.g. `Pages`, `PageEditor`, `Home`). Layout pieces, hooks, and domain UI go here.
+- See the **spa-routes** skill for the full convention and file-division rules.
 
 ## Skills (Auto-loaded)
 
-All AI development skills are available in `.agents/skills/` directory:
+All AI development skills are available in `.agents/skills/` directory and auto-loaded by Claude Code when relevant.
 
-| Category     | Skills                                     |
-| ------------ | ------------------------------------------ |
-| Frontend     | `react`, `typescript`, `i18n`, `microcopy` |
-| State        | `zustand`                                  |
-| Backend      | `drizzle`                                  |
-| Desktop      | `desktop`                                  |
-| Testing      | `testing`                                  |
-| UI           | `modal`, `hotkey`, `recent-data`           |
-| Config       | `add-provider-doc`, `add-setting-env`      |
-| Workflow     | `linear`, `debug`                          |
-| Architecture | `spa-routes`                               |
-| Performance  | `vercel-react-best-practices`              |
-| Overview     | `project-overview`                         |
+**IMPORTANT**: When reviewing PRs or code diffs, ALWAYS read `.agents/skills/code-review/SKILL.md` first.

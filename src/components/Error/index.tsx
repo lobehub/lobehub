@@ -15,9 +15,10 @@ interface ErrorCaptureProps {
 const ErrorCapture = ({ error, reset }: ErrorCaptureProps) => {
   const { t } = useTranslation('error');
   const hasStack = !!error?.stack;
+  const defaultStackKeys = typeof __CI__ !== 'undefined' && __CI__ ? ['stack'] : [];
 
   return (
-    <Flexbox align={'center'} justify={'center'} style={{ minHeight: '100%', width: '100%' }}>
+    <Flexbox align={'center'} justify={'center'} style={{ minHeight: '100dvh', width: '100%' }}>
       <h1
         style={{
           filter: 'blur(8px)',
@@ -38,7 +39,7 @@ const ErrorCapture = ({ error, reset }: ErrorCaptureProps) => {
       <p style={{ marginBottom: '2em' }}>{t('error.desc')}</p>
       {hasStack && (
         <Collapse
-          defaultActiveKey={__CI__ ? ['stack'] : []}
+          defaultActiveKey={defaultStackKeys}
           expandIconPlacement={'end'}
           size={'small'}
           style={{ marginBottom: '1em', maxWidth: '90vw', width: 560 }}

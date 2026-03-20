@@ -413,6 +413,100 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
     );
   });
 
+  it('should include stepCount in fallback error state when state reload fails', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+
+    let loadCallCount = 0;
+    coordinator.loadAgentState = vi.fn().mockImplementation(() => {
+      loadCallCount++;
+      if (loadCallCount === 1) {
+        return Promise.resolve({
+          status: 'running',
+          stepCount: 5,
+          lastModified: new Date().toISOString(),
+          metadata: {},
+        });
+      }
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    let publishCallCount = 0;
+    streamManager.publishStreamEvent = vi.fn().mockImplementation(() => {
+      publishCallCount++;
+      if (publishCallCount === 1) return Promise.resolve();
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        operationId: 'op-fallback-step-count',
+        stepIndex: 6,
+        context: { phase: 'user_input' } as any,
+      }),
+    ).rejects.toThrow();
+
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-fallback-step-count',
+      expect.objectContaining({
+        status: 'error',
+        stepCount: 6,
+      }),
+    );
+  });
+
+  it('should preserve stepCount when loadAgentState returns null in error handler', async () => {
+    const service = createService();
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+
+    let loadCallCount = 0;
+    coordinator.loadAgentState = vi.fn().mockImplementation(() => {
+      loadCallCount++;
+      if (loadCallCount === 1) {
+        return Promise.resolve({
+          status: 'running',
+          stepCount: 5,
+          lastModified: new Date().toISOString(),
+          metadata: {},
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    let publishCallCount = 0;
+    streamManager.publishStreamEvent = vi.fn().mockImplementation(() => {
+      publishCallCount++;
+      if (publishCallCount === 1) return Promise.resolve();
+      return Promise.reject(new Error('Redis ECONNRESET'));
+    });
+
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        operationId: 'op-null-step-count',
+        stepIndex: 7,
+        context: { phase: 'user_input' } as any,
+      }),
+    ).rejects.toThrow();
+
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      'op-null-step-count',
+      expect.objectContaining({
+        status: 'error',
+        stepCount: 7,
+      }),
+    );
+  });
+
   it('should preserve loaded state metadata when only saveAgentState fails', async () => {
     const service = createService();
     const coordinator = (service as any).coordinator;

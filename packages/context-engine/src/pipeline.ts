@@ -25,6 +25,7 @@ export class ContextEngine {
     this.processors = [...pipeline];
     this.options = {
       debug: false,
+      // eslint-disable-next-line no-console
       logger: console.log,
       ...options,
     };
@@ -94,6 +95,7 @@ export class ContextEngine {
 
         try {
           context = await processor.process(context);
+
           processedCount++;
 
           const duration = Date.now() - processorStartTime;

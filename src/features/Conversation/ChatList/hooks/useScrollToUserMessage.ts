@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+
+const PIN_RETRY_DELAYS = [0, 32, 96];
 
 interface UseScrollToUserMessageOptions {
   /**
@@ -32,6 +34,18 @@ export function useScrollToUserMessage({
   scrollToIndex,
 }: UseScrollToUserMessageOptions): void {
   const prevLengthRef = useRef(dataSourceLength);
+  const timerIdsRef = useRef<number[]>([]);
+
+  const clearPendingPins = useCallback(() => {
+    timerIdsRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    timerIdsRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    return clearPendingPins;
+  }, [clearPendingPins]);
 
   useEffect(() => {
     const newMessageCount = dataSourceLength - prevLengthRef.current;
@@ -39,8 +53,20 @@ export function useScrollToUserMessage({
 
     // Only scroll when user sends a new message (2 messages added: user + assistant pair)
     if (newMessageCount === 2 && isSecondLastMessageFromUser && scrollToIndex) {
-      // Scroll to the second-to-last message (user's message) with the start aligned
-      scrollToIndex(dataSourceLength - 2, { align: 'start', smooth: true });
+      const userMessageIndex = dataSourceLength - 2;
+
+      clearPendingPins();
+
+      PIN_RETRY_DELAYS.forEach((delay) => {
+        const timerId = window.setTimeout(() => {
+          scrollToIndex(userMessageIndex, {
+            align: 'start',
+            smooth: true,
+          });
+        }, delay);
+
+        timerIdsRef.current.push(timerId);
+      });
     }
-  }, [dataSourceLength, isSecondLastMessageFromUser, scrollToIndex]);
+  }, [clearPendingPins, dataSourceLength, isSecondLastMessageFromUser, scrollToIndex]);
 }

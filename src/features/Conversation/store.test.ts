@@ -1,6 +1,8 @@
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useChatStore } from '@/store/chat';
+
 import { createStore } from './store';
 import { type ConversationContext, type ConversationHooks } from './types';
 
@@ -37,6 +39,7 @@ vi.mock('@/store/chat', () => ({
       internal_dispatchMessage: vi.fn(),
       internal_dispatchTopic: vi.fn(),
       internal_execAgentRuntime: vi.fn(),
+      sendMessage: vi.fn(),
       switchTopic: vi.fn(),
       summaryTopicTitle: vi.fn(),
       internal_updateTopicLoading: vi.fn(),
@@ -295,6 +298,64 @@ describe('ConversationStore', () => {
 
         expect(store.getState().inputMessage).toBe('');
         expect(store.getState().editor).toBeNull();
+      });
+    });
+
+    describe('sendMessage', () => {
+      it('should preserve draft typed during pending send after streaming completes', async () => {
+        const context: ConversationContext = {
+          agentId: 'session-1',
+          topicId: 'topic-1',
+          threadId: null,
+        };
+
+        let resolveSend: (value: {
+          assistantMessageId: string;
+          createdThreadId?: string;
+          userMessageId: string;
+        }) => void;
+        const pendingSend = new Promise<{
+          assistantMessageId: string;
+          createdThreadId?: string;
+          userMessageId: string;
+        }>((resolve) => {
+          resolveSend = resolve;
+        });
+
+        vi.mocked(useChatStore.getState).mockReturnValue({
+          ...useChatStore.getState(),
+          sendMessage: vi.fn(() => pendingSend),
+        } as any);
+
+        const store = createStore({ context });
+
+        act(() => {
+          store.getState().updateInputMessage('first message');
+        });
+
+        let sendPromise: Promise<void>;
+        act(() => {
+          sendPromise = store.getState().sendMessage({ message: 'first message' } as any);
+        });
+
+        expect(store.getState().inputMessage).toBe('');
+
+        act(() => {
+          store.getState().updateInputMessage('draft during streaming');
+        });
+
+        expect(store.getState().inputMessage).toBe('draft during streaming');
+
+        resolveSend!({
+          assistantMessageId: 'assistant-1',
+          userMessageId: 'user-1',
+        });
+
+        await act(async () => {
+          await sendPromise;
+        });
+
+        expect(store.getState().inputMessage).toBe('draft during streaming');
       });
     });
   });

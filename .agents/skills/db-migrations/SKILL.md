@@ -1,6 +1,6 @@
 ---
 name: db-migrations
-description: Database migration guide. Use when generating migrations, writing migration SQL, or modifying database schemas. Triggers on migration generation, schema changes, or idempotent SQL questions.
+description: 'Use when generating or regenerating Drizzle migration files, changing database schema tables or columns, resolving migration sequence conflicts after rebase, reviewing migration SQL for idempotent patterns, or renaming migration files.'
 ---
 
 # Database Migrations Guide

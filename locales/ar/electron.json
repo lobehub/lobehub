@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "فشل الاتصال بالتفويض",
   "waitingOAuth.helpText": "إذا لم يفتح المتصفح تلقائياً، يرجى النقر على إلغاء والمحاولة مرة أخرى",
   "waitingOAuth.retry": "إعادة المحاولة",
-  "waitingOAuth.title": "في انتظار الاتصال بالتفويض"
+  "waitingOAuth.title": "في انتظار الاتصال بالتفويض",
+  "window.close": "إغلاق النافذة",
+  "window.maximize": "تكبير النافذة",
+  "window.minimize": "تصغير النافذة",
+  "window.restore": "استعادة النافذة"
 }

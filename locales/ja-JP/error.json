@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "コンテンツがセーフティポリシーに違反しています。有害または不適切な部分を削除してから再試行してください",
   "response.GoogleAIBlockReason.SPII": "コンテンツに機密個人情報が含まれている可能性があります。プライバシー保護のため、該当情報を削除してから再試行してください",
   "response.GoogleAIBlockReason.default": "コンテンツがブロックされました：{{blockReason}}。調整してから再試行してください",
+  "response.InsufficientBudgetForModel": "このモデルを使用するには、残りのクレジットが不足しています。クレジットを追加するか、プランをアップグレードするか、より安価なモデルをお試しください。",
   "response.InsufficientQuota": "クォータが使い果たされました。残高/クォータ設定を確認するか、使用可能な API キーに切り替えてから再試行してください",
   "response.InvalidAccessCode": "アクセスパスワードが空または正しくありません。正しいパスワードを再入力するか、カスタム API キーを使用してください",
   "response.InvalidBedrockCredentials": "Bedrock 認証に失敗しました。AccessKeyId/SecretAccessKey を確認してから再試行してください",

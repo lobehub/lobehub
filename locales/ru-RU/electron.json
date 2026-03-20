@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Не удалось подключиться к авторизации",
   "waitingOAuth.helpText": "Если браузер не открылся автоматически, нажмите «Отмена» и попробуйте снова",
   "waitingOAuth.retry": "Повторить",
-  "waitingOAuth.title": "Ожидание подключения к авторизации"
+  "waitingOAuth.title": "Ожидание подключения к авторизации",
+  "window.close": "Закрыть окно",
+  "window.maximize": "Развернуть окно",
+  "window.minimize": "Свернуть окно",
+  "window.restore": "Восстановить окно"
 }

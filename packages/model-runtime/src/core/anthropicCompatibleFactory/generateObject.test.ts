@@ -228,6 +228,50 @@ describe('Anthropic generateObject', () => {
       expect(result).toBeUndefined();
     });
 
+    it('should call onUsage callback with usage data', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                input: { data: 'test' },
+                name: 'test_tool',
+                type: 'tool_use',
+              },
+            ],
+            usage: {
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+              input_tokens: 100,
+              output_tokens: 50,
+            },
+          }),
+        },
+      };
+
+      const payload = {
+        messages: [{ content: 'Generate data', role: 'user' as const }],
+        model: 'claude-3-5-sonnet-20241022',
+        schema: {
+          name: 'test_tool',
+          schema: { properties: { data: { type: 'string' } }, type: 'object' as const },
+        },
+      };
+
+      const onUsage = vi.fn();
+      const result = await createAnthropicGenerateObject(mockClient as any, payload, { onUsage });
+
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inputCacheMissTokens: 100,
+          totalInputTokens: 100,
+          totalOutputTokens: 50,
+          totalTokens: 150,
+        }),
+      );
+      expect(result).toEqual({ data: 'test' });
+    });
+
     it('should handle complex nested schemas', async () => {
       const mockClient = {
         messages: {

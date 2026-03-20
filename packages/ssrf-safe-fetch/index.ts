@@ -61,10 +61,20 @@ export const ssrfSafeFetch = async (
       statusText: response.statusText,
     });
   } catch (error) {
-    console.error('SSRF-safe fetch error:', error);
-    throw new Error(
-      `SSRF-safe fetch failed: ${error instanceof Error ? error.message : String(error)}. ` +
-        'See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
-    );
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    // request-filtering-agent errors contain "is not allowed" when blocking private/denied IPs
+    const isSSRFBlock = errorMessage.includes('is not allowed');
+
+    if (isSSRFBlock) {
+      console.error('SSRF protection blocked request:', error);
+      throw new Error(
+        `SSRF blocked: ${errorMessage}. ` +
+          'See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
+        { cause: error },
+      );
+    }
+
+    console.error('Fetch error:', error);
+    throw new Error(`Fetch failed: ${errorMessage}`, { cause: error });
   }
 };

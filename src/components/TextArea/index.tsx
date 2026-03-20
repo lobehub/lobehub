@@ -3,13 +3,15 @@ import { TextArea as LobeTextArea } from '@lobehub/ui';
 import { type TextAreaRef } from 'antd/es/input/TextArea';
 import { memo, useRef, useState } from 'react';
 
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+
 interface TextAreaProps extends Omit<Props, 'onChange'> {
   onChange?: (value: string) => void;
 }
 
 const TextArea = memo<TextAreaProps>(({ onChange, value: defaultValue, ...props }) => {
   const ref = useRef<TextAreaRef>(null);
-  const isChineseInput = useRef(false);
+  const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
   const [value, setValue] = useState(defaultValue as string);
 
@@ -22,14 +24,9 @@ const TextArea = memo<TextAreaProps>(({ onChange, value: defaultValue, ...props 
       onChange={(e) => {
         setValue(e.target.value);
       }}
-      onCompositionEnd={() => {
-        isChineseInput.current = false;
-      }}
-      onCompositionStart={() => {
-        isChineseInput.current = true;
-      }}
+      {...compositionProps}
       onPressEnter={() => {
-        if (isChineseInput.current) return;
+        if (isComposingRef.current) return;
         onChange?.(value);
       }}
       {...props}

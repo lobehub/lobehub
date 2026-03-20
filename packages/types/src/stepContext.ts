@@ -75,6 +75,36 @@ export interface InitialPageEditorContext {
 }
 
 /**
+ * User-selected skill context for the current request
+ * Captured from slash-menu skill action tags before send
+ */
+export interface RuntimeSelectedSkill {
+  /**
+   * Skill identifier used by runtime/tooling
+   */
+  identifier: string;
+  /**
+   * Human-readable skill name shown in the input UI
+   */
+  name: string;
+}
+
+/**
+ * User-selected tool context for the current request
+ * Captured from slash-menu tool action tags before send
+ */
+export interface RuntimeSelectedTool {
+  /**
+   * Tool identifier used by runtime/tooling
+   */
+  identifier: string;
+  /**
+   * Human-readable tool name shown in the input UI
+   */
+  name: string;
+}
+
+/**
  * Runtime Step Context
  *
  * Contains dynamically computed state that changes between steps.
@@ -113,6 +143,16 @@ export interface RuntimeStepContext {
 }
 
 /**
+ * Agent mentioned by the user via @ in the input editor
+ */
+export interface RuntimeMentionedAgent {
+  /** Agent ID */
+  id: string;
+  /** Agent display name */
+  name: string;
+}
+
+/**
  * Initial Context
  *
  * Contains state captured at operation initialization.
@@ -120,8 +160,24 @@ export interface RuntimeStepContext {
  */
 export interface RuntimeInitialContext {
   /**
+   * Agents explicitly @mentioned by the user in the input editor.
+   * When present in a non-group conversation, the current agent acts as
+   * supervisor and can delegate to the mentioned agents via callAgent.
+   */
+  mentionedAgents?: RuntimeMentionedAgent[];
+  /**
    * Initial Page Editor context
    * Contains markdown content and metadata captured at operation start
    */
   pageEditor?: InitialPageEditorContext;
+  /**
+   * Skills explicitly selected by the user for the current request
+   * This is ephemeral runtime context and is not persisted to chat history
+   */
+  selectedSkills?: RuntimeSelectedSkill[];
+  /**
+   * Tools explicitly selected by the user for the current request
+   * This constrains the available tools for the current runtime execution
+   */
+  selectedTools?: RuntimeSelectedTool[];
 }

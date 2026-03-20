@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Twoja treść została zablokowana ze względów bezpieczeństwa. Dostosuj żądanie, aby uniknąć potencjalnie szkodliwych treści.",
   "response.GoogleAIBlockReason.SPII": "Twoja treść może zawierać wrażliwe dane osobowe. Usuń je i spróbuj ponownie.",
   "response.GoogleAIBlockReason.default": "Treść zablokowana: {{blockReason}}. Dostosuj żądanie i spróbuj ponownie.",
+  "response.InsufficientBudgetForModel": "Twoje pozostałe kredyty są niewystarczające dla tego modelu. Proszę doładuj kredyty, zaktualizuj swój plan lub spróbuj tańszego modelu.",
   "response.InsufficientQuota": "Przepraszamy, limit dla tego klucza został osiągnięty. Sprawdź saldo konta lub zwiększ limit i spróbuj ponownie.",
   "response.InvalidAccessCode": "Nieprawidłowy lub pusty kod dostępu. Wprowadź poprawny kod lub dodaj własny klucz API.",
   "response.InvalidBedrockCredentials": "Uwierzytelnienie Bedrock nie powiodło się. Sprawdź AccessKeyId/SecretAccessKey i spróbuj ponownie.",

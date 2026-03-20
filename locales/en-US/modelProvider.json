@@ -89,6 +89,7 @@
   "createNewAiProvider.description.placeholder": "Provider description (optional)",
   "createNewAiProvider.description.title": "Provider Description",
   "createNewAiProvider.id.desc": "Unique identifier for the service provider, which cannot be modified after creation",
+  "createNewAiProvider.id.duplicate": "Provider ID already exists",
   "createNewAiProvider.id.format": "Can only contain numbers, lowercase letters, hyphens (-), and underscores (_) ",
   "createNewAiProvider.id.placeholder": "Suggested all lowercase, e.g., openai, cannot be modified after creation",
   "createNewAiProvider.id.required": "Please enter the provider ID",

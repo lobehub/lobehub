@@ -10,6 +10,7 @@ export * from './gtd';
 export * from './knowledgeBaseQA';
 export * from './messagesToText';
 export * from './plugin';
+export * from './remoteDevice';
 export * from './search';
 export * from './skills';
 export * from './speaker';

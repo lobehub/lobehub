@@ -1,21 +1,12 @@
 'use client';
 
-import {
-  ReactCodemirrorPlugin,
-  ReactCodePlugin,
-  ReactHRPlugin,
-  ReactLinkHighlightPlugin,
-  ReactListPlugin,
-  ReactMathPlugin,
-  ReactMentionPlugin,
-  ReactTablePlugin,
-  ReactToolbarPlugin,
-} from '@lobehub/editor';
+import { ReactMentionPlugin, ReactTablePlugin, ReactToolbarPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -116,13 +107,8 @@ const EditorCanvas = memo(() => {
         mentionOption={mentionOptions}
         placeholder={t('settingAgent.prompt.templatePlaceholder')}
         plugins={[
-          ReactListPlugin,
-          ReactCodePlugin,
-          ReactCodemirrorPlugin,
-          ReactHRPlugin,
-          ReactLinkHighlightPlugin,
+          ...createChatInputRichPlugins(),
           ReactTablePlugin,
-          ReactMathPlugin,
           ReactMentionPlugin,
           Editor.withProps(ReactToolbarPlugin, {
             children: <TypoBar />,

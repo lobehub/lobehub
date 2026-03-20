@@ -609,7 +609,7 @@ describe('LobeBedrockAI', () => {
             accept: 'application/json',
             body: JSON.stringify({
               anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 64_000,
+              max_tokens: 8192,
               messages: [
                 {
                   content: [

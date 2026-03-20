@@ -7,6 +7,16 @@ import { type IAgentStateManager, type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:coordinator');
 
+const TERMINAL_STATUSES = new Set<AgentState['status']>(['done', 'error', 'interrupted']);
+
+const hasEnteredTerminalState = (
+  previousStatus?: AgentState['status'],
+  nextStatus?: AgentState['status'],
+): nextStatus is 'done' | 'error' | 'interrupted' => {
+  const wasTerminal = previousStatus ? TERMINAL_STATUSES.has(previousStatus) : false;
+  return Boolean(nextStatus && TERMINAL_STATUSES.has(nextStatus) && !wasTerminal);
+};
+
 export interface AgentRuntimeCoordinatorOptions {
   /**
    * Custom state manager implementation
@@ -79,10 +89,15 @@ export class AgentRuntimeCoordinator {
       // Save state
       await this.stateManager.saveAgentState(operationId, state);
 
-      // If status changes to done, send agent runtime end event
-      if (state.status === 'done' && previousState?.status !== 'done') {
-        await this.streamEventManager.publishAgentRuntimeEnd(operationId, state.stepCount, state);
-        log('[%s] Agent runtime completed', operationId);
+      // Send a terminal event once the operation first enters a terminal state.
+      if (hasEnteredTerminalState(previousState?.status, state.status)) {
+        await this.streamEventManager.publishAgentRuntimeEnd(
+          operationId,
+          state.stepCount ?? previousState?.stepCount ?? 0,
+          state,
+          state.status,
+        );
+        log('[%s] Agent runtime reached terminal state: %s', operationId, state.status);
       }
     } catch (error) {
       console.error('Failed to save agent state and handle events:', error);
@@ -101,15 +116,19 @@ export class AgentRuntimeCoordinator {
       // Save step result
       await this.stateManager.saveStepResult(operationId, stepResult);
 
-      // If status changes to done, send agent_runtime_end event
-      // This ensures agent_runtime_end is sent after all step events
-      if (stepResult.newState.status === 'done' && previousState?.status !== 'done') {
+      // This ensures agent_runtime_end is sent after all step events.
+      if (hasEnteredTerminalState(previousState?.status, stepResult.newState.status)) {
         await this.streamEventManager.publishAgentRuntimeEnd(
           operationId,
-          stepResult.newState.stepCount,
+          stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0,
           stepResult.newState,
+          stepResult.newState.status,
         );
-        log('[%s] Agent runtime completed', operationId);
+        log(
+          '[%s] Agent runtime reached terminal state after step result: %s',
+          operationId,
+          stepResult.newState.status,
+        );
       }
     } catch (error) {
       console.error('Failed to save step result and handle events:', error);

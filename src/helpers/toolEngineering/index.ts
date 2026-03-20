@@ -21,6 +21,8 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
@@ -122,7 +124,9 @@ export const createAgentToolsEngine = (
           agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
         [KnowledgeBaseManifest.identifier]: agentSelectors.hasEnabledKnowledgeBases(agentState),
         [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
-        [MemoryManifest.identifier]: agentChatConfigSelectors.isMemoryToolEnabled(agentState),
+        [MemoryManifest.identifier]:
+          agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
+          settingsSelectors.memoryEnabled(useUserStore.getState()),
         [WebBrowsingManifest.identifier]: searchConfig.useApplicationBuiltinSearchTool,
       },
     }),

@@ -1,10 +1,11 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
+import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { chunk } from 'es-toolkit/compat';
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { checkBudgetsUsage, checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
+import { checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
 import { serverDBEnv } from '@/config/db';
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -41,7 +42,6 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
 export const fileRouter = router({
   embeddingChunks: fileProcedure
     .use(checkEmbeddingUsage)
-    .use(checkBudgetsUsage)
     .input(
       z.object({
         fileId: z.string(),
@@ -98,11 +98,14 @@ export const fileRouter = router({
                   provider,
                 );
 
-                const embeddings = await modelRuntime.embeddings({
-                  dimensions: 1024,
-                  input: chunks.map((c) => c.text),
-                  model,
-                });
+                const embeddings = await modelRuntime.embeddings(
+                  {
+                    dimensions: 1024,
+                    input: chunks.map((c) => c.text),
+                    model,
+                  },
+                  { metadata: { trigger: RequestTrigger.FileEmbedding }, user: ctx.userId },
+                );
 
                 const items: NewEmbeddingsItem[] =
                   embeddings?.map((e, idx) => ({

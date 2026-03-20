@@ -174,6 +174,8 @@ export interface ChatMethodOptions {
    * response headers
    */
   headers?: Record<string, any>;
+  /** Metadata passed to hooks (billing, tracing, etc.) */
+  metadata?: Record<string, unknown>;
   /**
    * send the request to the ai api endpoint
    */

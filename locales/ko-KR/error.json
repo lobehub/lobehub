@@ -78,6 +78,7 @@
   "response.GoogleAIBlockReason.SAFETY": "콘텐츠가 안전 정책을 위반합니다. 유해하거나 부적절한 부분을 삭제한 후 다시 시도하세요",
   "response.GoogleAIBlockReason.SPII": "콘텐츠에 민감한 개인 신원 정보가 포함되어 있을 수 있습니다. 개인정보 보호를 위해 해당 정보를 삭제한 후 다시 시도하세요",
   "response.GoogleAIBlockReason.default": "콘텐츠가 차단되었습니다: {{blockReason}}。조정한 후 다시 시도하세요",
+  "response.InsufficientBudgetForModel": "이 모델을 사용하기에 남은 크레딧이 부족합니다. 크레딧을 충전하거나, 요금제를 업그레이드하거나, 더 저렴한 모델을 시도해 보세요.",
   "response.InsufficientQuota": "할당량이 소진되었습니다. 잔액/할당량 설정을 확인하거나 사용 가능한 API 키로 전환한 후 다시 시도하세요",
   "response.InvalidAccessCode": "액세스 암호가 비어 있거나 올바르지 않습니다. 올바른 암호를 다시 입력하거나 사용자 정의 API 키를 사용하세요",
   "response.InvalidBedrockCredentials": "Bedrock 인증에 실패했습니다. AccessKeyId/SecretAccessKey를 확인한 후 다시 시도하세요",

@@ -59,6 +59,7 @@ export const serverMessagesEngine = async ({
   historySummary,
   formatHistorySummary,
   knowledge,
+  skillsConfig,
   toolsConfig,
   capabilities,
   userMemory,
@@ -67,6 +68,7 @@ export const serverMessagesEngine = async ({
   evalContext,
   agentManagementContext,
   pageContentContext,
+  topicReferences,
   additionalVariables,
   userTimezone,
 }: ServerMessagesEngineParams): Promise<OpenAIChatMessage[]> => {
@@ -135,6 +137,12 @@ export const serverMessagesEngine = async ({
         Object.entries(additionalVariables ?? {}).map(([k, v]) => [k, () => v]),
       ),
     },
+
+    // Skills configuration
+    ...(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0 && { skillsConfig }),
+
+    // Topic references
+    ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
 
     // Extended contexts
     ...(agentBuilderContext && { agentBuilderContext }),

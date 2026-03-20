@@ -45,6 +45,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            type=raw,value=canary,enable=${{ contains(github.event.release.tag_name, '-canary.') }}
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event.release.prerelease }}
 
       - name: Docker login
@@ -111,6 +112,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            type=raw,value=canary,enable=${{ contains(github.event.release.tag_name, '-canary.') }}
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event.release.prerelease }}
 
       - name: Docker login

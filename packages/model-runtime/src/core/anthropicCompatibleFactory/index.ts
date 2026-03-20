@@ -3,6 +3,7 @@ import type { Stream } from '@anthropic-ai/sdk/streaming';
 import { CURRENT_VERSION } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
+import type { Pricing } from 'model-bank';
 
 import type {
   ChatCompletionErrorPayload,
@@ -89,6 +90,7 @@ export interface AnthropicCompatibleFactoryOptions<T extends Record<string, any>
     client: Anthropic,
     payload: GenerateObjectPayload,
     options?: GenerateObjectOptions,
+    pricing?: Pricing,
   ) => Promise<any>;
   models?: (params: {
     apiKey?: string;
@@ -616,7 +618,8 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
       }
 
       try {
-        return await generateObject(this.client, payload, options);
+        const pricing = await getModelPricing(payload.model, this.id);
+        return await generateObject(this.client, payload, options, pricing);
       } catch (error) {
         throw this.handleError(error);
       }

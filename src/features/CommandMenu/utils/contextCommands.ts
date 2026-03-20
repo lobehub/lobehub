@@ -39,6 +39,7 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
   group: [],
   page: [],
   painting: [],
+  video: [],
   resource: [],
   settings: [
     {
@@ -149,13 +150,13 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
           },
           {
             icon: Coins,
-            keywords: ['funds', 'balance', 'credit', 'money'],
-            keywordsKey: 'cmdk.keywords.funds',
-            label: 'Funds',
-            labelKey: 'tab.funds',
+            keywords: ['credits', 'balance', 'credit', 'money'],
+            keywordsKey: 'cmdk.keywords.credits',
+            label: 'Credits',
+            labelKey: 'tab.credits',
             labelNamespace: 'subscription' as const,
-            path: '/settings/funds',
-            subPath: 'funds',
+            path: '/settings/credits',
+            subPath: 'credits',
           },
           {
             icon: PieChart,

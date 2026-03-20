@@ -5,7 +5,7 @@ import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Spin, Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PencilIcon } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
@@ -58,31 +58,32 @@ const AvatarRow = ({ mobile }: AvatarRowProps) => {
   const updateAvatar = useUserStore((s) => s.updateAvatar);
   const [uploading, setUploading] = useState(false);
 
-  const handleUploadAvatar = useCallback(
-    createUploadImageHandler(async (avatar) => {
-      try {
-        setUploading(true);
-        const img = new Image();
-        img.src = avatar;
+  const handleUploadAvatar = useMemo(
+    () =>
+      createUploadImageHandler(async (avatar) => {
+        try {
+          setUploading(true);
+          const img = new Image();
+          img.src = avatar;
 
-        await new Promise((resolve, reject) => {
-          img.addEventListener('load', resolve);
-          img.addEventListener('error', reject);
-        });
+          await new Promise((resolve, reject) => {
+            img.addEventListener('load', resolve);
+            img.addEventListener('error', reject);
+          });
 
-        const webpBase64 = imageToBase64({ img, size: 256 });
-        await updateAvatar(webpBase64);
-        setUploading(false);
-      } catch (error) {
-        console.error('Failed to upload avatar:', error);
-        setUploading(false);
+          const webpBase64 = imageToBase64({ img, size: 256 });
+          await updateAvatar(webpBase64);
+          setUploading(false);
+        } catch (error) {
+          console.error('Failed to upload avatar:', error);
+          setUploading(false);
 
-        fetchErrorNotification.error({
-          errorMessage: error instanceof Error ? error.message : String(error),
-          status: 500,
-        });
-      }
-    }),
+          fetchErrorNotification.error({
+            errorMessage: error instanceof Error ? error.message : String(error),
+            status: 500,
+          });
+        }
+      }),
     [updateAvatar],
   );
 

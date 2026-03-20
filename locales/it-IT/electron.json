@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Connessione di autorizzazione fallita",
   "waitingOAuth.helpText": "Se il browser non si è aperto automaticamente, fai clic su annulla e riprova",
   "waitingOAuth.retry": "Riprova",
-  "waitingOAuth.title": "In attesa della connessione di autorizzazione"
+  "waitingOAuth.title": "In attesa della connessione di autorizzazione",
+  "window.close": "Chiudi finestra",
+  "window.maximize": "Massimizza finestra",
+  "window.minimize": "Minimizza finestra",
+  "window.restore": "Ripristina finestra"
 }

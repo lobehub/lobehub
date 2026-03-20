@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Kết nối xác thực thất bại",
   "waitingOAuth.helpText": "Nếu trình duyệt không tự động mở, vui lòng nhấn hủy và thử lại",
   "waitingOAuth.retry": "Thử lại",
-  "waitingOAuth.title": "Đang chờ kết nối xác thực"
+  "waitingOAuth.title": "Đang chờ kết nối xác thực",
+  "window.close": "Đóng cửa sổ",
+  "window.maximize": "Phóng to cửa sổ",
+  "window.minimize": "Thu nhỏ cửa sổ",
+  "window.restore": "Khôi phục cửa sổ"
 }

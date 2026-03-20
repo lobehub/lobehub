@@ -43,6 +43,17 @@ import {
 
 const log = debug('lobe-store:streaming-executor');
 
+const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): boolean => {
+  if (!editorData) return false;
+  const walk = (node: any): boolean => {
+    if (!node) return false;
+    if (node.type === 'refer-topic') return true;
+    if (Array.isArray(node.children)) return node.children.some(walk);
+    return false;
+  };
+  return walk(editorData.root);
+};
+
 /**
  * Core streaming execution actions for AI chat
  */
@@ -126,6 +137,13 @@ export class StreamingExecutorActionImpl {
     });
 
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
+    const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
+      (tool) => tool.identifier,
+    );
+    const mergedToolIds =
+      selectedToolIds && selectedToolIds.length > 0
+        ? [...new Set([...(pluginIds || []), ...selectedToolIds])]
+        : pluginIds;
 
     if (!agentConfigData || !agentConfigData.model) {
       throw new Error(
@@ -133,25 +151,35 @@ export class StreamingExecutorActionImpl {
       );
     }
 
+    // Dynamically inject topic-reference tool when messages contain refer-topic nodes
+    const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
+    const effectivePluginIds = hasTopicReference
+      ? [...(pluginIds || []), 'lobe-topic-reference']
+      : pluginIds;
+
     log(
-      '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s',
-      pluginIds,
+      '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',
+      effectivePluginIds,
       isSubTask,
       disableTools,
+      hasTopicReference,
     );
 
     // Generate tools using ToolsEngine (centralized here, passed to chatService via agentConfig)
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
-      pluginIds,
+      effectivePluginIds,
     );
+    // When skillActivateMode is 'manual', skipDefaultTools gives user precise control
+    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
+
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools,
-      toolIds: pluginIds,
+      skipDefaultTools: disableTools || isManualMode,
+      toolIds: mergedToolIds,
     });
 
     const enabledToolIds = toolsDetailed.enabledToolIds;
@@ -249,23 +277,36 @@ export class StreamingExecutorActionImpl {
       }
     }
 
+    const mergedRuntimeInitialContext =
+      runtimeInitialContext || initialContext?.initialContext
+        ? {
+            ...runtimeInitialContext,
+            ...initialContext?.initialContext,
+          }
+        : undefined;
+
     // Create initial context or use provided context
-    const context: AgentRuntimeContext = initialContext || {
-      phase: 'init',
-      payload: {
-        model: agentConfigData.model,
-        provider: agentConfigData.provider,
-        parentMessageId,
-      },
-      session: {
-        sessionId: agentId,
-        messageCount: messages.length,
-        status: state.status,
-        stepCount: 0,
-      },
-      // Inject initialContext if available
-      initialContext: runtimeInitialContext,
-    };
+    const context: AgentRuntimeContext = initialContext
+      ? {
+          ...initialContext,
+          initialContext: mergedRuntimeInitialContext,
+        }
+      : {
+          phase: 'init',
+          payload: {
+            model: agentConfigData.model,
+            provider: agentConfigData.provider,
+            parentMessageId,
+          },
+          session: {
+            sessionId: agentId,
+            messageCount: messages.length,
+            status: state.status,
+            stepCount: 0,
+          },
+          // Inject initialContext if available
+          initialContext: mergedRuntimeInitialContext,
+        };
 
     return { agentConfig: agentConfigWithTools, context, state, toolsEngine };
   };

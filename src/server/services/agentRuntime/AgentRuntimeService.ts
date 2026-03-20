@@ -1,5 +1,6 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
@@ -20,6 +21,7 @@ import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
+import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -90,6 +92,12 @@ export interface AgentRuntimeServiceOptions {
    */
   queueService?: QueueService | null;
   /**
+   * Optional snapshot store for persisting agent execution traces.
+   * When provided, execution snapshots are recorded on every step and finalized on completion.
+   * In dev mode without this option, falls back to FileSnapshotStore automatically.
+   */
+  snapshotStore?: ISnapshotStore;
+  /**
    * Custom StreamEventManager
    * Defaults to Redis-based StreamEventManager
    * Can pass InMemoryStreamEventManager in test environments
@@ -117,6 +125,7 @@ export class AgentRuntimeService {
   private coordinator: AgentRuntimeCoordinator;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
+  private snapshotStore: ISnapshotStore | null;
   private toolExecutionService: ToolExecutionService;
   /**
    * Step lifecycle callback registry
@@ -144,6 +153,7 @@ export class AgentRuntimeService {
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
+    this.snapshotStore = options?.snapshotStore ?? this.createDefaultSnapshotStore();
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
@@ -173,7 +183,7 @@ export class AgentRuntimeService {
     if (impl instanceof LocalQueueServiceImpl) {
       log('Setting up local execution callback');
       impl.setExecutionCallback(async (operationId, stepIndex, context) => {
-        log('[%s][%d] Local callback executing...', operationId, stepIndex);
+        log('[%s][%d] Local step executing...', operationId, stepIndex);
         await this.executeStep({
           context,
           operationId,
@@ -258,6 +268,7 @@ export class AgentRuntimeService {
       appContext,
       toolSet,
       stepCallbacks,
+      hooks,
       userInterventionConfig,
       completionWebhook,
       stepWebhook,
@@ -267,6 +278,7 @@ export class AgentRuntimeService {
       maxSteps,
       userMemory,
       deviceSystemInfo,
+      skillMetas,
       userTimezone,
     } = params;
 
@@ -307,6 +319,7 @@ export class AgentRuntimeService {
           modelRuntimeConfig,
           stepWebhook,
           stream,
+          skillMetas,
           userId,
           userMemory,
           userTimezone,
@@ -342,6 +355,26 @@ export class AgentRuntimeService {
       // Register step lifecycle callbacks
       if (stepCallbacks) {
         this.registerStepCallbacks(operationId, stepCallbacks);
+      }
+
+      // Register external hooks
+      if (hooks && hooks.length > 0) {
+        hookDispatcher.register(operationId, hooks);
+
+        // Persist webhook configs to state metadata for production mode
+        const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
+        if (serializedHooks && serializedHooks.length > 0) {
+          const currentState = await this.coordinator.loadAgentState(operationId);
+          if (currentState) {
+            await this.coordinator.saveAgentState(operationId, {
+              ...currentState,
+              metadata: {
+                ...currentState.metadata,
+                _hooks: serializedHooks,
+              },
+            });
+          }
+        }
       }
 
       let messageId: string | undefined;
@@ -470,7 +503,7 @@ export class AgentRuntimeService {
         };
       }
 
-      // Call onBeforeStep callback
+      // Call onBeforeStep callback (legacy)
       if (callbacks?.onBeforeStep) {
         try {
           await callbacks.onBeforeStep({
@@ -482,6 +515,26 @@ export class AgentRuntimeService {
         } catch (callbackError) {
           log('[%s] onBeforeStep callback error: %O', operationId, callbackError);
         }
+      }
+
+      // Dispatch beforeStep hooks
+      try {
+        const beforeStepMetadata = agentState?.metadata || {};
+        await hookDispatcher.dispatch(
+          operationId,
+          'beforeStep',
+          {
+            agentId: beforeStepMetadata?.agentId || '',
+            finalState: agentState,
+            operationId,
+            stepIndex,
+            steps: agentState?.stepCount || 0,
+            userId: beforeStepMetadata?.userId || this.userId,
+          },
+          beforeStepMetadata._hooks,
+        );
+      } catch (hookError) {
+        log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
       }
 
       // Create Agent and Runtime instances
@@ -724,7 +777,7 @@ export class AgentRuntimeService {
         totalTokens: totalTokensNum,
       };
 
-      // Call onAfterStep callback with presentation data
+      // Call onAfterStep callback with presentation data (legacy)
       if (callbacks?.onAfterStep) {
         try {
           await callbacks.onAfterStep({
@@ -740,13 +793,32 @@ export class AgentRuntimeService {
         }
       }
 
-      // Dev mode: record step snapshot to disk for agent-tracing CLI
-      if (process.env.NODE_ENV === 'development') {
-        try {
-          const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
-          const store = new FileSnapshotStore();
+      // Dispatch afterStep hooks
+      try {
+        const metadata = stepResult.newState?.metadata || {};
+        await hookDispatcher.dispatch(
+          operationId,
+          'afterStep',
+          {
+            agentId: metadata?.agentId || '',
+            finalState: stepResult.newState,
+            operationId,
+            shouldContinue,
+            status: stepResult.newState?.status,
+            stepIndex,
+            steps: stepResult.newState?.stepCount || 0,
+            userId: metadata?.userId || this.userId,
+          },
+          metadata._hooks,
+        );
+      } catch (hookError) {
+        log('[%s] afterStep hook dispatch error: %O', operationId, hookError);
+      }
 
-          const partial = (await store.loadPartial(operationId)) ?? { steps: [] };
+      // Record step snapshot via injected snapshot store
+      if (this.snapshotStore) {
+        try {
+          const partial = (await this.snapshotStore.loadPartial(operationId)) ?? { steps: [] };
 
           if (!partial.startedAt) {
             partial.startedAt = Date.now();
@@ -759,33 +831,90 @@ export class AgentRuntimeService {
           }
 
           if (!partial.steps) partial.steps = [];
+
+          // Incremental diff: only store message delta + baseline at reset points
+          const prevMessages = agentState?.messages ?? [];
+          const afterMessages = stepResult.newState.messages;
+          const isCompression = stepResult.events?.some(
+            (e: any) => e.type === 'compression_complete',
+          );
+          const isBaseline = stepIndex === 0 || isCompression;
+          // Always store only the newly added messages, even for baseline steps
+          const messagesDelta = afterMessages.slice(prevMessages.length);
+
+          // Strip heavy/redundant data from events before persisting to snapshot
+          const snapshotEvents = (stepResult.events as any[])
+            ?.filter((e) => e.type !== 'llm_stream')
+            .map((e) => {
+              if (e.type === 'done' && e.finalState) {
+                // Remove reconstructible fields from finalState:
+                // - messages: from messagesBaseline + messagesDelta chain
+                // - operationToolSet: from toolsetBaseline (step 0)
+                // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
+                const {
+                  messages: _msgs,
+                  operationToolSet: _ots,
+                  toolManifestMap: _tmm,
+                  toolSourceMap: _tsm,
+                  tools: _tools,
+                  // activatedStepTools is kept since it's the cumulative record
+                  ...restState
+                } = e.finalState;
+                return { ...e, finalState: restState };
+              }
+              return e;
+            });
+
+          // Strip toolResults from payload (already in step.toolsResult)
+          let snapshotPayload: unknown = currentContext?.payload;
+          if (
+            snapshotPayload &&
+            typeof snapshotPayload === 'object' &&
+            'toolResults' in snapshotPayload
+          ) {
+            const { toolResults: _tr, ...restPayload } = snapshotPayload as Record<string, unknown>;
+            snapshotPayload = restPayload;
+          }
+
+          // Compute activatedStepTools delta (newly discovered tools in this step)
+          const prevActivated = agentState?.activatedStepTools ?? [];
+          const afterActivated = stepResult.newState.activatedStepTools ?? [];
+          const activatedStepToolsDelta =
+            afterActivated.length > prevActivated.length
+              ? afterActivated.slice(prevActivated.length)
+              : undefined;
+
           partial.steps.push({
+            activatedStepToolsDelta,
             completedAt: Date.now(),
             content: stepPresentationData.content,
             context: {
-              payload: currentContext?.payload,
+              payload: snapshotPayload,
               phase: currentContext?.phase ?? 'unknown',
               stepContext: currentContext?.stepContext,
             },
-            events: stepResult.events as any,
+            events: snapshotEvents,
             executionTimeMs: stepPresentationData.executionTimeMs,
             inputTokens: stepPresentationData.stepInputTokens,
-            messages: agentState?.messages,
-            messagesAfter: stepResult.newState.messages,
+            isCompressionReset: isCompression || undefined,
+            messagesBaseline: isBaseline ? prevMessages : undefined,
+            messagesDelta,
             outputTokens: stepPresentationData.stepOutputTokens,
             reasoning: stepPresentationData.reasoning,
             startedAt: startAt,
             stepIndex,
             stepType: stepPresentationData.stepType,
+            // Store operation-level toolset once at step 0
+            toolsetBaseline: stepIndex === 0 ? agentState?.operationToolSet : undefined,
             toolsCalling: stepPresentationData.toolsCalling,
             toolsResult: stepPresentationData.toolsResult,
             totalCost: stepPresentationData.totalCost,
             totalTokens: stepPresentationData.totalTokens,
           });
 
-          await store.savePartial(operationId, partial);
-        } catch {
-          // agent-tracing not available, skip silently
+          await this.snapshotStore.savePartial(operationId, partial);
+        } catch (e) {
+          log('[%s] snapshot step recording failed: %O', operationId, e);
         }
       }
 
@@ -844,7 +973,10 @@ export class AgentRuntimeService {
         // Trigger completion webhook (fire-and-forget)
         await this.triggerCompletionWebhook(stepResult.newState, operationId, reason);
 
-        // Call onComplete callback
+        // Dispatch onComplete hooks
+        await this.dispatchCompletionHooks(operationId, stepResult.newState, reason);
+
+        // Call onComplete callback (legacy)
         if (callbacks?.onComplete) {
           try {
             await callbacks.onComplete({
@@ -859,15 +991,15 @@ export class AgentRuntimeService {
           }
         }
 
-        // Dev mode: finalize tracing snapshot
-        if (process.env.NODE_ENV === 'development') {
+        // Finalize tracing snapshot via injected snapshot store
+        if (this.snapshotStore) {
           try {
-            const { FileSnapshotStore } = await import('@lobechat/agent-tracing');
-            const store = new FileSnapshotStore();
-            const partial = await store.loadPartial(operationId);
+            const partial = await this.snapshotStore.loadPartial(operationId);
 
             if (partial) {
+              const metadata = agentState?.metadata as any;
               const snapshot = {
+                agentId: metadata?.agentId,
                 completedAt: Date.now(),
                 completionReason: reason,
                 error: stepResult.newState.error
@@ -886,14 +1018,16 @@ export class AgentRuntimeService {
                 totalCost: stepResult.newState.cost?.total ?? 0,
                 totalSteps: stepResult.newState.stepCount,
                 totalTokens: stepResult.newState.usage?.llm?.tokens?.total ?? 0,
+                topicId: metadata?.topicId,
                 traceId: operationId,
+                userId: metadata?.userId,
               };
 
-              await store.save(snapshot as any);
-              await store.removePartial(operationId);
+              await this.snapshotStore.save(snapshot as any);
+              await this.snapshotStore.removePartial(operationId);
             }
-          } catch {
-            // agent-tracing not available, skip silently
+          } catch (e) {
+            log('[%s] snapshot finalization failed: %O', operationId, e);
           }
         }
       }
@@ -906,6 +1040,7 @@ export class AgentRuntimeService {
       };
     } catch (error) {
       log('Step %d failed for operation %s: %O', stepIndex, operationId, error);
+      const formattedError = formatErrorForState(error);
 
       // Build error state — try loading current state from coordinator, but if that
       // also fails (e.g. Redis ECONNRESET), fall back to a minimal error state so
@@ -914,7 +1049,8 @@ export class AgentRuntimeService {
       try {
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
-            error: (error as Error).message,
+            error: formattedError.message,
+            errorType: String(formattedError.type),
             phase: 'step_execution',
             stepIndex,
           },
@@ -933,15 +1069,17 @@ export class AgentRuntimeService {
         const errorState = await this.coordinator.loadAgentState(operationId);
         finalStateWithError = {
           ...errorState!,
-          error: formatErrorForState(error),
+          error: formattedError,
           status: 'error' as const,
+          stepCount: errorState?.stepCount ?? stepIndex,
         };
       } catch (loadError) {
         log('[%s] Failed to load error state (infra may be down): %O', operationId, loadError);
         // Fallback: construct a minimal error state so callbacks still receive useful info
         finalStateWithError = {
-          error: formatErrorForState(error),
+          error: formattedError,
           status: 'error' as const,
+          stepCount: stepIndex,
         };
       }
 
@@ -958,7 +1096,10 @@ export class AgentRuntimeService {
         log('[%s] Failed to trigger completion webhook: %O', operationId, webhookError);
       }
 
-      // Also call onComplete callback when execution fails
+      // Dispatch onComplete + onError hooks
+      await this.dispatchCompletionHooks(operationId, finalStateWithError, 'error');
+
+      // Also call onComplete callback when execution fails (legacy)
       if (callbacks?.onComplete) {
         try {
           await callbacks.onComplete({
@@ -1351,6 +1492,34 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Create default snapshot store based on environment.
+   * - ENABLE_AGENT_S3_TRACING=1 → S3SnapshotStore
+   * - NODE_ENV=development → FileSnapshotStore
+   * - Otherwise → null (no tracing)
+   */
+  private createDefaultSnapshotStore(): ISnapshotStore | null {
+    if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
+      try {
+        const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
+        return new S3SnapshotStore();
+      } catch {
+        // S3SnapshotStore not available
+      }
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const { FileSnapshotStore } = require('@lobechat/agent-tracing');
+        return new FileSnapshotStore();
+      } catch {
+        // agent-tracing not available
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Compute device context from DB messages at step boundary.
    * Uses findInMessages visitor to scan tool messages for device activation.
    */
@@ -1441,6 +1610,65 @@ export class AgentRuntimeService {
       }
     } catch (error) {
       console.error('[%s] Webhook delivery failed (%s → %s):', operationId, delivery, url, error);
+    }
+  }
+
+  /**
+   * Dispatch onComplete (and onError) hooks via HookDispatcher.
+   * Fire-and-forget: errors are logged but never thrown.
+   */
+  private async dispatchCompletionHooks(
+    operationId: string,
+    state: any,
+    reason: string,
+  ): Promise<void> {
+    try {
+      const metadata = state?.metadata || {};
+
+      // Extract last assistant content (same as triggerCompletionWebhook)
+      const lastAssistantContent = state?.messages
+        ?.slice()
+        .reverse()
+        .find(
+          (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
+        )?.content;
+
+      const duration = state?.createdAt
+        ? Date.now() - new Date(state.createdAt).getTime()
+        : undefined;
+
+      const event = {
+        agentId: metadata?.agentId || '',
+        cost: state?.cost?.total,
+        duration,
+        errorDetail: state?.error,
+        errorMessage: this.extractErrorMessage?.(state?.error) || String(state?.error || ''),
+        // Full state available in local mode only (not serialized to webhooks)
+        finalState: state,
+        lastAssistantContent,
+        llmCalls: state?.usage?.llm?.apiCalls,
+        operationId,
+        reason,
+        status: state?.status || reason,
+        steps: state?.stepCount || 0,
+        toolCalls: state?.usage?.tools?.totalCalls,
+        topicId: metadata?.topicId,
+        totalTokens: state?.usage?.llm?.tokens?.total,
+        userId: metadata?.userId || this.userId,
+      };
+
+      // Dispatch onComplete hooks
+      await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+
+      // Also dispatch onError hooks if reason is error
+      if (reason === 'error') {
+        await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);
+      }
+
+      // Cleanup hooks after completion
+      hookDispatcher.unregister(operationId);
+    } catch (error) {
+      log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     }
   }
 

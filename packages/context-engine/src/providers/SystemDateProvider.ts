@@ -3,6 +3,12 @@ import debug from 'debug';
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    systemDateInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:SystemDateProvider');
 
 export interface SystemDateProviderConfig {

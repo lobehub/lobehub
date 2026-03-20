@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "認証接続に失敗しました",
   "waitingOAuth.helpText": "ブラウザが自動的に開かない場合は、キャンセルをクリックして再試行してください",
   "waitingOAuth.retry": "再試行",
-  "waitingOAuth.title": "認証接続を待機中"
+  "waitingOAuth.title": "認証接続を待機中",
+  "window.close": "ウィンドウを閉じる",
+  "window.maximize": "ウィンドウを最大化",
+  "window.minimize": "ウィンドウを最小化",
+  "window.restore": "ウィンドウを復元"
 }

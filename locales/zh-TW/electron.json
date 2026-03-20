@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "授權連接失敗",
   "waitingOAuth.helpText": "如果瀏覽器沒有自動打開，請點擊取消後重新嘗試",
   "waitingOAuth.retry": "重試",
-  "waitingOAuth.title": "等待授權連接"
+  "waitingOAuth.title": "等待授權連接",
+  "window.close": "關閉視窗",
+  "window.maximize": "最大化視窗",
+  "window.minimize": "最小化視窗",
+  "window.restore": "還原視窗"
 }

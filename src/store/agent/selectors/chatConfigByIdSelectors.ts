@@ -71,6 +71,11 @@ const getRuntimeModeById =
     return runtimeEnv?.runtimeMode?.[platform] ?? (isDesktop ? 'local' : 'none');
   };
 
+const getSkillActivateModeById =
+  (agentId: string) =>
+  (s: AgentStoreState): 'auto' | 'manual' =>
+    getChatConfigById(agentId)(s).skillActivateMode ?? 'auto';
+
 export const chatConfigByIdSelectors = {
   getChatConfigById,
   getEnableHistoryCountById,
@@ -81,6 +86,7 @@ export const chatConfigByIdSelectors = {
   getRuntimeModeById,
   getSearchFCModelById,
   getSearchModeById,
+  getSkillActivateModeById,
   getUseModelBuiltinSearchById,
   isEnableSearchById,
   isLocalSystemEnabledById,

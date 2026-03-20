@@ -90,6 +90,7 @@ export interface RouteAttemptResult {
   channelId?: string;
   durationMs: number;
   error?: unknown;
+  metadata?: Record<string, unknown>;
   model: string;
   optionIndex: number;
   providerId: string;
@@ -302,6 +303,7 @@ export const createRouterRuntime = ({
     private async runWithFallback<T>(
       model: string,
       requestHandler: (runtime: LobeRuntimeAI) => Promise<T>,
+      metadata?: Record<string, unknown>,
     ): Promise<T> {
       const matchedRouter = await this.resolveMatchedRouter(model);
       const routerOptions = this.normalizeRouterOptions(matchedRouter);
@@ -354,6 +356,7 @@ export const createRouterRuntime = ({
               apiType: resolvedApiType,
               channelId,
               durationMs: Date.now() - startTime,
+              metadata,
               model,
               optionIndex: index,
               providerId: id,
@@ -376,6 +379,7 @@ export const createRouterRuntime = ({
               channelId,
               durationMs: Date.now() - startTime,
               error,
+              metadata,
               model,
               optionIndex: index,
               providerId: id,
@@ -452,8 +456,10 @@ export const createRouterRuntime = ({
      */
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
-        return await this.runWithFallback(payload.model, (runtime) =>
-          runtime.chat!(payload, options),
+        return await this.runWithFallback(
+          payload.model,
+          (runtime) => runtime.chat!(payload, options),
+          options?.metadata,
         );
       } catch (e) {
         if (params.chatCompletion?.handleError) {
@@ -485,14 +491,18 @@ export const createRouterRuntime = ({
     }
 
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-      return this.runWithFallback(payload.model, (runtime) =>
-        runtime.generateObject!(payload, options),
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.generateObject!(payload, options),
+        options?.metadata,
       );
     }
 
     async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
-      return this.runWithFallback(payload.model, (runtime) =>
-        runtime.embeddings!(payload, options),
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.embeddings!(payload, options),
+        options?.metadata,
       );
     }
 

@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Autorisierungsverbindung fehlgeschlagen",
   "waitingOAuth.helpText": "Falls sich der Browser nicht automatisch geöffnet hat, klicken Sie bitte auf Abbrechen und versuchen Sie es erneut",
   "waitingOAuth.retry": "Erneut versuchen",
-  "waitingOAuth.title": "Warten auf Autorisierungsverbindung"
+  "waitingOAuth.title": "Warten auf Autorisierungsverbindung",
+  "window.close": "Fenster schließen",
+  "window.maximize": "Fenster maximieren",
+  "window.minimize": "Fenster minimieren",
+  "window.restore": "Fenster wiederherstellen"
 }

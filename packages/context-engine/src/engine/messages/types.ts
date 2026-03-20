@@ -1,11 +1,16 @@
 /* eslint-disable perfectionist/sort-interfaces */
 import type { FileContent, KnowledgeBaseInfo, PageContentContext } from '@lobechat/prompts';
-import type { RuntimeInitialContext, RuntimeStepContext } from '@lobechat/types';
+import type {
+  RuntimeInitialContext,
+  RuntimeSelectedSkill,
+  RuntimeStepContext,
+} from '@lobechat/types';
 
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
+import type { AgentContextDocument } from '../../providers/AgentDocumentInjector';
 import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 import type { DiscordContext } from '../../providers/DiscordContextProvider';
 import type { EvalContext } from '../../providers/EvalContextSystemInjector';
@@ -15,6 +20,8 @@ import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
+import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
+import type { PipelineContextMetadata } from '../../types';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -235,10 +242,14 @@ export interface MessagesEngineParams {
   // ========== Knowledge ==========
   /** Knowledge configuration */
   knowledge?: KnowledgeConfig;
+  /** Agent document configuration for context injection */
+  agentDocuments?: AgentContextDocument[];
 
   // ========== Skills ==========
   /** Skills configuration */
   skillsConfig?: SkillsConfig;
+  /** Skills explicitly selected by the user for the current request */
+  selectedSkills?: RuntimeSelectedSkill[];
 
   // ========== Tool Discovery ==========
   /** Tool Discovery configuration (available tools for dynamic activation) */
@@ -274,6 +285,10 @@ export interface MessagesEngineParams {
   /** User memory configuration */
   userMemory?: UserMemoryConfig;
 
+  // ========== Topic References ==========
+  /** Topic reference summaries to inject into last user message */
+  topicReferences?: TopicReferenceItem[];
+
   // ========== Page Editor context ==========
   /**
    * Initial context captured at operation start (frontend runtime usage)
@@ -299,7 +314,7 @@ export interface MessagesEngineResult {
   /** Processed messages in OpenAI format */
   messages: OpenAIChatMessage[];
   /** Processing metadata */
-  metadata: Record<string, any>;
+  metadata: PipelineContextMetadata;
   /** Processing statistics */
   stats: {
     /** Number of processors executed */
@@ -323,5 +338,6 @@ export { type GTDPlan } from '../../providers/GTDPlanInjector';
 export { type GTDTodoItem, type GTDTodoList } from '../../providers/GTDTodoInjector';
 export { type SkillMeta } from '../../providers/SkillContextProvider';
 export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
+export { type TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
 export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';

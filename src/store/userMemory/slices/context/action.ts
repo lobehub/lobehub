@@ -92,12 +92,8 @@ export class ContextActionImpl {
           this.#set(
             produce((draft) => {
               draft.contextsSearchLoading = false;
-
-              // Set basic information
-              if (!draft.contextsInit) {
-                draft.contextsInit = true;
-                draft.contextsTotal = data.total;
-              }
+              draft.contextsInit = true;
+              draft.contextsTotal = data.total;
 
               // Transform data structure
               const transformedItems: DisplayContextMemory[] = data.items.map((item: any) => ({

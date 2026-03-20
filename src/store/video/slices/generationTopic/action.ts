@@ -265,14 +265,6 @@ export const createGenerationTopicSlice: StateCreator<
   },
 
   switchGenerationTopic: (topicId: string) => {
-    const currentTopics = get().generationTopics;
-    const targetTopic = currentTopics.find((topic) => topic.id === topicId);
-
-    if (!targetTopic) {
-      console.warn(`Generation topic with id ${topicId} not found`);
-      return;
-    }
-
     if (get().activeGenerationTopicId === topicId) return;
 
     set({ activeGenerationTopicId: topicId }, false, n('switchGenerationTopic'));

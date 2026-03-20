@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AiProviderModel } from '@/database/models/aiProvider';
@@ -87,9 +88,19 @@ export const aiProviderRouter = router({
   createAiProvider: aiProviderProcedure
     .input(CreateAiProviderSchema)
     .mutation(async ({ input, ctx }) => {
-      const data = await ctx.aiProviderModel.create(input, ctx.gateKeeper.encrypt);
-
-      return data?.id;
+      try {
+        const data = await ctx.aiProviderModel.create(input, ctx.gateKeeper.encrypt);
+        return data?.id;
+      } catch (error: any) {
+        const pgErrorCode = error?.cause?.cause?.code || error?.cause?.code || error?.code;
+        if (pgErrorCode === '23505') {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `Provider "${input.id}" already exists`,
+          });
+        }
+        throw error;
+      }
     }),
 
   getAiProviderById: aiProviderProcedure

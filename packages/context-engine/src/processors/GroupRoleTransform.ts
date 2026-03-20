@@ -3,6 +3,15 @@ import debug from 'debug';
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { Message, PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    groupRoleTransformProcessed?: {
+      assistantTransformed: number;
+      toolTransformed: number;
+    };
+  }
+}
+
 const log = debug('context-engine:processor:GroupRoleTransformProcessor');
 
 /**

@@ -50,8 +50,9 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
   let asyncTaskMetadata: VideoGenerationTaskMetadata | undefined;
 
   try {
-    // Parse webhook body using provider-specific handler
-    const runtime = ModelRuntime.initializeWithProvider(provider, {});
+    const runtime = ModelRuntime.initializeWithProvider(provider, {
+      apiKey: 'webhook-placeholder',
+    });
     const result = await runtime.handleCreateVideoWebhook({ body });
 
     if (!result) {

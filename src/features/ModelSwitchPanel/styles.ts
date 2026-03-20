@@ -22,32 +22,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       padding-inline: 8px;
       border-radius: ${cssVar.borderRadiusSM};
     }
-
-    [role='menuitem'] .settings-icon {
-      opacity: 0;
-    }
-
-    [role='menuitem']:hover .settings-icon {
-      opacity: 1;
-    }
-  `,
-
-  footer: css`
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   groupHeader: css`
     width: 100%;
     color: ${cssVar.colorTextSecondary};
-
-    .settings-icon {
-      opacity: 0;
-    }
-
-    &:hover {
-      .settings-icon {
-        opacity: 1;
-      }
-    }
   `,
   list: css`
     position: relative;
@@ -68,24 +46,24 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 8px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};
-
-    .settings-icon {
-      opacity: 0;
-    }
-
-    &:hover {
-      .settings-icon {
-        opacity: 1;
-      }
-    }
   `,
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};
+  `,
+  footer: css`
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   toolbar: css`
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   trigger: css`
+    display: inline-flex;
     outline: none;
+
+    /* SVG icons (from @lobehub/icons IconAvatar) can receive focus when dropdown closes,
+       causing an unwanted blue outline ring */
+    svg:focus {
+      outline: none;
+    }
   `,
 }));

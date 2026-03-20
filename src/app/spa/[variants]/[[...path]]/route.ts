@@ -220,6 +220,7 @@ export async function GET(
 
   return new Response(html, {
     headers: {
+      'Cache-Control': 'no-cache',
       'content-type': 'text/html; charset=utf-8',
     },
   });

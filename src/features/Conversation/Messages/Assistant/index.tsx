@@ -7,7 +7,8 @@ import { memo, useCallback } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
@@ -32,106 +33,97 @@ interface AssistantMessageProps {
   isLatestItem?: boolean;
 }
 
-const AssistantMessage = memo<AssistantMessageProps>(
-  ({ id, index, disableEditing, isLatestItem }) => {
-    // Get message and actionsConfig from ConversationStore
-    const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
+const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditing }) => {
+  // Get message and actionsConfig from ConversationStore
+  const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
-    const {
-      agentId,
-      branch,
-      error,
-      role,
-      content,
-      createdAt,
-      tools,
-      extra,
-      model,
-      provider,
-      performance,
-      usage,
-      metadata,
-    } = item;
+  const {
+    agentId,
+    branch,
+    error,
+    role,
+    content,
+    createdAt,
+    tools,
+    extra,
+    model,
+    provider,
+    performance,
+    usage,
+    metadata,
+  } = item;
 
-    const avatar = useAgentMeta(agentId);
+  const avatar = useAgentMeta(agentId);
 
-    // Get editing and generating state from ConversationStore
-    const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
-    const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
-    const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-    const { minHeight } = useNewScreen({
-      creating: creating || generating,
-      isLatestItem,
-      messageId: id,
-    });
+  // Get editing and generating state from ConversationStore
+  const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
+  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
 
-    const errorContent = useErrorContent(error);
+  const errorContent = useErrorContent(error);
 
-    // remove line breaks in artifact tag to make the ast transform easier
-    const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
+  // remove line breaks in artifact tag to make the ast transform easier
+  const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
 
-    const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
-    const setMessageItemActionElementPortialContext =
-      useSetMessageItemActionElementPortialContext();
-    const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
+  const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
+  const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
+  const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
 
-    const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
-      (e) => {
-        setMessageItemActionElementPortialContext(e.currentTarget);
-        setMessageItemActionTypeContext({ id, index, type: 'assistant' });
-      },
-      [id, index, setMessageItemActionElementPortialContext, setMessageItemActionTypeContext],
-    );
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
-    return (
-      <ChatItem
-        showTitle
-        aboveMessage={null}
-        avatar={avatar}
-        customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
-        editing={editing}
-        id={id}
-        loading={generating}
-        message={message}
-        newScreenMinHeight={minHeight}
-        placement={'left'}
-        time={createdAt}
-        actions={
-          <>
-            {branch && (
-              <MessageBranch
-                activeBranchIndex={branch.activeBranchIndex}
-                count={branch.count}
-                messageId={id}
-              />
-            )}
-            {actionBarHolder}
-          </>
-        }
-        error={
-          errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
-        }
-        messageExtra={
-          <AssistantMessageExtra
-            content={content}
-            extra={extra}
-            id={id}
-            model={model!}
-            performance={performance! || metadata}
-            provider={provider!}
-            tools={tools}
-            usage={usage! || metadata}
-          />
-        }
-        onDoubleClick={onDoubleClick}
-        onMouseEnter={onMouseEnter}
-      >
-        <MessageContent {...item} />
-      </ChatItem>
-    );
-  },
-  isEqual,
-);
+  const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
+    (e) => {
+      setMessageItemActionElementPortialContext(e.currentTarget);
+      setMessageItemActionTypeContext({ id, index, type: 'assistant' });
+    },
+    [id, index, setMessageItemActionElementPortialContext, setMessageItemActionTypeContext],
+  );
+
+  return (
+    <ChatItem
+      showTitle
+      aboveMessage={null}
+      avatar={avatar}
+      customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
+      editing={editing}
+      id={id}
+      loading={generating}
+      message={message}
+      placement={'left'}
+      time={createdAt}
+      actions={
+        <>
+          {isDevMode && branch && (
+            <MessageBranch
+              activeBranchIndex={branch.activeBranchIndex}
+              count={branch.count}
+              messageId={id}
+            />
+          )}
+          {actionBarHolder}
+        </>
+      }
+      error={
+        errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
+      }
+      messageExtra={
+        <AssistantMessageExtra
+          content={content}
+          extra={extra}
+          id={id}
+          model={model!}
+          performance={performance! || metadata}
+          provider={provider!}
+          tools={tools}
+          usage={usage! || metadata}
+        />
+      }
+      onDoubleClick={onDoubleClick}
+      onMouseEnter={onMouseEnter}
+    >
+      <MessageContent {...item} />
+    </ChatItem>
+  );
+}, isEqual);
 
 AssistantMessage.displayName = 'AssistantMessage';
 

@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Fallo en la conexión de autorización",
   "waitingOAuth.helpText": "Si el navegador no se abrió automáticamente, por favor haz clic en cancelar e inténtalo de nuevo",
   "waitingOAuth.retry": "Reintentar",
-  "waitingOAuth.title": "Esperando conexión de autorización"
+  "waitingOAuth.title": "Esperando conexión de autorización",
+  "window.close": "Cerrar ventana",
+  "window.maximize": "Maximizar ventana",
+  "window.minimize": "Minimizar ventana",
+  "window.restore": "Restaurar ventana"
 }

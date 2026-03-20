@@ -53,6 +53,14 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     }
   }
 
+  html.desktop[data-theme='dark'] body {
+    background-color: color-mix(in srgb, ${token.colorBgLayout} 50%, transparent);
+  }
+
+  html.desktop[data-theme='light'] body {
+    background-color: color-mix(in srgb, ${token.colorBgLayout} 70%, transparent);
+  }
+
   button {
     -webkit-app-region: no-drag;
   }

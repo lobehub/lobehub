@@ -1,6 +1,7 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
 import { chainSummaryTitle } from '@lobechat/prompts';
-import { type UserSystemAgentConfig, type UserSystemAgentConfigKey } from '@lobechat/types';
+import type { UserSystemAgentConfig, UserSystemAgentConfigKey } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
@@ -65,11 +66,14 @@ export class SystemAgentService {
       const payload = chainSummaryTitle(messages, locale);
 
       const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
-      const result = await modelRuntime.generateObject({
-        messages: payload.messages as any[],
-        model,
-        schema: TOPIC_TITLE_SCHEMA,
-      });
+      const result = await modelRuntime.generateObject(
+        {
+          messages: payload.messages as any[],
+          model,
+          schema: TOPIC_TITLE_SCHEMA,
+        },
+        { metadata: { trigger: RequestTrigger.Topic } },
+      );
 
       const title = (result as { title?: string })?.title?.trim();
       if (!title) {

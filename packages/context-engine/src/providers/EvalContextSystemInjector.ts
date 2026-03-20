@@ -3,6 +3,12 @@ import debug from 'debug';
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    evalContextInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:EvalContextSystemInjector');
 
 export interface EvalContext {

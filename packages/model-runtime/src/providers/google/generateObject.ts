@@ -1,8 +1,10 @@
 import type { GenerateContentConfig, GoogleGenAI } from '@google/genai';
 import { FunctionCallingConfigMode, Type as SchemaType } from '@google/genai';
 import Debug from 'debug';
+import type { Pricing } from 'model-bank';
 
 import { buildGoogleTool } from '../../core/contextBuilders/google';
+import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
 import type { ChatCompletionTool, GenerateObjectOptions, GenerateObjectSchema } from '../../types';
 
 const debug = Debug('lobe-mode-runtime:google:generateObject');
@@ -109,6 +111,7 @@ export const createGoogleGenerateObject = async (
     schema: GenerateObjectSchema;
   },
   options?: GenerateObjectOptions,
+  pricing?: Pricing,
 ) => {
   const { schema, contents, model } = payload;
 
@@ -165,6 +168,10 @@ export const createGoogleGenerateObject = async (
 
   debug('API response received', { hasText: !!response.text, textLength: response.text?.length });
 
+  if (response.usageMetadata) {
+    await options?.onUsage?.(convertGoogleAIUsage(response.usageMetadata, pricing));
+  }
+
   const text = response.text;
 
   try {
@@ -190,6 +197,7 @@ export const createGoogleGenerateObjectWithTools = async (
     tools: ChatCompletionTool[];
   },
   options?: GenerateObjectOptions,
+  pricing?: Pricing,
 ) => {
   const { tools, contents, model } = payload;
 
@@ -250,6 +258,10 @@ export const createGoogleGenerateObjectWithTools = async (
     candidatesCount: response.candidates?.length,
     hasContent: !!response.candidates?.[0]?.content,
   });
+
+  if (response.usageMetadata) {
+    await options?.onUsage?.(convertGoogleAIUsage(response.usageMetadata, pricing));
+  }
 
   // Extract function calls from response
   const candidate = response.candidates?.[0];

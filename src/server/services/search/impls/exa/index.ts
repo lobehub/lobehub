@@ -31,7 +31,7 @@ export class ExaImpl implements SearchServiceImpl {
     const endpoint = urlJoin(this.baseUrl, '/search');
 
     const defaultQueryParams: ExaSearchParameters = {
-      numResults: 15,
+      numResults: 10,
       query,
       type: 'auto',
     };

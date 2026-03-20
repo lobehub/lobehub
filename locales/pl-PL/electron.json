@@ -120,5 +120,9 @@
   "waitingOAuth.errorTitle": "Nie udało się nawiązać połączenia autoryzacyjnego",
   "waitingOAuth.helpText": "Jeśli przeglądarka nie otworzyła się automatycznie, kliknij Anuluj i spróbuj ponownie",
   "waitingOAuth.retry": "Spróbuj ponownie",
-  "waitingOAuth.title": "Oczekiwanie na połączenie autoryzacyjne"
+  "waitingOAuth.title": "Oczekiwanie na połączenie autoryzacyjne",
+  "window.close": "Zamknij okno",
+  "window.maximize": "Maksymalizuj okno",
+  "window.minimize": "Minimalizuj okno",
+  "window.restore": "Przywróć okno"
 }

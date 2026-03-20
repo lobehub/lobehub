@@ -1,6 +1,18 @@
 import type { UIChatMessage } from '@lobechat/types';
 
 /**
+ * Consumer-side metadata extensions for PipelineContext.metadata.
+ *
+ * Example:
+ * declare module '@lobechat/context-engine' {
+ *   interface PipelineContextMetadataOverrides {
+ *     myCustomFlag?: boolean;
+ *   }
+ * }
+ */
+export interface PipelineContextMetadataOverrides {}
+
+/**
  * Agent state - inferred from original project types
  */
 export interface AgentState {
@@ -40,6 +52,19 @@ export interface Message {
 }
 
 /**
+ * Metadata shared across pipeline processors.
+ * Consumers can extend this through declaration merging on
+ * `LobeChatContextEngine.PipelineContextMetadataOverrides`.
+ */
+export interface PipelineContextMetadata extends PipelineContextMetadataOverrides {
+  [key: `${string}InjectedCount`]: number | undefined;
+  currentTokenCount?: number;
+  maxTokens?: number;
+  model?: string;
+  provider?: string;
+}
+
+/**
  * Pipeline context - core data structure flowing through the pipeline
  */
 export interface PipelineContext {
@@ -55,16 +80,7 @@ export interface PipelineContext {
   /** Mutable message list being built */
   messages: Message[];
   /** Metadata for communication between processors */
-  metadata: {
-    /** Other custom metadata */
-    [key: string]: any;
-    /** Current token count estimate */
-    currentTokenCount?: number;
-    /** Maximum token limit */
-    maxTokens?: number;
-    /** Model identifier */
-    model?: string;
-  };
+  metadata: PipelineContextMetadata;
 }
 
 /**
@@ -98,7 +114,7 @@ export interface PipelineResult {
   /** Final processed messages */
   messages: any[];
   /** Metadata from processing */
-  metadata: Record<string, any>;
+  metadata: PipelineContextMetadata;
   /** Execution statistics */
   stats: {
     /** Number of processors processed */
