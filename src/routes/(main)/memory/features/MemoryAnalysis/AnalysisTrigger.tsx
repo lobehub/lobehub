@@ -1,11 +1,12 @@
 'use client';
 
-import { ActionIcon, Button, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, Tooltip } from '@lobehub/ui';
 import { App } from 'antd';
 import { CalendarClockIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
 import { memoryExtractionService } from '@/services/userMemory/extraction';
 
@@ -52,13 +53,19 @@ const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange, iconOnl
     <>
       {iconOnly ? (
         <Tooltip title={t('analysis.action.button')}>
-          <ActionIcon icon={CalendarClockIcon} loading={loading} onClick={() => setOpen(true)} />
+          <ActionIcon
+            icon={CalendarClockIcon}
+            size={DESKTOP_HEADER_ICON_SIZE}
+            tooltipProps={{ placement: 'bottom' }}
+            onClick={() => setOpen(true)}
+          />
         </Tooltip>
       ) : (
         <Button
-          icon={<Icon icon={CalendarClockIcon} />}
+          className="test"
+          icon={CalendarClockIcon}
           loading={loading}
-          size={'large'}
+          size={'small'}
           style={{ maxWidth: 300 }}
           type={'primary'}
           onClick={() => setOpen(true)}
