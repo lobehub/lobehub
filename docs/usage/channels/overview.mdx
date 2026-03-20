@@ -2,14 +2,16 @@
 title: Channels Overview
 description: >-
   Connect your LobeHub agents to external messaging platforms like Discord,
-  Telegram, and Feishu/Lark, allowing users to interact with AI assistants
-  directly in their favorite chat apps.
+  Slack, Telegram, QQ, Feishu, and Lark, allowing users to interact with AI
+  assistants directly in their favorite chat apps.
 tags:
   - Channels
   - Message Channels
   - Integration
   - Discord
+  - Slack
   - Telegram
+  - QQ
   - Feishu
   - Lark
 ---
@@ -24,18 +26,21 @@ Channels allow you to connect your LobeHub agents to external messaging platform
 
 ## Supported Platforms
 
-| Platform                                     | Description                                                     |
-| -------------------------------------------- | --------------------------------------------------------------- |
-| [Discord](/docs/usage/channels/discord)      | Connect to Discord servers for channel chat and direct messages |
-| [Telegram](/docs/usage/channels/telegram)    | Connect to Telegram for private and group conversations         |
-| [Feishu / Lark](/docs/usage/channels/feishu) | Connect to Feishu (飞书) or Lark for team collaboration           |
+| Platform                                   | Description                                                     |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| [Discord](/docs/usage/channels/discord)    | Connect to Discord servers for channel chat and direct messages |
+| [Slack](/docs/usage/channels/slack)        | Connect to Slack for channel and direct message conversations   |
+| [Telegram](/docs/usage/channels/telegram)  | Connect to Telegram for private and group conversations         |
+| [QQ](/docs/usage/channels/qq)              | Connect to QQ for group chats and direct messages               |
+| [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)      |
+| [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)  |
 
 ## How It Works
 
 Each channel integration works by linking a bot account on the target platform to a LobeHub agent. When a user sends a message to the bot, LobeHub processes it through the agent and sends the response back to the same conversation.
 
 - **Per-agent configuration** — Each agent can have its own set of channel connections, so different agents can serve different platforms or communities.
-- **Multiple channels simultaneously** — A single agent can be connected to Discord, Telegram, and Feishu/Lark at the same time. LobeHub routes messages to the correct agent automatically.
+- **Multiple channels simultaneously** — A single agent can be connected to Discord, Slack, Telegram, QQ, Feishu, and Lark at the same time. LobeHub routes messages to the correct agent automatically.
 - **Secure credential storage** — All bot tokens and app secrets are encrypted before being stored.
 
 ## Getting Started
@@ -44,17 +49,20 @@ Each channel integration works by linking a bot account on the target platform t
 2. Navigate to your agent's settings and select the **Channels** tab
 3. Choose a platform and follow the setup guide:
    - [Discord](/docs/usage/channels/discord)
+   - [Slack](/docs/usage/channels/slack)
    - [Telegram](/docs/usage/channels/telegram)
-   - [Feishu / Lark](/docs/usage/channels/feishu)
+   - [QQ](/docs/usage/channels/qq)
+   - [Feishu (飞书)](/docs/usage/channels/feishu)
+   - [Lark](/docs/usage/channels/lark)
 
 ## Feature Support
 
 Text messages are supported across all platforms. Some features vary by platform:
 
-| Feature                | Discord | Telegram | Feishu / Lark |
-| ---------------------- | ------- | -------- | ------------- |
-| Text messages          | Yes     | Yes      | Yes           |
-| Direct messages        | Yes     | Yes      | Yes           |
-| Group chats            | Yes     | Yes      | Yes           |
-| Reactions              | Yes     | Yes      | Partial       |
-| Image/file attachments | Yes     | Yes      | Yes           |
+| Feature                | Discord | Slack | Telegram | QQ  | Feishu  | Lark    |
+| ---------------------- | ------- | ----- | -------- | --- | ------- | ------- |
+| Text messages          | Yes     | Yes   | Yes      | Yes | Yes     | Yes     |
+| Direct messages        | Yes     | Yes   | Yes      | Yes | Yes     | Yes     |
+| Group chats            | Yes     | Yes   | Yes      | Yes | Yes     | Yes     |
+| Reactions              | Yes     | Yes   | Yes      | No  | Partial | Partial |
+| Image/file attachments | Yes     | Yes   | Yes      | Yes | Yes     | Yes     |
