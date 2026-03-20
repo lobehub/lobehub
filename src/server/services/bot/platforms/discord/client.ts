@@ -163,12 +163,6 @@ class DiscordGatewayClient implements PlatformClient {
   sanitizeUserInput(text: string): string {
     return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
   }
-
-  shouldSubscribe(threadId: string): boolean {
-    // Only auto-subscribe to actual threads (4-part ID), not top-level channels (3-part ID).
-    const parts = threadId.split(':');
-    return parts.length >= 4;
-  }
 }
 
 export class DiscordClientFactory extends ClientFactory {
