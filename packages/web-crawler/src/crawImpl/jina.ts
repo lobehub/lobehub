@@ -1,7 +1,9 @@
 import type { CrawlImpl } from '../type';
 import { toFetchError } from '../utils/errorType';
 import { parseJSONResponse } from '../utils/response';
-import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
+import { withTimeout } from '../utils/withTimeout';
+
+const JINA_TIMEOUT = 15_000;
 
 export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
   const token = params.apiKey ?? process.env.JINA_READER_API_KEY ?? process.env.JINA_API_KEY;
@@ -18,7 +20,7 @@ export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
           },
           signal,
         }),
-      DEFAULT_TIMEOUT,
+      JINA_TIMEOUT,
     );
   } catch (e) {
     throw toFetchError(e);
