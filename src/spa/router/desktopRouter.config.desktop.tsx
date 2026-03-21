@@ -26,6 +26,7 @@ import CommunityDetailGroupAgentPage from '@/routes/(main)/community/(detail)/gr
 import CommunityDetailMcpPage from '@/routes/(main)/community/(detail)/mcp';
 import CommunityDetailModelPage from '@/routes/(main)/community/(detail)/model';
 import CommunityDetailProviderPage from '@/routes/(main)/community/(detail)/provider';
+import CommunityDetailSkillPage from '@/routes/(main)/community/(detail)/skill';
 import CommunityDetailUserPage from '@/routes/(main)/community/(detail)/user';
 import CommunityListLayout from '@/routes/(main)/community/(list)/_layout';
 import CommunityListHomePage from '@/routes/(main)/community/(list)/(home)';
@@ -36,6 +37,8 @@ import CommunityListMcpLayout from '@/routes/(main)/community/(list)/mcp/_layout
 import CommunityListModelPage from '@/routes/(main)/community/(list)/model';
 import CommunityListModelLayout from '@/routes/(main)/community/(list)/model/_layout';
 import CommunityListProviderPage from '@/routes/(main)/community/(list)/provider';
+import CommunityListSkillPage from '@/routes/(main)/community/(list)/skill';
+import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_layout';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -167,6 +170,16 @@ export const desktopRoutes: RouteObject[] = [
               {
                 children: [
                   {
+                    element: <CommunityListSkillPage />,
+                    index: true,
+                  },
+                ],
+                element: <CommunityListSkillLayout />,
+                path: 'skill',
+              },
+              {
+                children: [
+                  {
                     element: <CommunityListMcpPage />,
                     index: true,
                   },
@@ -199,6 +212,10 @@ export const desktopRoutes: RouteObject[] = [
               {
                 element: <CommunityDetailProviderPage />,
                 path: 'provider/:slug',
+              },
+              {
+                element: <CommunityDetailSkillPage />,
+                path: 'skill/:slug',
               },
               {
                 element: <CommunityDetailMcpPage />,
