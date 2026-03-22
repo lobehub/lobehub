@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button, Modal, Spin, Typography } from 'antd';
+import { Alert, Button, Modal, QRCode, Spin, Typography } from 'antd';
 import { QrCode, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -129,13 +129,7 @@ const QrCodeAuth = memo<QrCodeAuthProps>(({ onAuthenticated }) => {
         >
           {loading && <Spin size="large" />}
 
-          {qrImgUrl && !error && (
-            <img
-              alt="WeChat QR Code"
-              src={qrImgUrl}
-              style={{ borderRadius: 8, height: 240, width: 240 }}
-            />
-          )}
+          {qrImgUrl && !error && <QRCode size={240} value={qrImgUrl} />}
 
           {statusText && !error && <Typography.Text type="secondary">{statusText}</Typography.Text>}
 

@@ -170,11 +170,12 @@ export class WechatApiClient {
   }
 
   /**
-   * Verify bot token by calling getconfig.
+   * Verify bot token by attempting a getupdates call with empty cursor.
+   * Returns true if the API responds successfully (ret === 0).
    */
   async verifyToken(): Promise<boolean> {
-    const res = await this.getConfig();
-    return (res.ret ?? res.errcode ?? -1) === WECHAT_RET_CODES.OK;
+    const res = await this.getUpdates('', AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+    return res.ret === WECHAT_RET_CODES.OK;
   }
 }
 
