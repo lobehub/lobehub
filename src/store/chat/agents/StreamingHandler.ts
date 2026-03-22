@@ -134,6 +134,10 @@ export class StreamingHandler {
    * Handle streaming finish
    */
   async handleFinish(finishData: FinishData): Promise<StreamingResult> {
+    // Ensure reasoning is ended even if stop chunk was not processed by handleChunk
+    // (e.g., in tool call scenarios where the stream ends differently)
+    this.endReasoningIfNeeded();
+
     // Update traceId
     if (finishData.traceId) {
       this.msgTraceId = finishData.traceId;
