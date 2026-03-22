@@ -5,7 +5,7 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable } from '../utils/format';
 import { log } from '../utils/logger';
 
-const SUPPORTED_PLATFORMS = ['discord', 'slack', 'telegram', 'lark', 'feishu'];
+const SUPPORTED_PLATFORMS = ['discord', 'slack', 'telegram', 'lark', 'feishu', 'wechat'];
 
 const PLATFORM_CREDENTIAL_FIELDS: Record<string, string[]> = {
   discord: ['botToken', 'publicKey'],
@@ -13,6 +13,7 @@ const PLATFORM_CREDENTIAL_FIELDS: Record<string, string[]> = {
   lark: ['appSecret'],
   slack: ['botToken', 'signingSecret'],
   telegram: ['botToken'],
+  wechat: ['botToken', 'botId'],
 };
 
 function parseCredentials(
@@ -22,6 +23,7 @@ function parseCredentials(
   const creds: Record<string, string> = {};
 
   if (options.botToken) creds.botToken = options.botToken;
+  if (options.botId) creds.botId = options.botId;
   if (options.publicKey) creds.publicKey = options.publicKey;
   if (options.signingSecret) creds.signingSecret = options.signingSecret;
   if (options.appSecret) creds.appSecret = options.appSecret;
@@ -125,6 +127,7 @@ export function registerBotCommand(program: Command) {
     .requiredOption('--platform <platform>', `Platform: ${SUPPORTED_PLATFORMS.join(', ')}`)
     .requiredOption('--app-id <appId>', 'Application ID for webhook routing')
     .option('--bot-token <token>', 'Bot token')
+    .option('--bot-id <id>', 'Bot ID (WeChat)')
     .option('--public-key <key>', 'Public key (Discord)')
     .option('--signing-secret <secret>', 'Signing secret (Slack)')
     .option('--app-secret <secret>', 'App secret (Lark/Feishu)')
@@ -133,6 +136,7 @@ export function registerBotCommand(program: Command) {
         agent: string;
         appId: string;
         appSecret?: string;
+        botId?: string;
         botToken?: string;
         platform: string;
         publicKey?: string;
@@ -175,6 +179,7 @@ export function registerBotCommand(program: Command) {
     .command('update <botId>')
     .description('Update a bot integration')
     .option('--bot-token <token>', 'New bot token')
+    .option('--bot-id <id>', 'New bot ID (WeChat)')
     .option('--public-key <key>', 'New public key')
     .option('--signing-secret <secret>', 'New signing secret')
     .option('--app-secret <secret>', 'New app secret')
@@ -186,6 +191,7 @@ export function registerBotCommand(program: Command) {
         options: {
           appId?: string;
           appSecret?: string;
+          botId?: string;
           botToken?: string;
           platform?: string;
           publicKey?: string;
@@ -196,6 +202,7 @@ export function registerBotCommand(program: Command) {
 
         const credentials: Record<string, string> = {};
         if (options.botToken) credentials.botToken = options.botToken;
+        if (options.botId) credentials.botId = options.botId;
         if (options.publicKey) credentials.publicKey = options.publicKey;
         if (options.signingSecret) credentials.signingSecret = options.signingSecret;
         if (options.appSecret) credentials.appSecret = options.appSecret;
