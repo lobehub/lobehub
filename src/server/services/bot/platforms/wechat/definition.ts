@@ -8,7 +8,6 @@ export const wechat: PlatformDefinition = {
   connectionMode: 'websocket',
   description: 'Connect a WeChat bot via iLink API',
   documentation: {
-    portalUrl: 'https://ilinkai.weixin.qq.com',
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/wechat',
   },
   schema,

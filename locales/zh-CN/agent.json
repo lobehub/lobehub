@@ -81,6 +81,7 @@
   "channel.verificationTokenHint": "可选。用于验证事件推送来源。",
   "channel.verificationTokenPlaceholder": "在此粘贴你的 Verification Token",
   "channel.wechat.description": "通过 iLink Bot 将助手连接到微信，支持私聊和群聊。",
-  "channel.wechatAppToken": "App Token",
-  "channel.wechatAppTokenHint": "来自 iLink Bot 平台的认证令牌。令牌将被加密安全存储。"
+  "channel.wechatBotId": "Bot ID",
+  "channel.wechatBotIdHint": "可选。机器人的 iLink 用户 ID，通过 QR 码登录获取。",
+  "channel.wechatBotTokenHint": "通过微信 iLink QR 码登录获取的 Bot Token。令牌将被加密安全存储。"
 }

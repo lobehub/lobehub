@@ -3,13 +3,10 @@ export { WechatApiClient } from './api';
 export { WechatFormatConverter } from './format-converter';
 export type {
   WechatAdapterConfig,
-  WechatAuthor,
-  WechatBotInfoResponse,
+  WechatGetConfigResponse,
   WechatGetUpdatesResponse,
   WechatRawMessage,
-  WechatSendMessageParams,
   WechatSendMessageResponse,
   WechatThreadId,
-  WechatUpdate,
 } from './types';
-export { WECHAT_ERROR_CODES, WECHAT_MSG_TYPE } from './types';
+export { MessageItemType, MessageState, MessageType, WECHAT_RET_CODES } from './types';

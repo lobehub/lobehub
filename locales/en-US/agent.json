@@ -81,6 +81,7 @@
   "channel.verificationTokenHint": "Optional. Used to verify webhook event source.",
   "channel.verificationTokenPlaceholder": "Paste your verification token here",
   "channel.wechat.description": "Connect this assistant to WeChat via iLink Bot for private and group chats.",
-  "channel.wechatAppToken": "App Token",
-  "channel.wechatAppTokenHint": "The authentication token from the iLink Bot Platform. It will be encrypted and stored securely."
+  "channel.wechatBotId": "Bot ID",
+  "channel.wechatBotIdHint": "Optional. The bot's iLink user ID, obtained from QR code login.",
+  "channel.wechatBotTokenHint": "Bot token obtained from WeChat iLink QR code login. It will be encrypted and stored securely."
 }

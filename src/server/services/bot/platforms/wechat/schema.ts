@@ -7,11 +7,18 @@ export const schema: FieldSchema[] = [
     label: 'channel.credentials',
     properties: [
       {
-        key: 'appToken',
-        description: 'channel.wechatAppTokenHint',
-        label: 'channel.wechatAppToken',
+        key: 'botToken',
+        description: 'channel.wechatBotTokenHint',
+        label: 'channel.botToken',
         required: true,
         type: 'password',
+      },
+      {
+        key: 'botId',
+        description: 'channel.wechatBotIdHint',
+        label: 'channel.wechatBotId',
+        required: false,
+        type: 'string',
       },
     ],
     type: 'object',
@@ -22,10 +29,10 @@ export const schema: FieldSchema[] = [
     properties: [
       {
         key: 'charLimit',
-        default: 2048,
+        default: 2000,
         description: 'channel.charLimitHint',
         label: 'channel.charLimit',
-        maximum: 2048,
+        maximum: 2000,
         minimum: 100,
         type: 'number',
       },
