@@ -23,49 +23,35 @@ By connecting a WeChat channel to your LobeHub agent, users can interact with th
 ## Prerequisites
 
 - A LobeHub account with an active subscription
-- A WeChat account registered with the iLink Bot platform
+- A WeChat account
 
-## Step 1: Register on the iLink Bot Platform
+## Step 1: Open Channel Settings
 
-<Steps>
-  ### Open the iLink Bot Platform
+In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **WeChat** from the platform list.
 
-  Visit the [iLink Bot Platform](https://ilinkai.weixin.qq.com) and sign in with your WeChat account.
-
-  ### Create a Bot
-
-  Follow the platform instructions to create a new bot application. Fill in the bot name and description.
-
-  ### Obtain App Token
-
-  After the bot is created, navigate to the bot's settings page and obtain your **App Token**. This token is used to authenticate API requests.
-
-  > **Important:** Keep your App Token confidential. Never share it publicly.
-</Steps>
-
-## Step 2: Configure WeChat in LobeHub
+## Step 2: Scan QR Code to Connect
 
 <Steps>
-  ### Open Channel Settings
+  ### Click "Scan QR Code to Connect"
 
-  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **WeChat** from the platform list.
+  On the WeChat channel page, click the **Scan QR Code to Connect** button. A modal dialog will appear displaying a QR code.
 
-  ### Enter Credentials
+  ### Scan with WeChat
 
-  Fill in the following field:
+  Open WeChat on your phone, go to **Scan** (via the + button in the top right), and scan the QR code displayed in LobeHub.
 
-  - **App Token** — The token obtained from the iLink Bot Platform
+  ### Confirm Login
 
-  ### Save Configuration
+  After scanning, a confirmation prompt will appear in WeChat. Tap **Confirm** to authorize the connection.
 
-  Click **Save Configuration**. Your credentials will be encrypted and stored securely.
+  ### Connection Complete
 
-  LobeHub will use long-polling to connect to the iLink Bot API and start receiving messages automatically.
+  Once confirmed, LobeHub will automatically save your credentials and connect the bot. You should see a success message in the channel settings.
 </Steps>
 
-## Step 3: Test the Connection
+## Step 3: Test the Bot
 
-Click **Test Connection** in LobeHub's channel settings to verify the integration. Then open WeChat, find your bot, and send a message. The bot should respond through your LobeHub agent.
+Open WeChat, find your bot contact, and send a message. The bot should respond through your LobeHub agent.
 
 ## Adding the Bot to Group Chats
 
@@ -75,17 +61,11 @@ To use the bot in WeChat groups:
 2. @mention the bot or send a message in the group to trigger a response
 3. The bot will reply in the group conversation
 
-## Configuration Reference
-
-| Field         | Required | Description                                                 |
-| ------------- | -------- | ----------------------------------------------------------- |
-| **App Token** | Yes      | Your bot's authentication token from the iLink Bot Platform |
-
-### Advanced Settings
+## Advanced Settings
 
 | Setting                  | Default | Description                                              |
 | ------------------------ | ------- | -------------------------------------------------------- |
-| **Character Limit**      | 2048    | Maximum characters per message (range: 100–2048)         |
+| **Character Limit**      | 2000    | Maximum characters per message (range: 100–2000)         |
 | **Message Merge Window** | 2000 ms | How long to wait for additional messages before replying |
 | **Show Usage Stats**     | Off     | Display token/cost stats in replies                      |
 
@@ -93,9 +73,10 @@ To use the bot in WeChat groups:
 
 Unlike webhook-based platforms (Telegram, Slack), WeChat uses a **long-polling** mechanism via the iLink Bot API:
 
-1. LobeHub continuously polls the iLink API for new messages (35-second intervals)
-2. When a message arrives, it is routed through the LobeHub agent for processing
-3. The agent's response is sent back to WeChat via the iLink API
+1. When you scan the QR code, LobeHub obtains a bot token from WeChat's iLink API
+2. LobeHub continuously polls the iLink API for new messages (\~35 second intervals)
+3. When a message arrives, it is routed through the LobeHub agent for processing
+4. The agent's response is sent back to WeChat via the iLink API
 
 This polling is managed by a background cron job, so the connection is maintained automatically.
 
@@ -103,14 +84,13 @@ This polling is managed by a background cron job, so the connection is maintaine
 
 - **No message editing** — WeChat does not support editing sent messages. Updated responses will be sent as new messages.
 - **No reactions** — WeChat iLink Bot API does not support emoji reactions.
-- **No typing indicator** — WeChat does not provide typing indicator support for bots.
 - **Text only** — Only text messages are currently supported. Image and file attachments are not yet available.
-- **Message length limit** — Messages exceeding 2048 characters will be automatically truncated.
-- **Session expiration** — The bot session may expire and require re-authentication. LobeHub will notify you if this occurs.
+- **Message length limit** — Messages exceeding 2000 characters will be automatically split into multiple messages.
+- **Session expiration** — The bot session may expire and require re-authentication by scanning a new QR code.
 
 ## Troubleshooting
 
-- **Bot not responding:** Verify the App Token is correct and has not expired. Try re-entering the token in LobeHub's channel settings.
-- **Session expired error:** The iLink Bot session has expired. Re-authenticate by updating your App Token.
-- **Test Connection failed:** Double-check the App Token in LobeHub's channel settings. Ensure your bot is active on the iLink platform.
+- **QR code expired:** Click **Refresh QR Code** in the modal to generate a new one.
+- **Bot not responding:** The session may have expired. Go to the WeChat channel settings and re-scan the QR code to reconnect.
 - **Delayed responses:** Long-polling has a natural delay of up to 35 seconds between polls. This is expected behavior.
+- **Connection lost after some time:** WeChat sessions expire periodically. Re-authenticate by clicking "Scan QR Code to Connect" again.
