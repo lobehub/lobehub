@@ -156,6 +156,69 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     }
   }, [agentId, platformDef, form, currentConfig, createBotProvider, updateBotProvider, connectBot]);
 
+  const handleQrAuthenticated = useCallback(
+    async (creds: { botId: string; botToken: string; userId: string }) => {
+      setSaving(true);
+      setSaveResult(undefined);
+      setConnectResult(undefined);
+
+      try {
+        const credentials = {
+          botId: creds.botId,
+          botToken: creds.botToken,
+          userId: creds.userId,
+        };
+        const applicationId = creds.botId || creds.botToken.slice(0, 16);
+        const settings = form.getFieldValue('settings') || {};
+
+        if (currentConfig) {
+          await updateBotProvider(currentConfig.id, agentId, {
+            applicationId,
+            credentials,
+            settings,
+          });
+        } else {
+          await createBotProvider({
+            agentId,
+            applicationId,
+            credentials,
+            platform: platformDef.id,
+            settings,
+          });
+        }
+
+        setSaveResult({ type: 'success' });
+        msg.success(t('channel.saved'));
+
+        // Auto-connect
+        setConnecting(true);
+        try {
+          await connectBot({ applicationId, platform: platformDef.id });
+          setConnectResult({ type: 'success' });
+        } catch (e: any) {
+          setConnectResult({ errorDetail: e?.message || String(e), type: 'error' });
+        } finally {
+          setConnecting(false);
+        }
+      } catch (e: any) {
+        setSaveResult({ errorDetail: e?.message || String(e), type: 'error' });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      agentId,
+      platformDef,
+      form,
+      currentConfig,
+      createBotProvider,
+      updateBotProvider,
+      connectBot,
+      msg,
+      t,
+    ],
+  );
+
   const handleDelete = useCallback(async () => {
     if (!currentConfig) return;
 
@@ -224,7 +287,11 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
         platformDef={platformDef}
         onToggleEnable={handleToggleEnable}
       />
-      <Body form={form} platformDef={platformDef} />
+      <Body
+        form={form}
+        platformDef={platformDef}
+        onQrAuthenticated={platformDef.authFlow === 'qrcode' ? handleQrAuthenticated : undefined}
+      />
       <Footer
         connectResult={connectResult}
         connecting={connecting}

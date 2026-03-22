@@ -7,7 +7,7 @@ import type {
 } from './types';
 import { MessageItemType, MessageState, MessageType, WECHAT_RET_CODES } from './types';
 
-const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
+export const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
 const CHANNEL_VERSION = '1.0.0';
 const MAX_TEXT_LENGTH = 2000;
 const POLL_TIMEOUT_MS = 40_000;
@@ -177,6 +177,63 @@ export class WechatApiClient {
     return (res.ret ?? res.errcode ?? -1) === WECHAT_RET_CODES.OK;
   }
 }
+
+// ============================================================================
+// QR Code Authentication (unauthenticated endpoints)
+// ============================================================================
+
+export interface QrCodeResponse {
+  qrcode: string;
+  qrcode_img_content: string;
+}
+
+export interface QrStatusResponse {
+  baseurl?: string;
+  bot_token?: string;
+  ilink_bot_id?: string;
+  ilink_user_id?: string;
+  status: 'wait' | 'scaned' | 'confirmed' | 'expired';
+}
+
+/**
+ * Request a new QR code for bot login.
+ */
+export async function fetchQrCode(baseUrl: string = DEFAULT_BASE_URL): Promise<QrCodeResponse> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/ilink/bot/get_bot_qrcode?bot_type=3`;
+  const response = await fetch(url, { method: 'GET' });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`iLink get_bot_qrcode failed: ${response.status} ${text}`);
+  }
+
+  return response.json() as Promise<QrCodeResponse>;
+}
+
+/**
+ * Poll the QR code scan status.
+ */
+export async function pollQrStatus(
+  qrcode: string,
+  baseUrl: string = DEFAULT_BASE_URL,
+): Promise<QrStatusResponse> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`;
+  const response = await fetch(url, {
+    headers: { 'iLink-App-ClientVersion': '1' },
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`iLink get_qrcode_status failed: ${response.status} ${text}`);
+  }
+
+  return response.json() as Promise<QrStatusResponse>;
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
 
 /**
  * Split text into chunks of at most `limit` characters.

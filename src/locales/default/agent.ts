@@ -43,10 +43,12 @@ export default {
   'channel.qq.description': 'Connect this assistant to QQ for group chats and direct messages.',
   'channel.wechat.description':
     'Connect this assistant to WeChat via iLink Bot for private and group chats.',
-  'channel.wechatBotId': 'Bot ID',
-  'channel.wechatBotIdHint': "Optional. The bot's iLink user ID, obtained from QR code login.",
-  'channel.wechatBotTokenHint':
-    'Bot token obtained from WeChat iLink QR code login. It will be encrypted and stored securely.',
+  'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
+  'channel.wechatQrRefresh': 'Refresh QR Code',
+  'channel.wechatQrScaned': 'QR code scanned. Please confirm the login in WeChat.',
+  'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
+  'channel.wechatScanTitle': 'Connect WeChat Bot',
+  'channel.wechatScanToConnect': 'Scan QR Code to Connect',
   'channel.removeChannel': 'Remove Channel',
   'channel.removed': 'Channel removed',
   'channel.removeFailed': 'Failed to remove channel',

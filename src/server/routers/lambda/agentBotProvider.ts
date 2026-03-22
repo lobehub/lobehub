@@ -1,3 +1,4 @@
+import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -134,6 +135,16 @@ export const agentBotProviderRouter = router({
       }
 
       return { valid: true };
+    }),
+
+  wechatGetQrCode: authedProcedure.mutation(async () => {
+    return fetchQrCode();
+  }),
+
+  wechatPollQrStatus: authedProcedure
+    .input(z.object({ qrcode: z.string() }))
+    .query(async ({ input }) => {
+      return pollQrStatus(input.qrcode);
     }),
 
   update: agentBotProviderProcedure

@@ -81,7 +81,10 @@
   "channel.verificationTokenHint": "可选。用于验证事件推送来源。",
   "channel.verificationTokenPlaceholder": "在此粘贴你的 Verification Token",
   "channel.wechat.description": "通过 iLink Bot 将助手连接到微信，支持私聊和群聊。",
-  "channel.wechatBotId": "Bot ID",
-  "channel.wechatBotIdHint": "可选。机器人的 iLink 用户 ID，通过 QR 码登录获取。",
-  "channel.wechatBotTokenHint": "通过微信 iLink QR 码登录获取的 Bot Token。令牌将被加密安全存储。"
+  "channel.wechatQrExpired": "二维码已过期，请刷新获取新的二维码。",
+  "channel.wechatQrRefresh": "刷新二维码",
+  "channel.wechatQrScaned": "已扫码，请在微信中确认登录。",
+  "channel.wechatQrWait": "打开微信扫描二维码以连接。",
+  "channel.wechatScanTitle": "连接微信机器人",
+  "channel.wechatScanToConnect": "扫码连接"
 }

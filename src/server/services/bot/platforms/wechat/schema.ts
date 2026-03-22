@@ -2,27 +2,8 @@ import { DEFAULT_DEBOUNCE_MS, MAX_DEBOUNCE_MS } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
-  {
-    key: 'credentials',
-    label: 'channel.credentials',
-    properties: [
-      {
-        key: 'botToken',
-        description: 'channel.wechatBotTokenHint',
-        label: 'channel.botToken',
-        required: true,
-        type: 'password',
-      },
-      {
-        key: 'botId',
-        description: 'channel.wechatBotIdHint',
-        label: 'channel.wechatBotId',
-        required: false,
-        type: 'string',
-      },
-    ],
-    type: 'object',
-  },
+  // No credentials fields — WeChat uses QR code auth flow (authFlow: 'qrcode').
+  // botToken, botId, and userId are populated automatically after QR scan.
   {
     key: 'settings',
     label: 'channel.settings',
