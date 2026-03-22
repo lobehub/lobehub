@@ -269,8 +269,11 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     _emoji: EmojiValue | string,
   ): Promise<void> {}
 
-  async startTyping(_threadId: string): Promise<void> {
-    // Typing is handled at the PlatformClient level via typing_ticket
+  async startTyping(threadId: string): Promise<void> {
+    const { id } = this.decodeThreadId(threadId);
+    const contextToken = this.contextTokens.get(threadId);
+    if (!contextToken) return;
+    await this.api.startTyping(id, contextToken);
   }
 
   // ------------------------------------------------------------------

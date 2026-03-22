@@ -3,6 +3,7 @@ import debug from 'debug';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -72,9 +73,11 @@ export class BotCallbackService {
     const canEdit = entry?.supportsMessageEdit !== false;
 
     if (type === 'step') {
-      // Skip step progress updates for platforms that can't edit messages
       if (canEdit && progressMessageId) {
         await this.handleStep(body, messenger, progressMessageId, client);
+      } else if (body.shouldContinue) {
+        // For platforms without progress messages (e.g. WeChat), still send typing indicator
+        await messenger.triggerTyping();
       }
     } else if (type === 'completion') {
       await this.handleCompletion(
@@ -128,7 +131,9 @@ export class BotCallbackService {
       settings: settings || {},
     };
 
-    const client = entry.clientFactory.createClient(config, {});
+    const client = entry.clientFactory.createClient(config, {
+      redisClient: getAgentRuntimeRedisClient() as any,
+    });
     const messenger = client.getMessenger(platformThreadId);
 
     return { charLimit, messenger, client };

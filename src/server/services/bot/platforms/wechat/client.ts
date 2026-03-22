@@ -129,8 +129,9 @@ class WechatGatewayClient implements PlatformClient {
             if (msg.message_state !== undefined && msg.message_state !== MessageState.FINISH)
               continue;
 
-            // Cache context token
+            // Cache context token in memory and persist to Redis for queue-mode callbacks
             this.contextTokens.set(msg.from_user_id, msg.context_token);
+            this.persistContextToken(msg.from_user_id, msg.context_token);
 
             // Forward to webhook
             await this.forwardToWebhook(webhookUrl, msg);
@@ -181,6 +182,21 @@ class WechatGatewayClient implements PlatformClient {
     }
   }
 
+  private contextTokenRedisKey(userId: string): string {
+    return `wechat:ctx-token:${this.applicationId}:${userId}`;
+  }
+
+  private persistContextToken(userId: string, token: string): void {
+    if (!this.context.redisClient) return;
+    const key = this.contextTokenRedisKey(userId);
+    // 24h TTL — tokens are refreshed on every inbound message.
+    // The redisClient is a raw ioredis instance (cast via `as any`), so use
+    // positional args instead of the { ex } object form.
+    (this.context.redisClient as any).set(key, token, 'EX', 86_400).catch((err: any) => {
+      log('WechatBot appId=%s failed to persist context token: %s', this.applicationId, err);
+    });
+  }
+
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
       const timer = setTimeout(resolve, ms);
@@ -202,22 +218,47 @@ class WechatGatewayClient implements PlatformClient {
     };
   }
 
-  getContextToken(platformThreadId: string): string | undefined {
-    const targetId = extractChatId(platformThreadId);
-    return this.contextTokens.get(targetId);
-  }
-
   getMessenger(platformThreadId: string): PlatformMessenger {
     const targetId = extractChatId(platformThreadId);
-    const contextToken = this.contextTokens.get(targetId) || '';
+
+    // Resolve context token: in-memory cache first, then Redis fallback.
+    // This allows queue-mode callbacks (fresh client instances) to recover
+    // the token that was persisted by the long-polling instance.
+    const resolveToken = async (): Promise<string> => {
+      const cached = this.contextTokens.get(targetId);
+      if (cached) return cached;
+
+      if (this.context.redisClient) {
+        const redisKey = this.contextTokenRedisKey(targetId);
+        const token = await this.context.redisClient.get(redisKey);
+        if (token) {
+          this.contextTokens.set(targetId, token);
+          return token;
+        }
+      }
+
+      return '';
+    };
+
     return {
-      createMessage: (content) =>
-        this.api.sendMessage(targetId, content, contextToken).then(() => {}),
-      editMessage: (_messageId, content) =>
+      createMessage: async (content) => {
+        const token = await resolveToken();
+        await this.api.sendMessage(targetId, content, token);
+      },
+      editMessage: async (_messageId, content) => {
         // WeChat doesn't support editing — send a new message
-        this.api.sendMessage(targetId, content, contextToken).then(() => {}),
+        const token = await resolveToken();
+        await this.api.sendMessage(targetId, content, token);
+      },
       removeReaction: () => Promise.resolve(),
-      triggerTyping: () => Promise.resolve(),
+      triggerTyping: async () => {
+        const token = await resolveToken();
+        if (!token) {
+          log('triggerTyping: no context token for user=%s', targetId);
+          return;
+        }
+        await this.api.startTyping(targetId, token);
+      },
     };
   }
 

@@ -169,6 +169,20 @@ export class WechatApiClient {
   }
 
   /**
+   * Convenience: getConfig + sendTyping in one call. Best-effort, never throws.
+   */
+  async startTyping(toUserId: string, contextToken: string): Promise<void> {
+    try {
+      const config = await this.getConfig(toUserId, contextToken);
+      if (config.typing_ticket) {
+        await this.sendTyping(toUserId, config.typing_ticket);
+      }
+    } catch {
+      // typing is best-effort
+    }
+  }
+
+  /**
    * Get bot configuration (including typing_ticket).
    * Requires userId and contextToken per reference implementation.
    */
