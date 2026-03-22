@@ -92,16 +92,6 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     this.logger = chat.getLogger(this.name);
     this._userName = chat.getUserName();
 
-    // Verify token
-    try {
-      const valid = await this.api.verifyToken();
-      if (!valid) {
-        this.logger.warn('WeChat bot token verification failed');
-      }
-    } catch {
-      // Not critical for initialization
-    }
-
     this.logger.info('Initialized WeChat adapter (botUserId=%s)', this._botUserId);
   }
 

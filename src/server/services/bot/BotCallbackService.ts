@@ -27,7 +27,7 @@ export interface BotCallbackBody {
   lastToolsCalling?: any;
   llmCalls?: number;
   platformThreadId: string;
-  progressMessageId: string;
+  progressMessageId?: string;
   reason?: string;
   reasoning?: string;
   shouldContinue?: boolean;
@@ -73,11 +73,18 @@ export class BotCallbackService {
 
     if (type === 'step') {
       // Skip step progress updates for platforms that can't edit messages
-      if (canEdit) {
+      if (canEdit && progressMessageId) {
         await this.handleStep(body, messenger, progressMessageId, client);
       }
     } else if (type === 'completion') {
-      await this.handleCompletion(body, messenger, progressMessageId, client, charLimit, canEdit);
+      await this.handleCompletion(
+        body,
+        messenger,
+        progressMessageId ?? '',
+        client,
+        charLimit,
+        canEdit,
+      );
       await this.removeEyesReaction(body, messenger);
       this.summarizeTopicTitle(body, messenger);
     }

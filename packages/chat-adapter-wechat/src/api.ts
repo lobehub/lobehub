@@ -32,10 +32,43 @@ function buildHeaders(botToken: string): Record<string, string> {
   };
 }
 
+/**
+ * Parse JSON response. Throws if HTTP error or ret is non-zero.
+ * Matches reference: only throws when ret IS a number AND not 0.
+ */
+async function parseResponse<T>(response: Response, label: string): Promise<T> {
+  const text = await response.text();
+  const payload = text ? (JSON.parse(text) as T) : ({} as T);
+
+  if (!response.ok) {
+    const msg =
+      (payload as { errmsg?: string } | null)?.errmsg ??
+      `${label} failed with HTTP ${response.status}`;
+    throw new Error(msg);
+  }
+
+  const ret = (payload as { ret?: number } | null)?.ret;
+  if (typeof ret === 'number' && ret !== WECHAT_RET_CODES.OK) {
+    const body = payload as { errcode?: number; errmsg?: string; ret: number };
+    throw Object.assign(new Error(body.errmsg ?? `${label} failed with ret=${ret}`), {
+      code: body.errcode ?? ret,
+    });
+  }
+
+  return payload;
+}
+
+/**
+ * Build a combined AbortSignal from an optional external signal and a timeout.
+ */
+function combinedSignal(signal?: AbortSignal, timeoutMs: number = POLL_TIMEOUT_MS): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+}
+
 export class WechatApiClient {
   private readonly botToken: string;
   private readonly baseUrl: string;
-  /** Bot's own user ID, needed for from_user_id in sendmessage */
   botId: string;
 
   constructor(botToken: string, botId?: string, baseUrl?: string) {
@@ -47,9 +80,6 @@ export class WechatApiClient {
   /**
    * Long-poll for new messages via iLink Bot API.
    * Server holds connection for ~35 seconds.
-   *
-   * @param cursor - Opaque `get_updates_buf` from previous response
-   * @param signal - AbortSignal for cancellation
    */
   async getUpdates(cursor?: string, signal?: AbortSignal): Promise<WechatGetUpdatesResponse> {
     const body = {
@@ -61,23 +91,15 @@ export class WechatApiClient {
       body: JSON.stringify(body),
       headers: buildHeaders(this.botToken),
       method: 'POST',
-      signal: signal ?? AbortSignal.timeout(POLL_TIMEOUT_MS),
+      signal: combinedSignal(signal, POLL_TIMEOUT_MS),
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`iLink getupdates failed: ${response.status} ${text}`);
-    }
-
-    return response.json() as Promise<WechatGetUpdatesResponse>;
+    return parseResponse<WechatGetUpdatesResponse>(response, 'getupdates');
   }
 
   /**
    * Send a text message via iLink Bot API.
-   *
-   * @param toUserId - Target user ID (xxx@im.wechat)
-   * @param text - Message text (auto-chunked at 2000 chars)
-   * @param contextToken - context_token from the inbound message
+   * Reference: from_user_id is empty string, client_id is random UUID.
    */
   async sendMessage(
     toUserId: string,
@@ -96,9 +118,9 @@ export class WechatApiClient {
       const body = {
         base_info: BASE_INFO,
         msg: {
-          client_id: `lobehub_${Date.now()}`,
+          client_id: crypto.randomUUID(),
           context_token: contextToken,
-          from_user_id: this.botId,
+          from_user_id: '',
           item_list: [item],
           message_state: MessageState.FINISH,
           message_type: MessageType.BOT,
@@ -113,18 +135,7 @@ export class WechatApiClient {
         signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`iLink sendmessage failed: ${response.status} ${errText}`);
-      }
-
-      lastResponse = (await response.json()) as WechatSendMessageResponse;
-
-      if (lastResponse.ret !== WECHAT_RET_CODES.OK) {
-        throw new Error(
-          `iLink sendmessage error: ret=${lastResponse.ret} ${lastResponse.errmsg || ''}`,
-        );
-      }
+      lastResponse = await parseResponse<WechatSendMessageResponse>(response, 'sendmessage');
     }
 
     return lastResponse;
@@ -132,7 +143,6 @@ export class WechatApiClient {
 
   /**
    * Send typing indicator via iLink Bot API.
-   * @param start - true to start, false to stop
    */
   async sendTyping(toUserId: string, typingTicket: string, start = true): Promise<void> {
     await fetch(`${this.baseUrl}/ilink/bot/sendtyping`, {
@@ -152,30 +162,21 @@ export class WechatApiClient {
 
   /**
    * Get bot configuration (including typing_ticket).
+   * Requires userId and contextToken per reference implementation.
    */
-  async getConfig(): Promise<WechatGetConfigResponse> {
+  async getConfig(userId: string, contextToken: string): Promise<WechatGetConfigResponse> {
     const response = await fetch(`${this.baseUrl}/ilink/bot/getconfig`, {
-      body: JSON.stringify({ base_info: BASE_INFO }),
+      body: JSON.stringify({
+        base_info: BASE_INFO,
+        context_token: contextToken,
+        ilink_user_id: userId,
+      }),
       headers: buildHeaders(this.botToken),
       method: 'POST',
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`iLink getconfig failed: ${response.status} ${text}`);
-    }
-
-    return response.json() as Promise<WechatGetConfigResponse>;
-  }
-
-  /**
-   * Verify bot token by attempting a getupdates call with empty cursor.
-   * Returns true if the API responds successfully (ret === 0).
-   */
-  async verifyToken(): Promise<boolean> {
-    const res = await this.getUpdates('', AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
-    return res.ret === WECHAT_RET_CODES.OK;
+    return parseResponse<WechatGetConfigResponse>(response, 'getconfig');
   }
 }
 
@@ -236,9 +237,6 @@ export async function pollQrStatus(
 // Utilities
 // ============================================================================
 
-/**
- * Split text into chunks of at most `limit` characters.
- */
 function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) return [text];
 

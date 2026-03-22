@@ -15,6 +15,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import type { PlatformClient } from './platforms';
+import { platformRegistry } from './platforms';
 import { DEFAULT_DEBOUNCE_MS } from './platforms/const';
 import {
   renderError,
@@ -448,22 +449,29 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    // Post initial progress message to get the message ID
-    let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithWebhooks: failed to post progress message: %O', error);
-    }
+    // Skip initial ack message for platforms that don't support editing (e.g. WeChat, QQ).
+    // The ack can't be edited into the final reply, so it would stay as a stale extra message.
+    const canEdit = platformRegistry.getPlatform(client?.id ?? '')?.supportsMessageEdit !== false;
 
-    const progressMessageId = progressMessage?.id;
-    if (!progressMessageId) {
-      throw new Error('Failed to post initial progress message');
-    }
+    let progressMessageId: string | undefined;
+    if (canEdit) {
+      // Post initial progress message to get the message ID
+      let progressMessage: SentMessage | undefined;
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithWebhooks: failed to post progress message: %O', error);
+      }
 
-    // Refresh typing indicator after posting the ack message,
-    // so typing stays active until the first step webhook arrives
-    await thread.startTyping();
+      progressMessageId = progressMessage?.id;
+      if (!progressMessageId) {
+        throw new Error('Failed to post initial progress message');
+      }
+
+      // Refresh typing indicator after posting the ack message,
+      // so typing stays active until the first step webhook arrives
+      await thread.startTyping();
+    }
 
     // Build webhook URL for bot-callback endpoint
     // Prefer INTERNAL_APP_URL for server-to-server calls (bypasses CDN/proxy)
@@ -541,12 +549,17 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    // Post initial progress message
+    // Skip initial ack message for platforms that don't support editing (e.g. WeChat, QQ).
+    const canEdit = platformRegistry.getPlatform(client?.id ?? '')?.supportsMessageEdit !== false;
+
     let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
+    if (canEdit) {
+      // Post initial progress message
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
+      }
     }
 
     // Track the last LLM content and tool calls for showing during tool execution
@@ -628,12 +641,15 @@ export class AgentBridgeService {
 
               if (reason === 'error') {
                 const errorMsg = extractErrorMessage(finalState.error);
-                if (progressMessage) {
-                  try {
-                    await progressMessage.edit(renderError(errorMsg));
-                  } catch {
-                    // ignore edit failure
+                try {
+                  const errorText = renderError(errorMsg);
+                  if (progressMessage) {
+                    await progressMessage.edit(errorText);
+                  } else {
+                    await thread.post(errorText);
                   }
+                } catch {
+                  // ignore send failure
                 }
                 reject(new Error(errorMsg));
                 return;
@@ -661,19 +677,21 @@ export class AgentBridgeService {
 
                   const chunks = splitMessage(finalText, charLimit);
 
-                  if (progressMessage) {
-                    try {
+                  try {
+                    if (progressMessage) {
                       await progressMessage.edit(chunks[0]);
                       // Post overflow chunks as follow-up messages
                       for (let i = 1; i < chunks.length; i++) {
                         await thread.post(chunks[i]);
                       }
-                    } catch (error) {
-                      log(
-                        'executeWithInMemoryCallbacks: failed to edit final progress message: %O',
-                        error,
-                      );
+                    } else {
+                      // No progress message (non-editable platform) — post all chunks as new messages
+                      for (const chunk of chunks) {
+                        await thread.post(chunk);
+                      }
                     }
+                  } catch (error) {
+                    log('executeWithInMemoryCallbacks: failed to send final message: %O', error);
                   }
 
                   log(
