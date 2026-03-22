@@ -7,7 +7,7 @@ import { qq } from './qq/definition';
 import { PlatformRegistry } from './registry';
 import { slack } from './slack/definition';
 import { telegram } from './telegram/definition';
-import { weixin } from './weixin/definition';
+import { wechat } from './wechat/definition';
 
 export { PlatformRegistry } from './registry';
 export type {
@@ -40,7 +40,7 @@ export { lark } from './feishu/definitions/lark';
 export { qq } from './qq/definition';
 export { slack } from './slack/definition';
 export { telegram } from './telegram/definition';
-export { weixin } from './weixin/definition';
+export { wechat } from './wechat/definition';
 
 export const platformRegistry = new PlatformRegistry();
 
@@ -50,4 +50,4 @@ platformRegistry.register(slack);
 platformRegistry.register(feishu);
 platformRegistry.register(lark);
 platformRegistry.register(qq);
-platformRegistry.register(weixin);
+platformRegistry.register(wechat);

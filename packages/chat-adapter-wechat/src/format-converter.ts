@@ -1,7 +1,7 @@
 import type { Root } from 'chat';
 import { BaseFormatConverter, parseMarkdown, stringifyMarkdown } from 'chat';
 
-export class WeixinFormatConverter extends BaseFormatConverter {
+export class WechatFormatConverter extends BaseFormatConverter {
   /**
    * Convert mdast AST to WeChat-compatible text.
    * WeChat does not support Markdown; convert to plain text.

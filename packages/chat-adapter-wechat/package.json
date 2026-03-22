@@ -1,5 +1,5 @@
 {
-  "name": "@lobechat/chat-adapter-weixin",
+  "name": "@lobechat/chat-adapter-wechat",
   "version": "0.1.0",
   "description": "WeChat (iLink) Bot adapter for chat SDK",
   "type": "module",

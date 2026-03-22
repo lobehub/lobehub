@@ -5,51 +5,51 @@ import { after } from 'next/server';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { type BotProviderConfig, weixin } from '@/server/services/bot/platforms';
+import { type BotProviderConfig, wechat } from '@/server/services/bot/platforms';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
-const log = debug('lobe-server:bot:gateway:cron:weixin');
+const log = debug('lobe-server:bot:gateway:cron:wechat');
 
 const GATEWAY_DURATION_MS = 600_000; // 10 minutes
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function createWeixinBot(applicationId: string, credentials: Record<string, string>) {
+function createWechatBot(applicationId: string, credentials: Record<string, string>) {
   const config: BotProviderConfig = {
     applicationId,
     credentials,
-    platform: 'weixin',
+    platform: 'wechat',
     settings: {},
   };
-  return weixin.clientFactory.createClient(config, { appUrl: process.env.APP_URL });
+  return wechat.clientFactory.createClient(config, { appUrl: process.env.APP_URL });
 }
 
 async function processConnectQueue(remainingMs: number): Promise<number> {
   const queue = new BotConnectQueue();
   const items = await queue.popAll();
-  const weixinItems = items.filter((item) => item.platform === 'weixin');
+  const wechatItems = items.filter((item) => item.platform === 'wechat');
 
-  if (weixinItems.length === 0) return 0;
+  if (wechatItems.length === 0) return 0;
 
-  log('Processing %d queued weixin connect requests', weixinItems.length);
+  log('Processing %d queued wechat connect requests', wechatItems.length);
 
   const serverDB = await getServerDB();
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   let processed = 0;
 
-  for (const item of weixinItems) {
+  for (const item of wechatItems) {
     try {
       const model = new AgentBotProviderModel(serverDB, item.userId, gateKeeper);
-      const provider = await model.findEnabledByApplicationId('weixin', item.applicationId);
+      const provider = await model.findEnabledByApplicationId('wechat', item.applicationId);
 
       if (!provider) {
         log('No enabled provider found for queued appId=%s', item.applicationId);
-        await queue.remove('weixin', item.applicationId);
+        await queue.remove('wechat', item.applicationId);
         continue;
       }
 
-      const bot = createWeixinBot(provider.applicationId, provider.credentials);
+      const bot = createWechatBot(provider.applicationId, provider.credentials);
 
       await bot.start({
         durationMs: remainingMs,
@@ -64,7 +64,7 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
       log('Failed to start queued bot appId=%s: %O', item.applicationId, err);
     }
 
-    await queue.remove('weixin', item.applicationId);
+    await queue.remove('wechat', item.applicationId);
   }
 
   return processed;
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const providers = await AgentBotProviderModel.findEnabledByPlatform(
     serverDB,
-    'weixin',
+    'wechat',
     gateKeeper,
   );
 
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
     const { applicationId, credentials } = provider;
 
     try {
-      const bot = createWeixinBot(applicationId, credentials);
+      const bot = createWechatBot(applicationId, credentials);
 
       await bot.start({
         durationMs: GATEWAY_DURATION_MS,

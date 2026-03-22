@@ -1,16 +1,16 @@
 import type {
-  WeixinBotInfoResponse,
-  WeixinGetUpdatesResponse,
-  WeixinSendMessageParams,
-  WeixinSendMessageResponse,
+  WechatBotInfoResponse,
+  WechatGetUpdatesResponse,
+  WechatSendMessageParams,
+  WechatSendMessageResponse,
 } from './types';
-import { WEIXIN_ERROR_CODES, WEIXIN_MSG_TYPE } from './types';
+import { WECHAT_ERROR_CODES, WECHAT_MSG_TYPE } from './types';
 
 const API_BASE_URL = 'https://ilinkai.weixin.qq.com/cgi-bin';
 const MAX_TEXT_LENGTH = 2048;
 const DEFAULT_POLL_TIMEOUT = 35;
 
-export class WeixinApiClient {
+export class WechatApiClient {
   private readonly appToken: string;
 
   constructor(appToken: string) {
@@ -28,7 +28,7 @@ export class WeixinApiClient {
     offset?: number,
     timeout: number = DEFAULT_POLL_TIMEOUT,
     signal?: AbortSignal,
-  ): Promise<WeixinGetUpdatesResponse> {
+  ): Promise<WechatGetUpdatesResponse> {
     const body: Record<string, unknown> = { timeout };
     if (offset !== undefined) {
       body.offset = offset;
@@ -49,17 +49,17 @@ export class WeixinApiClient {
       throw new Error(`iLink getUpdates failed: ${response.status} ${text}`);
     }
 
-    return response.json() as Promise<WeixinGetUpdatesResponse>;
+    return response.json() as Promise<WechatGetUpdatesResponse>;
   }
 
   /**
    * Send a text message via iLink Bot API.
    */
-  async sendMessage(params: WeixinSendMessageParams): Promise<WeixinSendMessageResponse> {
+  async sendMessage(params: WechatSendMessageParams): Promise<WechatSendMessageResponse> {
     const body: Record<string, unknown> = {
       content: this.truncateText(params.content),
       to: params.to,
-      type: params.type ?? WEIXIN_MSG_TYPE.TEXT,
+      type: params.type ?? WECHAT_MSG_TYPE.TEXT,
     };
 
     if (params.contextToken) {
@@ -80,9 +80,9 @@ export class WeixinApiClient {
       throw new Error(`iLink sendMessage failed: ${response.status} ${text}`);
     }
 
-    const data = (await response.json()) as WeixinSendMessageResponse;
+    const data = (await response.json()) as WechatSendMessageResponse;
 
-    if (data.errcode !== WEIXIN_ERROR_CODES.OK) {
+    if (data.errcode !== WECHAT_ERROR_CODES.OK) {
       throw new Error(`iLink sendMessage error: ${data.errcode} ${data.errmsg}`);
     }
 
@@ -92,7 +92,7 @@ export class WeixinApiClient {
   /**
    * Get bot info to verify credentials.
    */
-  async getBotInfo(): Promise<WeixinBotInfoResponse> {
+  async getBotInfo(): Promise<WechatBotInfoResponse> {
     const response = await fetch(`${API_BASE_URL}/getBotInfo`, {
       headers: {
         'Authorization': `Bearer ${this.appToken}`,
@@ -106,7 +106,7 @@ export class WeixinApiClient {
       throw new Error(`iLink getBotInfo failed: ${response.status} ${text}`);
     }
 
-    return response.json() as Promise<WeixinBotInfoResponse>;
+    return response.json() as Promise<WechatBotInfoResponse>;
   }
 
   private truncateText(text: string): string {

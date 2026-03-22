@@ -1,9 +1,9 @@
-import type { WeixinUpdate } from '@lobechat/chat-adapter-weixin';
+import type { WechatUpdate } from '@lobechat/chat-adapter-wechat';
 import {
-  createWeixinAdapter,
-  WEIXIN_ERROR_CODES,
-  WeixinApiClient,
-} from '@lobechat/chat-adapter-weixin';
+  createWechatAdapter,
+  WECHAT_ERROR_CODES,
+  WechatApiClient,
+} from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
 
 import {
@@ -17,7 +17,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 
-const log = debug('bot-platform:weixin:bot');
+const log = debug('bot-platform:wechat:bot');
 
 const DEFAULT_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 const POLL_TIMEOUT_S = 35; // 35 seconds long-poll
@@ -25,7 +25,7 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 const ERROR_BACKOFF_MS = 30_000; // 30 seconds
 const SESSION_EXPIRED_BACKOFF_MS = 60 * 60 * 1000; // 60 minutes
 
-export interface WeixinGatewayOptions {
+export interface WechatGatewayOptions {
   durationMs?: number;
   waitUntil?: (task: Promise<any>) => void;
 }
@@ -34,44 +34,44 @@ function extractChatId(platformThreadId: string): string {
   return platformThreadId.split(':')[2];
 }
 
-class WeixinGatewayClient implements PlatformClient {
-  readonly id = 'weixin';
+class WechatGatewayClient implements PlatformClient {
+  readonly id = 'wechat';
   readonly applicationId: string;
 
   private abort = new AbortController();
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
-  private api: WeixinApiClient;
+  private api: WechatApiClient;
   private stopped = false;
 
   constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
     this.config = config;
     this.context = context;
     this.applicationId = config.applicationId || config.credentials.appToken.slice(0, 8);
-    this.api = new WeixinApiClient(config.credentials.appToken);
+    this.api = new WechatApiClient(config.credentials.appToken);
   }
 
   // --- Lifecycle ---
 
-  async start(options?: WeixinGatewayOptions): Promise<void> {
-    log('Starting WeixinBot appId=%s', this.applicationId);
+  async start(options?: WechatGatewayOptions): Promise<void> {
+    log('Starting WechatBot appId=%s', this.applicationId);
 
     this.stopped = false;
     this.abort = new AbortController();
 
     const durationMs = options?.durationMs ?? DEFAULT_DURATION_MS;
     const waitUntil = options?.waitUntil ?? ((task: Promise<any>) => task.catch(() => {}));
-    const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/weixin/${this.applicationId}`;
+    const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/wechat/${this.applicationId}`;
 
     // Start the long-polling loop in background
     const pollTask = this.pollLoop(durationMs, webhookUrl);
     waitUntil(pollTask);
 
-    log('WeixinBot appId=%s started, webhookUrl=%s', this.applicationId, webhookUrl);
+    log('WechatBot appId=%s started, webhookUrl=%s', this.applicationId, webhookUrl);
   }
 
   async stop(): Promise<void> {
-    log('Stopping WeixinBot appId=%s', this.applicationId);
+    log('Stopping WechatBot appId=%s', this.applicationId);
     this.stopped = true;
     this.abort.abort();
   }
@@ -87,9 +87,9 @@ class WeixinGatewayClient implements PlatformClient {
       try {
         const response = await this.api.getUpdates(offset, POLL_TIMEOUT_S, this.abort.signal);
 
-        if (response.errcode === WEIXIN_ERROR_CODES.SESSION_EXPIRED) {
+        if (response.errcode === WECHAT_ERROR_CODES.SESSION_EXPIRED) {
           log(
-            'WeixinBot appId=%s session expired (errcode -14), backing off %dmin',
+            'WechatBot appId=%s session expired (errcode -14), backing off %dmin',
             this.applicationId,
             SESSION_EXPIRED_BACKOFF_MS / 60_000,
           );
@@ -97,7 +97,7 @@ class WeixinGatewayClient implements PlatformClient {
           break;
         }
 
-        if (response.errcode !== WEIXIN_ERROR_CODES.OK) {
+        if (response.errcode !== WECHAT_ERROR_CODES.OK) {
           throw new Error(`getUpdates errcode=${response.errcode}: ${response.errmsg}`);
         }
 
@@ -116,7 +116,7 @@ class WeixinGatewayClient implements PlatformClient {
 
         consecutiveErrors++;
         log(
-          'WeixinBot appId=%s poll error (%d/%d): %O',
+          'WechatBot appId=%s poll error (%d/%d): %O',
           this.applicationId,
           consecutiveErrors,
           MAX_CONSECUTIVE_ERRORS,
@@ -125,7 +125,7 @@ class WeixinGatewayClient implements PlatformClient {
 
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           log(
-            'WeixinBot appId=%s max errors reached, backing off %ds',
+            'WechatBot appId=%s max errors reached, backing off %ds',
             this.applicationId,
             ERROR_BACKOFF_MS / 1000,
           );
@@ -135,13 +135,13 @@ class WeixinGatewayClient implements PlatformClient {
       }
     }
 
-    log('WeixinBot appId=%s poll loop ended', this.applicationId);
+    log('WechatBot appId=%s poll loop ended', this.applicationId);
   }
 
   /**
    * Forward a polled update to the webhook endpoint for Chat SDK processing.
    */
-  private async forwardToWebhook(webhookUrl: string, update: WeixinUpdate): Promise<void> {
+  private async forwardToWebhook(webhookUrl: string, update: WechatUpdate): Promise<void> {
     try {
       const response = await fetch(webhookUrl, {
         body: JSON.stringify(update),
@@ -150,10 +150,10 @@ class WeixinGatewayClient implements PlatformClient {
       });
 
       if (!response.ok) {
-        log('WeixinBot appId=%s webhook forward failed: %d', this.applicationId, response.status);
+        log('WechatBot appId=%s webhook forward failed: %d', this.applicationId, response.status);
       }
     } catch (err) {
-      log('WeixinBot appId=%s webhook forward error: %O', this.applicationId, err);
+      log('WechatBot appId=%s webhook forward error: %O', this.applicationId, err);
     }
   }
 
@@ -171,7 +171,7 @@ class WeixinGatewayClient implements PlatformClient {
 
   createAdapter(): Record<string, any> {
     return {
-      weixin: createWeixinAdapter({
+      wechat: createWechatAdapter({
         appToken: this.config.credentials.appToken,
       }),
     };
@@ -203,9 +203,9 @@ class WeixinGatewayClient implements PlatformClient {
   }
 }
 
-export class WeixinClientFactory extends ClientFactory {
+export class WechatClientFactory extends ClientFactory {
   createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
-    return new WeixinGatewayClient(config, context);
+    return new WechatGatewayClient(config, context);
   }
 
   async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
@@ -218,7 +218,7 @@ export class WeixinClientFactory extends ClientFactory {
     if (errors.length > 0) return { errors, valid: false };
 
     try {
-      const api = new WeixinApiClient(credentials.appToken);
+      const api = new WechatApiClient(credentials.appToken);
       await api.getBotInfo();
       return { valid: true };
     } catch {

@@ -14,9 +14,9 @@ import type {
 } from 'chat';
 import { Message, parseMarkdown } from 'chat';
 
-import { WeixinApiClient } from './api';
-import { WeixinFormatConverter } from './format-converter';
-import type { WeixinAdapterConfig, WeixinRawMessage, WeixinThreadId, WeixinUpdate } from './types';
+import { WechatApiClient } from './api';
+import { WechatFormatConverter } from './format-converter';
+import type { WechatAdapterConfig, WechatRawMessage, WechatThreadId, WechatUpdate } from './types';
 
 /**
  * WeChat (iLink) adapter for Chat SDK.
@@ -24,10 +24,10 @@ import type { WeixinAdapterConfig, WeixinRawMessage, WeixinThreadId, WeixinUpdat
  * Handles webhook requests forwarded by the long-polling monitor
  * and message operations via iLink Bot API.
  */
-export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> {
-  readonly name = 'weixin';
-  private readonly api: WeixinApiClient;
-  private readonly formatConverter: WeixinFormatConverter;
+export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> {
+  readonly name = 'wechat';
+  private readonly api: WechatApiClient;
+  private readonly formatConverter: WechatFormatConverter;
   private _userName: string;
   private _botUserId?: string;
   private chat!: ChatInstance;
@@ -47,10 +47,10 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
     return this._botUserId;
   }
 
-  constructor(config: WeixinAdapterConfig & { userName?: string }) {
-    this.api = new WeixinApiClient(config.appToken);
-    this.formatConverter = new WeixinFormatConverter();
-    this._userName = config.userName || 'weixin-bot';
+  constructor(config: WechatAdapterConfig & { userName?: string }) {
+    this.api = new WechatApiClient(config.appToken);
+    this.formatConverter = new WechatFormatConverter();
+    this._userName = config.userName || 'wechat-bot';
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
@@ -78,7 +78,7 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
   async handleWebhook(request: Request, options?: WebhookOptions): Promise<Response> {
     const bodyText = await request.text();
 
-    let update: WeixinUpdate;
+    let update: WechatUpdate;
     try {
       update = JSON.parse(bodyText);
     } catch {
@@ -104,7 +104,7 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
     return Response.json({ ok: true });
   }
 
-  private buildThreadId(msg: WeixinRawMessage): string {
+  private buildThreadId(msg: WechatRawMessage): string {
     if (msg.groupId) {
       return this.encodeThreadId({ id: msg.groupId, type: 'group' });
     }
@@ -118,7 +118,7 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
   async postMessage(
     threadId: string,
     message: AdapterPostableMessage,
-  ): Promise<RawMessage<WeixinRawMessage>> {
+  ): Promise<RawMessage<WechatRawMessage>> {
     const { id } = this.decodeThreadId(threadId);
     const text = this.formatConverter.renderPostable(message);
     const contextToken = this.contextTokens.get(threadId);
@@ -150,7 +150,7 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
     threadId: string,
     _messageId: string,
     message: AdapterPostableMessage,
-  ): Promise<RawMessage<WeixinRawMessage>> {
+  ): Promise<RawMessage<WechatRawMessage>> {
     // WeChat doesn't support editing — fall back to posting a new message
     return this.postMessage(threadId, message);
   }
@@ -162,7 +162,7 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
   async fetchMessages(
     _threadId: string,
     _options?: FetchOptions,
-  ): Promise<FetchResult<WeixinRawMessage>> {
+  ): Promise<FetchResult<WechatRawMessage>> {
     return { messages: [], nextCursor: undefined };
   }
 
@@ -181,7 +181,7 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
   // Message parsing
   // ------------------------------------------------------------------
 
-  parseMessage(raw: WeixinRawMessage): Message<WeixinRawMessage> {
+  parseMessage(raw: WechatRawMessage): Message<WechatRawMessage> {
     const formatted = parseMarkdown(raw.content || '');
     const threadId = raw.groupId
       ? this.encodeThreadId({ id: raw.groupId, type: 'group' })
@@ -209,9 +209,9 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
   }
 
   private async parseRawEvent(
-    msg: WeixinRawMessage,
+    msg: WechatRawMessage,
     threadId: string,
-  ): Promise<Message<WeixinRawMessage>> {
+  ): Promise<Message<WechatRawMessage>> {
     const formatted = parseMarkdown(msg.content || '');
 
     const author: Author = {
@@ -265,17 +265,17 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
   // Thread ID encoding
   // ------------------------------------------------------------------
 
-  encodeThreadId(data: WeixinThreadId): string {
-    return `weixin:${data.type}:${data.id}`;
+  encodeThreadId(data: WechatThreadId): string {
+    return `wechat:${data.type}:${data.id}`;
   }
 
-  decodeThreadId(threadId: string): WeixinThreadId {
+  decodeThreadId(threadId: string): WechatThreadId {
     const parts = threadId.split(':');
-    if (parts.length < 3 || parts[0] !== 'weixin') {
+    if (parts.length < 3 || parts[0] !== 'wechat') {
       return { id: threadId, type: 'single' };
     }
 
-    const type = parts[1] as WeixinThreadId['type'];
+    const type = parts[1] as WechatThreadId['type'];
     const id = parts[2];
 
     return { id, type };
@@ -312,10 +312,10 @@ export class WeixinAdapter implements Adapter<WeixinThreadId, WeixinRawMessage> 
 }
 
 /**
- * Factory function to create a WeixinAdapter.
+ * Factory function to create a WechatAdapter.
  */
-export function createWeixinAdapter(
-  config: WeixinAdapterConfig & { userName?: string },
-): WeixinAdapter {
-  return new WeixinAdapter(config);
+export function createWechatAdapter(
+  config: WechatAdapterConfig & { userName?: string },
+): WechatAdapter {
+  return new WechatAdapter(config);
 }

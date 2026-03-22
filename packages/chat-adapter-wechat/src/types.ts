@@ -1,25 +1,25 @@
-export interface WeixinAdapterConfig {
+export interface WechatAdapterConfig {
   /** App token obtained from iLink Bot authentication */
   appToken: string;
 }
 
-export interface WeixinThreadId {
+export interface WechatThreadId {
   /** The WeChat user or group ID */
   id: string;
   /** Chat type: single user, group, or room */
   type: 'single' | 'group' | 'room';
 }
 
-export interface WeixinAuthor {
+export interface WechatAuthor {
   avatar?: string;
   id: string;
   nickname?: string;
 }
 
-export interface WeixinRawMessage {
+export interface WechatRawMessage {
   content: string;
   contextToken?: string;
-  from: WeixinAuthor;
+  from: WechatAuthor;
   /** Group ID if the message is from a group chat */
   groupId?: string;
   id: string;
@@ -28,28 +28,28 @@ export interface WeixinRawMessage {
   type: number;
 }
 
-export interface WeixinUpdate {
-  message?: WeixinRawMessage;
+export interface WechatUpdate {
+  message?: WechatRawMessage;
   updateId: number;
 }
 
-export interface WeixinGetUpdatesResponse {
+export interface WechatGetUpdatesResponse {
   data?: {
-    updates: WeixinUpdate[];
+    updates: WechatUpdate[];
     nextOffset: number;
   };
   errcode: number;
   errmsg: string;
 }
 
-export interface WeixinSendMessageParams {
+export interface WechatSendMessageParams {
   content: string;
   contextToken?: string;
   to: string;
   type?: number;
 }
 
-export interface WeixinSendMessageResponse {
+export interface WechatSendMessageResponse {
   data?: {
     msgId: string;
     timestamp: number;
@@ -58,7 +58,7 @@ export interface WeixinSendMessageResponse {
   errmsg: string;
 }
 
-export interface WeixinBotInfoResponse {
+export interface WechatBotInfoResponse {
   data?: {
     botId: string;
     nickname: string;
@@ -69,7 +69,7 @@ export interface WeixinBotInfoResponse {
 }
 
 /** iLink API error codes */
-export const WEIXIN_ERROR_CODES = {
+export const WECHAT_ERROR_CODES = {
   /** Success */
   OK: 0,
   /** Session expired — requires re-authentication */
@@ -79,7 +79,7 @@ export const WEIXIN_ERROR_CODES = {
 } as const;
 
 /** Message types */
-export const WEIXIN_MSG_TYPE = {
+export const WECHAT_MSG_TYPE = {
   TEXT: 1,
   IMAGE: 3,
   VOICE: 34,

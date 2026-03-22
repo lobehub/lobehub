@@ -8,8 +8,8 @@ export const schema: FieldSchema[] = [
     properties: [
       {
         key: 'appToken',
-        description: 'channel.weixinAppTokenHint',
-        label: 'channel.weixinAppToken',
+        description: 'channel.wechatAppTokenHint',
+        label: 'channel.wechatAppToken',
         required: true,
         type: 'password',
       },
