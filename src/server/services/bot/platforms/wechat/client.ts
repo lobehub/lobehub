@@ -43,6 +43,7 @@ class WechatGatewayClient implements PlatformClient {
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private api: WechatApiClient;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   /** Cached context tokens per user ID for replies */
   private contextTokens = new Map<string, string>();
@@ -70,12 +71,34 @@ class WechatGatewayClient implements PlatformClient {
     const pollTask = this.pollLoop(durationMs, webhookUrl);
     waitUntil(pollTask);
 
+    // When called from GatewayManager (no explicit options), schedule auto-refresh
+    // so the poller restarts after the duration instead of going silent.
+    if (!options) {
+      this.refreshTimer = setTimeout(() => {
+        if (this.abort.signal.aborted || this.stopped) return;
+
+        log(
+          'WechatBot appId=%s duration elapsed (%dmin), refreshing...',
+          this.applicationId,
+          durationMs / 60_000,
+        );
+        this.abort.abort();
+        this.start().catch((err) => {
+          log('Failed to refresh WechatBot appId=%s: %O', this.applicationId, err);
+        });
+      }, durationMs);
+    }
+
     log('WechatBot appId=%s started, webhookUrl=%s', this.applicationId, webhookUrl);
   }
 
   async stop(): Promise<void> {
     log('Stopping WechatBot appId=%s', this.applicationId);
     this.stopped = true;
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
     this.abort.abort();
   }
 
@@ -177,6 +200,11 @@ class WechatGatewayClient implements PlatformClient {
         botToken: this.config.credentials.botToken,
       }),
     };
+  }
+
+  getContextToken(platformThreadId: string): string | undefined {
+    const targetId = extractChatId(platformThreadId);
+    return this.contextTokens.get(targetId);
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
