@@ -85,7 +85,7 @@ export class BotCallbackService {
         charLimit,
         canEdit,
       );
-      await this.removeEyesReaction(body, messenger);
+      await this.removeEyesReaction(body, client, platformThreadId);
       this.summarizeTopicTitle(body, messenger);
     }
   }
@@ -243,10 +243,17 @@ export class BotCallbackService {
 
   private async removeEyesReaction(
     body: BotCallbackBody,
-    messenger: PlatformMessenger,
+    client: PlatformClient,
+    platformThreadId: string,
   ): Promise<void> {
     const { userMessageId } = body;
     if (!userMessageId) return;
+
+    // Thread-starter messages may live in the parent channel (e.g. Discord),
+    // so resolve the correct thread ID before obtaining the messenger.
+    const reactionThreadId =
+      client.resolveReactionThreadId?.(platformThreadId, userMessageId) ?? platformThreadId;
+    const messenger = client.getMessenger(reactionThreadId);
 
     try {
       await messenger.removeReaction(userMessageId, '👀');

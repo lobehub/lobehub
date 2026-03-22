@@ -160,6 +160,20 @@ class DiscordGatewayClient implements PlatformClient {
     return compositeId;
   }
 
+  /**
+   * Discord thread-starter messages live in the parent channel, not the thread.
+   * When the message ID matches the Discord thread segment, route the reaction
+   * to the parent channel so the API call targets the correct channel.
+   */
+  resolveReactionThreadId(threadId: string, messageId: string): string {
+    const parts = threadId.split(':');
+    // Format: discord:guildId:channelId:discordThreadId
+    if (parts.length === 4 && parts[3] === messageId) {
+      return parts.slice(0, 3).join(':');
+    }
+    return threadId;
+  }
+
   sanitizeUserInput(text: string): string {
     return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
   }

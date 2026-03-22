@@ -248,8 +248,9 @@ export class AgentBridgeService {
 
     // Immediate feedback: mark as received + show typing
     const { client } = opts;
+    const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
     await safeReaction(
-      () => thread.adapter.addReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
       'add eyes',
     );
 
@@ -298,7 +299,7 @@ export class AgentBridgeService {
       clearInterval(typingInterval);
       // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
-        await this.removeReceivedReaction(thread, message);
+        await this.removeReceivedReaction(thread, message, client);
       }
     }
   }
@@ -357,9 +358,10 @@ export class AgentBridgeService {
     const queueMode = isQueueAgentRuntimeEnabled();
 
     // Immediate feedback: mark as received + show typing
-    // Subscribed messages are inside the thread, so pass thread.id directly
+    const reactionThreadId =
+      opts.client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
     await safeReaction(
-      () => thread.adapter.addReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
       'add eyes',
     );
     await thread.startTyping();
@@ -400,7 +402,7 @@ export class AgentBridgeService {
       clearInterval(typingInterval);
       // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
-        await this.removeReceivedReaction(thread, message);
+        await this.removeReceivedReaction(thread, message, opts.client);
       }
     }
   }
@@ -900,9 +902,11 @@ export class AgentBridgeService {
   private async removeReceivedReaction(
     thread: Thread<ThreadState>,
     message: Message,
+    client?: PlatformClient,
   ): Promise<void> {
+    const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
     await safeReaction(
-      () => thread.adapter.removeReaction(thread.id, message.id, RECEIVED_EMOJI),
+      () => thread.adapter.removeReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
       'remove eyes',
     );
   }
