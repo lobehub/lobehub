@@ -471,6 +471,9 @@ export class AgentBridgeService {
       // Refresh typing indicator after posting the ack message,
       // so typing stays active until the first step webhook arrives
       await thread.startTyping();
+    } else {
+      // No ack message — still refresh typing so the user knows the bot is working
+      await thread.startTyping();
     }
 
     // Build webhook URL for bot-callback endpoint
@@ -560,6 +563,9 @@ export class AgentBridgeService {
       } catch (error) {
         log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
       }
+    } else {
+      // No ack message — still refresh typing so the user knows the bot is working
+      await thread.startTyping();
     }
 
     // Track the last LLM content and tool calls for showing during tool execution
