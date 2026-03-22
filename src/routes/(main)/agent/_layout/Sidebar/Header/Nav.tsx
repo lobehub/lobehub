@@ -15,8 +15,6 @@ import { useActionSWR } from '@/libs/swr';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
@@ -29,7 +27,6 @@ const Nav = memo(() => {
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const hideProfile = !isAgentEditable;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
@@ -61,7 +58,7 @@ const Nav = memo(() => {
           }}
         />
       )}
-      {!hideProfile && isDevMode && (
+      {!hideProfile && (
         <NavItem
           active={isIntegrationActive}
           icon={RadioTowerIcon}
