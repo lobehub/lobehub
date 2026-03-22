@@ -20,8 +20,8 @@ import type {
 } from '../types/knowledge-base.type';
 
 /**
- * 知识库服务类
- * 处理知识库的增删改查功能
+ * Knowledge base service class
+ * Handles CRUD operations for knowledge bases
  */
 export class KnowledgeBaseService extends BaseService {
   private knowledgeBaseModel: KnowledgeBaseModel;
@@ -32,11 +32,11 @@ export class KnowledgeBaseService extends BaseService {
   }
 
   /**
-   * 获取知识库列表
+   * Get knowledge base list
    */
   async getKnowledgeBaseList(request: KnowledgeBaseListQuery): Promise<KnowledgeBaseListResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_READ');
 
       if (!permissionResult.isPermitted) {
@@ -45,7 +45,7 @@ export class KnowledgeBaseService extends BaseService {
 
       this.log('info', 'Getting knowledge base list', request);
 
-      // 计算分页参数与查询条件
+      // Calculate pagination parameters and query conditions
       const { limit, offset } = processPaginationConditions(request);
       const { keyword } = request;
 
@@ -74,7 +74,7 @@ export class KnowledgeBaseService extends BaseService {
 
       const total = totalResult[0]?.count || 0;
 
-      // 添加访问类型
+      // Add access type
       const knowledgeBasesWithAuthorization = items.map((item) => {
         const accessType: KnowledgeBaseAccessType = 'owner';
 
@@ -99,11 +99,11 @@ export class KnowledgeBaseService extends BaseService {
   }
 
   /**
-   * 获取知识库详情
+   * Get knowledge base detail
    */
   async getKnowledgeBaseDetail(id: string): Promise<KnowledgeBaseDetailResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_READ');
 
       if (!permissionResult.isPermitted) {
@@ -112,7 +112,7 @@ export class KnowledgeBaseService extends BaseService {
 
       this.log('info', 'Getting knowledge base detail', { id });
 
-      // 使用模型的 findById 方法，它包含了访问权限和启用状态的检查
+      // Use the model's findById method, which includes access permission and enabled status checks
       const knowledgeBase = await this.knowledgeBaseModel.findById(id);
 
       if (!knowledgeBase) {
@@ -130,13 +130,13 @@ export class KnowledgeBaseService extends BaseService {
   }
 
   /**
-   * 创建知识库
+   * Create knowledge base
    */
   async createKnowledgeBase(
     request: CreateKnowledgeBaseRequest,
   ): Promise<CreateKnowledgeBaseResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_CREATE');
 
       if (!permissionResult.isPermitted) {
@@ -147,7 +147,7 @@ export class KnowledgeBaseService extends BaseService {
         name: request.name,
       });
 
-      // 创建知识库
+      // Create knowledge base
       const createData: Parameters<KnowledgeBaseModel['create']>[0] = {
         name: request.name,
       };
@@ -171,14 +171,14 @@ export class KnowledgeBaseService extends BaseService {
   }
 
   /**
-   * 更新知识库
+   * Update knowledge base
    */
   async updateKnowledgeBase(
     id: string,
     request: UpdateKnowledgeBaseRequest,
   ): Promise<KnowledgeBaseDetailResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_UPDATE');
 
       if (!permissionResult.isPermitted) {
@@ -187,7 +187,7 @@ export class KnowledgeBaseService extends BaseService {
 
       this.log('info', 'Updating knowledge base', { id, request });
 
-      // 检查知识库是否存在且属于当前用户
+      // Check if knowledge base exists and belongs to the current user
       const existingKb = await this.db.query.knowledgeBases.findFirst({
         where: and(eq(knowledgeBases.id, id), eq(knowledgeBases.userId, this.userId)),
       });
@@ -196,10 +196,10 @@ export class KnowledgeBaseService extends BaseService {
         throw this.createNotFoundError('Knowledge base not found or access denied');
       }
 
-      // 更新知识库
+      // Update knowledge base
       await this.knowledgeBaseModel.update(id, request);
 
-      // 获取更新后的知识库信息
+      // Get updated knowledge base info
       const updatedKb = await this.db.query.knowledgeBases.findFirst({
         where: eq(knowledgeBases.id, id),
       });
@@ -215,11 +215,11 @@ export class KnowledgeBaseService extends BaseService {
   }
 
   /**
-   * 删除知识库
+   * Delete knowledge base
    */
   async deleteKnowledgeBase(id: string): Promise<DeleteKnowledgeBaseResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_DELETE');
 
       if (!permissionResult.isPermitted) {
@@ -228,7 +228,7 @@ export class KnowledgeBaseService extends BaseService {
 
       this.log('info', 'Deleting knowledge base', { id });
 
-      // 检查知识库是否存在且属于当前用户
+      // Check if knowledge base exists and belongs to the current user
       const existingKb = await this.db.query.knowledgeBases.findFirst({
         where: and(eq(knowledgeBases.id, id), eq(knowledgeBases.userId, this.userId)),
       });
@@ -237,7 +237,7 @@ export class KnowledgeBaseService extends BaseService {
         throw this.createNotFoundError('Knowledge base not found or access denied');
       }
 
-      // 删除知识库
+      // Delete knowledge base
       await this.knowledgeBaseModel.delete(id);
 
       this.log('info', 'Knowledge base deleted successfully', { id });

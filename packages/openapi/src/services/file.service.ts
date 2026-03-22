@@ -56,8 +56,8 @@ import type {
 } from '../types/knowledge-base.type';
 
 /**
- * 文件上传服务类
- * 专门处理服务端模式的文件上传和管理功能
+ * File upload service class
+ * Handles file upload and management functionality in server mode
  */
 export class FileUploadService extends BaseService {
   private fileModel: FileModel;
@@ -68,8 +68,8 @@ export class FileUploadService extends BaseService {
   private chunkModel: ChunkModel;
   private asyncTaskModel: AsyncTaskModel;
   private knowledgeBaseModel: KnowledgeBaseModel;
-  // 延迟引入 ChunkService，避免循环依赖开销
-  // 注意：ChunkService 仅在服务端环境可用
+  // Lazy import ChunkService to avoid circular dependency overhead
+  // Note: ChunkService is only available in server-side environments
 
   constructor(db: LobeChatDatabase, userId: string) {
     super(db, userId);
@@ -84,25 +84,25 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 确保获取完整URL，避免重复拼接
-   * 检查URL是否已经是完整URL，如果不是则生成完整URL
+   * Ensure a full URL is obtained, avoiding duplicate concatenation
+   * Checks whether the URL is already a full URL; if not, generates the full URL
    */
   private async ensureFullUrl(url?: string): Promise<string> {
     if (!url) {
       return '';
     }
 
-    // 检查URL是否已经是完整URL（向后兼容历史数据）
+    // Check if URL is already a full URL (backward compatible with historical data)
     if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-      return url; // 已经是完整URL，直接返回
+      return url; // Already a full URL, return directly
     } else {
-      // 相对路径，生成完整URL
+      // Relative path, generate full URL
       return await this.coreFileService.getFullFileUrl(url);
     }
   }
 
   /**
-   * 转换为上传响应格式
+   * Convert to upload response format
    */
   private async convertToResponse(file: FileItem): Promise<FileDetailResponse['file']> {
     const fullUrl = await this.ensureFullUrl(file.url);
@@ -114,7 +114,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 校验知识库归属（仅允许当前用户的知识库）
+   * Validate knowledge base ownership (only allows the current user's knowledge bases)
    */
   private async assertOwnedKnowledgeBase(
     knowledgeBaseId: string,
@@ -139,7 +139,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 批量文件上传
+   * Batch file upload
    */
   async uploadFiles(request: BatchFileUploadRequest): Promise<BatchFileUploadResponse> {
     try {
@@ -190,21 +190,21 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 获取文件列表，支持三种场景：
-   * 1. 获取当前用户的文件（默认）
-   * 2. 获取指定用户的文件（需要 ALL 权限，或目标用户是自己）
-   * 3. 获取系统中所有用户的文件（需要 ALL 权限，queryAll=true）
+   * Get file list, supporting three scenarios:
+   * 1. Get files for the current user (default)
+   * 2. Get files for a specified user (requires ALL permission, or target user is self)
+   * 3. Get files for all users in the system (requires ALL permission, queryAll=true)
    */
   async getFileList(request: FileListQuery): Promise<FileListResponse> {
     try {
-      // 检查是否有全局权限
+      // Check whether global permission is available
       const hasGlobalPermission = await this.hasGlobalPermission('FILE_READ');
 
-      // 根据请求参数决定权限校验的资源范围
-      // 1. queryAll=true 时，使用 ALL_SCOPE 查询全量数据
-      // 2. 指定 userId 时，查询指定用户的数据
-      // 3. 如果查询知识库文件且有全局权限，使用 ALL_SCOPE 以获取所有文件
-      // 4. 否则查询当前用户的数据
+      // Determine resource scope for permission check based on request parameters
+      // 1. When queryAll=true, use ALL_SCOPE to query all data
+      // 2. When userId is specified, query data for that user
+      // 3. If querying knowledge base files and global permission exists, use ALL_SCOPE to get all files
+      // 4. Otherwise query current user's data
       let resourceInfo: { targetUserId: string } | typeof ALL_SCOPE | undefined;
 
       if (request.queryAll) {
@@ -212,7 +212,7 @@ export class FileUploadService extends BaseService {
       } else if (request.userId) {
         resourceInfo = { targetUserId: request.userId };
       } else if (request.knowledgeBaseId && hasGlobalPermission) {
-        // 查询知识库文件时，如果有全局权限，可查询所有文件
+        // When querying knowledge base files, if global permission exists, can query all files
         resourceInfo = ALL_SCOPE;
       }
 
@@ -228,15 +228,15 @@ export class FileUploadService extends BaseService {
         queryAll: request.queryAll,
       });
 
-      // 计算分页参数
+      // Calculate pagination parameters
       const { limit, offset } = processPaginationConditions(request);
 
-      // 构建查询条件
+      // Build query conditions
       const { knowledgeBaseId } = request;
 
-      // 如果指定了知识库ID，使用 JOIN 查询
+      // If knowledge base ID is specified, use JOIN query
       if (knowledgeBaseId) {
-        // 构建查询条件
+        // Build query conditions
         const whereConditions = [
           eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
           ...this.buildFileWhereConditions(request, permissionResult),
@@ -244,7 +244,7 @@ export class FileUploadService extends BaseService {
 
         const whereClause = and(...whereConditions);
 
-        // 使用 JOIN 查询知识库关联的文件
+        // Use JOIN query for knowledge base associated files
         const baseQuery = this.db
           .select({ file: files })
           .from(knowledgeBaseFiles)
@@ -269,7 +269,7 @@ export class FileUploadService extends BaseService {
         const filesResult: FileItem[] = records.map((row) => row.file);
         const total = totalResult[0]?.count || 0;
 
-        // 构建响应 (JOIN查询需要手动获取关联数据)
+        // Build response (JOIN query requires manually fetching associated data)
         const responseFiles = await this.buildFileListResponse(
           filesResult,
           true,
@@ -289,11 +289,11 @@ export class FileUploadService extends BaseService {
         };
       }
 
-      // 未指定知识库ID，使用关系查询(自动 join user 和 knowledgeBases)
+      // No knowledge base ID specified, use relational query (auto join user and knowledgeBases)
       const whereConditions = this.buildFileWhereConditions(request, permissionResult);
       const whereClause = and(...whereConditions);
 
-      // 当前 files 关系未定义 user/knowledgeBases，采用基础查询并手动补齐关联数据
+      // Current files relation does not define user/knowledgeBases, use basic query and manually supplement associated data
       const queryOptions = {
         limit,
         offset,
@@ -311,7 +311,7 @@ export class FileUploadService extends BaseService {
 
       const total = totalResult[0]?.count || 0;
 
-      // 构建响应 (关系查询已包含 user 和 knowledgeBases)
+      // Build response (relational query already includes user and knowledgeBases)
       const responseFiles = await this.buildFileListResponse(
         filesResult,
         true,
@@ -334,22 +334,22 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 获取指定知识库下的文件列表
-   * 复用 getFileList 的查询逻辑，但使用 KNOWLEDGE_BASE_READ 权限
+   * Get file list for a specified knowledge base
+   * Reuses getFileList query logic but uses KNOWLEDGE_BASE_READ permission
    */
   async getKnowledgeBaseFileList(
     knowledgeBaseId: string,
     request: KnowledgeBaseFileListQuery,
   ): Promise<FileListResponse> {
     try {
-      // 权限校验（知识库读取权限）
+      // Permission check (knowledge base read permission)
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_READ');
 
       if (!permissionResult.isPermitted) {
         throw this.createAuthorizationError(permissionResult.message || '无权访问知识库文件列表');
       }
 
-      // 校验知识库访问权限与存在性
+      // Validate knowledge base access permission and existence
       const knowledgeBase = await this.knowledgeBaseModel.findById(knowledgeBaseId);
       if (!knowledgeBase) {
         throw this.createNotFoundError('Knowledge base not found or access denied');
@@ -360,7 +360,7 @@ export class FileUploadService extends BaseService {
         request,
       });
 
-      // 复用 getFileList 的查询逻辑
+      // Reuse getFileList query logic
       const fileListQuery: FileListQuery = {
         ...request,
         knowledgeBaseId,
@@ -381,7 +381,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 批量创建知识库与文件的关联
+   * Batch create associations between knowledge bases and files
    */
   async addFilesToKnowledgeBase(
     knowledgeBaseId: string,
@@ -428,7 +428,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 批量移除知识库与文件的关联
+   * Batch remove associations between knowledge bases and files
    */
   async removeFilesFromKnowledgeBase(
     knowledgeBaseId: string,
@@ -474,7 +474,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 批量移动文件到另一个知识库
+   * Batch move files to another knowledge base
    */
   async moveFilesBetweenKnowledgeBases(
     sourceKnowledgeBaseId: string,
@@ -485,11 +485,11 @@ export class FileUploadService extends BaseService {
         throw this.createValidationError('目标知识库不能与源知识库相同');
       }
 
-      // 校验知识库归属
+      // Validate knowledge base ownership
       await this.assertOwnedKnowledgeBase(sourceKnowledgeBaseId, 'KNOWLEDGE_BASE_UPDATE');
       await this.assertOwnedKnowledgeBase(request.targetKnowledgeBaseId, 'KNOWLEDGE_BASE_UPDATE');
 
-      // 校验文件归属
+      // Validate file ownership
       const uniqueFileIds = Array.from(new Set(request.fileIds));
 
       const ownedFiles = await this.db.query.files.findMany({
@@ -543,11 +543,11 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 获取文件详情
+   * Get file detail
    */
   async getFileDetail(fileId: string): Promise<FileDetailResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('FILE_READ', {
         targetFileId: fileId,
       });
@@ -558,13 +558,13 @@ export class FileUploadService extends BaseService {
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
-      // 检查是否为图片文件
+      // Check if the file is an image
       const isImage = file.fileType.startsWith('image/');
 
       const convertedFile = await this.convertToResponse(file);
 
       if (!isImage) {
-        // 非图片文件：获取解析结果
+        // Non-image file: get parse result
         try {
           const parseResult = await this.parseFile(fileId, { skipExist: true });
 
@@ -573,7 +573,7 @@ export class FileUploadService extends BaseService {
             parsed: parseResult,
           };
         } catch (parseError) {
-          // 如果解析失败，仍然返回文件详情，但不包含解析结果
+          // If parsing fails, still return file details without parse result
           this.log('warn', 'Failed to parse file content', {
             error: parseError,
             fileId,
@@ -601,11 +601,11 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 获取文件预签名访问URL
+   * Get file pre-signed access URL
    */
   async getFileUrl(fileId: string, options: FileUrlRequest = {}): Promise<FileUrlResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('FILE_READ', {
         targetFileId: fileId,
       });
@@ -616,13 +616,13 @@ export class FileUploadService extends BaseService {
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
-      // 设置过期时间（默认1小时）
+      // Set expiry time (default 1 hour)
       const expiresIn = options.expiresIn || 3600;
 
-      // 使用S3服务生成预签名URL
+      // Use S3 service to generate pre-signed URL
       const signedUrl = await this.s3Service.createPreSignedUrlForPreview(file.url, expiresIn);
 
-      // 计算过期时间戳
+      // Calculate expiry timestamp
       const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
       this.log('info', 'File URL generated successfully', {
@@ -644,7 +644,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 文件上传
+   * File upload
    */
   async uploadFile(file: File, options: PublicFileUploadRequest = {}): Promise<FileDetailResponse> {
     try {
@@ -661,15 +661,15 @@ export class FileUploadService extends BaseService {
         type: file.type,
       });
 
-      // 1. 验证文件
+      // 1. Validate file
       await this.validateFile(file, options.skipCheckFileType);
 
-      // 2. 计算文件哈希
+      // 2. Calculate file hash
       const fileArrayBuffer = await file.arrayBuffer();
       const hash = sha256(fileArrayBuffer);
       const resolvedSessionId = await this.resolveSessionId(options);
 
-      // 3. 检查文件是否已存在（去重逻辑）
+      // 3. Check if file already exists (deduplication logic)
       if (!options.skipDeduplication) {
         const existingFileCheck = await this.fileModel.checkHash(hash);
 
@@ -680,17 +680,17 @@ export class FileUploadService extends BaseService {
             name: file.name,
           });
 
-          // 检查当前用户是否已经有这个文件的记录
+          // Check if the current user already has a record for this file
           const existingUserFile = await this.findExistingUserFile(hash);
 
           if (existingUserFile) {
-            // 用户已有此文件记录，直接返回
+            // User already has this file record, return directly
             this.log('info', 'User already has this public file record', {
               fileId: existingUserFile.id,
               name: existingUserFile.name,
             });
 
-            // 如果提供了 sessionId（支持 agentId 解析），创建文件和会话的关联关系
+            // If sessionId is provided (supports agentId resolution), create file-session association
             if (resolvedSessionId) {
               await this.createFileSessionRelation(existingUserFile.id, resolvedSessionId);
               this.log('info', 'Existing public file associated with session', {
@@ -701,7 +701,7 @@ export class FileUploadService extends BaseService {
 
             return await this.getFileDetail(existingUserFile.id);
           } else {
-            // 文件在全局表中存在，但用户没有记录，创建用户文件记录
+            // File exists in global table but user has no record, create user file record
             this.log('info', 'Public file exists globally, creating user file record', {
               hash,
               name: file.name,
@@ -721,9 +721,9 @@ export class FileUploadService extends BaseService {
               userId: this.userId,
             };
 
-            const createResult = await this.fileModel.create(fileRecord, false); // 不插入全局表，因为已存在
+            const createResult = await this.fileModel.create(fileRecord, false); // Skip inserting into global table since it already exists
 
-            // 如果提供了 sessionId（支持 agentId 解析），创建文件和会话的关联关系
+            // If sessionId is provided (supports agentId resolution), create file-session association
             if (resolvedSessionId) {
               await this.createFileSessionRelation(createResult.id, resolvedSessionId);
               this.log('info', 'Deduplicated public file associated with session', {
@@ -745,14 +745,14 @@ export class FileUploadService extends BaseService {
         }
       }
 
-      // 4. 文件不存在，正常上传流程
+      // 4. File does not exist, proceed with normal upload flow
       const metadata = this.generateFileMetadata(file, options.directory);
 
-      // 5. 上传到 S3
+      // 5. Upload to S3
       const fileBuffer = Buffer.from(fileArrayBuffer);
       await this.s3Service.uploadBuffer(metadata.path, fileBuffer, file.type);
 
-      // 7. 保存文件记录到数据库
+      // 7. Save file record to database
       const fileRecord = {
         chunkTaskId: null,
         clientId: null,
@@ -769,7 +769,7 @@ export class FileUploadService extends BaseService {
 
       const createResult = await this.fileModel.create(fileRecord, true);
 
-      // 如果提供了 sessionId（支持 agentId 解析），创建文件和会话的关联关系
+      // If sessionId is provided (supports agentId resolution), create file-session association
       if (resolvedSessionId) {
         await this.createFileSessionRelation(createResult.id, resolvedSessionId);
         this.log('info', 'Public file associated with session', {
@@ -785,14 +785,14 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 解析文件内容
+   * Parse file content
    */
   async parseFile(
     fileId: string,
     options: Partial<FileParseRequest> = {},
   ): Promise<FileParseResponse> {
     try {
-      // 1. 权限校验
+      // 1. Permission check
       const permissionResult = await this.resolveOperationPermission('FILE_READ', {
         targetFileId: fileId,
       });
@@ -801,17 +801,17 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权访问此文件');
       }
 
-      // 2. 查询文件
+      // 2. Query file
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
-      // 3. 检查文件类型是否支持解析
+      // 3. Check if file type supports parsing
       if (isChunkingUnsupported(file.fileType)) {
         throw this.createBusinessError(
           `File type '${file.fileType}' does not support content parsing`,
         );
       }
 
-      // 4. 检查是否已经解析过（如果不跳过已存在的）
+      // 4. Check if file has already been parsed (if not skipping existing)
       if (!options.skipExist) {
         const existingDocument = await this.documentModel.findByFileId(fileId);
         if (existingDocument) {
@@ -842,7 +842,7 @@ export class FileUploadService extends BaseService {
       });
 
       try {
-        // 5. 使用 DocumentService 解析文件
+        // 5. Use DocumentService to parse file
         const document = await this.documentService.parseFile(fileId);
 
         this.log('info', 'File parsed successfully', {
@@ -852,7 +852,7 @@ export class FileUploadService extends BaseService {
           totalCharCount: document.totalCharCount,
         });
 
-        // 6. 返回解析结果
+        // 6. Return parse result
         return {
           content: document.content || '',
           fileId,
@@ -877,7 +877,7 @@ export class FileUploadService extends BaseService {
           name: file.name,
         });
 
-        // 返回失败结果
+        // Return failure result
         return {
           content: '',
           error: errorMessage,
@@ -894,14 +894,14 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 创建分块任务（可选自动触发嵌入）
+   * Create chunking task (optionally auto-trigger embedding)
    */
   async createChunkTask(
     fileId: string,
     req: Partial<FileChunkRequest> = {},
   ): Promise<FileChunkResponse> {
     try {
-      // 权限：更新文件即可
+      // Permission: file update is sufficient
       const permissionResult = await this.resolveOperationPermission('FILE_UPDATE', {
         targetFileId: fileId,
       });
@@ -915,7 +915,7 @@ export class FileUploadService extends BaseService {
         throw this.createBusinessError(`File type '${file.fileType}' does not support chunking`);
       }
 
-      // 触发分块异步任务
+      // Trigger async chunking task
       const { ChunkService } = await import('@/server/services/chunk');
       const chunkService = new ChunkService(this.db, this.userId);
 
@@ -946,11 +946,11 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 查询文件分块与嵌入任务状态
+   * Query file chunking and embedding task status
    */
   async getFileChunkStatus(fileId: string) {
     try {
-      // 权限：读取文件即可
+      // Permission: file read is sufficient
       const permissionResult = await this.resolveOperationPermission('FILE_READ', {
         targetFileId: fileId,
       });
@@ -983,11 +983,11 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 删除文件
+   * Delete file
    */
   async deleteFile(fileId: string): Promise<void> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('FILE_DELETE', {
         targetFileId: fileId,
       });
@@ -998,10 +998,10 @@ export class FileUploadService extends BaseService {
 
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
-      // 删除S3文件
+      // Delete S3 file
       await this.coreFileService.deleteFile(file.url);
 
-      // 删除数据库记录及关联 chunks / global_files
+      // Delete database record and associated chunks / global_files
       await this.fileModel.delete(fileId);
 
       this.log('info', 'File deleted successfully', { fileId, key: file.url });
@@ -1013,10 +1013,10 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 验证文件
+   * Validate file
    */
   private async validateFile(file: File, skipCheckFileType = false): Promise<void> {
-    // 文件大小限制 (100MB)
+    // File size limit (100MB)
     const maxSize = 100 * 1024 * 1024;
     if (file.size > maxSize) {
       throw this.createBusinessError(
@@ -1024,12 +1024,12 @@ export class FileUploadService extends BaseService {
       );
     }
 
-    // 文件名长度限制
+    // Filename length limit
     if (file.name.length > 255) {
       throw this.createBusinessError('Filename is too long (max 255 characters)');
     }
 
-    // 检查文件类型（如果未跳过检查）
+    // Check file type (if check is not skipped)
     if (!skipCheckFileType) {
       const allowedTypes = [
         'image/',
@@ -1048,7 +1048,7 @@ export class FileUploadService extends BaseService {
         'application/json',
       ];
 
-      // 基于文件扩展名的额外验证（用于处理 application/octet-stream 等通用类型）
+      // Additional validation based on file extension (for handling generic types like application/octet-stream)
       const allowedExtensions = [
         '.yaml',
         '.yml',
@@ -1090,7 +1090,7 @@ export class FileUploadService extends BaseService {
       const fileExtension = file.name.toLowerCase().slice(Math.max(0, file.name.lastIndexOf('.')));
       const isExtensionAllowed = allowedExtensions.includes(fileExtension);
 
-      // 如果文件类型不被允许，但扩展名是允许的（处理 application/octet-stream 等情况）
+      // If file type is not allowed but extension is allowed (handles application/octet-stream cases)
       if (!isAllowed && !isExtensionAllowed) {
         throw this.createBusinessError(`File type '${file.type}' is not supported`);
       }
@@ -1098,7 +1098,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 生成文件元数据
+   * Generate file metadata
    */
   private generateFileMetadata(file: File, directory?: string): FileMetadata {
     const now = new Date();
@@ -1116,7 +1116,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 解析上传请求中的 sessionId（agentId 优先，sessionId 兼容）
+   * Resolve sessionId from upload request (agentId takes priority, sessionId as fallback)
    */
   private async resolveSessionId(options: PublicFileUploadRequest): Promise<string | undefined> {
     if (!options.agentId) {
@@ -1143,7 +1143,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 创建文件和会话的关联关系
+   * Create file-session association
    */
   private async createFileSessionRelation(fileId: string, sessionId: string): Promise<void> {
     try {
@@ -1167,7 +1167,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 批量获取文件详情和内容
+   * Batch retrieve file details and content
    */
   async handleQueries(request: BatchGetFilesRequest): Promise<BatchGetFilesResponse> {
     try {
@@ -1179,10 +1179,10 @@ export class FileUploadService extends BaseService {
       const files: BatchGetFilesResponse['files'] = [];
       const failed: BatchGetFilesResponse['failed'] = [];
 
-      // 并行处理所有文件
+      // Process all files in parallel
       const promises = request.fileIds.map(async (fileId) => {
         try {
-          // 获取文件详情
+          // Get file detail
           const fileDetail = await this.getFileDetail(fileId);
 
           files.push(fileDetail);
@@ -1199,7 +1199,7 @@ export class FileUploadService extends BaseService {
         }
       });
 
-      // 等待所有异步操作完成
+      // Wait for all async operations to complete
       await Promise.all(promises);
 
       const result: BatchGetFilesResponse = {
@@ -1222,7 +1222,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 查找用户是否已有指定哈希的文件记录
+   * Find whether the user already has a file record for the specified hash
    */
   private async findExistingUserFile(hash: string): Promise<FileItem | null> {
     try {
@@ -1237,7 +1237,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 构建文件查询的 WHERE 条件
+   * Build WHERE conditions for file queries
    */
   private buildFileWhereConditions(
     request: FileListQuery,
@@ -1250,22 +1250,22 @@ export class FileUploadService extends BaseService {
     const { keyword, fileType, updatedAtStart, updatedAtEnd } = request;
     const conditions = [];
 
-    // 权限条件
+    // Permission conditions
     if (permissionResult?.condition?.userId) {
       conditions.push(eq(files.userId, permissionResult.condition.userId));
     }
 
-    // 关键词搜索
+    // Keyword search
     if (keyword) {
       conditions.push(ilike(files.name, `%${keyword}%`));
     }
 
-    // 文件类型过滤
+    // File type filter
     if (fileType) {
       conditions.push(ilike(files.fileType, `${fileType}%`));
     }
 
-    // 更新时间区间
+    // Updated time range
     if (updatedAtStart) {
       conditions.push(gte(files.updatedAt, new Date(updatedAtStart)));
     }
@@ -1303,10 +1303,10 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 批量获取文件关联数据并构建响应
-   * @param filesResult 文件列表(FileItem 或带关系的文件对象)
-   * @param needsManualRelationFetch 是否需要手动获取关联数据(JOIN查询时需要)
-   * @param hasGlobalPermission 是否有全局权限（决定是否显示所有关联用户）
+   * Batch fetch file associated data and build response
+   * @param filesResult File list (FileItem or file objects with relations)
+   * @param needsManualRelationFetch Whether to manually fetch associated data (required for JOIN queries)
+   * @param hasGlobalPermission Whether global permission is available (determines whether to show all associated users)
    */
   private async buildFileListResponse(
     filesResult: (FileItem & {
@@ -1318,7 +1318,7 @@ export class FileUploadService extends BaseService {
   ): Promise<FileDetailResponse['file'][]> {
     if (filesResult.length === 0) return [];
 
-    // 1. 按 fileHash 去重（相同 hash 的文件只保留第一个）
+    // 1. Deduplicate by fileHash (only keep the first file with the same hash)
     const uniqueFilesByHash = new Map<string, (typeof filesResult)[0]>();
     for (const file of filesResult) {
       const key = file.fileHash || file.id;
@@ -1331,7 +1331,7 @@ export class FileUploadService extends BaseService {
     const fileIds = dedupedFiles.map((file) => file.id);
     const fileHashes = dedupedFiles.map((file) => file.fileHash).filter(Boolean) as string[];
 
-    // 批量查询分块、任务状态
+    // Batch query chunk counts and task statuses
     const [chunkCounts, chunkTasks, embeddingTasks] = await Promise.all([
       this.chunkModel.countByFileIds(fileIds),
       this.asyncTaskModel.findByIds(
@@ -1344,21 +1344,21 @@ export class FileUploadService extends BaseService {
       ),
     ]);
 
-    // 2. 查询所有相同 hash 的文件对应的用户
-    // 只有全局权限时才查询所有用户，否则只返回当前文件的用户
+    // 2. Query users associated with all files having the same hash
+    // Only query all users when global permission is available; otherwise only return the current file's user
     const hashUsersMap = new Map<string, any[]>();
 
     if (hasGlobalPermission && fileHashes.length > 0) {
-      // 查询所有相同 hash 的文件
+      // Query all files with the same hash
       const allFilesWithSameHash = await this.db.query.files.findMany({
         columns: { fileHash: true, userId: true },
         where: inArray(files.fileHash, fileHashes),
       });
 
-      // 收集所有用户 ID
+      // Collect all user IDs
       const allUserIds = [...new Set(allFilesWithSameHash.map((f) => f.userId))];
 
-      // 查询用户信息
+      // Query user info
       const allUsers =
         allUserIds.length > 0
           ? await this.db.query.users.findMany({
@@ -1367,7 +1367,7 @@ export class FileUploadService extends BaseService {
             })
           : [];
 
-      // 构建 hash -> users 映射
+      // Build hash -> users mapping
       for (const file of allFilesWithSameHash) {
         if (!file.fileHash) continue;
         const user = allUsers.find((u) => u.id === file.userId);
@@ -1375,7 +1375,7 @@ export class FileUploadService extends BaseService {
           if (!hashUsersMap.has(file.fileHash)) {
             hashUsersMap.set(file.fileHash, []);
           }
-          // 避免重复添加同一用户
+          // Avoid adding the same user twice
           const existingUsers = hashUsersMap.get(file.fileHash)!;
           if (!existingUsers.some((u) => u.id === user.id)) {
             existingUsers.push(user);
@@ -1384,7 +1384,7 @@ export class FileUploadService extends BaseService {
       }
     }
 
-    // 如果是 JOIN 查询,需要单独查询知识库和用户信息
+    // For JOIN queries, need to separately query knowledge base and user info
     let fileKnowledgeBases: any[] = [];
     let usersData: any[] = [];
 
@@ -1418,7 +1418,7 @@ export class FileUploadService extends BaseService {
       ]);
     }
 
-    // 构建响应数据
+    // Build response data
     return Promise.all(
       dedupedFiles.map(async (file) => {
         const base = await this.convertToResponse(file);
@@ -1431,7 +1431,7 @@ export class FileUploadService extends BaseService {
           ? embeddingTasks.find((task) => task.id === file.embeddingTaskId)
           : null;
 
-        // 获取知识库信息
+        // Get knowledge base info
         const knowledgeBases = needsManualRelationFetch
           ? fileKnowledgeBases
               .filter((kb) => kb.fileId === file.id)
@@ -1443,14 +1443,14 @@ export class FileUploadService extends BaseService {
               }))
           : file.knowledgeBases?.map((kb) => kb.knowledgeBase) || [];
 
-        // 获取用户信息
+        // Get user info
         let fileUsers = [];
 
         if (hasGlobalPermission && file.fileHash && hashUsersMap.has(file.fileHash)) {
-          // 全局权限：返回所有关联该 hash 的用户
+          // Global permission: return all users associated with this hash
           fileUsers = hashUsersMap.get(file.fileHash) || [];
         } else {
-          // 非全局权限：只返回当前文件的用户
+          // Non-global permission: only return the current file's user
           const currentUser = needsManualRelationFetch
             ? usersData.find((u) => u.id === file.userId) || null
             : file.user || null;
@@ -1492,7 +1492,7 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 更新文件
+   * Update file
    * PATCH /files/:id
    */
   async updateFile(
@@ -1500,7 +1500,7 @@ export class FileUploadService extends BaseService {
     updateData: { knowledgeBaseId?: string | null },
   ): Promise<FileDetailResponse> {
     try {
-      // 1. 权限校验
+      // 1. Permission check
       const permissionResult = await this.resolveOperationPermission('FILE_UPDATE', {
         targetFileId: fileId,
       });
@@ -1508,13 +1508,13 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权更新文件');
       }
 
-      // 2. 查询文件
+      // 2. Query file
       const file = await this.findFileByIdWithPermission(fileId, permissionResult);
 
-      // 3. 处理知识库关联
+      // 3. Handle knowledge base association
       if ('knowledgeBaseId' in updateData) {
         await this.db.transaction(async (trx) => {
-          // 删除现有的知识库关联（对于全局权限用户，使用文件的实际 userId）
+          // Delete existing knowledge base association (for global permission users, use the file's actual userId)
           const targetUserId = file.userId;
           await trx
             .delete(knowledgeBaseFiles)
@@ -1525,9 +1525,9 @@ export class FileUploadService extends BaseService {
               ),
             );
 
-          // 如果提供了新的知识库ID，创建新的关联
+          // If a new knowledge base ID is provided, create a new association
           if (updateData.knowledgeBaseId) {
-            // 验证知识库是否存在且用户有权访问
+            // Validate that the knowledge base exists and the user has access
             const knowledgeBase = await this.knowledgeBaseModel.findById(
               updateData.knowledgeBaseId,
             );
@@ -1545,7 +1545,7 @@ export class FileUploadService extends BaseService {
         });
       }
 
-      // 4. 获取更新后的文件详情
+      // 4. Get updated file detail
       const updatedFile = await this.getFileDetail(fileId);
 
       return updatedFile;

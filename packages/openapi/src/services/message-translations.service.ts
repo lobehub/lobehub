@@ -21,12 +21,12 @@ export class MessageTranslateService extends BaseService {
   }
 
   /**
-   * 根据消息ID获取翻译信息
-   * @param messageId 消息ID
-   * @returns 翻译信息
+   * Get translation info by message ID
+   * @param messageId Message ID
+   * @returns Translation info
    */
   async getTranslateByMessageId(messageId: string): ServiceResult<MessageTranslateResponse | null> {
-    // 权限检查已在路由层完成 (MESSAGE_READ + TRANSLATION_READ)
+    // Permission check is already done in the route layer (MESSAGE_READ + TRANSLATION_READ)
 
     this.log('info', '根据消息ID获取翻译信息', { messageId, userId: this.userId });
 
@@ -57,14 +57,14 @@ export class MessageTranslateService extends BaseService {
   }
 
   /**
-   * 创建或更新消息翻译
-   * @param translateData 翻译数据
-   * @returns 翻译结果
+   * Create or update message translation
+   * @param translateData Translation data
+   * @returns Translation result
    */
   async translateMessage(
     translateData: MessageTranslateTriggerRequest,
   ): ServiceResult<Partial<MessageTranslateItem>> {
-    // 权限检查已在路由层完成 (MESSAGE_READ + TRANSLATION_CREATE)
+    // Permission check is already done in the route layer (MESSAGE_READ + TRANSLATION_CREATE)
 
     this.log('info', '开始翻译消息', {
       ...translateData,
@@ -72,7 +72,7 @@ export class MessageTranslateService extends BaseService {
     });
 
     try {
-      // 首先获取原始消息内容和 sessionId
+      // First fetch the original message content and sessionId
       const messageInfo = await this.db.query.messages.findFirst({
         where: eq(messages.id, translateData.messageId),
       });
@@ -83,7 +83,7 @@ export class MessageTranslateService extends BaseService {
 
       this.log('info', '原始消息内容', { originalMessage: messageInfo.content });
 
-      // 使用ChatService进行翻译，传递 sessionId 以使用正确的模型配置
+      // Use ChatService for translation, passing sessionId to use the correct model configuration
       const chatService = new ChatService(this.db, this.userId);
       const translatedContent = await chatService.translate({
         ...translateData,
@@ -91,7 +91,7 @@ export class MessageTranslateService extends BaseService {
         text: removeSystemContext(messageInfo.content),
       });
 
-      // 使用 updateTranslateInfo 来更新翻译内容
+      // Use updateTranslateInfo to update translation content
       return this.updateTranslateInfo({
         from: translateData.from,
         messageId: translateData.messageId,
@@ -104,17 +104,17 @@ export class MessageTranslateService extends BaseService {
   }
 
   /**
-   * 更新消息翻译信息
-   * @param data 翻译信息更新数据
-   * @returns 更新后的翻译结果
+   * Update message translation info
+   * @param data Translation info update data
+   * @returns Updated translation result
    */
   async updateTranslateInfo(
     data: MessageTranslateInfoUpdate,
   ): ServiceResult<Partial<MessageTranslateItem>> {
-    // 权限检查已在路由层完成 (MESSAGE_UPDATE + TRANSLATION_UPDATE)
+    // Permission check is already done in the route layer (MESSAGE_UPDATE + TRANSLATION_UPDATE)
 
     try {
-      // 检查消息是否存在
+      // Check if message exists
       const messageInfo = await this.db.query.messages.findFirst({
         where: eq(messages.id, data.messageId),
       });
@@ -122,7 +122,7 @@ export class MessageTranslateService extends BaseService {
         throw this.createCommonError('未找到要更新翻译信息的消息');
       }
 
-      // 更新翻译信息和内容
+      // Update translation info and content
       await this.db
         .insert(messageTranslates)
         .values({
@@ -156,17 +156,17 @@ export class MessageTranslateService extends BaseService {
   }
 
   /**
-   * 删除指定消息的翻译信息
-   * @param messageId 消息ID
-   * @returns 删除结果
+   * Delete translation info for the specified message
+   * @param messageId Message ID
+   * @returns Deletion result
    */
   async deleteTranslateByMessageId(
     messageId: string,
   ): ServiceResult<{ deleted: boolean; messageId: string }> {
-    // 权限检查已在路由层完成 (TRANSLATION_DELETE)
+    // Permission check is already done in the route layer (TRANSLATION_DELETE)
 
     try {
-      // 检查翻译消息是否存在
+      // Check if the translation message exists
       const originalTranslation = await this.db.query.messageTranslates.findFirst({
         where: eq(messageTranslates.id, messageId),
       });
