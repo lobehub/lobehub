@@ -83,7 +83,7 @@ export const params = {
         tools: zhipuTools,
       } as any;
     },
-    handleStream: (stream, { callbacks, inputStartAt }) => {
+    handleStream: (stream, { callbacks, inputStartAt, payload }) => {
       const readableStream =
         stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
 
@@ -132,9 +132,7 @@ export const params = {
       return OpenAIStream(preprocessedStream, {
         callbacks,
         inputStartAt,
-        payload: {
-          provider: 'zhipu',
-        },
+        payload,
       });
     },
   },
