@@ -8,6 +8,14 @@ import type {
 import { MessageItemType, MessageState, MessageType, WECHAT_RET_CODES } from './types';
 
 export const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
+
+/** Strip trailing slashes without regex (avoids ReDoS on untrusted input). */
+function stripTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end--;
+  return url.slice(0, end);
+}
+
 const CHANNEL_VERSION = '1.0.0';
 const MAX_TEXT_LENGTH = 2000;
 const POLL_TIMEOUT_MS = 40_000;
@@ -74,7 +82,7 @@ export class WechatApiClient {
   constructor(botToken: string, botId?: string, baseUrl?: string) {
     this.botToken = botToken;
     this.botId = botId || '';
-    this.baseUrl = (baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = stripTrailingSlashes(baseUrl || DEFAULT_BASE_URL);
   }
 
   /**
@@ -201,7 +209,7 @@ export interface QrStatusResponse {
  * Request a new QR code for bot login.
  */
 export async function fetchQrCode(baseUrl: string = DEFAULT_BASE_URL): Promise<QrCodeResponse> {
-  const url = `${baseUrl.replace(/\/+$/, '')}/ilink/bot/get_bot_qrcode?bot_type=3`;
+  const url = `${stripTrailingSlashes(baseUrl)}/ilink/bot/get_bot_qrcode?bot_type=3`;
   const response = await fetch(url, { method: 'GET' });
 
   if (!response.ok) {
@@ -219,7 +227,7 @@ export async function pollQrStatus(
   qrcode: string,
   baseUrl: string = DEFAULT_BASE_URL,
 ): Promise<QrStatusResponse> {
-  const url = `${baseUrl.replace(/\/+$/, '')}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`;
+  const url = `${stripTrailingSlashes(baseUrl)}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`;
   const response = await fetch(url, {
     headers: { 'iLink-App-ClientVersion': '1' },
     method: 'GET',
