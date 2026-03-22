@@ -79,5 +79,8 @@
   "channel.validationError": "Please fill in Application ID and Token",
   "channel.verificationToken": "Verification Token",
   "channel.verificationTokenHint": "Optional. Used to verify webhook event source.",
-  "channel.verificationTokenPlaceholder": "Paste your verification token here"
+  "channel.verificationTokenPlaceholder": "Paste your verification token here",
+  "channel.weixin.description": "Connect this assistant to WeChat via iLink Bot for private and group chats.",
+  "channel.weixinAppToken": "App Token",
+  "channel.weixinAppTokenHint": "The authentication token from the iLink Bot Platform. It will be encrypted and stored securely."
 }

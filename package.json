@@ -225,6 +225,7 @@
     "@lobechat/business-const": "workspace:*",
     "@lobechat/chat-adapter-feishu": "workspace:*",
     "@lobechat/chat-adapter-qq": "workspace:*",
+    "@lobechat/chat-adapter-weixin": "workspace:*",
     "@lobechat/config": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/context-engine": "workspace:*",

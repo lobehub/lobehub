@@ -1,0 +1,116 @@
+---
+title: Connect LobeHub to WeChat
+description: >-
+  Learn how to connect a WeChat bot to your LobeHub agent via the iLink Bot API,
+  enabling your AI assistant to chat with users in WeChat private and group
+  conversations.
+tags:
+  - WeChat
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to WeChat
+
+<Callout type={'info'}>
+  This feature is currently in development and may not be fully stable. You can enable it by turning
+  on **Developer Mode** in **Settings** → **Advanced Settings** → **Developer Mode**.
+</Callout>
+
+By connecting a WeChat channel to your LobeHub agent, users can interact with the AI assistant through WeChat private chats and group conversations.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A WeChat account registered with the iLink Bot platform
+
+## Step 1: Register on the iLink Bot Platform
+
+<Steps>
+  ### Open the iLink Bot Platform
+
+  Visit the [iLink Bot Platform](https://ilinkai.weixin.qq.com) and sign in with your WeChat account.
+
+  ### Create a Bot
+
+  Follow the platform instructions to create a new bot application. Fill in the bot name and description.
+
+  ### Obtain App Token
+
+  After the bot is created, navigate to the bot's settings page and obtain your **App Token**. This token is used to authenticate API requests.
+
+  > **Important:** Keep your App Token confidential. Never share it publicly.
+</Steps>
+
+## Step 2: Configure WeChat in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **WeChat** from the platform list.
+
+  ### Enter Credentials
+
+  Fill in the following field:
+
+  - **App Token** — The token obtained from the iLink Bot Platform
+
+  ### Save Configuration
+
+  Click **Save Configuration**. Your credentials will be encrypted and stored securely.
+
+  LobeHub will use long-polling to connect to the iLink Bot API and start receiving messages automatically.
+</Steps>
+
+## Step 3: Test the Connection
+
+Click **Test Connection** in LobeHub's channel settings to verify the integration. Then open WeChat, find your bot, and send a message. The bot should respond through your LobeHub agent.
+
+## Adding the Bot to Group Chats
+
+To use the bot in WeChat groups:
+
+1. Add the bot to a WeChat group
+2. @mention the bot or send a message in the group to trigger a response
+3. The bot will reply in the group conversation
+
+## Configuration Reference
+
+| Field         | Required | Description                                                 |
+| ------------- | -------- | ----------------------------------------------------------- |
+| **App Token** | Yes      | Your bot's authentication token from the iLink Bot Platform |
+
+### Advanced Settings
+
+| Setting                  | Default | Description                                              |
+| ------------------------ | ------- | -------------------------------------------------------- |
+| **Character Limit**      | 2048    | Maximum characters per message (range: 100–2048)         |
+| **Message Merge Window** | 2000 ms | How long to wait for additional messages before replying |
+| **Show Usage Stats**     | Off     | Display token/cost stats in replies                      |
+
+## How It Works
+
+Unlike webhook-based platforms (Telegram, Slack), WeChat uses a **long-polling** mechanism via the iLink Bot API:
+
+1. LobeHub continuously polls the iLink API for new messages (35-second intervals)
+2. When a message arrives, it is routed through the LobeHub agent for processing
+3. The agent's response is sent back to WeChat via the iLink API
+
+This polling is managed by a background cron job, so the connection is maintained automatically.
+
+## Limitations
+
+- **No message editing** — WeChat does not support editing sent messages. Updated responses will be sent as new messages.
+- **No reactions** — WeChat iLink Bot API does not support emoji reactions.
+- **No typing indicator** — WeChat does not provide typing indicator support for bots.
+- **Text only** — Only text messages are currently supported. Image and file attachments are not yet available.
+- **Message length limit** — Messages exceeding 2048 characters will be automatically truncated.
+- **Session expiration** — The bot session may expire and require re-authentication. LobeHub will notify you if this occurs.
+
+## Troubleshooting
+
+- **Bot not responding:** Verify the App Token is correct and has not expired. Try re-entering the token in LobeHub's channel settings.
+- **Session expired error:** The iLink Bot session has expired. Re-authenticate by updating your App Token.
+- **Test Connection failed:** Double-check the App Token in LobeHub's channel settings. Ensure your bot is active on the iLink platform.
+- **Delayed responses:** Long-polling has a natural delay of up to 35 seconds between polls. This is expected behavior.

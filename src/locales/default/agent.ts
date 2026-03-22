@@ -41,6 +41,11 @@ export default {
   'channel.publicKeyPlaceholder': 'Required for interaction verification',
   'channel.qq.appIdHint': 'Your QQ Bot App ID from QQ Open Platform',
   'channel.qq.description': 'Connect this assistant to QQ for group chats and direct messages.',
+  'channel.weixin.description':
+    'Connect this assistant to WeChat via iLink Bot for private and group chats.',
+  'channel.weixinAppToken': 'App Token',
+  'channel.weixinAppTokenHint':
+    'The authentication token from the iLink Bot Platform. It will be encrypted and stored securely.',
   'channel.removeChannel': 'Remove Channel',
   'channel.removed': 'Channel removed',
   'channel.removeFailed': 'Failed to remove channel',
