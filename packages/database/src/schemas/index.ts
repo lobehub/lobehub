@@ -8,6 +8,7 @@ export * from './aiInfra';
 export * from './apiKey';
 export * from './asyncTask';
 export * from './betterAuth';
+export * from './brief';
 export * from './chatGroup';
 export * from './file';
 export * from './generation';

@@ -19,6 +19,7 @@
     "@lobechat/builtin-tool-activator": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",
+    "@lobechat/builtin-tool-brief": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-creds": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
@@ -32,6 +33,7 @@
     "@lobechat/builtin-tool-remote-device": "workspace:*",
     "@lobechat/builtin-tool-skill-store": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
+    "@lobechat/builtin-tool-task": "workspace:*",
     "@lobechat/builtin-tool-topic-reference": "workspace:*",
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/const": "workspace:*"

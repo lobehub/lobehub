@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.1-canary.12",
+  "version": "0.0.1-canary.14",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",

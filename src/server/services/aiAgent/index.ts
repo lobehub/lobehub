@@ -9,7 +9,7 @@ import {
 } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import type { LobeToolManifest, SkillMeta } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ChatTopicBotContext,
@@ -82,6 +82,8 @@ function formatErrorForMetadata(error: unknown): Record<string, any> | undefined
  * This extends the public ExecAgentParams with server-side only options
  */
 interface InternalExecAgentParams extends ExecAgentParams {
+  /** Additional plugin IDs to inject (e.g., task tool during task execution) */
+  additionalPluginIds?: string[];
   /** Bot context for topic metadata (platform, applicationId, platformThreadId) */
   botContext?: ChatTopicBotContext;
   /**
@@ -126,13 +128,15 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
   stream?: boolean;
+  /** Task ID that triggered this execution (if trigger is 'task') */
+  taskId?: string;
   /**
    * Custom title for the topic.
    * When provided (including empty string), overrides the default prompt-based title.
    * When undefined, falls back to prompt.slice(0, 50).
    */
   title?: string;
-  /** Topic creation trigger source ('cron' | 'chat' | 'api') */
+  /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
   trigger?: string;
   /**
    * User intervention configuration
@@ -201,6 +205,7 @@ export class AiAgentService {
    */
   async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
     const {
+      additionalPluginIds,
       agentId,
       slug,
       prompt,
@@ -217,6 +222,7 @@ export class AiAgentService {
       title,
       trigger,
       cronJobId,
+      taskId,
       evalContext,
       maxSteps,
       signal,
@@ -322,10 +328,10 @@ export class AiAgentService {
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     if (!topicId) {
-      // Prepare metadata with cronJobId and botContext if provided
+      // Prepare metadata with cronJobId, taskId, and botContext if provided
       const metadata =
-        cronJobId || botContext
-          ? { bot: botContext, cronJobId: cronJobId || undefined }
+        cronJobId || taskId || botContext
+          ? { bot: botContext, cronJobId: cronJobId || undefined, taskId: taskId || undefined }
           : undefined;
 
       const newTopic = await this.topicModel.create({
@@ -434,6 +440,7 @@ export class AiAgentService {
     const hasTopicReference = /refer_topic/.test(prompt ?? '');
     const agentPlugins = [
       ...(agentConfig?.plugins ?? []),
+      ...(additionalPluginIds || []),
       ...(hasTopicReference ? ['lobe-topic-reference'] : []),
     ];
 
@@ -472,6 +479,7 @@ export class AiAgentService {
     // Include device tool IDs so ToolsEngine can process them via enableChecker
     const pluginIds = [
       ...(agentConfig.plugins || []),
+      ...(additionalPluginIds || []),
       LocalSystemManifest.identifier,
       RemoteDeviceManifest.identifier,
     ];
@@ -830,9 +838,13 @@ export class AiAgentService {
 
     // 18. Build skill metas for <available_skills> prompt injection
     // Combine builtin skills + user DB skills so AI can discover all installed skills
-    let skillMetas: Array<{ description: string; identifier: string; name: string }> = [];
+    // Skills whose identifier is in the agent's enabled plugins are auto-activated (content injected directly)
+    const enabledPluginIds = new Set(agentPlugins);
+    let skillMetas: SkillMeta[] = [];
     try {
       const builtinMetas = builtinSkills.map((s) => ({
+        activated: enabledPluginIds.has(s.identifier),
+        content: s.content,
         description: s.description,
         identifier: s.identifier,
         name: s.name,
@@ -861,6 +873,7 @@ export class AiAgentService {
         appContext: {
           agentId: resolvedAgentId,
           groupId: appContext?.groupId,
+          taskId,
           threadId: appContext?.threadId,
           topicId,
           trigger,

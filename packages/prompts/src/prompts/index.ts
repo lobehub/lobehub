@@ -15,5 +15,6 @@ export * from './search';
 export * from './skills';
 export * from './speaker';
 export * from './systemRole';
+export * from './task';
 export * from './toolDiscovery';
 export * from './userMemory';

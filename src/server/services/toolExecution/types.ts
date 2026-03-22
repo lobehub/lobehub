@@ -11,6 +11,8 @@ export interface ToolExecutionContext {
   memoryToolPermission?: 'read-only' | 'read-write';
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
+  /** Task ID when executing within the Task system */
+  taskId?: string;
   toolManifestMap: Record<string, LobeToolManifest>;
   /**
    * Maximum length for tool execution result content (in characters)

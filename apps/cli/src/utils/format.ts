@@ -87,7 +87,7 @@ function stripAnsi(s: string): string {
  * Calculate the display width of a string in the terminal.
  * CJK characters and fullwidth symbols occupy 2 columns.
  */
-function displayWidth(s: string): number {
+export function displayWidth(s: string): number {
   const plain = stripAnsi(s);
   let width = 0;
   for (const char of plain) {

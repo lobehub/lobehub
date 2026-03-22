@@ -20,6 +20,16 @@ const log = debug('context-engine:provider:SkillContextProvider');
  * Compatible with the SkillMeta that will be added in @lobechat/types (Phase 3.2)
  */
 export interface SkillMeta {
+  /**
+   * When true, the skill's content is directly injected into the system prompt
+   * instead of only appearing in the <available_skills> list.
+   */
+  activated?: boolean;
+  /**
+   * Full skill content to inject when activated.
+   * Only used when `activated` is true.
+   */
+  content?: string;
   description: string;
   identifier: string;
   location?: string;
@@ -58,28 +68,50 @@ export class SkillContextProvider extends BaseProvider {
       return this.markAsExecuted(clonedContext);
     }
 
-    const skills: SkillItem[] = enabledSkills.map((skill) => ({
-      description: skill.description,
-      identifier: skill.identifier,
-      location: skill.location,
-      name: skill.name,
-    }));
+    // Separate activated skills (inject content directly) from available skills (list only)
+    const activatedSkills = enabledSkills.filter((s) => s.activated && s.content);
+    const availableSkills = enabledSkills.filter((s) => !s.activated);
 
-    const skillContent = skillsPrompts(skills);
+    const contentParts: string[] = [];
 
-    if (!skillContent) {
+    // Inject activated skill content directly into system prompt
+    for (const skill of activatedSkills) {
+      contentParts.push(skill.content!);
+      log('Auto-activated skill: %s', skill.identifier);
+    }
+
+    // Generate <available_skills> list for non-activated skills
+    if (availableSkills.length > 0) {
+      const skills: SkillItem[] = availableSkills.map((skill) => ({
+        description: skill.description,
+        identifier: skill.identifier,
+        location: skill.location,
+        name: skill.name,
+      }));
+
+      const availableSkillsContent = skillsPrompts(skills);
+      if (availableSkillsContent) {
+        contentParts.push(availableSkillsContent);
+      }
+    }
+
+    if (contentParts.length === 0) {
       log('No skill content generated, skipping injection');
       return this.markAsExecuted(clonedContext);
     }
 
-    this.injectSkillContext(clonedContext, skillContent);
+    this.injectSkillContext(clonedContext, contentParts.join('\n\n'));
 
     clonedContext.metadata.skillContext = {
       injected: true,
       skillsCount: enabledSkills.length,
     };
 
-    log(`Skill context injected, skills count: ${enabledSkills.length}`);
+    log(
+      'Skill context injected: %d activated, %d available',
+      activatedSkills.length,
+      availableSkills.length,
+    );
     return this.markAsExecuted(clonedContext);
   }
 

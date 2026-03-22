@@ -1,5 +1,5 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
-import { type LobeToolManifest } from '@lobechat/context-engine';
+import { type LobeToolManifest, type SkillMeta } from '@lobechat/context-engine';
 import { type UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -135,6 +135,7 @@ export interface OperationCreationParams {
   appContext: {
     agentId?: string;
     groupId?: string | null;
+    taskId?: string;
     threadId?: string | null;
     topicId?: string | null;
     trigger?: string;
@@ -167,7 +168,7 @@ export interface OperationCreationParams {
   /** Abort startup before the first step is scheduled */
   signal?: AbortSignal;
   /** Skill metas for <available_skills> prompt injection */
-  skillMetas?: Array<{ description: string; identifier: string; name: string }>;
+  skillMetas?: SkillMeta[];
   /**
    * Step lifecycle callbacks
    * Used to inject custom logic at different stages of step execution
