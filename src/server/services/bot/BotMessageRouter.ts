@@ -9,6 +9,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
+import { AiAgentService } from '@/server/services/aiAgent';
+
 import { AgentBridgeService } from './AgentBridgeService';
 import {
   type BotPlatformRuntimeContext,
@@ -324,6 +326,14 @@ export class BotMessageRouter {
       });
     });
 
+    // Register slash command handlers
+    this.registerSlashCommands(bot, serverDB, {
+      agentId,
+      applicationId,
+      platform,
+      userId,
+    });
+
     // Register onNewMessage handler based on platform config
     const dmEnabled = info.settings?.dm?.enabled ?? false;
     if (dmEnabled) {
@@ -348,6 +358,58 @@ export class BotMessageRouter {
         });
       });
     }
+  }
+
+  /**
+   * Register /new and /stop slash commands on the bot.
+   *
+   * - /new: Clears the thread's conversation state so the next message starts a fresh topic.
+   * - /stop: Cancels any active agent execution running on the current thread.
+   */
+  private registerSlashCommands(
+    bot: Chat<any>,
+    serverDB: LobeChatDatabase,
+    info: { agentId: string; applicationId: string; platform: string; userId: string },
+  ): void {
+    const { agentId, platform, userId } = info;
+
+    // /new — reset conversation state to start a fresh topic
+    bot.onSlashCommand('/new', async (event) => {
+      log('onSlashCommand /new: agent=%s, platform=%s, user=%s', agentId, platform, event.user.userName);
+
+      await event.channel.setState({ topicId: undefined }, { replace: true });
+      await event.channel.post('Conversation reset. Your next message will start a new topic.');
+    });
+
+    // /stop — cancel the active agent execution on this thread
+    bot.onSlashCommand('/stop', async (event) => {
+      log('onSlashCommand /stop: agent=%s, platform=%s, user=%s', agentId, platform, event.user.userName);
+
+      // Check if there's an active execution via the bridge's static tracker
+      const isActive = AgentBridgeService.isThreadActive(event.channel.id);
+
+      if (!isActive) {
+        await event.channel.post('No active execution to stop.');
+        return;
+      }
+
+      // Try to interrupt via AiAgentService using the tracked operationId
+      const operationId = AgentBridgeService.getActiveOperationId(event.channel.id);
+      if (operationId) {
+        try {
+          const aiAgentService = new AiAgentService(serverDB, userId);
+          await aiAgentService.interruptTask({ operationId });
+          log('onSlashCommand /stop: interrupted operationId=%s', operationId);
+        } catch (error) {
+          log('onSlashCommand /stop: interruptTask failed: %O', error);
+        }
+      }
+
+      // Mark thread as no longer active in the bridge
+      AgentBridgeService.clearActiveThread(event.channel.id);
+
+      await event.channel.post('Execution stopped.');
+    });
   }
 }
 

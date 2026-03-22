@@ -111,6 +111,34 @@ export class AgentBridgeService {
   private static activeThreads = new Set<string>();
 
   /**
+   * Maps platform thread ID → operationId for active executions.
+   * Used by /stop to interrupt a running agent via AiAgentService.interruptTask.
+   */
+  private static activeOperations = new Map<string, string>();
+
+  /**
+   * Check if a thread currently has an active agent execution.
+   */
+  static isThreadActive(threadId: string): boolean {
+    return AgentBridgeService.activeThreads.has(threadId);
+  }
+
+  /**
+   * Get the operationId for an active execution on the given thread.
+   */
+  static getActiveOperationId(threadId: string): string | undefined {
+    return AgentBridgeService.activeOperations.get(threadId);
+  }
+
+  /**
+   * Remove a thread from the active set, e.g. when /stop cancels execution.
+   */
+  static clearActiveThread(threadId: string): void {
+    AgentBridgeService.activeThreads.delete(threadId);
+    AgentBridgeService.activeOperations.delete(threadId);
+  }
+
+  /**
    * Debounce buffer for incoming messages per thread.
    * Users often send multiple short messages in quick succession (e.g. "hello" + "how are you").
    * Instead of triggering separate agent executions for each, we collect messages arriving
@@ -529,6 +557,11 @@ export class AgentBridgeService {
       result.topicId,
     );
 
+    // Track operationId so /stop can interrupt this execution
+    if (result.operationId) {
+      AgentBridgeService.activeOperations.set(thread.id, result.operationId);
+    }
+
     // Return immediately — progress/completion handled by webhooks
     return { reply: '', topicId: result.topicId };
   }
@@ -750,6 +783,11 @@ export class AgentBridgeService {
           assistantMessageId = result.assistantMessageId;
           resolvedTopicId = result.topicId;
           operationStartTime = new Date(result.createdAt).getTime();
+
+          // Track operationId so /stop can interrupt this execution
+          if (result.operationId) {
+            AgentBridgeService.activeOperations.set(thread.id, result.operationId);
+          }
 
           log(
             'executeWithInMemoryCallbacks: operationId=%s, assistantMessageId=%s, topicId=%s',
