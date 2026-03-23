@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { getTitleBarLayoutConfig, TITLE_BAR_HORIZONTAL_PADDING } from './layout';
-import { WINDOW_CONTROL_WIDTH } from './WinControl';
 
 describe('getTitleBarLayoutConfig', () => {
   it('reserves right-side space for native Windows controls', () => {
     expect(getTitleBarLayoutConfig('Windows')).toEqual({
-      padding: `0 ${WINDOW_CONTROL_WIDTH + TITLE_BAR_HORIZONTAL_PADDING}px 0 ${TITLE_BAR_HORIZONTAL_PADDING}px`,
+      padding: `0 162px 0 ${TITLE_BAR_HORIZONTAL_PADDING}px`,
       reserveNativeControlSpace: true,
       showCustomWinControl: false,
     });
