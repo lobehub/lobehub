@@ -8,7 +8,7 @@ import debug from 'debug';
 import urlJoin from 'url-join';
 
 import { type SearchServiceImpl } from '../type';
-import { type Search1ApiResponse } from './type';
+import { type Search1ApiRawResponse } from './type';
 
 interface Search1APIQueryParams {
   crawl_results?: 0 | 1;
@@ -118,19 +118,20 @@ export class Search1APIImpl implements SearchServiceImpl {
     }
 
     try {
-      const search1ApiResponse = (await response.json()) as Search1ApiResponse[]; // Use a specific type if defined elsewhere
+      const rawResponse = (await response.json()) as Search1ApiRawResponse;
 
-      log('Parsed Search1API response: %o', search1ApiResponse);
+      log('Parsed Search1API response: %o', rawResponse);
 
-      const mappedResults = search1ApiResponse.flatMap((response) => {
-        // Map Search1API response to SearchResponse
-        return (response.results || []).map(
+      const mappedResults = (rawResponse.results || []).flatMap((item) => {
+        if (!item.success || !item.data) return [];
+        const { results = [], searchParameters } = item.data;
+        return results.map(
           (result): UniformSearchResult => ({
-            category: 'general', // Default category
-            content: result.content || result.snippet || '', // Prioritize content, fallback to snippet
-            engines: [response.searchParameters?.search_service || ''],
-            parsedUrl: result.link ? new URL(result.link).hostname : '', // Basic URL parsing
-            score: 1, // Default score
+            category: 'general',
+            content: result.content || result.snippet || '',
+            engines: [searchParameters?.search_service || ''],
+            parsedUrl: result.link ? new URL(result.link).hostname : '',
+            score: 1,
             title: result.title || '',
             url: result.link,
           }),
