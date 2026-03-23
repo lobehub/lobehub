@@ -15,6 +15,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
+import { FileService } from '@/server/services/file';
 import { nanoid } from '@/utils/uuid';
 
 const log = debug('lobe-server:ai-agent-router');
@@ -235,12 +236,16 @@ const InterruptTaskSchema = z
 const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
+  const fileService = new FileService(ctx.serverDB, ctx.userId);
+
   return opts.next({
     ctx: {
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId),
       aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId),
+      fileService,
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
+      postProcessUrl: (path: string | null) => fileService.getFullFileUrl(path),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
     },
@@ -306,10 +311,13 @@ export const aiAgentRouter = router({
           // Thread messages (messages within this thread)
           // DON'T pass agentId - thread query fetches parent messages via sourceMessageId
           // which may have different agentIds (supervisor vs worker in group chat)
-          ctx.messageModel.query({ threadId: thread.id, topicId }),
+          ctx.messageModel.query(
+            { threadId: thread.id, topicId },
+            { postProcessUrl: ctx.postProcessUrl },
+          ),
           // Main chat messages (messages without threadId)
           // Only filter by groupId + topicId (not agentId) to include all agents' messages
-          ctx.messageModel.query({ groupId, topicId }),
+          ctx.messageModel.query({ groupId, topicId }, { postProcessUrl: ctx.postProcessUrl }),
         ]);
 
         log(
@@ -394,10 +402,16 @@ export const aiAgentRouter = router({
         // 3. Query thread messages and main chat messages in parallel
         const [threadMessages, messages] = await Promise.all([
           // Thread messages (messages within this thread)
-          ctx.messageModel.query({ agentId, threadId: thread.id, topicId }),
+          ctx.messageModel.query(
+            { agentId, threadId: thread.id, topicId },
+            { postProcessUrl: ctx.postProcessUrl },
+          ),
           // Main chat messages (messages without threadId, includes updated taskDetail)
           // Pass both agentId and groupId - query() prioritizes groupId when present
-          ctx.messageModel.query({ agentId, groupId, topicId }),
+          ctx.messageModel.query(
+            { agentId, groupId, topicId },
+            { postProcessUrl: ctx.postProcessUrl },
+          ),
         ]);
 
         log(
@@ -912,7 +926,10 @@ export const aiAgentRouter = router({
       }
 
       // 6. Query thread messages for result content or current activity
-      const threadMessages = await ctx.messageModel.query({ threadId });
+      const threadMessages = await ctx.messageModel.query(
+        { threadId },
+        { postProcessUrl: ctx.postProcessUrl },
+      );
       const sortedMessages = threadMessages.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
