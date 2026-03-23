@@ -71,6 +71,11 @@ export class TelegramApi {
     });
   }
 
+  async setMyCommands(commands: Array<{ command: string; description: string }>): Promise<void> {
+    log('setMyCommands: %d commands', commands.length);
+    await this.call('setMyCommands', { commands });
+  }
+
   // ------------------------------------------------------------------
 
   private truncateText(text: string): string {

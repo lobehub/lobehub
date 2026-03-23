@@ -8,7 +8,6 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
@@ -32,6 +31,24 @@ interface RegisteredBot {
   agentInfo: ResolvedAgentInfo;
   chatBot: Chat<any>;
   client: PlatformClient;
+}
+
+/** Context passed to every command handler — a minimal surface shared by both
+ *  native slash-command events and text-based message events. */
+interface CommandContext {
+  /** Text after the command name (e.g. "/new foo" → "foo"). */
+  args: string;
+  post: (text: string) => Promise<any>;
+  setState: (state: Record<string, any>, opts?: { replace?: boolean }) => Promise<any>;
+  threadId: string;
+}
+
+/** A single bot command definition.
+ *  Add new entries to `buildCommands()` to register additional commands. */
+interface BotCommand {
+  description: string;
+  handler: (ctx: CommandContext) => Promise<void>;
+  name: string;
 }
 
 /**
@@ -194,8 +211,10 @@ export class BotMessageRouter {
     const client = entry.clientFactory.createClient(providerConfig, runtimeContext);
     const adapters = client.createAdapter();
 
+    const commands = this.buildCommands(serverDB, { agentId, platform, userId });
+
     const chatBot = this.createChatBot(adapters, `agent-${agentId}`);
-    this.registerHandlers(chatBot, serverDB, client, {
+    this.registerHandlers(chatBot, serverDB, client, commands, {
       agentId,
       applicationId,
       platform,
@@ -203,6 +222,14 @@ export class BotMessageRouter {
       userId,
     });
     await chatBot.initialize();
+
+    // Register platform-specific bot commands (e.g., Telegram setMyCommands menu)
+    if (client.registerBotCommands) {
+      const commandList = commands.map((c) => ({ command: c.name, description: c.description }));
+      client.registerBotCommands(commandList).catch((error) => {
+        log('registerBotCommands failed for %s: %O', key, error);
+      });
+    }
 
     const registered: RegisteredBot = {
       agentInfo: { agentId, userId },
@@ -278,6 +305,7 @@ export class BotMessageRouter {
     bot: Chat<any>,
     serverDB: LobeChatDatabase,
     client: PlatformClient,
+    commands: BotCommand[],
     info: ResolvedAgentInfo & {
       applicationId: string;
       platform: string;
@@ -289,7 +317,29 @@ export class BotMessageRouter {
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const debounceMs = (info.settings?.debounceMs as number) || undefined;
 
+    /** Try dispatching a text command. Returns true if handled. */
+    const tryDispatch = async (
+      thread: {
+        id: string;
+        post: (t: string) => Promise<any>;
+        setState: (s: Record<string, any>, o?: { replace?: boolean }) => Promise<any>;
+      },
+      text: string | undefined,
+    ): Promise<boolean> => {
+      const result = BotMessageRouter.dispatchTextCommand(text, commands);
+      if (!result) return false;
+      await result.command.handler({
+        args: result.args,
+        post: (t) => thread.post(t),
+        setState: (s, o) => thread.setState(s, o),
+        threadId: thread.id,
+      });
+      return true;
+    };
+
     bot.onNewMention(async (thread, message) => {
+      if (await tryDispatch(thread, message.text)) return;
+
       log(
         'onNewMention: agent=%s, platform=%s, author=%s, thread=%s',
         agentId,
@@ -308,6 +358,7 @@ export class BotMessageRouter {
 
     bot.onSubscribedMessage(async (thread, message) => {
       if (message.author.isBot === true) return;
+      if (await tryDispatch(thread, message.text)) return;
 
       log(
         'onSubscribedMessage: agent=%s, platform=%s, author=%s, thread=%s',
@@ -326,19 +377,17 @@ export class BotMessageRouter {
       });
     });
 
-    // Register slash command handlers
-    this.registerSlashCommands(bot, serverDB, {
-      agentId,
-      applicationId,
-      platform,
-      userId,
-    });
+    // Register slash command handlers (native + text-based)
+    this.registerCommands(bot, commands);
 
     // Register onNewMessage handler based on platform config
     const dmEnabled = info.settings?.dm?.enabled ?? false;
     if (dmEnabled) {
       bot.onNewMessage(/./, async (thread, message) => {
         if (message.author.isBot === true) return;
+
+        // Skip text-based slash commands — already handled by registerCommands
+        if (BotMessageRouter.dispatchTextCommand(message.text, commands)) return;
 
         log(
           'onNewMessage (%s catch-all): agent=%s, author=%s, thread=%s, text=%s',
@@ -360,55 +409,114 @@ export class BotMessageRouter {
     }
   }
 
+  // ------------------------------------------------------------------
+  // Command registry
+  // ------------------------------------------------------------------
+
   /**
-   * Register /new and /stop slash commands on the bot.
+   * Build the list of bot commands. Each entry defines a name, description,
+   * and handler. To add a new command, just append to this array.
    *
-   * - /new: Clears the thread's conversation state so the next message starts a fresh topic.
-   * - /stop: Cancels any active agent execution running on the current thread.
+   * Handlers close over serverDB / userId / agentId / platform so they can
+   * access services without needing those passed through CommandContext.
    */
-  private registerSlashCommands(
-    bot: Chat<any>,
+  private buildCommands(
     serverDB: LobeChatDatabase,
-    info: { agentId: string; applicationId: string; platform: string; userId: string },
-  ): void {
+    info: { agentId: string; platform: string; userId: string },
+  ): BotCommand[] {
     const { agentId, platform, userId } = info;
 
-    // /new — reset conversation state to start a fresh topic
-    bot.onSlashCommand('/new', async (event) => {
-      log('onSlashCommand /new: agent=%s, platform=%s, user=%s', agentId, platform, event.user.userName);
+    return [
+      {
+        description: 'Start a new conversation',
+        handler: async (ctx) => {
+          log('command /new: agent=%s, platform=%s', agentId, platform);
+          await ctx.setState({ topicId: undefined }, { replace: true });
+          await ctx.post('Conversation reset. Your next message will start a new topic.');
+        },
+        name: 'new',
+      },
+      {
+        description: 'Stop the current execution',
+        handler: async (ctx) => {
+          log('command /stop: agent=%s, platform=%s', agentId, platform);
+          const isActive = AgentBridgeService.isThreadActive(ctx.threadId);
+          if (!isActive) {
+            await ctx.post('No active execution to stop.');
+            return;
+          }
+          const operationId = AgentBridgeService.getActiveOperationId(ctx.threadId);
+          if (operationId) {
+            try {
+              const aiAgentService = new AiAgentService(serverDB, userId);
+              await aiAgentService.interruptTask({ operationId });
+              log('command /stop: interrupted operationId=%s', operationId);
+            } catch (error) {
+              log('command /stop: interruptTask failed: %O', error);
+            }
+          }
+          AgentBridgeService.clearActiveThread(ctx.threadId);
+          await ctx.post('Execution stopped.');
+        },
+        name: 'stop',
+      },
+    ];
+  }
 
-      await event.channel.setState({ topicId: undefined }, { replace: true });
-      await event.channel.post('Conversation reset. Your next message will start a new topic.');
-    });
+  /**
+   * Parse a text message for a registered command.
+   * Handles formats: "/cmd", "/cmd args", "/cmd@botname args" (Telegram).
+   * Returns the matched command and any trailing arguments, or null.
+   */
+  private static dispatchTextCommand(
+    text: string | undefined,
+    commands: BotCommand[],
+  ): { args: string; command: BotCommand } | null {
+    if (!text) return null;
+    const match = text.trim().match(/^\/(\w+)(?:@\w+)?(?:\s(.*))?$/s);
+    if (!match) return null;
+    const name = match[1].toLowerCase();
+    const command = commands.find((c) => c.name === name);
+    if (!command) return null;
+    return { args: match[2]?.trim() ?? '', command };
+  }
 
-    // /stop — cancel the active agent execution on this thread
-    bot.onSlashCommand('/stop', async (event) => {
-      log('onSlashCommand /stop: agent=%s, platform=%s, user=%s', agentId, platform, event.user.userName);
+  /**
+   * Register all commands on the bot via both native slash-command events
+   * (Slack, Discord) and text-based onNewMessage handlers (Telegram, Feishu, etc.).
+   *
+   * To add a new command, add an entry to `buildCommands()` — it will be
+   * automatically registered on all platforms.
+   */
+  private registerCommands(bot: Chat<any>, commands: BotCommand[]): void {
+    // --- Native slash commands (Slack, Discord) ---
+    for (const cmd of commands) {
+      bot.onSlashCommand(`/${cmd.name}`, async (event) => {
+        await cmd.handler({
+          args: event.text,
+          post: (text) => event.channel.post(text),
+          setState: (state, opts) => event.channel.setState(state, opts),
+          threadId: event.channel.id,
+        });
+      });
+    }
 
-      // Check if there's an active execution via the bridge's static tracker
-      const isActive = AgentBridgeService.isThreadActive(event.channel.id);
-
-      if (!isActive) {
-        await event.channel.post('No active execution to stop.');
-        return;
-      }
-
-      // Try to interrupt via AiAgentService using the tracked operationId
-      const operationId = AgentBridgeService.getActiveOperationId(event.channel.id);
-      if (operationId) {
-        try {
-          const aiAgentService = new AiAgentService(serverDB, userId);
-          await aiAgentService.interruptTask({ operationId });
-          log('onSlashCommand /stop: interrupted operationId=%s', operationId);
-        } catch (error) {
-          log('onSlashCommand /stop: interruptTask failed: %O', error);
-        }
-      }
-
-      // Mark thread as no longer active in the bridge
-      AgentBridgeService.clearActiveThread(event.channel.id);
-
-      await event.channel.post('Execution stopped.');
+    // --- Text-based slash commands (Telegram, Feishu, etc.) ---
+    // Platforms that don't support native onSlashCommand send /commands as
+    // regular text messages. This handler intercepts them in unsubscribed
+    // threads (e.g. first command in a group chat or DM).
+    const namePattern = commands.map((c) => c.name).join('|');
+    const regex = new RegExp(`^\\/(?:${namePattern})(?:\\s|$|@)`);
+    bot.onNewMessage(regex, async (thread, message) => {
+      if (message.author.isBot === true) return;
+      const result = BotMessageRouter.dispatchTextCommand(message.text, commands);
+      if (!result) return;
+      await result.command.handler({
+        args: result.args,
+        post: (text) => thread.post(text),
+        setState: (state, opts) => thread.setState(state, opts),
+        threadId: thread.id,
+      });
     });
   }
 }

@@ -110,6 +110,15 @@ export interface PlatformClient {
   parseMessageId: (compositeId: string) => string | number;
 
   /**
+   * Register bot commands with the platform (e.g., Telegram setMyCommands).
+   * Called once during bot initialization with the list of available commands.
+   * Optional — platforms that don't support command menus can omit this.
+   */
+  registerBotCommands?: (
+    commands: Array<{ command: string; description: string }>,
+  ) => Promise<void>;
+
+  /**
    * Resolve the correct thread ID for reaction API calls.
    *
    * Some platforms (e.g. Discord) need to route reactions to a different channel

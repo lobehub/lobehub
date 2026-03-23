@@ -101,6 +101,14 @@ class TelegramWebhookClient implements PlatformClient {
     return extractChatId(platformThreadId);
   }
 
+  async registerBotCommands(
+    commands: Array<{ command: string; description: string }>,
+  ): Promise<void> {
+    const telegram = new TelegramApi(this.config.credentials.botToken);
+    await telegram.setMyCommands(commands);
+    log('TelegramBot appId=%s registered %d commands', this.applicationId, commands.length);
+  }
+
   formatReply(body: string, stats?: UsageStats): string {
     if (!stats || !this.config.settings?.showUsageStats) return body;
     return `${body}\n\n${formatUsageStats(stats)}`;
