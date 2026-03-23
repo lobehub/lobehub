@@ -1,5 +1,3 @@
-import { WINDOW_CONTROL_WIDTH } from './WinControl';
-
 export const TITLE_BAR_HORIZONTAL_PADDING = 12;
 
 export interface TitleBarLayoutConfig {
@@ -7,6 +5,8 @@ export interface TitleBarLayoutConfig {
   reserveNativeControlSpace: boolean;
   showCustomWinControl: boolean;
 }
+
+const WINDOWS_CONTROL_WIDTH = 150;
 
 export const getTitleBarLayoutConfig = (platform?: string): TitleBarLayoutConfig => {
   const showCustomWinControl = platform === 'Linux';
@@ -22,7 +22,7 @@ export const getTitleBarLayoutConfig = (platform?: string): TitleBarLayoutConfig
 
   if (reserveNativeControlSpace) {
     return {
-      padding: `0 ${WINDOW_CONTROL_WIDTH + TITLE_BAR_HORIZONTAL_PADDING}px 0 ${TITLE_BAR_HORIZONTAL_PADDING}px`,
+      padding: `0 ${WINDOWS_CONTROL_WIDTH + TITLE_BAR_HORIZONTAL_PADDING}px 0 ${TITLE_BAR_HORIZONTAL_PADDING}px`,
       reserveNativeControlSpace,
       showCustomWinControl,
     };
