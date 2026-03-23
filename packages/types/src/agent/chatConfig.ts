@@ -203,7 +203,7 @@ export const AgentChatConfigSchema = z
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
     thinkingLevel5: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-    toolResultMaxLength: z.number().default(6000),
+    toolResultMaxLength: z.number().default(25000),
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),
   })
