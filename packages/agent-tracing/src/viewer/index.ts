@@ -818,6 +818,22 @@ export function renderStepDetail(
     }
   }
 
+  // Default view: show tool errors even without -t flag
+  if (!hasSpecificFlag && step.toolsResult) {
+    const failedResults = step.toolsResult.filter((tr) => tr.isSuccess === false);
+    if (failedResults.length > 0) {
+      lines.push('');
+      lines.push(bold(red('Errors:')));
+      for (const tr of failedResults) {
+        lines.push(`  ${red('✗')} ${cyan(tr.identifier || tr.apiName)}`);
+        if (tr.output) {
+          const output = tr.output.length > 500 ? tr.output.slice(0, 500) + '...' : tr.output;
+          lines.push(`    ${red(output)}`);
+        }
+      }
+    }
+  }
+
   if (options?.tools) {
     if (step.toolsCalling && step.toolsCalling.length > 0) {
       lines.push('');

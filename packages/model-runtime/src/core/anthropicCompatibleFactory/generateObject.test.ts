@@ -55,7 +55,7 @@ describe('Anthropic generateObject', () => {
 
       expect(mockClient.messages.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          max_tokens: 8192,
+          max_tokens: 64_000,
           messages: [{ content: 'Generate a person object', role: 'user' }],
           model: 'claude-3-5-sonnet-20241022',
           tool_choice: {
@@ -404,7 +404,7 @@ describe('Anthropic generateObject', () => {
 
       expect(mockClient.messages.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          max_tokens: 8192,
+          max_tokens: 64_000,
           messages: [{ content: 'What is the weather and time in New York?', role: 'user' }],
           model: 'claude-3-5-sonnet-20241022',
           tool_choice: {
