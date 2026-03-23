@@ -37,17 +37,14 @@ export interface MessageToolCall {
   type: 'function' | string;
 }
 
-// Some providers (e.g., Zhipu GLM-5) send null for function.name/id in early
-// streaming tool_call chunks. Using .catch() prevents ZodError from breaking
-// the SSE stream; later chunks fill in the correct values via merging.
 export const MessageToolCallSchema = z.object({
   function: z.object({
-    arguments: z.string().catch(''),
-    name: z.string().catch(''),
+    arguments: z.string(),
+    name: z.string(),
   }),
-  id: z.string().catch(''),
+  id: z.string(),
   thoughtSignature: z.string().optional(),
-  type: z.string().catch('function'),
+  type: z.string(),
 });
 
 export type MessageToolCallChunk = PartialDeep<MessageToolCall> & { index: number };

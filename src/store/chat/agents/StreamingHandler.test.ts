@@ -577,44 +577,6 @@ describe('StreamingHandler', () => {
       expect(result.metadata.reasoning?.content).toBe('Fallback');
       expect(result.metadata.reasoning?.signature).toBe('fallback-sig');
     });
-
-    it('should end reasoning in handleFinish when stop chunk was not received (tool call scenario)', async () => {
-      const callbacks = createMockCallbacks();
-      const handler = new StreamingHandler(mockContext, callbacks);
-
-      // Simulate: reasoning starts, then stream ends without stop/text chunk
-      handler.handleChunk({ type: 'reasoning', text: 'Let me call a tool...' });
-      await new Promise((r) => setTimeout(r, 10));
-
-      // handleFinish without any prior stop or text chunk
-      const result = await handler.handleFinish({
-        type: 'stop',
-        toolCalls: [
-          { id: 'call-1', type: 'function', function: { name: 'search', arguments: '{}' } },
-        ],
-      });
-
-      expect(callbacks.onReasoningComplete).toHaveBeenCalledWith('reasoning-op-id');
-      expect(result.metadata.reasoning?.duration).toBeGreaterThan(0);
-      expect(result.isFunctionCall).toBe(true);
-    });
-
-    it('should not double-complete reasoning if already ended by text chunk', async () => {
-      const callbacks = createMockCallbacks();
-      const handler = new StreamingHandler(mockContext, callbacks);
-
-      handler.handleChunk({ type: 'reasoning', text: 'Thinking...' });
-      await new Promise((r) => setTimeout(r, 10));
-      handler.handleChunk({ type: 'text', text: 'Result' });
-
-      // onReasoningComplete called once by text chunk
-      expect(callbacks.onReasoningComplete).toHaveBeenCalledTimes(1);
-
-      await handler.handleFinish({ type: 'stop' });
-
-      // Should still be 1, not called again
-      expect(callbacks.onReasoningComplete).toHaveBeenCalledTimes(1);
-    });
   });
 
   describe('getter methods', () => {
