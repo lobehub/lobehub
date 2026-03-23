@@ -101,10 +101,6 @@ DROP TABLE "old_table";
 CREATE INDEX "users_email_idx" ON "users" ("email");
 ```
 
-## Step 4: Regenerate Client After SQL Edits
+## Step 4: Update Journal Tag
 
-After modifying the generated SQL (e.g., adding `IF NOT EXISTS`), regenerate the client:
-
-```bash
-bun run db:generate:client
-```
+After renaming the migration SQL file in Step 2, update the `tag` field in `packages/database/migrations/meta/_journal.json` to match the new filename (without `.sql` extension).

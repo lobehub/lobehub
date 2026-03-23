@@ -200,20 +200,85 @@ The base directory (`~/.lobehub/`) can be overridden with the `LOBEHUB_CLI_HOME`
 
 ## Development
 
+### Running in Dev Mode
+
+Dev mode uses `LOBEHUB_CLI_HOME=.lobehub-dev` to isolate credentials from the global `~/.lobehub/` directory, so dev and production configs never conflict.
+
 ```bash
-# Run directly (dev mode, uses ~/.lobehub-dev for credentials)
+# Run a command in dev mode (from apps/cli/)
 cd apps/cli && bun run dev -- <command>
 
-# Build
+# This is equivalent to:
+LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts <command>
+```
+
+### Connecting to Local Dev Server
+
+To test CLI against a local dev server (e.g. `localhost:3011`):
+
+**Step 1: Start the local server**
+
+```bash
+# From cloud repo root
+bun run dev
+# Server starts on http://localhost:3011 (or configured port)
+```
+
+**Step 2: Login to local server via Device Code Flow**
+
+```bash
+cd apps/cli && bun run dev -- login --server http://localhost:3011
+```
+
+This will:
+
+1. Call `POST http://localhost:3011/oidc/device/auth` to get a device code
+2. Print a URL like `http://localhost:3011/oidc/device?user_code=XXXX-YYYY`
+3. Open the URL in your browser — log in and authorize
+4. Save credentials to `apps/cli/.lobehub-dev/credentials.json`
+5. Save server URL to `apps/cli/.lobehub-dev/settings.json`
+
+After login, all subsequent `bun run dev -- <command>` calls will use the local server.
+
+**Step 3: Run commands against local server**
+
+```bash
+cd apps/cli && bun run dev -- task list
+cd apps/cli && bun run dev -- task create -i "Test task" -n "My Task"
+cd apps/cli && bun run dev -- agent list
+```
+
+**Troubleshooting:**
+
+- If login returns `invalid_grant`, make sure the local OIDC provider is properly configured (check `OIDC_*` env vars in `.env`)
+- If you get `UNAUTHORIZED` on API calls, your token may have expired — run `bun run dev -- login --server http://localhost:3011` again
+- Dev credentials are stored in `apps/cli/.lobehub-dev/` (gitignored), not in `~/.lobehub/`
+
+### Switching Between Local and Production
+
+```bash
+# Dev mode (local server) — uses .lobehub-dev/
+cd apps/cli && bun run dev -- <command>
+
+# Production (app.lobehub.com) — uses ~/.lobehub/
+lh <command>
+```
+
+The two environments are completely isolated by different credential directories.
+
+### Build & Test
+
+```bash
+# Build CLI
 cd apps/cli && bun run build
 
-# Test (unit tests)
+# Unit tests
 cd apps/cli && bun run test
 
 # E2E tests (requires authenticated CLI)
 cd apps/cli && bunx vitest run e2e/kb.e2e.test.ts
 
-# Link globally for testing
+# Link globally for testing (installs lh/lobe/lobehub commands)
 cd apps/cli && bun run cli:link
 ```
 

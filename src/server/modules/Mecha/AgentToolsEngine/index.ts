@@ -135,7 +135,8 @@ export const createServerAgentToolsEngine = (
         [LocalSystemManifest.identifier]:
           runtimeMode === 'local' &&
           !!deviceContext?.gatewayConfigured &&
-          !!deviceContext?.deviceOnline,
+          !!deviceContext?.deviceOnline &&
+          !!deviceContext?.autoActivated,
         [MemoryManifest.identifier]: globalMemoryEnabled,
         [RemoteDeviceManifest.identifier]:
           !!deviceContext?.gatewayConfigured && !deviceContext?.autoActivated,
