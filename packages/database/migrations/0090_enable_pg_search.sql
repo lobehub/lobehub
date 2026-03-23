@@ -1,0 +1,4 @@
+-- pg_search extension creation intentionally removed.
+-- The pg_search extension is not available on all PostgreSQL instances
+-- and is not required for core application functionality.
+-- This migration is a no-op to preserve migration history integrity.
