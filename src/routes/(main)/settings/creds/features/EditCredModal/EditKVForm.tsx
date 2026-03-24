@@ -63,7 +63,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
           kvPairs: kvPairs.length > 0 ? kvPairs : [{ key: '', value: '' }],
           name: cred.name,
         });
-      } catch (error) {
+      } catch {
         // If decryption fails, just show empty values
         form.setFieldsValue({
           description: cred.description,

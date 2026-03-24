@@ -249,11 +249,19 @@ export const credsRouter = router({
       log('inject input: %O', input);
 
       try {
+        const userId = input.userId || ctx.userId;
+        if (!userId) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'userId is required for credential injection',
+          });
+        }
+
         const result = await ctx.marketService.market.creds.inject({
           keys: input.keys,
           sandbox: input.sandbox,
           topicId: input.topicId,
-          userId: input.userId || ctx.userId,
+          userId,
         });
         log('inject success: %O', {
           notFound: result.notFound?.length,

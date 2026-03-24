@@ -4,8 +4,7 @@ import { type UserCredSummary } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Typography } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { type FC, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { type FC } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -24,9 +23,6 @@ interface CredDisplayProps {
 }
 
 const CredDisplay: FC<CredDisplayProps> = ({ cred }) => {
-  const { t } = useTranslation('setting');
-  const [copied, setCopied] = useState(false);
-
   // For OAuth type, show username
   if (cred.type === 'oauth') {
     return (
@@ -51,14 +47,6 @@ const CredDisplay: FC<CredDisplayProps> = ({ cred }) => {
   }
 
   // For KV types, show masked preview
-  const handleCopy = () => {
-    if (cred.maskedPreview) {
-      navigator.clipboard.writeText(cred.maskedPreview);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   return (
     <Flexbox className={styles.container}>
       <span className={styles.value}>{cred.maskedPreview || '-'}</span>

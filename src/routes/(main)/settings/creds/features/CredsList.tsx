@@ -1,34 +1,30 @@
 'use client';
 
-import { type CredType } from '@lobechat/types';
+import { type UserCredSummary } from '@lobechat/types';
 import { Button, Flexbox } from '@lobehub/ui';
+import { useMutation } from '@tanstack/react-query';
 import { Empty, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { LogIn, Plus } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 
-import CreateCredModal from './CreateCredModal';
-import CredsTable from './CredsTable';
-import CredsTypeFilter from './CredsTypeFilter';
+import CredItem from './CredItem';
+import EditCredModal from './EditCredModal';
+import ViewCredModal from './ViewCredModal';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 8px;
   `,
   empty: css`
     padding-block: 48px;
     padding-inline: 0;
-  `,
-  header: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
   `,
   signInPrompt: css`
     display: flex;
@@ -43,21 +39,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const CredsList: FC = () => {
   const { t } = useTranslation('setting');
-  const [typeFilter, setTypeFilter] = useState<CredType | 'all'>('all');
-  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingCred, setEditingCred] = useState<UserCredSummary | null>(null);
+  const [viewingCred, setViewingCred] = useState<UserCredSummary | null>(null);
   const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
 
   const { data, isLoading, refetch } = lambdaQuery.market.creds.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => lambdaClient.market.creds.delete.mutate({ id }),
+    onSuccess: () => {
+      refetch();
+    },
+  });
+
   const credentials = data?.data ?? [];
 
-  const filteredCredentials =
-    typeFilter === 'all' ? credentials : credentials.filter((c) => c.type === typeFilter);
-
-  const handleCreateSuccess = () => {
-    setCreateModalOpen(false);
+  const handleEditSuccess = () => {
+    setEditingCred(null);
     refetch();
   };
 
@@ -84,28 +84,33 @@ const CredsList: FC = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <CredsTypeFilter value={typeFilter} onChange={setTypeFilter} />
-        <Button icon={Plus} type="primary" onClick={() => setCreateModalOpen(true)}>
-          {t('creds.create')}
-        </Button>
-      </div>
-
       {isLoading ? (
         <Flexbox align="center" justify="center" style={{ padding: 48 }}>
           <Spin />
         </Flexbox>
-      ) : filteredCredentials.length === 0 ? (
+      ) : credentials.length === 0 ? (
         <Empty className={styles.empty} description={t('creds.empty')} />
       ) : (
-        <CredsTable credentials={filteredCredentials} onRefresh={refetch} />
+        <Flexbox gap={0}>
+          {credentials.map((cred) => (
+            <CredItem
+              cred={cred}
+              key={cred.id}
+              onDelete={(id) => deleteMutation.mutate(id)}
+              onEdit={setEditingCred}
+              onView={setViewingCred}
+            />
+          ))}
+        </Flexbox>
       )}
 
-      <CreateCredModal
-        open={createModalOpen}
-        onCancel={() => setCreateModalOpen(false)}
-        onSuccess={handleCreateSuccess}
+      <EditCredModal
+        cred={editingCred}
+        open={!!editingCred}
+        onClose={() => setEditingCred(null)}
+        onSuccess={handleEditSuccess}
       />
+      <ViewCredModal cred={viewingCred} open={!!viewingCred} onClose={() => setViewingCred(null)} />
     </div>
   );
 };
