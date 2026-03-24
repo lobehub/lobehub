@@ -289,7 +289,10 @@ export class AgentBridgeService {
 
   private async interruptTrackedOperation(threadId: string, operationId: string): Promise<void> {
     const aiAgentService = new AiAgentService(this.db, this.userId);
-    await aiAgentService.interruptTask({ operationId });
+    const result = await aiAgentService.interruptTask({ operationId });
+    if (!result.success) {
+      throw new Error(`Failed to interrupt operation ${operationId}`);
+    }
     AgentBridgeService.clearActiveThread(threadId);
     log('interruptTrackedOperation: thread=%s, operationId=%s', threadId, operationId);
   }

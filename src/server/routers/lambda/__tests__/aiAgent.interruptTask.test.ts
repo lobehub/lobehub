@@ -15,10 +15,12 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => testDB),
 }));
 
-// Mock AgentRuntimeService - interruptOperation method doesn't exist yet
+const mockInterruptOperation = vi.fn();
+
+// Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    // No interruptOperation method - tests the graceful fallback
+    interruptOperation: mockInterruptOperation,
   })),
 }));
 
@@ -39,6 +41,8 @@ describe('aiAgentRouter.interruptTask', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    mockInterruptOperation.mockReset();
+    mockInterruptOperation.mockResolvedValue(true);
 
     // Create test agent
     const [agent] = await serverDB
@@ -201,25 +205,27 @@ describe('aiAgentRouter.interruptTask', () => {
     });
   });
 
-  describe('graceful handling without interruptOperation method', () => {
-    it('should succeed even when interruptOperation method is not available', async () => {
-      // The mock doesn't have interruptOperation method
-      // This tests the graceful fallback in the implementation
+  describe('interrupt failure handling', () => {
+    it('should return success=false and keep thread processing when runtime interrupt fails', async () => {
+      mockInterruptOperation.mockResolvedValue(false);
+
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       const result = await caller.interruptTask({
         threadId: testThreadId,
       });
 
-      // Should still succeed and update thread status
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
+      expect(result.threadId).toBe(testThreadId);
+      expect(result.operationId).toBe('op-interrupt-test');
 
       const [updatedThread] = await serverDB
         .select()
         .from(threads)
         .where(eq(threads.id, testThreadId));
 
-      expect(updatedThread.status).toBe(ThreadStatus.Cancel);
+      expect(updatedThread.status).toBe(ThreadStatus.Processing);
+      expect(updatedThread.metadata?.completedAt).toBeUndefined();
     });
   });
 

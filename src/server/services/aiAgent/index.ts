@@ -1387,25 +1387,23 @@ export class AiAgentService {
       throw new Error('Operation ID not found');
     }
 
-    // 2. Try to interrupt the operation
-    // Note: AgentRuntimeService may not have interruptOperation method yet
-    // We'll gracefully handle this case by only updating thread status
-    try {
-      // Check if the method exists before calling (using type assertion for future method)
-      const service = this.agentRuntimeService as any;
-      if (typeof service.interruptOperation === 'function') {
-        const interrupted = await service.interruptOperation(resolvedOperationId);
-        log(
-          'interruptTask: interruptOperation=%s for operationId=%s',
-          interrupted,
-          resolvedOperationId,
-        );
-      } else {
-        log('interruptTask: interruptOperation method not available, only updating thread status');
-      }
-    } catch (error: any) {
-      log('interruptTask: Failed to interrupt operation: %O', error);
-      // Continue to update Thread status even if operation interrupt fails
+    // 2. Interrupt the runtime operation first. Only mark the thread cancelled
+    // after the runtime acknowledges the interrupt to avoid unlocking a live task.
+    const interrupted = await this.agentRuntimeService.interruptOperation(resolvedOperationId);
+    log(
+      'interruptTask: interruptOperation=%s for operationId=%s',
+      interrupted,
+      resolvedOperationId,
+    );
+
+    if (!interrupted) {
+      const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
+
+      return {
+        operationId: resolvedOperationId,
+        success: alreadyCancelled,
+        threadId: thread?.id,
+      };
     }
 
     // 3. Update Thread status to cancel

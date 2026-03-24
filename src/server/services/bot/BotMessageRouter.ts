@@ -450,11 +450,18 @@ export class BotMessageRouter {
           if (operationId) {
             try {
               const aiAgentService = new AiAgentService(serverDB, userId);
-              await aiAgentService.interruptTask({ operationId });
+              const result = await aiAgentService.interruptTask({ operationId });
+              if (!result.success) {
+                log('command /stop: runtime interrupt rejected for operationId=%s', operationId);
+                await ctx.post('Unable to stop the current execution.');
+                return;
+              }
               AgentBridgeService.clearActiveThread(ctx.threadId);
               log('command /stop: interrupted operationId=%s', operationId);
             } catch (error) {
               log('command /stop: interruptTask failed: %O', error);
+              await ctx.post('Unable to stop the current execution.');
+              return;
             }
           } else {
             AgentBridgeService.requestStop(ctx.threadId);
