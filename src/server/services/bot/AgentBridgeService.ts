@@ -578,10 +578,10 @@ export class AgentBridgeService {
     // The ack can't be edited into the final reply, so it would stay as a stale extra message.
     const canEdit = platformRegistry.getPlatform(client?.id ?? '')?.supportsMessageEdit !== false;
 
+    let progressMessage: SentMessage | undefined;
     let progressMessageId: string | undefined;
     if (canEdit) {
       // Post initial progress message to get the message ID
-      let progressMessage: SentMessage | undefined;
       try {
         progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
       } catch (error) {
