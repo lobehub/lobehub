@@ -240,7 +240,7 @@ export default {
   'tab.profile': 'My Account',
   'tab.security': 'Security',
   'tab.stats': 'Statistics',
-  'tab.usage': 'Usage Statistics',
+  'tab.usage': 'Usage',
   'usage.activeModels.modelTable': 'Model List',
   'usage.activeModels.models': 'Active Models',
   'usage.activeModels.providerTable': 'Provider List',

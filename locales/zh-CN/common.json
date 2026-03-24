@@ -429,10 +429,10 @@
   "upgradeVersion.newVersion": "可用更新版本：{{version}}",
   "upgradeVersion.serverVersion": "服务端：{{version}}",
   "userPanel.anonymousNickName": "匿名用户",
-  "userPanel.billing": "账单管理",
+  "userPanel.billing": "账单",
   "userPanel.cloud": "体验 {{name}}",
   "userPanel.community": "社区版",
-  "userPanel.credits": "积分管理",
+  "userPanel.credits": "积分",
   "userPanel.data": "数据存储",
   "userPanel.defaultNickname": "社区版用户",
   "userPanel.discord": "Discord",
@@ -445,6 +445,6 @@
   "userPanel.profile": "账户管理",
   "userPanel.setting": "应用设置",
   "userPanel.upgradePlan": "升级套餐",
-  "userPanel.usages": "用量统计",
+  "userPanel.usages": "用量",
   "version": "版本"
 }
