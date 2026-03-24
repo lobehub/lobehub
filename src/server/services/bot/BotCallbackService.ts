@@ -226,11 +226,7 @@ export class BotCallbackService {
     if (reason === 'interrupted') {
       const stoppedText = renderStopped(errorMessage || 'Execution stopped.');
       try {
-        if (canEdit) {
-          await messenger.editMessage(progressMessageId, stoppedText);
-        } else {
-          await messenger.createMessage(stoppedText);
-        }
+        await messenger.createMessage(stoppedText);
       } catch (error) {
         log('handleCompletion: failed to send interrupted message: %O', error);
       }
