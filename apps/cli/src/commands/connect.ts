@@ -298,12 +298,6 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       return;
     }
 
-    if (auth.tokenType !== 'jwt') {
-      cleanup();
-      process.exit(1);
-      return;
-    }
-
     error('Authentication expired. Attempting to refresh...');
 
     try {
