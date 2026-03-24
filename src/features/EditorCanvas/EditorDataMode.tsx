@@ -4,6 +4,8 @@ import { type IEditor } from '@lobehub/editor';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
+
 import { type EditorCanvasProps } from './EditorCanvas';
 import InternalEditor from './InternalEditor';
 
@@ -28,6 +30,9 @@ const loadEditorContent = (
       return true;
     } else if (editorData.content?.trim()) {
       editorInstance.setDocument('markdown', editorData.content, { keepId: true });
+      return true;
+    } else {
+      editorInstance.setDocument('json', JSON.stringify(EMPTY_EDITOR_STATE));
       return true;
     }
   } catch (err) {

@@ -4,6 +4,7 @@ import type { IEditor } from '@lobehub/editor/es/types';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
 
+import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { documentService } from '@/services/document';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -129,14 +130,14 @@ export class EditorActionImpl {
       }
     }
 
-    // Load markdown content if available
-    // Skip setDocument for empty content - let editor use its default empty state
-    if (doc.content?.trim()) {
-      try {
+    try {
+      if (doc.content?.trim()) {
         editor.setDocument('markdown', doc.content);
-      } catch (err) {
-        console.error('[DocumentStore] Failed to load markdown content:', err);
+      } else {
+        editor.setDocument('json', JSON.stringify(EMPTY_EDITOR_STATE));
       }
+    } catch (err) {
+      console.error('[DocumentStore] Failed to load markdown content:', err);
     }
 
     this.#set({ editor });
