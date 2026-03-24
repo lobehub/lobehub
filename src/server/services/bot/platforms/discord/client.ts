@@ -30,6 +30,13 @@ function extractChannelId(platformThreadId: string): string {
   return parts[3] || parts[2];
 }
 
+function isSubscribableThread(platformThreadId: string): boolean {
+  const [, guildId, , discordThreadId] = platformThreadId.split(':');
+
+  // Keep DM conversations multi-turn, but avoid subscribing to top-level guild channels.
+  return guildId === '@me' || !!discordThreadId;
+}
+
 class DiscordGatewayClient implements PlatformClient {
   readonly id = 'discord';
   readonly applicationId: string;
@@ -182,6 +189,10 @@ class DiscordGatewayClient implements PlatformClient {
 
   sanitizeUserInput(text: string): string {
     return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
+  }
+
+  shouldSubscribe(threadId: string): boolean {
+    return isSubscribableThread(threadId);
   }
 
   async registerBotCommands(
