@@ -15,7 +15,6 @@ const SCOPES = 'openid profile email offline_access';
 const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
 
 interface LoginOptions {
-  apiKey?: boolean;
   server: string;
 }
 
@@ -55,23 +54,15 @@ async function parseJsonResponse<T>(res: Response, endpoint: string): Promise<T>
 export function registerLoginCommand(program: Command) {
   program
     .command('login')
-    .description('Log in to LobeHub via browser (Device Code Flow) or API key')
+    .description('Log in to LobeHub via browser (Device Code Flow) or configure API key server')
     .option('--server <url>', 'LobeHub server URL', OFFICIAL_SERVER_URL)
-    .option('--api-key', `Read API key from ${CLI_API_KEY_ENV}`)
     .action(async (options: LoginOptions) => {
       const serverUrl = options.server.replace(/\/$/, '');
 
       log.info('Starting login...');
 
-      if (options.apiKey) {
-        const apiKey = process.env[CLI_API_KEY_ENV];
-
-        if (!apiKey) {
-          log.error(`--api-key requires the ${CLI_API_KEY_ENV} environment variable to be set.`);
-          process.exit(1);
-          return;
-        }
-
+      const apiKey = process.env[CLI_API_KEY_ENV];
+      if (apiKey) {
         try {
           await getUserIdFromApiKey(apiKey, serverUrl);
 
@@ -91,12 +82,12 @@ export function registerLoginCommand(program: Command) {
                 },
           );
           log.info(
-            `API key login is ready. ${CLI_API_KEY_ENV} will be used at runtime and is not stored locally.`,
+            `API key authentication is ready. ${CLI_API_KEY_ENV} will be used at runtime and is not stored locally.`,
           );
           return;
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          log.error(`API key login failed: ${message}`);
+          log.error(`API key validation failed: ${message}`);
           process.exit(1);
           return;
         }

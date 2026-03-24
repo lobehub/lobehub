@@ -139,28 +139,17 @@ describe('login command', () => {
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Login successful'));
   });
 
-  it('should prepare api key login from environment without storing credentials', async () => {
+  it('should use environment api key without storing credentials', async () => {
     process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-env-test';
     vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-123');
 
     const program = createProgram();
-    await runLogin(program, ['--api-key']);
+    await runLogin(program);
 
     expect(getUserIdFromApiKey).toHaveBeenCalledWith('sk-lh-env-test', 'https://app.lobehub.com');
     expect(saveCredentials).not.toHaveBeenCalled();
     expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://app.lobehub.com' });
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('is not stored locally'));
-  });
-
-  it('should require LOBEHUB_CLI_API_KEY when using --api-key', async () => {
-    const program = createProgram();
-    await runLogin(program, ['--api-key']);
-
-    expect(log.error).toHaveBeenCalledWith(
-      expect.stringContaining('LOBEHUB_CLI_API_KEY environment variable'),
-    );
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(saveCredentials).not.toHaveBeenCalled();
   });
 
   it('should persist custom server into settings', async () => {
@@ -192,7 +181,7 @@ describe('login command', () => {
     });
   });
 
-  it('should preserve existing gateway for api key login on the same server', async () => {
+  it('should preserve existing gateway for environment api key on the same server', async () => {
     process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-env-test';
     vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-123');
     vi.mocked(loadSettings).mockReturnValueOnce({
@@ -201,7 +190,7 @@ describe('login command', () => {
     });
 
     const program = createProgram();
-    await runLogin(program, ['--api-key', '--server', 'https://test.com/']);
+    await runLogin(program, ['--server', 'https://test.com/']);
 
     expect(saveSettings).toHaveBeenCalledWith({
       gatewayUrl: 'https://gateway.example.com',

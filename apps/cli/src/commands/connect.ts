@@ -286,7 +286,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   client.on('auth_failed', (reason) => {
     error(`Authentication failed: ${reason}`);
     error(
-      "Run 'lh login' or set LOBEHUB_CLI_API_KEY and use 'lh login --api-key' to re-authenticate.",
+      "Run 'lh login', or set LOBEHUB_CLI_API_KEY and run 'lh login --server <url>' to configure API key authentication.",
     );
     cleanup();
     process.exit(1);
@@ -297,7 +297,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     if (auth.tokenType !== 'jwt') {
       error('Authentication expired.');
       error(
-        "Set LOBEHUB_CLI_API_KEY and run 'lh login --api-key', or run 'lh login' to re-authenticate.",
+        "Set LOBEHUB_CLI_API_KEY and run 'lh login --server <url>', or run 'lh login' to re-authenticate.",
       );
       cleanup();
       process.exit(1);
