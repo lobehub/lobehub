@@ -10,7 +10,13 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { AgentBridgeService } from './AgentBridgeService';
 import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
 import { platformRegistry } from './platforms';
-import { renderError, renderFinalReply, renderStepProgress, splitMessage } from './replyTemplate';
+import {
+  renderError,
+  renderFinalReply,
+  renderStepProgress,
+  renderStopped,
+  splitMessage,
+} from './replyTemplate';
 
 const log = debug('lobe-server:bot:callback');
 
@@ -217,6 +223,20 @@ export class BotCallbackService {
       return;
     }
 
+    if (reason === 'interrupted') {
+      const stoppedText = renderStopped(errorMessage || 'Execution stopped.');
+      try {
+        if (canEdit) {
+          await messenger.editMessage(progressMessageId, stoppedText);
+        } else {
+          await messenger.createMessage(stoppedText);
+        }
+      } catch (error) {
+        log('handleCompletion: failed to send interrupted message: %O', error);
+      }
+      return;
+    }
+
     if (!lastAssistantContent) {
       log('handleCompletion: no lastAssistantContent, skipping');
       return;
@@ -275,7 +295,16 @@ export class BotCallbackService {
 
   private summarizeTopicTitle(body: BotCallbackBody, messenger: PlatformMessenger): void {
     const { reason, topicId, userId, userPrompt, lastAssistantContent } = body;
-    if (reason === 'error' || !topicId || !userId || !userPrompt || !lastAssistantContent) return;
+    if (
+      reason === 'error' ||
+      reason === 'interrupted' ||
+      !topicId ||
+      !userId ||
+      !userPrompt ||
+      !lastAssistantContent
+    ) {
+      return;
+    }
 
     const topicModel = new TopicModel(this.db, userId);
     topicModel

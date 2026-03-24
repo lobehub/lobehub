@@ -335,6 +335,19 @@ describe('BotCallbackService', () => {
       );
     });
 
+    it('should render stopped message when reason is interrupted', async () => {
+      const body = makeBody({
+        lastAssistantContent: 'Partial answer that should not be shown',
+        reason: 'interrupted',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledWith('progress-msg-1', 'Execution stopped.');
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
     it('should skip when no lastAssistantContent on successful completion', async () => {
       const body = makeBody({
         reason: 'completed',
@@ -563,6 +576,24 @@ describe('BotCallbackService', () => {
       // Wait a tick to ensure no async work was started
       await new Promise((r) => setTimeout(r, 50));
       expect(mockFindById).not.toHaveBeenCalled();
+    });
+
+    it('should skip summarization when reason is interrupted', async () => {
+      const body = makeBody({
+        lastAssistantContent: 'partial',
+        reason: 'interrupted',
+        topicId: 'topic-1',
+        type: 'completion',
+        userId: 'user-1',
+        userPrompt: 'test',
+      });
+
+      await service.handleCallback(body);
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(mockFindById).not.toHaveBeenCalled();
+      expect(mockGenerateTopicTitle).not.toHaveBeenCalled();
+      expect(mockTopicUpdate).not.toHaveBeenCalled();
     });
 
     it('should skip summarization when topicId is missing', async () => {
