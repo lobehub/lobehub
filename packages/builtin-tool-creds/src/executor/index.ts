@@ -190,9 +190,46 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         key: params.key,
       });
 
-      const values = (result as any).values || {};
-      const valueKeys = Object.keys(values);
+      const credType = (result as any).type;
       const credName = (result as any).name || params.key;
+
+      log('[CredsExecutor] getPlaintextCred - type:', credType);
+
+      // Handle file type credentials
+      if (credType === 'file') {
+        const fileUrl = (result as any).fileUrl;
+        const fileName = (result as any).fileName;
+
+        log('[CredsExecutor] getPlaintextCred - fileUrl:', fileUrl ? 'present' : 'missing');
+
+        if (!fileUrl) {
+          return {
+            content: `File credential "${credName}" (key: ${params.key}) found but file URL is not available.`,
+            error: {
+              message: 'File URL not available',
+              type: 'FileUrlNotAvailable',
+            },
+            success: false,
+          };
+        }
+
+        return {
+          content: `Successfully retrieved file credential "${credName}" (key: ${params.key}). File: ${fileName || 'unknown'}. The file download URL is available in the state.`,
+          state: {
+            fileName,
+            fileUrl,
+            key: params.key,
+            name: credName,
+            type: 'file',
+          },
+          success: true,
+        };
+      }
+
+      // Handle KV types (kv-env, kv-header, oauth)
+      // Market API returns 'plaintext' field, SDK might transform to 'values'
+      const values = (result as any).values || (result as any).plaintext || {};
+      const valueKeys = Object.keys(values);
 
       log('[CredsExecutor] getPlaintextCred - result keys:', valueKeys);
 
@@ -204,6 +241,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         state: {
           key: params.key,
           name: credName,
+          type: credType,
           values,
         },
         success: true,
