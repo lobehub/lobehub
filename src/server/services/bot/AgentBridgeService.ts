@@ -26,6 +26,7 @@ import {
   renderStopped,
   splitMessage,
 } from './replyTemplate';
+import { startTypingKeepAlive, stopTypingKeepAlive } from './typingKeepAlive';
 
 const log = debug('lobe-server:bot:agent-bridge');
 
@@ -389,6 +390,10 @@ export class AgentBridgeService {
 
     const queueMode = isQueueAgentRuntimeEnabled();
 
+    // Keep typing indicator alive (e.g. Telegram expires after ~5s, Discord after ~10s)
+    const platformThreadId = botContext?.platformThreadId ?? thread.id;
+    startTypingKeepAlive(platformThreadId, () => thread.startTyping());
+
     try {
       // executeWithCallback handles progress message (post + edit at each step)
       // The final reply is edited into the progress message by onComplete
@@ -413,9 +418,10 @@ export class AgentBridgeService {
       await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
-      // In queue mode, reaction is removed by the bot-callback webhook on completion
+      // In queue mode, typing keepalive is stopped by the bot-callback webhook on completion.
+      // In local mode, stop it here.
       if (!queueMode) {
-        AgentBridgeService.activeThreads.delete(thread.id);
+        stopTypingKeepAlive(platformThreadId);
         await this.removeReceivedReaction(thread, message, client);
       }
     }
@@ -483,6 +489,10 @@ export class AgentBridgeService {
     );
     await thread.startTyping();
 
+    // Keep typing indicator alive
+    const platformThreadId = botContext?.platformThreadId ?? thread.id;
+    startTypingKeepAlive(platformThreadId, () => thread.startTyping());
+
     try {
       // executeWithCallback handles progress message (post + edit at each step)
       await this.executeWithCallback(thread, mergedMessage, {
@@ -511,9 +521,9 @@ export class AgentBridgeService {
       await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
-      // In queue mode, reaction is removed by the bot-callback webhook on completion
+      // In queue mode, typing keepalive is stopped by the bot-callback webhook on completion.
       if (!queueMode) {
-        AgentBridgeService.activeThreads.delete(thread.id);
+        stopTypingKeepAlive(platformThreadId);
         await this.removeReceivedReaction(thread, message, opts.client);
       }
     }
