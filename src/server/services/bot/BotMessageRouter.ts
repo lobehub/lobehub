@@ -222,6 +222,7 @@ export class BotMessageRouter {
       userId,
     });
     await chatBot.initialize();
+    client.applyChatPatches?.(chatBot);
 
     // Register platform-specific bot commands (e.g., Telegram setMyCommands menu)
     if (client.registerBotCommands) {
