@@ -17,7 +17,7 @@ const QueryProvider = ({ children }: PropsWithChildren) => {
     typeof lambdaQuery.Provider
   >['queryClient'];
 
-  // 使用 useState 确保 provider 只创建一次
+  // Use useState to ensure the provider is only created once
   const [provider] = useState(swrCacheProvider);
 
   return (
