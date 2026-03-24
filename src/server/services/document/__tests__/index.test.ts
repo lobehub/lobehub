@@ -42,6 +42,7 @@ describe('DocumentService', () => {
     mockDocumentModel = {
       create: vi.fn(),
       delete: vi.fn(),
+      findByFileId: vi.fn().mockResolvedValue(null),
       findById: vi.fn(),
       query: vi.fn(),
       update: vi.fn(),
