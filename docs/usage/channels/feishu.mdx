@@ -34,6 +34,8 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
 
   Click **Create Enterprise App**. Fill in the app name (e.g., "LobeHub 助手"), description, and icon, then submit the form.
 
+  ![](https://github.com/user-attachments/assets/ca1ef965-c7b6-401a-826c-bb9f1ac14769)
+
   ### Copy App Credentials
 
   Go to **Credentials & Basic Info** and copy:
@@ -42,6 +44,8 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
   - **App Secret**
 
   > **Important:** Keep your App Secret confidential. Never share it publicly.
+
+  ![](https://github.com/user-attachments/assets/a850b19f-c45a-4aa9-a583-4a453e421fc1)
 </Steps>
 
 ## Step 2: Configure App Permissions and Bot
@@ -83,9 +87,13 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
   }
   ```
 
+  ![](https://github.com/user-attachments/assets/a92c8ad1-4243-4eaa-affa-8650fe0a6c63)
+
   ### Enable Bot Capability
 
   Go to **App Capability** → **Bot**. Toggle the bot capability on and set your preferred bot name.
+
+  ![](https://github.com/user-attachments/assets/64f6a8cb-a693-4764-99f3-8e3621629db3)
 </Steps>
 
 ## Step 3: Configure Feishu in LobeHub
@@ -107,6 +115,8 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
   ### Save and Copy the Webhook URL
 
   Click **Save Configuration**. After saving, an **Event Subscription URL** will be displayed. Copy this URL — you will need it in the next step.
+
+  ![](https://github.com/user-attachments/assets/e063e4e6-3d5c-47e4-84a2-c7f904a92a81)
 </Steps>
 
 ## Step 4: Set Up Event Subscription in Feishu
@@ -128,9 +138,13 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
 
   This allows your app to receive messages and forward them to LobeHub.
 
+  ![](https://github.com/user-attachments/assets/3849afb3-ea46-4d30-bc81-a7cb88cf451f)
+
   ### (Recommended) Fill in Verification Token and Encrypt Key
 
   After configuring Event Subscription, you can find the **Verification Token** and **Encrypt Key** at the top of the Event Subscription page under **Encryption Strategy**.
+
+  ![](https://github.com/user-attachments/assets/a43dd863-fd97-41ab-bcc0-0cf5fb1a859d)
 
   Go back to LobeHub's channel settings and fill in:
 
@@ -138,6 +152,8 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
   - **Encrypt Key** (optional) — Used to decrypt encrypted event payloads
 
   Click **Save Configuration** again to apply.
+
+  ![](https://github.com/user-attachments/assets/37bd35c6-c6e1-4c33-aeb6-c4b0cb1e25ff)
 </Steps>
 
 ## Step 5: Publish the App
@@ -146,6 +162,8 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
   ### Create a Version
 
   In your app settings, go to **Version Management & Release**. Create a new version with release notes.
+
+  ![](https://github.com/user-attachments/assets/2a0a21f6-4dc8-4160-a683-8629af1f6336)
 
   ### Submit for Review
 

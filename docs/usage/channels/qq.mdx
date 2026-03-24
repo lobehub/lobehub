@@ -40,6 +40,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
 
   > **Important:** Keep your App Secret confidential. Never share it publicly.
 
+  ![](https://github.com/user-attachments/assets/fd60ab55-ead2-4930-ad00-fdf77662f5a0)
+
   ### Configure Webhook URL
 
   In the QQ Open Platform, navigate to **Development Settings** → **Callback Configuration**. You will need to paste the LobeHub Callback URL here after completing Step 2.
@@ -64,6 +66,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   Click **Save Configuration**. After saving, a **Callback URL** will be displayed. Copy this URL.
 
   Your credentials will be encrypted and stored securely.
+
+  ![](https://github.com/user-attachments/assets/78c408b0-8432-4938-bdff-c9a291b6c5be)
 </Steps>
 
 ## Step 3: Configure Callback in QQ Open Platform
@@ -82,6 +86,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   - `AT_MESSAGE_CREATE` — Triggered when the bot is @mentioned in a guild channel
   - `DIRECT_MESSAGE_CREATE` — Triggered for direct messages in a guild
 
+  ![](https://github.com/user-attachments/assets/aeb73c3e-4f04-4bec-820f-264792f8d0dc)
+
   ### Verify the Callback
 
   The QQ Open Platform will send a verification request to your Callback URL. LobeHub handles this automatically using Ed25519 signature verification.
@@ -97,6 +103,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   ### Wait for Approval
 
   QQ will review your bot. Once approved, the bot will be published and ready to use. For sandbox testing, you can add test users directly without publishing.
+
+  ![](https://github.com/user-attachments/assets/432d22e3-8d73-4376-b4cf-a7dcacae4444)
 </Steps>
 
 ## Step 5: Test the Connection
