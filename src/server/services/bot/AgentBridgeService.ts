@@ -384,11 +384,6 @@ export class AgentBridgeService {
 
     await thread.startTyping();
 
-    // Keep typing indicator alive (Telegram's expires after ~5s)
-    const typingInterval = setInterval(() => {
-      thread.startTyping().catch(() => {});
-    }, 4000);
-
     // Fetch channel context for Discord context injection
     const channelContext = await this.fetchChannelContext(thread);
 
@@ -417,10 +412,8 @@ export class AgentBridgeService {
       const msg = error instanceof Error ? error.message : String(error);
       await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
     } finally {
-      clearInterval(typingInterval);
-      // In queue mode, the agent is still running on the job queue after
-      // executeWithWebhooks returns. Keep the thread marked active so /stop
-      // can find and interrupt it. The completion callback clears it instead.
+      AgentBridgeService.activeThreads.delete(thread.id);
+      // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
         AgentBridgeService.activeThreads.delete(thread.id);
         await this.removeReceivedReaction(thread, message, client);
@@ -490,11 +483,6 @@ export class AgentBridgeService {
     );
     await thread.startTyping();
 
-    // Keep typing indicator alive (Telegram's expires after ~5s)
-    const typingInterval = setInterval(() => {
-      thread.startTyping().catch(() => {});
-    }, 4000);
-
     try {
       // executeWithCallback handles progress message (post + edit at each step)
       await this.executeWithCallback(thread, mergedMessage, {
@@ -522,7 +510,8 @@ export class AgentBridgeService {
       log('handleSubscribedMessage error: %O', error);
       await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
     } finally {
-      clearInterval(typingInterval);
+      AgentBridgeService.activeThreads.delete(thread.id);
+      // In queue mode, reaction is removed by the bot-callback webhook on completion
       if (!queueMode) {
         AgentBridgeService.activeThreads.delete(thread.id);
         await this.removeReceivedReaction(thread, message, opts.client);
