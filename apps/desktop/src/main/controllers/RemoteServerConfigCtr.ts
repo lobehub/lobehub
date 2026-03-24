@@ -6,6 +6,7 @@ import retry from 'async-retry';
 import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
@@ -321,11 +322,10 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     this.app.storeManager.delete(this.encryptedTokensKey);
 
     // Disconnect gateway when tokens are cleared (logout / token refresh failure)
-    const GatewayConnectionCtr = (await import('./GatewayConnectionCtr')).default;
-    const gatewayCtr = this.app.getController(GatewayConnectionCtr);
-    if (gatewayCtr) {
+    const gatewaySrv = this.app.getService(GatewayConnectionService);
+    if (gatewaySrv) {
       logger.debug('Disconnecting gateway due to token clear');
-      await gatewayCtr.disconnect();
+      await gatewaySrv.disconnect();
     }
   }
 

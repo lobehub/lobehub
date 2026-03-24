@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 
 import GatewayConnectionCtr from '../GatewayConnectionCtr';
 import LocalFileCtr from '../LocalFileCtr';
@@ -84,6 +85,9 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
 });
 
 vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn((name: string) => `/mock/${name}`),
+  },
   ipcMain: { handle: ipcMainHandleMock },
 }));
 
@@ -159,8 +163,15 @@ const mockApp = {
     if (Cls === ShellCommandCtr) return mockShellCommandCtr;
     return null;
   }),
+  getService: vi.fn((Cls) => {
+    if (Cls === GatewayConnectionService) return mockGatewayConnectionSrv;
+    return null;
+  }),
   storeManager: { get: mockStoreGet, set: mockStoreSet },
 } as unknown as App;
+
+// Lazily initialized — created in beforeEach so it uses the current mockApp
+let mockGatewayConnectionSrv: GatewayConnectionService;
 
 // ─── Test Suite ───
 
@@ -174,6 +185,7 @@ describe('GatewayConnectionCtr', () => {
     MockGatewayClient.lastOptions = null;
     mockStoreGet.mockReturnValue(undefined);
 
+    mockGatewayConnectionSrv = new GatewayConnectionService(mockApp);
     ctr = new GatewayConnectionCtr(mockApp);
   });
 

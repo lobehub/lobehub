@@ -47,13 +47,14 @@ const mockBrowserManager = {
   broadcastToAllWindows: vi.fn(),
 };
 
-const mockGatewayConnectionCtr = {
+const mockGatewayConnectionSrv = {
   disconnect: vi.fn().mockResolvedValue({ success: true }),
 };
 
 const mockApp = {
   browserManager: mockBrowserManager,
-  getController: vi.fn().mockReturnValue(mockGatewayConnectionCtr),
+  getController: vi.fn(),
+  getService: vi.fn().mockReturnValue(mockGatewayConnectionSrv),
   storeManager: mockStoreManager,
 } as unknown as App;
 
@@ -304,7 +305,7 @@ describe('RemoteServerConfigCtr', () => {
       await controller.saveTokens('access', 'refresh', 3600);
       await controller.clearTokens();
 
-      expect(mockGatewayConnectionCtr.disconnect).toHaveBeenCalled();
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalled();
     });
   });
 
