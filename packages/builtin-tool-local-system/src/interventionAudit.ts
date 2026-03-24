@@ -1,16 +1,57 @@
+import { existsSync, realpathSync } from 'node:fs';
+
 import { type DynamicInterventionResolver } from '@lobechat/types';
+import path from 'path-browserify-esm';
 
 import { normalizePathForScope, resolvePathWithScope } from './utils/path';
 
 /**
- * Safe path prefixes that never require user intervention.
+ * Safe path prefixes that can bypass intervention once their real filesystem
+ * location is verified to remain inside those same temporary directories.
  * Operations targeting these directories are considered low-risk
  * because they are ephemeral / world-writable system locations.
  */
-const SAFE_PATH_PREFIXES = ['/tmp/', '/tmp', '/var/tmp/', '/var/tmp'];
+const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
+
+const isWithinPathPrefixes = (targetPath: string, prefixes: readonly string[]): boolean =>
+  prefixes.some((prefix) => targetPath === prefix || targetPath.startsWith(prefix + '/'));
+
+const resolveSafePathPrefixes = (): string[] => {
+  const prefixes = new Set<string>(SAFE_PATH_PREFIXES);
+
+  for (const safePrefix of SAFE_PATH_PREFIXES) {
+    try {
+      prefixes.add(normalizePathForScope(realpathSync.native(safePrefix)));
+    } catch {
+      // Ignore missing safe directories and fall back to the lexical prefix.
+    }
+  }
+
+  return [...prefixes];
+};
+
+const SAFE_PATH_REAL_PREFIXES = resolveSafePathPrefixes();
+
+const resolveNearestExistingRealPath = (targetPath: string): string | undefined => {
+  let currentPath = targetPath;
+
+  while (true) {
+    if (existsSync(currentPath)) {
+      try {
+        return normalizePathForScope(realpathSync.native(currentPath));
+      } catch {
+        return undefined;
+      }
+    }
+
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) return undefined;
+    currentPath = parentPath;
+  }
+};
 
 /**
- * Check if every path in the list targets a known safe location.
+ * Check if every path in the list targets a known safe location on disk.
  * Returns `true` only when **all** paths fall under a safe prefix.
  */
 const areAllPathsSafe = (paths: string[], resolveAgainstScope: string): boolean => {
@@ -19,11 +60,13 @@ const areAllPathsSafe = (paths: string[], resolveAgainstScope: string): boolean 
   return paths.every((p) => {
     const resolved = resolvePathWithScope(p, resolveAgainstScope) ?? p;
     const normalized = normalizePathForScope(resolved);
-    return SAFE_PATH_PREFIXES.some(
-      (prefix) =>
-        normalized === prefix ||
-        normalized.startsWith(prefix.endsWith('/') ? prefix : prefix + '/'),
-    );
+
+    if (!isWithinPathPrefixes(normalized, SAFE_PATH_PREFIXES)) return false;
+
+    const nearestExistingRealPath = resolveNearestExistingRealPath(normalized);
+    if (!nearestExistingRealPath) return false;
+
+    return isWithinPathPrefixes(nearestExistingRealPath, SAFE_PATH_REAL_PREFIXES);
   });
 };
 

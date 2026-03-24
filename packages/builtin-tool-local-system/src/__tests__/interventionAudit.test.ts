@@ -1,3 +1,7 @@
+import { existsSync } from 'node:fs';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { pathScopeAudit } from '../interventionAudit';
@@ -171,6 +175,25 @@ describe('pathScopeAudit', () => {
           metadata,
         ),
       ).toBe(false);
+    });
+
+    it('should require intervention when a /tmp ancestor symlink resolves outside safe paths', async () => {
+      if (!existsSync('/tmp') || process.platform === 'win32') return;
+
+      const outsideDirectory = await mkdtemp(join(process.cwd(), 'intervention-audit-outside-'));
+      const symlinkPath = join(
+        '/tmp',
+        `intervention-audit-link-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+
+      try {
+        await symlink(outsideDirectory, symlinkPath, 'dir');
+
+        expect(pathScopeAudit({ path: join(symlinkPath, 'config.json') }, metadata)).toBe(true);
+      } finally {
+        await rm(symlinkPath, { force: true, recursive: true });
+        await rm(outsideDirectory, { force: true, recursive: true });
+      }
     });
   });
 
