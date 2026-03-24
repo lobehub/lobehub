@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { Hono } from 'hono';
 
-import { verifyDesktopToken } from './auth';
+import { verifyApiKeyToken, verifyDesktopToken } from './auth';
 import type { DeviceAttachment, Env } from './types';
 
 const AUTH_TIMEOUT = 10_000; // 10s to authenticate after connect
@@ -59,11 +59,17 @@ export class DeviceGatewayDO extends DurableObject<Env> {
 
       try {
         const token = data.token as string;
+        const tokenType = data.tokenType as 'apiKey' | 'jwt' | 'serviceToken' | undefined;
+        const serverUrl = data.serverUrl as string | undefined;
         if (!token) throw new Error('Missing token');
 
         let verifiedUserId: string;
 
-        if (token === this.env.SERVICE_TOKEN) {
+        if (tokenType === 'apiKey') {
+          if (!serverUrl) throw new Error('Missing serverUrl');
+          const result = await verifyApiKeyToken(serverUrl, token);
+          verifiedUserId = result.userId;
+        } else if (token === this.env.SERVICE_TOKEN || tokenType === 'serviceToken') {
           // Service token auth (for CLI debugging)
           const storedUserId = await this.ctx.storage.get<string>('_userId');
           if (!storedUserId) throw new Error('Missing userId');

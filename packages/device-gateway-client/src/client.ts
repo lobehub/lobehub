@@ -44,7 +44,9 @@ export interface GatewayClientOptions {
   deviceId?: string;
   gatewayUrl?: string;
   logger?: GatewayClientLogger;
+  serverUrl?: string;
   token: string;
+  tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
   userId?: string;
 }
 
@@ -58,15 +60,19 @@ export class GatewayClient extends EventEmitter {
   private deviceId: string;
   private gatewayUrl: string;
   private token: string;
+  private tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
   private userId?: string;
+  private serverUrl?: string;
   private logger: GatewayClientLogger;
   private autoReconnect: boolean;
 
   constructor(options: GatewayClientOptions) {
     super();
     this.token = options.token;
+    this.tokenType = options.tokenType;
     this.gatewayUrl = options.gatewayUrl || DEFAULT_GATEWAY_URL;
     this.deviceId = options.deviceId || randomUUID();
+    this.serverUrl = options.serverUrl;
     this.userId = options.userId;
     this.logger = options.logger || noopLogger;
     this.autoReconnect = options.autoReconnect ?? true;
@@ -180,7 +186,12 @@ export class GatewayClient extends EventEmitter {
     this.setStatus('authenticating');
 
     // Send token as first message instead of in URL
-    this.sendMessage({ type: 'auth', token: this.token });
+    this.sendMessage({
+      serverUrl: this.serverUrl,
+      token: this.token,
+      tokenType: this.tokenType,
+      type: 'auth',
+    });
   };
 
   private handleMessage = (data: WebSocket.Data) => {

@@ -34,3 +34,46 @@ export async function verifyDesktopToken(
     userId: payload.sub,
   };
 }
+
+interface CurrentUserResponse {
+  data?: {
+    id?: string;
+    userId?: string;
+  };
+  error?: string;
+  message?: string;
+  success?: boolean;
+}
+
+export async function verifyApiKeyToken(
+  serverUrl: string,
+  token: string,
+): Promise<{ userId: string }> {
+  const normalizedServerUrl = new URL(serverUrl).toString().replace(/\/$/, '');
+
+  const response = await fetch(`${normalizedServerUrl}/api/v1/users/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  let body: CurrentUserResponse | undefined;
+  try {
+    body = (await response.json()) as CurrentUserResponse;
+  } catch {
+    throw new Error(`Failed to parse response from ${normalizedServerUrl}/api/v1/users/me.`);
+  }
+
+  if (!response.ok || body?.success === false) {
+    throw new Error(
+      body?.error || body?.message || `Request failed with status ${response.status}.`,
+    );
+  }
+
+  const userId = body?.data?.id || body?.data?.userId;
+  if (!userId) {
+    throw new Error('Current user response did not include a user id.');
+  }
+
+  return { userId };
+}

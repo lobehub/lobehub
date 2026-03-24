@@ -11,7 +11,7 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
-import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
+import { OFFICIAL_GATEWAY_URL, OFFICIAL_SERVER_URL } from '../constants/urls';
 import {
   appendLog,
   getLogPath,
@@ -189,12 +189,15 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   }
 
   const resolvedGatewayUrl = gatewayUrl || OFFICIAL_GATEWAY_URL;
+  const serverUrl = (settings?.serverUrl || OFFICIAL_SERVER_URL).replace(/\/$/, '');
 
   const client = new GatewayClient({
     deviceId: options.deviceId,
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
+    serverUrl,
     token: auth.token,
+    tokenType: auth.tokenType,
     userId: auth.userId,
   });
 

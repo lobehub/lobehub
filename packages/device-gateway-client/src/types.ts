@@ -24,7 +24,9 @@ export interface DeviceSystemInfo {
 
 // Client → Server
 export interface AuthMessage {
+  serverUrl?: string;
   token: string;
+  tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
   type: 'auth';
 }
 

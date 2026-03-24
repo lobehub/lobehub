@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock resolveToken
 vi.mock('../auth/resolveToken', () => ({
-  resolveToken: vi.fn().mockResolvedValue({ token: 'test-token', userId: 'test-user' }),
+  resolveToken: vi
+    .fn()
+    .mockResolvedValue({ token: 'test-token', tokenType: 'jwt', userId: 'test-user' }),
 }));
 vi.mock('../settings', () => ({
   loadSettings: vi.fn().mockReturnValue(null),
