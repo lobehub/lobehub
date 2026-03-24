@@ -80,9 +80,7 @@ export function registerLoginCommand(program: Command) {
                   serverUrl,
                 },
           );
-          log.info(
-            `API key authentication is ready. ${CLI_API_KEY_ENV} will be used at runtime and is not stored locally.`,
-          );
+          log.info('Login successful! Credentials saved.');
           return;
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
