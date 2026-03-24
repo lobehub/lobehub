@@ -523,6 +523,7 @@ export default {
   'userPanel.plans': 'Subscription Plans',
   'userPanel.profile': 'Account',
   'userPanel.setting': 'Settings',
+  'userPanel.upgradePlan': 'Upgrade Plan',
   'userPanel.usages': 'Usage Statistics',
   'version': 'Version',
 };

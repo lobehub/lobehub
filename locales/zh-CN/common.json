@@ -443,6 +443,7 @@
   "userPanel.plans": "订阅方案",
   "userPanel.profile": "账户管理",
   "userPanel.setting": "应用设置",
+  "userPanel.upgradePlan": "升级套餐",
   "userPanel.usages": "用量统计",
   "version": "版本"
 }
