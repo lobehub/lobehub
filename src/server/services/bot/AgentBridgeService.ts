@@ -389,6 +389,7 @@ export class AgentBridgeService {
     const channelContext = await this.fetchChannelContext(thread);
 
     const queueMode = isQueueAgentRuntimeEnabled();
+    let queueHandoffSucceeded = false;
 
     // Keep typing indicator alive (e.g. Telegram expires after ~5s, Discord after ~10s)
     const platformThreadId = botContext?.platformThreadId ?? thread.id;
@@ -405,6 +406,7 @@ export class AgentBridgeService {
         client,
         trigger: RequestTrigger.Bot,
       });
+      queueHandoffSucceeded = queueMode;
 
       // Persist topic mapping and channel context in thread state for follow-up messages
       // Skip if the platform opted out of auto-subscribe (no subscribe = no follow-up)
@@ -418,9 +420,9 @@ export class AgentBridgeService {
       await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
-      // In queue mode, typing keepalive is stopped by the bot-callback webhook on completion.
-      // In local mode, stop it here.
-      if (!queueMode) {
+      // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
+      // If setup fails before that point, clean up locally to avoid leaked keepalive/reactions.
+      if (!queueMode || !queueHandoffSucceeded) {
         stopTypingKeepAlive(platformThreadId);
         await this.removeReceivedReaction(thread, message, client);
       }
@@ -479,6 +481,7 @@ export class AgentBridgeService {
     const channelContext = threadState?.channelContext;
 
     const queueMode = isQueueAgentRuntimeEnabled();
+    let queueHandoffSucceeded = false;
 
     // Immediate feedback: mark as received + show typing
     const reactionThreadId =
@@ -504,6 +507,7 @@ export class AgentBridgeService {
         topicId,
         trigger: RequestTrigger.Bot,
       });
+      queueHandoffSucceeded = queueMode;
     } catch (error) {
       // If the cached topicId references a deleted topic (FK violation),
       // clear thread state and retry as a fresh mention instead of surfacing the DB error.
@@ -521,8 +525,8 @@ export class AgentBridgeService {
       await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
-      // In queue mode, typing keepalive is stopped by the bot-callback webhook on completion.
-      if (!queueMode) {
+      // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
+      if (!queueMode || !queueHandoffSucceeded) {
         stopTypingKeepAlive(platformThreadId);
         await this.removeReceivedReaction(thread, message, opts.client);
       }
@@ -713,10 +717,6 @@ export class AgentBridgeService {
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
-
-    // Platforms without message editing still get an initial placeholder message,
-    // but completion will be sent as follow-up messages instead of editing in place.
-    const canEdit = platformRegistry.getPlatform(client?.id ?? '')?.supportsMessageEdit !== false;
 
     let progressMessage: SentMessage | undefined;
     try {
