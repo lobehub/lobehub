@@ -12,9 +12,10 @@ import { log } from '../utils/logger';
 
 const CLIENT_ID = 'lobehub-cli';
 const SCOPES = 'openid profile email offline_access';
+const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
 
 interface LoginOptions {
-  apiKey?: string;
+  apiKey?: boolean;
   server: string;
 }
 
@@ -56,21 +57,23 @@ export function registerLoginCommand(program: Command) {
     .command('login')
     .description('Log in to LobeHub via browser (Device Code Flow) or API key')
     .option('--server <url>', 'LobeHub server URL', OFFICIAL_SERVER_URL)
-    .option('--api-key <key>', 'API key from /settings/apikey')
+    .option('--api-key', `Read API key from ${CLI_API_KEY_ENV}`)
     .action(async (options: LoginOptions) => {
       const serverUrl = options.server.replace(/\/$/, '');
 
       log.info('Starting login...');
 
       if (options.apiKey) {
-        try {
-          const userId = await getUserIdFromApiKey(options.apiKey, serverUrl);
+        const apiKey = process.env[CLI_API_KEY_ENV];
 
-          saveCredentials({
-            apiKey: options.apiKey,
-            tokenType: 'apiKey',
-            userId,
-          });
+        if (!apiKey) {
+          log.error(`--api-key requires the ${CLI_API_KEY_ENV} environment variable to be set.`);
+          process.exit(1);
+          return;
+        }
+
+        try {
+          await getUserIdFromApiKey(apiKey, serverUrl);
 
           const existingSettings = loadSettings();
           const shouldPreserveGateway = existingSettings?.serverUrl === serverUrl;
@@ -87,7 +90,9 @@ export function registerLoginCommand(program: Command) {
                   serverUrl,
                 },
           );
-          log.info('Login successful! API key credentials saved.');
+          log.info(
+            `API key login is ready. ${CLI_API_KEY_ENV} will be used at runtime and is not stored locally.`,
+          );
           return;
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -168,11 +173,10 @@ export function registerLoginCommand(program: Command) {
             '/oidc/token',
           );
 
-          // Check body for error field — some proxies may return 200 for error responses
+          // Check body for error field, some proxies may return 200 for error responses
           if (body.error) {
             switch (body.error) {
               case 'authorization_pending': {
-                // Keep polling
                 break;
               }
               case 'slow_down': {

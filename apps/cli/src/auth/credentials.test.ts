@@ -11,7 +11,6 @@ import {
   type StoredCredentials,
 } from './credentials';
 
-// Use a fixed temp path to avoid hoisting issues with vi.mock
 const tmpDir = path.join(os.tmpdir(), 'lobehub-cli-test-creds');
 const credentialsDir = path.join(tmpDir, '.lobehub');
 const credentialsFile = path.join(credentialsDir, 'credentials.json');
@@ -21,7 +20,7 @@ vi.mock('node:os', async (importOriginal) => {
   return {
     ...actual,
     default: {
-      ...actual['default'],
+      ...actual.default,
       homedir: () => path.join(os.tmpdir(), 'lobehub-cli-test-creds'),
     },
   };
@@ -63,24 +62,8 @@ describe('credentials', () => {
 
       const raw = fs.readFileSync(credentialsFile, 'utf8');
 
-      // Should not be plain JSON
       expect(() => JSON.parse(raw)).toThrow();
-
-      // Should be base64
       expect(Buffer.from(raw, 'base64').length).toBeGreaterThan(0);
-    });
-
-    it('should handle API key credentials', () => {
-      const apiKeyCredentials: StoredCredentials = {
-        apiKey: 'sk-lh-test',
-        tokenType: 'apiKey',
-        userId: 'user-123',
-      };
-
-      saveCredentials(apiKeyCredentials);
-      const loaded = loadCredentials();
-
-      expect(loaded).toEqual(apiKeyCredentials);
     });
   });
 

@@ -45,20 +45,6 @@ describe('getValidToken', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('should return API key credentials without refresh', async () => {
-    const creds: StoredCredentials = {
-      apiKey: 'sk-lh-test',
-      tokenType: 'apiKey',
-      userId: 'user-123',
-    };
-    vi.mocked(loadCredentials).mockReturnValue(creds);
-
-    const result = await getValidToken();
-
-    expect(result).toEqual({ credentials: creds });
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
   it('should return null when token expired and no refresh token', async () => {
     const creds: StoredCredentials = {
       expiresAt: Math.floor(Date.now() / 1000) - 100,

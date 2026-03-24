@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getUserIdFromApiKey } from './apiKey';
 import { getValidToken } from './refresh';
 import { resolveToken } from './resolveToken';
 
+vi.mock('./apiKey', () => ({
+  getUserIdFromApiKey: vi.fn(),
+}));
 vi.mock('./refresh', () => ({
   getValidToken: vi.fn(),
 }));
-
+vi.mock('../settings', () => ({
+  loadSettings: vi.fn().mockReturnValue({ serverUrl: 'https://app.lobehub.com' }),
+}));
 vi.mock('../utils/logger', () => ({
   log: {
     debug: vi.fn(),
@@ -16,7 +22,6 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-// Helper to create a valid JWT with sub claim
 function makeJwt(sub: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({ sub })).toString('base64url');
@@ -25,14 +30,20 @@ function makeJwt(sub: string): string {
 
 describe('resolveToken', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  const originalApiKey = process.env.LOBEHUB_CLI_API_KEY;
+  const originalJwt = process.env.LOBEHUB_JWT;
 
   beforeEach(() => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit');
     });
+    delete process.env.LOBEHUB_CLI_API_KEY;
+    delete process.env.LOBEHUB_JWT;
   });
 
   afterEach(() => {
+    process.env.LOBEHUB_CLI_API_KEY = originalApiKey;
+    process.env.LOBEHUB_JWT = originalJwt;
     exitSpy.mockRestore();
   });
 
@@ -76,6 +87,18 @@ describe('resolveToken', () => {
     });
   });
 
+  describe('with environment api key', () => {
+    it('should return API key from environment', async () => {
+      process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-test';
+      vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-789');
+
+      const result = await resolveToken({});
+
+      expect(getUserIdFromApiKey).toHaveBeenCalledWith('sk-lh-test', 'https://app.lobehub.com');
+      expect(result).toEqual({ token: 'sk-lh-test', tokenType: 'apiKey', userId: 'user-789' });
+    });
+  });
+
   describe('with stored credentials', () => {
     it('should return stored credentials token', async () => {
       const token = makeJwt('stored-user');
@@ -89,20 +112,6 @@ describe('resolveToken', () => {
       const result = await resolveToken({});
 
       expect(result).toEqual({ token, tokenType: 'jwt', userId: 'stored-user' });
-    });
-
-    it('should return stored API key credentials', async () => {
-      vi.mocked(getValidToken).mockResolvedValue({
-        credentials: {
-          apiKey: 'sk-lh-test',
-          tokenType: 'apiKey',
-          userId: 'user-789',
-        },
-      });
-
-      const result = await resolveToken({});
-
-      expect(result).toEqual({ token: 'sk-lh-test', tokenType: 'apiKey', userId: 'user-789' });
     });
 
     it('should exit if stored token has no sub', async () => {

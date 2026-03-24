@@ -3,6 +3,8 @@ import { OFFICIAL_SERVER_URL } from '../constants/urls';
 import { loadSettings } from '../settings';
 import { log } from '../utils/logger';
 
+const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
+
 // Must match the server's SECRET_XOR_KEY (src/envs/auth.ts)
 const SECRET_XOR_KEY = 'LobeHub · LobeHub';
 
@@ -31,14 +33,16 @@ export interface AuthInfo {
 }
 
 export async function getAuthInfo(): Promise<AuthInfo> {
-  const result = await getValidToken();
-  if (!result) {
-    log.error("No authentication found. Run 'lh login' first.");
+  if (process.env[CLI_API_KEY_ENV]) {
+    log.error(
+      `API key auth from ${CLI_API_KEY_ENV} is not supported for /webapi/* routes. Run OIDC login instead.`,
+    );
     process.exit(1);
   }
 
-  if (result.credentials.tokenType === 'apiKey') {
-    log.error('API key login is not supported for /webapi/* routes. Run OIDC login instead.');
+  const result = await getValidToken();
+  if (!result) {
+    log.error("No authentication found. Run 'lh login' first.");
     process.exit(1);
   }
 

@@ -3,12 +3,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export interface StoredApiKeyCredentials {
-  apiKey: string;
-  tokenType: 'apiKey';
-  userId: string;
-}
-
 export interface StoredJwtCredentials {
   accessToken: string;
   expiresAt?: number; // Unix timestamp (seconds)
@@ -17,7 +11,7 @@ export interface StoredJwtCredentials {
   userId?: string;
 }
 
-export type StoredCredentials = StoredApiKeyCredentials | StoredJwtCredentials;
+export type StoredCredentials = StoredJwtCredentials;
 
 const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
 const CREDENTIALS_DIR = path.join(os.homedir(), LOBEHUB_DIR_NAME);
@@ -62,13 +56,8 @@ export function loadCredentials(): StoredCredentials | null {
   try {
     const data = fs.readFileSync(CREDENTIALS_FILE, 'utf8');
     const decrypted = decrypt(data);
-    const credentials = JSON.parse(decrypted) as Partial<StoredCredentials>;
+    const credentials = JSON.parse(decrypted) as Partial<StoredJwtCredentials>;
 
-    if (credentials.tokenType === 'apiKey') {
-      return typeof credentials.apiKey === 'string' && typeof credentials.userId === 'string'
-        ? (credentials as StoredApiKeyCredentials)
-        : null;
-    }
     if (credentials.tokenType !== 'jwt') return null;
     if (typeof credentials.accessToken !== 'string') return null;
 

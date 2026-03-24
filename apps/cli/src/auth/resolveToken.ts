@@ -1,5 +1,10 @@
+import { OFFICIAL_SERVER_URL } from '../constants/urls';
+import { loadSettings } from '../settings';
 import { log } from '../utils/logger';
+import { getUserIdFromApiKey } from './apiKey';
 import { getValidToken } from './refresh';
+
+const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
 
 interface ResolveTokenOptions {
   serviceToken?: string;
@@ -26,11 +31,10 @@ function parseJwtSub(token: string): string | undefined {
 }
 
 /**
- * Resolve an access token from explicit options or stored credentials.
+ * Resolve an access token from explicit options, environment variables, or stored credentials.
  * Exits the process if no token can be resolved.
  */
 export async function resolveToken(options: ResolveTokenOptions): Promise<ResolvedAuth> {
-  // LOBEHUB_JWT env var takes highest priority (used by server-side sandbox execution)
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
     const userId = parseJwtSub(envJwt);
@@ -42,7 +46,6 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
     return { token: envJwt, tokenType: 'jwt', userId };
   }
 
-  // Explicit token takes priority
   if (options.token) {
     const userId = parseJwtSub(options.token);
     if (!userId) {
@@ -60,15 +63,24 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
     return { token: options.serviceToken, tokenType: 'serviceToken', userId: options.userId };
   }
 
-  // Try stored credentials
+  const envApiKey = process.env[CLI_API_KEY_ENV];
+  if (envApiKey) {
+    try {
+      const serverUrl = (loadSettings()?.serverUrl || OFFICIAL_SERVER_URL).replace(/\/$/, '');
+      const userId = await getUserIdFromApiKey(envApiKey, serverUrl);
+      log.debug(`Using ${CLI_API_KEY_ENV} from environment`);
+      return { token: envApiKey, tokenType: 'apiKey', userId };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.error(`Failed to validate ${CLI_API_KEY_ENV}: ${message}`);
+      process.exit(1);
+    }
+  }
+
   const result = await getValidToken();
   if (result) {
     log.debug('Using stored credentials');
     const { credentials } = result;
-
-    if (credentials.tokenType === 'apiKey') {
-      return { token: credentials.apiKey, tokenType: 'apiKey', userId: credentials.userId };
-    }
 
     const userId = parseJwtSub(credentials.accessToken);
     if (!userId) {
@@ -79,6 +91,8 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
     return { token: credentials.accessToken, tokenType: 'jwt', userId };
   }
 
-  log.error("No authentication found. Run 'lh login' first, or provide --token.");
+  log.error(
+    `No authentication found. Run 'lh login' first, or set ${CLI_API_KEY_ENV}, or provide --token.`,
+  );
   process.exit(1);
 }

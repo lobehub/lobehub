@@ -9,6 +9,8 @@ import { OFFICIAL_SERVER_URL } from '../constants/urls';
 import { loadSettings } from '../settings';
 import { log } from '../utils/logger';
 
+const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
+
 export type TrpcClient = ReturnType<typeof createTRPCClient<LambdaRouter>>;
 export type ToolsTrpcClient = ReturnType<typeof createTRPCClient<ToolsRouter>>;
 
@@ -16,7 +18,6 @@ let _client: TrpcClient | undefined;
 let _toolsClient: ToolsTrpcClient | undefined;
 
 async function getAuthAndServer() {
-  // LOBEHUB_JWT + LOBEHUB_SERVER env vars (used by server-side sandbox execution)
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
     const serverUrl = process.env.LOBEHUB_SERVER || OFFICIAL_SERVER_URL;
@@ -27,19 +28,28 @@ async function getAuthAndServer() {
     };
   }
 
+  const envApiKey = process.env[CLI_API_KEY_ENV];
+  if (envApiKey) {
+    const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
+
+    return {
+      headers: { 'X-API-Key': envApiKey },
+      serverUrl: serverUrl.replace(/\/$/, ''),
+    };
+  }
+
   const result = await getValidToken();
   if (!result) {
-    log.error("No authentication found. Run 'lh login' first.");
+    log.error(`No authentication found. Run 'lh login' first, or set ${CLI_API_KEY_ENV}.`);
     process.exit(1);
   }
 
-  const headers =
-    result.credentials.tokenType === 'apiKey'
-      ? { 'X-API-Key': result.credentials.apiKey }
-      : { 'Oidc-Auth': result.credentials.accessToken };
   const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
 
-  return { headers, serverUrl: serverUrl.replace(/\/$/, '') };
+  return {
+    headers: { 'Oidc-Auth': result.credentials.accessToken },
+    serverUrl: serverUrl.replace(/\/$/, ''),
+  };
 }
 
 export async function getTrpcClient(): Promise<TrpcClient> {

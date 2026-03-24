@@ -1,11 +1,6 @@
 import { OFFICIAL_SERVER_URL } from '../constants/urls';
 import { loadSettings } from '../settings';
-import {
-  loadCredentials,
-  saveCredentials,
-  type StoredCredentials,
-  type StoredJwtCredentials,
-} from './credentials';
+import { loadCredentials, saveCredentials, type StoredCredentials } from './credentials';
 
 const CLIENT_ID = 'lobehub-cli';
 
@@ -17,23 +12,19 @@ export async function getValidToken(): Promise<{ credentials: StoredCredentials 
   const credentials = loadCredentials();
   if (!credentials) return null;
 
-  if (credentials.tokenType === 'apiKey') {
-    return { credentials };
-  }
-
   // Check if token is still valid (with 60s buffer)
   if (credentials.expiresAt && Date.now() / 1000 < credentials.expiresAt - 60) {
     return { credentials };
   }
 
-  // Token expired — try refresh
+  // Token expired, try refresh
   if (!credentials.refreshToken) return null;
 
   const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
   const refreshed = await refreshAccessToken(serverUrl, credentials.refreshToken);
   if (!refreshed) return null;
 
-  const updated: StoredJwtCredentials = {
+  const updated: StoredCredentials = {
     accessToken: refreshed.access_token,
     expiresAt: refreshed.expires_in
       ? Math.floor(Date.now() / 1000) + refreshed.expires_in
