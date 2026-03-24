@@ -432,6 +432,7 @@
   "userPanel.billing": "账单管理",
   "userPanel.cloud": "体验 {{name}}",
   "userPanel.community": "社区版",
+  "userPanel.credits": "积分管理",
   "userPanel.data": "数据存储",
   "userPanel.defaultNickname": "社区版用户",
   "userPanel.discord": "Discord",
