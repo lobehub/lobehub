@@ -10,7 +10,7 @@
   "activity.notes": "Бележки",
   "analysis.action.button": "Заяви анализ на спомени",
   "analysis.modal.cancel": "Отказ",
-  "analysis.modal.helper": "По подразбиране Lobe AI ще анализира всички необработени чатове. По желание можете да изберете период за анализ.",
+  "analysis.modal.helper": "По подразбиране AI ще анализира всички необработени чатове. По желание можете да изберете период за анализ.",
   "analysis.modal.rangePlaceholder": "Не е избран период; всички разговори ще бъдат анализирани.",
   "analysis.modal.rangeSelected": "Анализ на чатове от {{start}} до {{end}}",
   "analysis.modal.submit": "Заяви анализ на спомени",

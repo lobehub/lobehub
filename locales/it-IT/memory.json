@@ -10,7 +10,7 @@
   "activity.notes": "Note",
   "analysis.action.button": "Richiedi analisi delle memorie",
   "analysis.modal.cancel": "Annulla",
-  "analysis.modal.helper": "Per impostazione predefinita, Lobe AI analizzerà tutte le chat non elaborate. È facoltativo selezionare un intervallo di date da analizzare.",
+  "analysis.modal.helper": "Per impostazione predefinita, AI analizzerà tutte le chat non elaborate. È facoltativo selezionare un intervallo di date da analizzare.",
   "analysis.modal.rangePlaceholder": "Nessun intervallo selezionato; tutte le conversazioni saranno analizzate.",
   "analysis.modal.rangeSelected": "Analisi delle chat dal {{start}} al {{end}}",
   "analysis.modal.submit": "Richiedi analisi delle memorie",

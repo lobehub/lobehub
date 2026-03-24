@@ -10,7 +10,7 @@
   "activity.notes": "Notlar",
   "analysis.action.button": "Hafıza analizi iste",
   "analysis.modal.cancel": "İptal",
-  "analysis.modal.helper": "Varsayılan olarak Lobe AI, işlenmemiş tüm sohbetleri analiz eder. Analiz için tarih aralığı seçmek isteğe bağlıdır.",
+  "analysis.modal.helper": "Varsayılan olarak AI, işlenmemiş tüm sohbetleri analiz eder. Analiz için tarih aralığı seçmek isteğe bağlıdır.",
   "analysis.modal.rangePlaceholder": "Aralık seçilmedi; tüm sohbetler analiz edilecek.",
   "analysis.modal.rangeSelected": "{{start}} ile {{end}} arasındaki sohbetler analiz ediliyor",
   "analysis.modal.submit": "Hafıza analizi iste",

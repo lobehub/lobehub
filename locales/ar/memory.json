@@ -10,7 +10,7 @@
   "activity.notes": "ملاحظات",
   "analysis.action.button": "طلب تحليل الذاكرة",
   "analysis.modal.cancel": "إلغاء",
-  "analysis.modal.helper": "بشكل افتراضي، سيقوم Lobe AI بتحليل جميع المحادثات غير المعالجة. من الممكن اختيار نطاق زمني للتحليل.",
+  "analysis.modal.helper": "بشكل افتراضي، سيقوم AI بتحليل جميع المحادثات غير المعالجة. من الممكن اختيار نطاق زمني للتحليل.",
   "analysis.modal.rangePlaceholder": "لم يتم تحديد نطاق؛ سيتم تحليل جميع المحادثات.",
   "analysis.modal.rangeSelected": "جارٍ تحليل المحادثات من {{start}} إلى {{end}}",
   "analysis.modal.submit": "طلب تحليل الذاكرة",

@@ -15,7 +15,7 @@
   "desktop.showApp.title": "メインウィンドウの表示/非表示",
   "editMessage.desc": "Altキーを押しながらメッセージをダブルクリックして編集モードに入ります",
   "editMessage.title": "メッセージを編集",
-  "navigateToChat.desc": "チャットタブに切り替えてLobe AIに入る",
+  "navigateToChat.desc": "チャットタブに切り替えてAIに入る",
   "navigateToChat.title": "デフォルトの会話に切り替え",
   "openChatSettings.desc": "現在の会話の設定を表示および変更する",
   "openChatSettings.title": "チャット設定を開く",

@@ -10,7 +10,7 @@
   "activity.notes": "노트",
   "analysis.action.button": "메모리 분석 요청",
   "analysis.modal.cancel": "취소",
-  "analysis.modal.helper": "기본적으로 Lobe AI는 처리되지 않은 모든 채팅을 분석합니다. 분석할 날짜 범위를 선택하는 것은 선택 사항입니다.",
+  "analysis.modal.helper": "기본적으로 AI는 처리되지 않은 모든 채팅을 분석합니다. 분석할 날짜 범위를 선택하는 것은 선택 사항입니다.",
   "analysis.modal.rangePlaceholder": "범위가 선택되지 않았습니다. 모든 대화가 분석됩니다.",
   "analysis.modal.rangeSelected": "{{start}}부터 {{end}}까지의 채팅을 분석 중입니다",
   "analysis.modal.submit": "메모리 분석 요청",

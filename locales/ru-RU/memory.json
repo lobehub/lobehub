@@ -10,7 +10,7 @@
   "activity.notes": "Заметки",
   "analysis.action.button": "Запросить анализ воспоминаний",
   "analysis.modal.cancel": "Отмена",
-  "analysis.modal.helper": "По умолчанию Lobe AI проанализирует все необработанные чаты. Вы можете выбрать диапазон дат для анализа по желанию.",
+  "analysis.modal.helper": "По умолчанию AI проанализирует все необработанные чаты. Вы можете выбрать диапазон дат для анализа по желанию.",
   "analysis.modal.rangePlaceholder": "Диапазон не выбран; будут проанализированы все беседы.",
   "analysis.modal.rangeSelected": "Анализируются чаты с {{start}} по {{end}}",
   "analysis.modal.submit": "Запросить анализ воспоминаний",
