@@ -299,14 +299,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     }
 
     error('Authentication expired. Attempting to refresh...');
-
-    try {
-      await resolveToken({});
+    const refreshed = await resolveToken({});
+    if (refreshed) {
       info('Token refreshed. Please reconnect.');
-    } catch {
+    } else {
       error("Could not refresh token. Run 'lh login' to re-authenticate.");
     }
-
     cleanup();
     process.exit(1);
   });

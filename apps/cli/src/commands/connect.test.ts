@@ -270,8 +270,8 @@ describe('connect command', () => {
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);
 
-    // After initial connect, make the refresh attempt fail
-    vi.mocked(resolveToken).mockRejectedValueOnce(new Error('refresh failed'));
+    // After initial connect, mock resolveToken to return falsy for the refresh attempt
+    vi.mocked(resolveToken).mockResolvedValueOnce(undefined as any);
 
     await clientEventHandlers['auth_expired']?.();
 
