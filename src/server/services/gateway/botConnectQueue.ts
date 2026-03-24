@@ -7,7 +7,7 @@ import { buildRuntimeKey, parseRuntimeKey } from '@/server/services/bot/platform
 const log = debug('lobe-server:bot:connect-queue');
 
 const QUEUE_KEY = 'bot:gateway:connect_queue';
-const EXPIRE_MS = 10 * 60 * 1000; // 10 minutes
+export const BOT_CONNECT_QUEUE_EXPIRE_MS = 10 * 60 * 1000; // 10 minutes
 
 interface ConnectEntry {
   timestamp: number;
@@ -51,7 +51,7 @@ export class BotConnectQueue {
       try {
         const entry: ConnectEntry = JSON.parse(raw);
 
-        if (now - entry.timestamp > EXPIRE_MS) {
+        if (now - entry.timestamp > BOT_CONNECT_QUEUE_EXPIRE_MS) {
           expiredFields.push(field);
           continue;
         }

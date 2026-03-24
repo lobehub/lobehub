@@ -156,13 +156,13 @@ export class GatewayManager {
         continue;
       }
 
-      const client = this.createClient(platform, provider);
-      if (!client) {
-        log('Sync: createClient returned null for %s', key);
-        continue;
-      }
-
       try {
+        const client = this.createClient(platform, provider);
+        if (!client) {
+          log('Sync: createClient returned null for %s', key);
+          continue;
+        }
+
         await client.start();
         this.clients.set(key, client);
         log('Sync: started client %s', key);

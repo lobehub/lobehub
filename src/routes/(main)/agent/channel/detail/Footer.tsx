@@ -143,9 +143,10 @@ const Footer = memo<FooterProps>(
             description={connectResult.type === 'error' ? connectResult.errorDetail : undefined}
             type={connectResult.type}
             title={
-              connectResult.type === 'success'
+              connectResult.title ||
+              (connectResult.type === 'success'
                 ? t('channel.connectSuccess')
-                : t('channel.connectFailed')
+                : t('channel.connectFailed'))
             }
           />
         )}

@@ -9,6 +9,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import { useAgentStore } from '@/store/agent';
 
+import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
 import PlatformDetail from './detail';
 import PlatformList from './list';
 
@@ -33,15 +34,29 @@ const ChannelPage = memo(() => {
   const { data: providers, isLoading: providersLoading } = useAgentStore((s) =>
     s.useFetchBotProviders(aid),
   );
+  const { data: runtimeStatuses } = useAgentStore((s) => s.useFetchBotRuntimeStatuses(aid));
 
   const isLoading = platformsLoading || providersLoading;
 
   // Default to first platform once loaded
   const effectiveActiveId = activeProviderId || platforms?.[0]?.id || '';
 
-  const connectedPlatforms = useMemo(
-    () => new Set(providers?.filter((p) => p.enabled).map((p) => p.platform) ?? []),
-    [providers],
+  const platformRuntimeStatuses = useMemo(
+    () =>
+      new Map<string, BotRuntimeStatus>(
+        (providers ?? [])
+          .filter((provider) => provider.enabled)
+          .map((provider) => {
+            const runtimeStatus = runtimeStatuses?.find(
+              (item) =>
+                item.platform === provider.platform &&
+                item.applicationId === provider.applicationId,
+            );
+
+            return [provider.platform, runtimeStatus?.status ?? BOT_RUNTIME_STATUSES.disconnected];
+          }),
+      ),
+    [providers, runtimeStatuses],
   );
 
   const activePlatformDef = useMemo(
@@ -66,8 +81,8 @@ const ChannelPage = memo(() => {
           <div className={styles.container}>
             <PlatformList
               activeId={effectiveActiveId}
-              connectedPlatforms={connectedPlatforms}
               platforms={platforms}
+              runtimeStatuses={platformRuntimeStatuses}
               onSelect={setActiveProviderId}
             />
             <PlatformDetail

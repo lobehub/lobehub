@@ -2,12 +2,17 @@
 
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+import { agentBotProviderService } from '@/services/agentBotProvider';
 import { useAgentStore } from '@/store/agent';
 
+import {
+  BOT_RUNTIME_STATUSES,
+  type BotRuntimeStatusSnapshot,
+} from '../../../../../types/botRuntimeStatus';
 import Body from './Body';
 import Footer from './Footer';
 import Header from './Header';
@@ -44,7 +49,8 @@ export interface ChannelFormValues {
 
 export interface TestResult {
   errorDetail?: string;
-  type: 'error' | 'success';
+  title?: string;
+  type: 'error' | 'info' | 'success';
 }
 
 interface PlatformDetailProps {
@@ -69,10 +75,106 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
 
   const [saving, setSaving] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [pendingEnabled, setPendingEnabled] = useState<boolean>();
   const [saveResult, setSaveResult] = useState<TestResult>();
   const [connectResult, setConnectResult] = useState<TestResult>();
+  const [toggleLoading, setToggleLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult>();
+  const connectPollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopConnectPolling = useCallback(() => {
+    if (!connectPollingTimerRef.current) return;
+    clearTimeout(connectPollingTimerRef.current);
+    connectPollingTimerRef.current = null;
+  }, []);
+
+  const mapRuntimeStatusToResult = useCallback(
+    (
+      runtimeStatus: BotRuntimeStatusSnapshot,
+      options?: { showConnected?: boolean },
+    ): TestResult | undefined => {
+      switch (runtimeStatus.status) {
+        case BOT_RUNTIME_STATUSES.connected: {
+          if (!options?.showConnected) return undefined;
+          return { title: t('channel.connectSuccess'), type: 'success' };
+        }
+        case BOT_RUNTIME_STATUSES.failed: {
+          return {
+            errorDetail: runtimeStatus.errorMessage,
+            title: t('channel.connectFailed'),
+            type: 'error',
+          };
+        }
+        case BOT_RUNTIME_STATUSES.queued: {
+          return { title: t('channel.connectQueued'), type: 'info' };
+        }
+        case BOT_RUNTIME_STATUSES.starting: {
+          return { title: t('channel.connectStarting'), type: 'info' };
+        }
+        default: {
+          return undefined;
+        }
+      }
+    },
+    [t],
+  );
+
+  const syncRuntimeStatus = useCallback(
+    async (
+      params: {
+        applicationId: string;
+        platform: string;
+      },
+      options?: { poll?: boolean; showConnected?: boolean },
+    ) => {
+      stopConnectPolling();
+
+      const runtimeStatus = await agentBotProviderService.getRuntimeStatus(params);
+      const nextResult = mapRuntimeStatusToResult(runtimeStatus, {
+        showConnected: options?.showConnected,
+      });
+
+      if (nextResult) {
+        setConnectResult(nextResult);
+      } else if (runtimeStatus.status === BOT_RUNTIME_STATUSES.disconnected) {
+        setConnectResult(undefined);
+      }
+
+      if (
+        options?.poll &&
+        (runtimeStatus.status === BOT_RUNTIME_STATUSES.queued ||
+          runtimeStatus.status === BOT_RUNTIME_STATUSES.starting)
+      ) {
+        connectPollingTimerRef.current = setTimeout(() => {
+          void syncRuntimeStatus(params, options);
+        }, 2000);
+      }
+    },
+    [mapRuntimeStatusToResult, stopConnectPolling],
+  );
+
+  const connectCurrentBot = useCallback(
+    async (applicationId: string) => {
+      setConnecting(true);
+      try {
+        const { status } = await connectBot({ agentId, applicationId, platform: platformDef.id });
+        setConnectResult({
+          title: status === 'queued' ? t('channel.connectQueued') : t('channel.connectStarting'),
+          type: 'info',
+        });
+        await syncRuntimeStatus(
+          { applicationId, platform: platformDef.id },
+          { poll: true, showConnected: true },
+        );
+      } catch (e: any) {
+        setConnectResult({ errorDetail: e?.message || String(e), type: 'error' });
+      } finally {
+        setConnecting(false);
+      }
+    },
+    [agentId, connectBot, platformDef.id, syncRuntimeStatus, t],
+  );
 
   // Reset form and status when switching platforms
   useEffect(() => {
@@ -80,7 +182,8 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     setSaveResult(undefined);
     setConnectResult(undefined);
     setTestResult(undefined);
-  }, [platformDef.id, form]);
+    stopConnectPolling();
+  }, [platformDef.id, form, stopConnectPolling]);
 
   // Sync form with saved config
   useEffect(() => {
@@ -91,6 +194,38 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       } as any);
     }
   }, [currentConfig, form]);
+
+  useEffect(() => {
+    if (!currentConfig) {
+      setPendingEnabled(undefined);
+      setToggleLoading(false);
+      return;
+    }
+
+    if (pendingEnabled === currentConfig.enabled) {
+      setPendingEnabled(undefined);
+    }
+  }, [currentConfig, pendingEnabled]);
+
+  useEffect(() => {
+    if (!currentConfig?.enabled) {
+      stopConnectPolling();
+      setConnectResult(undefined);
+      return;
+    }
+
+    void syncRuntimeStatus(
+      {
+        applicationId: currentConfig.applicationId,
+        platform: currentConfig.platform,
+      },
+      { poll: true, showConnected: false },
+    );
+
+    return () => {
+      stopConnectPolling();
+    };
+  }, [currentConfig, stopConnectPolling, syncRuntimeStatus]);
 
   const handleSave = useCallback(async () => {
     try {
@@ -139,22 +274,22 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       setSaving(false);
 
       // Auto-connect bot after save
-      setConnecting(true);
-      try {
-        await connectBot({ applicationId, platform: platformDef.id });
-        setConnectResult({ type: 'success' });
-      } catch (e: any) {
-        setConnectResult({ errorDetail: e?.message || String(e), type: 'error' });
-      } finally {
-        setConnecting(false);
-      }
+      await connectCurrentBot(applicationId);
     } catch (e: any) {
       if (e?.errorFields) return;
       console.error(e);
       setSaveResult({ errorDetail: e?.message || String(e), type: 'error' });
       setSaving(false);
     }
-  }, [agentId, platformDef, form, currentConfig, createBotProvider, updateBotProvider, connectBot]);
+  }, [
+    agentId,
+    platformDef,
+    form,
+    currentConfig,
+    createBotProvider,
+    updateBotProvider,
+    connectCurrentBot,
+  ]);
 
   const handleQrAuthenticated = useCallback(
     async (creds: { botId: string; botToken: string; userId: string }) => {
@@ -163,12 +298,18 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       setConnectResult(undefined);
 
       try {
+        const botToken = creds.botToken?.trim();
+
+        if (!creds.botId && !botToken) {
+          throw new Error('Bot Token is required');
+        }
+
         const credentials = {
           botId: creds.botId,
           botToken: creds.botToken,
           userId: creds.userId,
         };
-        const applicationId = creds.botId || creds.botToken.slice(0, 16);
+        const applicationId = creds.botId || botToken?.slice(0, 16) || '';
         const settings = form.getFieldValue('settings') || {};
 
         if (currentConfig) {
@@ -191,15 +332,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
         msg.success(t('channel.saved'));
 
         // Auto-connect
-        setConnecting(true);
-        try {
-          await connectBot({ applicationId, platform: platformDef.id });
-          setConnectResult({ type: 'success' });
-        } catch (e: any) {
-          setConnectResult({ errorDetail: e?.message || String(e), type: 'error' });
-        } finally {
-          setConnecting(false);
-        }
+        await connectCurrentBot(applicationId);
       } catch (e: any) {
         setSaveResult({ errorDetail: e?.message || String(e), type: 'error' });
       } finally {
@@ -213,7 +346,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       currentConfig,
       createBotProvider,
       updateBotProvider,
-      connectBot,
+      connectCurrentBot,
       msg,
       t,
     ],
@@ -242,18 +375,20 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     async (enabled: boolean) => {
       if (!currentConfig) return;
       try {
+        setPendingEnabled(enabled);
+        setToggleLoading(true);
         await updateBotProvider(currentConfig.id, agentId, { enabled });
+        setToggleLoading(false);
         if (enabled) {
-          await connectBot({
-            applicationId: currentConfig.applicationId,
-            platform: currentConfig.platform,
-          });
+          await connectCurrentBot(currentConfig.applicationId);
         }
       } catch {
+        setPendingEnabled(undefined);
+        setToggleLoading(false);
         msg.error(t('channel.updateFailed'));
       }
     },
-    [currentConfig, agentId, updateBotProvider, connectBot, msg, t],
+    [currentConfig, agentId, updateBotProvider, connectCurrentBot, msg, t],
   );
 
   const handleTestConnection = useCallback(async () => {
@@ -284,11 +419,15 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     <main className={styles.main}>
       <Header
         currentConfig={currentConfig}
+        enabledValue={pendingEnabled}
         platformDef={platformDef}
+        toggleLoading={toggleLoading}
         onToggleEnable={handleToggleEnable}
       />
       <Body
+        currentConfig={currentConfig}
         form={form}
+        hasConfig={!!currentConfig}
         platformDef={platformDef}
         onQrAuthenticated={platformDef.authFlow === 'qrcode' ? handleQrAuthenticated : undefined}
       />

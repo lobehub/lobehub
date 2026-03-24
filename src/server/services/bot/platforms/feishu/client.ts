@@ -2,6 +2,12 @@ import { createLarkAdapter, LarkApiClient } from '@lobechat/chat-adapter-feishu'
 import debug from 'debug';
 
 import {
+  BOT_RUNTIME_STATUSES,
+  getRuntimeStatusErrorMessage,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
+
+import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
@@ -25,7 +31,7 @@ function resolveDomain(settings: Record<string, unknown>): 'lark' | 'feishu' {
 }
 
 class FeishuWebhookClient implements PlatformClient {
-  readonly id = 'feishu';
+  readonly id: string;
   readonly applicationId: string;
 
   private config: BotProviderConfig;
@@ -33,6 +39,7 @@ class FeishuWebhookClient implements PlatformClient {
 
   constructor(config: BotProviderConfig, _context: BotPlatformRuntimeContext) {
     this.config = config;
+    this.id = config.platform;
     this.applicationId = config.applicationId;
     this.domain = resolveDomain(config.settings);
   }
@@ -41,19 +48,45 @@ class FeishuWebhookClient implements PlatformClient {
 
   async start(): Promise<void> {
     log('Starting FeishuClient appId=%s domain=%s', this.applicationId, this.domain);
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.starting,
+    });
 
-    const api = new LarkApiClient(
-      this.config.applicationId,
-      this.config.credentials.appSecret,
-      this.domain,
-    );
-    await api.getTenantAccessToken();
+    try {
+      const api = new LarkApiClient(
+        this.config.applicationId,
+        this.config.credentials.appSecret,
+        this.domain,
+      );
+      await api.getTenantAccessToken();
 
-    log('FeishuClient appId=%s credentials verified', this.applicationId);
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.connected,
+      });
+
+      log('FeishuClient appId=%s credentials verified', this.applicationId);
+    } catch (error) {
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        errorMessage: getRuntimeStatusErrorMessage(error),
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.failed,
+      });
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
     log('Stopping FeishuClient appId=%s', this.applicationId);
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.disconnected,
+    });
   }
 
   // --- Runtime Operations ---

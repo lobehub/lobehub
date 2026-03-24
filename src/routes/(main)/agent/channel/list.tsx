@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
+import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
 import { getPlatformIcon } from './const';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -78,15 +79,59 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface PlatformListProps {
   activeId: string;
-  connectedPlatforms: Set<string>;
   onSelect: (id: string) => void;
   platforms: SerializedPlatformDefinition[];
+  runtimeStatuses: Map<string, BotRuntimeStatus>;
 }
 
 const PlatformList = memo<PlatformListProps>(
-  ({ platforms, activeId, connectedPlatforms, onSelect }) => {
+  ({ platforms, activeId, onSelect, runtimeStatuses }) => {
     const { t } = useTranslation('agent');
     const theme = useTheme();
+
+    const getStatusColor = (status?: BotRuntimeStatus) => {
+      switch (status) {
+        case BOT_RUNTIME_STATUSES.connected: {
+          return theme.colorSuccess;
+        }
+        case BOT_RUNTIME_STATUSES.failed: {
+          return theme.colorError;
+        }
+        case BOT_RUNTIME_STATUSES.queued:
+        case BOT_RUNTIME_STATUSES.starting: {
+          return theme.colorInfo;
+        }
+        case BOT_RUNTIME_STATUSES.disconnected: {
+          return theme.colorTextQuaternary;
+        }
+        default: {
+          return undefined;
+        }
+      }
+    };
+
+    const getStatusTitle = (status?: BotRuntimeStatus) => {
+      switch (status) {
+        case BOT_RUNTIME_STATUSES.connected: {
+          return t('channel.connectSuccess');
+        }
+        case BOT_RUNTIME_STATUSES.failed: {
+          return t('channel.connectFailed');
+        }
+        case BOT_RUNTIME_STATUSES.queued: {
+          return t('channel.connectQueued');
+        }
+        case BOT_RUNTIME_STATUSES.starting: {
+          return t('channel.connectStarting');
+        }
+        case BOT_RUNTIME_STATUSES.disconnected: {
+          return t('channel.runtimeDisconnected');
+        }
+        default: {
+          return undefined;
+        }
+      }
+    };
 
     return (
       <aside className={styles.root}>
@@ -96,6 +141,9 @@ const PlatformList = memo<PlatformListProps>(
             const PlatformIcon = getPlatformIcon(platform.name);
             const ColorIcon =
               PlatformIcon && 'Color' in PlatformIcon ? (PlatformIcon as any).Color : PlatformIcon;
+            const runtimeStatus = runtimeStatuses.get(platform.id);
+            const statusColor = getStatusColor(runtimeStatus);
+            const statusTitle = getStatusTitle(runtimeStatus);
             return (
               <button
                 className={cx(styles.item, activeId === platform.id && 'active')}
@@ -104,7 +152,13 @@ const PlatformList = memo<PlatformListProps>(
               >
                 {ColorIcon && <ColorIcon size={20} />}
                 <span style={{ flex: 1 }}>{platform.name}</span>
-                {connectedPlatforms.has(platform.id) && <div className={styles.statusDot} />}
+                {runtimeStatus && (
+                  <div
+                    className={styles.statusDot}
+                    style={{ background: statusColor }}
+                    title={statusTitle}
+                  />
+                )}
               </button>
             );
           })}

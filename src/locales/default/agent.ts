@@ -27,6 +27,8 @@ export default {
   'channel.encryptKeyHint': 'Optional. Used to decrypt encrypted event payloads.',
   'channel.encryptKeyPlaceholder': 'Optional encryption key',
   'channel.connectFailed': 'Bot connection failed',
+  'channel.connectQueued': 'Bot connection queued. It will start shortly.',
+  'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
   'channel.endpointUrl': 'Webhook URL',
@@ -47,12 +49,18 @@ export default {
   'channel.wechatQrRefresh': 'Refresh QR Code',
   'channel.wechatQrScaned': 'QR code scanned. Please confirm the login in WeChat.',
   'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
+  'channel.wechatBotId': 'Bot ID',
+  'channel.wechatConnectedInfo': 'Connected WeChat Account',
+  'channel.wechatManagedCredentials':
+    'This channel is already connected through QR code authorization. Credentials are managed automatically.',
+  'channel.wechatRebind': 'Rebind via QR Code',
   'channel.wechatScanTitle': 'Connect WeChat Bot',
   'channel.wechatScanToConnect': 'Scan QR Code to Connect',
-  'channel.wechatTip1':
-    'Please update WeChat to the latest version, and it is recommended to restart WeChat.',
-  'channel.wechatTip2':
-    'This feature is currently in gradual rollout. You can check Settings => Plugins to confirm whether you have access.',
+  'channel.wechatTips':
+    'Please update WeChat to the latest version and restart it. The ClawBot plugin is in gradual rollout, so check Settings > Plugins to confirm access.',
+  'channel.wechatUserId': 'WeChat User ID',
+  'channel.wechatBotIdHint': 'Bot identifier assigned after QR code authorization.',
+  'channel.wechatUserIdHint': 'WeChat account identifier returned by the authorization flow.',
   'channel.removeChannel': 'Remove Channel',
   'channel.removed': 'Channel removed',
   'channel.removeFailed': 'Failed to remove channel',
@@ -100,4 +108,5 @@ export default {
   'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',
   'channel.showUsageStatsHint': 'Show token usage, cost, and duration stats in bot replies',
+  'channel.runtimeDisconnected': 'Bot disconnected',
 } as const;

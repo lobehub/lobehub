@@ -19,6 +19,12 @@ import QrCodeAuth from './QrCodeAuth';
 const prefixCls = 'ant';
 
 const styles = createStaticStyles(({ css }) => ({
+  connectedInfoHeader: css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-block-end: 16px;
+  `,
   form: css`
     .${prefixCls}-form-item-control:has(.${prefixCls}-input, .${prefixCls}-select, .${prefixCls}-input-number) {
       flex: none;
@@ -159,6 +165,30 @@ const ApplicationIdField = memo<{ field: FieldSchema }>(({ field }) => {
   );
 });
 
+const ReadOnlyField = memo<{
+  description?: string;
+  divider?: boolean;
+  label: string;
+  password?: boolean;
+  tag: string;
+  value?: string;
+}>(({ description, divider, label, password, tag, value }) => {
+  const InputComponent = password ? FormPassword : FormInput;
+
+  return (
+    <FormItem
+      desc={description}
+      divider={divider}
+      label={label}
+      minWidth={'max(50%, 400px)'}
+      tag={tag}
+      variant="borderless"
+    >
+      <InputComponent readOnly value={value || ''} />
+    </FormItem>
+  );
+});
+
 // --------------- Helper: flatten fields from schema ---------------
 
 function getFields(schema: FieldSchema[], sectionKey: string): FieldSchema[] {
@@ -189,93 +219,158 @@ const SettingsTitle = memo<{ schema: FieldSchema[] }>(({ schema }) => {
 // --------------- Body component ---------------
 
 interface BodyProps {
+  currentConfig?: {
+    applicationId: string;
+    credentials: Record<string, string>;
+  };
   form: FormInstance<ChannelFormValues>;
+  hasConfig?: boolean;
   onQrAuthenticated?: (credentials: { botId: string; botToken: string; userId: string }) => void;
   platformDef: SerializedPlatformDefinition;
 }
 
-const Body = memo<BodyProps>(({ platformDef, form, onQrAuthenticated }) => {
-  const { t: _t } = useTranslation('agent');
-  const t = _t as (key: string) => string;
+const Body = memo<BodyProps>(
+  ({ platformDef, form, hasConfig, currentConfig, onQrAuthenticated }) => {
+    const { t: _t } = useTranslation('agent');
+    const t = _t as (key: string) => string;
 
-  const applicationIdField = useMemo(
-    () => platformDef.schema.find((f) => f.key === 'applicationId'),
-    [platformDef.schema],
-  );
+    const applicationIdField = useMemo(
+      () => platformDef.schema.find((f) => f.key === 'applicationId'),
+      [platformDef.schema],
+    );
 
-  const credentialFields = useMemo(
-    () => getFields(platformDef.schema, 'credentials'),
-    [platformDef.schema],
-  );
+    const credentialFields = useMemo(
+      () => getFields(platformDef.schema, 'credentials'),
+      [platformDef.schema],
+    );
 
-  const settingsFields = useMemo(
-    () => getFields(platformDef.schema, 'settings'),
-    [platformDef.schema],
-  );
+    const settingsFields = useMemo(
+      () => getFields(platformDef.schema, 'settings'),
+      [platformDef.schema],
+    );
 
-  const [settingsActive, setSettingsActive] = useState(false);
+    const [settingsActive, setSettingsActive] = useState(false);
+    const shouldShowWechatApplicationId =
+      !!currentConfig?.applicationId &&
+      currentConfig.applicationId !== currentConfig.credentials.botId;
 
-  const handleResetSettings = useCallback(() => {
-    const defaults: Record<string, any> = {};
-    for (const field of settingsFields) {
-      if (field.default !== undefined) {
-        defaults[field.key] = field.default;
+    const handleResetSettings = useCallback(() => {
+      const defaults: Record<string, any> = {};
+      for (const field of settingsFields) {
+        if (field.default !== undefined) {
+          defaults[field.key] = field.default;
+        }
       }
-    }
-    form.setFieldsValue({ settings: defaults });
-  }, [form, settingsFields]);
+      form.setFieldsValue({ settings: defaults });
+    }, [form, settingsFields]);
 
-  return (
-    <Form
-      className={styles.form}
-      form={form}
-      gap={0}
-      itemMinWidth={'max(50%, 400px)'}
-      requiredMark={false}
-      style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
-      variant={'borderless'}
-    >
-      {platformDef.authFlow === 'qrcode' && onQrAuthenticated && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
-          <QrCodeAuth onAuthenticated={onQrAuthenticated} />
-        </div>
-      )}
-      {applicationIdField && <ApplicationIdField field={applicationIdField} />}
-      {!platformDef.authFlow &&
-        credentialFields.map((field, i) => (
-          <SchemaField
-            divider={applicationIdField ? true : i !== 0}
-            field={field}
-            key={field.key}
-            parentKey="credentials"
-          />
-        ))}
-      {settingsFields.length > 0 && (
-        <FormGroup
-          collapsible
-          defaultActive={false}
-          keyValue={`settings-${platformDef.id}`}
-          style={{ marginBlockStart: 16 }}
-          title={<SettingsTitle schema={platformDef.schema} />}
-          variant="borderless"
-          extra={
-            settingsActive ? (
-              <Popconfirm title={t('channel.settingsResetConfirm')} onConfirm={handleResetSettings}>
-                <Button icon={<RotateCcw size={14} />} size="small" type="default">
-                  {t('channel.settingsResetDefault')}
-                </Button>
-              </Popconfirm>
-            ) : undefined
-          }
-          onCollapse={setSettingsActive}
-        >
-          {settingsFields.map((field, i) => (
-            <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
+    return (
+      <Form
+        className={styles.form}
+        form={form}
+        gap={0}
+        itemMinWidth={'max(50%, 400px)'}
+        requiredMark={false}
+        style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
+        variant={'borderless'}
+      >
+        {platformDef.authFlow === 'qrcode' && hasConfig && currentConfig && (
+          <>
+            <div className={styles.connectedInfoHeader}>
+              <Flexbox gap={4}>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>
+                  {t('channel.wechatConnectedInfo')}
+                </div>
+                <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
+                  {t('channel.wechatManagedCredentials')}
+                </div>
+              </Flexbox>
+              {onQrAuthenticated && (
+                <QrCodeAuth
+                  buttonLabel={t('channel.wechatRebind')}
+                  buttonType="default"
+                  showTips={false}
+                  onAuthenticated={onQrAuthenticated}
+                />
+              )}
+            </div>
+            {shouldShowWechatApplicationId && (
+              <ReadOnlyField
+                description={t('channel.applicationIdHint')}
+                label={t('channel.applicationId')}
+                tag="applicationId"
+                value={currentConfig.applicationId}
+              />
+            )}
+            <ReadOnlyField
+              description={t('channel.wechatBotIdHint')}
+              divider={shouldShowWechatApplicationId}
+              label={t('channel.wechatBotId')}
+              tag="botId"
+              value={currentConfig.credentials.botId}
+            />
+            <ReadOnlyField
+              divider
+              password
+              description={t('channel.botTokenEncryptedHint')}
+              label={t('channel.botToken')}
+              tag="botToken"
+              value={currentConfig.credentials.botToken}
+            />
+            <ReadOnlyField
+              divider
+              description={t('channel.wechatUserIdHint')}
+              label={t('channel.wechatUserId')}
+              tag="userId"
+              value={currentConfig.credentials.userId}
+            />
+          </>
+        )}
+        {platformDef.authFlow === 'qrcode' && onQrAuthenticated && !hasConfig && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+            <QrCodeAuth onAuthenticated={onQrAuthenticated} />
+          </div>
+        )}
+        {applicationIdField && <ApplicationIdField field={applicationIdField} />}
+        {!platformDef.authFlow &&
+          credentialFields.map((field, i) => (
+            <SchemaField
+              divider={applicationIdField ? true : i !== 0}
+              field={field}
+              key={field.key}
+              parentKey="credentials"
+            />
           ))}
-        </FormGroup>
-      )}
-    </Form>
-  );
-});
+        {settingsFields.length > 0 && (
+          <FormGroup
+            collapsible
+            defaultActive={false}
+            keyValue={`settings-${platformDef.id}`}
+            style={{ marginBlockStart: 16 }}
+            title={<SettingsTitle schema={platformDef.schema} />}
+            variant="borderless"
+            extra={
+              settingsActive ? (
+                <Popconfirm
+                  title={t('channel.settingsResetConfirm')}
+                  onConfirm={handleResetSettings}
+                >
+                  <Button icon={<RotateCcw size={14} />} size="small" type="default">
+                    {t('channel.settingsResetDefault')}
+                  </Button>
+                </Popconfirm>
+              ) : undefined
+            }
+            onCollapse={setSettingsActive}
+          >
+            {settingsFields.map((field, i) => (
+              <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
+            ))}
+          </FormGroup>
+        )}
+      </Form>
+    );
+  },
+);
 
 export default Body;
