@@ -390,7 +390,18 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should send tool_call_response with success result', async () => {
-      vi.mocked(mockLocalFileCtr.readFile).mockResolvedValueOnce({ content: 'hello' });
+      vi.mocked(mockLocalFileCtr.readFile).mockResolvedValueOnce({
+        charCount: 5,
+        content: 'hello',
+        createdTime: new Date('2024-01-01'),
+        filename: 'a.txt',
+        fileType: '.txt',
+        lineCount: 1,
+        loc: [1, 1] as [number, number],
+        modifiedTime: new Date('2024-01-01'),
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
       const client = await connectAndOpen();
 
       client.simulateToolCallRequest('readLocalFile', { path: '/a.txt' }, 'req-42');
@@ -399,7 +410,18 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-42',
         result: {
-          content: JSON.stringify({ content: 'hello' }),
+          content: JSON.stringify({
+            charCount: 5,
+            content: 'hello',
+            createdTime: new Date('2024-01-01'),
+            filename: 'a.txt',
+            fileType: '.txt',
+            lineCount: 1,
+            loc: [1, 1],
+            modifiedTime: new Date('2024-01-01'),
+            totalCharCount: 5,
+            totalLineCount: 1,
+          }),
           success: true,
         },
       });
