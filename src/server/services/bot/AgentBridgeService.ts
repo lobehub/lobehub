@@ -574,30 +574,25 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    // Skip initial ack message for platforms that don't support editing (e.g. WeChat, QQ).
-    // The ack can't be edited into the final reply, so it would stay as a stale extra message.
+    // Platforms without message editing still get an initial placeholder message,
+    // but completion will be sent as follow-up messages instead of editing in place.
     const canEdit = platformRegistry.getPlatform(client?.id ?? '')?.supportsMessageEdit !== false;
 
     let progressMessage: SentMessage | undefined;
-    let progressMessageId: string | undefined;
-    if (canEdit) {
-      // Post initial progress message to get the message ID
-      try {
-        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-      } catch (error) {
-        log('executeWithWebhooks: failed to post progress message: %O', error);
-      }
+    try {
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+    } catch (error) {
+      log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
+    }
 
-      progressMessageId = progressMessage?.id;
+    const progressMessageId: string | undefined; = progressMessage?.id;
+    if (canEdit) {
       if (!progressMessageId) {
         throw new Error('Failed to post initial progress message');
       }
 
       // Refresh typing indicator after posting the ack message,
-      // so typing stays active until the first step webhook arrives
-      await thread.startTyping();
-    } else {
-      // No ack message — still refresh typing so the user knows the bot is working
+      // so typing stays active until the first step webhook arrives.
       await thread.startTyping();
     }
 
@@ -720,20 +715,15 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    // Skip initial ack message for platforms that don't support editing (e.g. WeChat, QQ).
+    // Platforms without message editing still get an initial placeholder message,
+    // but completion will be sent as follow-up messages instead of editing in place.
     const canEdit = platformRegistry.getPlatform(client?.id ?? '')?.supportsMessageEdit !== false;
 
     let progressMessage: SentMessage | undefined;
-    if (canEdit) {
-      // Post initial progress message
-      try {
-        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-      } catch (error) {
-        log('executeWithInMemoryCallbacks: failed to post progress message: %O', error);
-      }
-    } else {
-      // No ack message — still refresh typing so the user knows the bot is working
-      await thread.startTyping();
+    try {
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+    } catch (error) {
+      log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
     }
 
     // Track the last LLM content and tool calls for showing during tool execution

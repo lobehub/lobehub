@@ -82,9 +82,6 @@ export class BotCallbackService {
     if (type === 'step') {
       if (canEdit && progressMessageId) {
         await this.handleStep(body, messenger, progressMessageId, client);
-      } else if (body.shouldContinue) {
-        // For platforms without progress messages (e.g. WeChat), still send typing indicator
-        await messenger.triggerTyping();
       }
     } else if (type === 'completion') {
       await this.handleCompletion(
