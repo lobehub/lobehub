@@ -40,15 +40,13 @@ export async function getAuthInfo(): Promise<AuthInfo> {
         `API key auth from ${CLI_API_KEY_ENV} is not supported for /webapi/* routes. Run OIDC login instead.`,
       );
       process.exit(1);
-      throw new Error('process.exit');
     }
 
     log.error("No authentication found. Run 'lh login' first.");
     process.exit(1);
-    throw new Error('process.exit');
   }
 
-  const accessToken = result.credentials.accessToken;
+  const accessToken = result!.credentials.accessToken;
   const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
 
   return {

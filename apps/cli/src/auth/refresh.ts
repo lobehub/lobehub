@@ -17,7 +17,7 @@ export async function getValidToken(): Promise<{ credentials: StoredCredentials 
     return { credentials };
   }
 
-  // Token expired, try refresh
+  // Token expired — try refresh
   if (!credentials.refreshToken) return null;
 
   const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
