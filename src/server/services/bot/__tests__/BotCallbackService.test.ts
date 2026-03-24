@@ -68,6 +68,12 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock('../AgentBridgeService', () => ({
+  AgentBridgeService: {
+    clearActiveThread: vi.fn(),
+  },
+}));
+
 vi.mock('@/server/services/systemAgent', () => ({
   SystemAgentService: vi.fn().mockImplementation(() => ({
     generateTopicTitle: mockGenerateTopicTitle,

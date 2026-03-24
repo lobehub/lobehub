@@ -95,7 +95,6 @@ export class BotCallbackService {
         charLimit,
         canEdit,
       );
-      await this.handleCompletion(body, messenger, progressMessageId, client, charLimit, canEdit);
       await this.removeEyesReaction(body, client, platformThreadId);
       // Clear the active thread tracker so the thread can accept new messages.
       // In queue mode, the bridge handler's finally block skips this cleanup
