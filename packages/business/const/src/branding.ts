@@ -7,10 +7,10 @@ export const BRANDING_LOGO_URL = '';
 export const ORG_NAME = 'Radnet Telecom';
 export const BRANDING_URL = {
   help: undefined,
-  privacy: undefined,
+  privacy: 'https://viaradnet.com.br/privacidade',
   subscription: undefined,
-  support: undefined,
-  terms: undefined,
+  support: 'https://viaradnet.com.br/suporte',
+  terms: 'https://viaradnet.com.br/termos',
 };
 export const SOCIAL_URL = {
   discord: undefined,
