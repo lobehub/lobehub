@@ -1,6 +1,10 @@
 import { REST } from '@discordjs/rest';
 import debug from 'debug';
-import { type RESTPostAPIChannelMessageResult, Routes } from 'discord-api-types/v10';
+import {
+  ApplicationCommandType,
+  type RESTPostAPIChannelMessageResult,
+  Routes,
+} from 'discord-api-types/v10';
 
 const log = debug('bot-platform:discord:client');
 
@@ -41,5 +45,19 @@ export class DiscordApi {
     })) as RESTPostAPIChannelMessageResult;
 
     return { id: data.id };
+  }
+
+  async registerCommands(
+    applicationId: string,
+    commands: Array<{ command: string; description: string }>,
+  ): Promise<void> {
+    log('registerCommands: appId=%s, %d commands', applicationId, commands.length);
+    await this.rest.put(Routes.applicationCommands(applicationId), {
+      body: commands.map((c) => ({
+        description: c.description,
+        name: c.command,
+        type: ApplicationCommandType.ChatInput,
+      })),
+    });
   }
 }

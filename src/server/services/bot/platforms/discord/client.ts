@@ -177,6 +177,13 @@ class DiscordGatewayClient implements PlatformClient {
   sanitizeUserInput(text: string): string {
     return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
   }
+
+  async registerBotCommands(
+    commands: Array<{ command: string; description: string }>,
+  ): Promise<void> {
+    await this.discord.registerCommands(this.applicationId, commands);
+    log('DiscordBot appId=%s registered %d commands', this.applicationId, commands.length);
+  }
 }
 
 export class DiscordClientFactory extends ClientFactory {
