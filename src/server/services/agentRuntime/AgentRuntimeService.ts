@@ -1501,9 +1501,7 @@ export class AgentRuntimeService {
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
-      activeDeviceId: metadata?.activeDeviceId,
       agentConfig: metadata?.agentConfig,
-      deviceSystemInfo: metadata?.deviceSystemInfo,
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
