@@ -134,9 +134,22 @@ const mockLocalFileCtr = {
   handleGlobFiles: vi.fn().mockResolvedValue({ files: [] }),
   handleGrepContent: vi.fn().mockResolvedValue({ matches: [] }),
   handleLocalFilesSearch: vi.fn().mockResolvedValue([]),
+  handleMoveFiles: vi.fn().mockResolvedValue([]),
+  handleRenameFile: vi.fn().mockResolvedValue({ newPath: '/mock/renamed.txt', success: true }),
   handleWriteFile: vi.fn().mockResolvedValue({ success: true }),
   listLocalFiles: vi.fn().mockResolvedValue([]),
-  readFile: vi.fn().mockResolvedValue({ content: 'file content' }),
+  readFile: vi.fn().mockResolvedValue({
+    charCount: 12,
+    content: 'file content',
+    createdTime: new Date('2024-01-01'),
+    filename: 'test.txt',
+    fileType: '.txt',
+    lineCount: 1,
+    loc: [1, 1] as [number, number],
+    modifiedTime: new Date('2024-01-01'),
+    totalCharCount: 12,
+    totalLineCount: 1,
+  }),
 } as unknown as LocalFileCtr;
 
 const mockShellCommandCtr = {
@@ -223,13 +236,18 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      await ctr.connect();
+      ctr.afterAppReady();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
     });
 
     it('should return success:false when no access token', async () => {
+      // Prevent auto-connect, then set up providers manually
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
+
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
 
       const result = await ctr.connect();
@@ -238,7 +256,8 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should no-op when already connected', async () => {
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       const firstClient = MockGatewayClient.lastInstance;
       firstClient!.simulateConnected();
 
@@ -249,7 +268,8 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should broadcast status changes: disconnected → connecting → connected', async () => {
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'connecting',
       });
@@ -265,7 +285,8 @@ describe('GatewayConnectionCtr', () => {
 
   describe('disconnect', () => {
     it('should disconnect client and set status to disconnected', async () => {
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
       mockBroadcast.mockClear();
@@ -279,7 +300,8 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should not trigger reconnect after intentional disconnect', async () => {
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
 
@@ -345,7 +367,8 @@ describe('GatewayConnectionCtr', () => {
 
   describe('reconnection', () => {
     it('should broadcast reconnecting status when client emits reconnecting', async () => {
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
       mockBroadcast.mockClear();
@@ -362,7 +385,8 @@ describe('GatewayConnectionCtr', () => {
 
   describe('tool call routing', () => {
     async function connectAndOpen() {
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
       return client;
@@ -371,6 +395,8 @@ describe('GatewayConnectionCtr', () => {
     it.each([
       ['readLocalFile', 'readFile', mockLocalFileCtr],
       ['listLocalFiles', 'listLocalFiles', mockLocalFileCtr],
+      ['moveLocalFiles', 'handleMoveFiles', mockLocalFileCtr],
+      ['renameLocalFile', 'handleRenameFile', mockLocalFileCtr],
       ['searchLocalFiles', 'handleLocalFilesSearch', mockLocalFileCtr],
       ['writeLocalFile', 'handleWriteFile', mockLocalFileCtr],
       ['editLocalFile', 'handleEditFile', mockLocalFileCtr],
@@ -437,7 +463,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-err',
         result: {
-          content: '',
+          content: 'File not found',
           error: 'File not found',
           success: false,
         },
@@ -450,11 +476,13 @@ describe('GatewayConnectionCtr', () => {
       client.simulateToolCallRequest('unknownApi', {}, 'req-unknown');
       await vi.advanceTimersByTimeAsync(0);
 
+      const errorMsg =
+        'Tool "unknownApi" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.';
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-unknown',
         result: {
-          content: '',
-          error: 'Unknown tool API: unknownApi',
+          content: errorMsg,
+          error: errorMsg,
           success: false,
         },
       });
@@ -465,7 +493,8 @@ describe('GatewayConnectionCtr', () => {
 
   describe('auth_expired handling', () => {
     it('should refresh token and reconnect on auth_expired', async () => {
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       const client1 = MockGatewayClient.lastInstance!;
       client1.simulateConnected();
 
@@ -484,7 +513,8 @@ describe('GatewayConnectionCtr', () => {
         success: false,
       });
 
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
       mockBroadcast.mockClear();
@@ -504,7 +534,8 @@ describe('GatewayConnectionCtr', () => {
     it('should return current status', async () => {
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'disconnected' });
 
-      await ctr.connect();
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'connecting' });
 
       MockGatewayClient.lastInstance!.simulateConnected();

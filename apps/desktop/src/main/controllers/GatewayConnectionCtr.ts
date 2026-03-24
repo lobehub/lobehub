@@ -110,10 +110,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     const handler = methodMap[apiName];
     if (!handler) {
-      return {
-        error: `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
-        success: false,
-      };
+      throw new Error(
+        `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
+      );
     }
 
     return handler();

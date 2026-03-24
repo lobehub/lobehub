@@ -249,7 +249,7 @@ export default class GatewayConnectionService extends ServiceModule {
       this.client?.sendToolCallResponse({
         requestId,
         result: {
-          content: '',
+          content: errorMsg,
           error: errorMsg,
           success: false,
         },
