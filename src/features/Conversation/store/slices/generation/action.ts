@@ -1,10 +1,45 @@
+import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { type StateCreator } from 'zustand';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { useChatStore } from '@/store/chat';
+import {
+  parseMentionedAgentsFromEditorData,
+  parseSelectedSkillsFromEditorData,
+  parseSelectedToolsFromEditorData,
+} from '@/store/chat/slices/aiChat/actions/commandBus';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
 import { type Store as ConversationStore } from '../../action';
+
+const buildRetryInitialContext = (editorData: Record<string, any> | null | undefined) => {
+  const normalizedEditorData = editorData ?? undefined;
+  const selectedSkills = parseSelectedSkillsFromEditorData(normalizedEditorData);
+  const selectedTools = parseSelectedToolsFromEditorData(normalizedEditorData);
+  const mentionedAgents = parseMentionedAgentsFromEditorData(normalizedEditorData);
+
+  const effectiveSelectedTools =
+    mentionedAgents.length > 0 &&
+    !selectedTools.some((tool) => tool.identifier === AgentManagementIdentifier)
+      ? [...selectedTools, { identifier: AgentManagementIdentifier, name: 'Agent Management' }]
+      : selectedTools;
+
+  const hasInitialContext =
+    effectiveSelectedTools.length > 0 || selectedSkills.length > 0 || mentionedAgents.length > 0;
+
+  if (!hasInitialContext) return undefined;
+
+  return {
+    initialContext: {
+      ...(selectedSkills.length > 0 ? { selectedSkills } : undefined),
+      ...(effectiveSelectedTools.length > 0
+        ? { selectedTools: effectiveSelectedTools }
+        : undefined),
+      ...(mentionedAgents.length > 0 ? { mentionedAgents } : undefined),
+    },
+    phase: 'init' as const,
+  };
+};
 
 /**
  * Generation Actions
@@ -287,6 +322,7 @@ export const generationSlice: StateCreator<
     const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
     const item = displayMessages[currentIndex];
     if (!item) return;
+    const initialContext = buildRetryInitialContext(item.editorData);
 
     // Get context messages up to and including the target message
     const contextMessages = displayMessages.slice(0, currentIndex + 1);
@@ -320,6 +356,7 @@ export const generationSlice: StateCreator<
       // Execute agent runtime with full context from ConversationStore
       await chatStore.internal_execAgentRuntime({
         context,
+        initialContext,
         messages: contextMessages,
         parentMessageId: messageId,
         parentMessageType: 'user',
