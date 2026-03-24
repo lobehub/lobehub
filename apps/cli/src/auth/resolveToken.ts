@@ -31,7 +31,7 @@ function parseJwtSub(token: string): string | undefined {
 }
 
 /**
- * Resolve an access token from explicit options or stored credentials.
+ * Resolve an access token from explicit options, environment variables, or stored credentials.
  * Exits the process if no token can be resolved.
  */
 export async function resolveToken(options: ResolveTokenOptions): Promise<ResolvedAuth> {
