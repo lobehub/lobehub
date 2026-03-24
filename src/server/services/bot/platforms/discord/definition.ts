@@ -5,7 +5,7 @@ import { schema } from './schema';
 export const discord: PlatformDefinition = {
   id: 'discord',
   name: 'Discord',
-  connectionMode: 'websocket',
+  connectionMode: 'persistent',
   description: 'Connect a Discord bot',
   documentation: {
     portalUrl: 'https://discord.com/developers/applications',

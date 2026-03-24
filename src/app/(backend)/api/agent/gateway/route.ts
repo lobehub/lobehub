@@ -16,7 +16,7 @@ import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
 const log = debug('lobe-server:bot:gateway:cron');
 
-// A single gateway invocation keeps websocket-based bots alive for one
+// A single gateway invocation keeps persistent bots alive for one
 // serverless cron window. Keep this aligned with BotConnectQueue.EXPIRE_MS
 // so connect requests queued during the same window can still be consumed.
 const GATEWAY_DURATION_MS = 600_000; // 10 minutes
@@ -31,7 +31,7 @@ const waitUntil = (task: Promise<unknown>) => {
 function getGatewayPlatforms(): PlatformDefinition[] {
   return platformRegistry
     .listPlatforms()
-    .filter((platform) => (platform.connectionMode ?? 'webhook') === 'websocket');
+    .filter((platform) => (platform.connectionMode ?? 'webhook') === 'persistent');
 }
 
 function createRuntimeContext(): BotPlatformRuntimeContext {

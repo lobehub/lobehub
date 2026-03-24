@@ -254,10 +254,10 @@ export interface PlatformDefinition {
   /**
    * Connection mode: how the platform communicates with the server.
    * - 'webhook': stateless HTTP callbacks (can run in serverless)
-   * - 'websocket': persistent connection (requires long-running process)
+   * - 'persistent': requires a long-running client (e.g. websocket or long-polling)
    * Defaults to 'webhook'.
    */
-  connectionMode?: 'webhook' | 'websocket';
+  connectionMode?: 'persistent' | 'webhook';
 
   /** The description of the platform. */
   description?: string;

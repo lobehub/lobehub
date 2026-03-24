@@ -39,8 +39,8 @@ export class GatewayService {
       const definition = platformRegistry.getPlatform(platform);
       const connectionMode = definition?.connectionMode || 'webhook';
 
-      if (connectionMode === 'websocket') {
-        // Persistent platforms (e.g. Discord WebSocket) cannot run in a
+      if (connectionMode === 'persistent') {
+        // Persistent platforms (e.g. Discord gateway or WeChat long-polling) cannot run in a
         // serverless function — queue for the long-running cron gateway.
         const queue = new BotConnectQueue();
         await queue.push(platform, applicationId, userId);
