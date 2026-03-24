@@ -1,6 +1,7 @@
 import type {
   Adapter,
   AdapterPostableMessage,
+  Attachment,
   Author,
   ChatInstance,
   EmojiValue,
@@ -49,6 +50,68 @@ function extractText(msg: WechatRawMessage): string {
     }
   }
   return parts.join('\n');
+}
+
+function parseOptionalNumber(value: number | string | undefined): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function extractAttachments(msg: WechatRawMessage): Attachment[] {
+  const attachments: Attachment[] = [];
+
+  for (const item of msg.item_list) {
+    switch (item.type) {
+      case MessageItemType.IMAGE: {
+        if (!item.image_item?.url) break;
+
+        attachments.push({
+          mimeType: 'image/*',
+          type: 'image',
+          url: item.image_item.url,
+        });
+        break;
+      }
+      case MessageItemType.FILE: {
+        const url = (item.file_item as { url?: string } | undefined)?.url;
+        if (!url) break;
+
+        attachments.push({
+          name: item.file_item?.file_name,
+          size: parseOptionalNumber(item.file_item?.len),
+          type: 'file',
+          url,
+        });
+        break;
+      }
+      case MessageItemType.VOICE: {
+        const url = (item.voice_item as { url?: string } | undefined)?.url;
+        if (!url) break;
+
+        attachments.push({
+          type: 'audio',
+          url,
+        });
+        break;
+      }
+      case MessageItemType.VIDEO: {
+        const url = (item.video_item as { url?: string } | undefined)?.url;
+        if (!url) break;
+
+        attachments.push({
+          size: parseOptionalNumber(item.video_item?.video_size),
+          type: 'video',
+          url,
+        });
+        break;
+      }
+    }
+  }
+
+  return attachments;
 }
 
 /**
@@ -201,9 +264,10 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     const text = extractText(raw);
     const formatted = parseMarkdown(text);
     const threadId = this.encodeThreadId({ id: raw.from_user_id, type: 'single' });
+    const attachments = extractAttachments(raw);
 
     return new Message({
-      attachments: [],
+      attachments,
       author: {
         fullName: raw.from_user_id,
         isBot: raw.message_type === MessageType.BOT,
@@ -229,6 +293,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     text: string,
   ): Promise<Message<WechatRawMessage>> {
     const formatted = parseMarkdown(text);
+    const attachments = extractAttachments(msg);
 
     const author: Author = {
       fullName: msg.from_user_id,
@@ -239,7 +304,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     };
 
     return new Message({
-      attachments: [],
+      attachments,
       author,
       formatted,
       id: String(msg.message_id || 0),

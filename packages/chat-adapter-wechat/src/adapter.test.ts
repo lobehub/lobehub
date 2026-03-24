@@ -224,13 +224,19 @@ describe('WechatAdapter', () => {
       const raw = makeRawMessage({
         item_list: [
           {
-            image_item: { media: { aes_key: '', encrypt_query_param: '' } },
+            image_item: {
+              media: { aes_key: '', encrypt_query_param: '' },
+              url: 'https://cdn.example.com/image.png',
+            },
             type: MessageItemType.IMAGE,
           },
         ],
       });
       const message = adapter.parseMessage(raw);
       expect(message.text).toBe('[image]');
+      expect(message.attachments).toEqual([
+        { mimeType: 'image/*', type: 'image', url: 'https://cdn.example.com/image.png' },
+      ]);
     });
 
     it('should extract voice text or placeholder', () => {
@@ -284,6 +290,30 @@ describe('WechatAdapter', () => {
       });
       const message = adapter.parseMessage(raw);
       expect(message.text).toBe('line1\nline2');
+    });
+
+    it('should keep image-only messages as attachments for downstream processing', async () => {
+      const raw = makeRawMessage({
+        item_list: [
+          {
+            image_item: {
+              media: { aes_key: '', encrypt_query_param: '' },
+              url: 'https://cdn.example.com/image-only.png',
+            },
+            type: MessageItemType.IMAGE,
+          },
+        ],
+      });
+
+      await adapter.handleWebhook(makeRequest(raw));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.attachments).toEqual([
+        { mimeType: 'image/*', type: 'image', url: 'https://cdn.example.com/image-only.png' },
+      ]);
+      expect(message?.text).toBe('[image]');
     });
   });
 
