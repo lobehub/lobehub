@@ -112,7 +112,9 @@ export class FileActionImpl {
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
     // 1. compress images and add files with base64
     const files = await Promise.all(
-      filteredFiles.map((file) => (file.type.startsWith('image') ? compressImageFile(file) : file)),
+      filteredFiles.map((file) =>
+        COMPRESSIBLE_IMAGE_TYPES.has(file.type) ? compressImageFile(file) : file,
+      ),
     );
 
     const uploadFiles: UploadFileItem[] = await Promise.all(
@@ -177,6 +179,9 @@ export class FileActionImpl {
 }
 
 export type FileAction = Pick<FileActionImpl, keyof FileActionImpl>;
+
+// Only compress raster formats safe for canvas; skip GIF (loses animation) and SVG (loses vector data)
+const COMPRESSIBLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const compressImageFile = (file: File): Promise<File> =>
   new Promise((resolve) => {
