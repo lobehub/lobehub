@@ -199,6 +199,8 @@
   "plans.btn.paymentDesc": "Supports credit card / Alipay / WeChat Pay",
   "plans.btn.paymentDescForZarinpal": "Supports credit card",
   "plans.btn.soon": "Coming Soon",
+  "plans.cancelDowngrade": "Cancel Scheduled Downgrade",
+  "plans.cancelDowngradeSuccess": "Scheduled downgrade has been cancelled",
   "plans.changePlan": "Choose Plan",
   "plans.cloud.history": "Unlimited conversation history",
   "plans.cloud.sync": "Global cloud sync",

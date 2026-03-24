@@ -247,6 +247,8 @@ export default {
   'plans.downgradeTip':
     'Your subscription has been canceled. You cannot perform other operations until the cancellation is complete',
   'plans.downgradeWillCancel': 'This action will cancel your scheduled plan downgrade',
+  'plans.cancelDowngrade': 'Cancel Scheduled Downgrade',
+  'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
   'plans.pendingDowngrade': 'Pending Downgrade',
   'plans.embeddingStorage.embeddings': 'entries',
   'plans.embeddingStorage.title': 'Vector Storage',

@@ -199,6 +199,8 @@
   "plans.btn.paymentDesc": "支持信用卡 / 支付宝 / 微信支付",
   "plans.btn.paymentDescForZarinpal": "支持信用卡",
   "plans.btn.soon": "即将上线",
+  "plans.cancelDowngrade": "取消降级预约",
+  "plans.cancelDowngradeSuccess": "降级预约已取消",
   "plans.changePlan": "选择计划",
   "plans.cloud.history": "无限对话历史",
   "plans.cloud.sync": "全球云端同步",
