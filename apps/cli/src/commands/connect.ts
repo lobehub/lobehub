@@ -294,7 +294,13 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   // Handle auth expired
   client.on('auth_expired', async () => {
+    if (auth.tokenType === 'apiKey') {
+      return;
+    }
+
     if (auth.tokenType !== 'jwt') {
+      cleanup();
+      process.exit(1);
       return;
     }
 

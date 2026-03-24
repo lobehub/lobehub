@@ -214,7 +214,7 @@ describe('connect command', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it('should handle auth_expired', async () => {
+  it('should ignore auth_expired for api key auth', async () => {
     vi.mocked(resolveToken).mockResolvedValueOnce({
       token: 'test-api-key',
       tokenType: 'apiKey',
@@ -229,6 +229,23 @@ describe('connect command', () => {
     expect(log.error).not.toHaveBeenCalled();
     expect(cleanupAllProcesses).not.toHaveBeenCalled();
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it('should exit on auth_expired for non-jwt auth', async () => {
+    vi.mocked(resolveToken).mockResolvedValueOnce({
+      token: 'service-token',
+      tokenType: 'serviceToken',
+      userId: 'user',
+    });
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    await clientEventHandlers['auth_expired']?.();
+
+    expect(log.error).not.toHaveBeenCalled();
+    expect(cleanupAllProcesses).toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle error event', async () => {
