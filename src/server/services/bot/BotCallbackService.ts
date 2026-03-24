@@ -7,6 +7,7 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
+import { AgentBridgeService } from './AgentBridgeService';
 import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
 import { platformRegistry } from './platforms';
 import { renderError, renderFinalReply, renderStepProgress, splitMessage } from './replyTemplate';
@@ -88,7 +89,12 @@ export class BotCallbackService {
         charLimit,
         canEdit,
       );
+      await this.handleCompletion(body, messenger, progressMessageId, client, charLimit, canEdit);
       await this.removeEyesReaction(body, client, platformThreadId);
+      // Clear the active thread tracker so the thread can accept new messages.
+      // In queue mode, the bridge handler's finally block skips this cleanup
+      // to keep the thread marked active while the agent runs on the job queue.
+      AgentBridgeService.clearActiveThread(platformThreadId);
       this.summarizeTopicTitle(body, messenger);
     }
   }
