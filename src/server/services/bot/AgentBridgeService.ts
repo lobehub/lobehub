@@ -117,6 +117,12 @@ export class AgentBridgeService {
   private static activeOperations = new Map<string, string>();
 
   /**
+   * Threads where the user requested /stop before we had an operationId.
+   * Once the operationId becomes available we immediately interrupt it.
+   */
+  private static pendingStopThreads = new Set<string>();
+
+  /**
    * Check if a thread currently has an active agent execution.
    */
   static isThreadActive(threadId: string): boolean {
@@ -136,6 +142,25 @@ export class AgentBridgeService {
   static clearActiveThread(threadId: string): void {
     AgentBridgeService.activeThreads.delete(threadId);
     AgentBridgeService.activeOperations.delete(threadId);
+    AgentBridgeService.pendingStopThreads.delete(threadId);
+  }
+
+  /**
+   * Mark a thread as waiting for interruption once its operationId is known.
+   */
+  static requestStop(threadId: string): void {
+    AgentBridgeService.pendingStopThreads.add(threadId);
+  }
+
+  /**
+   * Consume a pending stop request for a thread.
+   */
+  static consumeStopRequest(threadId: string): boolean {
+    const hasPendingStop = AgentBridgeService.pendingStopThreads.has(threadId);
+    if (hasPendingStop) {
+      AgentBridgeService.pendingStopThreads.delete(threadId);
+    }
+    return hasPendingStop;
   }
 
   /**
@@ -227,6 +252,13 @@ export class AgentBridgeService {
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
+  }
+
+  private async interruptTrackedOperation(threadId: string, operationId: string): Promise<void> {
+    const aiAgentService = new AiAgentService(this.db, this.userId);
+    await aiAgentService.interruptTask({ operationId });
+    AgentBridgeService.clearActiveThread(threadId);
+    log('interruptTrackedOperation: thread=%s, operationId=%s', threadId, operationId);
   }
 
   /**
@@ -561,6 +593,19 @@ export class AgentBridgeService {
     // Track operationId so /stop can interrupt this execution
     if (result.operationId) {
       AgentBridgeService.activeOperations.set(thread.id, result.operationId);
+
+      if (AgentBridgeService.consumeStopRequest(thread.id)) {
+        try {
+          await this.interruptTrackedOperation(thread.id, result.operationId);
+        } catch (error) {
+          log(
+            'executeWithWebhooks: deferred stop failed for thread=%s, operationId=%s: %O',
+            thread.id,
+            result.operationId,
+            error,
+          );
+        }
+      }
     }
 
     // Return immediately — progress/completion handled by webhooks
@@ -780,7 +825,7 @@ export class AgentBridgeService {
           trigger,
           userInterventionConfig: { approvalMode: 'headless' },
         })
-        .then((result) => {
+        .then(async (result) => {
           assistantMessageId = result.assistantMessageId;
           resolvedTopicId = result.topicId;
           operationStartTime = new Date(result.createdAt).getTime();
@@ -788,6 +833,19 @@ export class AgentBridgeService {
           // Track operationId so /stop can interrupt this execution
           if (result.operationId) {
             AgentBridgeService.activeOperations.set(thread.id, result.operationId);
+
+            if (AgentBridgeService.consumeStopRequest(thread.id)) {
+              try {
+                await this.interruptTrackedOperation(thread.id, result.operationId);
+              } catch (error) {
+                log(
+                  'executeWithInMemoryCallbacks: deferred stop failed for thread=%s, operationId=%s: %O',
+                  thread.id,
+                  result.operationId,
+                  error,
+                );
+              }
+            }
           }
 
           log(

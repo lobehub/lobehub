@@ -1333,9 +1333,12 @@ export class AiAgentService {
       // Check if the method exists before calling (using type assertion for future method)
       const service = this.agentRuntimeService as any;
       if (typeof service.interruptOperation === 'function') {
-        await service.interruptOperation({
-          operationId: resolvedOperationId,
-        });
+        const interrupted = await service.interruptOperation(resolvedOperationId);
+        log(
+          'interruptTask: interruptOperation=%s for operationId=%s',
+          interrupted,
+          resolvedOperationId,
+        );
       } else {
         log('interruptTask: interruptOperation method not available, only updating thread status');
       }

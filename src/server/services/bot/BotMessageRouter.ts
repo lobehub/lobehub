@@ -451,13 +451,16 @@ export class BotMessageRouter {
             try {
               const aiAgentService = new AiAgentService(serverDB, userId);
               await aiAgentService.interruptTask({ operationId });
+              AgentBridgeService.clearActiveThread(ctx.threadId);
               log('command /stop: interrupted operationId=%s', operationId);
             } catch (error) {
               log('command /stop: interruptTask failed: %O', error);
             }
+          } else {
+            AgentBridgeService.requestStop(ctx.threadId);
+            log('command /stop: queued deferred stop for thread=%s', ctx.threadId);
           }
-          AgentBridgeService.clearActiveThread(ctx.threadId);
-          await ctx.post('Execution stopped.');
+          await ctx.post('Stop requested.');
         },
         name: 'stop',
       },
