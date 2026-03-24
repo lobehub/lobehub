@@ -10,7 +10,7 @@
   "activity.notes": "Notas",
   "analysis.action.button": "Solicitar análisis de recuerdos",
   "analysis.modal.cancel": "Cancelar",
-  "analysis.modal.helper": "Por defecto, AI analizará todos los chats no procesados. Es opcional seleccionar un rango de fechas para analizar.",
+  "analysis.modal.helper": "Por defecto, Radnet AI analizará todos los chats no procesados. Es opcional seleccionar un rango de fechas para analizar.",
   "analysis.modal.rangePlaceholder": "Sin rango seleccionado; se analizarán todas las conversaciones.",
   "analysis.modal.rangeSelected": "Analizando chats desde {{start}} hasta {{end}}",
   "analysis.modal.submit": "Solicitar análisis de recuerdos",

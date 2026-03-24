@@ -10,7 +10,7 @@
   "activity.notes": "メモ",
   "analysis.action.button": "メモリ分析をリクエスト",
   "analysis.modal.cancel": "キャンセル",
-  "analysis.modal.helper": "デフォルトでは、AI は未処理のすべてのチャットを分析します。分析する期間を選択することも可能です（任意）。",
+  "analysis.modal.helper": "デフォルトでは、Radnet AI は未処理のすべてのチャットを分析します。分析する期間を選択することも可能です（任意）。",
   "analysis.modal.rangePlaceholder": "期間が選択されていません。すべての会話が分析されます。",
   "analysis.modal.rangeSelected": "{{start}} から {{end}} までのチャットを分析中",
   "analysis.modal.submit": "メモリ分析をリクエスト",

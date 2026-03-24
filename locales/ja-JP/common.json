@@ -103,7 +103,7 @@
   "cmdk.askAIHeadingEmpty": "AI 機能を選択してください",
   "cmdk.askAgentHeading": "エージェントに質問",
   "cmdk.askAgentPlaceholder": "{{agent}} に質問してください...",
-  "cmdk.askLobeAI": "AI に質問する",
+  "cmdk.askLobeAI": "Radnet AI に質問する",
   "cmdk.community": "コミュニティ",
   "cmdk.communitySupport": "コミュニティサポート",
   "cmdk.contactUs": "お問い合わせ",

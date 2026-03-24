@@ -103,7 +103,7 @@
   "cmdk.askAIHeadingEmpty": "選擇一個 AI 功能",
   "cmdk.askAgentHeading": "詢問代理",
   "cmdk.askAgentPlaceholder": "向 {{agent}} 詢問問題……",
-  "cmdk.askLobeAI": "詢問 AI",
+  "cmdk.askLobeAI": "詢問 Radnet AI",
   "cmdk.community": "社群",
   "cmdk.communitySupport": "社群支援",
   "cmdk.contactUs": "聯絡我們",

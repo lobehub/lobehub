@@ -10,7 +10,7 @@
   "activity.notes": "Ghi chú",
   "analysis.action.button": "Yêu cầu phân tích ký ức",
   "analysis.modal.cancel": "Hủy",
-  "analysis.modal.helper": "Theo mặc định, AI sẽ phân tích tất cả các cuộc trò chuyện chưa được xử lý. Bạn có thể chọn khoảng thời gian để phân tích nếu muốn.",
+  "analysis.modal.helper": "Theo mặc định, Radnet AI sẽ phân tích tất cả các cuộc trò chuyện chưa được xử lý. Bạn có thể chọn khoảng thời gian để phân tích nếu muốn.",
   "analysis.modal.rangePlaceholder": "Chưa chọn khoảng thời gian; tất cả cuộc trò chuyện sẽ được phân tích.",
   "analysis.modal.rangeSelected": "Đang phân tích các cuộc trò chuyện từ {{start}} đến {{end}}",
   "analysis.modal.submit": "Yêu cầu phân tích ký ức",

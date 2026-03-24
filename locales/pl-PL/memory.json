@@ -10,7 +10,7 @@
   "activity.notes": "Notatki",
   "analysis.action.button": "Poproś o analizę wspomnień",
   "analysis.modal.cancel": "Anuluj",
-  "analysis.modal.helper": "Domyślnie AI przeanalizuje wszystkie nieprzetworzone rozmowy. Możesz opcjonalnie wybrać zakres dat do analizy.",
+  "analysis.modal.helper": "Domyślnie Radnet AI przeanalizuje wszystkie nieprzetworzone rozmowy. Możesz opcjonalnie wybrać zakres dat do analizy.",
   "analysis.modal.rangePlaceholder": "Nie wybrano zakresu; wszystkie rozmowy zostaną przeanalizowane.",
   "analysis.modal.rangeSelected": "Analiza rozmów od {{start}} do {{end}}",
   "analysis.modal.submit": "Poproś o analizę wspomnień",

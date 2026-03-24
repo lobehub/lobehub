@@ -119,7 +119,7 @@ export default {
   'cmdk.askAIHeadingEmpty': 'Choose an AI feature',
   'cmdk.askAgentHeading': 'Ask Agent',
   'cmdk.askAgentPlaceholder': 'Ask {{agent}} something...',
-  'cmdk.askLobeAI': 'Ask AI',
+  'cmdk.askLobeAI': 'Ask Radnet AI',
   'cmdk.community': 'Community',
   'cmdk.communitySupport': 'Community Support',
   'cmdk.contactUs': 'Contact Us',

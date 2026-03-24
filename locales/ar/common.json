@@ -103,7 +103,7 @@
   "cmdk.askAIHeadingEmpty": "اختر ميزة ذكاء اصطناعي",
   "cmdk.askAgentHeading": "اسأل الوكيل",
   "cmdk.askAgentPlaceholder": "اسأل {{agent}} عن شيء ما...",
-  "cmdk.askLobeAI": "اسأل AI",
+  "cmdk.askLobeAI": "اسأل Radnet AI",
   "cmdk.community": "المجتمع",
   "cmdk.communitySupport": "دعم المجتمع",
   "cmdk.contactUs": "اتصل بنا",

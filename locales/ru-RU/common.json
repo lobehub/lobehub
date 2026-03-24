@@ -103,7 +103,7 @@
   "cmdk.askAIHeadingEmpty": "Выберите функцию ИИ",
   "cmdk.askAgentHeading": "Спросить у агента",
   "cmdk.askAgentPlaceholder": "Спросите у {{agent}} что-нибудь...",
-  "cmdk.askLobeAI": "Спросить у AI",
+  "cmdk.askLobeAI": "Спросить у Radnet AI",
   "cmdk.community": "Сообщество",
   "cmdk.communitySupport": "Поддержка сообщества",
   "cmdk.contactUs": "Связаться с нами",

@@ -541,7 +541,7 @@
   "skillDetail.tabs.tools": "Funktionen",
   "skillDetail.tools": "Werkzeuge",
   "skillDetail.trustWarning": "Verwenden Sie nur Connectoren von vertrauenswürdigen Entwicklern. LobeHub hat keine Kontrolle darüber, welche Werkzeuge von Entwicklern bereitgestellt werden, und kann nicht garantieren, dass diese wie beabsichtigt funktionieren oder unverändert bleiben.",
-  "skillInstallBanner.title": "Funktionen zu AI hinzufügen",
+  "skillInstallBanner.title": "Funktionen zu Radnet AI hinzufügen",
   "store.actions.cancel": "Abbrechen",
   "store.actions.configure": "Konfigurieren",
   "store.actions.confirmUninstall": "Durch Deinstallation wird die Skill-Konfiguration gelöscht. Fortfahren?",

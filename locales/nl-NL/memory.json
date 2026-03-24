@@ -10,7 +10,7 @@
   "activity.notes": "Notities",
   "analysis.action.button": "Analyse van herinneringen aanvragen",
   "analysis.modal.cancel": "Annuleren",
-  "analysis.modal.helper": "Standaard analyseert AI alle niet-verwerkte chats. Het is optioneel om een datumbereik te selecteren voor analyse.",
+  "analysis.modal.helper": "Standaard analyseert Radnet AI alle niet-verwerkte chats. Het is optioneel om een datumbereik te selecteren voor analyse.",
   "analysis.modal.rangePlaceholder": "Geen bereik geselecteerd; alle gesprekken worden geanalyseerd.",
   "analysis.modal.rangeSelected": "Chats analyseren van {{start}} tot {{end}}",
   "analysis.modal.submit": "Analyse van herinneringen aanvragen",
