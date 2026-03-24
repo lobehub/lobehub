@@ -432,6 +432,7 @@
   "userPanel.billing": "Управление оплатой",
   "userPanel.cloud": "Запустить {{name}}",
   "userPanel.community": "Сообщество",
+  "userPanel.credits": "Управление кредитами",
   "userPanel.data": "Хранилище данных",
   "userPanel.defaultNickname": "Пользователь сообщества",
   "userPanel.discord": "Поддержка сообщества",
