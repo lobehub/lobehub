@@ -30,7 +30,6 @@ export async function getValidToken(): Promise<{ credentials: StoredCredentials 
       ? Math.floor(Date.now() / 1000) + refreshed.expires_in
       : undefined,
     refreshToken: refreshed.refresh_token || credentials.refreshToken,
-    tokenType: 'jwt',
   };
 
   saveCredentials(updated);

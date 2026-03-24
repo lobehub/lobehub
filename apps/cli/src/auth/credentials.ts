@@ -3,15 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export interface StoredJwtCredentials {
+export interface StoredCredentials {
   accessToken: string;
   expiresAt?: number; // Unix timestamp (seconds)
   refreshToken?: string;
-  tokenType: 'jwt';
-  userId?: string;
 }
-
-export type StoredCredentials = StoredJwtCredentials;
 
 const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
 const CREDENTIALS_DIR = path.join(os.homedir(), LOBEHUB_DIR_NAME);
@@ -55,13 +51,17 @@ export function saveCredentials(credentials: StoredCredentials): void {
 export function loadCredentials(): StoredCredentials | null {
   try {
     const data = fs.readFileSync(CREDENTIALS_FILE, 'utf8');
-    const decrypted = decrypt(data);
-    const credentials = JSON.parse(decrypted) as Partial<StoredJwtCredentials>;
 
-    if (credentials.tokenType !== 'jwt') return null;
-    if (typeof credentials.accessToken !== 'string') return null;
-
-    return credentials as StoredJwtCredentials;
+    // Try decrypting first
+    try {
+      const decrypted = decrypt(data);
+      return JSON.parse(decrypted) as StoredCredentials;
+    } catch {
+      // Fallback: handle legacy plaintext JSON, re-save encrypted
+      const credentials = JSON.parse(data) as StoredCredentials;
+      saveCredentials(credentials);
+      return credentials;
+    }
   } catch {
     return null;
   }

@@ -84,7 +84,7 @@ describe('getValidToken', () => {
     expect(result!.credentials.accessToken).toBe('new-access-token');
     expect(result!.credentials.refreshToken).toBe('new-refresh-token');
     expect(saveCredentials).toHaveBeenCalledWith(
-      expect.objectContaining({ accessToken: 'new-access-token', tokenType: 'jwt' }),
+      expect.objectContaining({ accessToken: 'new-access-token' }),
     );
   });
 

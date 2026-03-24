@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiKeyModel } from '@/database/models/apiKey';
+
 import { createContextInner, createLambdaContext } from './context';
 
 const {
@@ -30,10 +32,14 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/database/models/apiKey', () => ({
-  ApiKeyModel: vi.fn().mockImplementation((_db: unknown, userId: string) => ({
-    findByKey: mockFindByKey,
-    updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
-  })),
+  ApiKeyModel: Object.assign(
+    vi.fn().mockImplementation((_db: unknown, userId: string) => ({
+      updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
+    })),
+    {
+      findByKey: mockFindByKey,
+    },
+  ),
 }));
 
 vi.mock('@/envs/auth', () => ({
@@ -173,7 +179,7 @@ describe('createLambdaContext', () => {
   });
 
   it('should authenticate with API key and skip session fallback', async () => {
-    mockFindByKey.mockResolvedValue({
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue({
       enabled: true,
       expiresAt: null,
       id: 'key-1',
@@ -194,7 +200,7 @@ describe('createLambdaContext', () => {
   });
 
   it('should reject invalid API key without falling back to OIDC or session', async () => {
-    mockFindByKey.mockResolvedValue(null);
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(null);
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {

@@ -206,7 +206,6 @@ export function registerLoginCommand(program: Command) {
                 ? Math.floor(Date.now() / 1000) + body.expires_in
                 : undefined,
               refreshToken: body.refresh_token,
-              tokenType: 'jwt',
             });
 
             const existingSettings = loadSettings();

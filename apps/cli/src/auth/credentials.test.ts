@@ -74,13 +74,15 @@ describe('credentials', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null for plaintext legacy JSON', () => {
+    it('should load and re-encrypt plaintext legacy JSON', () => {
       fs.mkdirSync(credentialsDir, { recursive: true });
       fs.writeFileSync(credentialsFile, JSON.stringify(testCredentials));
 
       const loaded = loadCredentials();
+      const raw = fs.readFileSync(credentialsFile, 'utf8');
 
-      expect(loaded).toBeNull();
+      expect(loaded).toEqual(testCredentials);
+      expect(() => JSON.parse(raw)).toThrow();
     });
 
     it('should return null for corrupted file', () => {

@@ -34,8 +34,7 @@ const validateApiKeyUserId = async (apiKey: string): Promise<string | null> => {
 
   try {
     const db = await getServerDB();
-    const apiKeyModel = new ApiKeyModel(db, '');
-    const apiKeyRecord = await apiKeyModel.findByKey(apiKey);
+    const apiKeyRecord = await ApiKeyModel.findByKey(db, apiKey);
 
     if (!apiKeyRecord) return null;
     if (!apiKeyRecord.enabled) return null;
