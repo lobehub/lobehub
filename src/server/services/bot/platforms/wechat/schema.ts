@@ -13,7 +13,7 @@ export const schema: FieldSchema[] = [
         default: 2000,
         description: 'channel.charLimitHint',
         label: 'channel.charLimit',
-        maximum: 2000,
+        maximum: 2048,
         minimum: 100,
         type: 'number',
       },
