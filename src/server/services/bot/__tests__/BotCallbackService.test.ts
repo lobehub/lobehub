@@ -344,8 +344,22 @@ describe('BotCallbackService', () => {
 
       await service.handleCallback(body);
 
-      expect(mockEditMessage).toHaveBeenCalledWith('progress-msg-1', 'Execution stopped.');
-      expect(mockCreateMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).toHaveBeenCalledWith('Execution stopped.');
+      expect(mockEditMessage).not.toHaveBeenCalled();
+    });
+
+    it('should render custom stopped message when interrupted has errorMessage', async () => {
+      const body = makeBody({
+        errorMessage: 'Execution stopped by user.',
+        lastAssistantContent: 'Partial answer that should not be shown',
+        reason: 'interrupted',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith('Execution stopped by user.');
+      expect(mockEditMessage).not.toHaveBeenCalled();
     });
 
     it('should skip when no lastAssistantContent on successful completion', async () => {
@@ -385,6 +399,17 @@ describe('BotCallbackService', () => {
       const body = makeBody({
         lastAssistantContent: 'Some response',
         reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).resolves.toBeUndefined();
+    });
+
+    it('should not throw when sending interrupted message fails', async () => {
+      mockCreateMessage.mockRejectedValueOnce(new Error('Send failed'));
+
+      const body = makeBody({
+        reason: 'interrupted',
         type: 'completion',
       });
 
