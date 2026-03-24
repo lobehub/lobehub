@@ -54,6 +54,7 @@
   "FLUX.1-Kontext-pro.description": "FLUX.1 Kontext [專業版]",
   "FLUX.1-dev.description": "FLUX.1-dev 是來自 Black Forest Labs 的開源多模態語言模型（MLLM），針對圖文任務進行優化，結合圖像與文字的理解與生成能力。該模型基於先進的大型語言模型（如 Mistral-7B），搭配精心設計的視覺編碼器與多階段指令微調，實現多模態協同與複雜任務推理。",
   "Gryphe/MythoMax-L2-13b.description": "MythoMax-L2（13B）是一款創新模型，適用於多領域與複雜任務。",
+  "HY-Image-V3.0.description": "強大的原始影像特徵提取與細節保留能力，呈現更豐富的視覺紋理，生成高精度、構圖優良、達到生產級別的視覺效果。",
   "HelloMeme.description": "HelloMeme 是一款 AI 工具，可根據您提供的圖像或動作生成迷因、GIF 或短影片。無需繪圖或程式設計技能，只需一張參考圖像，即可創作出有趣、吸睛且風格一致的內容。",
   "HiDream-E1-Full.description": "HiDream-E1-Full 是 HiDream.ai 推出的開源多模態影像編輯模型，基於先進的擴散變壓器架構以及強大的語言理解能力（內建 LLaMA 3.1-8B-Instruct）。它支持自然語言驅動的影像生成、風格轉換、局部編輯和重繪，並具備卓越的影像-文本理解與執行能力。",
   "HiDream-I1-Full.description": "HiDream-I1 是 HiDream 推出的全新開源基礎影像生成模型。擁有 17B 參數（Flux 為 12B），能在數秒內提供業界領先的影像品質。",

@@ -54,6 +54,7 @@
   "FLUX.1-Kontext-pro.description": "FLUX.1 Kontext [pro]",
   "FLUX.1-dev.description": "FLUX.1-dev는 Black Forest Labs에서 개발한 오픈소스 다중 모달 언어 모델(MLLM)로, 이미지-텍스트 작업에 최적화되어 있으며 이미지/텍스트 이해 및 생성을 결합합니다. Mistral-7B와 같은 고급 LLM을 기반으로, 정교한 비전 인코더와 다단계 지시 튜닝을 통해 다중 모달 조정 및 복잡한 작업 추론을 가능하게 합니다.",
   "Gryphe/MythoMax-L2-13b.description": "MythoMax-L2 (13B)는 다양한 분야와 복잡한 작업을 위한 혁신적인 모델입니다.",
+  "HY-Image-V3.0.description": "강력한 원본 이미지 특징 추출 및 세부 보존 기능을 통해 풍부한 시각적 텍스처를 제공하며, 높은 정확도와 잘 구성된 제작 등급의 비주얼을 생성합니다.",
   "HelloMeme.description": "HelloMeme은 사용자가 제공한 이미지나 동작을 기반으로 밈, GIF, 짧은 영상을 생성하는 AI 도구입니다. 그림이나 코딩 기술 없이도 참조 이미지 하나만으로 재미있고 매력적이며 스타일이 일관된 콘텐츠를 만들 수 있습니다.",
   "HiDream-E1-Full.description": "HiDream-E1-Full은 HiDream.ai에서 개발한 오픈 소스 멀티모달 이미지 편집 모델로, 고급 Diffusion Transformer 아키텍처와 강력한 언어 이해력(내장된 LLaMA 3.1-8B-Instruct)을 기반으로 합니다. 자연어 기반 이미지 생성, 스타일 전환, 로컬 편집 및 재페인팅을 지원하며, 뛰어난 이미지-텍스트 이해력과 실행력을 제공합니다.",
   "HiDream-I1-Full.description": "HiDream-I1은 HiDream에서 출시한 새로운 오픈 소스 기반 이미지 생성 모델입니다. 17B 파라미터(Flux는 12B)를 통해 몇 초 만에 업계 최고 수준의 이미지 품질을 제공합니다.",

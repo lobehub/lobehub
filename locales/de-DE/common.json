@@ -443,6 +443,7 @@
   "userPanel.plans": "Abonnementpläne",
   "userPanel.profile": "Konto",
   "userPanel.setting": "Einstellungen",
+  "userPanel.upgradePlan": "Plan upgraden",
   "userPanel.usages": "Nutzungsstatistiken",
   "version": "Version"
 }

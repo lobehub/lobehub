@@ -443,6 +443,7 @@
   "userPanel.plans": "サブスクリプションプラン",
   "userPanel.profile": "アカウント管理",
   "userPanel.setting": "アプリ設定",
+  "userPanel.upgradePlan": "プランをアップグレード",
   "userPanel.usages": "使用統計",
   "version": "バージョン"
 }
