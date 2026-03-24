@@ -289,6 +289,10 @@ export class StreamingExecutorActionImpl {
       parentMessageId,
       provider: agentConfigData.provider,
     };
+    const existingPayload =
+      initialContext?.payload && typeof initialContext.payload === 'object'
+        ? (initialContext.payload as Record<string, unknown>)
+        : undefined;
 
     // Create initial context or use provided context
     const context: AgentRuntimeContext = initialContext
@@ -296,7 +300,7 @@ export class StreamingExecutorActionImpl {
           ...initialContext,
           payload: {
             ...defaultPayload,
-            ...initialContext.payload,
+            ...existingPayload,
           },
           initialContext: mergedRuntimeInitialContext,
         }
