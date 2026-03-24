@@ -4,6 +4,7 @@ import { after } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { type BotProviderConfig, wechat } from '@/server/services/bot/platforms';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
@@ -22,7 +23,10 @@ function createWechatBot(applicationId: string, credentials: Record<string, stri
     platform: 'wechat',
     settings: {},
   };
-  return wechat.clientFactory.createClient(config, { appUrl: process.env.APP_URL });
+  return wechat.clientFactory.createClient(config, {
+    appUrl: process.env.APP_URL,
+    redisClient: getAgentRuntimeRedisClient() as any,
+  });
 }
 
 async function processConnectQueue(remainingMs: number): Promise<number> {
